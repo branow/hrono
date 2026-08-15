@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI
 
+from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, open_database
 
 _VERSION = version("hrono")
@@ -38,13 +39,17 @@ def create_app(
     *,
     db_path: Path = DEFAULT_PATH,
     connection: sqlite3.Connection | None = None,
+    master_key: bytes | None = None,
 ) -> FastAPI:
     """Build a fresh hrono server application.
 
     The database is opened and migrated on startup, before requests are served,
     and closed on shutdown. Pass ``db_path`` to relocate the file or
     ``connection`` to supply a ready connection (tests inject either); an
-    injected connection is used as-is and left for its owner to close.
+    injected connection is used as-is and left for its owner to close. The
+    ``master_key`` is required at startup: it is reconciled against the ``keys``
+    table and, on success, held in app state (never logged, never persisted) for
+    the cipher to use.
     """
 
     @asynccontextmanager
@@ -53,6 +58,11 @@ def create_app(
         conn = open_database(db_path) if owned else connection
         app.state.db = conn
         try:
+            if master_key is None:
+                raise MasterKeyError("master key required to start the server")
+            record = reconcile(conn, master_key)
+            app.state.master_key = master_key
+            app.state.key_id = record.key_id
             yield
         finally:
             if owned:

@@ -1,0 +1,93 @@
+"""Loading the master key at startup and reconciling it with the DB.
+
+The raw key is read from a file or the environment, validated as a Fernet key,
+and its fingerprint checked against the ``keys`` table so a wrong key is
+rejected before any request is served. The raw key is never logged and never
+stored; only its fingerprint reaches the database.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from datetime import UTC, datetime
+from pathlib import Path
+
+from cryptography.fernet import Fernet
+
+from hrono.crypto.keys import KeyRecord, fingerprint
+
+
+class MasterKeyError(Exception):
+    """Base for master-key startup failures; the boundary maps it to output."""
+
+
+class KeyNotProvided(MasterKeyError):
+    """Neither a key file nor the environment variable was given."""
+
+
+class KeyFileUnreadable(MasterKeyError):
+    """The key file does not exist or cannot be read."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__("master key file is unreadable")
+        self.path = path
+
+
+class InvalidKey(MasterKeyError):
+    """The supplied bytes are not a valid Fernet key."""
+
+
+class WrongMasterKey(MasterKeyError):
+    """The supplied key does not match the active key on record."""
+
+    def __init__(self, active_key_id: int) -> None:
+        super().__init__("wrong master key: does not match the active key")
+        self.active_key_id = active_key_id
+
+
+def load_key(key_file: Path | None, env_value: str | None) -> bytes:
+    """Resolve and validate the master key from a file or the environment.
+
+    ``key_file`` wins when both are supplied. Returns the raw Fernet key bytes;
+    raises a ``MasterKeyError`` subtype the caller maps to a startup failure.
+    """
+    if key_file is not None:
+        try:
+            raw = key_file.read_bytes().strip()
+        except OSError as exc:
+            raise KeyFileUnreadable(key_file) from exc
+    elif env_value:
+        raw = env_value.strip().encode()
+    else:
+        raise KeyNotProvided
+
+    try:
+        Fernet(raw)
+    except (ValueError, TypeError) as exc:
+        raise InvalidKey from exc
+    return raw
+
+
+def reconcile(conn: sqlite3.Connection, key: bytes) -> KeyRecord:
+    """Match ``key`` against the ``keys`` table, recording it on first run.
+
+    An empty table takes this key's fingerprint as the active key; an existing
+    active key must match or startup is refused. Nothing is mutated on mismatch.
+    """
+    digest = fingerprint(key)
+    row = conn.execute(
+        "SELECT key_id, key_hash, created_at FROM keys "
+        "ORDER BY key_id DESC LIMIT 1"
+    ).fetchone()
+    if row is not None:
+        if row["key_hash"] != digest:
+            raise WrongMasterKey(row["key_id"])
+        return KeyRecord(row["key_id"], row["key_hash"], row["created_at"])
+
+    created_at = datetime.now(UTC).isoformat()
+    with conn:
+        cursor = conn.execute(
+            "INSERT INTO keys (key_hash, created_at) VALUES (?, ?)",
+            (digest, created_at),
+        )
+    return KeyRecord(cursor.lastrowid or 0, digest, created_at)

@@ -5,6 +5,7 @@ description = "Hierarchical, incrementally-updated knowledge base for AI agents"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=44,<45",
     "fastapi>=0.115.0",
     "sqlite-vec>=0.1.9",
     "typer>=0.12.0",

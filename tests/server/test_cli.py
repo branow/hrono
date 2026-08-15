@@ -1,40 +1,76 @@
+from pathlib import Path
+
 import pytest
+from cryptography.fernet import Fernet
 from typer.testing import CliRunner
 
 from hrono import cli
 
 
-def test_serve_boots_uvicorn_with_the_app_factory(
+def keyfile(tmp_path: Path) -> Path:
+    path = tmp_path / "master.key"
+    path.write_bytes(Fernet.generate_key())
+    return path
+
+
+def test_serve_refuses_without_a_master_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    result = CliRunner().invoke(cli.app, ["serve"])
+    assert result.exit_code != 0
+    assert "--key-file" in result.output
+    assert "HRONO_MASTER_KEY" in result.output
+
+
+def test_serve_rejects_an_invalid_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HRONO_MASTER_KEY", "not-a-valid-fernet-key")
+    result = CliRunner().invoke(cli.app, ["serve"])
+    assert result.exit_code != 0
+
+
+def test_serve_boots_uvicorn_with_a_valid_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
     captured: dict[str, object] = {}
-
-    def fake_run(target: str, **kwargs: object) -> None:
-        captured["target"] = target
-        captured.update(kwargs)
-
-    monkeypatch.setattr(cli.uvicorn, "run", fake_run)
+    monkeypatch.setattr(
+        cli.uvicorn, "run", lambda app, **kw: captured.update(kw, app=app)
+    )
 
     result = CliRunner().invoke(
-        cli.app, ["serve", "--host", "0.0.0.0", "--port", "9000"]
+        cli.app,
+        [
+            "serve",
+            "--key-file",
+            str(keyfile(tmp_path)),
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "9000",
+        ],
     )
 
     assert result.exit_code == 0
-    assert captured["target"] == "hrono.server.app:create_app"
-    assert captured["factory"] is True
+    assert captured["app"] is not None
     assert captured["host"] == "0.0.0.0"
     assert captured["port"] == 9000
 
 
 def test_serve_defaults_to_localhost_8080(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
     captured: dict[str, object] = {}
     monkeypatch.setattr(
-        cli.uvicorn, "run", lambda target, **kw: captured.update(kw)
+        cli.uvicorn, "run", lambda app, **kw: captured.update(kw)
     )
 
-    result = CliRunner().invoke(cli.app, ["serve"])
+    result = CliRunner().invoke(
+        cli.app, ["serve", "--key-file", str(keyfile(tmp_path))]
+    )
 
     assert result.exit_code == 0
     assert captured["host"] == "127.0.0.1"
