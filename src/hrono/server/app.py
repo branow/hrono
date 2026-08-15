@@ -40,16 +40,17 @@ def create_app(
     db_path: Path = DEFAULT_PATH,
     connection: sqlite3.Connection | None = None,
     master_key: bytes | None = None,
+    key_id: int | None = None,
 ) -> FastAPI:
     """Build a fresh hrono server application.
 
     The database is opened and migrated on startup, before requests are served,
-    and closed on shutdown. Pass ``db_path`` to relocate the file or
-    ``connection`` to supply a ready connection (tests inject either); an
-    injected connection is used as-is and left for its owner to close. The
-    ``master_key`` is required at startup: it is reconciled against the ``keys``
-    table and, on success, held in app state (never logged, never persisted) for
-    the cipher to use.
+    and closed on shutdown. Pass ``db_path`` to open and reconcile the file
+    here, or ``connection`` to supply a connection whose key is already
+    reconciled by the caller (with its ``key_id``); an injected connection is
+    used as-is and left for its owner to close. The ``master_key`` is required
+    at startup and is held in app state (never logged, never persisted) for the
+    cipher to use.
     """
 
     @asynccontextmanager
@@ -60,9 +61,11 @@ def create_app(
         try:
             if master_key is None:
                 raise MasterKeyError("master key required to start the server")
-            record = reconcile(conn, master_key)
             app.state.master_key = master_key
-            app.state.key_id = record.key_id
+            if owned:
+                app.state.key_id = reconcile(conn, master_key).key_id
+            else:
+                app.state.key_id = key_id
             yield
         finally:
             if owned:

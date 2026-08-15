@@ -35,6 +35,7 @@ def test_serve_boots_uvicorn_with_a_valid_key(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         cli.uvicorn, "run", lambda app, **kw: captured.update(kw, app=app)
@@ -63,6 +64,7 @@ def test_serve_defaults_to_localhost_8080(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         cli.uvicorn, "run", lambda app, **kw: captured.update(kw)
@@ -75,6 +77,27 @@ def test_serve_defaults_to_localhost_8080(
     assert result.exit_code == 0
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == 8080
+
+
+def test_serve_refuses_a_wrong_key_with_a_clear_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **kw: None)
+
+    first = tmp_path / "first.key"
+    first.write_bytes(Fernet.generate_key())
+    seeded = CliRunner().invoke(cli.app, ["serve", "--key-file", str(first)])
+    assert seeded.exit_code == 0
+
+    other = tmp_path / "other.key"
+    other.write_bytes(Fernet.generate_key())
+    result = CliRunner().invoke(cli.app, ["serve", "--key-file", str(other)])
+
+    assert result.exit_code != 0
+    assert "wrong master key" in result.output.lower()
+    assert "Traceback" not in result.output
 
 
 def test_serve_is_a_named_subcommand_not_the_bare_command() -> None:

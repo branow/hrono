@@ -21,7 +21,9 @@ from hrono.crypto.masterkey import (
     KeyNotProvided,
     MasterKeyError,
     load_key,
+    reconcile,
 )
+from hrono.db.database import DEFAULT_PATH, open_database
 from hrono.server.app import create_app
 
 app = typer.Typer(add_completion=False)
@@ -53,13 +55,24 @@ def serve(
     key_file: Annotated[Path | None, typer.Option("--key-file")] = None,
 ) -> None:
     """Run the hrono HTTP server (owns the database and all compute)."""
+    connection = None
     try:
         key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
+        connection = open_database(DEFAULT_PATH)
+        record = reconcile(connection, key)
     except MasterKeyError as exc:
+        if connection is not None:
+            connection.close()
         typer.echo(_key_error_message(exc), err=True)
         raise typer.Exit(1) from exc
 
-    uvicorn.run(create_app(master_key=key), host=host, port=port)
+    app = create_app(
+        connection=connection, master_key=key, key_id=record.key_id
+    )
+    try:
+        uvicorn.run(app, host=host, port=port)
+    finally:
+        connection.close()
 
 
 def _key_error_message(exc: MasterKeyError) -> str:
