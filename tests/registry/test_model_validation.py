@@ -1,0 +1,127 @@
+import json
+from pathlib import Path
+
+import pytest
+from cryptography.fernet import Fernet
+
+from hrono.crypto.cipher import Cipher
+from hrono.crypto.masterkey import reconcile
+from hrono.db.database import Database, open_database
+from hrono.registry import store
+from hrono.registry.descriptor import ValidationContext, ValidationFailed
+from hrono.registry.model_validation import validate_model
+
+KEY = Fernet.generate_key()
+API_KEY = "sk-donotleak"
+
+
+def context(
+    tmp_path: Path, *, with_connection: bool = True
+) -> ValidationContext:
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    cipher = Cipher.from_key(KEY, 1)
+    if with_connection:
+        secret = cipher.encrypt(API_KEY)
+        payload = {
+            "name": "prov",
+            "provider": "anthropic",
+            "auth": {"method": "api-key", "key": secret.ciphertext},
+        }
+        store.insert(conn, "connections", "prov", json.dumps(payload), 1, "now")
+    return ValidationContext(database=Database(conn), cipher=cipher)
+
+
+def embedding(dims: int = 4, connection: str | None = None) -> dict:
+    return {
+        "name": "e",
+        "kind": "embedding",
+        "connection": connection,
+        "model": "m",
+        "params": {"dims": dims},
+    }
+
+
+def text(connection: str | None = "prov") -> dict:
+    return {"name": "t", "kind": "text", "connection": connection, "model": "m"}
+
+
+def test_embedding_dims_ok(tmp_path: Path) -> None:
+    validate_model(
+        embedding(dims=4),
+        context(tmp_path),
+        embed=lambda cfg, conn, t: [0.0, 0.0, 0.0, 0.0],
+    )
+
+
+def test_embedding_dims_mismatch_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValidationFailed) as caught:
+        validate_model(
+            embedding(dims=4),
+            context(tmp_path),
+            embed=lambda cfg, conn, t: [0.0, 0.0],
+        )
+    assert "dims" in str(caught.value)
+
+
+def test_text_round_trip_ok(tmp_path: Path) -> None:
+    validate_model(
+        text(),
+        context(tmp_path),
+        generate=lambda cfg, conn, t: "hello",
+    )
+
+
+def test_text_empty_response_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValidationFailed):
+        validate_model(
+            text(), context(tmp_path), generate=lambda cfg, conn, t: "   "
+        )
+
+
+def test_connection_failure_is_rejected(tmp_path: Path) -> None:
+    def boom(cfg: dict, conn: dict, t: float) -> str:
+        raise ConnectionError("refused")
+
+    with pytest.raises(ValidationFailed) as caught:
+        validate_model(text(), context(tmp_path), generate=boom)
+    assert "reach" in str(caught.value)
+
+
+def test_unknown_connection_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValidationFailed) as caught:
+        validate_model(
+            text(connection="ghost"),
+            context(tmp_path),
+            generate=lambda cfg, conn, t: "hi",
+        )
+    assert "unknown connection" in str(caught.value)
+
+
+def test_resolved_connection_is_decrypted_for_the_probe(tmp_path: Path) -> None:
+    seen: dict = {}
+
+    def generate(cfg: dict, connection: dict, t: float) -> str:
+        seen["key"] = connection["auth"]["key"]
+        return "ok"
+
+    validate_model(text(), context(tmp_path), generate=generate)
+    assert seen["key"] == API_KEY
+
+
+def test_credential_never_appears_in_a_reason(tmp_path: Path) -> None:
+    def boom(cfg: dict, connection: dict, t: float) -> str:
+        raise ConnectionError(connection["auth"]["key"])
+
+    with pytest.raises(ValidationFailed) as caught:
+        validate_model(text(), context(tmp_path), generate=boom)
+    assert API_KEY not in str(caught.value)
+
+
+def test_text_without_connection_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValidationFailed):
+        validate_model(
+            text(connection=None),
+            context(tmp_path, with_connection=False),
+            generate=lambda cfg, conn, t: "hi",
+        )

@@ -11,8 +11,12 @@ import os
 import subprocess
 import tempfile
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from hrono.registry.descriptor import ValidationFailed
+
+if TYPE_CHECKING:
+    from hrono.registry.descriptor import ValidationContext
 
 _TIMEOUT = 10.0
 _AUTH_MARKERS = (
@@ -29,11 +33,15 @@ Runner = Callable[[str, dict[str, str] | None, float], tuple[int, str]]
 
 def validate_git(
     config: dict[str, object],
+    context: ValidationContext | None = None,
     *,
     run: Runner | None = None,
     timeout: float = _TIMEOUT,
 ) -> None:
-    """Reject the write unless the git repo is reachable and auth works."""
+    """Reject the write unless the git repo is reachable and auth works.
+
+    ``context`` is unused here — git sources need only their own config.
+    """
     probe = run if run is not None else _run
     auth = config["auth"]
     method = auth["method"]  # type: ignore[index]

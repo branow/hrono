@@ -12,6 +12,9 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from hrono.crypto.cipher import Cipher
+from hrono.db.database import Database
+
 
 class ValidationFailed(Exception):
     """A write was rejected by a collection's validation hook."""
@@ -22,9 +25,23 @@ class ValidationFailed(Exception):
 
 
 @dataclass(frozen=True)
+class ValidationContext:
+    """What a validation hook may need beyond the config it is validating.
+
+    A hook can read a sibling collection (e.g. resolve a referenced connection)
+    through ``database`` and decrypt that row's secret with ``cipher``.
+    """
+
+    database: Database
+    cipher: Cipher
+
+
+@dataclass(frozen=True)
 class Descriptor:
     collection: str
     model: type[BaseModel]
     secret_paths: tuple[tuple[str, ...], ...]
     write_role: str
-    validate: Callable[[dict[str, object]], None] | None = None
+    validate: Callable[[dict[str, object], ValidationContext], None] | None = (
+        None
+    )

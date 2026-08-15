@@ -18,7 +18,11 @@ from pydantic import ValidationError
 
 from hrono.crypto.cipher import Cipher
 from hrono.registry import store
-from hrono.registry.descriptor import Descriptor, ValidationFailed
+from hrono.registry.descriptor import (
+    Descriptor,
+    ValidationContext,
+    ValidationFailed,
+)
 from hrono.server.auth import require_role
 
 _MASK = "***"
@@ -45,7 +49,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
 
     def create_item(body: dict, request: Request) -> dict[str, object]:
         config = _validated(descriptor, body)
-        _run_hook(descriptor, config)
+        _run_hook(descriptor, config, _context(request))
         stored, key_id = _encrypt(config, descriptor, _cipher(request))
         try:
             with request.app.state.db.connect() as conn:
@@ -73,7 +77,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="name in body does not match name in path",
             )
-        _run_hook(descriptor, config)
+        _run_hook(descriptor, config, _context(request))
         stored, key_id = _encrypt(config, descriptor, _cipher(request))
         with request.app.state.db.connect() as conn:
             existed = store.replace(
@@ -120,6 +124,12 @@ def _cipher(request: Request) -> Cipher:
     )
 
 
+def _context(request: Request) -> ValidationContext:
+    return ValidationContext(
+        database=request.app.state.db, cipher=_cipher(request)
+    )
+
+
 def _validated(descriptor: Descriptor, body: dict) -> dict[str, object]:
     try:
         model = descriptor.model.model_validate(body)
@@ -131,11 +141,15 @@ def _validated(descriptor: Descriptor, body: dict) -> dict[str, object]:
     return model.model_dump()
 
 
-def _run_hook(descriptor: Descriptor, config: dict[str, object]) -> None:
+def _run_hook(
+    descriptor: Descriptor,
+    config: dict[str, object],
+    context: ValidationContext,
+) -> None:
     if descriptor.validate is None:
         return
     try:
-        descriptor.validate(config)
+        descriptor.validate(config, context)
     except ValidationFailed as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason

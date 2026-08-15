@@ -8,10 +8,16 @@ from fastapi.testclient import TestClient
 from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.registry import connection_validation, model_validation
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
 
+CONNECTION = {
+    "name": "anthropic-main",
+    "provider": "anthropic",
+    "auth": {"method": "api-key", "key": "sk-secret"},
+}
 TEXT = {
     "name": "opus",
     "kind": "text",
@@ -26,6 +32,24 @@ EMBEDDING = {
     "model": "BAAI/bge-small",
     "params": {"dims": 384, "batch_size": 32},
 }
+
+
+@pytest.fixture(autouse=True)
+def _valid_backends(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep validation offline: auth ok, probes behave as declared."""
+    monkeypatch.setattr(
+        connection_validation, "_get", lambda url, key, timeout: 200
+    )
+    monkeypatch.setattr(
+        model_validation,
+        "_default_embed",
+        lambda config, conn, t: (
+            [0.0] * int((config.get("params") or {})["dims"])
+        ),
+    )
+    monkeypatch.setattr(
+        model_validation, "_default_generate", lambda config, conn, t: "ok"
+    )
 
 
 class Harness:
@@ -48,6 +72,11 @@ def harness(tmp_path: Path) -> Iterator[Harness]:
     }
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
+        client.post(
+            "/connections",
+            json=CONNECTION,
+            headers={"Authorization": f"Bearer {tokens['writer']}"},
+        )
         yield Harness(client, conn, tokens)
     conn.close()
 

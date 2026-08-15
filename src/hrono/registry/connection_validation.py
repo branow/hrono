@@ -9,10 +9,14 @@ until their tickets. The api-key never appears in a reason or log line.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import httpx
 
 from hrono.registry.descriptor import ValidationFailed
+
+if TYPE_CHECKING:
+    from hrono.registry.descriptor import ValidationContext
 
 _TIMEOUT = 10.0
 _DEFAULT_ENDPOINT = "https://api.anthropic.com"
@@ -22,11 +26,15 @@ Runner = Callable[[str, str, float], int]
 
 def validate_connection(
     config: dict[str, object],
+    context: ValidationContext | None = None,
     *,
     run: Runner | None = None,
     timeout: float = _TIMEOUT,
 ) -> None:
-    """Reject the write unless the provider validates the credential."""
+    """Reject the write unless the provider validates the credential.
+
+    ``context`` is unused here — a connection validates against its own key.
+    """
     validator = _VALIDATORS.get(str(config["provider"]))
     if validator is None:
         return

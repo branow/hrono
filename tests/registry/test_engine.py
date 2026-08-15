@@ -21,7 +21,7 @@ class Widget(BaseModel):
     value: int
 
 
-def _reject_negative(config: dict[str, object]) -> None:
+def _reject_negative(config: dict[str, object], context: object) -> None:
     if int(config["value"]) < 0:  # type: ignore[call-overload]
         raise ValidationFailed("value must be non-negative")
 

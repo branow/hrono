@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from hrono.registry.descriptor import Descriptor
+from hrono.registry.model_validation import validate_model
 
 
 class Model(BaseModel):
@@ -22,15 +23,10 @@ class Model(BaseModel):
     params: dict[str, object] = Field(default_factory=dict)
 
 
-def _validate(config: dict[str, object]) -> None:
-    """Load / round-trip validation lands in #019; the seam is wired here."""
-    return None
-
-
 MODELS = Descriptor(
     collection="models",
     model=Model,
     secret_paths=(),
     write_role="writer",
-    validate=_validate,
+    validate=validate_model,
 )
