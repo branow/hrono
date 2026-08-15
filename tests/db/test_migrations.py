@@ -99,7 +99,5 @@ def test_failed_migration_rolls_back_fully(tmp_path: Path) -> None:
     ).fetchall()
     names = {r[0] for r in tables}
     assert "good" not in names
-    count = conn.execute(
-        "SELECT count(*) FROM schema_migrations"
-    ).fetchone()[0]
+    count = conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0]
     assert count == 0
