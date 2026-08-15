@@ -17,6 +17,7 @@ from fastapi import APIRouter, FastAPI
 
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database, open_database
+from hrono.server.users import router as users_router
 
 _VERSION = version("hrono")
 
@@ -76,4 +77,5 @@ def create_app(
 
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
     app.include_router(router)
+    app.include_router(users_router)
     return app
