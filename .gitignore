@@ -1,5 +1,6 @@
 # Local-only working memory — never commit
 CLAUDE.md
+.autodev/
 
 # Python
 __pycache__/
