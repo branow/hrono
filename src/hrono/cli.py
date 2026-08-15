@@ -15,6 +15,7 @@ from typing import Annotated
 import typer
 import uvicorn
 
+from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
 from hrono.crypto.masterkey import (
     InvalidKey,
     KeyFileUnreadable,
@@ -66,6 +67,10 @@ def serve(
         typer.echo(_key_error_message(exc), err=True)
         raise typer.Exit(1) from exc
 
+    token = bootstrap_admin(connection)
+    if token is not None:
+        typer.echo(_bootstrap_message(token))
+
     app = create_app(
         connection=connection, master_key=key, key_id=record.key_id
     )
@@ -78,3 +83,15 @@ def serve(
 def _key_error_message(exc: MasterKeyError) -> str:
     builder = _KEY_ERRORS.get(type(exc))
     return builder(exc) if builder else str(exc)
+
+
+def _bootstrap_message(token: str) -> str:
+    return (
+        "\nThe users table was empty, so a bootstrap admin was created.\n"
+        f"  user:  {BOOTSTRAP_ADMIN}\n"
+        "  role:  admin\n"
+        f"  token: {token}\n"
+        "\nThis token is shown ONCE and is stored only as a hash.\n"
+        "Save it now. Authenticate with it as a Bearer token:\n"
+        "  Authorization: Bearer <token>\n"
+    )

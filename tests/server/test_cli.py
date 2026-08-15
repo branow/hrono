@@ -5,6 +5,8 @@ from cryptography.fernet import Fernet
 from typer.testing import CliRunner
 
 from hrono import cli
+from hrono.auth.users import authenticate
+from hrono.db.database import open_database
 
 
 def keyfile(tmp_path: Path) -> Path:
@@ -98,6 +100,40 @@ def test_serve_refuses_a_wrong_key_with_a_clear_message_not_a_traceback(
     assert result.exit_code != 0
     assert "wrong master key" in result.output.lower()
     assert "Traceback" not in result.output
+
+
+def _token_from(output: str) -> str:
+    for line in output.splitlines():
+        if "token:" in line:
+            return line.split("token:", 1)[1].strip()
+    raise AssertionError("no token line in output")
+
+
+def test_first_serve_bootstraps_admin_and_prints_token_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **kw: None)
+    key = tmp_path / "master.key"
+    key.write_bytes(Fernet.generate_key())
+
+    first = CliRunner().invoke(cli.app, ["serve", "--key-file", str(key)])
+    assert first.exit_code == 0
+    assert "admin" in first.output
+    assert "once" in first.output.lower()
+    assert "Bearer" in first.output
+
+    conn = open_database(tmp_path / ".hrono" / "hrono.db")
+    user = authenticate(conn, _token_from(first.output))
+    conn.close()
+    assert user is not None
+    assert user.name == "admin"
+    assert user.role == "admin"
+
+    second = CliRunner().invoke(cli.app, ["serve", "--key-file", str(key)])
+    assert second.exit_code == 0
+    assert "Bearer" not in second.output
 
 
 def test_serve_is_a_named_subcommand_not_the_bare_command() -> None:
