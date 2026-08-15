@@ -16,7 +16,7 @@ from pathlib import Path
 from fastapi import APIRouter, FastAPI
 
 from hrono.crypto.masterkey import MasterKeyError, reconcile
-from hrono.db.database import DEFAULT_PATH, open_database
+from hrono.db.database import DEFAULT_PATH, Database, open_database
 
 _VERSION = version("hrono")
 
@@ -50,26 +50,29 @@ def create_app(
     reconciled by the caller (with its ``key_id``); an injected connection is
     used as-is and left for its owner to close. The ``master_key`` is required
     at startup and is held in app state (never logged, never persisted) for the
-    cipher to use.
+    cipher to use. ``app.state.db`` is a ``Database`` owner that serializes
+    access so sync route handlers can use the connection safely.
     """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         owned = connection is None
         conn = open_database(db_path) if owned else connection
-        app.state.db = conn
+        database = Database(conn)
+        app.state.db = database
         try:
             if master_key is None:
                 raise MasterKeyError("master key required to start the server")
             app.state.master_key = master_key
             if owned:
-                app.state.key_id = reconcile(conn, master_key).key_id
+                with database.connect() as active:
+                    app.state.key_id = reconcile(active, master_key).key_id
             else:
                 app.state.key_id = key_id
             yield
         finally:
             if owned:
-                conn.close()
+                database.close()
 
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
     app.include_router(router)

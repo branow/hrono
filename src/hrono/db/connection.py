@@ -23,9 +23,13 @@ def connect(path: Path, *, extensions: bool = True) -> sqlite3.Connection:
     connection is handed back in transactional mode (autocommit off) so callers
     own their commits. Set ``extensions`` false to skip sqlite-vec when the
     caller never touches vectors.
+
+    ``check_same_thread`` is disabled so the single connection can be shared
+    across FastAPI's threadpool handlers; safe concurrent use is enforced by the
+    ``Database`` owner's lock, not by sqlite's per-thread guard.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, autocommit=True)
+    conn = sqlite3.connect(path, autocommit=True, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     for pragma in _PRAGMAS:
         conn.execute(pragma)

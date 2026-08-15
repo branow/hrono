@@ -1,8 +1,9 @@
+import threading
 from pathlib import Path
 
 import pytest
 
-from hrono.db.database import open_database
+from hrono.db.database import Database, open_database
 from hrono.db.migrations import Migrator, packaged
 
 
@@ -47,3 +48,34 @@ def test_open_database_default_path_is_dot_hrono() -> None:
     from hrono.db.database import DEFAULT_PATH
 
     assert Path(".hrono/hrono.db") == DEFAULT_PATH
+
+
+def test_database_serializes_concurrent_cross_thread_access(
+    tmp_path: Path,
+) -> None:
+    database = Database(open_database(tmp_path / "hrono.db"))
+    with database.connect() as conn:
+        conn.execute("CREATE TABLE probe (n INTEGER)")
+        conn.commit()
+
+    errors: list[Exception] = []
+
+    def worker() -> None:
+        try:
+            for _ in range(50):
+                with database.connect() as conn, conn:
+                    conn.execute("INSERT INTO probe (n) VALUES (1)")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    with database.connect() as conn:
+        total = conn.execute("SELECT count(*) FROM probe").fetchone()[0]
+    assert total == 8 * 50
+    database.close()
