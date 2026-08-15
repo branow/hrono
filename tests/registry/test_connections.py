@@ -8,9 +8,20 @@ from fastapi.testclient import TestClient
 from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.registry import connection_validation
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
+
+
+@pytest.fixture(autouse=True)
+def _valid_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep provider validation offline: every key reports as valid (200)."""
+    monkeypatch.setattr(
+        connection_validation, "_get", lambda url, key, timeout: 200
+    )
+
+
 API_KEY = "sk-provider-supersecret"
 
 ANTHROPIC = {

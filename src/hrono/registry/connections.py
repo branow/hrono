@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, RootModel
 
+from hrono.registry.connection_validation import validate_connection
 from hrono.registry.descriptor import Descriptor
 
 
@@ -70,15 +71,10 @@ class Connection(
     pass
 
 
-def _validate(config: dict[str, object]) -> None:
-    """Provider reachability lands in #016; the hook seam is wired here."""
-    return None
-
-
 CONNECTIONS = Descriptor(
     collection="connections",
     model=Connection,
     secret_paths=(("auth", "key"),),
     write_role="writer",
-    validate=_validate,
+    validate=validate_connection,
 )

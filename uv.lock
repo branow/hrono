@@ -202,6 +202,7 @@ source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "sqlite-vec" },
     { name = "tomli-w" },
     { name = "typer" },
@@ -219,6 +220,7 @@ dev = [
 requires-dist = [
     { name = "cryptography", specifier = ">=44,<45" },
     { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "httpx", specifier = ">=0.27,<0.29" },
     { name = "sqlite-vec", specifier = ">=0.1.9" },
     { name = "tomli-w", specifier = ">=1.0,<2.0" },
     { name = "typer", specifier = ">=0.12.0" },
