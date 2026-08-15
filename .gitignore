@@ -1,0 +1,19 @@
+# Local-only working memory — never commit
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+.venv/
+
+# hrono runtime data
+.hrono/
+
+# tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
