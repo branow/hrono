@@ -15,6 +15,8 @@ from pathlib import Path
 
 _FILENAME = re.compile(r"^(\d+)_([a-z0-9_]+)\.sql$")
 
+_PACKAGED = Path(__file__).parent / "migrations"
+
 _BOOKKEEPING = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    INTEGER PRIMARY KEY,
@@ -85,6 +87,20 @@ class Migrator:
             conn.execute(_BOOKKEEPING)
         rows = conn.execute("SELECT version FROM schema_migrations").fetchall()
         return frozenset(row[0] for row in rows)
+
+
+def packaged() -> tuple[Migration, ...]:
+    """Discover the migrations shipped inside the installed hrono package.
+
+    Resolved relative to this module, so it works from an installed package
+    and never depends on the current working directory.
+    """
+    return discover(_PACKAGED)
+
+
+def migrate(conn: sqlite3.Connection) -> tuple[int, ...]:
+    """Apply every pending packaged migration to ``conn``."""
+    return Migrator(packaged()).apply(conn)
 
 
 def _now() -> str:
