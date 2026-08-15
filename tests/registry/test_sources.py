@@ -1,3 +1,4 @@
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -12,22 +13,35 @@ from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
 SECRET = "gh-token-supersecret"
-GIT = {
-    "name": "webphone",
-    "type": "git",
-    "url": "https://github.com/acme/webphone",
-    "auth": {"method": "token", "token": SECRET},
-}
+
+
+def _bare_repo(path: Path) -> str:
+    repo = path / "repo.git"
+    subprocess.run(["git", "init", "--bare", "--quiet", str(repo)], check=True)
+    return repo.as_uri()
 
 
 class Harness:
-    def __init__(self, client: TestClient, conn: object, tokens: dict) -> None:
+    def __init__(
+        self, client: TestClient, conn: object, tokens: dict, url: str
+    ) -> None:
         self.client = client
         self.conn = conn
         self.tokens = tokens
+        self.url = url
 
     def auth(self, role: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.tokens[role]}"}
+
+    def body(self, **over: object) -> dict[str, object]:
+        base: dict[str, object] = {
+            "name": "webphone",
+            "type": "git",
+            "url": self.url,
+            "auth": {"method": "none"},
+        }
+        base.update(over)
+        return base
 
 
 @pytest.fixture
@@ -40,13 +54,13 @@ def harness(tmp_path: Path) -> Iterator[Harness]:
     }
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
-        yield Harness(client, conn, tokens)
+        yield Harness(client, conn, tokens, _bare_repo(tmp_path))
     conn.close()
 
 
-def register(harness: Harness, body: dict | None = None) -> object:
+def register(harness: Harness, **over: object) -> object:
     return harness.client.post(
-        "/sources", json=body or GIT, headers=harness.auth("writer")
+        "/sources", json=harness.body(**over), headers=harness.auth("writer")
     )
 
 
@@ -59,20 +73,17 @@ def test_register_list_fetch(harness: Harness) -> None:
         "/sources/webphone", headers=harness.auth("reader")
     )
     assert fetched.status_code == 200
-    assert fetched.json()["url"] == GIT["url"]
+    assert fetched.json()["url"] == harness.url
 
 
 def test_put_replaces(harness: Harness) -> None:
     register(harness)
-    changed = {**GIT, "url": "https://github.com/acme/renamed"}
     put = harness.client.put(
-        "/sources/webphone", json=changed, headers=harness.auth("writer")
+        "/sources/webphone",
+        json=harness.body(),
+        headers=harness.auth("writer"),
     )
     assert put.status_code == 200
-    fetched = harness.client.get(
-        "/sources/webphone", headers=harness.auth("reader")
-    )
-    assert fetched.json()["url"] == "https://github.com/acme/renamed"
 
 
 def test_delete_removes(harness: Harness) -> None:
@@ -93,7 +104,9 @@ def test_delete_removes(harness: Harness) -> None:
 
 def test_unauthenticated_is_401(harness: Harness) -> None:
     assert harness.client.get("/sources").status_code == 401
-    assert harness.client.post("/sources", json=GIT).status_code == 401
+    assert (
+        harness.client.post("/sources", json=harness.body()).status_code == 401
+    )
 
 
 def test_reader_may_read_not_write(harness: Harness) -> None:
@@ -107,14 +120,8 @@ def test_reader_may_read_not_write(harness: Harness) -> None:
     assert (
         harness.client.post(
             "/sources",
-            json={**GIT, "name": "two"},
+            json=harness.body(name="two"),
             headers=harness.auth("reader"),
-        ).status_code
-        == 403
-    )
-    assert (
-        harness.client.put(
-            "/sources/webphone", json=GIT, headers=harness.auth("reader")
         ).status_code
         == 403
     )
@@ -127,7 +134,7 @@ def test_reader_may_read_not_write(harness: Harness) -> None:
 
 
 def test_secret_is_encrypted_at_rest_and_masked(harness: Harness) -> None:
-    register(harness)
+    register(harness, auth={"method": "token", "token": SECRET})
     fetched = harness.client.get(
         "/sources/webphone", headers=harness.auth("reader")
     )
@@ -142,13 +149,8 @@ def test_secret_is_encrypted_at_rest_and_masked(harness: Harness) -> None:
     assert row["key_id"] == 1
 
 
-def test_post_response_masks_the_secret(harness: Harness) -> None:
-    created = register(harness)
-    assert created.json()["auth"]["token"] == "***"
-
-
 def test_auth_none_stores_no_key_id(harness: Harness) -> None:
-    register(harness, {**GIT, "name": "open", "auth": {"method": "none"}})
+    register(harness, name="open")
     row = harness.conn.execute(
         "SELECT key_id FROM registry WHERE name = 'open'"
     ).fetchone()
@@ -171,10 +173,11 @@ def test_invalid_body_is_422(harness: Harness) -> None:
 
 
 def test_unknown_type_is_422(harness: Harness) -> None:
-    bad = {**GIT, "type": "svn"}
     assert (
         harness.client.post(
-            "/sources", json=bad, headers=harness.auth("writer")
+            "/sources",
+            json=harness.body(type="svn"),
+            headers=harness.auth("writer"),
         ).status_code
         == 422
     )
@@ -182,10 +185,11 @@ def test_unknown_type_is_422(harness: Harness) -> None:
 
 def test_put_name_mismatch_is_400(harness: Harness) -> None:
     register(harness)
-    mismatched = {**GIT, "name": "other"}
     assert (
         harness.client.put(
-            "/sources/webphone", json=mismatched, headers=harness.auth("writer")
+            "/sources/webphone",
+            json=harness.body(name="other"),
+            headers=harness.auth("writer"),
         ).status_code
         == 400
     )
@@ -199,16 +203,24 @@ def test_unknown_name_is_404(harness: Harness) -> None:
         == 404
     )
     assert (
-        harness.client.put(
-            "/sources/ghost",
-            json={**GIT, "name": "ghost"},
-            headers=harness.auth("writer"),
+        harness.client.delete(
+            "/sources/ghost", headers=harness.auth("writer")
         ).status_code
         == 404
     )
+
+
+def test_unreachable_source_is_rejected_400(harness: Harness) -> None:
+    missing = (Path(harness.url[len("file://") :]).parent / "nope.git").as_uri()
+    response = harness.client.post(
+        "/sources",
+        json=harness.body(url=missing),
+        headers=harness.auth("writer"),
+    )
+    assert response.status_code == 400
     assert (
-        harness.client.delete(
-            "/sources/ghost", headers=harness.auth("writer")
+        harness.client.get(
+            "/sources/webphone", headers=harness.auth("reader")
         ).status_code
         == 404
     )

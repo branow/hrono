@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from hrono.registry.descriptor import Descriptor
+from hrono.registry.git_validation import validate_git
 
 
 class GitAuth(BaseModel):
@@ -32,15 +33,10 @@ class GitSource(BaseModel):
     filter: GitFilter | None = None
 
 
-def _validate(config: dict[str, object]) -> None:
-    """Reach + auth validation lands in #013; the hook seam is wired here."""
-    return None
-
-
 SOURCES = Descriptor(
     collection="sources",
     model=GitSource,
     secret_paths=(("auth", "token"), ("auth", "key")),
     write_role="writer",
-    validate=_validate,
+    validate=validate_git,
 )
