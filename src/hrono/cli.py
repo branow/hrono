@@ -16,6 +16,7 @@ import typer
 import uvicorn
 
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
+from hrono.context.commands import app as context_app
 from hrono.crypto.masterkey import (
     InvalidKey,
     KeyFileUnreadable,
@@ -28,6 +29,7 @@ from hrono.db.database import DEFAULT_PATH, open_database
 from hrono.server.app import create_app
 
 app = typer.Typer(add_completion=False)
+app.add_typer(context_app, name="context")
 
 _KEY_ERRORS: dict[type[MasterKeyError], Callable[[MasterKeyError], str]] = {
     KeyNotProvided: lambda _: (
