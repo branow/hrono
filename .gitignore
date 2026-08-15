@@ -1,20 +1,27 @@
-# Local-only working memory — never commit
-CLAUDE.md
-.autodev/
+# Deny by default: ignore everything, then un-ignore only what we track.
+# Local-only files (CLAUDE.md, .autodev/, caches, .venv) are ignored simply
+# by never being un-ignored below.
+*
 
-# Python
+# Descend into directories so the un-ignore rules below can reach nested files.
+!*/
+
+# Root files we track.
+!/.gitignore
+!/.python-version
+!/README.md
+!/pyproject.toml
+!/uv.lock
+
+# Source and tests.
+!/src/**
+!/tests/**
+
+# Re-ignore junk that the broad src/tests rules would otherwise pull back in.
 __pycache__/
 *.py[oc]
-build/
-dist/
-wheels/
-*.egg-info/
+
+# Heavy or local-only directories: re-ignore fully so git never descends.
 .venv/
-
-# hrono runtime data
 .hrono/
-
-# tooling caches
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+.autodev/
