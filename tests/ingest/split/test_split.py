@@ -4,7 +4,7 @@ import pytest
 
 from hrono.ingest.split import Node, structure
 from hrono.ingest.split.cascade import deepen
-from hrono.ingest.split.constants import CASCADE, PARAGRAPH_BYTES
+from hrono.ingest.split.constants import CASCADE, PASSAGE_BYTES
 
 PY = (
     b"def foo(x):\n    return x\n\nclass Bar:\n    def m(self):\n        pass\n"
@@ -110,7 +110,7 @@ def test_over_budget_leaves_have_no_delimiter_left_to_split_on() -> None:
     root = structure(Path("blob.dat"), BLOB)
     separators = [d.separator for d in CASCADE]
     for leaf in root.leaves():
-        if leaf.end - leaf.start > PARAGRAPH_BYTES:
+        if leaf.end - leaf.start > PASSAGE_BYTES:
             body = BLOB[leaf.start : leaf.end]
             assert not any(sep in body for sep in separators)
 

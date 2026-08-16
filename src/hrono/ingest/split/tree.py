@@ -16,7 +16,7 @@ from pathlib import Path
 from tree_sitter import Node as TSNode
 
 from hrono.ingest.split.cascade import deepen
-from hrono.ingest.split.constants import PARAGRAPH_BYTES
+from hrono.ingest.split.constants import PASSAGE_BYTES
 from hrono.ingest.split.grammar import parser_for
 from hrono.ingest.split.node import Node
 
@@ -35,7 +35,7 @@ def _convert(node: TSNode, raw: bytes, start: int, end: int) -> Node:
         child for child in node.children if child.end_byte > child.start_byte
     ]
     if not kids:
-        grown = deepen(raw, start, end) if end - start > PARAGRAPH_BYTES else ()
+        grown = deepen(raw, start, end) if end - start > PASSAGE_BYTES else ()
         return Node(start, end, node.type, _name(node), grown)
     children = tuple(
         _convert(kid, raw, span_start, span_end)

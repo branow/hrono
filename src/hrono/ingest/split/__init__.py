@@ -6,6 +6,8 @@ passages. The tree tiles the file exactly, so reassembly is byte-identical.
 """
 
 from hrono.ingest.split.node import Node
+from hrono.ingest.split.pack import split
+from hrono.ingest.split.section import Passage, Section
 from hrono.ingest.split.tree import structure
 
-__all__ = ["Node", "structure"]
+__all__ = ["Node", "Passage", "Section", "split", "structure"]

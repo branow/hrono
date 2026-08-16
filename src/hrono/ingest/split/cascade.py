@@ -10,7 +10,7 @@ piece, so the pieces tile the span exactly (no gaps, no overlaps).
 
 from __future__ import annotations
 
-from hrono.ingest.split.constants import CASCADE, PARAGRAPH_BYTES
+from hrono.ingest.split.constants import CASCADE, PASSAGE_BYTES
 from hrono.ingest.split.node import Node
 
 
@@ -31,7 +31,7 @@ def deepen(
             f"~{delimiter.name}",
             None,
             deepen(raw, piece_start, piece_end, level + 1)
-            if piece_end - piece_start > PARAGRAPH_BYTES
+            if piece_end - piece_start > PASSAGE_BYTES
             else (),
         )
         for piece_start, piece_end in pieces
