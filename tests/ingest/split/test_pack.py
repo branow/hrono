@@ -134,6 +134,24 @@ def test_byte_chop_splits_an_atomic_span_into_marked_raw_parts() -> None:
     assert b"".join(MINIFIED[p.start : p.end] for p in passages) == MINIFIED
 
 
+def test_byte_chop_survives_crumbs_flanking_an_atomic_span() -> None:
+    # the minified shape the ticket targets: tiny tokens around a huge atomic
+    # span (var / x / = / ; are sub-MIN_PARA crumbs that merge, and must not
+    # swallow the byte-chop of the 30 KB blob between them).
+    raw = b"var x=" + b"a" * 30000 + b";\n"
+    sections = split(Path("min.js"), raw)
+    passages = _passages(sections)
+    # every passage stays within budget despite the crumb/chop interaction
+    assert all(p.end - p.start <= PASSAGE_BYTES for p in passages)
+    # the over-budget atomic content is split into part/of-marked passages
+    assert any(p.part is not None for p in passages)
+    # and nothing is lost
+    assert b"".join(raw[p.start : p.end] for p in passages) == raw
+    for section in sections:
+        rebuilt = b"".join(raw[p.start : p.end] for p in section.passages)
+        assert rebuilt == raw[section.start : section.end]
+
+
 def test_ordinary_passages_carry_no_raw_part_markers() -> None:
     passages = _passages(split(Path("code.py"), CODE))
     assert all(p.part is None and p.of is None for p in passages)

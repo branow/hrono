@@ -55,9 +55,29 @@ def _passages(section: _Span) -> tuple[Passage, ...]:
     wrapper = Node(
         section.start, section.end, "~section", None, _group(section)
     )
-    packed = _merge_tiny(_pack(wrapper, PASSAGE_BYTES, MIN_GROUP))
+    packed = _pack(wrapper, PASSAGE_BYTES, MIN_GROUP)
     stretched = _stretch(packed, section.start, section.end)
-    return tuple(Passage(s.start, s.end, s.part, s.of) for s in stretched)
+    merged = _merge_tiny(stretched)
+    bounded = _enforce_budget(merged)
+    return tuple(Passage(s.start, s.end, s.part, s.of) for s in bounded)
+
+
+def _enforce_budget(spans: tuple[_Span, ...]) -> tuple[_Span, ...]:
+    """Byte-chop any span over the passage budget, whatever its node coverage.
+
+    A section can span bytes its nodes do not cover: when a crumb-merge folds a
+    byte-chopped atomic span's parts away, ``_stretch`` and the final group
+    flush can balloon one passage to the whole section. This is the last-resort
+    guarantee that every passage stays within budget, chopping over-budget
+    atomic content into ``part``/``of``-marked pieces regardless of coverage.
+    """
+    bounded: list[_Span] = []
+    for span in spans:
+        if span.end - span.start > PASSAGE_BYTES:
+            bounded.extend(_chop(span.start, span.end, PASSAGE_BYTES))
+        else:
+            bounded.append(span)
+    return tuple(bounded)
 
 
 def _group(section: _Span) -> tuple[Node, ...]:
