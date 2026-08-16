@@ -7,7 +7,6 @@ reported as opaque "cannot reach" / "authentication failed" reasons only.
 
 from __future__ import annotations
 
-import os
 import subprocess
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -66,7 +65,7 @@ def _run(
             text=True,
             timeout=timeout,
             check=False,
-            env={**os.environ, **env},
+            env=env,
         )
     except subprocess.TimeoutExpired:
         return 124, "timed out"

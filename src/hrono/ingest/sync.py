@@ -10,7 +10,6 @@ Registers into the op registry so the worker dispatches ``sync`` per source.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -102,7 +101,7 @@ def _run(
             text=True,
             timeout=timeout,
             check=False,
-            env={**os.environ, **env},
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         raise SyncError(f"sync timed out for source: {name}") from exc

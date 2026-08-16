@@ -1,3 +1,5 @@
+import pytest
+
 from hrono.registry.git_auth import git_auth
 
 
@@ -31,3 +33,23 @@ def test_ssh_sets_a_batchmode_command() -> None:
         assert "GIT_SSH_COMMAND" in env
         assert "BatchMode=yes" in env["GIT_SSH_COMMAND"]
         assert config == []
+
+
+@pytest.mark.parametrize(
+    "auth",
+    [
+        {"method": "none"},
+        {"method": "token", "token": "T"},
+        {"method": "ssh", "key": "K"},
+    ],
+)
+def test_child_env_excludes_hrono_secrets(
+    monkeypatch: pytest.MonkeyPatch, auth: dict
+) -> None:
+    monkeypatch.setenv("HRONO_MASTER_KEY", "crown-jewel")
+    monkeypatch.setenv("PATH", "/usr/bin")
+    with git_auth("file:///x", auth) as (_, env, _config):
+        assert "HRONO_MASTER_KEY" not in env
+        assert "crown-jewel" not in env.values()
+        assert env["PATH"] == "/usr/bin"
+        assert env["GIT_TERMINAL_PROMPT"] == "0"

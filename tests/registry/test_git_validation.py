@@ -27,6 +27,22 @@ def test_none_auth_passes_when_reachable() -> None:
     validate_git(body(method="none"), run=lambda url, env, cfg, t: (0, ""))
 
 
+def test_subprocess_env_excludes_the_master_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HRONO_MASTER_KEY", "crown-jewel-secret")
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    seen: list = []
+    validate_git(body(method="token", token=TOKEN), run=ok_runner(seen))
+    _, env, _ = seen[0]
+    # the crown-jewel secret is never handed to the git subprocess
+    assert "HRONO_MASTER_KEY" not in env
+    assert "crown-jewel-secret" not in env.values()
+    # git still gets what it legitimately needs, and validation succeeded
+    assert env["PATH"] == "/usr/bin:/bin"
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+
+
 def test_token_stays_out_of_the_url_and_goes_to_env() -> None:
     seen: list = []
     validate_git(body(method="token", token=TOKEN), run=ok_runner(seen))
