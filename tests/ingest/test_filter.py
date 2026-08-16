@@ -61,3 +61,25 @@ def test_result_is_deterministic_and_sorted(tmp_path: Path) -> None:
 def test_default_cap_keeps_normal_files(tmp_path: Path) -> None:
     (tmp_path / "normal.py").write_text("def f():\n    return 1\n")
     assert ingestable(tmp_path, None) == ("normal.py",)
+
+
+def test_symlink_escaping_the_cache_is_never_ingested(tmp_path: Path) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "real.py").write_text("kept")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret outside the cache")
+    (cache / "abs_escape").symlink_to(outside)
+    (cache / "rel_escape").symlink_to(Path("../outside.txt"))
+    kept = ingestable(cache, None)
+    assert kept == ("real.py",)
+    assert "abs_escape" not in kept
+    assert "rel_escape" not in kept
+
+
+def test_symlink_to_a_file_inside_the_cache_is_also_skipped(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "real.py").write_text("x")
+    (tmp_path / "link.py").symlink_to(tmp_path / "real.py")
+    assert ingestable(tmp_path, None) == ("real.py",)

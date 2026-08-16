@@ -2,8 +2,9 @@
 
 Pure classification over the synced tree (#025): three gates in order — glob
 exclude, size cap, then a null-byte sniff for anything no glob caught — plus
-skipping ``.git`` and non-regular files. Defaults are baked from the spec and
-kept as data. No file content is read beyond the size stat and the sniff.
+skipping ``.git``, symlinks (which could escape the cache), and non-regular
+files. Defaults are baked from the spec and kept as data. No file content is
+read beyond the size stat and the sniff.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ def ingestable(
     kept: list[str] = []
     for path in cache.rglob("*"):
         rel = path.relative_to(cache)
-        if ".git" in rel.parts or not path.is_file():
+        if ".git" in rel.parts or path.is_symlink() or not path.is_file():
             continue
         if any(rel.full_match(pattern) for pattern in exclude):
             continue
