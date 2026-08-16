@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI
 
+import hrono.ingest.split_op  # noqa: F401 - registers the split op
 import hrono.ingest.sync  # noqa: F401 - registers the sync op into the registry
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
