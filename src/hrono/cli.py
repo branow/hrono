@@ -14,6 +14,7 @@ from typing import Annotated
 import typer
 import uvicorn
 
+from hrono.admin.commands import app as admin_app
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
 from hrono.context.commands import app as context_app
 from hrono.crypto.cipher import Cipher
@@ -26,6 +27,7 @@ from hrono.server.app import create_app
 
 app = typer.Typer(add_completion=False)
 app.add_typer(context_app, name="context")
+app.add_typer(admin_app, name="admin")
 
 
 @app.callback()

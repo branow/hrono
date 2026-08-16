@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hrono.crypto.tokens import generate_token, hash_token
-from hrono.errors import Conflict, Invalid
+from hrono.errors import Conflict, Invalid, NotFound
 
 ROLES = frozenset({"reader", "writer", "admin"})
 
@@ -52,6 +52,24 @@ def create_user(
     except sqlite3.IntegrityError as exc:
         raise Conflict(f"user already exists: {name}") from exc
     return User(name, role, created_at), token
+
+
+def reset_token(conn: sqlite3.Connection, name: str) -> tuple[User, str]:
+    """Reissue an existing user's token; return the ``User`` and raw token once.
+
+    Only the new token's hash is persisted (the old one stops authenticating);
+    no other column or row changes. Raises ``NotFound`` for an unknown user.
+    """
+    user = get_user(conn, name)
+    if user is None:
+        raise NotFound(f"user not found: {name}")
+    token = generate_token()
+    with conn:
+        conn.execute(
+            "UPDATE users SET token_hash = ? WHERE name = ?",
+            (hash_token(token), name),
+        )
+    return user, token
 
 
 def get_user(conn: sqlite3.Connection, name: str) -> User | None:
