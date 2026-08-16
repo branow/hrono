@@ -32,6 +32,14 @@ class UnknownContext(Exception):
         self.name = name
 
 
+class MalformedConfig(Exception):
+    """The config file is not valid TOML or has the wrong shape."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__("malformed config")
+        self.path = path
+
+
 @dataclass(frozen=True)
 class Context:
     name: str
@@ -106,18 +114,43 @@ def _remove(state: State, name: str) -> tuple[State, bool]:
 def _read(path: Path) -> State:
     if not path.exists():
         return State((), None)
-    with path.open("rb") as handle:
-        document = tomllib.load(handle)
-    contexts = tuple(
-        Context(
-            name=name,
-            server_url=table["server_url"],
-            token=table["token"],
-            default_tree=table.get("default_tree"),
-        )
-        for name, table in document.get("contexts", {}).items()
-    )
-    return State(contexts, document.get("current"))
+    try:
+        with path.open("rb") as handle:
+            document = tomllib.load(handle)
+        return _parse(document)
+    except (
+        tomllib.TOMLDecodeError,
+        KeyError,
+        TypeError,
+        AttributeError,
+    ) as exc:
+        raise MalformedConfig(path) from exc
+
+
+def _parse(document: object) -> State:
+    if not isinstance(document, dict):
+        raise TypeError
+    raw = document.get("contexts", {})
+    if not isinstance(raw, dict):
+        raise TypeError
+    contexts = tuple(_context(name, table) for name, table in raw.items())
+    current = document.get("current")
+    if current is not None and not isinstance(current, str):
+        raise TypeError
+    return State(contexts, current)
+
+
+def _context(name: str, table: object) -> Context:
+    if not isinstance(table, dict):
+        raise TypeError
+    server_url = table["server_url"]
+    token = table["token"]
+    default_tree = table.get("default_tree")
+    if not isinstance(server_url, str) or not isinstance(token, str):
+        raise TypeError
+    if default_tree is not None and not isinstance(default_tree, str):
+        raise TypeError
+    return Context(name, server_url, token, default_tree)
 
 
 def _write(path: Path, state: State) -> None:

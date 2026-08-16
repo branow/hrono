@@ -6,6 +6,7 @@ set.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated
 
 import typer
@@ -13,6 +14,7 @@ import typer
 from hrono.context.store import (
     Context,
     DuplicateContext,
+    MalformedConfig,
     Store,
     UnknownContext,
     config_path,
@@ -25,6 +27,17 @@ def _store() -> Store:
     return Store(config_path())
 
 
+def _guard[T](action: Callable[[], T]) -> T:
+    """Run a store action, mapping a malformed config to a clean CLI error."""
+    try:
+        return action()
+    except MalformedConfig as exc:
+        typer.echo(
+            f"Malformed config at {exc.path}: fix or remove it.", err=True
+        )
+        raise typer.Exit(1) from exc
+
+
 @app.command("add")
 def add(
     name: str,
@@ -34,7 +47,7 @@ def add(
 ) -> None:
     """Register a context; the first one added becomes current."""
     try:
-        _store().add(Context(name, server, token, default_tree))
+        _guard(lambda: _store().add(Context(name, server, token, default_tree)))
     except DuplicateContext as exc:
         typer.echo(f"Context '{name}' already exists.", err=True)
         raise typer.Exit(1) from exc
@@ -45,12 +58,12 @@ def add(
 def list_contexts() -> None:
     """List every context, marking the current one."""
     store = _store()
-    contexts = store.contexts()
+    contexts = _guard(store.contexts)
     if not contexts:
         typer.echo("No contexts yet. Add one with 'hrono context add'.")
         return
-    current = store.current()
-    current_name = current.name if current is not None else None
+    active = _guard(store.current)
+    current_name = active.name if active is not None else None
     for context in contexts:
         marker = "*" if context.name == current_name else " "
         typer.echo(f"{marker} {context.name}\t{context.server_url}")
@@ -60,7 +73,7 @@ def list_contexts() -> None:
 def use(name: str) -> None:
     """Switch the current context."""
     try:
-        _store().use(name)
+        _guard(lambda: _store().use(name))
     except UnknownContext as exc:
         typer.echo(f"Unknown context '{name}'.", err=True)
         raise typer.Exit(1) from exc
@@ -70,7 +83,7 @@ def use(name: str) -> None:
 @app.command("current")
 def current() -> None:
     """Print the current context without revealing the token."""
-    active = _store().current()
+    active = _guard(_store().current)
     if active is None:
         typer.echo("No current context. Set one with 'hrono context use'.")
         return
@@ -81,7 +94,7 @@ def current() -> None:
 def remove(name: str) -> None:
     """Remove a context; if it was current, clear the current pointer."""
     try:
-        cleared = _store().remove(name)
+        cleared = _guard(lambda: _store().remove(name))
     except UnknownContext as exc:
         typer.echo(f"Unknown context '{name}'.", err=True)
         raise typer.Exit(1) from exc
