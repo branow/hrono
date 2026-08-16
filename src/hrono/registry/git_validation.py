@@ -28,7 +28,7 @@ _AUTH_MARKERS = (
     "access denied",
 )
 
-Runner = Callable[[str, dict[str, str] | None, float], tuple[int, str]]
+Runner = Callable[[str, dict[str, str], list[str], float], tuple[int, str]]
 
 
 def validate_git(
@@ -46,8 +46,8 @@ def validate_git(
     auth = config["auth"]
     url = str(config["url"])
 
-    with git_auth(url, auth) as (effective, env):  # type: ignore[arg-type]
-        code, stderr = probe(effective, env, timeout)
+    with git_auth(url, auth) as (effective, env, config_args):  # type: ignore[arg-type]
+        code, stderr = probe(effective, env, config_args, timeout)
 
     if code == 0:
         return
@@ -57,19 +57,16 @@ def validate_git(
 
 
 def _run(
-    url: str, env: dict[str, str] | None, timeout: float
+    url: str, env: dict[str, str], config_args: list[str], timeout: float
 ) -> tuple[int, str]:
-    environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    if env is not None:
-        environment.update(env)
     try:
         completed = subprocess.run(
-            ["git", "ls-remote", url],
+            ["git", *config_args, "ls-remote", url],
             capture_output=True,
             text=True,
             timeout=timeout,
             check=False,
-            env=environment,
+            env={**os.environ, **env},
         )
     except subprocess.TimeoutExpired:
         return 124, "timed out"

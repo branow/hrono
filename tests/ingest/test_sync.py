@@ -134,15 +134,23 @@ def test_bad_source_fails_cleanly_without_a_half_written_cache(
     db.close()
 
 
-def test_token_auth_is_decrypted_and_never_leaks(
+def _cache_contains(cache: Path, needle: str) -> bool:
+    for path in cache.rglob("*"):
+        if path.is_file() and needle in path.read_bytes().decode("latin-1"):
+            return True
+    return False
+
+
+def test_token_auth_never_persists_to_the_cache_or_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    secret_token = "gh-secret-token"
     url = make_repo(tmp_path / "remote")
     db = setup(tmp_path, monkeypatch)
     cipher = Cipher.from_key(KEY, 1)
     with db.connect() as conn:
         reconcile(conn, KEY)
-        secret = cipher.encrypt("gh-secret-token")
+        secret = cipher.encrypt(secret_token)
         register(
             conn,
             "repo",
@@ -150,11 +158,18 @@ def test_token_auth_is_decrypted_and_never_leaks(
             {"method": "token", "token": secret.ciphertext},
             key_id=1,
         )
+    cache = tmp_path / ".hrono/cache/sources/repo"
+
     sync(job("repo"), JobContext(db, cipher))
     assert version(db, "repo") is not None
+    assert not _cache_contains(cache, secret_token)
+
+    sync(job("repo"), JobContext(db, cipher))
+    assert not _cache_contains(cache, secret_token)
+
     with db.connect() as conn:
         dump = str(conn.execute("SELECT * FROM source_state").fetchall())
-    assert "gh-secret-token" not in dump
+    assert secret_token not in dump
     db.close()
 
 

@@ -10,6 +10,7 @@ Registers into the op registry so the worker dispatches ``sync`` per source.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import UTC, datetime
@@ -54,29 +55,46 @@ def _load_source(context: JobContext, name: str) -> dict[str, object]:
 def _sync_repo(name: str, url: str, auth: object, timeout: float) -> str:
     cache = _CACHE_ROOT / name
     auth_dict = auth if isinstance(auth, dict) else {"method": "none"}
-    with git_auth(url, auth_dict) as (effective, env):
+    with git_auth(url, auth_dict) as (clean_url, env, config_args):
         if cache.exists():
-            _run(["fetch", "origin"], name, cache, env, timeout)
-            _run(["reset", "--hard", "FETCH_HEAD"], name, cache, env, timeout)
+            _run(["fetch", "origin"], name, cache, env, config_args, timeout)
+            _run(
+                ["reset", "--hard", "FETCH_HEAD"],
+                name,
+                cache,
+                env,
+                config_args,
+                timeout,
+            )
         else:
             cache.parent.mkdir(parents=True, exist_ok=True)
             try:
-                _run(["clone", effective, str(cache)], name, None, env, timeout)
+                _run(
+                    ["clone", clean_url, str(cache)],
+                    name,
+                    None,
+                    env,
+                    config_args,
+                    timeout,
+                )
             except SyncError:
                 shutil.rmtree(cache, ignore_errors=True)
                 raise
-        return _run(["rev-parse", "HEAD"], name, cache, env, timeout).strip()
+        return _run(
+            ["rev-parse", "HEAD"], name, cache, env, config_args, timeout
+        ).strip()
 
 
 def _run(
     args: list[str],
     name: str,
     cwd: Path | None,
-    env: dict[str, str] | None,
+    env: dict[str, str],
+    config_args: list[str],
     timeout: float,
 ) -> str:
-    environment = _env(env)
-    command = ["git", *(["-C", str(cwd)] if cwd is not None else []), *args]
+    prefix = ["-C", str(cwd)] if cwd is not None else []
+    command = ["git", *prefix, *config_args, *args]
     try:
         completed = subprocess.run(
             command,
@@ -84,22 +102,13 @@ def _run(
             text=True,
             timeout=timeout,
             check=False,
-            env=environment,
+            env={**os.environ, **env},
         )
     except subprocess.TimeoutExpired as exc:
         raise SyncError(f"sync timed out for source: {name}") from exc
     if completed.returncode != 0:
         raise SyncError(f"sync failed for source: {name}")
     return completed.stdout
-
-
-def _env(extra: dict[str, str] | None) -> dict[str, str]:
-    import os
-
-    environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    if extra is not None:
-        environment.update(extra)
-    return environment
 
 
 def _record_version(context: JobContext, name: str, version: str) -> None:
