@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import os
 import subprocess
-import tempfile
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from hrono.registry.descriptor import ValidationFailed
+from hrono.registry.git_auth import git_auth
 
 if TYPE_CHECKING:
     from hrono.registry.descriptor import ValidationContext
@@ -44,51 +44,16 @@ def validate_git(
     """
     probe = run if run is not None else _run
     auth = config["auth"]
-    method = auth["method"]  # type: ignore[index]
     url = str(config["url"])
 
-    key_file: str | None = None
-    env: dict[str, str] | None = None
-    effective = url
-    try:
-        if method == "token":
-            effective = _with_token(url, str(auth["token"]))  # type: ignore[index]
-        elif method == "ssh":
-            key_file = _write_key(str(auth["key"]))  # type: ignore[index]
-            env = {
-                "GIT_SSH_COMMAND": (
-                    f"ssh -i {key_file} -o BatchMode=yes "
-                    "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
-                )
-            }
+    with git_auth(url, auth) as (effective, env):  # type: ignore[arg-type]
         code, stderr = probe(effective, env, timeout)
-    finally:
-        if key_file is not None:
-            os.unlink(key_file)
 
     if code == 0:
         return
     if any(marker in stderr.lower() for marker in _AUTH_MARKERS):
         raise ValidationFailed("authentication failed")
     raise ValidationFailed("cannot reach repository")
-
-
-def _with_token(url: str, token: str) -> str:
-    prefix = "https://"
-    if not url.startswith(prefix):
-        return url
-    rest = url[len(prefix) :]
-    host = rest.split("/", 1)[0]
-    user = "x-token-auth" if "bitbucket.org" in host else "x-access-token"
-    return f"{prefix}{user}:{token}@{rest}"
-
-
-def _write_key(key: str) -> str:
-    descriptor, path = tempfile.mkstemp()
-    with os.fdopen(descriptor, "w") as handle:
-        handle.write(key if key.endswith("\n") else key + "\n")
-    os.chmod(path, 0o600)
-    return path
 
 
 def _run(

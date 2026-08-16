@@ -13,6 +13,7 @@ import threading
 import uuid
 from datetime import UTC, datetime
 
+from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
 from hrono.jobs import store
 from hrono.jobs.model import Job, serialize_scope, to_job
@@ -45,11 +46,13 @@ class Worker(threading.Thread):
         database: Database,
         ops: dict[str, Handler] | None = None,
         *,
+        cipher: Cipher | None = None,
         poll_interval: float = 0.02,
     ) -> None:
         super().__init__(daemon=True)
         self._database = database
         self._ops = ops if ops is not None else OPS
+        self._cipher = cipher
         self._interval = poll_interval
         self._stopped = threading.Event()
 
@@ -74,7 +77,7 @@ class Worker(threading.Thread):
         try:
             if handler is None:
                 raise LookupError(f"unknown op: {job.op}")
-            handler(job, JobContext(self._database))
+            handler(job, JobContext(self._database, self._cipher))
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
             self._finish(job, "failed", str(exc))
         else:

@@ -15,6 +15,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI
 
+import hrono.ingest.sync  # noqa: F401 - registers the sync op into the registry
+from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database, open_database
 from hrono.jobs.worker import Worker
@@ -76,7 +78,8 @@ def create_app(
                     app.state.key_id = reconcile(active, master_key).key_id
             else:
                 app.state.key_id = key_id
-            worker = Worker(database)
+            cipher = Cipher.from_key(master_key, app.state.key_id)
+            worker = Worker(database, cipher=cipher)
             app.state.worker = worker
             worker.start()
             yield

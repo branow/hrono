@@ -10,15 +10,21 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 
 
 @dataclass(frozen=True)
 class JobContext:
-    """What an op handler needs to do its work (grows with the ops)."""
+    """What an op handler needs to do its work (grows with the ops).
+
+    ``cipher`` is None only when no op in play needs to decrypt a secret (tests
+    of secretless ops); real ingest ops that read source auth require it.
+    """
 
     database: Database
+    cipher: Cipher | None = None
 
 
 Handler = Callable[[Job, JobContext], None]
