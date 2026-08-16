@@ -32,10 +32,47 @@ def insert(
         )
 
 
+def create_fanout(
+    conn: sqlite3.Connection,
+    parent_id: str,
+    op: str,
+    scope: str,
+    leaves: list[tuple[str, str]],
+    tree: str | None,
+    now: str,
+) -> None:
+    """Insert a parent and its leaves atomically (one transaction).
+
+    An empty fan-out records the parent ``succeeded`` with no leaves; otherwise
+    the parent stays ``pending`` (the worker skips it — it has children) and
+    each leaf is a runnable ``pending`` job carrying its single-item scope.
+    """
+    parent_status = "succeeded" if not leaves else "pending"
+    with conn:
+        conn.execute(
+            "INSERT INTO jobs (id, parent_id, tree, op, scope, status, "
+            "created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)",
+            (parent_id, tree, op, scope, parent_status, now, now),
+        )
+        conn.executemany(
+            "INSERT INTO jobs (id, parent_id, tree, op, scope, status, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+            [
+                (leaf_id, parent_id, tree, op, leaf_scope, now, now)
+                for leaf_id, leaf_scope in leaves
+            ],
+        )
+
+
 def claim_next(conn: sqlite3.Connection, now: str) -> sqlite3.Row | None:
-    """Flip the oldest pending job to running and return it, or None."""
+    """Flip the oldest runnable pending leaf to running and return it.
+
+    A parent job (one with children) is never claimed — only leaves and
+    standalone jobs run.
+    """
     row = conn.execute(
-        "SELECT id FROM jobs WHERE status = 'pending' "
+        "SELECT id FROM jobs j WHERE j.status = 'pending' AND NOT EXISTS "
+        "(SELECT 1 FROM jobs c WHERE c.parent_id = j.id) "
         "ORDER BY created_at, id LIMIT 1"
     ).fetchone()
     if row is None:
