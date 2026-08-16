@@ -17,8 +17,10 @@ from fastapi import APIRouter, FastAPI
 
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database, open_database
+from hrono.jobs.worker import Worker
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
+from hrono.server.jobs import router as jobs_router
 from hrono.server.users import router as users_router
 
 _VERSION = version("hrono")
@@ -63,6 +65,7 @@ def create_app(
         conn = open_database(db_path) if owned else connection
         database = Database(conn)
         app.state.db = database
+        worker: Worker | None = None
         try:
             if master_key is None:
                 raise MasterKeyError("master key required to start the server")
@@ -72,14 +75,21 @@ def create_app(
                     app.state.key_id = reconcile(active, master_key).key_id
             else:
                 app.state.key_id = key_id
+            worker = Worker(database)
+            app.state.worker = worker
+            worker.start()
             yield
         finally:
+            if worker is not None:
+                worker.stop()
+                worker.join(timeout=5)
             if owned:
                 database.close()
 
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
     app.include_router(router)
     app.include_router(users_router)
+    app.include_router(jobs_router)
     for descriptor in COLLECTIONS:
         app.include_router(build_router(descriptor))
     return app
