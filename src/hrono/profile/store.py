@@ -9,11 +9,13 @@ never touch the real ``~/.hrono``. (kubectl/gh call this a context.)
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 import tomli_w
+from platformdirs import user_config_dir
 
 from hrono.errors import BadRequest, Conflict, NotFound
 
@@ -57,9 +59,20 @@ class State:
 
 
 def config_path() -> Path:
-    """Resolve the config file location, honouring ``HRONO_HOME``."""
+    """Resolve the config file location per OS, honouring ``HRONO_HOME``.
+
+    ``HRONO_HOME`` wins everywhere. Otherwise Windows uses the per-user config
+    dir (``%APPDATA%\\hrono`` via platformdirs); macOS and Linux keep the Unix
+    dotfolder ``~/.hrono`` (the CLI-tool convention). Only the default location
+    differs, and only on Windows.
+    """
     home = os.environ.get("HRONO_HOME")
-    base = Path(home) if home else Path.home() / ".hrono"
+    if home:
+        base = Path(home)
+    elif sys.platform == "win32":
+        base = Path(user_config_dir("hrono", roaming=True))
+    else:
+        base = Path.home() / ".hrono"
     return base / "config.toml"
 
 
@@ -157,11 +170,15 @@ def _profile(name: str, table: object) -> Profile:
 
 def _write(path: Path, state: State) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    os.chmod(path.parent, 0o700)
+    # POSIX owner-only perms; on Windows the file lands in the user-scoped
+    # AppData dir and POSIX mode bits do not apply, so skip them cleanly.
+    if os.name == "posix":
+        os.chmod(path.parent, 0o700)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "wb") as handle:
         tomli_w.dump(_document(state), handle)
-    os.chmod(path, 0o600)
+    if os.name == "posix":
+        os.chmod(path, 0o600)
 
 
 def _document(state: State) -> dict[str, object]:
