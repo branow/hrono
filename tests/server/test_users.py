@@ -46,6 +46,23 @@ def test_missing_header_is_401(harness: Harness) -> None:
     assert response.json()["error"]["code"] == "unauthorized"
 
 
+def test_bearer_scheme_is_case_insensitive(harness: Harness) -> None:
+    token = harness.tokens["admin"]
+    for scheme in ("bearer", "BEARER", "BeArEr"):
+        response = harness.client.get(
+            "/users", headers={"Authorization": f"{scheme} {token}"}
+        )
+        assert response.status_code == 200, scheme
+
+
+def test_token_value_stays_case_sensitive(harness: Harness) -> None:
+    mutated = harness.tokens["admin"].swapcase()
+    response = harness.client.get(
+        "/users", headers={"Authorization": f"Bearer {mutated}"}
+    )
+    assert response.status_code == 401
+
+
 def test_malformed_header_is_401(harness: Harness) -> None:
     assert (
         harness.client.get(

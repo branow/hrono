@@ -50,6 +50,6 @@ def _bearer_token(header: str | None) -> str | None:
     if header is None:
         return None
     scheme, _, token = header.partition(" ")
-    if scheme != "Bearer" or not token.strip():
+    if scheme.lower() != "bearer" or not token.strip():
         return None
     return token.strip()
