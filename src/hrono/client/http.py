@@ -1,6 +1,6 @@
 """The shared HTTP client every CLI subcommand talks to ``hrono serve`` through.
 
-Resolves the current context (server_url + token), attaches the Bearer token on
+Resolves the current profile (server_url + token), attaches the Bearer token on
 every request, and maps transport/HTTP failures to typed errors the CLI boundary
 renders as a clean one-line message. The token never appears in a message,
 exception, or log line.
@@ -12,15 +12,15 @@ from collections.abc import Callable
 
 import httpx
 
-from hrono.context.store import Store, config_path
+from hrono.profile.store import Store, config_path
 
 
 class ClientError(Exception):
     """Base for client-side failures; the boundary maps it to a clean line."""
 
 
-class NoContext(ClientError):
-    """No context is current, so there is no server to talk to."""
+class NoProfile(ClientError):
+    """No profile is current, so there is no server to talk to."""
 
 
 class Unreachable(ClientError):
@@ -105,11 +105,11 @@ class Client:
             return http.request(method, path, json=body, headers=headers)
 
 
-def from_context() -> Client:
-    """Build a client for the current context; raise ``NoContext`` if none."""
+def from_profile() -> Client:
+    """Build a client for the current profile; raise ``NoProfile`` if none."""
     current = Store(config_path()).current()
     if current is None:
-        raise NoContext
+        raise NoProfile
     return Client(current.server_url, current.token)
 
 
@@ -149,14 +149,14 @@ _STATUS_ERRORS: dict[int, Callable[[], ClientError]] = {
 }
 
 _MESSAGES: dict[type[ClientError], Callable[[ClientError], str]] = {
-    NoContext: lambda _: (
-        "No active context. Add one with "
-        "'hrono context add <name> --server <url> --token <token>'."
+    NoProfile: lambda _: (
+        "No active profile. Add one with "
+        "'hrono profile add <name> --server <url> --token <token>'."
     ),
     Unreachable: lambda e: (
         f"Cannot reach hrono server at {e.server_url}."  # type: ignore[attr-defined]
     ),
-    Unauthorized: lambda _: "Unauthorized — check the token for this context.",
+    Unauthorized: lambda _: "Unauthorized — check the token for this profile.",
     Forbidden: lambda _: "Forbidden — this token's role lacks permission.",
     NotFound: lambda _: "Not found.",
 }

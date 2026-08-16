@@ -15,12 +15,12 @@ def write_config(home: Path, text: str) -> None:
 
 def run(monkeypatch: pytest.MonkeyPatch, home: Path, *args: str) -> object:
     monkeypatch.setenv("HRONO_HOME", str(home))
-    return CliRunner().invoke(cli.app, ["context", *args])
+    return CliRunner().invoke(cli.app, ["profile", *args])
 
 
 INVALID_TOML = "this is = not valid toml ["
 WRONG_SHAPE = (
-    'current = "prod"\n[contexts.prod]\nserver_url = 42\ntoken = "'
+    'current = "prod"\n[profiles.prod]\nserver_url = 42\ntoken = "'
     + TOKEN
     + '"\n'
 )

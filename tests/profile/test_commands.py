@@ -10,7 +10,7 @@ TOKEN = "sekret-bearer-token"
 
 def run(monkeypatch: pytest.MonkeyPatch, home: Path, *args: str) -> object:
     monkeypatch.setenv("HRONO_HOME", str(home))
-    return CliRunner().invoke(cli.app, ["context", *args])
+    return CliRunner().invoke(cli.app, ["profile", *args])
 
 
 def test_add_writes_config_and_marks_first_current(
@@ -142,7 +142,7 @@ def test_current_when_none(
 ) -> None:
     current = run(monkeypatch, tmp_path, "current")
     assert current.exit_code == 0
-    assert "No current context" in current.output
+    assert "No current profile" in current.output
 
 
 def test_list_empty_message(
@@ -150,7 +150,7 @@ def test_list_empty_message(
 ) -> None:
     listed = run(monkeypatch, tmp_path, "list")
     assert listed.exit_code == 0
-    assert "No contexts" in listed.output
+    assert "No profiles" in listed.output
 
 
 def test_rm_removes_and_clears_current(
@@ -168,7 +168,7 @@ def test_rm_removes_and_clears_current(
     )
     removed = run(monkeypatch, tmp_path, "rm", "prod")
     assert removed.exit_code == 0
-    assert "no context is current" in removed.output.lower()
+    assert "no profile is current" in removed.output.lower()
     assert run(monkeypatch, tmp_path, "rm", "ghost").exit_code != 0
 
 

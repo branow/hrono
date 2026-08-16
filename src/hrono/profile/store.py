@@ -1,9 +1,9 @@
-"""Named client contexts persisted in ``config.toml``.
+"""Named client profiles persisted in ``config.toml``.
 
-A context tells a client subcommand which server to talk to and with what token.
+A profile tells a client subcommand which server to talk to and with what token.
 The file holds a bearer token, so it is created owner-only (``0600``) under an
 owner-only directory (``0700``). Access goes through an injectable path so tests
-never touch the real ``~/.hrono``.
+never touch the real ``~/.hrono``. (kubectl/gh call this a context.)
 """
 
 from __future__ import annotations
@@ -18,19 +18,19 @@ import tomli_w
 from hrono.errors import BadRequest, Conflict, NotFound
 
 
-class DuplicateContext(Conflict):
-    """A context with this name already exists."""
+class DuplicateProfile(Conflict):
+    """A profile with this name already exists."""
 
     def __init__(self, name: str) -> None:
-        super().__init__(f"Context '{name}' already exists.")
+        super().__init__(f"Profile '{name}' already exists.")
         self.name = name
 
 
-class UnknownContext(NotFound):
-    """No context with this name is registered."""
+class UnknownProfile(NotFound):
+    """No profile with this name is registered."""
 
     def __init__(self, name: str) -> None:
-        super().__init__(f"Unknown context '{name}'.")
+        super().__init__(f"Unknown profile '{name}'.")
         self.name = name
 
 
@@ -43,7 +43,7 @@ class MalformedConfig(BadRequest):
 
 
 @dataclass(frozen=True)
-class Context:
+class Profile:
     name: str
     server_url: str
     token: str
@@ -52,7 +52,7 @@ class Context:
 
 @dataclass(frozen=True)
 class State:
-    contexts: tuple[Context, ...]
+    profiles: tuple[Profile, ...]
     current: str | None
 
 
@@ -64,24 +64,24 @@ def config_path() -> Path:
 
 
 class Store:
-    """Load/save/CRUD of contexts over one injectable config path."""
+    """Load/save/CRUD of profiles over one injectable config path."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def contexts(self) -> tuple[Context, ...]:
-        return _read(self._path).contexts
+    def profiles(self) -> tuple[Profile, ...]:
+        return _read(self._path).profiles
 
-    def current(self) -> Context | None:
+    def current(self) -> Profile | None:
         state = _read(self._path)
         if state.current is None:
             return None
         return next(
-            (c for c in state.contexts if c.name == state.current), None
+            (p for p in state.profiles if p.name == state.current), None
         )
 
-    def add(self, context: Context) -> None:
-        _write(self._path, _add(_read(self._path), context))
+    def add(self, profile: Profile) -> None:
+        _write(self._path, _add(_read(self._path), profile))
 
     def use(self, name: str) -> None:
         _write(self._path, _use(_read(self._path), name))
@@ -92,23 +92,23 @@ class Store:
         return cleared
 
 
-def _add(state: State, context: Context) -> State:
-    if any(c.name == context.name for c in state.contexts):
-        raise DuplicateContext(context.name)
-    current = state.current if state.current is not None else context.name
-    return State(state.contexts + (context,), current)
+def _add(state: State, profile: Profile) -> State:
+    if any(p.name == profile.name for p in state.profiles):
+        raise DuplicateProfile(profile.name)
+    current = state.current if state.current is not None else profile.name
+    return State(state.profiles + (profile,), current)
 
 
 def _use(state: State, name: str) -> State:
-    if not any(c.name == name for c in state.contexts):
-        raise UnknownContext(name)
-    return State(state.contexts, name)
+    if not any(p.name == name for p in state.profiles):
+        raise UnknownProfile(name)
+    return State(state.profiles, name)
 
 
 def _remove(state: State, name: str) -> tuple[State, bool]:
-    if not any(c.name == name for c in state.contexts):
-        raise UnknownContext(name)
-    remaining = tuple(c for c in state.contexts if c.name != name)
+    if not any(p.name == name for p in state.profiles):
+        raise UnknownProfile(name)
+    remaining = tuple(p for p in state.profiles if p.name != name)
     cleared = state.current == name
     return State(remaining, None if cleared else state.current), cleared
 
@@ -132,17 +132,17 @@ def _read(path: Path) -> State:
 def _parse(document: object) -> State:
     if not isinstance(document, dict):
         raise TypeError
-    raw = document.get("contexts", {})
+    raw = document.get("profiles", {})
     if not isinstance(raw, dict):
         raise TypeError
-    contexts = tuple(_context(name, table) for name, table in raw.items())
+    profiles = tuple(_profile(name, table) for name, table in raw.items())
     current = document.get("current")
     if current is not None and not isinstance(current, str):
         raise TypeError
-    return State(contexts, current)
+    return State(profiles, current)
 
 
-def _context(name: str, table: object) -> Context:
+def _profile(name: str, table: object) -> Profile:
     if not isinstance(table, dict):
         raise TypeError
     server_url = table["server_url"]
@@ -152,7 +152,7 @@ def _context(name: str, table: object) -> Context:
         raise TypeError
     if default_tree is not None and not isinstance(default_tree, str):
         raise TypeError
-    return Context(name, server_url, token, default_tree)
+    return Profile(name, server_url, token, default_tree)
 
 
 def _write(path: Path, state: State) -> None:
@@ -168,12 +168,12 @@ def _document(state: State) -> dict[str, object]:
     document: dict[str, object] = {}
     if state.current is not None:
         document["current"] = state.current
-    document["contexts"] = {c.name: _table(c) for c in state.contexts}
+    document["profiles"] = {p.name: _table(p) for p in state.profiles}
     return document
 
 
-def _table(context: Context) -> dict[str, str]:
-    table = {"server_url": context.server_url, "token": context.token}
-    if context.default_tree is not None:
-        table["default_tree"] = context.default_tree
+def _table(profile: Profile) -> dict[str, str]:
+    table = {"server_url": profile.server_url, "token": profile.token}
+    if profile.default_tree is not None:
+        table["default_tree"] = profile.default_tree
     return table

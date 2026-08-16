@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 from hrono.client.http import (
     Client,
     Forbidden,
-    NoContext,
+    NoProfile,
     NotFound,
     RequestFailed,
     Unauthorized,
     Unreachable,
-    from_context,
+    from_profile,
     message,
 )
 from hrono.server.app import create_app
@@ -83,13 +83,13 @@ def test_connection_failure_maps_to_unreachable() -> None:
     assert TOKEN not in message(caught.value)
 
 
-def test_no_current_context_raises_no_context(
+def test_no_current_profile_raises_no_profile(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setenv("HRONO_HOME", str(tmp_path))
-    with pytest.raises(NoContext):
-        from_context()
-    assert "hrono context add" in message(NoContext())
+    with pytest.raises(NoProfile):
+        from_profile()
+    assert "hrono profile add" in message(NoProfile())
 
 
 def test_token_never_appears_in_a_message() -> None:

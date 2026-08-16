@@ -17,17 +17,17 @@ import uvicorn
 from hrono.admin.commands import app as admin_app
 from hrono.admin.reset import targets, wipe
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
-from hrono.context.commands import app as context_app
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, load_key, reconcile
 from hrono.db.database import DEFAULT_PATH, open_database
 from hrono.errors import AppError, cli_message
+from hrono.profile.commands import app as profile_app
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
 
 app = typer.Typer(add_completion=False)
-app.add_typer(context_app, name="context")
+app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
 
 
