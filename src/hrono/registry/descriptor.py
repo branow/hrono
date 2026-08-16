@@ -45,3 +45,4 @@ class Descriptor:
     validate: Callable[[dict[str, object], ValidationContext], None] | None = (
         None
     )
+    defaults: tuple[dict[str, object], ...] = ()

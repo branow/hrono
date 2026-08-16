@@ -17,6 +17,7 @@ import uvicorn
 
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
 from hrono.context.commands import app as context_app
+from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import (
     InvalidKey,
     KeyFileUnreadable,
@@ -26,6 +27,8 @@ from hrono.crypto.masterkey import (
     reconcile,
 )
 from hrono.db.database import DEFAULT_PATH, open_database
+from hrono.registry.collections import COLLECTIONS
+from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
 
 app = typer.Typer(add_completion=False)
@@ -72,6 +75,8 @@ def serve(
     token = bootstrap_admin(connection)
     if token is not None:
         typer.echo(_bootstrap_message(token))
+
+    seed_defaults(connection, Cipher.from_key(key, record.key_id), COLLECTIONS)
 
     app = create_app(
         connection=connection, master_key=key, key_id=record.key_id

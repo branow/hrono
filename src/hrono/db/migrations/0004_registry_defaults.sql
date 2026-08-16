@@ -1,0 +1,2 @@
+ALTER TABLE registry ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE registry ADD COLUMN content_hash TEXT;

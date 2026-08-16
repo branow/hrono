@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from copy import deepcopy
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -23,9 +22,8 @@ from hrono.registry.descriptor import (
     ValidationContext,
     ValidationFailed,
 )
+from hrono.registry.write import content_hash, encrypt, mask
 from hrono.server.auth import require_role
-
-_MASK = "***"
 
 
 def build_router(descriptor: Descriptor) -> APIRouter:
@@ -50,23 +48,25 @@ def build_router(descriptor: Descriptor) -> APIRouter:
     def create_item(body: dict, request: Request) -> dict[str, object]:
         config = _validated(descriptor, body)
         _run_hook(descriptor, config, _context(request))
-        stored, key_id = _encrypt(config, descriptor, _cipher(request))
+        stored, key_id = encrypt(config, descriptor, _cipher(request))
+        payload = json.dumps(stored)
         try:
             with request.app.state.db.connect() as conn:
                 store.insert(
                     conn,
                     collection,
                     config["name"],
-                    json.dumps(stored),
+                    payload,
                     key_id,
                     _now(),
+                    content_hash=content_hash(payload),
                 )
         except sqlite3.IntegrityError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"{collection} already exists: {config['name']}",
             ) from exc
-        return _mask(stored, descriptor)
+        return mask(stored, descriptor)
 
     def replace_item(
         name: str, body: dict, request: Request
@@ -78,20 +78,44 @@ def build_router(descriptor: Descriptor) -> APIRouter:
                 detail="name in body does not match name in path",
             )
         _run_hook(descriptor, config, _context(request))
-        stored, key_id = _encrypt(config, descriptor, _cipher(request))
+        stored, key_id = encrypt(config, descriptor, _cipher(request))
+        payload = json.dumps(stored)
         with request.app.state.db.connect() as conn:
             existed = store.replace(
-                conn, collection, name, json.dumps(stored), key_id, _now()
+                conn,
+                collection,
+                name,
+                payload,
+                key_id,
+                _now(),
+                content_hash(payload),
             )
         if not existed:
             raise _not_found(collection, name)
-        return _mask(stored, descriptor)
+        return mask(stored, descriptor)
 
     def delete_item(name: str, request: Request) -> dict[str, str]:
         with request.app.state.db.connect() as conn:
-            removed = store.delete(conn, collection, name)
-        if not removed:
+            row = store.get(conn, collection, name)
+        if row is None:
             raise _not_found(collection, name)
+        default = _default_config(descriptor, name)
+        if row["is_default"] and default is not None:
+            stored, key_id = encrypt(default, descriptor, _cipher(request))
+            payload = json.dumps(stored)
+            with request.app.state.db.connect() as conn:
+                store.replace(
+                    conn,
+                    collection,
+                    name,
+                    payload,
+                    key_id,
+                    _now(),
+                    content_hash(payload),
+                )
+            return {"reset": name}
+        with request.app.state.db.connect() as conn:
+            store.delete(conn, collection, name)
         return {"deleted": name}
 
     base = f"/{collection}"
@@ -156,53 +180,17 @@ def _run_hook(
         ) from exc
 
 
-def _encrypt(
-    config: dict[str, object], descriptor: Descriptor, cipher: Cipher
-) -> tuple[dict[str, object], int | None]:
-    stored = deepcopy(config)
-    key_id: int | None = None
-    for path in descriptor.secret_paths:
-        holder = _holder(stored, path)
-        if holder is None:
-            continue
-        parent, key = holder
-        if parent[key] is None:
-            continue
-        secret = cipher.encrypt(str(parent[key]))
-        parent[key] = secret.ciphertext
-        key_id = secret.key_id
-    return stored, key_id
-
-
-def _mask(
-    config: dict[str, object], descriptor: Descriptor
-) -> dict[str, object]:
-    masked = deepcopy(config)
-    for path in descriptor.secret_paths:
-        holder = _holder(masked, path)
-        if holder is None:
-            continue
-        parent, key = holder
-        if parent[key] is not None:
-            parent[key] = _MASK
-    return masked
-
-
 def _masked(descriptor: Descriptor, row: sqlite3.Row) -> dict[str, object]:
-    return _mask(json.loads(row["config"]), descriptor)
+    return mask(json.loads(row["config"]), descriptor)
 
 
-def _holder(
-    data: dict[str, object], path: tuple[str, ...]
-) -> tuple[dict[str, object], str] | None:
-    node: object = data
-    for key in path[:-1]:
-        if not isinstance(node, dict) or key not in node:
-            return None
-        node = node[key]
-    if not isinstance(node, dict) or path[-1] not in node:
-        return None
-    return node, path[-1]
+def _default_config(
+    descriptor: Descriptor, name: str
+) -> dict[str, object] | None:
+    for default in descriptor.defaults:
+        if default["name"] == name:
+            return dict(default)
+    return None
 
 
 def _not_found(collection: str, name: str) -> HTTPException:
