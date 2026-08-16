@@ -20,6 +20,7 @@ from hrono.db.database import DEFAULT_PATH, Database, open_database
 from hrono.jobs.worker import Worker
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
+from hrono.server.errors import install as install_errors
 from hrono.server.jobs import router as jobs_router
 from hrono.server.users import router as users_router
 
@@ -87,6 +88,7 @@ def create_app(
                 database.close()
 
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
+    install_errors(app)
     app.include_router(router)
     app.include_router(users_router)
     app.include_router(jobs_router)
