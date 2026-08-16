@@ -15,12 +15,13 @@ import typer
 import uvicorn
 
 from hrono.admin.commands import app as admin_app
+from hrono.admin.reset import targets, wipe
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
 from hrono.context.commands import app as context_app
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, load_key, reconcile
 from hrono.db.database import DEFAULT_PATH, open_database
-from hrono.errors import cli_message
+from hrono.errors import AppError, cli_message
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
@@ -33,6 +34,43 @@ app.add_typer(admin_app, name="admin")
 @app.callback()
 def main() -> None:
     """hrono — a hierarchical knowledge base for AI agents."""
+
+
+@app.command()
+def reset(
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Skip the confirmation prompt."),
+    ] = False,
+) -> None:
+    """Wipe the local hrono database to recover from a lockout.
+
+    DESTROYS ALL DATA — users, registries (with their encrypted secrets), jobs,
+    and ingested content. The next 'hrono serve' re-applies migrations onto a
+    fresh file and bootstraps a new admin token. Requires no Bearer token and no
+    master key; its trust boundary is filesystem access. Run it while the server
+    is stopped. Confirm interactively, or pass --force for non-interactive use.
+    """
+    doomed = targets(DEFAULT_PATH)
+    if not doomed:
+        typer.echo(f"No hrono database at {DEFAULT_PATH}: nothing to reset.")
+        return
+    if not force:
+        typer.echo("This DESTROYS ALL DATA in the hrono database:")
+        for path in doomed:
+            typer.echo(f"  {path}")
+        if not typer.confirm("Delete everything and start over?"):
+            typer.echo("Aborted; nothing was changed.", err=True)
+            raise typer.Exit(1)
+    try:
+        removed = wipe(DEFAULT_PATH)
+    except AppError as exc:
+        typer.echo(cli_message(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo("Removed:")
+    for path in removed:
+        typer.echo(f"  {path}")
+    typer.echo("Run 'hrono serve' to bootstrap a fresh admin token.")
 
 
 @app.command()
