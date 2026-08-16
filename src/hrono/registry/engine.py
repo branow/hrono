@@ -12,16 +12,13 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import ValidationError
 
 from hrono.crypto.cipher import Cipher
+from hrono.errors import BadRequest, Conflict, Invalid, NotFound
 from hrono.registry import store
-from hrono.registry.descriptor import (
-    Descriptor,
-    ValidationContext,
-    ValidationFailed,
-)
+from hrono.registry.descriptor import Descriptor, ValidationContext
 from hrono.registry.write import content_hash, encrypt, mask
 from hrono.server.auth import require_role
 
@@ -62,9 +59,8 @@ def build_router(descriptor: Descriptor) -> APIRouter:
                     content_hash=content_hash(payload),
                 )
         except sqlite3.IntegrityError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"{collection} already exists: {config['name']}",
+            raise Conflict(
+                f"{collection} already exists: {config['name']}"
             ) from exc
         return mask(stored, descriptor)
 
@@ -73,10 +69,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
     ) -> dict[str, object]:
         config = _validated(descriptor, body)
         if config["name"] != name:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="name in body does not match name in path",
-            )
+            raise BadRequest("name in body does not match name in path")
         _run_hook(descriptor, config, _context(request))
         stored, key_id = encrypt(config, descriptor, _cipher(request))
         payload = json.dumps(stored)
@@ -158,10 +151,8 @@ def _validated(descriptor: Descriptor, body: dict) -> dict[str, object]:
     try:
         model = descriptor.model.model_validate(body)
     except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=[{"loc": e["loc"], "msg": e["msg"]} for e in exc.errors()],
-        ) from exc
+        errors = [{"loc": e["loc"], "msg": e["msg"]} for e in exc.errors()]
+        raise Invalid("invalid body", details={"errors": errors}) from exc
     return model.model_dump()
 
 
@@ -172,12 +163,7 @@ def _run_hook(
 ) -> None:
     if descriptor.validate is None:
         return
-    try:
-        descriptor.validate(config, context)
-    except ValidationFailed as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason
-        ) from exc
+    descriptor.validate(config, context)
 
 
 def _masked(descriptor: Descriptor, row: sqlite3.Row) -> dict[str, object]:
@@ -193,11 +179,8 @@ def _default_config(
     return None
 
 
-def _not_found(collection: str, name: str) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"{collection} not found: {name}",
-    )
+def _not_found(collection: str, name: str) -> NotFound:
+    return NotFound(f"{collection} not found: {name}")
 
 
 def _now() -> str:

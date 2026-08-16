@@ -11,15 +11,16 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hrono.crypto.tokens import generate_token, hash_token
+from hrono.errors import Conflict, Invalid
 
 ROLES = frozenset({"reader", "writer", "admin"})
 
 
-class InvalidRole(Exception):
-    """A role outside the allowed reader/writer/admin set."""
+class InvalidRole(Invalid):
+    """A role outside the allowed reader/writer/admin set (maps to 422)."""
 
     def __init__(self, role: str) -> None:
-        super().__init__("invalid role")
+        super().__init__(f"invalid role: {role}")
         self.role = role
 
 
@@ -41,12 +42,15 @@ def create_user(
         raise InvalidRole(role)
     token = generate_token()
     created_at = datetime.now(UTC).isoformat()
-    with conn:
-        conn.execute(
-            "INSERT INTO users (name, role, token_hash, created_at) "
-            "VALUES (?, ?, ?, ?)",
-            (name, role, hash_token(token), created_at),
-        )
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO users (name, role, token_hash, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (name, role, hash_token(token), created_at),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise Conflict(f"user already exists: {name}") from exc
     return User(name, role, created_at), token
 
 

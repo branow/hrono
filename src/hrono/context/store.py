@@ -15,28 +15,30 @@ from pathlib import Path
 
 import tomli_w
 
+from hrono.errors import BadRequest, Conflict, NotFound
 
-class DuplicateContext(Exception):
+
+class DuplicateContext(Conflict):
     """A context with this name already exists."""
 
     def __init__(self, name: str) -> None:
-        super().__init__("context already exists")
+        super().__init__(f"Context '{name}' already exists.")
         self.name = name
 
 
-class UnknownContext(Exception):
+class UnknownContext(NotFound):
     """No context with this name is registered."""
 
     def __init__(self, name: str) -> None:
-        super().__init__("unknown context")
+        super().__init__(f"Unknown context '{name}'.")
         self.name = name
 
 
-class MalformedConfig(Exception):
+class MalformedConfig(BadRequest):
     """The config file is not valid TOML or has the wrong shape."""
 
     def __init__(self, path: Path) -> None:
-        super().__init__("malformed config")
+        super().__init__(f"Malformed config at {path}: fix or remove it.")
         self.path = path
 
 

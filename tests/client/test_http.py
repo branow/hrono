@@ -47,7 +47,8 @@ def test_attaches_bearer_header_on_every_request() -> None:
 )
 def test_status_maps_to_typed_error(status: int, error: type) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(status, json={"detail": "x"})
+        body = {"error": {"code": "x", "message": "x", "details": None}}
+        return httpx.Response(status, json=body)
 
     with mock_client(handler) as http, pytest.raises(error):
         Client("http://testserver", TOKEN, http=http).get("/x")
@@ -55,7 +56,16 @@ def test_status_maps_to_typed_error(status: int, error: type) -> None:
 
 def test_other_status_surfaces_server_detail() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(409, json={"detail": "already exists: webphone"})
+        return httpx.Response(
+            409,
+            json={
+                "error": {
+                    "code": "conflict",
+                    "message": "already exists: webphone",
+                    "details": None,
+                }
+            },
+        )
 
     with mock_client(handler) as http, pytest.raises(RequestFailed) as caught:
         Client("http://testserver", TOKEN, http=http).post("/sources", {})
@@ -84,7 +94,8 @@ def test_no_current_context_raises_no_context(
 
 def test_token_never_appears_in_a_message() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(401, json={"detail": "nope"})
+        body = {"error": {"code": "unauthorized", "message": "nope"}}
+        return httpx.Response(401, json=body)
 
     with mock_client(handler) as http:
         try:

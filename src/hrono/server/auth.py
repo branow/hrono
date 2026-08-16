@@ -11,17 +11,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 
 from hrono.auth.users import User, authenticate
+from hrono.errors import Forbidden, Unauthorized
 
 _ROLE_RANK = {"reader": 0, "writer": 1, "admin": 2}
 
-_UNAUTHENTICATED = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="could not authenticate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
+
+def _unauthenticated() -> Unauthorized:
+    return Unauthorized("could not authenticate credentials")
 
 
 def require_role(minimum: str) -> Callable[[Request], User]:
@@ -30,10 +29,7 @@ def require_role(minimum: str) -> Callable[[Request], User]:
     def dependency(request: Request) -> User:
         user = _authenticate(request)
         if _ROLE_RANK[user.role] < _ROLE_RANK[minimum]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="insufficient role",
-            )
+            raise Forbidden("insufficient role")
         return user
 
     return dependency
@@ -42,11 +38,11 @@ def require_role(minimum: str) -> Callable[[Request], User]:
 def _authenticate(request: Request) -> User:
     token = _bearer_token(request.headers.get("Authorization"))
     if token is None:
-        raise _UNAUTHENTICATED
+        raise _unauthenticated()
     with request.app.state.db.connect() as conn:
         user = authenticate(conn, token)
     if user is None:
-        raise _UNAUTHENTICATED
+        raise _unauthenticated()
     return user
 
 

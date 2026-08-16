@@ -17,6 +17,7 @@ class AppError(Exception):
 
     status_code: int = 500
     code: str = "internal-error"
+    headers: dict[str, str] | None = None
 
     def __init__(
         self, message: str, *, details: dict[str, object] | None = None
@@ -34,6 +35,7 @@ class BadRequest(AppError):
 class Unauthorized(AppError):
     status_code = 401
     code = "unauthorized"
+    headers = {"WWW-Authenticate": "Bearer"}
 
 
 class Forbidden(AppError):

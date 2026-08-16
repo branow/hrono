@@ -71,6 +71,13 @@ def test_each_subclass_maps_to_its_envelope(
     assert body["error"]["code"] == code
 
 
+def test_unauthorized_carries_the_www_authenticate_header() -> None:
+    client = TestClient(app_with_demo_routes())
+    response = client.get("/raise/unauth")
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+
+
 def test_details_are_carried_through() -> None:
     client = TestClient(app_with_demo_routes())
     body = client.get("/raise/notfound").json()

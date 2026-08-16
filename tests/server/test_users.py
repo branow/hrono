@@ -40,7 +40,10 @@ def test_health_and_version_need_no_token(harness: Harness) -> None:
 
 
 def test_missing_header_is_401(harness: Harness) -> None:
-    assert harness.client.get("/users").status_code == 401
+    response = harness.client.get("/users")
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.json()["error"]["code"] == "unauthorized"
 
 
 def test_malformed_header_is_401(harness: Harness) -> None:
@@ -143,7 +146,7 @@ def test_duplicate_name_is_409(harness: Harness) -> None:
         headers=harness.auth("admin"),
     )
     assert response.status_code == 409
-    assert "detail" in response.json()
+    assert response.json()["error"]["code"] == "conflict"
 
 
 def test_invalid_role_is_422(harness: Harness) -> None:

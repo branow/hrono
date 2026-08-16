@@ -15,30 +15,53 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 
 from hrono.crypto.keys import KeyRecord, fingerprint
+from hrono.errors import BadRequest
 
 
-class MasterKeyError(Exception):
+class MasterKeyError(BadRequest):
     """Base for master-key startup failures; the boundary maps it to output."""
+
+    code = "master-key-error"
 
 
 class KeyNotProvided(MasterKeyError):
     """Neither a key file nor the environment variable was given."""
 
+    code = "master-key-missing"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "No master key provided. Supply it with --key-file <path> or "
+            "the HRONO_MASTER_KEY environment variable."
+        )
+
 
 class KeyFileUnreadable(MasterKeyError):
     """The key file does not exist or cannot be read."""
 
+    code = "master-key-unreadable"
+
     def __init__(self, path: Path) -> None:
-        super().__init__("master key file is unreadable")
+        super().__init__(f"Cannot read master key file: {path}")
         self.path = path
 
 
 class InvalidKey(MasterKeyError):
     """The supplied bytes are not a valid Fernet key."""
 
+    code = "master-key-invalid"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Master key is not a valid Fernet key (expected a url-safe "
+            "base64-encoded 32-byte key)."
+        )
+
 
 class WrongMasterKey(MasterKeyError):
     """The supplied key does not match the active key on record."""
+
+    code = "wrong-master-key"
 
     def __init__(self, active_key_id: int) -> None:
         super().__init__("wrong master key: does not match the active key")

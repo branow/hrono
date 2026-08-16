@@ -125,9 +125,10 @@ def _detail(response: httpx.Response) -> str:
         payload = response.json()
     except ValueError:
         return f"request failed ({response.status_code})"
-    detail = payload.get("detail") if isinstance(payload, dict) else None
-    if isinstance(detail, str):
-        return detail
+    error = payload.get("error") if isinstance(payload, dict) else None
+    message = error.get("message") if isinstance(error, dict) else None
+    if isinstance(message, str):
+        return message
     return f"request failed ({response.status_code})"
 
 

@@ -6,19 +6,13 @@ token exactly once. Domain errors map to actionable status codes, never a 500.
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 
-from hrono.auth.users import (
-    InvalidRole,
-    User,
-    create_user,
-    delete_user,
-    list_users,
-)
+from hrono.auth.users import User, create_user, delete_user, list_users
+from hrono.errors import NotFound
 from hrono.server.auth import require_role
 
 router = APIRouter()
@@ -48,19 +42,8 @@ def post_user(
     request: Request,
     _: Admin,
 ) -> dict[str, str]:
-    try:
-        with request.app.state.db.connect() as conn:
-            user, token = create_user(conn, body.name, body.role)
-    except InvalidRole as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"invalid role: {exc.role}",
-        ) from exc
-    except sqlite3.IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"user already exists: {body.name}",
-        ) from exc
+    with request.app.state.db.connect() as conn:
+        user, token = create_user(conn, body.name, body.role)
     return {**_public(user), "token": token}
 
 
@@ -73,8 +56,5 @@ def delete_named_user(
     with request.app.state.db.connect() as conn:
         removed = delete_user(conn, name)
     if not removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"user not found: {name}",
-        )
+        raise NotFound(f"user not found: {name}")
     return {"deleted": name}

@@ -69,4 +69,6 @@ def test_validation_hook_rejection_is_400(
         "/widgets", json={"name": "bad", "value": -1}, headers=admin
     )
     assert rejected.status_code == 400
-    assert "non-negative" in rejected.json()["detail"]
+    body = rejected.json()["error"]
+    assert body["code"] == "bad-request"
+    assert "non-negative" in body["message"]

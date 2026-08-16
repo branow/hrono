@@ -5,9 +5,10 @@ from __future__ import annotations
 import sqlite3
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 
 from hrono.auth.users import User
+from hrono.errors import NotFound
 from hrono.jobs import store
 from hrono.jobs.model import to_job
 from hrono.server.auth import require_role
@@ -49,8 +50,5 @@ def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
     with request.app.state.db.connect() as conn:
         row = store.get(conn, job_id)
     if row is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"job not found: {job_id}",
-        )
+        raise NotFound(f"job not found: {job_id}")
     return _job(row)

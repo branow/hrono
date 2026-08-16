@@ -14,10 +14,11 @@ from pydantic import BaseModel
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
+from hrono.errors import BadRequest
 
 
-class ValidationFailed(Exception):
-    """A write was rejected by a collection's validation hook."""
+class ValidationFailed(BadRequest):
+    """A write was rejected by a collection's validation hook (maps to 400)."""
 
     def __init__(self, reason: str) -> None:
         super().__init__(reason)

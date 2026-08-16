@@ -37,7 +37,11 @@ def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
         _logger.error("%s", error.code, exc_info=error)
     else:
         _logger.warning("%s: %s", error.code, error.message)
-    return JSONResponse(status_code=error.status_code, content=envelope(error))
+    return JSONResponse(
+        status_code=error.status_code,
+        content=envelope(error),
+        headers=error.headers,
+    )
 
 
 def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
