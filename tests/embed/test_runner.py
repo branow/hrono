@@ -1,6 +1,10 @@
+import importlib.util
+
 import pytest
 
 from hrono.embed.runner import EmbedError, batch_size, embed_texts
+
+_HAS_BACKEND = importlib.util.find_spec("sentence_transformers") is not None
 
 
 def _fixed(dims: int):
@@ -70,3 +74,14 @@ def test_missing_backend_reports_cleanly(
 
     with pytest.raises(EmbedError, match="not installed"):
         encoder_for("any/model")
+
+
+@pytest.mark.skipif(
+    not _HAS_BACKEND,
+    reason="embed extra not installed (uv pip install hrono[embed])",
+)
+def test_backend_is_importable_when_the_embed_extra_is_installed() -> None:
+    # With the `embed` optional-extra the in-process backend is present, so the
+    # runner can build a real encoder (weights are not loaded here to keep CI
+    # offline). Skipped on the lean default install.
+    import sentence_transformers  # noqa: F401

@@ -11,6 +11,17 @@ The project ships as one binary, `hrono`. `hrono serve` is a long-running
 HTTP server that owns the SQLite database, all compute, and all LLM calls;
 every other subcommand is a thin HTTP client of that server.
 
+## In-process embedding
+
+Embedding sources locally (for clustering and recall) uses the heavyweight
+`sentence-transformers` backend, which is an opt-in extra so the default
+install stays lean:
+
+    uv pip install "hrono[embed]"
+
+Without it the default install has no `torch`, and the `embed` operation fails
+with a clear "in-process embedding backend is not installed" message.
+
 ## Status
 
 Early development. See the build order for milestone progress.

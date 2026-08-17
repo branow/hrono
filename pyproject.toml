@@ -17,6 +17,13 @@ dependencies = [
     "uvicorn>=0.30.0",
 ]
 
+[project.optional-dependencies]
+# In-process embedding backend (heavyweight: pulls torch). Opt-in so the default
+# install stays lean; without it the `embed` op fails with a clean
+# "in-process embedding backend is not installed" message. Enable with:
+#   uv pip install "hrono[embed]"
+embed = ["sentence-transformers>=3.0,<6"]
+
 [project.scripts]
 hrono = "hrono.cli:app"
 
