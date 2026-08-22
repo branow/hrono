@@ -112,7 +112,11 @@ def _bootstrap_message(token: str) -> str:
         f"  user:  {BOOTSTRAP_ADMIN}\n"
         "  role:  admin\n"
         f"  token: {token}\n"
-        "\nThis token is shown ONCE and is stored only as a hash.\n"
-        "Save it now. Authenticate with it as a Bearer token:\n"
+        "\nThis token is shown ONCE and is stored only as a hash. "
+        "Save it now.\n"
+        "Use it with the CLI:\n"
+        "  hrono profile add local --server http://127.0.0.1:8080 "
+        "--token <token>\n"
+        "or call the API directly with a Bearer token:\n"
         "  Authorization: Bearer <token>\n"
     )

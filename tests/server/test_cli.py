@@ -122,7 +122,8 @@ def test_first_serve_bootstraps_admin_and_prints_token_once(
     assert first.exit_code == 0
     assert "admin" in first.output
     assert "once" in first.output.lower()
-    assert "Bearer" in first.output
+    assert "hrono profile add" in first.output  # primary CLI path
+    assert "Bearer" in first.output  # secondary direct-API note
 
     conn = open_database(tmp_path / ".hrono" / "hrono.db")
     user = authenticate(conn, _token_from(first.output))

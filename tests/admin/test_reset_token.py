@@ -37,7 +37,8 @@ def test_reissue_rotates_the_token_old_fails_new_works(
     result = runner.invoke(cli.app, ["admin", "reset-token", "admin"])
     assert result.exit_code == 0
     assert "once" in result.output.lower()
-    assert "Bearer" in result.output
+    assert "hrono profile add" in result.output  # primary CLI path
+    assert "Bearer" in result.output  # secondary direct-API note
     new = _token(result.output)
     assert new != old
     conn = open_database(DEFAULT_PATH)

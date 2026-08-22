@@ -57,7 +57,11 @@ def _reset_message(name: str, role: str, token: str) -> str:
         f"  user:  {name}\n"
         f"  role:  {role}\n"
         f"  token: {token}\n"
-        "\nThis token is shown ONCE and is stored only as a hash.\n"
-        "The previous token no longer works. Authenticate with the new one:\n"
+        "\nThis token is shown ONCE and is stored only as a hash. "
+        "Save it now.\n"
+        "The previous token no longer works. Use the new one with the CLI:\n"
+        "  hrono profile add local --server http://127.0.0.1:8080 "
+        "--token <token>\n"
+        "or call the API directly with a Bearer token:\n"
         "  Authorization: Bearer <token>\n"
     )
