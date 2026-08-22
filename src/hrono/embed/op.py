@@ -11,15 +11,13 @@ registry so the worker dispatches ``embed``.
 
 from __future__ import annotations
 
-import json
-
 from hrono.embed import store
+from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import EmbedError, Encoder, batch_size, embed_texts
 from hrono.embed.runner import encoder_for as _default_encoder_for
 from hrono.ingest.store import get_content
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry import store as registry_store
 
 
 def embed(
@@ -30,7 +28,8 @@ def embed(
 ) -> None:
     """Embed every stored content hash missing a vector for the model."""
     factory = encoder_for if encoder_for is not None else _default_encoder_for
-    config = _resolve_model(context, job.scope)
+    with context.database.connect() as conn:
+        config = resolve_embedding_model(conn, job.scope)
     model_name = str(config["name"])
     with context.database.connect() as conn:
         hashes = store.missing(conn, model_name)
@@ -51,25 +50,6 @@ def embed(
                     f"got {len(vector)}"
                 )
             store.upsert_vector(conn, digest, model_name, vector)
-
-
-def _resolve_model(
-    context: JobContext, scope: dict[str, object]
-) -> dict[str, object]:
-    name = scope.get("name") if scope.get("type") == "model" else None
-    with context.database.connect() as conn:
-        if name is not None:
-            row = registry_store.get(conn, "models", str(name))
-            rows = [row] if row is not None else []
-        else:
-            rows = list(registry_store.list_all(conn, "models"))
-    configs = [json.loads(r["config"]) for r in rows if r is not None]
-    embedding = [c for c in configs if c.get("kind") == "embedding"]
-    if not embedding:
-        raise EmbedError("no embedding model available to embed with")
-    if name is None and len(embedding) > 1:
-        raise EmbedError("multiple embedding models — name one in the scope")
-    return embedding[0]
 
 
 def _params(config: dict[str, object]) -> dict[str, object]:

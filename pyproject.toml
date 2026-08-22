@@ -23,6 +23,15 @@ dependencies = [
 # "in-process embedding backend is not installed" message. Enable with:
 #   uv pip install "hrono[embed]"
 embed = ["sentence-transformers>=3.0,<6"]
+# In-process clustering backend (heavyweight: pulls numba/llvmlite/scipy/
+# scikit-learn). Opt-in like `embed`; without it the `cluster` op fails with a
+# clean "clustering backend is not installed" message. Enable with:
+#   uv pip install "hrono[cluster]"
+cluster = [
+    "umap-learn>=0.5.6,<0.6",
+    "hdbscan>=0.8.38,<0.9",
+    "numpy>=1.26,<3",
+]
 
 [project.scripts]
 hrono = "hrono.cli:app"
@@ -32,6 +41,12 @@ dev = [
     "httpx>=0.27.0",
     "pytest>=8.4.2",
     "ruff>=0.14.5",
+    # The clustering backend is an opt-in runtime extra, but the tests exercise
+    # the real UMAP -> HDBSCAN recipe (known-group recovery), so the gate needs
+    # it installed.
+    "umap-learn>=0.5.6,<0.6",
+    "hdbscan>=0.8.38,<0.9",
+    "numpy>=1.26,<3",
 ]
 
 [build-system]

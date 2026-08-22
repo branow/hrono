@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, FastAPI
 
+import hrono.cluster.op  # noqa: F401 - registers the cluster op
 import hrono.embed.op  # noqa: F401 - registers the embed op
 import hrono.ingest.split_op  # noqa: F401 - registers the split op
 import hrono.ingest.sync  # noqa: F401 - registers the sync op into the registry

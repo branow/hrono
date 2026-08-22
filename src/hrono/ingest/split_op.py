@@ -16,6 +16,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from hrono.cluster.blend import register_path_bodies
 from hrono.ingest import store
 from hrono.ingest.filter import ingestable
 from hrono.ingest.identity import (
@@ -51,6 +52,7 @@ def split_source(job: Job, context: JobContext) -> None:
     )
     with context.database.connect() as conn, conn:
         store.clear_source(conn, name)
+        register_path_bodies(conn, files)
         for path in files:
             _store_file(conn, cache, path, name, source_type, instance, version)
 
