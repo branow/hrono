@@ -182,6 +182,7 @@ def test_runs_as_a_job_and_persists(
             time.sleep(0.02)
     finally:
         worker.stop()
+        worker.join(timeout=5)  # let the claim query finish before we read
     assert row["status"] == "succeeded"
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] == 2
@@ -212,6 +213,7 @@ def test_failing_run_fails_its_leaf_cleanly(tmp_path: object) -> None:
             time.sleep(0.02)
     finally:
         worker.stop()
+        worker.join(timeout=5)  # let the claim query finish before close
     assert row == "failed"
     database.close()
 
