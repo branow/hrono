@@ -17,9 +17,6 @@ recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
 
 from __future__ import annotations
 
-import json
-import sqlite3
-
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -28,8 +25,8 @@ from hrono.llm.client import (
     CompletionRequest,
     LLMError,
 )
-from hrono.registry import store as registry_store
 from hrono.summarize import store
+from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _CONTENT_PLACEHOLDER = "{content}"
 
@@ -42,9 +39,9 @@ def condense(
 ) -> None:
     """Condense every stored section missing a condensation for the model."""
     with context.database.connect() as conn:
-        model = _resolve_text_model(conn, job.scope)
+        model = resolve_text_model(conn, job.scope)
         model_name = str(model["name"])
-        template = _condense_template(conn)
+        _, template = resolve_prompt(conn, "condense")
         sections = store.pending(conn, model_name)
     if not sections:
         return
@@ -66,37 +63,6 @@ def condense(
                 result.usage.input_tokens,
                 result.usage.output_tokens,
             )
-
-
-def _resolve_text_model(
-    conn: sqlite3.Connection, scope: dict[str, object]
-) -> dict[str, object]:
-    name = scope.get("name") if scope.get("type") == "model" else None
-    if name is not None:
-        row = registry_store.get(conn, "models", str(name))
-        rows = [row] if row is not None else []
-    else:
-        rows = list(registry_store.list_all(conn, "models"))
-    configs = [json.loads(r["config"]) for r in rows if r is not None]
-    text = [c for c in configs if c.get("kind") == "text"]
-    if not text:
-        raise LLMError("no text model available")
-    if name is None and len(text) > 1:
-        raise LLMError("multiple text models — name one in the scope")
-    return text[0]
-
-
-def _condense_template(conn: sqlite3.Connection) -> str:
-    configs = [
-        json.loads(row["config"])
-        for row in registry_store.list_all(conn, "prompts")
-    ]
-    matches = [c for c in configs if c.get("role") == "condense"]
-    if not matches:
-        raise LLMError("no condense prompt configured")
-    if len(matches) > 1:
-        raise LLMError("multiple condense prompts configured")
-    return str(matches[0]["template"])
 
 
 def _default_client(context: JobContext) -> Completion:
