@@ -28,6 +28,19 @@ def needing_brief(
     return tuple(int(row["id"]) for row in rows)
 
 
+def level_briefs(
+    conn: sqlite3.Connection, tree: str, level: int
+) -> tuple[tuple[int, str], ...]:
+    """Return (node_id, brief text) for every node at (tree, level)."""
+    rows = conn.execute(
+        "SELECT b.node_id AS id, b.text AS text FROM briefs b "
+        "JOIN nodes n ON n.id = b.node_id WHERE n.tree = ? AND n.level = ? "
+        "ORDER BY b.node_id",
+        (tree, level),
+    ).fetchall()
+    return tuple((int(row["id"]), row["text"]) for row in rows)
+
+
 def member_condensations(
     conn: sqlite3.Connection, node_id: int, model_name: str
 ) -> tuple[str, ...]:

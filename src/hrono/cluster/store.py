@@ -107,5 +107,44 @@ def replace_tree(
         )
 
 
+def replace_level(
+    conn: sqlite3.Connection,
+    tree: str,
+    level: int,
+    members: Sequence[tuple[int, int, bool, float | None]],
+) -> None:
+    """Rebuild an UPPER tree level from child nodes: clear it, then insert.
+
+    ``members`` is (label, child_node_id, attached, assignment_similarity); each
+    distinct label becomes one node at ``level`` whose children (the level
+    below) are linked in node_children. Unlike ``replace_tree`` (leaf sections)
+    this carries no per-member coords — warm-init for upper levels is future.
+    """
+    now = _now()
+    conn.execute(
+        "DELETE FROM nodes WHERE tree = ? AND level = ?", (tree, level)
+    )
+
+    by_label: dict[int, list[tuple[int, bool, float | None]]] = defaultdict(
+        list
+    )
+    for label, child_id, attached, similarity in members:
+        by_label[label].append((child_id, attached, similarity))
+
+    for label in sorted(by_label):
+        cursor = conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (tree, level, label, now),
+        )
+        parent_id = int(cursor.lastrowid or 0)
+        for child_id, attached, similarity in by_label[label]:
+            conn.execute(
+                "INSERT INTO node_children(parent_id, child_id, attached, "
+                "assignment_similarity, created_at) VALUES (?, ?, ?, ?, ?)",
+                (parent_id, child_id, int(attached), similarity, now),
+            )
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
