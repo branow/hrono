@@ -41,27 +41,30 @@ def brief(
     *,
     client: Completion | None = None,
 ) -> None:
-    """Write one brief per bottom-level node missing one, with provenance."""
+    """Write a brief per stale-or-missing bottom-level node, with provenance."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
         model = resolve_text_model(conn, job.scope)
         model_name = str(model["name"])
         prompt_name, template = resolve_prompt(conn, "brief")
+        prompt_hash = _hash(template)
         pending = [
             (
                 node_id,
                 briefs.member_condensations(conn, node_id, model_name),
                 briefs.member_uris(conn, node_id),
+                briefs.member_signature(conn, node_id),
             )
-            for node_id in briefs.needing_brief(conn, tree, _LEVEL)
+            for node_id in briefs.stale_or_missing(
+                conn, tree, _LEVEL, prompt_hash, model_name
+            )
         ]
-    pending = [(n, c, u) for (n, c, u) in pending if c]
+    pending = [(n, c, u, s) for (n, c, u, s) in pending if c]
     if not pending:
         return
 
-    prompt_hash = _hash(template)
     completion = client if client is not None else _default_client(context)
-    for node_id, condensations, uris in pending:
+    for node_id, condensations, uris, signature in pending:
         rendered = template.replace(
             _CONTENT_PLACEHOLDER, "\n\n".join(condensations)
         )
@@ -77,6 +80,7 @@ def brief(
                 model_name=model_name,
                 prompt_name=prompt_name,
                 prompt_hash=prompt_hash,
+                member_signature=signature,
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )

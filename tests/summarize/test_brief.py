@@ -22,7 +22,8 @@ from hrono.llm.client import (
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from hrono.summarize import store as condensations
-from hrono.summarize.brief import brief
+from hrono.summarize.brief import _hash, brief
+from hrono.summarize.resolve import resolve_prompt
 
 MODEL = "sonnet"
 TEMPLATE = "Brief this group: {content}"
@@ -209,6 +210,66 @@ def test_node_without_condensations_is_skipped(db: Database) -> None:
     assert client.calls == 0
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM briefs").fetchone()[0] == 0
+
+
+def test_membership_change_marks_the_brief_stale(db: Database) -> None:
+    brief(job(), JobContext(db), client=FakeCompletion())
+    nodes = _node_ids(db)
+    # add a new member section to the first node -> its member signature changes
+    with db.connect() as conn, conn:
+        new_section = add_condensed_section(conn, "e.py", b"eee\n", 9)
+        conn.execute(
+            "INSERT INTO node_members(node_id, section_id, attached, "
+            "created_at) VALUES (?, ?, 0, 't')",
+            (nodes[0], new_section),
+        )
+    resumed = FakeCompletion()
+    brief(job(), JobContext(db), client=resumed)
+    assert resumed.calls == 1  # only the node whose membership changed
+
+
+def test_prompt_template_change_marks_all_briefs_stale(db: Database) -> None:
+    brief(job(), JobContext(db), client=FakeCompletion())
+    with db.connect() as conn, conn:
+        registry_store.replace(
+            conn,
+            "prompts",
+            "brief",
+            json.dumps(
+                {"name": "brief", "role": "brief", "template": "NEW {content}"}
+            ),
+            None,
+            "t",
+        )
+    resumed = FakeCompletion()
+    brief(job(), JobContext(db), client=resumed)
+    assert resumed.calls == 2  # every brief stale under the new prompt hash
+
+
+def test_unchanged_inputs_keep_briefs_fresh_and_counts_readable(
+    db: Database,
+) -> None:
+    brief(job(), JobContext(db), client=FakeCompletion())
+    with db.connect() as conn:
+        _, template = resolve_prompt(conn, "brief")
+        fresh, stale = briefs.counts(conn, TREE, 0, _hash(template), MODEL)
+    assert (fresh, stale) == (2, 0)
+
+
+def test_membership_change_shows_in_counts(db: Database) -> None:
+    brief(job(), JobContext(db), client=FakeCompletion())
+    nodes = _node_ids(db)
+    with db.connect() as conn, conn:
+        new_section = add_condensed_section(conn, "f.py", b"fff\n", 9)
+        conn.execute(
+            "INSERT INTO node_members(node_id, section_id, attached, "
+            "created_at) VALUES (?, ?, 0, 't')",
+            (nodes[0], new_section),
+        )
+    with db.connect() as conn:
+        _, template = resolve_prompt(conn, "brief")
+        fresh, stale = briefs.counts(conn, TREE, 0, _hash(template), MODEL)
+    assert (fresh, stale) == (1, 1)
 
 
 def test_runs_as_a_job_through_the_worker(

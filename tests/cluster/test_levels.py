@@ -43,6 +43,7 @@ def build_level0(conn: object, per_group: int = 10) -> dict[int, str]:
                 model_name="emb",
                 prompt_name="brief",
                 prompt_hash="h",
+                member_signature="sig",
                 input_tokens=1,
                 output_tokens=1,
             )
