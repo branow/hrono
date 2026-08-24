@@ -18,6 +18,7 @@ idempotent re-run fills only the gaps.
 from __future__ import annotations
 
 import hashlib
+import json
 
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -28,6 +29,7 @@ from hrono.llm.client import (
     LLMError,
 )
 from hrono.summarize import briefs
+from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _CONTENT_PLACEHOLDER = "{content}"
@@ -65,12 +67,12 @@ def brief(
 
     completion = client if client is not None else _default_client(context)
     for node_id, condensations, uris, signature in pending:
-        rendered = template.replace(
-            _CONTENT_PLACEHOLDER, "\n\n".join(condensations)
-        )
+        source = "\n\n".join(condensations)
+        rendered = template.replace(_CONTENT_PLACEHOLDER, source)
         result = completion.complete(
             CompletionRequest(model=model, system="", content=rendered)
         )
+        unfaithful = faithfulness(result.text, source)
         text = result.text + _references(uris)
         with context.database.connect() as conn, conn:
             briefs.upsert(
@@ -81,6 +83,7 @@ def brief(
                 prompt_name=prompt_name,
                 prompt_hash=prompt_hash,
                 member_signature=signature,
+                unfaithful=json.dumps(unfaithful),
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )

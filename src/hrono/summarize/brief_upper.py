@@ -15,6 +15,8 @@ the child node ids, appended in code from membership, never LLM-written.
 
 from __future__ import annotations
 
+import json
+
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -25,6 +27,7 @@ from hrono.llm.client import (
 )
 from hrono.summarize import briefs
 from hrono.summarize.brief import _hash
+from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _CONTENT_PLACEHOLDER = "{content}"
@@ -63,12 +66,12 @@ def brief_upper(
 
     completion = client if client is not None else _default_client(context)
     for node_id, child_texts, ids, signature in pending:
-        rendered = template.replace(
-            _CONTENT_PLACEHOLDER, "\n\n".join(child_texts)
-        )
+        source = "\n\n".join(child_texts)
+        rendered = template.replace(_CONTENT_PLACEHOLDER, source)
         result = completion.complete(
             CompletionRequest(model=model, system="", content=rendered)
         )
+        unfaithful = faithfulness(result.text, source)
         text = result.text + _references(ids)
         with context.database.connect() as conn, conn:
             briefs.upsert(
@@ -79,6 +82,7 @@ def brief_upper(
                 prompt_name=prompt_name,
                 prompt_hash=prompt_hash,
                 member_signature=signature,
+                unfaithful=json.dumps(unfaithful),
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )

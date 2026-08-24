@@ -187,12 +187,17 @@ def upsert(
     member_signature: str,
     input_tokens: int,
     output_tokens: int,
+    unfaithful: str = "[]",
 ) -> None:
-    """Store one node's brief with its provenance and member signature."""
+    """Store one node's brief with its provenance and member signature.
+
+    ``unfaithful`` is the faithfulness gate's JSON verdict (#063); default '[]'
+    keeps callers that do not run the gate unchanged.
+    """
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
-        "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "unfaithful, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             node_id,
             text,
@@ -202,6 +207,7 @@ def upsert(
             member_signature,
             input_tokens,
             output_tokens,
+            unfaithful,
             _now(),
         ),
     )
@@ -211,10 +217,21 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     """Return a node's brief row, or None."""
     return conn.execute(
         "SELECT node_id, text, model_name, prompt_name, prompt_hash, "
-        "member_signature, input_tokens, output_tokens FROM briefs "
-        "WHERE node_id = ?",
+        "member_signature, input_tokens, output_tokens, unfaithful "
+        "FROM briefs WHERE node_id = ?",
         (node_id,),
     ).fetchone()
+
+
+def unfaithful_count(conn: sqlite3.Connection, tree: str, level: int) -> int:
+    """Return how many briefs at (tree, level) the gate flagged (for health)."""
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) FROM briefs b JOIN nodes n ON n.id = b.node_id "
+            "WHERE n.tree = ? AND n.level = ? AND b.unfaithful != '[]'",
+            (tree, level),
+        ).fetchone()[0]
+    )
 
 
 def _now() -> str:

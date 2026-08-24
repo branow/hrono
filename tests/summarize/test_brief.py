@@ -272,6 +272,26 @@ def test_membership_change_shows_in_counts(db: Database) -> None:
     assert (fresh, stale) == (1, 1)
 
 
+def test_faithfulness_gate_flags_but_does_not_block(db: Database) -> None:
+    # a fabricated identifier in the LLM output is flagged, yet the brief is
+    # still stored (flag policy, not hard fail).
+    brief(
+        job(), JobContext(db), client=FakeCompletion(text="fabricatedToken x")
+    )
+    with db.connect() as conn:
+        rows = conn.execute("SELECT unfaithful FROM briefs").fetchall()
+    assert rows  # briefs were stored despite the fabrication
+    flagged = [json.loads(r["unfaithful"]) for r in rows]
+    assert any("fabricatedToken" in tokens for tokens in flagged)
+
+
+def test_faithful_brief_records_no_unfaithful_tokens(db: Database) -> None:
+    brief(job(), JobContext(db), client=FakeCompletion(text="a plain summary"))
+    with db.connect() as conn:
+        rows = conn.execute("SELECT unfaithful FROM briefs").fetchall()
+    assert rows and all(r["unfaithful"] == "[]" for r in rows)
+
+
 def test_runs_as_a_job_through_the_worker(
     db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
