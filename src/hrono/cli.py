@@ -25,10 +25,12 @@ from hrono.profile.commands import app as profile_app
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
+from hrono.tree.commands import app as tree_app
 
 app = typer.Typer(add_completion=False)
 app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
+app.add_typer(tree_app, name="tree")
 
 
 @app.callback()

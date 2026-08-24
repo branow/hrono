@@ -1,0 +1,188 @@
+import json
+import subprocess
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+from hrono.cluster.build import ClusterResult
+from hrono.db.database import Database, open_database
+from hrono.jobs.model import Job
+from hrono.jobs.ops import OPS, JobContext
+from hrono.llm.client import CompletionRequest, CompletionResult, Usage
+from hrono.registry import store as registry_store
+from hrono.tree.maintain import maintain
+
+DIMS = 8
+
+
+class FakeCompletion:
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        return CompletionResult("a plain summary.", Usage(10, 4))
+
+
+def fake_encoder(model_id: str):
+    def encode(texts: list[str]) -> list[list[float]]:
+        return [[1.0] + [0.0] * (DIMS - 1) for _ in texts]
+
+    return encode
+
+
+def fake_build(vectors: object, *, init: object = None) -> ClusterResult:
+    n = len(vectors)  # type: ignore[arg-type]
+    labels = [i // 3 for i in range(n)]  # reduces ~3:1 per level -> root
+    return ClusterResult(
+        labels=tuple(labels),
+        attached=tuple(False for _ in range(n)),
+        assignment_similarity=tuple(None for _ in range(n)),
+        coords=tuple((0.0,) for _ in range(n)),
+    )
+
+
+def make_repo(path: Path, files: int = 9) -> str:
+    path.mkdir()
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.email", "t@example.com"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.name", "Test"], check=True
+    )
+    for i in range(files):
+        (path / f"f{i}.txt").write_text(f"module {i} does thing number {i}\n")
+    subprocess.run(["git", "-C", str(path), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "-qm", "first"], check=True
+    )
+    return path.as_uri()
+
+
+def register(conn: object, url: str) -> None:
+    registry_store.insert(
+        conn,  # type: ignore[arg-type]
+        "sources",
+        "repo",
+        json.dumps({"name": "repo", "type": "git", "url": url, "auth": {}}),
+        None,
+        "t",
+    )
+    registry_store.insert(
+        conn,  # type: ignore[arg-type]
+        "models",
+        "emb",
+        json.dumps(
+            {
+                "name": "emb",
+                "kind": "embedding",
+                "connection": None,
+                "model": "fake",
+                "params": {"dims": DIMS, "batch_size": 8},
+            }
+        ),
+        None,
+        "t",
+    )
+    registry_store.insert(
+        conn,  # type: ignore[arg-type]
+        "models",
+        "sonnet",
+        json.dumps(
+            {
+                "name": "sonnet",
+                "kind": "text",
+                "connection": "c",
+                "model": "claude",
+                "params": {},
+            }
+        ),
+        None,
+        "t",
+    )
+    for role in ("condense", "brief", "brief-upper"):
+        registry_store.insert(
+            conn,  # type: ignore[arg-type]
+            "prompts",
+            role,
+            json.dumps({"name": role, "role": role, "template": "X {content}"}),
+            None,
+            "t",
+        )
+
+
+def job() -> Job:
+    return Job(
+        id="m1",
+        parent_id=None,
+        tree="default",
+        op="maintain",
+        scope={},
+        status="running",
+        error=None,
+        created_at="t",
+        updated_at="t",
+    )
+
+
+def run(db: Database) -> None:
+    maintain(
+        job(),
+        JobContext(db),
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+        build=fake_build,
+    )
+
+
+@pytest.fixture
+def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Database]:
+    monkeypatch.chdir(tmp_path)
+    url = make_repo(tmp_path / "src-repo")
+    database = Database(open_database(tmp_path / "hrono.db"))
+    with database.connect() as conn, conn:
+        register(conn, url)
+    yield database
+    database.close()
+
+
+def _count(db: Database, table: str) -> int:
+    with db.connect() as conn:
+        return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+
+
+def test_maintain_is_registered() -> None:
+    assert "maintain" in OPS
+
+
+def test_builds_a_fresh_tree_end_to_end_to_a_single_root(db: Database) -> None:
+    run(db)
+    assert _count(db, "sections") >= 3  # sync + split ran
+    assert _count(db, "embeddings") > 0  # embed ran
+    assert _count(db, "condensations") >= 3  # condense ran
+    assert _count(db, "briefs") > 0  # cluster + brief ran
+    with db.connect() as conn:
+        levels = conn.execute(
+            "SELECT level, COUNT(*) c FROM nodes GROUP BY level"
+        ).fetchall()
+    by_level = {int(r["level"]): int(r["c"]) for r in levels}
+    assert max(by_level) >= 1  # recursed above the leaf level
+    assert by_level[max(by_level)] == 1  # to a single root
+
+
+def test_second_maintain_re_embeds_and_re_condenses_nothing(
+    db: Database,
+) -> None:
+    run(db)
+    embeddings = _count(db, "embeddings")
+    condensations = _count(db, "condensations")
+    run(db)  # unchanged tree
+    # the M4 content-hash caches hold: embed + condense do zero new work
+    assert _count(db, "embeddings") == embeddings
+    assert _count(db, "condensations") == condensations
+
+
+def test_missing_embedding_model_fails_the_maintain_run(db: Database) -> None:
+    with db.connect() as conn, conn:
+        conn.execute("DELETE FROM registry WHERE name = 'emb'")
+    with pytest.raises(Exception):  # noqa: B017 - any clean stage error aborts
+        run(db)

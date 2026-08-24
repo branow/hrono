@@ -24,6 +24,7 @@ import hrono.summarize.brief  # noqa: F401 - registers the brief op
 import hrono.summarize.brief_upper  # noqa: F401 - registers the brief-upper op
 import hrono.summarize.build_tree  # noqa: F401 - registers the build-tree op
 import hrono.summarize.condense  # noqa: F401 - registers the condense op
+import hrono.tree.maintain  # noqa: F401 - registers the maintain op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database, open_database
@@ -32,6 +33,7 @@ from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
 from hrono.server.errors import install as install_errors
 from hrono.server.jobs import router as jobs_router
+from hrono.server.trees import router as trees_router
 from hrono.server.users import router as users_router
 
 _VERSION = version("hrono")
@@ -103,6 +105,7 @@ def create_app(
     app.include_router(router)
     app.include_router(users_router)
     app.include_router(jobs_router)
+    app.include_router(trees_router)
     for descriptor in COLLECTIONS:
         app.include_router(build_router(descriptor))
     return app
