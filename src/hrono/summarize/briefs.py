@@ -155,6 +155,27 @@ def member_uris(conn: sqlite3.Connection, node_id: int) -> tuple[str, ...]:
     return tuple(row["uri"] for row in rows)
 
 
+def child_briefs(conn: sqlite3.Connection, node_id: int) -> tuple[str, ...]:
+    """Return the brief texts of an upper node's child nodes (reduce input)."""
+    rows = conn.execute(
+        "SELECT b.text AS text FROM node_children c "
+        "JOIN briefs b ON b.node_id = c.child_id WHERE c.parent_id = ? "
+        "ORDER BY c.child_id",
+        (node_id,),
+    ).fetchall()
+    return tuple(row["text"] for row in rows)
+
+
+def child_ids(conn: sqlite3.Connection, node_id: int) -> tuple[int, ...]:
+    """Return an upper node's child node ids (the mechanical references)."""
+    rows = conn.execute(
+        "SELECT child_id FROM node_children WHERE parent_id = ? "
+        "ORDER BY child_id",
+        (node_id,),
+    ).fetchall()
+    return tuple(int(row["child_id"]) for row in rows)
+
+
 def upsert(
     conn: sqlite3.Connection,
     node_id: int,

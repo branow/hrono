@@ -21,6 +21,7 @@ import hrono.embed.op  # noqa: F401 - registers the embed op
 import hrono.ingest.split_op  # noqa: F401 - registers the split op
 import hrono.ingest.sync  # noqa: F401 - registers the sync op into the registry
 import hrono.summarize.brief  # noqa: F401 - registers the brief op
+import hrono.summarize.brief_upper  # noqa: F401 - registers the brief-upper op
 import hrono.summarize.condense  # noqa: F401 - registers the condense op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
