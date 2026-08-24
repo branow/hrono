@@ -119,19 +119,25 @@ def test_delete_of_a_user_prompt_removes_it(harness: Harness) -> None:
 def test_override_then_delete_restores_the_default(harness: Harness) -> None:
     harness.client.put(
         "/prompts/brief",
-        json={"name": "brief", "role": "brief", "template": "OVERRIDE"},
+        json={
+            "name": "brief",
+            "role": "brief",
+            "template": "OVERRIDE {content}",
+        },
         headers=harness.headers,
     )
     assert (
         harness.client.get("/prompts/brief", headers=harness.headers).json()[
             "template"
         ]
-        == "OVERRIDE"
+        == "OVERRIDE {content}"
     )
     harness.client.delete("/prompts/brief", headers=harness.headers)
-    assert harness.client.get("/prompts/brief", headers=harness.headers).json()[
-        "template"
-    ] == default_template("brief")
+    restored = harness.client.get(
+        "/prompts/brief", headers=harness.headers
+    ).json()["template"]
+    assert restored == default_template("brief")
+    assert "{content}" in restored  # the restored default is a valid template
 
 
 def test_template_hash_updates_on_write(harness: Harness) -> None:

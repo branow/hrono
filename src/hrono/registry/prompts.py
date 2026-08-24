@@ -12,7 +12,11 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from hrono.registry.descriptor import Descriptor, ValidationContext
+from hrono.registry.descriptor import (
+    Descriptor,
+    ValidationContext,
+    ValidationFailed,
+)
 
 
 class Prompt(BaseModel):
@@ -21,9 +25,31 @@ class Prompt(BaseModel):
     template: str
 
 
+# The placeholder each role's op injects the body at, so a stored template that
+# drops it can never silently no-op the ``template.replace`` the summarize ops
+# do. Data-driven (role -> required tokens), not a per-role branch. ``judge`` is
+# omitted until its op (#063) settles the tokens it injects — we do not guard a
+# token no op uses.
+_REQUIRED_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
+    "condense": ("{content}",),
+    "brief": ("{content}",),
+    "brief-upper": ("{content}",),
+}
+
+
 def _validate(config: dict[str, object], context: ValidationContext) -> None:
-    """No external validation for a prompt; #021 may add template sanity."""
-    return None
+    """Reject a template that omits a placeholder its role's op injects at."""
+    role = str(config["role"])
+    template = str(config["template"])
+    missing = [
+        token
+        for token in _REQUIRED_PLACEHOLDERS.get(role, ())
+        if token not in template
+    ]
+    if missing:
+        raise ValidationFailed(
+            f"{role} prompt template must contain " + ", ".join(missing)
+        )
 
 
 _DEFAULTS: tuple[dict[str, object], ...] = (

@@ -18,7 +18,7 @@ def prompt(role: str = "condense", **over: object) -> dict[str, object]:
     body: dict[str, object] = {
         "name": role,
         "role": role,
-        "template": "Summarize {section} in {n} words.",
+        "template": "Summarize {content} in {n} words.",
     }
     body.update(over)
     return body
@@ -63,7 +63,7 @@ def test_registers_each_valid_role(harness: Harness, role: str) -> None:
     assert fetched.status_code == 200
     got = fetched.json()
     assert got["role"] == role
-    assert got["template"] == "Summarize {section} in {n} words."
+    assert got["template"] == "Summarize {content} in {n} words."
 
 
 def test_bad_role_is_422(harness: Harness) -> None:
@@ -100,6 +100,27 @@ def test_secretless_stores_null_key_id(harness: Harness) -> None:
         "WHERE collection = 'prompts' AND name = 'b'"
     ).fetchone()
     assert row["key_id"] is None
+
+
+@pytest.mark.parametrize("role", ("condense", "brief", "brief-upper"))
+def test_content_consuming_prompt_without_placeholder_is_rejected(
+    harness: Harness, role: str
+) -> None:
+    body = prompt(role, name=f"{role}-x", template="Summarize the input.")
+    assert post(harness, body).status_code == 400
+
+
+def test_judge_template_needs_no_content_placeholder(harness: Harness) -> None:
+    body = prompt("judge", name="jx", template="Score {source} vs {summary}.")
+    assert post(harness, body).status_code == 201
+
+
+def test_seeded_default_templates_satisfy_validation() -> None:
+    from hrono.registry.prompts import PROMPTS
+
+    assert PROMPTS.validate is not None
+    for default in PROMPTS.defaults:
+        PROMPTS.validate(dict(default), None)  # type: ignore[arg-type]
 
 
 def test_role_and_error_matrix(harness: Harness) -> None:
