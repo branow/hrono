@@ -114,21 +114,23 @@ def _files(db: Database, notes=None) -> dict[str, str]:
 def test_root_renders_brief_and_mechanical_child_listing(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    database, _ = db
+    database, ids = db
     files = _files(database)
     assert "root.md" in files
     root = files["root.md"]
     assert "# Root overview" in root  # stored brief as-is
     assert "## Children" in root
-    assert "[Alpha topic](alpha-topic/brief.md)" in root  # mechanical link
-    assert "[Beta topic](beta-topic/brief.md)" in root
+    # mechanical links; node id suffixed so siblings never collide
+    assert f"[Alpha topic](alpha-topic-{ids['n0']}/brief.md)" in root
+    assert f"[Beta topic](beta-topic-{ids['n1']}/brief.md)" in root
 
 
 def test_leaf_lists_sections_and_carries_caution(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    files = _files(db[0])
-    alpha = files["alpha-topic/brief.md"]
+    database, ids = db
+    files = _files(database)
+    alpha = files[f"alpha-topic-{ids['n0']}/brief.md"]
     assert "Caution: none." in alpha  # the stored Caution rendered as-is
     assert "## Sections" in alpha
 
@@ -138,10 +140,11 @@ def test_section_reassembles_byte_identically(
 ) -> None:
     database, ids = db
     files = _files(database)
+    alpha_dir = f"alpha-topic-{ids['n0']}"
     section_files = [
         p
         for p in files
-        if p.startswith("alpha-topic/") and p != "alpha-topic/brief.md"
+        if p.startswith(f"{alpha_dir}/") and p != f"{alpha_dir}/brief.md"
     ]
     assert section_files
     content = files[section_files[0]]
@@ -169,12 +172,61 @@ def test_notes_render_only_when_present(
     db: tuple[Database, dict[str, int]],
 ) -> None:
     database, ids = db
+    alpha = f"alpha-topic-{ids['n0']}/brief.md"
     without = _files(database)
-    assert "## Notes" not in without["alpha-topic/brief.md"]
+    assert "## Notes" not in without[alpha]
     with_notes = _files(database, notes={ids["n0"]: "a human note"})
-    assert "## Notes" in with_notes["alpha-topic/brief.md"]
-    assert "a human note" in with_notes["alpha-topic/brief.md"]
+    assert "## Notes" in with_notes[alpha]
+    assert "a human note" in with_notes[alpha]
 
 
 def test_output_is_deterministic(db: tuple[Database, dict[str, int]]) -> None:
     assert _files(db[0]) == _files(db[0])
+
+
+def test_same_heading_siblings_do_not_collide(tmp_path: object) -> None:
+    # two children whose briefs both start "# Overview" must NOT overwrite each
+    # other — every subtree survives and each child link is unique.
+    database = Database(open_database(tmp_path / "c.db"))  # type: ignore[operator]
+    with database.connect() as conn, conn:
+        s0 = add_section(conn, "a.py", b"aaaa\n")
+        s1 = add_section(conn, "b.py", b"bbbb\n")
+        cluster_store.replace_tree(
+            conn,
+            TREE,
+            0,
+            [(0, s0, False, None), (1, s1, False, None)],
+            [(s0, [0.1]), (s1, [0.2])],
+        )
+        level0 = sorted(
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE level = 0"
+            ).fetchall()
+        )
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            1,
+            [(0, level0[0], False, None), (0, level0[1], False, None)],
+        )
+        root = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 1").fetchone()[
+                "id"
+            ]
+        )
+        brief(conn, level0[0], "# Overview\n\nFirst.")
+        brief(conn, level0[1], "# Overview\n\nSecond.")  # same heading
+        brief(conn, root, "# Root\n\nAll.")
+    try:
+        files = _files(database)
+        briefs_written = [p for p in files if p.endswith("/brief.md")]
+        assert len(briefs_written) == 2  # both subtrees survived, no overwrite
+        assert len(set(briefs_written)) == 2  # distinct directories
+        root_md = files["root.md"]
+        links = [
+            line for line in root_md.splitlines() if line.startswith("- [")
+        ]
+        assert len(links) == len(set(links)) == 2  # two unique child links
+    finally:
+        database.close()

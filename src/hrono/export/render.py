@@ -121,7 +121,10 @@ def _heading(conn: sqlite3.Connection, node_id: int) -> str:
 
 
 def _name(conn: sqlite3.Connection, node_id: int) -> str:
-    return _slug(_heading(conn, node_id)) or f"node-{node_id}"
+    # append the node id so sibling briefs with the same heading (LLM briefs
+    # readily repeat "Overview" etc.) never collide onto one directory and drop
+    # a subtree — the same collision-safety sections already have.
+    return f"{_slug(_heading(conn, node_id)) or 'node'}-{node_id}"
 
 
 def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
