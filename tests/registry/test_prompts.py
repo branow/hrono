@@ -54,16 +54,25 @@ def post(harness: Harness, body: dict, role: str = "writer") -> object:
     )
 
 
+_ROLE_TOKENS = {
+    "condense": "{content}",
+    "brief": "{content}",
+    "brief-upper": "{content}",
+    "judge": "{source} {summary}",
+}
+
+
 @pytest.mark.parametrize("role", ROLES)
 def test_registers_each_valid_role(harness: Harness, role: str) -> None:
-    assert post(harness, prompt(role)).status_code == 201
+    template = f"Use {_ROLE_TOKENS[role]} here."
+    assert post(harness, prompt(role, template=template)).status_code == 201
     fetched = harness.client.get(
         f"/prompts/{role}", headers=harness.auth("reader")
     )
     assert fetched.status_code == 200
     got = fetched.json()
     assert got["role"] == role
-    assert got["template"] == "Summarize {content} in {n} words."
+    assert got["template"] == template
 
 
 def test_bad_role_is_422(harness: Harness) -> None:
@@ -71,8 +80,10 @@ def test_bad_role_is_422(harness: Harness) -> None:
 
 
 def test_crud_round_trip(harness: Harness) -> None:
-    post(harness, prompt("judge", name="j"))
-    replaced = prompt("judge", name="j", template="Score {a} vs {b}.")
+    post(harness, prompt("judge", name="j", template="J {source} {summary}"))
+    replaced = prompt(
+        "judge", name="j", template="Score {source} vs {summary}."
+    )
     assert (
         harness.client.put(
             "/prompts/j", json=replaced, headers=harness.auth("writer")
@@ -83,7 +94,7 @@ def test_crud_round_trip(harness: Harness) -> None:
         harness.client.get("/prompts/j", headers=harness.auth("reader")).json()[
             "template"
         ]
-        == "Score {a} vs {b}."
+        == "Score {source} vs {summary}."
     )
     assert (
         harness.client.delete(
@@ -113,6 +124,17 @@ def test_content_consuming_prompt_without_placeholder_is_rejected(
 def test_judge_template_needs_no_content_placeholder(harness: Harness) -> None:
     body = prompt("judge", name="jx", template="Score {source} vs {summary}.")
     assert post(harness, body).status_code == 201
+
+
+@pytest.mark.parametrize(
+    "template",
+    ("only {source} here", "only {summary} here", "neither token"),
+)
+def test_judge_template_missing_a_settled_token_is_rejected(
+    harness: Harness, template: str
+) -> None:
+    body = prompt("judge", name="jbad", template=template)
+    assert post(harness, body).status_code == 400
 
 
 def test_seeded_default_templates_satisfy_validation() -> None:

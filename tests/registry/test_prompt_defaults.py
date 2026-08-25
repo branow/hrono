@@ -101,7 +101,11 @@ def test_delete_of_a_default_resets_it(harness: Harness) -> None:
 def test_delete_of_a_user_prompt_removes_it(harness: Harness) -> None:
     harness.client.post(
         "/prompts",
-        json={"name": "mine", "role": "judge", "template": "T"},
+        json={
+            "name": "mine",
+            "role": "judge",
+            "template": "T {source} {summary}",
+        },
         headers=harness.headers,
     )
     assert (
@@ -143,7 +147,11 @@ def test_override_then_delete_restores_the_default(harness: Harness) -> None:
 def test_template_hash_updates_on_write(harness: Harness) -> None:
     harness.client.post(
         "/prompts",
-        json={"name": "h", "role": "judge", "template": "one"},
+        json={
+            "name": "h",
+            "role": "judge",
+            "template": "one {source} {summary}",
+        },
         headers=harness.headers,
     )
     first = harness.conn.execute(
@@ -151,7 +159,11 @@ def test_template_hash_updates_on_write(harness: Harness) -> None:
     ).fetchone()["content_hash"]
     harness.client.put(
         "/prompts/h",
-        json={"name": "h", "role": "judge", "template": "two"},
+        json={
+            "name": "h",
+            "role": "judge",
+            "template": "two {source} {summary}",
+        },
         headers=harness.headers,
     )
     second = harness.conn.execute(

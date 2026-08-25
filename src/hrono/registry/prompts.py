@@ -27,13 +27,14 @@ class Prompt(BaseModel):
 
 # The placeholder each role's op injects the body at, so a stored template that
 # drops it can never silently no-op the ``template.replace`` the summarize ops
-# do. Data-driven (role -> required tokens), not a per-role branch. ``judge`` is
-# omitted until its op (#063) settles the tokens it injects — we do not guard a
-# token no op uses.
+# do. Data-driven (role -> required tokens), not a per-role branch. ``judge``
+# was deferred until its op settled its tokens; #087 propagate did — it injects
+# {source} and {summary} — so the guard now enforces them (#088).
 _REQUIRED_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
     "condense": ("{content}",),
     "brief": ("{content}",),
     "brief-upper": ("{content}",),
+    "judge": ("{source}", "{summary}"),
 }
 
 
