@@ -67,6 +67,9 @@ def maintain(
         encoder_for=encoder_for,
         build=build,
     )
+    # brief + build-tree wrote node:// brief passages (#071) after the first
+    # embed; vectorise them so recall's vector leg covers briefs too.
+    embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
 
 
 def _stage(tree: str, op: str, scope: dict[str, object]) -> Job:

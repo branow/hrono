@@ -169,16 +169,31 @@ def test_builds_a_fresh_tree_end_to_end_to_a_single_root(db: Database) -> None:
     assert by_level[max(by_level)] == 1  # to a single root
 
 
-def test_second_maintain_re_embeds_and_re_condenses_nothing(
+def _source_embeddings(db: Database) -> int:
+    with db.connect() as conn:
+        return int(
+            conn.execute(
+                "SELECT COUNT(*) FROM embeddings e WHERE EXISTS ("
+                "SELECT 1 FROM sections s WHERE "
+                "s.content_hash = e.content_hash "
+                "AND s.source_type != 'node')"
+            ).fetchone()[0]
+        )
+
+
+def test_second_maintain_re_condenses_and_re_embeds_source_nothing(
     db: Database,
 ) -> None:
     run(db)
-    embeddings = _count(db, "embeddings")
     condensations = _count(db, "condensations")
+    source_embeddings = _source_embeddings(db)
     run(db)  # unchanged tree
-    # the M4 content-hash caches hold: embed + condense do zero new work
-    assert _count(db, "embeddings") == embeddings
+    # the M4 content-hash caches hold: condense (the expensive LLM map) does
+    # zero new work, and no source section is re-embedded.
     assert _count(db, "condensations") == condensations
+    assert _source_embeddings(db) == source_embeddings
+    # (brief passage vectors may churn while cluster/brief rebuild with fresh
+    #  node ids each run — the known M4 limit closed by M7 stable ids, #068.)
 
 
 def test_missing_embedding_model_fails_the_maintain_run(db: Database) -> None:
