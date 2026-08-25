@@ -296,6 +296,59 @@ def node_centroids(
     return centroids
 
 
+def section_node(
+    conn: sqlite3.Connection, tree: str, section_id: int
+) -> int | None:
+    """Return the level-0 node a section belongs to in ``tree``, or None."""
+    row = conn.execute(
+        "SELECT m.node_id AS n FROM node_members m "
+        "JOIN nodes ON nodes.id = m.node_id "
+        "WHERE nodes.tree = ? AND nodes.level = 0 AND m.section_id = ?",
+        (tree, section_id),
+    ).fetchone()
+    return int(row["n"]) if row is not None else None
+
+
+def member_count(conn: sqlite3.Connection, node_id: int) -> int:
+    return int(
+        conn.execute(
+            "SELECT COUNT(*) FROM node_members WHERE node_id = ?", (node_id,)
+        ).fetchone()[0]
+    )
+
+
+def node_member_rows(
+    conn: sqlite3.Connection, node_id: int
+) -> tuple[tuple[int, str, str], ...]:
+    """Return (section_id, content_hash, path) for a node's members."""
+    rows = conn.execute(
+        "SELECT s.id AS id, s.content_hash AS h, s.path AS p "
+        "FROM node_members m JOIN sections s ON s.id = m.section_id "
+        "WHERE m.node_id = ? ORDER BY s.id",
+        (node_id,),
+    ).fetchall()
+    return tuple((int(r["id"]), r["h"], r["p"]) for r in rows)
+
+
+def remove_member(
+    conn: sqlite3.Connection, node_id: int, section_id: int
+) -> None:
+    """Drop a section from a node and refresh the node's content signature."""
+    conn.execute(
+        "DELETE FROM node_members WHERE node_id = ? AND section_id = ?",
+        (node_id, section_id),
+    )
+    conn.execute(
+        "UPDATE nodes SET signature = ? WHERE id = ?",
+        (node_content_signature(conn, node_id), node_id),
+    )
+
+
+def delete_node(conn: sqlite3.Connection, node_id: int) -> None:
+    """Remove a node (members, children, brief cascade)."""
+    conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
+
+
 def _renormalized_mean(vectors: Sequence[Sequence[float]]) -> tuple[float, ...]:
     dims = len(vectors[0])
     mean = [sum(v[i] for v in vectors) / len(vectors) for i in range(dims)]

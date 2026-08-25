@@ -56,10 +56,10 @@ def split_source(job: Job, context: JobContext) -> None:
         fts.clear_source(conn, name)
         register_path_bodies(conn, files)
         for path in files:
-            _store_file(conn, cache, path, name, source_type, instance, version)
+            store_file(conn, cache, path, name, source_type, instance, version)
 
 
-def _store_file(
+def store_file(
     conn: sqlite3.Connection,
     cache: Path,
     path: str,
@@ -67,10 +67,12 @@ def _store_file(
     source_type: str,
     instance: str,
     version: str,
-) -> None:
+) -> tuple[tuple[int, int, str], ...]:
+    """Split one file into sections/passages, returning (id, ordinal, hash)."""
     raw = (cache / path).read_bytes()
     tree = structure(Path(path), raw)
     address = Address(source_type, instance, path, version)
+    stored: list[tuple[int, int, str]] = []
     for ordinal, section in enumerate(
         pack_sections(tree, section_budget(Path(path)))
     ):
@@ -84,6 +86,7 @@ def _store_file(
             content_hash=section_hash,
             ordinal=ordinal,
         )
+        stored.append((section_id, ordinal, section_hash))
         for p_ordinal, passage in enumerate(section.passages):
             passage_hash = _store_body(conn, raw, passage.start, passage.end)
             paths = tuple(
@@ -112,6 +115,7 @@ def _store_file(
                     "utf-8", "replace"
                 ),
             )
+    return tuple(stored)
 
 
 def _store_body(

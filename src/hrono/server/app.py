@@ -25,6 +25,7 @@ import hrono.summarize.brief_upper  # noqa: F401 - registers the brief-upper op
 import hrono.summarize.build_tree  # noqa: F401 - registers the build-tree op
 import hrono.summarize.condense  # noqa: F401 - registers the condense op
 import hrono.tree.maintain  # noqa: F401 - registers the maintain op
+import hrono.tree.update  # noqa: F401 - registers the update op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database, open_database

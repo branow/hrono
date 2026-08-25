@@ -17,6 +17,14 @@ def clear_source(conn: sqlite3.Connection, source: str) -> None:
     conn.execute("DELETE FROM passages_fts WHERE source = ?", (source,))
 
 
+def clear_path(conn: sqlite3.Connection, source: str, path: str) -> None:
+    """Drop one path's FTS rows (an incremental re-split of that file, #085)."""
+    conn.execute(
+        "DELETE FROM passages_fts WHERE source = ? AND path = ?",
+        (source, path),
+    )
+
+
 def index_passage(
     conn: sqlite3.Connection,
     *,
