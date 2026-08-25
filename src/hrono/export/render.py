@@ -6,7 +6,7 @@ from the collapsed tree in code (titles + relative links, no LLM, no
 hallucinated links). Leaf nodes list their sections; each section is rendered to
 its own file, reassembled byte-identically from its stored passages (#032) with
 an address header. Human notes render only when passed (M9 creates them; here
-render-if-present). No file I/O — returns a deterministic path -> content mapping
+render-if-present). No file I/O — returns a deterministic path -> content map
 that #081 materialises into a folder tree.
 """
 
