@@ -17,6 +17,8 @@ import uvicorn
 from hrono.admin.commands import app as admin_app
 from hrono.admin.reset import targets, wipe
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
+from hrono.client.http import ClientError, from_profile
+from hrono.client.http import message as client_message
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, load_key, reconcile
 from hrono.db.database import DEFAULT_PATH, open_database
@@ -31,6 +33,31 @@ app = typer.Typer(add_completion=False)
 app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
 app.add_typer(tree_app, name="tree")
+
+
+@app.command()
+def recall(
+    tree: str,
+    question: str,
+    limit: Annotated[int, typer.Option("--limit")] = 10,
+) -> None:
+    """Recall passages from a tree for a question (the fast read door)."""
+    try:
+        result = from_profile().post(
+            f"/trees/{tree}/recall", {"question": question, "limit": limit}
+        )
+    except ClientError as exc:
+        typer.echo(client_message(exc), err=True)
+        raise typer.Exit(1) from exc
+    hits = result.get("hits") if isinstance(result, dict) else []
+    message = result.get("message") if isinstance(result, dict) else None
+    if not hits:
+        typer.echo(message or "no hits.")
+        return
+    for hit in hits:
+        typer.echo(f"[{hit['kind']}] {hit['header']}")
+        typer.echo(hit["body"])
+        typer.echo("")
 
 
 @app.callback()

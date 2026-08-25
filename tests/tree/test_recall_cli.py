@@ -1,0 +1,69 @@
+"""T28: the `hrono recall` CLI over the #010 client."""
+
+import pytest
+from typer.testing import CliRunner
+
+from hrono import cli
+from hrono.client.http import NoProfile
+
+runner = CliRunner()
+
+
+class FakeClient:
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+        self.calls: list[tuple[str, dict]] = []
+
+    def post(self, path: str, body: dict) -> object:
+        self.calls.append((path, body))
+        return self.payload
+
+
+def test_recall_posts_and_prints_hits(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeClient(
+        {
+            "hits": [
+                {
+                    "uri": "git://ex/repo/a.py@v1",
+                    "kind": "source",
+                    "header": "git://ex/repo/a.py@v1",
+                    "body": "the answer body",
+                    "score": 0.9,
+                }
+            ],
+            "message": None,
+        }
+    )
+    monkeypatch.setattr("hrono.cli.from_profile", lambda: fake)
+    result = runner.invoke(cli.app, ["recall", "acme", "how does auth work?"])
+    assert result.exit_code == 0
+    assert fake.calls == [
+        ("/trees/acme/recall", {"question": "how does auth work?", "limit": 10})
+    ]
+    assert "the answer body" in result.output
+    assert "[source]" in result.output
+
+
+def test_recall_prints_the_explore_message_on_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeClient(
+        {"hits": [], "message": "no confident matches - explore the map."}
+    )
+    monkeypatch.setattr("hrono.cli.from_profile", lambda: fake)
+    result = runner.invoke(cli.app, ["recall", "acme", "nope", "--limit", "5"])
+    assert result.exit_code == 0
+    assert "explore the map" in result.output
+    assert fake.calls[0][1]["limit"] == 5
+
+
+def test_recall_no_profile_is_a_clean_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_no_profile() -> object:
+        raise NoProfile
+
+    monkeypatch.setattr("hrono.cli.from_profile", raise_no_profile)
+    result = runner.invoke(cli.app, ["recall", "acme", "q"])
+    assert result.exit_code == 1
+    assert "profile" in result.output.lower()

@@ -26,10 +26,15 @@ EXPLORE_MESSAGE = "no confident matches - explore the map."
 
 @dataclass(frozen=True)
 class Fusion:
-    """The fused hits (passage ids, best first) and the empty-case message."""
+    """The fused (passage id, score) ranking and the empty-case message."""
 
-    hits: tuple[int, ...]
+    ranked: tuple[tuple[int, float], ...]
     message: str | None
+
+    @property
+    def hits(self) -> tuple[int, ...]:
+        """The ranked passage ids, best first."""
+        return tuple(passage_id for passage_id, _ in self.ranked)
 
 
 def fuse(
@@ -49,8 +54,6 @@ def fuse(
         return total
 
     union = set(vector_rank) | set(keyword_rank)
-    ranked = sorted(union, key=lambda pid: (-score(pid), pid))[:CAP]
-    return Fusion(
-        hits=tuple(ranked),
-        message=None if ranked else EXPLORE_MESSAGE,
-    )
+    ordered = sorted(union, key=lambda pid: (-score(pid), pid))[:CAP]
+    ranked = tuple((pid, score(pid)) for pid in ordered)
+    return Fusion(ranked=ranked, message=None if ranked else EXPLORE_MESSAGE)
