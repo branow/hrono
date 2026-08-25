@@ -106,6 +106,21 @@ def _attach_noise(
     return labels, attached, sims
 
 
+def core_labels(combined: Sequence[Sequence[float]]) -> tuple[int, ...]:
+    """Scoped mini-pipeline for the incubator (#086): UMAP -> HDBSCAN leaf,
+    returning the raw density labels WITHOUT attaching noise (-1 stays -1).
+
+    Unlike ``build_clusters`` (which attaches every noise point to a core), the
+    drain emits only density-core clusters and leaves residual noise to be
+    force-assigned to an existing cluster — so it needs the un-attached labels.
+    """
+    vectors = np.asarray(combined, dtype=np.float32)
+    if vectors.ndim != 2 or len(vectors) == 0:
+        raise ClusterError("no vectors to cluster")
+    reduced = _default_reduce(vectors, None)
+    return tuple(int(label) for label in _default_cluster(reduced))
+
+
 def _default_reduce(vectors: np.ndarray, init: np.ndarray | None) -> np.ndarray:
     umap = _umap()
     kwargs: dict[str, object] = {

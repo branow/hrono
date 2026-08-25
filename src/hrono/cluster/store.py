@@ -14,6 +14,7 @@ numeric libraries so persistence stays importable without the ``cluster`` extra.
 from __future__ import annotations
 
 import hashlib
+import math
 import sqlite3
 from array import array
 from collections import defaultdict
@@ -202,6 +203,106 @@ def _reconcile(
         if int(row["id"]) not in kept:
             conn.execute("DELETE FROM nodes WHERE id = ?", (int(row["id"]),))
     return node_id_of
+
+
+def add_leaf_node(
+    conn: sqlite3.Connection,
+    tree: str,
+    members: Sequence[tuple[int, bool, float | None]],
+) -> int:
+    """Add ONE new level-0 node (incremental #086), return its id.
+
+    ``members`` is (section_id, forced, assignment_similarity). Its signature is
+    set from the members' content hashes so a later full rebuild can match it.
+    """
+    now = _now()
+    cursor = conn.execute(
+        "INSERT INTO nodes(tree, level, label, created_at) "
+        "VALUES (?, 0, -1, ?)",
+        (tree, now),
+    )
+    node_id = int(cursor.lastrowid or 0)
+    for section_id, forced, similarity in members:
+        _insert_member(conn, node_id, section_id, forced, similarity, now)
+    conn.execute(
+        "UPDATE nodes SET signature = ? WHERE id = ?",
+        (node_content_signature(conn, node_id), node_id),
+    )
+    return node_id
+
+
+def add_member(
+    conn: sqlite3.Connection,
+    node_id: int,
+    section_id: int,
+    *,
+    forced: bool,
+    similarity: float | None,
+) -> None:
+    """Add one section to an existing node (force-assign #086); refresh sig."""
+    _insert_member(conn, node_id, section_id, forced, similarity, _now())
+    conn.execute(
+        "UPDATE nodes SET signature = ? WHERE id = ?",
+        (node_content_signature(conn, node_id), node_id),
+    )
+
+
+def _insert_member(
+    conn: sqlite3.Connection,
+    node_id: int,
+    section_id: int,
+    forced: bool,
+    similarity: float | None,
+    now: str,
+) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO node_members(node_id, section_id, attached, "
+        "assignment_similarity, forced, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (node_id, section_id, int(forced), similarity, int(forced), now),
+    )
+
+
+def node_content_signature(conn: sqlite3.Connection, node_id: int) -> str:
+    """The content-hash signature of a node's current section members."""
+    rows = conn.execute(
+        "SELECT s.content_hash AS h FROM node_members m "
+        "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
+        "ORDER BY s.content_hash",
+        (node_id,),
+    ).fetchall()
+    return _signature(row["h"] for row in rows)
+
+
+def node_centroids(
+    conn: sqlite3.Connection, tree: str, model_name: str
+) -> dict[int, tuple[float, ...]]:
+    """Return each leaf node's unit centroid (mean of member vectors)."""
+    centroids: dict[int, tuple[float, ...]] = {}
+    for row in conn.execute(
+        "SELECT id FROM nodes WHERE tree = ? AND level = 0", (tree,)
+    ).fetchall():
+        node_id = int(row["id"])
+        vectors = []
+        for member in conn.execute(
+            "SELECT s.content_hash AS h, s.path AS p FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ?",
+            (node_id,),
+        ).fetchall():
+            vector = combined_vector(conn, member["h"], member["p"], model_name)
+            if vector is not None:
+                vectors.append(vector)
+        if vectors:
+            centroids[node_id] = _renormalized_mean(vectors)
+    return centroids
+
+
+def _renormalized_mean(vectors: Sequence[Sequence[float]]) -> tuple[float, ...]:
+    dims = len(vectors[0])
+    mean = [sum(v[i] for v in vectors) / len(vectors) for i in range(dims)]
+    norm = math.sqrt(sum(x * x for x in mean))
+    if norm == 0.0:
+        return tuple(mean)
+    return tuple(x / norm for x in mean)
 
 
 def _section_hashes(

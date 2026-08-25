@@ -1,6 +1,4 @@
 # Deny by default: ignore everything, then un-ignore only what we track.
-# Local-only files (CLAUDE.md, .autodev/, caches, .venv) are ignored simply
-# by never being un-ignored below.
 *
 
 # Descend into directories so the un-ignore rules below can reach nested files.
