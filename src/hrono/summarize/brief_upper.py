@@ -25,6 +25,7 @@ from hrono.llm.client import (
     CompletionRequest,
     LLMError,
 )
+from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 from hrono.summarize.brief import _hash
 from hrono.summarize.faithfulness import faithfulness
@@ -86,6 +87,7 @@ def brief_upper(
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )
+            store_brief(conn, node_id, text, signature)
 
 
 def _level(scope: dict[str, object]) -> int:

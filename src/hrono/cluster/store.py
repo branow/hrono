@@ -27,7 +27,8 @@ def section_combined_vectors(
 ) -> tuple[tuple[int, tuple[float, ...]], ...]:
     """Return (section_id, combined vector) for every embedded section."""
     rows = conn.execute(
-        "SELECT id, path, content_hash FROM sections ORDER BY id"
+        "SELECT id, path, content_hash FROM sections "
+        "WHERE source_type != 'node' ORDER BY id"
     ).fetchall()
     pairs: list[tuple[int, tuple[float, ...]]] = []
     for row in rows:

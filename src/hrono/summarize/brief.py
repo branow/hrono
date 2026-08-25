@@ -28,6 +28,7 @@ from hrono.llm.client import (
     CompletionRequest,
     LLMError,
 )
+from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
@@ -87,6 +88,7 @@ def brief(
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )
+            store_brief(conn, node_id, text, signature)
 
 
 def _references(uris: tuple[str, ...]) -> str:

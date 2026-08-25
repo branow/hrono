@@ -24,9 +24,9 @@ def pending(
     rows = conn.execute(
         "SELECT DISTINCT s.content_hash AS h, c.body AS body "
         "FROM sections s JOIN contents c ON c.content_hash = s.content_hash "
-        "WHERE NOT EXISTS (SELECT 1 FROM condensations d "
-        "WHERE d.content_hash = s.content_hash AND d.model_name = ?) "
-        "ORDER BY s.content_hash",
+        "WHERE s.source_type != 'node' AND NOT EXISTS (SELECT 1 FROM "
+        "condensations d WHERE d.content_hash = s.content_hash "
+        "AND d.model_name = ?) ORDER BY s.content_hash",
         (model_name,),
     ).fetchall()
     return tuple((row["h"], bytes(row["body"])) for row in rows)
