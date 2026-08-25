@@ -57,7 +57,8 @@ def _is_fresh(
     model_name: str,
 ) -> bool:
     return (
-        row["member_signature"] == member_sig
+        not row["stale"]
+        and row["member_signature"] == member_sig
         and row["prompt_hash"] == prompt_hash
         and row["model_name"] == model_name
     )
@@ -220,10 +221,19 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     """Return a node's brief row, or None."""
     return conn.execute(
         "SELECT node_id, text, model_name, prompt_name, prompt_hash, "
-        "member_signature, input_tokens, output_tokens, unfaithful "
+        "member_signature, input_tokens, output_tokens, unfaithful, stale "
         "FROM briefs WHERE node_id = ?",
         (node_id,),
     ).fetchone()
+
+
+def mark_stale(conn: sqlite3.Connection, node_id: int) -> None:
+    """Flag a node's brief for regeneration without touching its members (#087).
+
+    A sticky-placed leaf keeps its id so #068's ancestor signature is unchanged;
+    propagate sets this so the next brief pass regenerates the ancestor anyway.
+    """
+    conn.execute("UPDATE briefs SET stale = 1 WHERE node_id = ?", (node_id,))
 
 
 def unfaithful_count(conn: sqlite3.Connection, tree: str, level: int) -> int:

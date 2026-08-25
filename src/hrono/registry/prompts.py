@@ -89,10 +89,12 @@ _DEFAULTS: tuple[dict[str, object], ...] = (
         "name": "judge",
         "role": "judge",
         "template": (
-            "Rank the candidate summary against the source for faithfulness "
-            "and usefulness. Flag any identifier or value in the summary that "
-            "does not appear in the source.\n\nSource:\n{source}\n\n"
-            "Summary:\n{summary}"
+            "The source below has changed since the summary was written. Judge "
+            "how much the change alters what a reader must know at this level, "
+            "ignoring cosmetic edits. Reply with exactly one word: 'none' if "
+            "the summary still holds, 'minor' if a detail shifted, 'major' if "
+            "the topic itself changed.\n\nSource:\n{source}\n\nSummary:\n"
+            "{summary}"
         ),
     },
 )
