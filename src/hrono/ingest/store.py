@@ -77,9 +77,9 @@ def insert_passage(
     content_hash: str,
     sp_paths: tuple[str, ...],
     ordinal: int,
-) -> None:
-    """Insert one passage under its section."""
-    conn.execute(
+) -> int:
+    """Insert one passage under its section; return its new id."""
+    cursor = conn.execute(
         "INSERT INTO passages(section_id, source, source_type, instance, path, "
         "version, uri, byte_start, byte_end, content_hash, sp_paths, ordinal, "
         "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -99,6 +99,7 @@ def insert_passage(
             _now(),
         ),
     )
+    return int(cursor.lastrowid or 0)
 
 
 def get_content(conn: sqlite3.Connection, content_hash: str) -> bytes | None:

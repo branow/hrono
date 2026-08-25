@@ -30,6 +30,7 @@ from hrono.ingest.split.constants import section_budget
 from hrono.ingest.split.pack import sections as pack_sections
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.recall import fts
 from hrono.registry import store as registry_store
 
 _CACHE_ROOT = Path(".hrono/cache/sources")
@@ -52,6 +53,7 @@ def split_source(job: Job, context: JobContext) -> None:
     )
     with context.database.connect() as conn, conn:
         store.clear_source(conn, name)
+        fts.clear_source(conn, name)
         register_path_bodies(conn, files)
         for path in files:
             _store_file(conn, cache, path, name, source_type, instance, version)
@@ -90,7 +92,7 @@ def _store_file(
                     tree, passage.start, passage.end, passage.part, passage.of
                 )
             )
-            store.insert_passage(
+            passage_id = store.insert_passage(
                 conn,
                 section_id=section_id,
                 source=source,
@@ -100,6 +102,15 @@ def _store_file(
                 content_hash=passage_hash,
                 sp_paths=paths,
                 ordinal=p_ordinal,
+            )
+            fts.index_passage(
+                conn,
+                passage_id=passage_id,
+                source=source,
+                path=path,
+                body=raw[passage.start : passage.end].decode(
+                    "utf-8", "replace"
+                ),
             )
 
 
