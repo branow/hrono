@@ -17,9 +17,15 @@ from pydantic import BaseModel
 from hrono.auth.users import User
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import Encoder, encoder_for
+from hrono.errors import NotFound
+from hrono.export import store as export_store
+from hrono.export.collapse import collapse
+from hrono.export.render import render
 from hrono.jobs.worker import enqueue
 from hrono.recall import engine
 from hrono.server.auth import require_role
+
+_EXPORT_LEVELS = 4
 
 router = APIRouter()
 
@@ -61,3 +67,27 @@ def recall_tree(
 def _query_encode(model_id: str) -> Encoder:
     """Build the query encoder for a model (overridable in tests)."""
     return encoder_for(model_id)
+
+
+@router.get("/trees/{name}/export")
+def export_tree(
+    name: str, request: Request, _: Reader, levels: int = _EXPORT_LEVELS
+) -> dict[str, object]:
+    """Return the rendered agent-facing tree as a path -> content manifest.
+
+    ``levels`` sets the collapse depth (default 3-4); #078 floors it at 2, so
+    ``levels`` below 2 yields a 2-level export rather than an error. A
+    non-integer ``levels`` is a clean 422 (FastAPI validation); an unbuilt tree
+    is a clean 404.
+    """
+    database = request.app.state.db
+    with database.connect() as conn:
+        stored = export_store.load(conn, name)
+        if stored is None:
+            raise NotFound(f"tree not built: {name}")
+        files = render(conn, collapse(stored, levels))
+    return {
+        "files": [
+            {"path": path, "content": files[path]} for path in sorted(files)
+        ]
+    }
