@@ -9,6 +9,8 @@ first, and the HTTP endpoint is the canonical interface.)
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
+from typing import Annotated
 
 import typer
 
@@ -17,11 +19,18 @@ from hrono.client.http import ClientError, from_profile, message
 app = typer.Typer(add_completion=False, help="Build and maintain trees.")
 
 
+class UnsafePath(Exception):
+    """A payload path tried to escape the output directory."""
+
+
 def _run(action: Callable[[], None]) -> None:
     try:
         action()
     except ClientError as exc:
         typer.echo(message(exc), err=True)
+        raise typer.Exit(1) from exc
+    except UnsafePath as exc:
+        typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
 
 
@@ -35,3 +44,36 @@ def maintain(name: str) -> None:
         typer.echo(f"Started maintain job {job_id} for tree '{name}'.")
 
     _run(action)
+
+
+@app.command("export")
+def export(
+    name: str,
+    out: Annotated[Path, typer.Option("-o", "--out")],
+    levels: Annotated[int, typer.Option("--levels")] = 4,
+) -> None:
+    """Materialize a tree's rendered map into a folder under ``--out``."""
+
+    def action() -> None:
+        result = from_profile().get(f"/trees/{name}/export?levels={levels}")
+        files = result.get("files", []) if isinstance(result, dict) else []
+        written = _materialize(out, files)
+        typer.echo(f"Wrote {written} files to {out}.")
+
+    _run(action)
+
+
+def _materialize(out: Path, files: list[dict[str, str]]) -> int:
+    out.mkdir(parents=True, exist_ok=True)
+    base = out.resolve()
+    written = 0
+    for entry in files:
+        target = (out / entry["path"]).resolve()
+        if base != target and base not in target.parents:
+            raise UnsafePath(
+                f"refused to write outside {out}: {entry['path']!r}"
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(entry.get("content", ""), encoding="utf-8")
+        written += 1
+    return written
