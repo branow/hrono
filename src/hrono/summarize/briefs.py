@@ -18,22 +18,25 @@ from datetime import UTC, datetime
 
 
 def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
-    """Return a stable hash of a node's ordered member ids.
+    """Return a stable content-derived hash of a node's members.
 
-    Members are sections (node_members) at the leaf level and child nodes
-    (node_children) above; the ids are prefixed so a section id and a node id
-    can never collide into the same signature.
+    Leaf members sign over their sections' CONTENT HASHES, not section ids, so
+    the signature survives a re-split that re-mints section ids for unchanged
+    content (#068) — this is what lets #064's brief skip actually fire through a
+    rebuild. Upper members sign over their child node ids (stable once the level
+    below is). Tokens are prefixed so a content hash and node id never collide.
     """
-    sections = [
-        int(row["section_id"])
+    content_hashes = [
+        row["content_hash"]
         for row in conn.execute(
-            "SELECT section_id FROM node_members WHERE node_id = ? "
-            "ORDER BY section_id",
+            "SELECT s.content_hash AS content_hash FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
+            "ORDER BY s.content_hash",
             (node_id,),
         ).fetchall()
     ]
-    if sections:
-        tokens = [f"s{i}" for i in sections]
+    if content_hashes:
+        tokens = [f"c{h}" for h in sorted(content_hashes)]
     else:
         children = [
             int(row["child_id"])

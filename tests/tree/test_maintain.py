@@ -17,7 +17,11 @@ DIMS = 8
 
 
 class FakeCompletion:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.calls += 1
         return CompletionResult("a plain summary.", Usage(10, 4))
 
 
@@ -192,8 +196,45 @@ def test_second_maintain_re_condenses_and_re_embeds_source_nothing(
     # zero new work, and no source section is re-embedded.
     assert _count(db, "condensations") == condensations
     assert _source_embeddings(db) == source_embeddings
-    # (brief passage vectors may churn while cluster/brief rebuild with fresh
-    #  node ids each run — the known M4 limit closed by M7 stable ids, #068.)
+    # briefs no longer churn either now that #068 keeps node ids stable — the
+    # stronger zero-LLM-calls proof is the test below.
+
+
+def _node_ids(db: Database) -> list[int]:
+    with db.connect() as conn:
+        return sorted(
+            int(r["id"])
+            for r in conn.execute("SELECT id FROM nodes").fetchall()
+        )
+
+
+def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
+    db: Database,
+) -> None:
+    # the incremental differentiator, now whole (#068): once built, a second
+    # maintain over an unchanged corpus regenerates NO briefs — cluster reuses
+    # node ids by content signature so briefs survive #064's skip.
+    first = FakeCompletion()
+    maintain(
+        job(),
+        JobContext(db),
+        encoder_for=fake_encoder,
+        client=first,
+        build=fake_build,
+    )
+    assert first.calls > 0  # a real build happened
+    ids_before = _node_ids(db)
+
+    second = FakeCompletion()
+    maintain(
+        job(),
+        JobContext(db),
+        encoder_for=fake_encoder,
+        client=second,
+        build=fake_build,
+    )
+    assert second.calls == 0  # condense + brief + brief-upper all skip
+    assert _node_ids(db) == ids_before  # stable node identity across rebuilds
 
 
 def test_missing_embedding_model_fails_the_maintain_run(db: Database) -> None:
