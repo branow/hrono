@@ -77,6 +77,18 @@ def test_deterministic() -> None:
     } == {n: (v.level, v.children, v.sections) for n, v in b.nodes.items()}
 
 
+def test_levels_below_two_is_clamped_not_a_crash() -> None:
+    # #080 exposes levels as user input; levels 1 and 0 must not raise
+    # ZeroDivisionError/IndexError — they clamp to the minimum useful 2 levels.
+    for degenerate in (1, 0, -3):
+        tree = collapse(balanced_tree(), levels=degenerate)
+        assert tree.levels == 2  # root + leaves
+        planted = {
+            s for secs in balanced_tree().sections.values() for s in secs
+        }
+        assert _reachable_sections(tree) == planted
+
+
 def test_leaf_agent_nodes_carry_sections_inner_do_not() -> None:
     tree = collapse(balanced_tree(), levels=3)
     leaf_level = tree.levels - 1

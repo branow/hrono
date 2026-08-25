@@ -42,7 +42,13 @@ class ExportTree:
 
 
 def collapse(stored: StoredTree, levels: int) -> ExportTree:
-    """Map the stored tree to an agent-facing tree of at most ``levels``."""
+    """Map the stored tree to an agent-facing tree of at most ``levels``.
+
+    ``levels`` below 2 is clamped to 2 — an export always has at least a root
+    and a leaf level (there is no narrow-root/wide-leaf shape in one), so the
+    function stays total over any int rather than dividing by zero on N < 2.
+    """
+    levels = max(2, levels)
     present = sorted(set(stored.node_level.values()))
     kept = (
         present if len(present) <= levels else _evenly_spaced(present, levels)
