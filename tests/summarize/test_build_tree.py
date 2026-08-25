@@ -180,35 +180,85 @@ def test_recurses_to_a_single_root(db: Database) -> None:
                 assert briefs.child_ids(conn, int(parent["id"]))
 
 
-def test_stops_when_a_level_does_not_reduce(db: Database) -> None:
-    with db.connect() as conn, conn:
-        register(conn)
-        seed_leaves(conn, 12)
-    run(
-        db, lambda n: list(range(n))
-    )  # every point its own cluster: no reduction
+def _top_is_single_root(db: Database) -> None:
+    """Every build must end with exactly one node at the top level (#082)."""
     levels = _levels(db)
-    assert levels == {0: 12}  # the non-reducing level was discarded
+    top = max(levels)
+    assert levels[top] == 1
+    with db.connect() as conn:
+        root = int(
+            conn.execute(
+                "SELECT id FROM nodes WHERE level = ?", (top,)
+            ).fetchone()["id"]
+        )
+        # the root's children are every node of the level below (all reachable)
+        children = {
+            int(r["child_id"])
+            for r in conn.execute(
+                "SELECT child_id FROM node_children WHERE parent_id = ?",
+                (root,),
+            ).fetchall()
+        }
+        below = {
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE level = ?", (top - 1,)
+            ).fetchall()
+        }
+    assert children == below and below  # no orphaned sibling top nodes
 
 
-def test_cluster_error_near_root_stops(db: Database) -> None:
+def test_non_reducing_top_is_collected_under_one_root(db: Database) -> None:
     with db.connect() as conn, conn:
         register(conn)
         seed_leaves(conn, 12)
-    run(db, None)  # raising build
-    assert _levels(db) == {0: 12}
+    run(db, lambda n: list(range(n)))  # never reduces -> 12 stable top nodes
+    _top_is_single_root(db)  # collected into one root, not left multi-top
 
 
-def test_depth_is_capped_at_d_max(db: Database) -> None:
+def test_cluster_error_top_is_collected_under_one_root(db: Database) -> None:
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 12)
+    run(db, None)  # raising build -> recursion stops immediately
+    _top_is_single_root(db)
+
+
+def test_depth_is_capped_at_d_max_then_a_root_collects_the_top(
+    db: Database,
+) -> None:
     with db.connect() as conn, conn:
         register(conn)
         seed_leaves(conn, 40)
-    run(
-        db, lambda n: [min(i, n - 2) for i in range(n)]
-    )  # reduce by one per level
+    run(db, lambda n: [min(i, n - 2) for i in range(n)])  # reduce by one/level
     levels = _levels(db)
-    assert max(levels) == D_MAX  # capped, did not recurse without bound
-    assert levels[D_MAX] > 1  # stopped by the cap, not by reaching a root
+    # clustered levels are capped at D_MAX; the collect root sits one above it
+    assert max(levels) == D_MAX + 1
+    assert levels[D_MAX + 1] == 1  # single root
+    assert levels[D_MAX] > 1  # the capped, non-reduced top it collects
+
+
+def test_multi_top_export_is_complete_no_orphans(db: Database) -> None:
+    # the #082 defect: a multi-top stored tree orphaned sibling top nodes in
+    # export. With the collect-root fix, export sees one root and reaches all.
+    from hrono.export.collapse import collapse
+    from hrono.export.render import render
+    from hrono.export.store import load
+
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 12)
+    run(db, lambda n: list(range(n)))  # 12 stable top nodes -> collected root
+    with db.connect() as conn:
+        stored = load(conn, "default")
+        assert stored is not None
+        files = render(conn, collapse(stored, 4))
+    assert "root.md" in files
+    assert not any(p.startswith("/") for p in files)  # no malformed "/brief.md"
+    child_links = [
+        ln for ln in files["root.md"].splitlines() if ln.startswith("- [")
+    ]
+    assert len(child_links) == 12  # every top topic reachable from root.md
 
 
 def test_idempotent_second_run_adds_nothing(db: Database) -> None:

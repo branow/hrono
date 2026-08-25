@@ -21,6 +21,7 @@ from __future__ import annotations
 import sqlite3
 
 from hrono.cluster import ClusterError
+from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import cluster_briefs
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -73,6 +74,35 @@ def build_tree(
         brief_upper(_level_job(tree, level + 1), context, client=client)
         level += 1
 
+    _collect_root(context, tree, client)
+
+
+def _collect_root(
+    context: JobContext, tree: str, client: Completion | None
+) -> None:
+    """Guarantee ONE root: if recursion stopped with >1 top node (non-reducing
+    or D_MAX cases), parent them all under a single root and brief it.
+
+    This is a COLLECT, not a cluster — it runs once, only when clustering has
+    genuinely stopped reducing, so the stored tree always has the single
+    orienting root the spec (and export/recall) require. The root may sit one
+    level above D_MAX: D_MAX bounds the CLUSTERED levels, the root is always
+    allowed on top.
+    """
+    with context.database.connect() as conn:
+        top = _highest_node_level(conn, tree)
+        top_nodes = [] if top is None else _nodes_at(conn, tree, top)
+    if len(top_nodes) <= 1:
+        return
+    with context.database.connect() as conn, conn:
+        cluster_store.replace_level(
+            conn,
+            tree,
+            top + 1,
+            [(0, node_id, False, None) for node_id in top_nodes],
+        )
+    brief_upper(_level_job(tree, top + 1), context, client=client)
+
 
 def _level_job(tree: str, level: int) -> Job:
     return Job(
@@ -95,6 +125,23 @@ def _highest_brief_level(conn: sqlite3.Connection, tree: str) -> int | None:
         (tree,),
     ).fetchone()
     return None if row is None or row["level"] is None else int(row["level"])
+
+
+def _highest_node_level(conn: sqlite3.Connection, tree: str) -> int | None:
+    row = conn.execute(
+        "SELECT MAX(level) AS level FROM nodes WHERE tree = ?", (tree,)
+    ).fetchone()
+    return None if row is None or row["level"] is None else int(row["level"])
+
+
+def _nodes_at(conn: sqlite3.Connection, tree: str, level: int) -> list[int]:
+    return [
+        int(row["id"])
+        for row in conn.execute(
+            "SELECT id FROM nodes WHERE tree = ? AND level = ? ORDER BY id",
+            (tree, level),
+        ).fetchall()
+    ]
 
 
 def _count(conn: sqlite3.Connection, tree: str, level: int) -> int:
