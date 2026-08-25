@@ -128,24 +128,49 @@ def _sticky(state: _Batch, delta: SectionDelta) -> None:
 
 
 def _placement(state: _Batch, delta: SectionDelta) -> None:
-    vector = _vector(state, delta)
+    outcome = assign_or_park(
+        state.conn,
+        state.tree,
+        section_id=_require(delta.section_id),
+        content_hash=delta.content_hash,
+        path=delta.path,
+        centroids=state.working,
+        model_name=state.model,
+        batch=state.batch,
+    )
+    if outcome == "joined":
+        state.joined += 1
+    elif outcome == "parked":
+        state.parked += 1
+
+
+def assign_or_park(
+    conn: sqlite3.Connection,
+    tree: str,
+    *,
+    section_id: int,
+    content_hash: str,
+    path: str,
+    centroids: dict[int, tuple[float, ...]],
+    model_name: str,
+    batch: int,
+) -> str:
+    """Join one chunk to its best centroid >= TAU, else park it (#086).
+
+    The shared placement primitive: the incremental rule (#085) and repair's
+    dissolve/re-place (#090) both route a homeless chunk through here.
+    """
+    vector = combined_vector(conn, content_hash, path, model_name)
     if vector is None:
-        return
-    target = _nearest(vector, state.working)
+        return "skipped"
+    target = _nearest(vector, centroids)
     if target is not None and target[1] >= TAU:
         store.add_member(
-            state.conn,
-            target[0],
-            _require(delta.section_id),
-            forced=False,
-            similarity=target[1],
+            conn, target[0], section_id, forced=False, similarity=target[1]
         )
-        state.joined += 1
-        return
-    incubator.park(
-        state.conn, state.tree, delta.content_hash, delta.path, state.batch
-    )
-    state.parked += 1
+        return "joined"
+    incubator.park(conn, tree, content_hash, path, batch)
+    return "parked"
 
 
 def _dissolve_sweep(state: _Batch) -> None:

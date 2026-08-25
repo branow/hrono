@@ -18,6 +18,7 @@ from fastapi import APIRouter, FastAPI
 import hrono.cluster.levels  # noqa: F401 - registers the cluster-briefs op
 import hrono.cluster.monitor  # noqa: F401 - registers the monitor op
 import hrono.cluster.op  # noqa: F401 - registers the cluster op
+import hrono.cluster.repair  # noqa: F401 - registers the repair op
 import hrono.embed.op  # noqa: F401 - registers the embed op
 import hrono.ingest.split_op  # noqa: F401 - registers the split op
 import hrono.ingest.sync  # noqa: F401 - registers the sync op into the registry
