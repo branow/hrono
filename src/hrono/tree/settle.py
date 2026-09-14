@@ -19,13 +19,17 @@ while #068's signature reconcile keeps unchanged nodes' ids and briefs;
 start reproduces the layout, ~0 delta, ~0 re-briefs. Heavy compute runs inside
 those ops, off the #008 lock. Manual-edit pins (M9) would be honoured as fixed
 here; none exist yet.
+
+A reconcile is also the natural moment to re-home strays (#095): the rebuild
+itself re-clusters every parked chunk and ``cluster`` sweeps the pool rows it
+obsoletes, and a final ``drain`` clears any residue the rebuild could not reach.
 """
 
 from __future__ import annotations
 
 import sqlite3
 
-from hrono.cluster import monitor, store
+from hrono.cluster import incubator, monitor, store
 from hrono.cluster.op import cluster
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
@@ -67,6 +71,7 @@ def settle(
 
     with context.database.write() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
+        incubator.drain(conn, tree, model)
         monitor.refresh(
             conn, tree, model, sorted(store.node_centroids(conn, tree, model))
         )

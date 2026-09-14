@@ -7,15 +7,17 @@ release it, run the heavy UMAP -> HDBSCAN -> attach pipeline OUTSIDE the lock
 section reduced coords, and flags. The tree is named by the job's ``tree`` (the
 topic hierarchy over a corpus), defaulting to ``default``. Warm-init reads the
 tree's stored coords, so a rebuild extends the prior layout; a first build inits
-fresh. Reads only local vectors — no secret — so it needs no cipher. Registers
-into the op registry so the worker dispatches ``cluster``.
+fresh. A full build homes every embedded section, so the incubator pool (#086)
+is swept in the same transaction — its rows would otherwise claim a re-homed
+chunk is still stranded. Reads only local vectors — no secret — so it needs no
+cipher. Registers into the op registry so the worker dispatches ``cluster``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from hrono.cluster import ClusterError, store
+from hrono.cluster import ClusterError, incubator, store
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -56,6 +58,7 @@ def cluster(
     ]
     with context.database.write() as conn:
         store.replace_tree(conn, tree, _LEVEL, members, coords)
+        incubator.sweep(conn, tree)
 
 
 def _load_builder() -> Builder:

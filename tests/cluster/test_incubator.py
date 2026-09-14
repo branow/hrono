@@ -12,6 +12,7 @@ from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
+from tests.cluster.harness import planted_groups
 
 MODEL = "emb"
 DIMS = 4
@@ -174,3 +175,126 @@ def test_a_pool_the_clusterer_cannot_reduce_does_not_raise(
         assert incubator.drain(conn, TREE, MODEL) is False
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 5  # still pending, intact
+
+
+PLANTED_DIMS = 40
+
+
+@pytest.fixture
+def planted(tmp_path: object) -> Iterator[Database]:
+    """A pool of two well-separated planted groups plus one existing node."""
+    vectors, _ = planted_groups(
+        groups=2, per_group=7, dim=PLANTED_DIMS, spread=0.1, noise=0, seed=1
+    )
+    database = Database.at(tmp_path / "planted.db")
+    with database.connect() as conn, conn:
+        register_path_bodies(conn, [PATH])
+        upsert_vector(
+            conn,
+            content_hash(path_body(PATH)),
+            MODEL,
+            [1.0] + [0.0] * (PLANTED_DIMS - 1),
+        )
+        existing = add_section(
+            conn, b"existing planted\n", [0.0] * (PLANTED_DIMS - 1) + [1.0]
+        )
+        cluster_store.add_leaf_node(
+            conn, TREE, [(_sid(conn, existing), False, None)]
+        )
+        for i, vector in enumerate(vectors):
+            digest = add_section(
+                conn, f"planted {i}\n".encode(), [float(v) for v in vector]
+            )
+            incubator.park(conn, TREE, digest, PATH, batch=1)
+    yield database
+    database.close()
+
+
+def _log(db: Database) -> list[tuple[str, str]]:
+    with db.connect() as conn:
+        return [
+            (row["verdict"], row["action"])
+            for row in conn.execute(
+                "SELECT verdict, action FROM update_log ORDER BY id"
+            ).fetchall()
+        ]
+
+
+def _level0(db: Database) -> int:
+    with db.connect() as conn:
+        return int(
+            conn.execute(
+                "SELECT COUNT(*) FROM nodes WHERE tree = ? AND level = 0",
+                (TREE,),
+            ).fetchone()[0]
+        )
+
+
+def test_the_real_mini_pipeline_drains_a_planted_pool(
+    planted: Database,
+) -> None:
+    # no `core_labeler` seam: the REAL UMAP -> HDBSCAN leaf recipe reduces the
+    # pool, so the drain's contract is proven against the backend it ships with.
+    before = _level0(planted)
+    with planted.connect() as conn, conn:
+        assert incubator.drain(conn, TREE, MODEL) is True
+    with planted.connect() as conn:
+        assert incubator.count(conn, TREE) == 0
+    assert _level0(planted) == before + 2  # both planted groups became nodes
+    assert _log(planted).count(("drain", "core")) == 2
+
+
+def test_drain_and_age_are_written_to_the_update_log(db: Database) -> None:
+    with db.connect() as conn, conn:
+        old = add_section(conn, b"old pending\n", unit(0))
+        incubator.park(conn, TREE, old, PATH, batch=1)
+    with db.connect() as conn, conn:
+        incubator.age(conn, TREE, MODEL, current_batch=10)
+    assert _log(db) == [("age", "forced")]
+
+
+def test_age_empties_a_pool_the_clusterer_can_never_reduce(
+    db: Database,
+) -> None:
+    # #095: the age gate is the DRAINABLE size, so a pool that is big enough to
+    # look full but has no usable vectors still ages out instead of stranding.
+    with db.connect() as conn, conn:
+        for i in range(MIN_POINTS + 3):
+            digest = add_section(conn, f"blind{i}\n".encode(), unit(0))
+            conn.execute(
+                "DELETE FROM embeddings WHERE content_hash = ?", (digest,)
+            )
+            incubator.park(conn, TREE, digest, PATH, batch=1)
+        placeable = add_section(conn, b"placeable\n", unit(0))
+        incubator.park(conn, TREE, placeable, PATH, batch=1)
+    with db.connect() as conn, conn:
+        assert incubator.age(conn, TREE, MODEL, current_batch=10) == 1
+    with db.connect() as conn:
+        assert incubator.pending(conn, TREE) and all(
+            entry[0] != placeable for entry in incubator.pending(conn, TREE)
+        )
+
+
+def test_sweep_retires_pool_rows_a_rebuild_has_already_homed(
+    db: Database,
+) -> None:
+    with db.connect() as conn, conn:
+        digest = add_section(conn, b"rehomed\n", unit(1))
+        incubator.park(conn, TREE, digest, PATH, batch=1)
+        cluster_store.add_member(
+            conn, 1, _sid(conn, digest), forced=False, similarity=0.9
+        )
+    with db.connect() as conn, conn:
+        assert incubator.sweep(conn, TREE) == 1
+    with db.connect() as conn:
+        assert incubator.count(conn, TREE) == 0
+
+
+def test_sweep_leaves_a_genuinely_homeless_chunk_alone(db: Database) -> None:
+    with db.connect() as conn, conn:
+        digest = add_section(conn, b"homeless\n", unit(1))
+        incubator.park(conn, TREE, digest, PATH, batch=1)
+    with db.connect() as conn, conn:
+        assert incubator.sweep(conn, TREE) == 0
+    with db.connect() as conn:
+        assert incubator.count(conn, TREE) == 1

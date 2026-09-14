@@ -8,8 +8,14 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster import monitor
+from hrono.cluster.blend import register_path_bodies
 from hrono.cluster.build import ClusterResult
+from hrono.cluster.incubator import count as incubator_count
+from hrono.cluster.incubator import park
+from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
+from hrono.ingest.identity import Address, content_hash
+from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
@@ -17,6 +23,7 @@ from hrono.registry import store as registry_store
 from hrono.tree import settle as settle_mod
 from hrono.tree.maintain import maintain
 from hrono.tree.settle import CHURN_THRESHOLD, settle, should_settle
+from tests.cluster.invariant import assert_pool_invariant
 
 DIMS = 8
 TREE = "default"
@@ -249,3 +256,73 @@ def test_untriggered_settle_leaves_the_counter(built: Database) -> None:
         client=FakeCompletion(),
     )
     assert _drift(built) == 3  # never ran, counter untouched
+
+
+def _park_a_member(db: Database) -> str:
+    """Park a chunk that a rebuild will home — the #095 'both' violation."""
+    with db.connect() as conn, conn:
+        row = conn.execute(
+            "SELECT s.content_hash AS h, s.path AS p FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id LIMIT 1"
+        ).fetchone()
+        park(conn, TREE, row["h"], row["p"], batch=1)
+    return str(row["h"])
+
+
+def test_settle_retires_a_pool_row_its_rebuild_has_re_homed(
+    built: Database,
+) -> None:
+    digest = _park_a_member(built)
+    with built.connect() as conn:
+        assert incubator_count(conn, TREE) == 1
+    settle(
+        _job(),
+        JobContext(built),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+    with built.connect() as conn:
+        assert incubator_count(conn, TREE) == 0, digest
+    assert_pool_invariant(built, TREE)
+
+
+def _park_unembedded(db: Database, count: int) -> None:
+    """Park chunks the rebuild cannot see — they embed only later in settle."""
+    path = "late/arrivals.txt"
+    with db.connect() as conn, conn:
+        register_path_bodies(conn, [path])
+        for i in range(count):
+            body = f"late arrival {i}\n".encode()
+            digest = content_hash(body)
+            upsert_content(conn, digest, body)
+            insert_section(
+                conn,
+                source="repo",
+                address=Address("git", "ex/repo", path, "v1"),
+                start=0,
+                end=len(body),
+                content_hash=digest,
+                ordinal=0,
+            )
+            park(conn, TREE, digest, path, batch=1)
+
+
+def test_settle_drains_chunks_its_own_embed_pass_made_placeable(
+    built: Database,
+) -> None:
+    # cluster runs before embed, so a chunk with no vector yet is invisible to
+    # the rebuild; settle's closing drain is what re-homes it.
+    _park_unembedded(built, MIN_POINTS)
+    settle(
+        _job(),
+        JobContext(built),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+    with built.connect() as conn:
+        assert incubator_count(conn, TREE) == 0
+    assert_pool_invariant(built, TREE)

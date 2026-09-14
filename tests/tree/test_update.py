@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster.build import ClusterResult
+from hrono.cluster.incubator import MAX_AGE, pending
+from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -15,6 +17,7 @@ from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
 from hrono.tree.update import update
+from tests.cluster.invariant import assert_pool_invariant
 
 DIMS = 8
 
@@ -212,3 +215,86 @@ def test_update_with_no_change_is_a_noop(built: tuple[Database, Path]) -> None:
         )
     assert sections_after == sections_before
     assert _node_ids(db) == nodes_before
+
+
+def alien_encoder(model_id: str):
+    """An encoder that puts anything marked ``alien`` in its own direction."""
+
+    def encode(texts: list[str]) -> list[list[float]]:
+        return [
+            [0.0, 1.0] + [0.0] * (DIMS - 2)
+            if "alien" in text
+            else [1.0] + [0.0] * (DIMS - 1)
+            for text in texts
+        ]
+
+    return encode
+
+
+def add_alien(origin: Path, name: str) -> None:
+    (origin / "alien").mkdir(exist_ok=True)
+    (origin / "alien" / name).write_text(f"alien {name} unlike everything\n")
+    _git(origin, "add", "-A")
+    _git(origin, "commit", "-qm", f"alien {name}")
+
+
+def _pending(db: Database) -> list[tuple[str, int]]:
+    with db.connect() as conn:
+        return [(path, batch) for _, path, batch in pending(conn, "default")]
+
+
+def _log(db: Database) -> list[tuple[str, str]]:
+    with db.connect() as conn:
+        return [
+            (row["verdict"], row["action"])
+            for row in conn.execute(
+                "SELECT verdict, action FROM update_log ORDER BY id"
+            ).fetchall()
+        ]
+
+
+def _forced_node(db: Database, path: str) -> int | None:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT m.node_id AS node_id FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id "
+            "WHERE s.path = ? AND m.forced = 1",
+            (path,),
+        ).fetchone()
+    return None if row is None else int(row["node_id"])
+
+
+def test_update_parks_an_alien_chunk_then_ages_it_in(
+    built: tuple[Database, Path],
+) -> None:
+    db, origin = built
+    add_alien(origin, "zz.txt")
+    update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+
+    assert _pending(db) == [("alien/zz.txt", 1)]  # sub-TAU, parked
+    assert_pool_invariant(db, "default")
+
+    for i in range(MAX_AGE + 1):  # batches 2..6 carry it past MAX_AGE
+        edit(origin, "f1.txt", f"module 1 revision {i}\n")
+        update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+        assert_pool_invariant(db, "default")
+
+    assert _pending(db) == []  # aged out, never stranded
+    assert _forced_node(db, "alien/zz.txt") is not None
+    assert ("age", "forced") in _log(db)
+
+
+def test_update_drains_a_full_pool_in_the_same_batch(
+    built: tuple[Database, Path],
+) -> None:
+    db, origin = built
+    for i in range(MIN_POINTS):
+        add_alien(origin, f"a{i}.txt")
+
+    update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+
+    # a pool the real mini-pipeline can reduce never survives its own batch:
+    # cores emit as leaf nodes, residual noise is force-assigned.
+    assert _pending(db) == []
+    assert [entry for entry in _log(db) if entry[0] == "drain"]
+    assert_pool_invariant(db, "default")

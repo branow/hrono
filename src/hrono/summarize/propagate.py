@@ -20,8 +20,8 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
+from hrono.db.update_log import record
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion, CompletionRequest
@@ -125,11 +125,11 @@ def _record(
     conn: sqlite3.Connection, tree: str, topic: _Topic, verdict: str
 ) -> None:
     if verdict == "none":
-        _log(conn, tree, topic.node_id, verdict, "skipped", None)
+        record(conn, tree, topic.node_id, verdict, "skipped")
         return
     climbed_to = _climb(conn, topic.node_id)
     _bump_drift(conn, tree, _DRIFT[verdict])
-    _log(conn, tree, topic.node_id, verdict, "propagated", climbed_to)
+    record(conn, tree, topic.node_id, verdict, "propagated", climbed_to)
 
 
 def _climb(conn: sqlite3.Connection, node_id: int) -> int | None:
@@ -166,25 +166,6 @@ def _bump_drift(conn: sqlite3.Connection, tree: str, amount: int) -> None:
         "ON CONFLICT(tree) DO UPDATE SET drift = drift + ?",
         (tree, amount, amount),
     )
-
-
-def _log(
-    conn: sqlite3.Connection,
-    tree: str,
-    node_id: int,
-    verdict: str,
-    action: str,
-    climbed_to: int | None,
-) -> None:
-    conn.execute(
-        "INSERT INTO update_log(tree, node_id, verdict, action, climbed_to, "
-        "created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (tree, node_id, verdict, action, climbed_to, _now()),
-    )
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 OPS["propagate"] = propagate

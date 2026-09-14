@@ -8,6 +8,12 @@ just the changed files' sections (#085 reconcile), embeds the new content (the
 placement rule against the PRE-BATCH cluster centroids (#085 placement).
 UMAP/HDBSCAN never run, so untouched chunks never move: churn = changed content.
 
+Placement is also the batch's pool pass (#095): whatever it parks in the
+incubator (#086) is immediately aged — anything past ``MAX_AGE`` batches is
+force-assigned — and then drained, so a chunk is never pending for longer than
+the pool can justify. Age runs first: the drain re-homes the whole pool anyway,
+so ageing after it would only re-decide chunks the drain already placed.
+
 Lock discipline like the other ops: the diff + centroid snapshot + section
 reconcile run under one #008 write lock (so the centroids are consistently
 pre-batch), embed runs its heavy compute under its own lock, then placement
@@ -17,7 +23,7 @@ through for the automated gate; production passes none.
 
 from __future__ import annotations
 
-from hrono.cluster import placement
+from hrono.cluster import incubator, placement
 from hrono.cluster import store as cluster_store
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
@@ -82,6 +88,8 @@ def _update_source(
 
     with context.database.write() as conn:
         placement.place(conn, tree, deltas, centroids, model_name, batch)
+        incubator.age(conn, tree, model_name, batch)
+        incubator.drain(conn, tree, model_name)
 
 
 def _next_batch(conn: object, tree: str) -> int:

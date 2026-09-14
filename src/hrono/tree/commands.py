@@ -4,6 +4,8 @@
 current profile's client and prints the job id to track. (The spec writes it
 kubectl-style as ``tree <name> maintain``; Typer groups put the subcommand
 first, and the HTTP endpoint is the canonical interface.)
+``hrono tree pending <name>`` reads the incubator pool so a chunk waiting
+outside the tree is visible from the CLI instead of silently absent.
 """
 
 from __future__ import annotations
@@ -59,6 +61,20 @@ def export(
         files = result.get("files", []) if isinstance(result, dict) else []
         written = _materialize(out, files)
         typer.echo(f"Wrote {written} files to {out}.")
+
+    _run(action)
+
+
+@app.command("pending")
+def pending(name: str) -> None:
+    """List the tree's incubator pool — chunks parked in no node yet."""
+
+    def action() -> None:
+        result = from_profile().get(f"/trees/{name}/pending")
+        pool = result.get("pending", []) if isinstance(result, dict) else []
+        for entry in pool:
+            typer.echo(f"{entry['path']} (batch {entry['batch']})")
+        typer.echo(f"{len(pool)} pending chunks in tree '{name}'.")
 
     _run(action)
 

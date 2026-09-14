@@ -4,6 +4,8 @@
 returns its id; the background worker runs the ordered pipeline. Writing this
 does the work of a job, so it is a POST behind the writer role, and it returns
 only the job id to track — config-vs-work stays separated.
+``GET /trees/{name}/pending`` reads the incubator pool (#086) so chunks waiting
+outside the tree are visible rather than silently missing from the map.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from hrono.auth.users import User
+from hrono.cluster import incubator
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import Encoder, encoder_for
 from hrono.errors import NotFound
@@ -90,4 +93,22 @@ def export_tree(
         "files": [
             {"path": path, "content": files[path]} for path in sorted(files)
         ]
+    }
+
+
+@router.get("/trees/{name}/pending")
+def pending_tree(name: str, request: Request, _: Reader) -> dict[str, object]:
+    """Return the incubator pool: chunks parked in no node yet (#086).
+
+    A parked chunk is in the corpus but not on the map, so the pool has to be
+    visible; an empty pool (or an unbuilt tree) is a plain zero, not a 404.
+    """
+    with request.app.state.db.connect() as conn:
+        pool = incubator.pending(conn, name)
+    return {
+        "count": len(pool),
+        "pending": [
+            {"content_hash": digest, "path": path, "batch": batch}
+            for digest, path, batch in pool
+        ],
     }
