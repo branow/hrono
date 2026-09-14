@@ -31,7 +31,7 @@ def enqueue(
     """Insert a pending job and return its id (ops/endpoints call this)."""
     job_id = f"job_{uuid.uuid4().hex}"
     now = _now()
-    with database.connect() as conn:
+    with database.write() as conn:
         store.insert(
             conn, job_id, parent_id, tree, op, serialize_scope(scope), now
         )
@@ -68,7 +68,7 @@ class Worker(threading.Thread):
         self._stopped.set()
 
     def _claim(self) -> Job | None:
-        with self._database.connect() as conn:
+        with self._database.write() as conn:
             row = store.claim_next(conn, _now())
         return to_job(row) if row is not None else None
 
@@ -84,7 +84,7 @@ class Worker(threading.Thread):
             self._finish(job, "succeeded", None)
 
     def _finish(self, job: Job, status: str, error: str | None) -> None:
-        with self._database.connect() as conn:
+        with self._database.write() as conn:
             store.set_status(conn, job.id, status, error, _now())
 
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,7 +75,7 @@ class Migrator:
         """Apply every pending migration; return the versions applied."""
         pending = self.pending(conn)
         for migration in pending:
-            with conn:
+            with _atomic(conn), conn:
                 conn.executescript(migration.statements)
                 conn.execute(
                     "INSERT INTO schema_migrations(version, name, "
@@ -87,6 +89,24 @@ class Migrator:
             conn.execute(_BOOKKEEPING)
         rows = conn.execute("SELECT version FROM schema_migrations").fetchall()
         return frozenset(row[0] for row in rows)
+
+
+@contextmanager
+def _atomic(conn: sqlite3.Connection) -> Iterator[None]:
+    """Run a migration script and its bookkeeping row as one transaction.
+
+    ``executescript`` commits whatever is pending before it runs, so an
+    explicit ``BEGIN`` cannot wrap it; PEP 249 transaction control can, and is
+    restored (with the transaction closed) before the connection goes back to
+    normal ``IMMEDIATE`` use.
+    """
+    previous = conn.autocommit
+    conn.autocommit = False
+    try:
+        yield
+    finally:
+        conn.autocommit = previous
+        conn.commit()
 
 
 def packaged() -> tuple[Migration, ...]:

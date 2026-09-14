@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest import store as istore
 from hrono.ingest.diff import (
     Change,
@@ -72,7 +72,7 @@ def test_current_files_honours_the_filter(cache: Path) -> None:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     yield database
     database.close()
 

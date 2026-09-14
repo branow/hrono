@@ -5,7 +5,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster import store as cluster_store
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.export.collapse import collapse
 from hrono.export.render import render
 from hrono.export.store import load
@@ -61,7 +61,7 @@ def brief(conn: object, node_id: int, text: str) -> None:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[tuple[Database, dict[str, int]]]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         s0 = add_section(conn, "a.py", b"alpha line one\nalpha line two\n")
         s1 = add_section(conn, "b.py", b"beta line one\nbeta line two\n")
@@ -187,7 +187,7 @@ def test_output_is_deterministic(db: tuple[Database, dict[str, int]]) -> None:
 def test_same_heading_siblings_do_not_collide(tmp_path: object) -> None:
     # two children whose briefs both start "# Overview" must NOT overwrite each
     # other — every subtree survives and each child link is unique.
-    database = Database(open_database(tmp_path / "c.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "c.db")
     with database.connect() as conn, conn:
         s0 = add_section(conn, "a.py", b"aaaa\n")
         s1 = add_section(conn, "b.py", b"bbbb\n")

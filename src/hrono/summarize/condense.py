@@ -54,7 +54,7 @@ def condense(
         result = completion.complete(
             CompletionRequest(model=model, system="", content=rendered)
         )
-        with context.database.connect() as conn, conn:
+        with context.database.write() as conn:
             store.upsert(
                 conn,
                 content_hash,

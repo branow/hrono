@@ -4,7 +4,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster import store as cluster_store
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -102,7 +102,7 @@ def job(level: int = 1) -> Job:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[tuple[Database, list[int]]]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register(conn)
         a = leaf_node(conn, 0, "child brief A about widgets")

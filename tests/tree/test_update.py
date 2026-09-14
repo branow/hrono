@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster.build import ClusterResult
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
@@ -136,7 +136,7 @@ def built(
     monkeypatch.chdir(tmp_path)
     origin = tmp_path / "src-repo"
     url = make_repo(origin)
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register(conn, url)
     maintain(

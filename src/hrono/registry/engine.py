@@ -48,7 +48,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
         stored, key_id = encrypt(config, descriptor, _cipher(request))
         payload = json.dumps(stored)
         try:
-            with request.app.state.db.connect() as conn:
+            with request.app.state.db.write() as conn:
                 store.insert(
                     conn,
                     collection,
@@ -73,7 +73,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
         _run_hook(descriptor, config, _context(request))
         stored, key_id = encrypt(config, descriptor, _cipher(request))
         payload = json.dumps(stored)
-        with request.app.state.db.connect() as conn:
+        with request.app.state.db.write() as conn:
             existed = store.replace(
                 conn,
                 collection,
@@ -96,7 +96,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
         if row["is_default"] and default is not None:
             stored, key_id = encrypt(default, descriptor, _cipher(request))
             payload = json.dumps(stored)
-            with request.app.state.db.connect() as conn:
+            with request.app.state.db.write() as conn:
                 store.replace(
                     conn,
                     collection,
@@ -107,7 +107,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
                     content_hash(payload),
                 )
             return {"reset": name}
-        with request.app.state.db.connect() as conn:
+        with request.app.state.db.write() as conn:
             store.delete(conn, collection, name)
         return {"deleted": name}
 

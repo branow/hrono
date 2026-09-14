@@ -65,7 +65,7 @@ def settle(
     )
     embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
 
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
         monitor.refresh(
             conn, tree, model, sorted(store.node_centroids(conn, tree, model))

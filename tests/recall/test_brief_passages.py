@@ -7,7 +7,7 @@ import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import register_path_bodies
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed.op import embed
 from hrono.embed.store import get_vector
 from hrono.ingest import store as istore
@@ -64,7 +64,7 @@ def embed_job() -> Job:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_model(conn)
     yield database

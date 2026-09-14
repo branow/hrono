@@ -58,6 +58,11 @@ class Invalid(AppError):
     code = "validation-error"
 
 
+class Unavailable(AppError):
+    status_code = 503
+    code = "unavailable"
+
+
 def envelope(error: AppError) -> dict[str, object]:
     """Render an AppError into the HTTP error envelope from its own metadata."""
     return {

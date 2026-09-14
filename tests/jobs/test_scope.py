@@ -19,7 +19,7 @@ def database(tmp_path: Path, sources: tuple[str, ...] = ()) -> Database:
         registry_store.insert(
             conn, "sources", name, json.dumps({"name": name}), None, "t"
         )
-    return Database(conn)
+    return Database.adopt(conn)
 
 
 def leaves(db: Database, parent_id: str) -> list:

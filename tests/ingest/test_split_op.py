@@ -8,7 +8,7 @@ import pytest
 from cryptography.fernet import Fernet
 
 from hrono.crypto.cipher import Cipher
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest import store
 from hrono.ingest.split_op import SplitError, _instance, split_source
 from hrono.ingest.sync import sync
@@ -87,7 +87,7 @@ def synced(
 ) -> Iterator[tuple[Database, str]]:
     monkeypatch.chdir(tmp_path)
     url = make_repo(tmp_path / "remote", FILES)
-    db = Database(open_database(tmp_path / "hrono.db"))
+    db = Database.at(tmp_path / "hrono.db")
     with db.connect() as conn:
         register(conn, "repo", url)
     sync(job("sync", "repo"), JobContext(db))
@@ -170,7 +170,7 @@ def test_identical_bodies_across_files_dedup(
     monkeypatch.chdir(tmp_path)
     same = "shared identical body line one\nand line two here as well now.\n"
     url = make_repo(tmp_path / "remote", {"a.txt": same, "b.txt": same})
-    db = Database(open_database(tmp_path / "hrono.db"))
+    db = Database.at(tmp_path / "hrono.db")
     with db.connect() as conn:
         register(conn, "repo", url)
     sync(job("sync", "repo"), JobContext(db))
@@ -187,7 +187,7 @@ def test_split_before_sync_raises_cleanly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    db = Database(open_database(tmp_path / "hrono.db"))
+    db = Database.at(tmp_path / "hrono.db")
     with db.connect() as conn:
         register(conn, "repo", "file:///nope")
     with pytest.raises(SplitError):

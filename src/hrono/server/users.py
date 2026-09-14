@@ -42,7 +42,7 @@ def post_user(
     request: Request,
     _: Admin,
 ) -> dict[str, str]:
-    with request.app.state.db.connect() as conn:
+    with request.app.state.db.write() as conn:
         user, token = create_user(conn, body.name, body.role)
     return {**_public(user), "token": token}
 
@@ -53,7 +53,7 @@ def delete_named_user(
     request: Request,
     _: Admin,
 ) -> dict[str, str]:
-    with request.app.state.db.connect() as conn:
+    with request.app.state.db.write() as conn:
         removed = delete_user(conn, name)
     if not removed:
         raise NotFound(f"user not found: {name}")

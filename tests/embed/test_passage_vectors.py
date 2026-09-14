@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster.blend import combine, combined_vector, path_body
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed.op import embed
 from hrono.embed.store import get_vector, vector_count
 from hrono.ingest.identity import content_hash
@@ -106,7 +106,7 @@ def _job(op: str) -> Job:
 def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Database]:
     monkeypatch.chdir(tmp_path)
     url = make_repo(tmp_path / "remote")
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn:
         register_source(conn, url)
         register_model(conn)

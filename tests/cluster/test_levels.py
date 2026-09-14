@@ -5,7 +5,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster.levels import cluster_briefs
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import store as registry_store
@@ -89,7 +89,7 @@ def job(level: int = 0) -> Job:
 
 @pytest.fixture
 def seeded(tmp_path: object) -> Iterator[tuple[Database, dict[int, str]]]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_embedding_model(conn)
         node_group = build_level0(conn)
@@ -179,7 +179,7 @@ def test_brief_embedding_is_embed_once(
 def test_clustering_is_deterministic(tmp_path: object) -> None:
     groups = []
     for name in ("a", "b"):
-        database = Database(open_database(tmp_path / f"{name}.db"))  # type: ignore[operator]
+        database = Database.at(tmp_path / f"{name}.db")
         with database.connect() as conn, conn:
             register_embedding_model(conn)
             node_group = build_level0(conn)

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster import store as cluster_store
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest import reconcile
 from hrono.ingest.diff import Change
 
@@ -30,7 +30,7 @@ def cache(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def db(tmp_path: Path) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     yield database
     database.close()
 

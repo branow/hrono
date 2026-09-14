@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
@@ -78,7 +78,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 @pytest.fixture
 def db(repo: Path, tmp_path: Path) -> Iterator[Database]:
     url = repo.as_uri()
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn:
         register(conn, url)
     sync(_job("sync"), JobContext(database))

@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.recall import fts
 from hrono.recall.keyword_leg import (
     VECTOR_SUPPORT,
@@ -61,7 +61,7 @@ def test_match_expr_ors_bare_terms_and_ignores_punctuation() -> None:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         fts.index_passage(
             conn,

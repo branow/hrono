@@ -12,7 +12,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster.blend import path_body, register_path_bodies
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
@@ -67,7 +67,7 @@ def _plant_paths(conn: object) -> None:
 
 @pytest.fixture
 def big(tmp_path: object) -> Iterator[tuple[Database, str]]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         _plant_paths(conn)
         answer = add_passage(
@@ -107,7 +107,7 @@ def test_tiny_corpus_fails_safe_to_explore(tmp_path: object) -> None:
     # under ~13 passages the vector leg cannot reach z>=3.5 and the keyword leg
     # cannot reach z>=6.0, so even a matching question returns explore, never a
     # low-confidence hit.
-    database = Database(open_database(tmp_path / "tiny.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "tiny.db")
     with database.connect() as conn, conn:
         _plant_paths(conn)
         add_passage(conn, b"authentication tokens here\n", unit(0))

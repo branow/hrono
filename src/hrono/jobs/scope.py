@@ -45,7 +45,7 @@ def fan_out(
     parent_id = _job_id()
     leaves = [(_job_id(), serialize_scope(item)) for item in items]
     parent_scope = serialize_scope(scope if scope else {"type": "all"})
-    with database.connect() as conn:
+    with database.write() as conn:
         store.create_fanout(
             conn, parent_id, op, parent_scope, leaves, tree, _now()
         )

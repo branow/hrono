@@ -105,8 +105,11 @@ def test_token_never_appears_in_a_message() -> None:
             assert TOKEN not in str(exc)
 
 
-def test_live_round_trip_against_a_real_app() -> None:
-    app = create_app(master_key=Fernet.generate_key())
-    client = Client("http://testserver", TOKEN, http=TestClient(app))
-    assert client.get("/health") == {"status": "ok"}
-    assert client.get("/version")["name"] == "hrono"
+def test_live_round_trip_against_a_real_app(tmp_path: Path) -> None:
+    app = create_app(
+        db_path=tmp_path / "hrono.db", master_key=Fernet.generate_key()
+    )
+    with TestClient(app) as http:
+        client = Client("http://testserver", TOKEN, http=http)
+        assert client.get("/health")["status"] == "ok"
+        assert client.get("/version")["name"] == "hrono"

@@ -61,7 +61,7 @@ def _update_source(
     raw_filter = config.get("filter")
     filter_config = raw_filter if isinstance(raw_filter, dict) else None
     cache = _CACHE_ROOT / name
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         changes = diff.diff(conn, name, cache, filter_config)
         if not changes:
             return
@@ -80,7 +80,7 @@ def _update_source(
 
     embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
 
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         placement.place(conn, tree, deltas, centroids, model_name, batch)
 
 

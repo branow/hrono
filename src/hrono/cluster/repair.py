@@ -47,7 +47,7 @@ def repair(
 ) -> None:
     """Apply the fitting local repair to each cluster from its size + misfit."""
     tree = job.tree or "default"
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
         batch = _batch(conn, tree)
         for node_id in sorted(store.node_centroids(conn, tree, model)):

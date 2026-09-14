@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet
 
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest.sync import SyncError, sync
 from hrono.jobs import store
 from hrono.jobs.model import Job
@@ -71,7 +71,7 @@ def version(db: Database, name: str) -> str | None:
 
 def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Database:
     monkeypatch.chdir(tmp_path)
-    return Database(open_database(tmp_path / "hrono.db"))
+    return Database.at(tmp_path / "hrono.db")
 
 
 def test_first_sync_clones_and_captures_the_commit(

@@ -1,15 +1,18 @@
 import threading
 import time
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
-from hrono.db.database import Database, open_database
+from hrono.db.connection import connect
+from hrono.db.database import Database
 from hrono.jobs import store
-from hrono.jobs.ops import Handler
+from hrono.jobs.ops import Handler, JobContext
 from hrono.jobs.worker import Worker, enqueue
 
 
 def database(tmp_path: Path) -> Database:
-    return Database(open_database(tmp_path / "hrono.db"))
+    return Database.at(tmp_path / "hrono.db")
 
 
 def status_of(db: Database, job_id: str) -> str | None:
@@ -103,3 +106,40 @@ def test_each_job_runs_exactly_once_under_concurrency(tmp_path: Path) -> None:
     assert sorted(ran) == sorted(ids)
     assert len(ran) == 30
     db.close()
+
+
+def test_a_job_dying_mid_transaction_does_not_wedge_the_queue(
+    tmp_path: Path,
+) -> None:
+    """F23: after a job failed inside a write, the worker stopped claiming
+    anything and never saw rows another process had committed."""
+
+    def poison(job: object, ctx: JobContext) -> None:
+        with ctx.database.write() as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS probe (n INTEGER)")
+            conn.execute("INSERT INTO probe (n) VALUES (1)")
+            raise RuntimeError("died holding the write lock")
+
+    db = database(tmp_path)
+    workers = run_workers(db, {"poison": poison, "noop": lambda job, ctx: None})
+    try:
+        assert wait_terminal(db, enqueue(db, "poison", {})) == "failed"
+
+        foreign = connect(tmp_path / "hrono.db", extensions=False)
+        job_id = f"job_{uuid.uuid4().hex}"
+        store.insert(foreign, job_id, None, None, "noop", "{}", _stamp())
+        foreign.close()
+
+        assert wait_terminal(db, job_id) == "succeeded"
+        with db.connect() as conn:
+            leftover = conn.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'probe'"
+            ).fetchall()
+        assert leftover == []  # the failed write rolled back whole
+    finally:
+        stop(workers)
+    db.close()
+
+
+def _stamp() -> str:
+    return datetime.now(UTC).isoformat()

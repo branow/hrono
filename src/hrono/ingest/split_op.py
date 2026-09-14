@@ -51,7 +51,7 @@ def split_source(job: Job, context: JobContext) -> None:
     files = ingestable(
         cache, filter_config if isinstance(filter_config, dict) else None
     )
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         store.clear_source(conn, name)
         fts.clear_source(conn, name)
         register_path_bodies(conn, files)

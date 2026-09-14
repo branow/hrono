@@ -50,7 +50,7 @@ def cluster_briefs(
     if not node_briefs:
         return
 
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         for _, text in node_briefs:
             body = text.encode("utf-8")
             upsert_content(conn, content_hash(body), body)
@@ -77,7 +77,7 @@ def cluster_briefs(
             zip(result.labels, result.assignment_similarity, strict=True)
         )
     ]
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         store.replace_level(conn, tree, source_level + 1, members)
 
 

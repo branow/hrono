@@ -9,7 +9,7 @@ import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.cluster.build import ClusterResult
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
@@ -149,7 +149,7 @@ def _job() -> Job:
 
 @pytest.fixture
 def db(tmp_path: Path) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         _register(conn)
     yield database
@@ -305,7 +305,7 @@ def test_marked_ancestor_regenerates_only_the_path(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     url = _make_repo(tmp_path / "src-repo")
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     try:
         with database.connect() as conn, conn:
             registry_store.insert(

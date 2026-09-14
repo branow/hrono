@@ -42,7 +42,7 @@ def embed(
     vectors = embed_texts(texts, batch_size(_params(config)), encode)
 
     dims = _declared_dims(config)
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         for digest, vector in zip(hashes, vectors, strict=True):
             if dims is not None and len(vector) != dims:
                 raise EmbedError(

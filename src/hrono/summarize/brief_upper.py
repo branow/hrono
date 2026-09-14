@@ -74,7 +74,7 @@ def brief_upper(
         )
         unfaithful = faithfulness(result.text, source)
         text = result.text + _references(ids)
-        with context.database.connect() as conn, conn:
+        with context.database.write() as conn:
             briefs.upsert(
                 conn,
                 node_id,

@@ -54,7 +54,7 @@ def cluster(
     coords: Sequence[tuple[int, Sequence[float]]] = [
         (section_ids[i], coord) for i, coord in enumerate(result.coords)
     ]
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         store.replace_tree(conn, tree, _LEVEL, members, coords)
 
 

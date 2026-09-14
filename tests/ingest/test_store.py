@@ -3,14 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest import store
 from hrono.ingest.identity import Address, content_hash
 
 
 @pytest.fixture
 def db(tmp_path: Path) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     yield database
     database.close()
 

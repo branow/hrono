@@ -12,7 +12,7 @@ from hrono.cluster.blend import (
     path_body,
     register_path_bodies,
 )
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed import store as vstore
 from hrono.embed.op import embed
 from hrono.ingest import store as istore
@@ -69,7 +69,7 @@ def test_zero_vector_does_not_divide_by_zero() -> None:
 
 @pytest.fixture
 def db(tmp_path: Path) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))
+    database = Database.at(tmp_path / "hrono.db")
     yield database
     database.close()
 

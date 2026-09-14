@@ -75,7 +75,7 @@ def brief(
         )
         unfaithful = faithfulness(result.text, source)
         text = result.text + _references(uris)
-        with context.database.connect() as conn, conn:
+        with context.database.write() as conn:
             briefs.upsert(
                 conn,
                 node_id,

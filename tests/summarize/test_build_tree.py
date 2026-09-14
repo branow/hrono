@@ -5,7 +5,7 @@ import pytest
 
 from hrono.cluster import ClusterError
 from hrono.cluster.build import ClusterResult
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
@@ -131,7 +131,7 @@ def job() -> Job:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     yield database
     database.close()
 

@@ -5,7 +5,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster.blend import path_body, register_path_bodies
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
@@ -52,7 +52,7 @@ def add_passage(conn: object, body: bytes, content_vec: list[float]) -> int:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[tuple[Database, int]]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_path_bodies(conn, [PATH])
         upsert_vector(conn, content_hash(path_body(PATH)), MODEL, _unit(2))
@@ -77,7 +77,7 @@ def test_near_duplicate_qualifies_and_unrelated_do_not(
 
 
 def test_empty_index_returns_no_hits(tmp_path: object) -> None:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     try:
         with database.connect() as conn:
             assert search(conn, _unit(0), MODEL) == ()

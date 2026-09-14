@@ -28,9 +28,25 @@ def test_enforces_foreign_keys(tmp_path: Path) -> None:
         conn.commit()
 
 
-def test_returned_in_transactional_mode(tmp_path: Path) -> None:
+def test_a_read_opens_no_transaction(tmp_path: Path) -> None:
     conn = connect(tmp_path / "hrono.db", extensions=False)
-    assert conn.autocommit is False
+    conn.execute("CREATE TABLE t (n INTEGER)")
+    conn.execute("SELECT count(*) FROM t").fetchone()
+    assert conn.in_transaction is False
+
+
+def test_a_write_opens_an_immediate_transaction(tmp_path: Path) -> None:
+    conn = connect(tmp_path / "hrono.db", extensions=False)
+    conn.execute("CREATE TABLE t (n INTEGER)")
+    conn.execute("INSERT INTO t VALUES (1)")
+    assert conn.in_transaction is True
+    assert conn.isolation_level == "IMMEDIATE"
+
+    blocked = connect(tmp_path / "hrono.db", extensions=False)
+    blocked.execute("PRAGMA busy_timeout=50")
+    with pytest.raises(sqlite3.OperationalError):
+        blocked.execute("BEGIN IMMEDIATE")
+    conn.commit()
 
 
 def test_rows_are_mappings(tmp_path: Path) -> None:

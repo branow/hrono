@@ -20,8 +20,9 @@ from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
 from hrono.client.http import ClientError, from_profile
 from hrono.client.http import message as client_message
 from hrono.crypto.cipher import Cipher
-from hrono.crypto.masterkey import MasterKeyError, load_key, reconcile
+from hrono.crypto.masterkey import load_key, reconcile
 from hrono.db.database import DEFAULT_PATH, open_database
+from hrono.db.lock import exclusive
 from hrono.errors import AppError, cli_message
 from hrono.profile.commands import app as profile_app
 from hrono.registry.collections import COLLECTIONS
@@ -109,28 +110,31 @@ def serve(
     key_file: Annotated[Path | None, typer.Option("--key-file")] = None,
 ) -> None:
     """Run the hrono HTTP server (owns the database and all compute)."""
-    connection = None
     try:
         key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
-        connection = open_database(DEFAULT_PATH)
-        record = reconcile(connection, key)
-    except MasterKeyError as exc:
-        if connection is not None:
-            connection.close()
+        with exclusive(DEFAULT_PATH):
+            _bootstrap(key)
+            uvicorn.run(
+                create_app(db_path=DEFAULT_PATH, master_key=key),
+                host=host,
+                port=port,
+            )
+    except AppError as exc:
         typer.echo(cli_message(exc), err=True)
         raise typer.Exit(1) from exc
 
-    token = bootstrap_admin(connection)
-    if token is not None:
-        typer.echo(_bootstrap_message(token))
 
-    seed_defaults(connection, Cipher.from_key(key, record.key_id), COLLECTIONS)
-
-    app = create_app(
-        connection=connection, master_key=key, key_id=record.key_id
-    )
+def _bootstrap(key: bytes) -> None:
+    """Reconcile the master key, seed defaults, and print a first-run token."""
+    connection = open_database(DEFAULT_PATH)
     try:
-        uvicorn.run(app, host=host, port=port)
+        record = reconcile(connection, key)
+        token = bootstrap_admin(connection)
+        if token is not None:
+            typer.echo(_bootstrap_message(token))
+        seed_defaults(
+            connection, Cipher.from_key(key, record.key_id), COLLECTIONS
+        )
     finally:
         connection.close()
 

@@ -7,7 +7,7 @@ import pytest
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import path_body, register_path_bodies
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
@@ -47,7 +47,7 @@ def content_core_labeler(vectors):
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_path_bodies(conn, [PATH])
         upsert_vector(conn, content_hash(path_body(PATH)), MODEL, unit(2))

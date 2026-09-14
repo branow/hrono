@@ -6,7 +6,8 @@ from typer.testing import CliRunner
 
 from hrono import cli
 from hrono.auth.users import authenticate
-from hrono.db.database import open_database
+from hrono.db.database import DEFAULT_PATH, open_database
+from hrono.db.lock import exclusive
 
 
 def keyfile(tmp_path: Path) -> Path:
@@ -140,3 +141,22 @@ def test_first_serve_bootstraps_admin_and_prints_token_once(
 def test_serve_is_a_named_subcommand_not_the_bare_command() -> None:
     result = CliRunner().invoke(cli.app, [])
     assert result.exit_code != 0
+
+
+def test_a_second_serve_on_the_same_database_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    started: list[object] = []
+    monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **kw: started.append(a))
+
+    with exclusive(DEFAULT_PATH):
+        result = CliRunner().invoke(
+            cli.app, ["serve", "--key-file", str(keyfile(tmp_path))]
+        )
+
+    assert result.exit_code != 0
+    assert started == []  # no second worker loop against the same file
+    assert "already using" in result.output
+    assert "Traceback" not in result.output

@@ -29,7 +29,7 @@ def context(
             "auth": {"method": "api-key", "key": secret.ciphertext},
         }
         store.insert(conn, "connections", "prov", json.dumps(payload), 1, "now")
-    return ValidationContext(database=Database(conn), cipher=cipher)
+    return ValidationContext(database=Database.adopt(conn), cipher=cipher)
 
 
 def embedding(dims: int = 4, connection: str | None = None) -> dict:

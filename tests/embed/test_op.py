@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed import store as vstore
 from hrono.embed.op import embed
 from hrono.embed.runner import EmbedError
@@ -61,7 +61,7 @@ def job(model: str, job_id: str = "j") -> Job:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         for body in BODIES:
             istore.upsert_content(conn, content_hash(body), body)

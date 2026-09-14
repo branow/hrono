@@ -19,23 +19,27 @@ def connect(path: Path, *, extensions: bool = True) -> sqlite3.Connection:
     """Open a configured connection to the hrono database.
 
     WAL, foreign-key enforcement and a busy timeout are applied before any
-    transaction opens, since WAL cannot be switched from inside one. The
-    connection is handed back in transactional mode (autocommit off) so callers
-    own their commits. Set ``extensions`` false to skip sqlite-vec when the
-    caller never touches vectors.
+    transaction opens, since WAL cannot be switched from inside one. Set
+    ``extensions`` false to skip sqlite-vec when the caller never touches
+    vectors.
 
-    ``check_same_thread`` is disabled so the single connection can be shared
-    across FastAPI's threadpool handlers; safe concurrent use is enforced by the
-    ``Database`` owner's lock, not by sqlite's per-thread guard.
+    Transactions are ``IMMEDIATE``: a read runs outside any transaction, so it
+    always sees the newest commit and can never pin a WAL snapshot, and a write
+    takes the write lock up front instead of discovering a conflict on upgrade
+    (the SQLITE_BUSY that wedged the server in F13/F23).
+
+    ``check_same_thread`` is disabled because a connection may be borrowed by
+    whichever thread asked for it; ``Database`` hands one connection to one
+    thread at a time.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, autocommit=True, check_same_thread=False)
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     for pragma in _PRAGMAS:
         conn.execute(pragma)
     if extensions:
         _load_extensions(conn)
-    conn.autocommit = False
+    conn.isolation_level = "IMMEDIATE"
     return conn
 
 

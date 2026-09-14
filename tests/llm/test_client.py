@@ -7,7 +7,7 @@ from cryptography.fernet import Fernet
 
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.llm.client import (
     AnthropicClient,
     CompletionRequest,
@@ -22,7 +22,7 @@ CONNECTION = "anthropic-prod"
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     yield database
     database.close()
 

@@ -64,7 +64,7 @@ def propagate(
         (topic, _judge(completion, model, template, topic)) for topic in topics
     ]
 
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         for topic, verdict in verdicts:
             _record(conn, tree, topic, verdict)
 

@@ -67,7 +67,7 @@ def build_tree(
         with context.database.connect() as conn:
             formed = _count(conn, tree, level + 1)
         if formed == 0 or formed >= current:
-            with context.database.connect() as conn, conn:
+            with context.database.write() as conn:
                 _drop_level(conn, tree, level + 1)  # not a real abstraction
             break
 
@@ -94,7 +94,7 @@ def _collect_root(
         top_nodes = [] if top is None else _nodes_at(conn, tree, top)
     if len(top_nodes) <= 1:
         return
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         cluster_store.replace_level(
             conn,
             tree,

@@ -6,7 +6,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster import store as cluster_store
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as jobs_store
@@ -101,7 +101,7 @@ def job(scope: dict[str, object] | None = None) -> Job:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_text_model(conn)
         register_brief_prompt(conn)

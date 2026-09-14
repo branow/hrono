@@ -112,7 +112,7 @@ def _run(
 
 def _record_version(context: JobContext, name: str, version: str) -> None:
     now = datetime.now(UTC).isoformat()
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         conn.execute(
             "INSERT INTO source_state (source, version, synced_at) "
             "VALUES (?, ?, ?) ON CONFLICT(source) DO UPDATE SET "

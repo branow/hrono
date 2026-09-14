@@ -13,7 +13,8 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 
 import hrono.cluster.levels  # noqa: F401 - registers the cluster-briefs op
 import hrono.cluster.monitor  # noqa: F401 - registers the monitor op
@@ -32,7 +33,7 @@ import hrono.tree.settle  # noqa: F401 - registers the settle op
 import hrono.tree.update  # noqa: F401 - registers the update op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
-from hrono.db.database import DEFAULT_PATH, Database, open_database
+from hrono.db.database import DEFAULT_PATH, Database
 from hrono.jobs.worker import Worker
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
@@ -47,9 +48,36 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    """Report that the server is up. Unauthenticated by design."""
-    return {"status": "ok"}
+def health(request: Request) -> JSONResponse:
+    """Report whether the server can actually work. Unauthenticated by design.
+
+    Being up is not being healthy: the run that produced #092 stayed up with an
+    unusable database and a dead worker. So this probes the database and the
+    worker thread, and answers 503 when either is gone.
+    """
+    database = getattr(request.app.state, "db", None)
+    worker = getattr(request.app.state, "worker", None)
+    body: dict[str, object] = {
+        "status": "ok",
+        "database": _probe(database),
+        "worker": "alive"
+        if worker is not None and worker.is_alive()
+        else "dead",
+    }
+    healthy = body["database"] == {"ok": True, "in_transaction": False}
+    if not healthy or body["worker"] != "alive":
+        body["status"] = "degraded"
+        return JSONResponse(status_code=503, content=body)
+    return JSONResponse(status_code=200, content=body)
+
+
+def _probe(database: Database | None) -> dict[str, object]:
+    if database is None:
+        return {"ok": False, "error": "no database"}
+    try:
+        return database.probe()
+    except Exception as exc:  # noqa: BLE001 - any driver failure is unhealthy
+        return {"ok": False, "error": type(exc).__name__}
 
 
 @router.get("/version")
@@ -73,15 +101,18 @@ def create_app(
     reconciled by the caller (with its ``key_id``); an injected connection is
     used as-is and left for its owner to close. The ``master_key`` is required
     at startup and is held in app state (never logged, never persisted) for the
-    cipher to use. ``app.state.db`` is a ``Database`` owner that serializes
-    access so sync route handlers can use the connection safely.
+    cipher to use. ``app.state.db`` lends a connection per operation, so one
+    failed op cannot leave the next one wedged.
     """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         owned = connection is None
-        conn = open_database(db_path) if owned else connection
-        database = Database(conn)
+        database = (
+            Database.at(db_path)
+            if connection is None
+            else Database.adopt(connection)
+        )
         app.state.db = database
         worker: Worker | None = None
         try:
@@ -89,7 +120,7 @@ def create_app(
                 raise MasterKeyError("master key required to start the server")
             app.state.master_key = master_key
             if owned:
-                with database.connect() as active:
+                with database.write() as active:
                     app.state.key_id = reconcile(active, master_key).key_id
             else:
                 app.state.key_id = key_id

@@ -34,7 +34,7 @@ def monitor(job: Job, context: JobContext) -> None:
     """Refresh misfit counts for the batch's dirty clusters (+ a sample)."""
     tree = job.tree or "default"
     dirty = [int(node_id) for node_id in job.scope.get("dirty", [])]
-    with context.database.connect() as conn, conn:
+    with context.database.write() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
         centroids = store.node_centroids(conn, tree, model)
         all_nodes = sorted(centroids)

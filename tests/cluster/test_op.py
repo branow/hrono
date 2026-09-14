@@ -7,7 +7,7 @@ import pytest
 from hrono.cluster import op as cluster_op
 from hrono.cluster.blend import path_body, register_path_bodies
 from hrono.cluster.build import ClusterResult
-from hrono.db.database import Database, open_database
+from hrono.db.database import Database
 from hrono.embed import store as vstore
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
@@ -84,7 +84,7 @@ def cluster_job(job_id: str = "c1", tree: str | None = "default") -> Job:
 
 @pytest.fixture
 def db(tmp_path: object) -> Iterator[Database]:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_model(conn)
         for i in range(6):
@@ -141,7 +141,7 @@ def test_warm_init_uses_stored_coords_on_rebuild(db: Database) -> None:
 
 
 def test_empty_corpus_is_a_noop(tmp_path: object) -> None:
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
         register_model(conn)
     try:
@@ -190,7 +190,7 @@ def test_runs_as_a_job_and_persists(
 
 def test_failing_run_fails_its_leaf_cleanly(tmp_path: object) -> None:
     # no embedding model registered -> model resolution fails, leaf fails.
-    database = Database(open_database(tmp_path / "hrono.db"))  # type: ignore[operator]
+    database = Database.at(tmp_path / "hrono.db")
     worker = Worker(database)
     worker.start()
     try:
