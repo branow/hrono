@@ -17,8 +17,10 @@ so ageing after it would only re-decide chunks the drain already placed.
 Lock discipline like the other ops: the diff + centroid snapshot + section
 reconcile run under one #008 write lock (so the centroids are consistently
 pre-batch), embed runs its heavy compute under its own lock, then placement
-re-acquires to persist. The ``encoder_for`` seam threads the injectable embedder
-through for the automated gate; production passes none.
+re-acquires to persist placement and ageing (dot products only). The drain owns
+its own locks — its mini-pipeline is real UMAP -> HDBSCAN, so it runs outside
+this one. The ``encoder_for`` seam threads the injectable embedder through for
+the automated gate; production passes none.
 """
 
 from __future__ import annotations
@@ -89,7 +91,7 @@ def _update_source(
     with context.database.write() as conn:
         placement.place(conn, tree, deltas, centroids, model_name, batch)
         incubator.age(conn, tree, model_name, batch)
-        incubator.drain(conn, tree, model_name)
+    incubator.drain(context.database, tree, model_name)
 
 
 def _next_batch(conn: object, tree: str) -> int:

@@ -10,8 +10,8 @@ from hrono.auth.users import create_user
 from hrono.cluster.incubator import park
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
-from hrono.ingest.identity import content_hash
-from hrono.ingest.store import upsert_content
+from hrono.ingest.identity import Address, content_hash
+from hrono.ingest.store import insert_section, upsert_content
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -92,11 +92,25 @@ def test_a_parked_chunk_is_visible_through_the_pool_route(
     with harness.conn:
         digest = content_hash(b"stranded\n")
         upsert_content(harness.conn, digest, b"stranded\n")
-        park(harness.conn, "default", digest, "docs/stranded.md", batch=3)
+        section_id = insert_section(
+            harness.conn,
+            source="repo",
+            address=Address("git", "ex/repo", "docs/stranded.md", "v1"),
+            start=0,
+            end=9,
+            content_hash=digest,
+            ordinal=0,
+        )
+        park(harness.conn, "default", section_id, batch=3)
     body = harness.client.get(
         "/trees/default/pending", headers=harness.auth("reader")
     ).json()
     assert body["count"] == 1
     assert body["pending"] == [
-        {"content_hash": digest, "path": "docs/stranded.md", "batch": 3}
+        {
+            "section_id": section_id,
+            "content_hash": digest,
+            "path": "docs/stranded.md",
+            "batch": 3,
+        }
     ]

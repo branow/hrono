@@ -22,7 +22,13 @@ here; none exist yet.
 
 A reconcile is also the natural moment to re-home strays (#095): the rebuild
 itself re-clusters every parked chunk and ``cluster`` sweeps the pool rows it
-obsoletes, and a final ``drain`` clears any residue the rebuild could not reach.
+obsoletes, and a ``drain`` clears any residue the rebuild could not reach. Its
+place in the chain is fixed by what it needs and what it produces — AFTER the
+embed pass that makes a late chunk placeable at all, and BEFORE ``brief`` /
+``build_tree``, so a leaf node the drain emits is briefed and parented in this
+same settle rather than left dangling until the next trigger. The closing embed
+then vectorises the node:// brief passages, as ``maintain`` does. The drain runs
+its own mini-pipeline off the #008 lock, like every other heavy step here.
 """
 
 from __future__ import annotations
@@ -59,6 +65,10 @@ def settle(
             return
 
     cluster(_stage(tree, "cluster"), context, build=build)
+    embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
+    with context.database.connect() as conn:
+        model = str(resolve_embedding_model(conn, job.scope)["name"])
+    incubator.drain(context.database, tree, model)
     brief(_stage(tree, "brief"), context, client=client)
     build_tree(
         _stage(tree, "build-tree"),
@@ -70,8 +80,6 @@ def settle(
     embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
 
     with context.database.write() as conn:
-        model = str(resolve_embedding_model(conn, job.scope)["name"])
-        incubator.drain(conn, tree, model)
         monitor.refresh(
             conn, tree, model, sorted(store.node_centroids(conn, tree, model))
         )

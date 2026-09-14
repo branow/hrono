@@ -158,7 +158,9 @@ def assign_or_park(
     """Join one chunk to its best centroid >= TAU, else park it (#086).
 
     The shared placement primitive: the incremental rule (#085) and repair's
-    dissolve/re-place (#090) both route a homeless chunk through here.
+    dissolve/re-place (#090) both route a homeless chunk through here. A join
+    also unparks, so a chunk that finds a home on a later pass cannot be left
+    clustered AND pending.
     """
     vector = combined_vector(conn, content_hash, path, model_name)
     if vector is None:
@@ -168,8 +170,9 @@ def assign_or_park(
         store.add_member(
             conn, target[0], section_id, forced=False, similarity=target[1]
         )
+        incubator.unpark(conn, tree, section_id)
         return "joined"
-    incubator.park(conn, tree, content_hash, path, batch)
+    incubator.park(conn, tree, section_id, batch)
     return "parked"
 
 

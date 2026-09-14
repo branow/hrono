@@ -74,7 +74,8 @@ def pending(name: str) -> None:
         pool = result.get("pending", []) if isinstance(result, dict) else []
         for entry in pool:
             typer.echo(f"{entry['path']} (batch {entry['batch']})")
-        typer.echo(f"{len(pool)} pending chunks in tree '{name}'.")
+        chunks = "chunk" if len(pool) == 1 else "chunks"
+        typer.echo(f"{len(pool)} pending {chunks} in tree '{name}'.")
 
     _run(action)
 

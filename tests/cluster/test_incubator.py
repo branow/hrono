@@ -1,6 +1,7 @@
 """T35: the incubator pending pool — park, drain, force-assign, aging."""
 
 from collections.abc import Iterator
+from threading import Thread
 
 import pytest
 
@@ -13,6 +14,7 @@ from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from tests.cluster.harness import planted_groups
+from tests.cluster.invariant import assert_pool_invariant
 
 MODEL = "emb"
 DIMS = 4
@@ -26,20 +28,22 @@ def unit(i: int) -> list[float]:
     return v
 
 
-def add_section(conn: object, body: bytes, content_vec: list[float]) -> str:
+def add_section(
+    conn: object, body: bytes, content_vec: list[float], path: str = PATH
+) -> int:
+    """Store a section (content embedded) and return its SECTION id."""
     digest = content_hash(body)
     upsert_content(conn, digest, body)  # type: ignore[arg-type]
     upsert_vector(conn, digest, MODEL, content_vec)  # type: ignore[arg-type]
-    insert_section(
+    return insert_section(
         conn,  # type: ignore[arg-type]
         source="repo",
-        address=Address("git", "ex/repo", PATH, "v1"),
+        address=Address("git", "ex/repo", path, "v1"),
         start=0,
         end=len(body),
         content_hash=digest,
         ordinal=0,
     )
-    return digest
 
 
 def content_core_labeler(vectors):
@@ -55,21 +59,9 @@ def db(tmp_path: object) -> Iterator[Database]:
         upsert_vector(conn, content_hash(path_body(PATH)), MODEL, unit(2))
         # one EXISTING cluster whose content is e0 (force-assign target)
         existing = add_section(conn, b"existing chunk\n", unit(0))
-        cluster_store.add_leaf_node(
-            conn,
-            TREE,
-            [(_sid(conn, existing), False, None)],
-        )
+        cluster_store.add_leaf_node(conn, TREE, [(existing, False, None)])
     yield database
     database.close()
-
-
-def _sid(conn: object, digest: str) -> int:
-    return int(
-        conn.execute(  # type: ignore[attr-defined]
-            "SELECT id FROM sections WHERE content_hash = ?", (digest,)
-        ).fetchone()["id"]
-    )
 
 
 def _members(db: Database, node_id: int) -> int:
@@ -84,13 +76,15 @@ def _members(db: Database, node_id: int) -> int:
 
 def test_park_pending_and_unpark(db: Database) -> None:
     with db.connect() as conn, conn:
-        digest = add_section(conn, b"parked\n", unit(1))
-        incubator.park(conn, TREE, digest, PATH, batch=1)
+        section_id = add_section(conn, b"parked\n", unit(1))
+        incubator.park(conn, TREE, section_id, batch=1)
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 1
-        assert incubator.pending(conn, TREE)[0][0] == digest
+        assert incubator.pending(conn, TREE) == (
+            (section_id, content_hash(b"parked\n"), PATH, 1),
+        )
     with db.connect() as conn, conn:
-        incubator.unpark(conn, TREE, digest)
+        incubator.unpark(conn, TREE, section_id)
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 0
 
@@ -99,9 +93,8 @@ def test_below_min_does_not_drain(db: Database) -> None:
     with db.connect() as conn, conn:
         for i in range(3):
             d = add_section(conn, f"c{i}\n".encode(), unit(1))
-            incubator.park(conn, TREE, d, PATH, batch=1)
-    with db.connect() as conn, conn:
-        assert incubator.drain(conn, TREE, MODEL) is False
+            incubator.park(conn, TREE, d, batch=1)
+    assert incubator.drain(db, TREE, MODEL) is False
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 3  # still pending
 
@@ -111,13 +104,10 @@ def test_drain_emits_cores_and_force_assigns_residual(db: Database) -> None:
     with db.connect() as conn, conn:
         for i in range(MIN_POINTS - 1):  # e1 chunks -> one density core
             d = add_section(conn, f"core{i}\n".encode(), unit(1))
-            incubator.park(conn, TREE, d, PATH, batch=1)
+            incubator.park(conn, TREE, d, batch=1)
         residual = add_section(conn, b"residual\n", unit(0))  # near existing
-        incubator.park(conn, TREE, residual, PATH, batch=1)
-    with db.connect() as conn, conn:
-        assert incubator.drain(
-            conn, TREE, MODEL, core_labeler=content_core_labeler
-        )
+        incubator.park(conn, TREE, residual, batch=1)
+    assert incubator.drain(db, TREE, MODEL, core_labeler=content_core_labeler)
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 0  # pool emptied
         level0 = conn.execute(
@@ -135,7 +125,7 @@ def test_drain_emits_cores_and_force_assigns_residual(db: Database) -> None:
 def test_aging_force_assigns_an_old_pending_chunk(db: Database) -> None:
     with db.connect() as conn, conn:
         old = add_section(conn, b"old pending\n", unit(0))
-        incubator.park(conn, TREE, old, PATH, batch=1)
+        incubator.park(conn, TREE, old, batch=1)
     with db.connect() as conn, conn:
         # batch 10 vs parked at 1, max_age 5 -> aged out, pool below min
         forced = incubator.age(conn, TREE, MODEL, current_batch=10, max_age=5)
@@ -153,7 +143,7 @@ def test_aging_force_assigns_an_old_pending_chunk(db: Database) -> None:
 def test_young_pending_chunk_is_not_aged_out(db: Database) -> None:
     with db.connect() as conn, conn:
         d = add_section(conn, b"young\n", unit(0))
-        incubator.park(conn, TREE, d, PATH, batch=8)
+        incubator.park(conn, TREE, d, batch=8)
     with db.connect() as conn, conn:
         assert (
             incubator.age(conn, TREE, MODEL, current_batch=10, max_age=5) == 0
@@ -170,9 +160,8 @@ def test_a_pool_the_clusterer_cannot_reduce_does_not_raise(
     with db.connect() as conn, conn:
         for i in range(5):
             d = add_section(conn, f"small{i}\n".encode(), unit(1))
-            incubator.park(conn, TREE, d, PATH, batch=1)
-    with db.connect() as conn, conn:
-        assert incubator.drain(conn, TREE, MODEL) is False
+            incubator.park(conn, TREE, d, batch=1)
+    assert incubator.drain(db, TREE, MODEL) is False
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 5  # still pending, intact
 
@@ -198,14 +187,12 @@ def planted(tmp_path: object) -> Iterator[Database]:
         existing = add_section(
             conn, b"existing planted\n", [0.0] * (PLANTED_DIMS - 1) + [1.0]
         )
-        cluster_store.add_leaf_node(
-            conn, TREE, [(_sid(conn, existing), False, None)]
-        )
+        cluster_store.add_leaf_node(conn, TREE, [(existing, False, None)])
         for i, vector in enumerate(vectors):
-            digest = add_section(
+            section_id = add_section(
                 conn, f"planted {i}\n".encode(), [float(v) for v in vector]
             )
-            incubator.park(conn, TREE, digest, PATH, batch=1)
+            incubator.park(conn, TREE, section_id, batch=1)
     yield database
     database.close()
 
@@ -236,8 +223,7 @@ def test_the_real_mini_pipeline_drains_a_planted_pool(
     # no `core_labeler` seam: the REAL UMAP -> HDBSCAN leaf recipe reduces the
     # pool, so the drain's contract is proven against the backend it ships with.
     before = _level0(planted)
-    with planted.connect() as conn, conn:
-        assert incubator.drain(conn, TREE, MODEL) is True
+    assert incubator.drain(planted, TREE, MODEL) is True
     with planted.connect() as conn:
         assert incubator.count(conn, TREE) == 0
     assert _level0(planted) == before + 2  # both planted groups became nodes
@@ -247,7 +233,7 @@ def test_the_real_mini_pipeline_drains_a_planted_pool(
 def test_drain_and_age_are_written_to_the_update_log(db: Database) -> None:
     with db.connect() as conn, conn:
         old = add_section(conn, b"old pending\n", unit(0))
-        incubator.park(conn, TREE, old, PATH, batch=1)
+        incubator.park(conn, TREE, old, batch=1)
     with db.connect() as conn, conn:
         incubator.age(conn, TREE, MODEL, current_batch=10)
     assert _log(db) == [("age", "forced")]
@@ -260,29 +246,33 @@ def test_age_empties_a_pool_the_clusterer_can_never_reduce(
     # look full but has no usable vectors still ages out instead of stranding.
     with db.connect() as conn, conn:
         for i in range(MIN_POINTS + 3):
-            digest = add_section(conn, f"blind{i}\n".encode(), unit(0))
+            body = f"blind{i}\n".encode()
+            incubator.park(conn, TREE, add_section(conn, body, unit(0)), 1)
             conn.execute(
-                "DELETE FROM embeddings WHERE content_hash = ?", (digest,)
+                "DELETE FROM embeddings WHERE content_hash = ?",
+                (content_hash(body),),
             )
-            incubator.park(conn, TREE, digest, PATH, batch=1)
         placeable = add_section(conn, b"placeable\n", unit(0))
-        incubator.park(conn, TREE, placeable, PATH, batch=1)
+        incubator.park(conn, TREE, placeable, batch=1)
     with db.connect() as conn, conn:
         assert incubator.age(conn, TREE, MODEL, current_batch=10) == 1
     with db.connect() as conn:
         assert incubator.pending(conn, TREE) and all(
             entry[0] != placeable for entry in incubator.pending(conn, TREE)
         )
+    # the rows that stay are UNPLACEABLE (no vector at all), the one bound the
+    # invariant's time limit carries: ageing rescued everything it could.
+    assert_pool_invariant(db, TREE, MODEL)
 
 
 def test_sweep_retires_pool_rows_a_rebuild_has_already_homed(
     db: Database,
 ) -> None:
     with db.connect() as conn, conn:
-        digest = add_section(conn, b"rehomed\n", unit(1))
-        incubator.park(conn, TREE, digest, PATH, batch=1)
+        section_id = add_section(conn, b"rehomed\n", unit(1))
+        incubator.park(conn, TREE, section_id, batch=1)
         cluster_store.add_member(
-            conn, 1, _sid(conn, digest), forced=False, similarity=0.9
+            conn, 1, section_id, forced=False, similarity=0.9
         )
     with db.connect() as conn, conn:
         assert incubator.sweep(conn, TREE) == 1
@@ -292,9 +282,98 @@ def test_sweep_retires_pool_rows_a_rebuild_has_already_homed(
 
 def test_sweep_leaves_a_genuinely_homeless_chunk_alone(db: Database) -> None:
     with db.connect() as conn, conn:
-        digest = add_section(conn, b"homeless\n", unit(1))
-        incubator.park(conn, TREE, digest, PATH, batch=1)
+        section_id = add_section(conn, b"homeless\n", unit(1))
+        incubator.park(conn, TREE, section_id, batch=1)
     with db.connect() as conn, conn:
         assert incubator.sweep(conn, TREE) == 0
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 1
+
+
+TWIN_PATH = "docs/x.py"
+
+
+def _twins(conn: object) -> tuple[int, int]:
+    """Two sections with the SAME body at different paths (#095).
+
+    Identical content, so one content hash — but the #039 path blend gives them
+    different combined vectors, so one can be homed while the other is parked.
+    """
+    register_path_bodies(conn, [TWIN_PATH])  # type: ignore[arg-type]
+    upsert_vector(
+        conn,  # type: ignore[arg-type]
+        content_hash(path_body(TWIN_PATH)),
+        MODEL,
+        unit(3),
+    )
+    body = b"the very same body\n"
+    return (
+        add_section(conn, body, unit(1)),
+        add_section(conn, body, unit(1), path=TWIN_PATH),
+    )
+
+
+def test_sweep_keeps_the_row_of_a_twin_the_rebuild_did_not_home(
+    db: Database,
+) -> None:
+    # same content hash, one homed and one parked: a hash-keyed sweep retires
+    # the row and strands the parked twin in NO node and NO pool.
+    with db.connect() as conn, conn:
+        homed, parked = _twins(conn)
+        cluster_store.add_member(conn, 1, homed, forced=False, similarity=0.9)
+        incubator.park(conn, TREE, parked, batch=1)
+    with db.connect() as conn, conn:
+        assert incubator.sweep(conn, TREE) == 0
+    with db.connect() as conn:
+        assert incubator.pending(conn, TREE)[0][0] == parked
+    assert_pool_invariant(db, TREE, MODEL)
+
+
+def test_ageing_forces_only_the_parked_twin(db: Database) -> None:
+    # the parked twin's nearest centroid is a node its homed twin is NOT in, so
+    # force-assigning by content hash drags the homed one into a SECOND node.
+    with db.connect() as conn, conn:
+        homed, parked = _twins(conn)
+        neighbour = add_section(
+            conn, b"same neighbourhood\n", unit(1), path=TWIN_PATH
+        )
+        target = cluster_store.add_leaf_node(
+            conn, TREE, [(neighbour, False, None)]
+        )
+        cluster_store.add_member(conn, 1, homed, forced=False, similarity=0.9)
+        incubator.park(conn, TREE, parked, batch=1)
+    with db.connect() as conn, conn:
+        assert incubator.age(conn, TREE, MODEL, current_batch=10) == 1
+    with db.connect() as conn:
+        assert incubator.count(conn, TREE) == 0
+        forced = conn.execute(
+            "SELECT node_id, section_id FROM node_members WHERE forced = 1"
+        ).fetchall()
+        assert [
+            (int(row["node_id"]), int(row["section_id"])) for row in forced
+        ] == [(target, parked)]
+    assert_pool_invariant(db, TREE, MODEL)
+
+
+def _write_from_another_thread(db: Database, done: list[bool]) -> None:
+    with db.write() as conn:
+        conn.execute("INSERT INTO tree_batch(tree, batch) VALUES ('p', 1)")
+    done.append(True)
+
+
+def test_drain_labels_the_pool_off_the_write_lock(planted: Database) -> None:
+    # the mini-pipeline is real UMAP -> HDBSCAN; the module's lock discipline
+    # says heavy compute runs outside the #008 lock, so another thread must be
+    # able to take the write lock while the pool is being labelled.
+    done: list[bool] = []
+
+    def labeler(vectors: object) -> list[int]:
+        thread = Thread(
+            target=_write_from_another_thread, args=(planted, done), daemon=True
+        )
+        thread.start()
+        thread.join(timeout=5)
+        return [0] * len(vectors)  # type: ignore[arg-type]
+
+    assert incubator.drain(planted, TREE, MODEL, core_labeler=labeler) is True
+    assert done == [True]

@@ -238,9 +238,19 @@ def add_alien(origin: Path, name: str) -> None:
     _git(origin, "commit", "-qm", f"alien {name}")
 
 
+def add_twins(origin: Path, name: str) -> None:
+    """Commit the SAME body at two paths — one content hash, two sections."""
+    body = f"module {name} does thing number {name}\n"
+    (origin / "alien").mkdir(exist_ok=True)
+    (origin / name).write_text(body)
+    (origin / "alien" / name).write_text(body)
+    _git(origin, "add", "-A")
+    _git(origin, "commit", "-qm", f"twins {name}")
+
+
 def _pending(db: Database) -> list[tuple[str, int]]:
     with db.connect() as conn:
-        return [(path, batch) for _, path, batch in pending(conn, "default")]
+        return [(path, batch) for _, _, path, batch in pending(conn, "default")]
 
 
 def _log(db: Database) -> list[tuple[str, str]]:
@@ -272,12 +282,12 @@ def test_update_parks_an_alien_chunk_then_ages_it_in(
     update(_job("update"), JobContext(db), encoder_for=alien_encoder)
 
     assert _pending(db) == [("alien/zz.txt", 1)]  # sub-TAU, parked
-    assert_pool_invariant(db, "default")
+    assert_pool_invariant(db, "default", "emb")
 
     for i in range(MAX_AGE + 1):  # batches 2..6 carry it past MAX_AGE
         edit(origin, "f1.txt", f"module 1 revision {i}\n")
         update(_job("update"), JobContext(db), encoder_for=alien_encoder)
-        assert_pool_invariant(db, "default")
+        assert_pool_invariant(db, "default", "emb")
 
     assert _pending(db) == []  # aged out, never stranded
     assert _forced_node(db, "alien/zz.txt") is not None
@@ -297,4 +307,28 @@ def test_update_drains_a_full_pool_in_the_same_batch(
     # cores emit as leaf nodes, residual noise is force-assigned.
     assert _pending(db) == []
     assert [entry for entry in _log(db) if entry[0] == "drain"]
-    assert_pool_invariant(db, "default")
+    assert_pool_invariant(db, "default", "emb")
+
+
+def test_update_parks_only_the_twin_that_fits_nowhere(
+    built: tuple[Database, Path],
+) -> None:
+    # duplicate content, different paths: one content hash but two sections,
+    # and the ALPHA-0.5 path blend gives them different combined vectors, so
+    # g9.txt clears TAU while alien/g9.txt parks. The pool is keyed by SECTION
+    # precisely so it can hold one without claiming the other is homeless.
+    db, origin = built
+    add_twins(origin, "g9.txt")
+    update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+
+    assert _pending(db) == [("alien/g9.txt", 1)]
+    assert_pool_invariant(db, "default", "emb")
+
+    for i in range(MAX_AGE + 1):  # batches 2..7 carry the twin past MAX_AGE
+        edit(origin, "f1.txt", f"module 1 revision {i}\n")
+        update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+        assert_pool_invariant(db, "default", "emb")
+
+    assert _pending(db) == []
+    assert _forced_node(db, "alien/g9.txt") is not None
+    assert _forced_node(db, "g9.txt") is None  # its homed twin never moved

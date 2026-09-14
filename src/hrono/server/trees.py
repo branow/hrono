@@ -108,7 +108,12 @@ def pending_tree(name: str, request: Request, _: Reader) -> dict[str, object]:
     return {
         "count": len(pool),
         "pending": [
-            {"content_hash": digest, "path": path, "batch": batch}
-            for digest, path, batch in pool
+            {
+                "section_id": section_id,
+                "content_hash": digest,
+                "path": path,
+                "batch": batch,
+            }
+            for section_id, digest, path, batch in pool
         ],
     }
