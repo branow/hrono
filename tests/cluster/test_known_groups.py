@@ -1,6 +1,7 @@
 import numpy as np
 
-from hrono.cluster.build import UMAP_DIMS, build_clusters
+from hrono.cluster.build import build_clusters
+from hrono.cluster.recipe import recipe_for
 from tests.cluster.harness import (
     RECOVERY_THRESHOLD,
     adjusted_rand_index,
@@ -77,7 +78,8 @@ def test_adjusted_rand_index_endpoints() -> None:
     assert adjusted_rand_index(labels, np.zeros(6, dtype=int)) == 0.0
 
 
-def test_reduced_coords_have_the_baked_dimensionality() -> None:
+def test_reduced_coords_have_the_recipe_dimensionality() -> None:
     vectors, _ = planted_groups()
     result = build_clusters(vectors)
-    assert all(len(coord) == UMAP_DIMS for coord in result.coords)
+    dims = recipe_for(len(vectors)).n_components
+    assert all(len(coord) == dims for coord in result.coords)

@@ -3,11 +3,11 @@
 Given the sections' combined vectors (#039), the settled recipe (clustering-
 lifecycle.md, how-hrono-works.md) is:
 
-1. **UMAP** to 25 dims, ``metric="cosine"``, a fixed seed — the nonlinear
-   reduction creates the density contrast HDBSCAN needs. A warm-init seam
-   (``init`` = stored coords) is wired for later incremental settle (#T39); a
-   fresh full build inits from UMAP's default.
-2. **HDBSCAN** on the reduced vectors, ``min_cluster_size=5``,
+1. **UMAP** to the recipe's dims, ``metric="cosine"``, a fixed seed — the
+   nonlinear reduction creates the density contrast HDBSCAN needs. A warm-init
+   seam (``init`` = stored coords) is wired for later incremental settle (#T39);
+   a fresh full build inits from UMAP's default.
+2. **HDBSCAN** on the reduced vectors, the recipe's ``min_cluster_size``,
    ``metric="euclidean"``, ``cluster_selection_method="leaf"`` — leaf selection
    yields the many small clusters a summarisation tree wants.
 3. **Attach** every HDBSCAN noise point (-1) to its nearest cluster in the
@@ -16,9 +16,14 @@ lifecycle.md, how-hrono-works.md) is:
    topic. Attached members carry the attachment similarity; density-core members
    do not.
 
-All constants are baked here, not config. The heavy numeric libraries are
-imported lazily so a missing ``cluster`` extra surfaces as a clean
-``ClusterError`` rather than an import traceback, mirroring the embed backend.
+The parameters that scale with the point count (dims, neighbours, minimum
+cluster size) come from ``recipe`` — the same machinery reduces a level of
+thousands of sections and a level of tens of briefs, with the recipe scaled to
+what it is given (how-hrono-works.md); the rest is baked here, not config. The
+heavy numeric libraries are imported lazily so a missing ``cluster`` extra
+surfaces as a clean ``ClusterError`` rather than an import traceback, mirroring
+the embed backend — and a driver failure inside them is translated to
+``ClusterError`` too, so no scipy/numba traceback escapes the backend.
 """
 
 from __future__ import annotations
@@ -29,11 +34,10 @@ from dataclasses import dataclass
 import numpy as np
 
 from hrono.cluster import ClusterError
+from hrono.cluster.recipe import recipe_for
 
-UMAP_DIMS = 25
 UMAP_METRIC = "cosine"
 UMAP_SEED = 42
-MIN_CLUSTER_SIZE = 5
 HDBSCAN_METRIC = "euclidean"
 SELECTION_METHOD = "leaf"
 
@@ -49,7 +53,7 @@ class ClusterResult:
     attached). ``attached`` is True for a section that was HDBSCAN noise and was
     attached by proximity; ``assignment_similarity`` is its combined-space
     similarity to the cluster it joined (None for density-core members).
-    ``coords`` is the reduced 25-d position, kept for warm-init and the graph.
+    ``coords`` is the reduced position, kept for warm-init and the graph.
     """
 
     labels: tuple[int, ...]
@@ -122,24 +126,33 @@ def core_labels(combined: Sequence[Sequence[float]]) -> tuple[int, ...]:
 
 
 def _default_reduce(vectors: np.ndarray, init: np.ndarray | None) -> np.ndarray:
+    recipe = recipe_for(len(vectors))
     umap = _umap()
     kwargs: dict[str, object] = {
-        "n_components": UMAP_DIMS,
+        "n_components": recipe.n_components,
+        "n_neighbors": recipe.n_neighbors,
         "metric": UMAP_METRIC,
         "random_state": UMAP_SEED,
     }
     if init is not None:
         kwargs["init"] = init
-    return umap.UMAP(**kwargs).fit_transform(vectors)
+    try:
+        return umap.UMAP(**kwargs).fit_transform(vectors)
+    except Exception as exc:
+        raise ClusterError("the reduction failed on these vectors") from exc
 
 
 def _default_cluster(reduced: np.ndarray) -> np.ndarray:
+    recipe = recipe_for(len(reduced))
     hdbscan = _hdbscan()
-    return hdbscan.HDBSCAN(
-        min_cluster_size=MIN_CLUSTER_SIZE,
-        metric=HDBSCAN_METRIC,
-        cluster_selection_method=SELECTION_METHOD,
-    ).fit_predict(reduced)
+    try:
+        return hdbscan.HDBSCAN(
+            min_cluster_size=recipe.min_cluster_size,
+            metric=HDBSCAN_METRIC,
+            cluster_selection_method=SELECTION_METHOD,
+        ).fit_predict(reduced)
+    except Exception as exc:
+        raise ClusterError("the clusterer failed on these vectors") from exc
 
 
 def _umap() -> object:

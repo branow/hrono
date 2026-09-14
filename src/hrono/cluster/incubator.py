@@ -2,13 +2,15 @@
 
 The incremental ``update`` (#085) parks a chunk that fits no existing cluster
 here, by CONTENT HASH, instead of force-marrying it to strangers. When the pool
-reaches ``min_cluster_size`` it DRAINS via the scoped mini-pipeline (UMAP ->
-HDBSCAN leaf over the pool only, deterministic): only density-core clusters emit
-as new leaf nodes; residual noise is force-assigned to the nearest EXISTING
-cluster ignoring TAU (a chunk outside the tree is unfindable — worse than one
-alien member), carrying a ``forced`` flag so the misfit monitor (T37) re-checks
-it. Aging force-assigns a chunk that has waited too many batches while the pool
-stayed too small — nothing waits forever. Constants are baked.
+reaches what the clusterer can actually reduce (``recipe.MIN_POINTS`` — a pool
+the mini-pipeline cannot reduce is not a drainable pool) it DRAINS via the
+scoped mini-pipeline (UMAP -> HDBSCAN leaf over the pool only, deterministic):
+only density-core clusters emit as new leaf nodes; residual noise is
+force-assigned to the nearest EXISTING cluster ignoring TAU (a chunk outside the
+tree is unfindable — worse than one alien member), carrying a ``forced`` flag so
+the misfit monitor (T37) re-checks it. Aging force-assigns a chunk that has
+waited too many batches while the pool stayed too small — nothing waits forever.
+Constants are baked.
 """
 
 from __future__ import annotations
@@ -20,8 +22,8 @@ from datetime import UTC, datetime
 
 from hrono.cluster import store
 from hrono.cluster.blend import combined_vector
+from hrono.cluster.recipe import MIN_POINTS
 
-MIN_CLUSTER_SIZE = 5
 MAX_AGE = 5  # batches a chunk may wait while the pool stays below the minimum
 
 CoreLabeler = Callable[[Sequence[Sequence[float]]], Sequence[int]]
@@ -85,7 +87,7 @@ def drain(
         for chash, path, _ in pool
     ]
     ready = [(c, p, v) for c, p, v in ready if v is not None]
-    if len(ready) < MIN_CLUSTER_SIZE:
+    if len(ready) < MIN_POINTS:
         return False
 
     labeler = core_labeler if core_labeler is not None else _default_core
@@ -126,7 +128,7 @@ def age(
     Only runs while the pool is too small to drain — a full pool takes the drain
     path instead, so nothing waits forever either way.
     """
-    if count(conn, tree) >= MIN_CLUSTER_SIZE:
+    if count(conn, tree) >= MIN_POINTS:
         return 0
     centroids = store.node_centroids(conn, tree, model_name)
     forced = 0

@@ -7,6 +7,7 @@ import pytest
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import path_body, register_path_bodies
+from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
@@ -107,7 +108,7 @@ def test_below_min_does_not_drain(db: Database) -> None:
 def test_drain_emits_cores_and_force_assigns_residual(db: Database) -> None:
     existing_node = 1  # the fixture's only node
     with db.connect() as conn, conn:
-        for i in range(5):  # 5 e1 chunks -> one density core
+        for i in range(MIN_POINTS - 1):  # e1 chunks -> one density core
             d = add_section(conn, f"core{i}\n".encode(), unit(1))
             incubator.park(conn, TREE, d, PATH, batch=1)
         residual = add_section(conn, b"residual\n", unit(0))  # near existing
@@ -158,3 +159,18 @@ def test_young_pending_chunk_is_not_aged_out(db: Database) -> None:
         )
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 1  # still waiting
+
+
+def test_a_pool_the_clusterer_cannot_reduce_does_not_raise(
+    db: Database,
+) -> None:
+    # #094: the drain gate is the clusterer's own minimum, so a 5-chunk pool
+    # takes the real mini-pipeline nowhere near a driver exception.
+    with db.connect() as conn, conn:
+        for i in range(5):
+            d = add_section(conn, f"small{i}\n".encode(), unit(1))
+            incubator.park(conn, TREE, d, PATH, batch=1)
+    with db.connect() as conn, conn:
+        assert incubator.drain(conn, TREE, MODEL) is False
+    with db.connect() as conn:
+        assert incubator.count(conn, TREE) == 5  # still pending, intact

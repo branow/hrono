@@ -141,11 +141,12 @@ def test_briefs_cluster_into_a_coherent_next_level(
     assert level1 == 2  # the two planted groups recovered
     assert children == 20  # every level-0 node is a member
     assert distinct == 20  # each in exactly one parent (full coverage)
-    # each recovered cluster is a single planted group
-    assert sorted(_partition(db, node_group)) == [
+    # each recovered cluster is a single planted group (label order is the
+    # clusterer's business, so compare the partition as a set)
+    assert set(_partition(db, node_group)) == {
         frozenset({"alpha"}),
         frozenset({"beta"}),
-    ]
+    }
 
 
 def test_members_are_node_ids_not_sections(

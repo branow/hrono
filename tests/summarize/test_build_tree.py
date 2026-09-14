@@ -269,3 +269,21 @@ def test_idempotent_second_run_adds_nothing(db: Database) -> None:
     first = _levels(db)
     run(db, lambda n: [i // 3 for i in range(n)])
     assert _levels(db) == first  # no duplicate levels, nothing rebuilt
+
+
+def test_real_recipe_over_a_tiny_level_declares_a_root(db: Database) -> None:
+    # #094 end to end with the REAL clusterer (no build seam): 7 briefs are
+    # below what UMAP can reduce, so cluster-briefs raises ClusterError,
+    # recursion stops, and the 7 topics are collected under one root.
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 7)
+    build_tree(
+        job(),
+        JobContext(db),
+        client=FakeCompletion(),
+        encoder_for=fake_encoder,
+    )
+    _top_is_single_root(db)
+    levels = _levels(db)
+    assert levels == {0: 7, 1: 1}

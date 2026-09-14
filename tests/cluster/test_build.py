@@ -2,7 +2,10 @@ import numpy as np
 import pytest
 
 from hrono.cluster import ClusterError
-from hrono.cluster.build import UMAP_DIMS, ClusterResult, build_clusters
+from hrono.cluster.build import ClusterResult, build_clusters, core_labels
+from hrono.cluster.recipe import MIN_POINTS, recipe_for
+
+STUB_DIMS = 4  # any width: the stub reducers below stand in for UMAP
 
 
 def planted_vectors(
@@ -46,8 +49,9 @@ def test_is_deterministic_under_the_fixed_seed() -> None:
 def test_coords_have_the_reduced_dimensionality() -> None:
     vectors, _ = planted_vectors()
     result = build_clusters(vectors)
+    dims = recipe_for(len(vectors)).n_components
     assert len(result.coords) == len(vectors)
-    assert all(len(coord) == UMAP_DIMS for coord in result.coords)
+    assert all(len(coord) == dims for coord in result.coords)
 
 
 def _labeler(labels: list[int]):
@@ -67,7 +71,7 @@ def test_noise_attaches_to_nearest_cluster_in_combined_space() -> None:
         ],
         dtype=np.float32,
     )
-    reduce = lambda vecs, init: np.zeros((len(vecs), UMAP_DIMS))  # noqa: E731
+    reduce = lambda vecs, init: np.zeros((len(vecs), STUB_DIMS))  # noqa: E731
     result = build_clusters(
         vectors, reduce=reduce, cluster=_labeler([0, 0, 1, 1, -1, -1])
     )
@@ -82,12 +86,12 @@ def test_noise_attaches_to_nearest_cluster_in_combined_space() -> None:
 
 def test_warm_init_coords_reach_the_reducer() -> None:
     vectors = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
-    init = [[0.5] * UMAP_DIMS, [0.6] * UMAP_DIMS]
+    init = [[0.5] * STUB_DIMS, [0.6] * STUB_DIMS]
     seen: dict[str, object] = {}
 
     def reduce(vecs: np.ndarray, passed_init: np.ndarray | None) -> np.ndarray:
         seen["init"] = passed_init
-        return np.zeros((len(vecs), UMAP_DIMS))
+        return np.zeros((len(vecs), STUB_DIMS))
 
     build_clusters(vectors, init=init, reduce=reduce, cluster=_labeler([0, 0]))
     assert seen["init"] is not None
@@ -99,7 +103,7 @@ def test_all_noise_fails_cleanly() -> None:
     with pytest.raises(ClusterError, match="no clusters"):
         build_clusters(
             vectors,
-            reduce=lambda vecs, init: np.zeros((len(vecs), UMAP_DIMS)),
+            reduce=lambda vecs, init: np.zeros((len(vecs), STUB_DIMS)),
             cluster=_labeler([-1, -1]),
         )
 
@@ -112,9 +116,35 @@ def test_empty_input_fails_cleanly() -> None:
 def test_result_shape_is_frozen() -> None:
     result = build_clusters(
         np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
-        reduce=lambda vecs, init: np.zeros((len(vecs), UMAP_DIMS)),
+        reduce=lambda vecs, init: np.zeros((len(vecs), STUB_DIMS)),
         cluster=_labeler([0, 0]),
     )
     assert isinstance(result, ClusterResult)
     with pytest.raises(AttributeError):
         result.labels = (1,)  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("count", [1, 4, 10, MIN_POINTS - 1])
+def test_real_recipe_refuses_a_level_it_cannot_reduce(count: int) -> None:
+    # #094: below the smallest rung there is no honest reduction — the caller
+    # must see ClusterError ("this level cannot be reduced further"), never a
+    # scipy/numba driver exception.
+    vectors, _ = planted_vectors(groups=1, per_group=count)
+    with pytest.raises(ClusterError, match="too few vectors"):
+        build_clusters(vectors)
+    with pytest.raises(ClusterError, match="too few vectors"):
+        core_labels(vectors)
+
+
+@pytest.mark.parametrize("count", [MIN_POINTS, 26, 27, 40])
+def test_real_recipe_clusters_every_size_it_accepts(count: int) -> None:
+    # the sizes around the old UMAP-25 breaking point (26/27) run the REAL
+    # reducer and clusterer end to end: scaled parameters, full coverage.
+    vectors, _ = planted_vectors(groups=2, per_group=count // 2 + 1)
+    vectors = vectors[:count]
+    result = build_clusters(vectors)
+    dims = recipe_for(count).n_components
+    assert len(result.labels) == count
+    assert all(label >= 0 for label in result.labels)
+    assert all(len(coord) == dims for coord in result.coords)
+    assert len(core_labels(vectors)) == count
