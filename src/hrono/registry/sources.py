@@ -22,6 +22,9 @@ class GitAuth(BaseModel):
 
 class GitFilter(BaseModel):
     exclude: list[str] | None = None
+    include: list[str] | None = None
+    replace_defaults: bool = False
+    include_generated: bool = False
     max_size_mb: float | None = None
 
 

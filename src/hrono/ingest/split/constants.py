@@ -5,6 +5,13 @@ the tiny/group thresholds, the ordered delimiter cascade, and the extension ->
 category -> section-budget table (code and docs 10 KB, data 2 KB — each a
 log-scale Kneedle knee of file-size distributions measured over four large
 repos). Values live here as data so the packer walks a table, not literals.
+
+``DEFAULT_IGNORE`` sits beside that table for the same reason: it is the other
+half of "what kind of file is this" — the globs #104 bakes as not worth a
+section, grouped by WHY (vendored trees, lockfiles, non-prose assets, tabular
+data, generated code). The #013 filter reads it; nothing here decides policy.
+Only ``OPTIONAL_IGNORE`` has a named opt-in (``filter.include_generated``); any
+group is re-admitted file by file with an explicit ``filter.include`` pattern.
 """
 
 from __future__ import annotations
@@ -68,6 +75,44 @@ _CATEGORY_BY_EXT: dict[str, str] = {
     ".ini": "data",
     ".cfg": "data",
 }
+
+
+DEFAULT_IGNORE: dict[str, tuple[str, ...]] = {
+    "vendored": (
+        "**/node_modules/**",
+        "**/vendor/**",
+        "**/third_party/**",
+    ),
+    "locks": ("**/*.lock",),
+    "assets": (
+        "**/*.svg",
+        "**/*.eps",
+        "**/*.ico",
+        "**/*.map",
+        "**/*.min.js",
+        "**/*.min.css",
+        "**/*.woff",
+        "**/*.woff2",
+        "**/*.ttf",
+        "**/*.otf",
+        "**/*.eot",
+    ),
+    "tabular": (
+        "**/*.csv",
+        "**/*.tsv",
+    ),
+    "generated": (
+        "**/*_pb2.py",
+        "**/*_pb2_grpc.py",
+        "**/*.pb.go",
+        "**/*.g.dart",
+        "**/*.generated.*",
+        "**/generated/**",
+        "**/.openapi-generator/**",
+        "**/.swagger-codegen/**",
+    ),
+}
+OPTIONAL_IGNORE = "generated"
 
 
 def section_budget(path: Path) -> int:
