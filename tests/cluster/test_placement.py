@@ -239,3 +239,29 @@ def test_moved_chunk_reuses_content_and_stays(db: Database) -> None:
     assert report.stayed == 1
     with db.connect() as conn:
         assert cluster_store.section_node(conn, TREE, moved) == node_a
+
+
+def test_a_parked_chunk_that_joins_is_unparked(db: Database) -> None:
+    # the primitive's own guard: a join unparks, so a chunk cannot end up
+    # clustered AND pending. No production caller reaches this today (both
+    # routes park or re-place homeless chunks only), so pin it here.
+    with db.connect() as conn, conn:
+        node_a, _ = make_node(conn, topic=0, n=3)
+        latecomer, digest = add_section(conn, b"near topic 0\n", unit(0))
+        incubator.park(conn, TREE, latecomer, batch=1)
+    centroids = _centroids(db)
+    with db.connect() as conn, conn:
+        outcome = placement.assign_or_park(
+            conn,
+            TREE,
+            section_id=latecomer,
+            content_hash=digest,
+            path=PATH,
+            centroids=centroids,
+            model_name=MODEL,
+            batch=2,
+        )
+    assert outcome == "joined"
+    with db.connect() as conn:
+        assert cluster_store.section_node(conn, TREE, latecomer) == node_a
+        assert incubator.count(conn, TREE) == 0

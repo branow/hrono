@@ -368,12 +368,15 @@ def planted_encoder(model_id: str):
     return encode
 
 
-def test_a_leaf_node_the_settle_drain_emits_is_briefed(
+def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
     built: Database,
 ) -> None:
     # the drain runs BEFORE the brief pass, so a leaf node it emits is
     # summarised in the same settle rather than left blank until the next
-    # trigger — with drift already reset, nothing would re-trigger.
+    # trigger — with drift already reset, nothing would re-trigger. It is not
+    # PARENTED: build_tree starts at the highest briefed level and never
+    # revisits level 0 (backlog #114). Pinned so settle's docstring and the
+    # code cannot drift apart again; #114 flips the second half.
     before = _leaf_ids(built)
     _park_unembedded(built, 14)
     settle(
@@ -387,4 +390,17 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed(
     emitted = set(_leaf_ids(built)) - set(before)
     assert emitted  # the drain reduced the pool into real clusters
     assert emitted <= _briefed(built)
+    parented = _parented(built)
+    assert parented  # the pre-drain leaves DO hang under the root
+    assert emitted.isdisjoint(parented)
     assert_pool_invariant(built, TREE, "emb")
+
+
+def _parented(db: Database) -> set[int]:
+    with db.connect() as conn:
+        return {
+            int(row["child_id"])
+            for row in conn.execute(
+                "SELECT child_id FROM node_children"
+            ).fetchall()
+        }

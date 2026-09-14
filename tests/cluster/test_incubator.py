@@ -89,6 +89,18 @@ def test_park_pending_and_unpark(db: Database) -> None:
         assert incubator.count(conn, TREE) == 0
 
 
+def test_a_re_park_keeps_the_original_wait(db: Database) -> None:
+    # ON CONFLICT DO NOTHING: re-parking the same section must not restart its
+    # age clock (a plain INSERT would raise, an upsert would reset the batch).
+    with db.connect() as conn, conn:
+        section_id = add_section(conn, b"parked twice\n", unit(1))
+        incubator.park(conn, TREE, section_id, batch=1)
+        incubator.park(conn, TREE, section_id, batch=7)
+    with db.connect() as conn:
+        assert incubator.count(conn, TREE) == 1
+        assert incubator.pending(conn, TREE)[0][3] == 1
+
+
 def test_below_min_does_not_drain(db: Database) -> None:
     with db.connect() as conn, conn:
         for i in range(3):

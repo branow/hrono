@@ -24,11 +24,14 @@ A reconcile is also the natural moment to re-home strays (#095): the rebuild
 itself re-clusters every parked chunk and ``cluster`` sweeps the pool rows it
 obsoletes, and a ``drain`` clears any residue the rebuild could not reach. Its
 place in the chain is fixed by what it needs and what it produces — AFTER the
-embed pass that makes a late chunk placeable at all, and BEFORE ``brief`` /
-``build_tree``, so a leaf node the drain emits is briefed and parented in this
-same settle rather than left dangling until the next trigger. The closing embed
-then vectorises the node:// brief passages, as ``maintain`` does. The drain runs
-its own mini-pipeline off the #008 lock, like every other heavy step here.
+embed pass that makes a late chunk placeable at all, and BEFORE ``brief``, so a
+leaf node the drain emits is briefed in this same settle rather than left blank
+until the next trigger. It is NOT parented: ``build_tree`` starts at the highest
+briefed level and never revisits level 0, so a leaf born after the recursion
+hangs under no parent and stays out of ``export`` (backlog #114). The closing
+embed then vectorises the node:// brief passages, as ``maintain`` does. The
+drain runs its own mini-pipeline off the #008 lock, like every other heavy step
+here.
 """
 
 from __future__ import annotations
