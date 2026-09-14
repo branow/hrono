@@ -1,14 +1,18 @@
+import logging
+import sqlite3
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from hrono.db.connection import connect
-from hrono.db.database import Database
+from hrono.db.database import Database, Pool
 from hrono.jobs import store
 from hrono.jobs.ops import Handler, JobContext
-from hrono.jobs.worker import Worker, enqueue
+from hrono.jobs.worker import Worker, enqueue, reclaim_stranded
 
 
 def database(tmp_path: Path) -> Database:
@@ -138,6 +142,173 @@ def test_a_job_dying_mid_transaction_does_not_wedge_the_queue(
         assert leftover == []  # the failed write rolled back whole
     finally:
         stop(workers)
+    db.close()
+
+
+class Flaky:
+    """Lends connections from a real pool, refusing the next one when armed."""
+
+    def __init__(
+        self, path: Path, armed: threading.Event, refused: threading.Event
+    ) -> None:
+        self._pool = Pool(path)
+        self._armed = armed
+        self._refused = refused
+
+    def acquire(self) -> sqlite3.Connection:
+        if self._armed.is_set():
+            self._armed.clear()
+            self._refused.set()
+            raise sqlite3.OperationalError("database is locked")
+        return self._pool.acquire()
+
+    def release(
+        self, connection: sqlite3.Connection, *, reusable: bool
+    ) -> None:
+        self._pool.release(connection, reusable=reusable)
+
+    def close(self) -> None:
+        self._pool.close()
+
+
+def wedging(tmp_path: Path) -> tuple[Database, Worker, threading.Event]:
+    """A worker whose status write loses the database once, as in F24."""
+    armed = threading.Event()
+    refused = threading.Event()
+    db = Database(Flaky(tmp_path / "hrono.db", armed, refused))
+
+    def wedge(job: object, ctx: object) -> None:
+        armed.set()
+
+    worker = Worker(
+        db,
+        {"wedge": wedge, "noop": lambda job, ctx: None},
+        poll_interval=0.01,
+        heartbeat_interval=60.0,
+    )
+    return db, worker, refused
+
+
+def strand(db: Database, op: str, age: float) -> str:
+    """Write the row a worker that died mid-job leaves behind."""
+    job_id = f"job_{uuid.uuid4().hex}"
+    beat = (datetime.now(UTC) - timedelta(seconds=age)).isoformat()
+    with db.write() as conn:
+        store.insert(conn, job_id, None, None, op, "{}", _stamp())
+        conn.execute(
+            "UPDATE jobs SET status = 'running', heartbeat = ? WHERE id = ?",
+            (beat, job_id),
+        )
+    return job_id
+
+
+def test_a_failing_status_write_does_not_kill_the_worker(
+    tmp_path: Path,
+) -> None:
+    """F24: the write in `_finish` escaped `run()`, the thread ended, and the
+    job enqueued after it was never claimed."""
+    db, worker, refused = wedging(tmp_path)
+    worker.start()
+    try:
+        wedged = enqueue(db, "wedge", {})
+        assert refused.wait(5)
+        assert wait_terminal(db, enqueue(db, "noop", {})) == "succeeded"
+        assert worker.is_alive()
+        assert status_of(db, wedged) == "running"
+    finally:
+        stop([worker])
+    db.close()
+
+
+def test_a_failing_status_write_is_logged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """F24: `grep "Exception in thread"` on the server log found nothing."""
+    db, worker, refused = wedging(tmp_path)
+    with caplog.at_level(logging.ERROR, logger="hrono.worker"):
+        worker.start()
+        try:
+            enqueue(db, "wedge", {})
+            assert refused.wait(5)
+            assert wait_terminal(db, enqueue(db, "noop", {})) == "succeeded"
+        finally:
+            stop([worker])
+    failures = [
+        record
+        for record in caplog.records
+        if "worker cycle failed" in record.getMessage()
+    ]
+    assert failures
+    assert all(record.exc_info is not None for record in failures)
+    db.close()
+
+
+def test_a_job_stranded_by_a_dead_worker_is_reclaimed_and_rerun(
+    tmp_path: Path,
+) -> None:
+    """A job whose heartbeat stopped goes back on the queue and a later worker
+    runs it — never stranded. Re-running is safe only while ops are idempotent:
+    every expensive stage is keyed by content hash."""
+    ran: list[str] = []
+    db = database(tmp_path)
+    stranded = strand(db, "count", age=5.0)
+    worker = Worker(
+        db,
+        {"count": lambda job, ctx: ran.append(job.id)},
+        poll_interval=0.01,
+        heartbeat_interval=0.02,
+        stale_after=0.2,
+    )
+    worker.start()
+    try:
+        assert wait_terminal(db, stranded) == "succeeded"
+        assert ran == [stranded]
+    finally:
+        stop([worker])
+    db.close()
+
+
+def test_a_running_job_is_not_reclaimed_while_its_worker_beats(
+    tmp_path: Path,
+) -> None:
+    """The heartbeat is stamped while the op runs, so a long job is never
+    mistaken for a dead worker's leftovers and re-run beside itself."""
+    release = threading.Event()
+    ran: list[str] = []
+
+    def slow(job: object, ctx: object) -> None:
+        ran.append(job.id)  # type: ignore[attr-defined]
+        release.wait(5)
+
+    db = database(tmp_path)
+    worker = Worker(
+        db,
+        {"slow": slow},
+        poll_interval=0.01,
+        heartbeat_interval=0.02,
+        stale_after=0.15,
+    )
+    worker.start()
+    try:
+        job_id = enqueue(db, "slow", {})
+        time.sleep(0.6)
+        assert status_of(db, job_id) == "running"
+        release.set()
+        assert wait_terminal(db, job_id) == "succeeded"
+        assert ran == [job_id]
+    finally:
+        release.set()
+        stop([worker])
+    db.close()
+
+
+def test_the_startup_sweep_requeues_every_running_job(tmp_path: Path) -> None:
+    """A hard crash leaves a fresh heartbeat behind; at startup no worker holds
+    anything, so every running job is a leftover."""
+    db = database(tmp_path)
+    fresh = strand(db, "noop", age=0.0)
+    assert reclaim_stranded(db) == (fresh,)
+    assert status_of(db, fresh) == "pending"
     db.close()
 
 

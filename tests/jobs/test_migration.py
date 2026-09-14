@@ -26,6 +26,7 @@ def test_jobs_table_shape(tmp_path: Path) -> None:
         "error",
         "created_at",
         "updated_at",
+        "heartbeat",
     }
     conn.close()
 

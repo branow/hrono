@@ -34,7 +34,7 @@ import hrono.tree.update  # noqa: F401 - registers the update op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database
-from hrono.jobs.worker import Worker
+from hrono.jobs.worker import Worker, reclaim_stranded
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
 from hrono.server.errors import install as install_errors
@@ -102,7 +102,8 @@ def create_app(
     used as-is and left for its owner to close. The ``master_key`` is required
     at startup and is held in app state (never logged, never persisted) for the
     cipher to use. ``app.state.db`` lends a connection per operation, so one
-    failed op cannot leave the next one wedged.
+    failed op cannot leave the next one wedged, and jobs left ``running`` by a
+    previous process go back on the queue before the worker starts.
     """
 
     @asynccontextmanager
@@ -125,6 +126,7 @@ def create_app(
             else:
                 app.state.key_id = key_id
             cipher = Cipher.from_key(master_key, app.state.key_id)
+            reclaim_stranded(database)
             worker = Worker(database, cipher=cipher)
             app.state.worker = worker
             worker.start()

@@ -1,3 +1,5 @@
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,7 @@ from hrono.crypto.masterkey import WrongMasterKey
 from hrono.db.connection import connect
 from hrono.db.database import open_database
 from hrono.db.migrations import packaged
+from hrono.jobs import store
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -93,3 +96,29 @@ def test_startup_refuses_a_wrong_master_key(tmp_path: Path) -> None:
     with pytest.raises(WrongMasterKey):  # noqa: SIM117
         with TestClient(create_app(db_path=db, master_key=other)):
             pass
+
+
+def test_startup_requeues_and_runs_a_job_left_running(tmp_path: Path) -> None:
+    """F24: a job whose worker died stayed `running` for ever, and the jobs
+    enqueued after it were never claimed."""
+    path = tmp_path / "hrono.db"
+    conn = open_database(path)
+    stamp = datetime.now(UTC).isoformat()
+    store.insert(conn, "job_stranded", None, None, "noop", "{}", stamp)
+    conn.execute(
+        "UPDATE jobs SET status = 'running', heartbeat = ? WHERE id = ?",
+        (stamp, "job_stranded"),
+    )
+    conn.commit()
+    conn.close()
+
+    reader = connect(path, extensions=False)
+    with TestClient(create_app(db_path=path, master_key=KEY)):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            status = store.get(reader, "job_stranded")["status"]
+            if status == "succeeded":
+                break
+            time.sleep(0.01)
+    assert store.get(reader, "job_stranded")["status"] == "succeeded"
+    reader.close()

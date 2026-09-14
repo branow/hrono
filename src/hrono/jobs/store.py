@@ -79,13 +79,48 @@ def claim_next(conn: sqlite3.Connection, now: str) -> sqlite3.Row | None:
         return None
     with conn:
         conn.execute(
-            "UPDATE jobs SET status = 'running', updated_at = ? "
+            "UPDATE jobs SET status = 'running', updated_at = ?, heartbeat = ? "
             "WHERE id = ? AND status = 'pending'",
-            (now, row["id"]),
+            (now, now, row["id"]),
         )
     return conn.execute(
         f"SELECT {_COLUMNS} FROM jobs WHERE id = ?", (row["id"],)
     ).fetchone()
+
+
+def touch(conn: sqlite3.Connection, job_id: str, now: str) -> None:
+    """Stamp a running job as still held by a live worker."""
+    with conn:
+        conn.execute(
+            "UPDATE jobs SET heartbeat = ? WHERE id = ? AND status = 'running'",
+            (now, job_id),
+        )
+
+
+def reclaim(
+    conn: sqlite3.Connection, cutoff: str | None, now: str
+) -> tuple[str, ...]:
+    """Return running jobs with no live worker to the queue; report their ids.
+
+    ``cutoff`` is the oldest heartbeat a live worker could have left behind;
+    pass None at startup, when no worker holds anything and every running job
+    is a leftover of the process that died.
+    """
+    where = "status = 'running'"
+    params: tuple[str, ...] = ()
+    if cutoff is not None:
+        where += " AND (heartbeat IS NULL OR heartbeat < ?)"
+        params = (cutoff,)
+    rows = conn.execute(f"SELECT id FROM jobs WHERE {where}", params).fetchall()
+    if not rows:
+        return ()
+    with conn:
+        conn.executemany(
+            "UPDATE jobs SET status = 'pending', heartbeat = NULL, "
+            "updated_at = ? WHERE id = ? AND status = 'running'",
+            [(now, row["id"]) for row in rows],
+        )
+    return tuple(row["id"] for row in rows)
 
 
 def set_status(
