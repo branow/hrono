@@ -98,8 +98,10 @@ def _materialize(
 
     A leading slash is NORMALISED rather than obeyed: ``out / "/a.md"`` is
     ``/a.md`` to pathlib, which would reroot the whole export out of the output
-    folder (#096, F19). Anything that still escapes after that is refused and
-    counted — one hostile entry costs its own file, not the other ninety-three.
+    folder (#096, F19). An entry is written only if it names a file strictly
+    under ``out``: one that escapes, or that lands ON ``out`` itself ("/", ".",
+    "" — a directory, not a file), is refused and counted instead. One bad
+    entry costs its own file, not the other ninety-three.
     """
     out.mkdir(parents=True, exist_ok=True)
     base = out.resolve()
@@ -107,7 +109,7 @@ def _materialize(
     refused: list[str] = []
     for entry in files:
         target = (out / entry["path"].lstrip("/")).resolve()
-        if base != target and base not in target.parents:
+        if target == base or base not in target.parents:
             refused.append(entry["path"])
             continue
         target.parent.mkdir(parents=True, exist_ok=True)

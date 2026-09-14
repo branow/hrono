@@ -112,3 +112,29 @@ def test_a_refused_entry_does_not_cost_the_whole_export(
     assert not (tmp_path / "escape.md").exists()
     assert "Wrote 1 file to" in result.output
     assert "refused 2 of 3" in result.output
+
+
+@pytest.mark.parametrize("degenerate", ["/", ".", "", "..", "/../"])
+def test_a_path_resolving_onto_the_output_directory_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, degenerate: str
+) -> None:
+    # such a path maps onto `out` itself, which is a DIRECTORY: it used to pass
+    # the guard and raise IsADirectoryError out of the command, losing every
+    # entry after it with no "Wrote"/"refused" line at all.
+    fake = FakeClient(
+        [
+            {"path": "a.md", "content": "A"},
+            {"path": degenerate, "content": "DEGENERATE"},
+            {"path": "b.md", "content": "B"},
+        ]
+    )
+    monkeypatch.setattr("hrono.tree.commands.from_profile", lambda: fake)
+    out = tmp_path / "map"
+    result = runner.invoke(cli.app, ["tree", "export", "acme", "-o", str(out)])
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert result.exit_code == 1
+    assert (out / "a.md").read_text() == "A"
+    assert (out / "b.md").read_text() == "B"  # not lost to the bad entry
+    assert out.is_dir()  # the output directory itself was never written over
+    assert "Wrote 2 files" in result.output
+    assert "refused 1 of 3" in result.output

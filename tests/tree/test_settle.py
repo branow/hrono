@@ -14,6 +14,9 @@ from hrono.cluster.incubator import count as incubator_count
 from hrono.cluster.incubator import park
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
+from hrono.export import store as export_store
+from hrono.export.collapse import collapse
+from hrono.export.render import render
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
@@ -393,7 +396,32 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
     parented = _parented(built)
     assert parented  # the pre-drain leaves DO hang under the root
     assert emitted.isdisjoint(parented)
+    # and the harm that unparenting actually does (#096 changed it): the leaf
+    # IS written to the export, it is simply not linked from root.md, so an
+    # agent walking the map from the root never reaches it.
+    files = _export(built)
+    for node_id in emitted:
+        directory = next(
+            p.rsplit("/", 1)[0]
+            for p in files
+            if p.endswith(f"-{node_id}/brief.md")
+        )
+        assert f"{directory}/brief.md" in files
+        assert directory not in files["root.md"]
+    # a PARENTED leaf's directory is in root.md, so the check above bites
+    assert [
+        p.rsplit("/", 1)[0]
+        for p in files
+        if p.endswith("/brief.md") and p.rsplit("/", 1)[0] in files["root.md"]
+    ]
     assert_pool_invariant(built, TREE, "emb")
+
+
+def _export(db: Database) -> dict[str, str]:
+    with db.connect() as conn:
+        stored = export_store.load(conn, TREE)
+        assert stored is not None
+        return render(conn, collapse(stored, 3))
 
 
 def _parented(db: Database) -> set[int]:
