@@ -6,7 +6,11 @@ lifecycle.md, how-hrono-works.md) is:
 1. **UMAP** to the recipe's dims, ``metric="cosine"``, a fixed seed — the
    nonlinear reduction creates the density contrast HDBSCAN needs. A warm-init
    seam (``init`` = stored coords) is wired for later incremental settle (#T39);
-   a fresh full build inits from UMAP's default.
+   a fresh full build inits from UMAP's default. Stored coords carry the width
+   of the build that wrote them, so a level that has crossed a rung since then
+   offers an init of the wrong width; that init is dropped and the build runs
+   cold rather than failing, and its own coords — written at the new width by
+   ``store.replace_tree`` — warm the next build.
 2. **HDBSCAN** on the reduced vectors, the recipe's ``min_cluster_size``,
    ``metric="euclidean"``, ``cluster_selection_method="leaf"`` — leaf selection
    yields the many small clusters a summarisation tree wants.
@@ -134,12 +138,17 @@ def _default_reduce(vectors: np.ndarray, init: np.ndarray | None) -> np.ndarray:
         "metric": UMAP_METRIC,
         "random_state": UMAP_SEED,
     }
-    if init is not None:
+    if _fits(init, recipe.n_components):
         kwargs["init"] = init
     try:
         return umap.UMAP(**kwargs).fit_transform(vectors)
     except Exception as exc:
         raise ClusterError("the reduction failed on these vectors") from exc
+
+
+def _fits(init: np.ndarray | None, n_components: int) -> bool:
+    """True when a warm init has the width this build's recipe reduces to."""
+    return init is not None and init.ndim == 2 and init.shape[1] == n_components
 
 
 def _default_cluster(reduced: np.ndarray) -> np.ndarray:

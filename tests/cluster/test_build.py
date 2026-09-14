@@ -148,3 +148,36 @@ def test_real_recipe_clusters_every_size_it_accepts(count: int) -> None:
     assert all(label >= 0 for label in result.labels)
     assert all(len(coord) == dims for coord in result.coords)
     assert len(core_labels(vectors)) == count
+
+
+@pytest.mark.parametrize(("stale_width", "count"), [(25, 20), (10, 40)])
+def test_real_recipe_drops_a_warm_init_from_another_rung(
+    stale_width: int, count: int
+) -> None:
+    # #094: stored coords carry the width of the build that wrote them, so a
+    # level that has crossed a rung since offers an init this recipe cannot
+    # reduce to. The build must run cold rather than fail — identical to one
+    # given no init at all — in both directions across the boundary.
+    dims = recipe_for(count).n_components
+    assert stale_width != dims
+    vectors, _ = planted_vectors(groups=2, per_group=count // 2)
+    stale = np.random.default_rng(1).normal(size=(count, stale_width))
+
+    warm = build_clusters(vectors, init=stale)
+    cold = build_clusters(vectors)
+
+    assert all(len(coord) == dims for coord in warm.coords)
+    assert np.allclose(warm.coords, cold.coords)
+
+
+def test_real_recipe_honours_a_warm_init_of_its_own_width() -> None:
+    # the width guard drops only a mismatched init: a usable one still steers
+    # the layout, which is what warm reconciliation depends on.
+    vectors, _ = planted_vectors(groups=2, per_group=20)
+    dims = recipe_for(len(vectors)).n_components
+    init = np.random.default_rng(1).normal(size=(len(vectors), dims))
+
+    warm = build_clusters(vectors, init=init)
+    cold = build_clusters(vectors)
+
+    assert not np.allclose(warm.coords, cold.coords)

@@ -2,11 +2,13 @@ import json
 import time
 from collections.abc import Iterator
 
+import numpy as np
 import pytest
 
 from hrono.cluster import op as cluster_op
 from hrono.cluster.blend import path_body, register_path_bodies
-from hrono.cluster.build import ClusterResult
+from hrono.cluster.build import ClusterResult, build_clusters
+from hrono.cluster.recipe import recipe_for
 from hrono.db.database import Database
 from hrono.embed import store as vstore
 from hrono.ingest import store as istore
@@ -216,6 +218,104 @@ def test_failing_run_fails_its_leaf_cleanly(tmp_path: object) -> None:
         worker.join(timeout=5)  # let the claim query finish before close
     assert row == "failed"
     database.close()
+
+
+def planted_sources(
+    per_source: int, groups: int = 2, dim: int = 16
+) -> dict[str, list[list[float]]]:
+    """Two sources, each carrying points from the SAME well-separated groups.
+
+    Dropping one source then halves the corpus without erasing a group, so the
+    smaller rebuild still has something to cluster.
+    """
+    rng = np.random.default_rng(0)
+    centres = []
+    for _ in range(groups):
+        centre = rng.normal(size=dim)
+        centres.append(centre / np.linalg.norm(centre))
+    by_source: dict[str, list[list[float]]] = {}
+    for source in ("repo-a", "repo-b"):
+        vectors = []
+        for i in range(per_source):
+            point = centres[i % groups] + 0.05 * rng.normal(size=dim)
+            vectors.append((point / np.linalg.norm(point)).tolist())
+        by_source[source] = vectors
+    return by_source
+
+
+def add_planted_section(
+    conn: object, source: str, i: int, vector: list[float]
+) -> int:
+    path = f"{source}/f{i}.py"
+    body = f"{source} body {i}\n".encode()
+    istore.upsert_content(conn, content_hash(body), body)  # type: ignore[arg-type]
+    register_path_bodies(conn, [path])  # type: ignore[arg-type]
+    vstore.upsert_vector(conn, content_hash(body), MODEL, vector)  # type: ignore[arg-type]
+    vstore.upsert_vector(  # type: ignore[arg-type]
+        conn, content_hash(path_body(path)), MODEL, vector
+    )
+    return istore.insert_section(
+        conn,  # type: ignore[arg-type]
+        source=source,
+        address=Address("git", f"example.com/{source}", path, "v1"),
+        start=0,
+        end=len(body),
+        content_hash=content_hash(body),
+        ordinal=i,
+    )
+
+
+def coord_widths(database: Database) -> set[int]:
+    with database.connect() as conn:
+        return {
+            int(row["dims"])
+            for row in conn.execute(
+                "SELECT dims FROM section_coords WHERE tree='default'"
+            ).fetchall()
+        }
+
+
+@pytest.fixture
+def shrinkable(tmp_path: object) -> Iterator[Database]:
+    """40 embedded sections split over two sources, ready for the REAL build."""
+    database = Database.at(tmp_path / "hrono.db")
+    with database.connect() as conn, conn:
+        register_model(conn)
+        for source, vectors in planted_sources(20).items():
+            for i, vector in enumerate(vectors):
+                add_planted_section(conn, source, i, vector)
+    yield database
+    database.close()
+
+
+def test_rebuild_across_a_rung_keeps_clustering(shrinkable: Database) -> None:
+    # #094: stored coords carry the width of the build that wrote them, and
+    # `maintain`/`settle` warm-init every rebuild from them. A corpus that
+    # shrinks across the ladder's boundary therefore offers a 25-wide init to
+    # a build the recipe reduces to 10 — which used to fail, and to keep
+    # failing forever since the stale coords were never rewritten.
+    context = JobContext(shrinkable)
+    cluster_op.cluster(cluster_job(), context, build=build_clusters)
+    assert coord_widths(shrinkable) == {recipe_for(40).n_components}
+
+    with shrinkable.write() as conn:
+        istore.clear_source(conn, "repo-b")  # 40 sections -> 20, coords stay
+
+    cluster_op.cluster(cluster_job("c2"), context, build=build_clusters)
+    assert coord_widths(shrinkable) == {recipe_for(20).n_components}
+    with shrinkable.connect() as conn:
+        nodes = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE tree='default' AND level=0"
+        ).fetchone()[0]
+        members = conn.execute("SELECT COUNT(*) FROM node_members").fetchone()[
+            0
+        ]
+    assert nodes >= 1
+    assert members == 20  # the surviving sections are all placed
+
+    # and the tree self-heals: the rewritten coords warm the next build.
+    cluster_op.cluster(cluster_job("c3"), context, build=build_clusters)
+    assert coord_widths(shrinkable) == {recipe_for(20).n_components}
 
 
 def database_status(conn: object, job_id: str) -> str | None:
