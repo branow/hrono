@@ -58,6 +58,11 @@ class Invalid(AppError):
     code = "validation-error"
 
 
+class Internal(AppError):
+    status_code = 500
+    code = "internal-error"
+
+
 class Unavailable(AppError):
     status_code = 503
     code = "unavailable"

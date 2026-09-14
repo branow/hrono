@@ -6,7 +6,7 @@ import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
-from hrono.export.collapse import collapse
+from hrono.export.collapse import StoredTree, collapse
 from hrono.export.render import render
 from hrono.export.store import load
 from hrono.ingest import store as istore
@@ -230,3 +230,66 @@ def test_same_heading_siblings_do_not_collide(tmp_path: object) -> None:
         assert len(links) == len(set(links)) == 2  # two unique child links
     finally:
         database.close()
+
+
+def test_no_rendered_path_is_absolute(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    files = _files(db[0])
+    assert files
+    assert not [p for p in files if p.startswith("/")]
+
+
+def test_the_roots_own_sections_render_beside_root_md(
+    tmp_path: object,
+) -> None:
+    # F19: a tree whose ROOT carries sections wrote "/<name>.md" for each of
+    # them — pathlib rerooted the join and the CLI refused the whole export.
+    database = Database.at(tmp_path / "flat.db")
+    with database.connect() as conn, conn:
+        s0 = add_section(conn, "a.py", b"alpha\n")
+        s1 = add_section(conn, "b.py", b"beta\n")
+        cluster_store.replace_tree(
+            conn,
+            TREE,
+            0,
+            [(0, s0, False, None), (0, s1, False, None)],
+            [(s0, [0.1]), (s1, [0.2])],
+        )
+        root = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 0").fetchone()[
+                "id"
+            ]
+        )
+        brief(conn, root, "# Only topic\n\nAll of it.")
+    try:
+        files = _files(database)
+        assert not [p for p in files if p.startswith("/")]
+        assert "root.md" in files
+        sections = sorted(p for p in files if p != "root.md")
+        assert sections == [f"a-py-{s0}.md", f"b-py-{s1}.md"]
+    finally:
+        database.close()
+
+
+def test_a_parentless_node_keeps_its_own_brief_path(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    # F20: the renderer must stay total — the loader refuses a forest, but if
+    # one ever reaches render, two briefs may not collide onto one key.
+    database, ids = db
+    with database.connect() as conn:
+        stored = load(conn, TREE)
+        assert stored is not None
+        forest = StoredTree(
+            root=stored.root,
+            node_level=stored.node_level,
+            children={},  # every node parentless: nothing links them
+            sections=stored.sections,
+        )
+        files = render(conn, collapse(forest, 3))
+    assert not [p for p in files if p.startswith("/")]
+    briefs_written = [p for p in files if p.endswith("brief.md")]
+    assert len(briefs_written) == len(set(briefs_written)) == 2
+    assert f"alpha-topic-{ids['n0']}/brief.md" in files
+    assert f"beta-topic-{ids['n1']}/brief.md" in files

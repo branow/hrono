@@ -143,3 +143,76 @@ def test_non_integer_levels_is_a_clean_422(harness: Harness) -> None:
         "/trees/default/export?levels=abc", headers=harness.auth("reader")
     )
     assert resp.status_code == 422
+
+
+def test_every_manifest_path_is_relative(harness: Harness) -> None:
+    resp = harness.client.get(
+        "/trees/default/export", headers=harness.auth("reader")
+    )
+    paths = [f["path"] for f in resp.json()["files"]]
+    assert paths
+    assert not [p for p in paths if p.startswith("/")]
+    assert len(paths) == len(set(paths))
+
+
+def test_a_root_carrying_sections_serves_relative_paths(
+    tmp_path: Path,
+) -> None:
+    # F19 end to end: the root's own sections were served as "/<name>.md", so
+    # `hrono tree export` refused the first entry and wrote nothing at all.
+    conn = open_database(tmp_path / "flat.db")
+    reconcile(conn, KEY)
+    token = create_user(conn, "reader", "reader")[1]
+    s0 = add_section(conn, "a.py", b"alpha body\n")
+    s1 = add_section(conn, "b.py", b"beta body\n")
+    cluster_store.replace_tree(
+        conn,
+        TREE,
+        0,
+        [(0, s0, False, None), (0, s1, False, None)],
+        [(s0, [0.1]), (s1, [0.2])],
+    )
+    root = int(conn.execute("SELECT id FROM nodes").fetchone()["id"])
+    brief(conn, root, "# Only topic\n\nAll of it.")
+    conn.commit()
+    app = create_app(connection=conn, master_key=KEY, key_id=1)
+    with TestClient(app) as client:
+        resp = client.get(
+            "/trees/default/export",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    conn.close()
+    assert resp.status_code == 200
+    paths = sorted(f["path"] for f in resp.json()["files"])
+    assert paths == [f"a-py-{s0}.md", f"b-py-{s1}.md", "root.md"]
+
+
+def test_a_tree_that_is_not_built_to_one_root_fails_loudly(
+    tmp_path: Path,
+) -> None:
+    # F20: seven parentless nodes rendered ONE /brief.md and silently dropped
+    # six briefs. A forest is not a shape to render; it is a broken build.
+    conn = open_database(tmp_path / "forest.db")
+    reconcile(conn, KEY)
+    token = create_user(conn, "reader", "reader")[1]
+    s0 = add_section(conn, "a.py", b"alpha body\n")
+    s1 = add_section(conn, "b.py", b"beta body\n")
+    cluster_store.replace_tree(
+        conn,
+        TREE,
+        0,
+        [(0, s0, False, None), (1, s1, False, None)],
+        [(s0, [0.1]), (s1, [0.2])],
+    )
+    for node in conn.execute("SELECT id FROM nodes WHERE level = 0").fetchall():
+        brief(conn, int(node["id"]), "# Topic\n\nOne of several.")
+    conn.commit()
+    app = create_app(connection=conn, master_key=KEY, key_id=1)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get(
+            "/trees/default/export",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    conn.close()
+    assert resp.status_code == 500
+    assert "single root" in resp.json()["error"]["message"]

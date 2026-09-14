@@ -8,6 +8,12 @@ its own file, reassembled byte-identically from its stored passages (#032) with
 an address header. Human notes render only when passed (M9 creates them; here
 render-if-present). No file I/O — returns a deterministic path -> content map
 that #081 materialises into a folder tree.
+
+Every key is RELATIVE and unique (#096). The root's own brief is ``root.md``
+and its sections sit beside it at the top level; every other node owns an
+id-suffixed directory, so no path can start with "/" (which pathlib would let
+reroot the whole export out of the output folder) and no two briefs can land on
+one key.
 """
 
 from __future__ import annotations
@@ -38,15 +44,18 @@ def render(
 
     for node_id in sorted(tree.nodes):
         node = tree.nodes[node_id]
-        directory = _directory(node_id, parent, conn)
-        path = "root.md" if node_id == tree.root else f"{directory}/brief.md"
+        directory = _directory(node_id, parent, tree.root, conn)
+        path = "root.md" if node_id == tree.root else _under(directory, "brief")
         files[path] = _node_markdown(conn, tree, node_id, notes.get(node_id))
         for section_id in node.sections:
             name = _section_name(conn, section_id)
-            files[f"{directory}/{name}.md"] = _section_markdown(
-                conn, section_id
-            )
+            files[_under(directory, name)] = _section_markdown(conn, section_id)
     return files
+
+
+def _under(directory: str, name: str) -> str:
+    """Join a name under a directory, staying RELATIVE for the root ("")."""
+    return f"{directory}/{name}.md" if directory else f"{name}.md"
 
 
 def _node_markdown(
@@ -99,13 +108,24 @@ def _reassemble(conn: sqlite3.Connection, section_id: int) -> bytes:
 
 
 def _directory(
-    node_id: int, parent: Mapping[int, int], conn: sqlite3.Connection
+    node_id: int,
+    parent: Mapping[int, int],
+    root: int,
+    conn: sqlite3.Connection,
 ) -> str:
+    # the chain of names from the root down to this node, root excluded — so
+    # only the ROOT is "" and every other node, parentless or not, gets its own
+    # id-suffixed directory. A parentless non-root node is a defect the loader
+    # refuses, but the renderer stays total: it can never collide two briefs
+    # onto one key, and it can never emit a leading slash.
     parts: list[str] = []
     cur = node_id
-    while cur in parent:
+    while cur != root:
         parts.append(_name(conn, cur))
-        cur = parent[cur]
+        above = parent.get(cur)
+        if above is None:
+            break
+        cur = above
     return "/".join(reversed(parts))
 
 

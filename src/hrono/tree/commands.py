@@ -6,6 +6,10 @@ kubectl-style as ``tree <name> maintain``; Typer groups put the subcommand
 first, and the HTTP endpoint is the canonical interface.)
 ``hrono tree pending <name>`` reads the incubator pool so a chunk waiting
 outside the tree is visible from the CLI instead of silently absent.
+``hrono tree export <name> -o <dir>`` materialises the rendered map under
+``<dir>``: every payload path is forced relative before the traversal guard
+runs, so a server path with a leading slash lands in the folder instead of
+rerooting the export (#096), and a refused entry costs only itself.
 """
 
 from __future__ import annotations
@@ -59,8 +63,15 @@ def export(
     def action() -> None:
         result = from_profile().get(f"/trees/{name}/export?levels={levels}")
         files = result.get("files", []) if isinstance(result, dict) else []
-        written = _materialize(out, files)
-        typer.echo(f"Wrote {written} files to {out}.")
+        written, refused = _materialize(out, files)
+        plural = "file" if written == 1 else "files"
+        typer.echo(f"Wrote {written} {plural} to {out}.")
+        if refused:
+            listed = ", ".join(repr(path) for path in refused[:3])
+            raise UnsafePath(
+                f"refused {len(refused)} of {len(files)} files that would "
+                f"write outside {out}: {listed}"
+            )
 
     _run(action)
 
@@ -80,17 +91,26 @@ def pending(name: str) -> None:
     _run(action)
 
 
-def _materialize(out: Path, files: list[dict[str, str]]) -> int:
+def _materialize(
+    out: Path, files: list[dict[str, str]]
+) -> tuple[int, tuple[str, ...]]:
+    """Write every entry under ``out``; return (written, refused paths).
+
+    A leading slash is NORMALISED rather than obeyed: ``out / "/a.md"`` is
+    ``/a.md`` to pathlib, which would reroot the whole export out of the output
+    folder (#096, F19). Anything that still escapes after that is refused and
+    counted — one hostile entry costs its own file, not the other ninety-three.
+    """
     out.mkdir(parents=True, exist_ok=True)
     base = out.resolve()
     written = 0
+    refused: list[str] = []
     for entry in files:
-        target = (out / entry["path"]).resolve()
+        target = (out / entry["path"].lstrip("/")).resolve()
         if base != target and base not in target.parents:
-            raise UnsafePath(
-                f"refused to write outside {out}: {entry['path']!r}"
-            )
+            refused.append(entry["path"])
+            continue
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(entry.get("content", ""), encoding="utf-8")
         written += 1
-    return written
+    return written, tuple(refused)
