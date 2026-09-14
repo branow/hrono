@@ -12,10 +12,11 @@ from hrono.db.database import Database
 from hrono.ingest.sync import SyncError, sync
 from hrono.jobs import store
 from hrono.jobs.model import Job
-from hrono.jobs.ops import JobContext
 from hrono.jobs.scope import fan_out
 from hrono.jobs.worker import Worker
+from hrono.paths import cache_root
 from hrono.registry import store as registry_store
+from tests.context import job_context
 
 KEY = Fernet.generate_key()
 
@@ -69,52 +70,51 @@ def version(db: Database, name: str) -> str | None:
     return row["version"] if row is not None else None
 
 
-def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Database:
-    monkeypatch.chdir(tmp_path)
+def setup(tmp_path: Path) -> Database:
     return Database.at(tmp_path / "hrono.db")
 
 
 def test_first_sync_clones_and_captures_the_commit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     url = make_repo(tmp_path / "remote")
-    db = setup(tmp_path, monkeypatch)
+    db = setup(tmp_path)
     with db.connect() as conn:
         register(conn, "repo", url, {"method": "none"})
-    sync(job("repo"), JobContext(db))
+    sync(job("repo"), job_context(db, tmp_path))
     assert version(db, "repo") == git(tmp_path / "remote", "rev-parse", "HEAD")
-    assert (tmp_path / ".hrono/cache/sources/repo/a.txt").read_text() == "one"
+    assert (tmp_path / "cache/sources/repo/a.txt").read_text() == "one"
     db.close()
 
 
 def test_resync_unchanged_is_idempotent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     url = make_repo(tmp_path / "remote")
-    db = setup(tmp_path, monkeypatch)
+    db = setup(tmp_path)
     with db.connect() as conn:
         register(conn, "repo", url, {"method": "none"})
-    sync(job("repo"), JobContext(db))
+    sync(job("repo"), job_context(db, tmp_path))
     first = version(db, "repo")
-    sync(job("repo"), JobContext(db))
+    sync(job("repo"), job_context(db, tmp_path))
     assert version(db, "repo") == first
     db.close()
 
 
 def test_resync_after_remote_advances_updates_version(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     remote = tmp_path / "remote"
     url = make_repo(remote)
-    db = setup(tmp_path, monkeypatch)
+    db = setup(tmp_path)
     with db.connect() as conn:
         register(conn, "repo", url, {"method": "none"})
-    sync(job("repo"), JobContext(db))
+    sync(job("repo"), job_context(db, tmp_path))
     old = version(db, "repo")
     (remote / "b.txt").write_text("two")
     git(remote, "add", "-A")
     git(remote, "commit", "-qm", "second")
-    sync(job("repo"), JobContext(db))
+    sync(job("repo"), job_context(db, tmp_path))
     new = version(db, "repo")
     assert new != old
     assert new == git(remote, "rev-parse", "HEAD")
@@ -122,15 +122,15 @@ def test_resync_after_remote_advances_updates_version(
 
 
 def test_bad_source_fails_cleanly_without_a_half_written_cache(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    db = setup(tmp_path, monkeypatch)
+    db = setup(tmp_path)
     missing = (tmp_path / "nope").as_uri()
     with db.connect() as conn:
         register(conn, "repo", missing, {"method": "none"})
     with pytest.raises(SyncError):
-        sync(job("repo"), JobContext(db))
-    assert not (tmp_path / ".hrono/cache/sources/repo").exists()
+        sync(job("repo"), job_context(db, tmp_path))
+    assert not (tmp_path / "cache/sources/repo").exists()
     db.close()
 
 
@@ -142,11 +142,11 @@ def _cache_contains(cache: Path, needle: str) -> bool:
 
 
 def test_token_auth_never_persists_to_the_cache_or_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     secret_token = "gh-secret-token"
     url = make_repo(tmp_path / "remote")
-    db = setup(tmp_path, monkeypatch)
+    db = setup(tmp_path)
     cipher = Cipher.from_key(KEY, 1)
     with db.connect() as conn:
         reconcile(conn, KEY)
@@ -158,13 +158,13 @@ def test_token_auth_never_persists_to_the_cache_or_state(
             {"method": "token", "token": secret.ciphertext},
             key_id=1,
         )
-    cache = tmp_path / ".hrono/cache/sources/repo"
+    cache = tmp_path / "cache/sources/repo"
 
-    sync(job("repo"), JobContext(db, cipher))
+    sync(job("repo"), job_context(db, tmp_path, cipher))
     assert version(db, "repo") is not None
     assert not _cache_contains(cache, secret_token)
 
-    sync(job("repo"), JobContext(db, cipher))
+    sync(job("repo"), job_context(db, tmp_path, cipher))
     assert not _cache_contains(cache, secret_token)
 
     with db.connect() as conn:
@@ -174,13 +174,17 @@ def test_token_auth_never_persists_to_the_cache_or_state(
 
 
 def test_sync_runs_as_a_registered_job_op(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     url = make_repo(tmp_path / "remote")
-    db = setup(tmp_path, monkeypatch)
+    db = setup(tmp_path)
     with db.connect() as conn:
         register(conn, "repo", url, {"method": "none"})
-    worker = Worker(db, cipher=Cipher.from_key(KEY, 1))
+    worker = Worker(
+        db,
+        cipher=Cipher.from_key(KEY, 1),
+        cache_root=cache_root(tmp_path / "hrono.db"),
+    )
     worker.start()
     try:
         parent = fan_out(db, "sync", {"type": "all"})

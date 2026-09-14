@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
+from hrono.errors import Internal
 from hrono.jobs.model import Job
 
 
@@ -21,10 +23,25 @@ class JobContext:
 
     ``cipher`` is None only when no op in play needs to decrypt a secret (tests
     of secretless ops); real ingest ops that read source auth require it.
+    ``cache_root`` is where this database's synced clones live (#098): the
+    server resolves it from the database path at startup and it is passed here,
+    never re-derived from the working directory. It is None only for a context
+    whose ops never touch the cache — asking for a path then is a bug, not a
+    reason to guess a location, so ``cache_for`` raises.
     """
 
     database: Database
     cipher: Cipher | None = None
+    cache_root: Path | None = None
+
+    def cache_for(self, source: str) -> Path:
+        """The synced clone directory for ``source`` under this cache root."""
+        if self.cache_root is None:
+            raise Internal(
+                "no cache root: this job context cannot run ingest ops",
+                details={"source": source},
+            )
+        return self.cache_root / source
 
 
 Handler = Callable[[Job, JobContext], None]

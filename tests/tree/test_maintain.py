@@ -8,10 +8,11 @@ import pytest
 from hrono.cluster.build import ClusterResult
 from hrono.db.database import Database
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
+from tests.context import job_context
 
 DIMS = 8
 
@@ -128,10 +129,10 @@ def job() -> Job:
     )
 
 
-def run(db: Database) -> None:
+def run(db: Database, tmp_path: Path) -> None:
     maintain(
         job(),
-        JobContext(db),
+        job_context(db, tmp_path),
         encoder_for=fake_encoder,
         client=FakeCompletion(),
         build=fake_build,
@@ -158,8 +159,10 @@ def test_maintain_is_registered() -> None:
     assert "maintain" in OPS
 
 
-def test_builds_a_fresh_tree_end_to_end_to_a_single_root(db: Database) -> None:
-    run(db)
+def test_builds_a_fresh_tree_end_to_end_to_a_single_root(
+    db: Database, tmp_path: Path
+) -> None:
+    run(db, tmp_path)
     assert _count(db, "sections") >= 3  # sync + split ran
     assert _count(db, "embeddings") > 0  # embed ran
     assert _count(db, "condensations") >= 3  # condense ran
@@ -187,11 +190,12 @@ def _source_embeddings(db: Database) -> int:
 
 def test_second_maintain_re_condenses_and_re_embeds_source_nothing(
     db: Database,
+    tmp_path: Path,
 ) -> None:
-    run(db)
+    run(db, tmp_path)
     condensations = _count(db, "condensations")
     source_embeddings = _source_embeddings(db)
-    run(db)  # unchanged tree
+    run(db, tmp_path)  # unchanged tree
     # the M4 content-hash caches hold: condense (the expensive LLM map) does
     # zero new work, and no source section is re-embedded.
     assert _count(db, "condensations") == condensations
@@ -210,6 +214,7 @@ def _node_ids(db: Database) -> list[int]:
 
 def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     db: Database,
+    tmp_path: Path,
 ) -> None:
     # the incremental differentiator, now whole (#068): once built, a second
     # maintain over an unchanged corpus regenerates NO briefs — cluster reuses
@@ -217,7 +222,7 @@ def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     first = FakeCompletion()
     maintain(
         job(),
-        JobContext(db),
+        job_context(db, tmp_path),
         encoder_for=fake_encoder,
         client=first,
         build=fake_build,
@@ -228,7 +233,7 @@ def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     second = FakeCompletion()
     maintain(
         job(),
-        JobContext(db),
+        job_context(db, tmp_path),
         encoder_for=fake_encoder,
         client=second,
         build=fake_build,
@@ -237,8 +242,10 @@ def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     assert _node_ids(db) == ids_before  # stable node identity across rebuilds
 
 
-def test_missing_embedding_model_fails_the_maintain_run(db: Database) -> None:
+def test_missing_embedding_model_fails_the_maintain_run(
+    db: Database, tmp_path: Path
+) -> None:
     with db.connect() as conn, conn:
         conn.execute("DELETE FROM registry WHERE name = 'emb'")
     with pytest.raises(Exception):  # noqa: B017 - any clean stage error aborts
-        run(db)
+        run(db, tmp_path)

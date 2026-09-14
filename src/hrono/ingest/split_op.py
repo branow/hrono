@@ -33,8 +33,6 @@ from hrono.jobs.ops import OPS, JobContext
 from hrono.recall import fts
 from hrono.registry import store as registry_store
 
-_CACHE_ROOT = Path(".hrono/cache/sources")
-
 
 class SplitError(Exception):
     """A source could not be split (reason is credential-free)."""
@@ -47,7 +45,7 @@ def split_source(job: Job, context: JobContext) -> None:
     source_type = str(config["type"])
     instance = _instance(str(config["url"]))
     filter_config = config.get("filter")
-    cache = _CACHE_ROOT / name
+    cache = context.cache_for(name)
     files = ingestable(
         cache, filter_config if isinstance(filter_config, dict) else None
     )

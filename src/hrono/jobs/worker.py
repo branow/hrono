@@ -20,6 +20,7 @@ import logging
 import threading
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
@@ -80,6 +81,7 @@ class Worker(threading.Thread):
         ops: dict[str, Handler] | None = None,
         *,
         cipher: Cipher | None = None,
+        cache_root: Path | None = None,
         poll_interval: float = 0.02,
         heartbeat_interval: float = HEARTBEAT_INTERVAL,
         stale_after: float = STALE_AFTER,
@@ -88,6 +90,7 @@ class Worker(threading.Thread):
         self._database = database
         self._ops = ops if ops is not None else OPS
         self._cipher = cipher
+        self._cache_root = cache_root
         self._interval = poll_interval
         self._heartbeat_interval = heartbeat_interval
         self._stale_after = stale_after
@@ -169,7 +172,10 @@ class Worker(threading.Thread):
         try:
             if handler is None:
                 raise LookupError(f"unknown op: {job.op}")
-            handler(job, JobContext(self._database, self._cipher))
+            handler(
+                job,
+                JobContext(self._database, self._cipher, self._cache_root),
+            )
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
             self._finish(job, "failed", str(exc))
         else:

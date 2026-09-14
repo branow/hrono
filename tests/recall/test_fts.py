@@ -11,9 +11,9 @@ from hrono.db.database import Database
 from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
-from hrono.jobs.ops import JobContext
 from hrono.recall import fts
 from hrono.registry import store as registry_store
+from tests.context import job_context
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -81,8 +81,8 @@ def db(repo: Path, tmp_path: Path) -> Iterator[Database]:
     database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn:
         register(conn, url)
-    sync(_job("sync"), JobContext(database))
-    split_source(_job("split"), JobContext(database))
+    sync(_job("sync"), job_context(database, tmp_path))
+    split_source(_job("split"), job_context(database, tmp_path))
     yield database
     database.close()
 
@@ -118,21 +118,23 @@ def test_path_terms_are_indexed(db: Database) -> None:
         assert fts.search(conn, "login")
 
 
-def test_resplit_is_consistent_no_duplicate_rows(db: Database) -> None:
-    split_source(_job("split"), JobContext(db))  # re-split unchanged
+def test_resplit_is_consistent_no_duplicate_rows(
+    db: Database, tmp_path: Path
+) -> None:
+    split_source(_job("split"), job_context(db, tmp_path))  # re-split unchanged
     assert _fts_count(db) == _passage_count(db)  # rebuilt, not duplicated
 
 
 def test_changed_and_removed_files_leave_no_orphans(
-    db: Database, repo: Path
+    db: Database, repo: Path, tmp_path: Path
 ) -> None:
     # remove the docs file, change the auth file, re-sync + re-split
     (repo / "docs" / "guide.md").unlink()
     (repo / "auth" / "login.py").write_text("def logout(user):\n    pass\n")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "change")
-    sync(_job("sync"), JobContext(db))
-    split_source(_job("split"), JobContext(db))
+    sync(_job("sync"), job_context(db, tmp_path))
+    split_source(_job("split"), job_context(db, tmp_path))
     assert _fts_count(db) == _passage_count(
         db
     )  # no orphans after change/remove

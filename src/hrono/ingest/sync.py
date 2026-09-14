@@ -1,9 +1,11 @@
 """The ``sync`` ingest op: pull a git source into a cache and pin its version.
 
-First run clones into ``./.hrono/cache/sources/<name>``; later runs fetch and
-hard-reset to the remote's current bytes. The synced version is the resolved
-commit SHA — content-addressed, so it is the same whether the repo was fetched
-over SSH or HTTPS (fetch-method-independent identity per the design sketch).
+First run clones into the context's cache root under the source name — that
+root hangs off the database file, never the working directory (#098); later
+runs fetch and hard-reset to the remote's current bytes. The synced version is
+the resolved commit SHA — content-addressed, so it is the same whether the repo
+was fetched over SSH or HTTPS (fetch-method-independent identity, per the
+design sketch).
 Registers into the op registry so the worker dispatches ``sync`` per source.
 """
 
@@ -21,7 +23,6 @@ from hrono.registry import store as registry_store
 from hrono.registry.git_auth import git_auth
 
 _TIMEOUT = 120.0
-_CACHE_ROOT = Path(".hrono/cache/sources")
 
 
 class SyncError(Exception):
@@ -32,7 +33,13 @@ def sync(job: Job, context: JobContext) -> None:
     """Clone/pull the job's source and record its commit as the version."""
     name = str(job.scope["name"])
     config = _load_source(context, name)
-    version = _sync_repo(name, str(config["url"]), config["auth"], _TIMEOUT)
+    version = _sync_repo(
+        context.cache_for(name),
+        name,
+        str(config["url"]),
+        config["auth"],
+        _TIMEOUT,
+    )
     _record_version(context, name, version)
 
 
@@ -51,8 +58,9 @@ def _load_source(context: JobContext, name: str) -> dict[str, object]:
     return config
 
 
-def _sync_repo(name: str, url: str, auth: object, timeout: float) -> str:
-    cache = _CACHE_ROOT / name
+def _sync_repo(
+    cache: Path, name: str, url: str, auth: object, timeout: float
+) -> str:
     auth_dict = auth if isinstance(auth, dict) else {"method": "none"}
     with git_auth(url, auth_dict) as (clean_url, env, config_args):
         if cache.exists():

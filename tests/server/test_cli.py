@@ -8,6 +8,7 @@ from hrono import cli
 from hrono.auth.users import authenticate
 from hrono.db.database import DEFAULT_PATH, open_database
 from hrono.db.lock import exclusive
+from hrono.paths import ENV_DB, cache_root
 
 
 def keyfile(tmp_path: Path) -> Path:
@@ -160,3 +161,77 @@ def test_a_second_serve_on_the_same_database_is_refused(
     assert started == []  # no second worker loop against the same file
     assert "already using" in result.output
     assert "Traceback" not in result.output
+
+
+def test_serve_db_flag_anchors_the_database_and_its_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # F6/F25: without --db the location was "whatever cwd the operator was in".
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    monkeypatch.delenv(ENV_DB, raising=False)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    db_path = tmp_path / "data" / ".hrono" / "hrono.db"
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        cli.uvicorn, "run", lambda app, **kw: captured.update(kw, app=app)
+    )
+
+    result = CliRunner().invoke(
+        cli.app,
+        ["serve", "--key-file", str(keyfile(tmp_path)), "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0
+    assert db_path.exists()  # created where --db says, not under the cwd
+    assert not (elsewhere / ".hrono").exists()
+    assert cache_root(db_path) == db_path.parent / "cache" / "sources"
+
+
+def test_serve_reads_the_database_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
+    db_path = tmp_path / "env" / ".hrono" / "hrono.db"
+    monkeypatch.setenv(ENV_DB, str(db_path))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setattr(cli.uvicorn, "run", lambda app, **kw: None)
+
+    result = CliRunner().invoke(
+        cli.app, ["serve", "--key-file", str(keyfile(tmp_path))]
+    )
+
+    assert result.exit_code == 0
+    assert db_path.exists()
+
+
+def test_serve_and_reset_document_the_db_flag() -> None:
+    for command in ("serve", "reset"):
+        out = CliRunner().invoke(cli.app, [command, "--help"]).output
+        assert "--db" in out
+        assert ENV_DB in out
+
+
+def test_reset_db_flag_wipes_the_named_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv(ENV_DB, raising=False)
+    db_path = tmp_path / "data" / ".hrono" / "hrono.db"
+    db_path.parent.mkdir(parents=True)
+    open_database(db_path).close()
+    clone = db_path.parent / "cache" / "sources" / "repo"
+    clone.mkdir(parents=True)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    result = CliRunner().invoke(
+        cli.app, ["reset", "--force", "--db", str(db_path)]
+    )
+
+    assert result.exit_code == 0
+    assert not db_path.exists()
+    assert not clone.exists()

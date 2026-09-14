@@ -20,7 +20,7 @@ from hrono.export.render import render
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.summarize import store as condensations
@@ -29,6 +29,7 @@ from hrono.tree.maintain import maintain
 from hrono.tree.settle import CHURN_THRESHOLD, settle, should_settle
 from tests.cluster.harness import planted_groups
 from tests.cluster.invariant import assert_pool_invariant
+from tests.context import job_context
 
 DIMS = 8
 TREE = "default"
@@ -164,7 +165,7 @@ def built(
             created_at="t",
             updated_at="t",
         ),
-        JobContext(database),
+        job_context(database, tmp_path),
         encoder_for=fake_encoder,
         client=FakeCompletion(),
         build=fake_build,
@@ -223,12 +224,14 @@ def test_misfit_backstop_triggers(built: Database) -> None:
         assert should_settle(conn, TREE) is True
 
 
-def test_settle_over_unchanged_corpus_is_near_no_op(built: Database) -> None:
+def test_settle_over_unchanged_corpus_is_near_no_op(
+    built: Database, tmp_path: Path
+) -> None:
     ids_before = _node_ids(built)
     counter = FakeCompletion()
     settle(
         _job(),
-        JobContext(built),
+        job_context(built, tmp_path),
         force=True,
         build=fake_build,
         encoder_for=fake_encoder,
@@ -239,11 +242,13 @@ def test_settle_over_unchanged_corpus_is_near_no_op(built: Database) -> None:
     assert _node_ids(built) == ids_before
 
 
-def test_settle_resets_the_churn_counter(built: Database) -> None:
+def test_settle_resets_the_churn_counter(
+    built: Database, tmp_path: Path
+) -> None:
     _set_drift(built, CHURN_THRESHOLD + 5)
     settle(
         _job(),
-        JobContext(built),
+        job_context(built, tmp_path),
         build=fake_build,
         encoder_for=fake_encoder,
         client=FakeCompletion(),
@@ -251,11 +256,13 @@ def test_settle_resets_the_churn_counter(built: Database) -> None:
     assert _drift(built) == 0
 
 
-def test_untriggered_settle_leaves_the_counter(built: Database) -> None:
+def test_untriggered_settle_leaves_the_counter(
+    built: Database, tmp_path: Path
+) -> None:
     _set_drift(built, 3)  # below threshold, no misfit backstop
     settle_mod.settle(
         _job(),
-        JobContext(built),
+        job_context(built, tmp_path),
         build=fake_build,
         encoder_for=fake_encoder,
         client=FakeCompletion(),
@@ -275,13 +282,14 @@ def _park_a_member(db: Database) -> int:
 
 def test_settle_retires_a_pool_row_its_rebuild_has_re_homed(
     built: Database,
+    tmp_path: Path,
 ) -> None:
     section_id = _park_a_member(built)
     with built.connect() as conn:
         assert incubator_count(conn, TREE) == 1
     settle(
         _job(),
-        JobContext(built),
+        job_context(built, tmp_path),
         force=True,
         build=fake_build,
         encoder_for=fake_encoder,
@@ -316,13 +324,14 @@ def _park_unembedded(db: Database, count: int) -> None:
 
 def test_settle_drains_chunks_its_own_embed_pass_made_placeable(
     built: Database,
+    tmp_path: Path,
 ) -> None:
     # cluster runs before embed, so a chunk with no vector yet is invisible to
     # the rebuild; settle's closing drain is what re-homes it.
     _park_unembedded(built, MIN_POINTS)
     settle(
         _job(),
-        JobContext(built),
+        job_context(built, tmp_path),
         force=True,
         build=fake_build,
         encoder_for=fake_encoder,
@@ -373,6 +382,7 @@ def planted_encoder(model_id: str):
 
 def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
     built: Database,
+    tmp_path: Path,
 ) -> None:
     # the drain runs BEFORE the brief pass, so a leaf node it emits is
     # summarised in the same settle rather than left blank until the next
@@ -384,7 +394,7 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
     _park_unembedded(built, 14)
     settle(
         _job(),
-        JobContext(built),
+        job_context(built, tmp_path),
         force=True,
         build=fake_build,
         encoder_for=planted_encoder,

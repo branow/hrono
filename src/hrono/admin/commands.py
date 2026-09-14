@@ -9,11 +9,15 @@ left — losing the once-shown bootstrap admin token would otherwise lock the AP
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Annotated
+
 import typer
 
 from hrono.auth.users import reset_token as reissue
-from hrono.db.database import DEFAULT_PATH, open_database
+from hrono.db.database import open_database
 from hrono.errors import AppError, cli_message
+from hrono.paths import ENV_DB, database_path
 
 app = typer.Typer(
     add_completion=False,
@@ -26,21 +30,30 @@ app = typer.Typer(
 
 
 @app.command("reset-token")
-def reset_token(user: str) -> None:
+def reset_token(
+    user: str,
+    db: Annotated[
+        Path | None,
+        typer.Option("--db", help=f"Database path (or ${ENV_DB})."),
+    ] = None,
+) -> None:
     """Reissue a user's API token against the local DB; prints it once.
 
     Requires no Bearer token and no master key: filesystem access to the
     database is the trust boundary. Use it to recover when the only token was
-    lost, such as the bootstrap admin token.
+    lost, such as the bootstrap admin token. ``--db`` picks the database the
+    same way ``serve`` does, so recovery does not depend on the directory the
+    command runs in.
     """
-    if not DEFAULT_PATH.exists():
+    db_path = database_path(db)
+    if not db_path.exists():
         typer.echo(
-            f"No hrono database at {DEFAULT_PATH}: nothing to reset. "
+            f"No hrono database at {db_path}: nothing to reset. "
             "Run 'hrono serve' first to create and bootstrap it.",
             err=True,
         )
         raise typer.Exit(1)
-    connection = open_database(DEFAULT_PATH)
+    connection = open_database(db_path)
     try:
         record, token = reissue(connection, user)
     except AppError as exc:

@@ -9,7 +9,7 @@ from cryptography.fernet import Fernet
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
-from hrono.ingest import store
+from hrono.ingest import diff, store
 from hrono.ingest.split_op import SplitError, _instance, split_source
 from hrono.ingest.sync import sync
 from hrono.jobs import store as jobs_store
@@ -17,7 +17,9 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import JobContext
 from hrono.jobs.scope import fan_out
 from hrono.jobs.worker import Worker
+from hrono.paths import cache_root
 from hrono.registry import store as registry_store
+from tests.context import job_context
 
 KEY = Fernet.generate_key()
 
@@ -83,23 +85,23 @@ FILES = {
 
 @pytest.fixture
 def synced(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> Iterator[tuple[Database, str]]:
-    monkeypatch.chdir(tmp_path)
     url = make_repo(tmp_path / "remote", FILES)
     db = Database.at(tmp_path / "hrono.db")
     with db.connect() as conn:
         register(conn, "repo", url)
-    sync(job("sync", "repo"), JobContext(db))
+    sync(job("sync", "repo"), job_context(db, tmp_path))
     yield db, _git(tmp_path / "remote", "rev-parse", "HEAD")
     db.close()
 
 
 def test_split_populates_sections_passages_and_contents(
     synced: tuple[Database, str],
+    tmp_path: Path,
 ) -> None:
     db, commit = synced
-    split_source(job("split", "repo"), JobContext(db))
+    split_source(job("split", "repo"), job_context(db, tmp_path))
     with db.connect() as conn:
         sections = store.list_sections(conn, "repo")
         assert sections
@@ -118,9 +120,10 @@ def test_split_populates_sections_passages_and_contents(
 
 def test_reassembly_from_storage_over_code_docs_data(
     synced: tuple[Database, str],
+    tmp_path: Path,
 ) -> None:
     db, _ = synced
-    split_source(job("split", "repo"), JobContext(db))
+    split_source(job("split", "repo"), job_context(db, tmp_path))
     with db.connect() as conn:
         for section in store.list_sections(conn, "repo"):
             passages = store.list_passages(conn, section["id"])
@@ -132,9 +135,10 @@ def test_reassembly_from_storage_over_code_docs_data(
 
 def test_data_file_uses_the_smaller_section_budget(
     synced: tuple[Database, str],
+    tmp_path: Path,
 ) -> None:
     db, _ = synced
-    split_source(job("split", "repo"), JobContext(db))
+    split_source(job("split", "repo"), job_context(db, tmp_path))
     with db.connect() as conn:
         json_sections = [
             s
@@ -145,16 +149,18 @@ def test_data_file_uses_the_smaller_section_budget(
     assert len(json_sections) > 1
 
 
-def test_resplit_is_idempotent(synced: tuple[Database, str]) -> None:
+def test_resplit_is_idempotent(
+    synced: tuple[Database, str], tmp_path: Path
+) -> None:
     db, _ = synced
-    split_source(job("split", "repo"), JobContext(db))
+    split_source(job("split", "repo"), job_context(db, tmp_path))
     with db.connect() as conn:
         before = (
             len(store.list_sections(conn, "repo")),
             store.content_count(conn),
             conn.execute("SELECT COUNT(*) FROM passages").fetchone()[0],
         )
-    split_source(job("split", "repo"), JobContext(db))
+    split_source(job("split", "repo"), job_context(db, tmp_path))
     with db.connect() as conn:
         after = (
             len(store.list_sections(conn, "repo")),
@@ -165,16 +171,15 @@ def test_resplit_is_idempotent(synced: tuple[Database, str]) -> None:
 
 
 def test_identical_bodies_across_files_dedup(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
     same = "shared identical body line one\nand line two here as well now.\n"
     url = make_repo(tmp_path / "remote", {"a.txt": same, "b.txt": same})
     db = Database.at(tmp_path / "hrono.db")
     with db.connect() as conn:
         register(conn, "repo", url)
-    sync(job("sync", "repo"), JobContext(db))
-    split_source(job("split", "repo"), JobContext(db))
+    sync(job("sync", "repo"), job_context(db, tmp_path))
+    split_source(job("split", "repo"), job_context(db, tmp_path))
     with db.connect() as conn:
         sections = store.list_sections(conn, "repo")
         # two files, same bytes -> two sections sharing one content row
@@ -184,22 +189,26 @@ def test_identical_bodies_across_files_dedup(
 
 
 def test_split_before_sync_raises_cleanly(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    monkeypatch.chdir(tmp_path)
     db = Database.at(tmp_path / "hrono.db")
     with db.connect() as conn:
         register(conn, "repo", "file:///nope")
     with pytest.raises(SplitError):
-        split_source(job("split", "repo"), JobContext(db))
+        split_source(job("split", "repo"), job_context(db, tmp_path))
     db.close()
 
 
 def test_split_runs_as_a_registered_job_op(
     synced: tuple[Database, str],
+    tmp_path: Path,
 ) -> None:
     db, _ = synced
-    worker = Worker(db, cipher=Cipher.from_key(KEY, 1))
+    worker = Worker(
+        db,
+        cipher=Cipher.from_key(KEY, 1),
+        cache_root=cache_root(tmp_path / "hrono.db"),
+    )
     worker.start()
     try:
         parent = fan_out(db, "split", {"type": "all"})
@@ -233,3 +242,65 @@ def test_instance_normalises_url_forms() -> None:
         "github.com/acme/webphone"
     )
     assert _instance("ssh://git@gitlab.com/x/y") == "gitlab.com/x/y"
+
+
+def test_two_working_directories_share_one_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F25: the server ran in one directory and an op driver in another, so ONE
+    # database grew TWO clone sets three commits apart, and diffing against the
+    # stale one invented changes (including a reversed rename). The cache now
+    # hangs off the database, so the working directory cannot move it.
+    url = make_repo(tmp_path / "remote", {"a.txt": "alpha body here\n"})
+    db_path = tmp_path / "data" / "hrono.db"
+    db_path.parent.mkdir()
+    db = Database.at(db_path)
+    with db.connect() as conn:
+        register(conn, "repo", url)
+
+    here = tmp_path / "here"
+    there = tmp_path / "there"
+    here.mkdir()
+    there.mkdir()
+    context = JobContext(db, None, cache_root(db_path))
+
+    monkeypatch.chdir(here)
+    sync(job("sync", "repo"), context)
+    monkeypatch.chdir(there)
+    split_source(job("split", "repo"), context)
+
+    clones = sorted(
+        p for p in tmp_path.rglob("cache/sources/repo") if p.is_dir()
+    )
+    assert clones == [tmp_path / "data" / "cache" / "sources" / "repo"]
+    assert not (here / ".hrono").exists()
+    assert not (there / ".hrono").exists()
+    with db.connect() as conn:
+        assert len(store.list_sections(conn, "repo")) == 1
+    db.close()
+
+
+def test_a_second_process_directory_sees_no_phantom_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the measurement hazard behind F25: re-diffing the same corpus from a
+    # different directory must report nothing, not a tree of invented changes.
+    url = make_repo(tmp_path / "remote", {"a.txt": "alpha body here\n"})
+    db_path = tmp_path / "data" / "hrono.db"
+    db_path.parent.mkdir()
+    db = Database.at(db_path)
+    with db.connect() as conn:
+        register(conn, "repo", url)
+    context = JobContext(db, None, cache_root(db_path))
+    monkeypatch.chdir(tmp_path)
+    sync(job("sync", "repo"), context)
+    split_source(job("split", "repo"), context)
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    sync(job("sync", "repo"), context)
+    with db.connect() as conn:
+        changes = diff.diff(conn, "repo", context.cache_for("repo"), None)
+    assert changes == ()
+    db.close()

@@ -30,7 +30,7 @@ from hrono.cluster import store as cluster_store
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
 from hrono.ingest import diff, reconcile
-from hrono.ingest.split_op import _CACHE_ROOT, _instance, _load
+from hrono.ingest.split_op import _instance, _load
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -68,7 +68,7 @@ def _update_source(
     config, version = _load(context, name)
     raw_filter = config.get("filter")
     filter_config = raw_filter if isinstance(raw_filter, dict) else None
-    cache = _CACHE_ROOT / name
+    cache = context.cache_for(name)
     with context.database.write() as conn:
         changes = diff.diff(conn, name, cache, filter_config)
         if not changes:

@@ -13,7 +13,7 @@ from hrono.db.database import Database
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import OPS
 from hrono.llm.client import (
     Completion,
     CompletionRequest,
@@ -23,6 +23,7 @@ from hrono.llm.client import (
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs, propagate
 from hrono.summarize.propagate import _majority, _verdict
+from tests.context import job_context
 
 TREE = "default"
 
@@ -156,8 +157,8 @@ def db(tmp_path: Path) -> Iterator[Database]:
     database.close()
 
 
-def _run(db: Database, judge: Completion) -> None:
-    propagate.propagate(_job(), JobContext(db), client=judge)
+def _run(db: Database, judge: Completion, tmp_path: Path) -> None:
+    propagate.propagate(_job(), job_context(db, tmp_path), client=judge)
 
 
 def _stale(db: Database, node_id: int) -> int:
@@ -183,6 +184,7 @@ def test_verdict_parsing() -> None:
 
 def test_material_verdict_climbs_ancestors_bounded_by_d_max(
     db: Database,
+    tmp_path: Path,
 ) -> None:
     with db.connect() as conn, conn:
         leaf = _leaf(conn)
@@ -193,7 +195,7 @@ def test_material_verdict_climbs_ancestors_bounded_by_d_max(
             ancestors.append(child)
 
     judge = FakeJudge("major")
-    _run(db, judge)
+    _run(db, judge, tmp_path)
 
     assert judge.calls == 3  # best-of-3 over the one changed leaf
     # D_MAX is 5: the nearest five ancestors are marked, the sixth is not
@@ -211,12 +213,14 @@ def test_material_verdict_climbs_ancestors_bounded_by_d_max(
     assert drift == 2  # major contributes 2
 
 
-def test_none_verdict_marks_nothing_and_logs_skip(db: Database) -> None:
+def test_none_verdict_marks_nothing_and_logs_skip(
+    db: Database, tmp_path: Path
+) -> None:
     with db.connect() as conn, conn:
         leaf = _leaf(conn)
         parent = _upper(conn, 1, leaf)
 
-    _run(db, FakeJudge("none"))
+    _run(db, FakeJudge("none"), tmp_path)
 
     assert _stale(db, parent) == 0  # climb never started
     with db.connect() as conn:
@@ -226,7 +230,7 @@ def test_none_verdict_marks_nothing_and_logs_skip(db: Database) -> None:
     assert row["action"] == "skipped" and row["climbed_to"] is None
 
 
-def test_unchanged_leaf_is_not_judged(db: Database) -> None:
+def test_unchanged_leaf_is_not_judged(db: Database, tmp_path: Path) -> None:
     with db.connect() as conn, conn:
         # a leaf whose stored brief signature matches its members: not changed
         members = []
@@ -250,7 +254,7 @@ def test_unchanged_leaf_is_not_judged(db: Database) -> None:
         _brief(conn, node_id, member_sig=briefs.member_signature(conn, node_id))
 
     judge = FakeJudge("major")
-    _run(db, judge)
+    _run(db, judge, tmp_path)
     assert judge.calls == 0  # nothing changed, nothing judged
 
 
@@ -349,7 +353,7 @@ def test_marked_ancestor_regenerates_only_the_path(
                 created_at="t",
                 updated_at="t",
             ),
-            JobContext(database),
+            job_context(database, tmp_path),
             encoder_for=_fake_encoder,
             client=FakeCompletion(),
             build=_fake_build,
@@ -383,13 +387,13 @@ def test_marked_ancestor_regenerates_only_the_path(
                 created_at="t",
                 updated_at="t",
             ),
-            JobContext(database),
+            job_context(database, tmp_path),
             client=before,
         )
         assert before.calls == 0  # nothing regenerates without propagate
 
         propagate.propagate(
-            _job(), JobContext(database), client=FakeJudge("major")
+            _job(), job_context(database, tmp_path), client=FakeJudge("major")
         )
 
         after = FakeCompletion()
@@ -405,7 +409,7 @@ def test_marked_ancestor_regenerates_only_the_path(
                 created_at="t",
                 updated_at="t",
             ),
-            JobContext(database),
+            job_context(database, tmp_path),
             client=after,
         )
         assert after.calls >= 1  # only the marked ancestor path regenerates

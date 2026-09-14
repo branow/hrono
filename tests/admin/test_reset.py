@@ -4,7 +4,7 @@ import pytest
 from typer.testing import CliRunner
 
 from hrono import cli
-from hrono.admin.reset import NotHronoDatabase, wipe
+from hrono.admin.reset import NotHronoDatabase, targets, wipe
 from hrono.auth.bootstrap import bootstrap_admin
 from hrono.auth.users import create_user, list_users
 from hrono.db.database import DEFAULT_PATH, open_database
@@ -100,3 +100,35 @@ def test_help_documents_recovery_and_data_loss() -> None:
     lower = result.output.lower()
     assert "destroys all data" in lower
     assert "lockout" in lower or "recover" in lower
+
+
+def test_reset_removes_the_cache_and_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F32: reset claimed to destroy ingested content but left the clones, so
+    # the next "fresh start" diffed against 10 MB of orphaned trees.
+    monkeypatch.chdir(tmp_path)
+    conn = open_database(DEFAULT_PATH)
+    conn.close()
+    DEFAULT_PATH.with_name(DEFAULT_PATH.name + ".lock").write_bytes(b"")
+    clone = DEFAULT_PATH.parent / "cache" / "sources" / "repo"
+    clone.mkdir(parents=True)
+    (clone / "a.txt").write_text("cloned bytes")
+
+    removed = wipe(DEFAULT_PATH)
+
+    assert clone.parent.parent in removed
+    assert not clone.exists()
+    assert not DEFAULT_PATH.with_name(DEFAULT_PATH.name + ".lock").exists()
+    assert not DEFAULT_PATH.exists()
+
+
+def test_reset_targets_report_the_cache_before_deleting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    conn = open_database(DEFAULT_PATH)
+    conn.close()
+    (DEFAULT_PATH.parent / "cache" / "sources").mkdir(parents=True)
+    listed = targets(DEFAULT_PATH)
+    assert DEFAULT_PATH.parent / "cache" in listed

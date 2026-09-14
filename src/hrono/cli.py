@@ -21,9 +21,10 @@ from hrono.client.http import ClientError, from_profile
 from hrono.client.http import message as client_message
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import load_key, reconcile
-from hrono.db.database import DEFAULT_PATH, open_database
+from hrono.db.database import open_database
 from hrono.db.lock import exclusive
 from hrono.errors import AppError, cli_message
+from hrono.paths import ENV_DB, database_path
 from hrono.profile.commands import app as profile_app
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.seeding import seed_defaults
@@ -72,18 +73,25 @@ def reset(
         bool,
         typer.Option("--force", help="Skip the confirmation prompt."),
     ] = False,
+    db: Annotated[
+        Path | None,
+        typer.Option("--db", help=f"Database path (or ${ENV_DB})."),
+    ] = None,
 ) -> None:
     """Wipe the local hrono database to recover from a lockout.
 
     DESTROYS ALL DATA — users, registries (with their encrypted secrets), jobs,
-    and ingested content. The next 'hrono serve' re-applies migrations onto a
-    fresh file and bootstraps a new admin token. Requires no Bearer token and no
-    master key; its trust boundary is filesystem access. Run it while the server
-    is stopped. Confirm interactively, or pass --force for non-interactive use.
+    and ingested content: the synced source clones beside the database go with
+    it, so the next run starts clean. The next 'hrono serve' re-applies
+    migrations onto a fresh file and bootstraps a new admin token.
+    Requires no Bearer token and no master key; its trust boundary is filesystem
+    access. Run it while the server is stopped. Confirm interactively, or pass
+    --force for non-interactive use.
     """
-    doomed = targets(DEFAULT_PATH)
+    db_path = database_path(db)
+    doomed = targets(db_path)
     if not doomed:
-        typer.echo(f"No hrono database at {DEFAULT_PATH}: nothing to reset.")
+        typer.echo(f"No hrono database at {db_path}: nothing to reset.")
         return
     if not force:
         typer.echo("This DESTROYS ALL DATA in the hrono database:")
@@ -93,7 +101,7 @@ def reset(
             typer.echo("Aborted; nothing was changed.", err=True)
             raise typer.Exit(1)
     try:
-        removed = wipe(DEFAULT_PATH)
+        removed = wipe(db_path)
     except AppError as exc:
         typer.echo(cli_message(exc), err=True)
         raise typer.Exit(1) from exc
@@ -108,14 +116,24 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8080,
     key_file: Annotated[Path | None, typer.Option("--key-file")] = None,
+    db: Annotated[
+        Path | None,
+        typer.Option("--db", help=f"Database path (or ${ENV_DB})."),
+    ] = None,
 ) -> None:
-    """Run the hrono HTTP server (owns the database and all compute)."""
+    """Run the hrono HTTP server (owns the database and all compute).
+
+    The database path anchors everything else: the synced source clones live in
+    <db parent>/cache/sources, so two servers started from different directories
+    against the same --db share one cache instead of re-cloning (#098).
+    """
+    db_path = database_path(db)
     try:
         key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
-        with exclusive(DEFAULT_PATH):
-            _bootstrap(key)
+        with exclusive(db_path):
+            _bootstrap(key, db_path)
             uvicorn.run(
-                create_app(db_path=DEFAULT_PATH, master_key=key),
+                create_app(db_path=db_path, master_key=key),
                 host=host,
                 port=port,
             )
@@ -124,9 +142,9 @@ def serve(
         raise typer.Exit(1) from exc
 
 
-def _bootstrap(key: bytes) -> None:
+def _bootstrap(key: bytes, db_path: Path) -> None:
     """Reconcile the master key, seed defaults, and print a first-run token."""
-    connection = open_database(DEFAULT_PATH)
+    connection = open_database(db_path)
     try:
         record = reconcile(connection, key)
         token = bootstrap_admin(connection)

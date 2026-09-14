@@ -23,8 +23,8 @@ from hrono.ingest.identity import content_hash
 from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
-from hrono.jobs.ops import JobContext
 from hrono.registry import store as registry_store
+from tests.context import job_context
 
 DIMS = 4
 
@@ -110,9 +110,11 @@ def db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Database]:
     with database.connect() as conn:
         register_source(conn, url)
         register_model(conn)
-    sync(_job("sync"), JobContext(database))
-    split_source(_job("split"), JobContext(database))
-    embed(_job("embed"), JobContext(database), encoder_for=fake_encoder)
+    sync(_job("sync"), job_context(database, tmp_path))
+    split_source(_job("split"), job_context(database, tmp_path))
+    embed(
+        _job("embed"), job_context(database, tmp_path), encoder_for=fake_encoder
+    )
     yield database
     database.close()
 
@@ -150,10 +152,10 @@ def test_passage_combined_vector_is_the_blend(db: Database) -> None:
             assert combined == combine(content, path_vec)  # #039 blend, a=0.5
 
 
-def test_re_embed_is_a_no_op(db: Database) -> None:
+def test_re_embed_is_a_no_op(db: Database, tmp_path: Path) -> None:
     with db.connect() as conn:
         before = vector_count(conn, "emb")
-    embed(_job("embed"), JobContext(db), encoder_for=fake_encoder)
+    embed(_job("embed"), job_context(db, tmp_path), encoder_for=fake_encoder)
     with db.connect() as conn:
         assert vector_count(conn, "emb") == before  # embed-once by content hash
 

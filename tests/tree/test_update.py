@@ -12,12 +12,13 @@ from hrono.cluster.incubator import MAX_AGE, pending
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
 from hrono.tree.update import update
 from tests.cluster.invariant import assert_pool_invariant
+from tests.context import job_context
 
 DIMS = 8
 
@@ -144,7 +145,7 @@ def built(
         register(conn, url)
     maintain(
         _job("maintain"),
-        JobContext(database),
+        job_context(database, tmp_path),
         encoder_for=fake_encoder,
         client=FakeCompletion(),
         build=fake_build,
@@ -186,20 +187,23 @@ def test_update_is_registered() -> None:
 
 def test_update_swaps_changed_file_and_leaves_untouched_alone(
     built: tuple[Database, Path],
+    tmp_path: Path,
 ) -> None:
     db, origin = built
     before_f1 = _section_ids(db, "f1.txt")  # untouched file
     old_f0 = _hashes(db, "f0.txt")
 
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
-    update(_job("update"), JobContext(db), encoder_for=fake_encoder)
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
 
     assert _hashes(db, "f0.txt") and _hashes(db, "f0.txt") != old_f0
     assert _section_ids(db, "f1.txt") == before_f1  # never touched
     assert _node_ids(db)  # tree intact, not destroyed
 
 
-def test_update_with_no_change_is_a_noop(built: tuple[Database, Path]) -> None:
+def test_update_with_no_change_is_a_noop(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
     db, _origin = built
     nodes_before = _node_ids(db)
     with db.connect() as conn:
@@ -207,7 +211,7 @@ def test_update_with_no_change_is_a_noop(built: tuple[Database, Path]) -> None:
             conn.execute("SELECT COUNT(*) FROM sections").fetchone()[0]
         )
 
-    update(_job("update"), JobContext(db), encoder_for=fake_encoder)
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
 
     with db.connect() as conn:
         sections_after = int(
@@ -276,17 +280,20 @@ def _forced_node(db: Database, path: str) -> int | None:
 
 def test_update_parks_an_alien_chunk_then_ages_it_in(
     built: tuple[Database, Path],
+    tmp_path: Path,
 ) -> None:
     db, origin = built
     add_alien(origin, "zz.txt")
-    update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
 
     assert _pending(db) == [("alien/zz.txt", 1)]  # sub-TAU, parked
     assert_pool_invariant(db, "default", "emb")
 
     for i in range(MAX_AGE + 1):  # batches 2..6 carry it past MAX_AGE
         edit(origin, "f1.txt", f"module 1 revision {i}\n")
-        update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+        update(
+            _job("update"), job_context(db, tmp_path), encoder_for=alien_encoder
+        )
         assert_pool_invariant(db, "default", "emb")
 
     assert _pending(db) == []  # aged out, never stranded
@@ -296,12 +303,13 @@ def test_update_parks_an_alien_chunk_then_ages_it_in(
 
 def test_update_drains_a_full_pool_in_the_same_batch(
     built: tuple[Database, Path],
+    tmp_path: Path,
 ) -> None:
     db, origin = built
     for i in range(MIN_POINTS):
         add_alien(origin, f"a{i}.txt")
 
-    update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
 
     # a pool the real mini-pipeline can reduce never survives its own batch:
     # cores emit as leaf nodes, residual noise is force-assigned.
@@ -312,6 +320,7 @@ def test_update_drains_a_full_pool_in_the_same_batch(
 
 def test_update_parks_only_the_twin_that_fits_nowhere(
     built: tuple[Database, Path],
+    tmp_path: Path,
 ) -> None:
     # duplicate content, different paths: one content hash but two sections,
     # and the ALPHA-0.5 path blend gives them different combined vectors, so
@@ -319,14 +328,16 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
     # precisely so it can hold one without claiming the other is homeless.
     db, origin = built
     add_twins(origin, "g9.txt")
-    update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
 
     assert _pending(db) == [("alien/g9.txt", 1)]
     assert_pool_invariant(db, "default", "emb")
 
     for i in range(MAX_AGE + 1):  # batches 2..7 carry the twin past MAX_AGE
         edit(origin, "f1.txt", f"module 1 revision {i}\n")
-        update(_job("update"), JobContext(db), encoder_for=alien_encoder)
+        update(
+            _job("update"), job_context(db, tmp_path), encoder_for=alien_encoder
+        )
         assert_pool_invariant(db, "default", "emb")
 
     assert _pending(db) == []

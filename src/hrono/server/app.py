@@ -35,6 +35,7 @@ from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database
 from hrono.jobs.worker import Worker, reclaim_stranded
+from hrono.paths import cache_root
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
 from hrono.server.errors import install as install_errors
@@ -127,7 +128,9 @@ def create_app(
                 app.state.key_id = key_id
             cipher = Cipher.from_key(master_key, app.state.key_id)
             reclaim_stranded(database)
-            worker = Worker(database, cipher=cipher)
+            worker = Worker(
+                database, cipher=cipher, cache_root=cache_root(db_path)
+            )
             app.state.worker = worker
             worker.start()
             yield
