@@ -75,7 +75,7 @@ def brief_upper(
             CompletionRequest(model=model, system="", content=rendered),
         )
         unfaithful = faithfulness(result.text, source)
-        text = result.text + _references(ids)
+        text = result.text
         with context.database.write() as conn:
             briefs.upsert(
                 conn,
@@ -87,6 +87,7 @@ def brief_upper(
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
                 flagged=flagged,
+                members=json.dumps([f"node {node}" for node in ids]),
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )
@@ -96,12 +97,6 @@ def brief_upper(
 def _level(scope: dict[str, object]) -> int:
     level = scope.get("level")
     return int(level) if isinstance(level, int) else _DEFAULT_LEVEL
-
-
-def _references(ids: tuple[int, ...]) -> str:
-    if not ids:
-        return ""
-    return "\n\nChildren:\n" + "\n".join(f"- node {node_id}" for node_id in ids)
 
 
 def _default_client(context: JobContext) -> Completion:

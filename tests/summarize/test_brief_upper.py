@@ -168,16 +168,21 @@ def test_input_is_the_child_briefs_not_sections(db: Database) -> None:
     assert "{content}" not in joined
 
 
-def test_child_references_appended_mechanically(db: Database) -> None:
+def test_child_references_are_recorded_beside_the_text(db: Database) -> None:
+    # the upper-level twin of the footer problem (#102): the raw "Children:"
+    # list used to live in the brief text, where #071 indexed it and render
+    # duplicated it as proper titled links.
     database, _ = db
     brief_upper(job(), JobContext(database), client=FakeCompletion())
     parents = _parents(database)
     with database.connect() as conn:
         row = briefs.get(conn, parents[0])
         assert row is not None
-        assert "Children:" in row["text"]
-        for child in briefs.child_ids(conn, parents[0]):
-            assert f"node {child}" in row["text"]
+        assert "Children:" not in row["text"]
+        children = briefs.child_ids(conn, parents[0])
+        assert json.loads(row["members"]) == [f"node {c}" for c in children]
+        for child in children:
+            assert f"node {child}" not in row["text"]
 
 
 def test_rerun_makes_zero_calls(db: Database) -> None:

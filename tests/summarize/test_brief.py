@@ -158,19 +158,23 @@ def test_writes_one_brief_per_node_with_provenance(db: Database) -> None:
             assert row["output_tokens"] == 12
 
 
-def test_references_are_appended_mechanically(db: Database) -> None:
-    # the fake LLM returns a fixed body with no URIs; every reference in the
-    # stored brief therefore came from code, not the model.
+def test_references_are_recorded_mechanically_beside_the_text(
+    db: Database,
+) -> None:
+    # the fake LLM returns a fixed body with no URIs; every reference stored
+    # therefore came from code, not the model. #102 keeps them OUT of the text:
+    # #071 indexes the text as passages, and a path list is dense enough to
+    # outrank prose for a keyword-ish question.
     brief(job(), JobContext(db), client=FakeCompletion(text="BODY " * 12))
     nodes = _node_ids(db)
     with db.connect() as conn:
         first = briefs.get(conn, nodes[0])
         assert first is not None
-        assert "References:" in first["text"]
         uris = briefs.member_uris(conn, nodes[0])
         assert uris
+        assert json.loads(first["members"]) == list(uris)
         for uri in uris:
-            assert uri in first["text"]
+            assert uri not in first["text"]
 
 
 def test_prompt_is_rendered_over_the_condensations(db: Database) -> None:

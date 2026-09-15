@@ -1,0 +1,13 @@
+-- A brief's member list moves OUT of its text (#102, F-recall). `brief` baked
+-- the member URIs into `briefs.text` as a "References:" footer and `brief-upper`
+-- a "Children:" list; #071 then split the WHOLE text into node:// passages, so
+-- a lexically dense path list entered the vector index and FTS as if it were
+-- prose and could outrank real summary text for a keyword-ish question. The
+-- list is data about the brief, not part of it: stored here as a JSON array,
+-- re-attached by the export renderer, and absent from the passages.
+-- Briefs written BEFORE this migration keep their footer inside `text` and an
+-- empty list here: the renderer re-attaches only what it finds, so their export
+-- is unchanged, and the footer leaves the passages the next time #064
+-- regenerates that brief. No backfill: parsing prose back into a list is
+-- guesswork, and a regeneration is already the normal way a brief changes.
+ALTER TABLE briefs ADD COLUMN members TEXT NOT NULL DEFAULT '[]';

@@ -7,6 +7,12 @@ from node membership — the LLM never writes a reference. Each brief records
 provenance (model, prompt name + template hash, token usage) that #064 freshness
 and the cost API read back.
 
+The member URIs are stored BESIDE the text, not inside it (#102): #071 splits a
+brief into node:// passages, and a path list is lexically dense enough to
+outrank real prose for a keyword-ish question — one QA query got five slices of
+a URI list as its best "summary" hits. The export renderer re-attaches them, so
+the map still shows every reference; only the indexed passages change.
+
 A reply that is not a summary at all — a question back to the caller, an
 assistant refusal — is retried ONCE and then stored WITH a flag (#103): the
 faithfulness gate cannot catch it, because a non-answer invents nothing, and
@@ -81,7 +87,7 @@ def brief(
             CompletionRequest(model=model, system="", content=rendered),
         )
         unfaithful = faithfulness(result.text, source)
-        text = result.text + _references(uris)
+        text = result.text
         with context.database.write() as conn:
             briefs.upsert(
                 conn,
@@ -93,16 +99,11 @@ def brief(
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
                 flagged=flagged,
+                members=json.dumps(uris),
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
-
-
-def _references(uris: tuple[str, ...]) -> str:
-    if not uris:
-        return ""
-    return "\n\nReferences:\n" + "\n".join(f"- {uri}" for uri in uris)
 
 
 def _hash(template: str) -> str:

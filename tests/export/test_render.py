@@ -1,5 +1,6 @@
 """T30: render the collapsed tree to markdown files."""
 
+import json
 from collections.abc import Iterator
 
 import pytest
@@ -295,11 +296,14 @@ def test_a_parentless_node_keeps_its_own_brief_path(
     assert f"beta-topic-{ids['n1']}/brief.md" in files
 
 
-def test_a_boilerplate_heading_does_not_become_the_directory_name(
+def test_a_brief_is_rendered_verbatim_including_its_own_headings(
     tmp_path: object,
 ) -> None:
-    # #103: a brief opening "## Summary" named its export directory summary-2
-    # in the real run — the brief's shape leaking into the map's navigation.
+    # the renderer DERIVES a title from the brief but never rewrites the brief:
+    # a "## Summary" heading survives into the file as written. (The boilerplate
+    # skip this test used to claim is exercised by
+    # test_a_long_first_line_is_trimmed_to_a_usable_title — a single node IS the
+    # root, so no directory name is derived from it here. #102.)
     database = Database.at(tmp_path / "b.db")
     with database.connect() as conn, conn:
         s0 = add_section(conn, "a.py", b"alpha\n")
@@ -320,8 +324,8 @@ def test_a_boilerplate_heading_does_not_become_the_directory_name(
     try:
         files = _files(database)
         assert "root.md" in files
-        title = files["root.md"].splitlines()[0]
-        assert "Summary" in title  # the brief itself is rendered as written
+        assert files["root.md"].startswith("## Summary")
+        assert "key rotation and all." in files["root.md"]
     finally:
         database.close()
 
@@ -380,3 +384,25 @@ def test_a_long_first_line_is_trimmed_to_a_usable_title(
         assert all(len(line) < 160 for line in links)  # not a whole paragraph
     finally:
         database.close()
+
+
+def test_the_member_references_are_re_attached_from_metadata(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    # #102 moved the member URIs out of briefs.text so #071's passages carry
+    # prose only. The map must still show every reference: the renderer puts
+    # them back from the stored metadata.
+    database, ids = db
+    uris = ("git://ex/repo/a.py@v1", "git://ex/repo/b.py@v1")
+    with database.connect() as conn, conn:
+        conn.execute(
+            "UPDATE briefs SET members = ? WHERE node_id = ?",
+            (json.dumps(list(uris)), ids["n0"]),
+        )
+    files = _files(database)
+    rendered = files[f"alpha-topic-{ids['n0']}/brief.md"]
+    assert "## References" in rendered
+    for uri in uris:
+        assert uri in rendered
+    # ... and a node with no recorded members gets no empty section
+    assert "## References" not in files[f"beta-topic-{ids['n1']}/brief.md"]

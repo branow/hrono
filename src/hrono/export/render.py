@@ -1,7 +1,8 @@
 """Render the collapsed agent-facing tree (#078) to a path -> markdown mapping.
 
 Per agent node: its stored brief text as-is (#059/#061 — already ends with its
-Caution section; never regenerated), then a MECHANICAL child listing rendered
+Caution section; never regenerated), its member references re-attached from the
+metadata #102 keeps them in, then a MECHANICAL child listing rendered
 from the collapsed tree in code (titles + relative links, no LLM, no
 hallucinated links). Leaf nodes list their sections; each section is rendered to
 its own file, reassembled byte-identically from its stored passages (#032) with
@@ -18,6 +19,7 @@ one key.
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections.abc import Mapping
@@ -85,7 +87,25 @@ def _node_markdown(
         )
     if note:
         parts.append(f"## Notes\n\n{note}")
+    references = _references(conn, node_id)
+    if references:
+        parts.append(references)
     return "\n\n".join(parts) + "\n"
+
+
+def _references(conn: sqlite3.Connection, node_id: int) -> str:
+    """Re-attach the brief's member list, which is stored beside its text.
+
+    #102 moved it out of ``briefs.text`` so a lexically dense path list stops
+    entering the vector index and FTS as if it were prose; the map still shows
+    every reference, and this is where it is put back.
+    """
+    row = briefs.get(conn, node_id)
+    members = json.loads(row["members"]) if row is not None else []
+    if not members:
+        return ""
+    listed = "\n".join(f"- {member}" for member in members)
+    return f"## References\n\n{listed}"
 
 
 def _section_markdown(conn: sqlite3.Connection, section_id: int) -> str:

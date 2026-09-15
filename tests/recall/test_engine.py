@@ -122,3 +122,51 @@ def test_tiny_corpus_fails_safe_to_explore(tmp_path: object) -> None:
         assert result.message == "no confident matches - explore the map."
     finally:
         database.close()
+
+
+def _blend(content: list[float]) -> list[float]:
+    norm = sum(v * v for v in content) ** 0.5
+    return [v / norm for v in content]
+
+
+@pytest.fixture
+def rich(tmp_path: object) -> Iterator[Database]:
+    """A corpus that genuinely holds MANY answers, plus a varied noise body.
+
+    The shape the old estimator broke (#102): 12 real matches raise the mean
+    AND the standard deviation they are then measured against, so every one of
+    them scores under the floor. The noise scores vary slightly so the MAD is
+    not degenerate — a flat noise body is the case ``_spread`` falls back on.
+    """
+    database = Database.at(tmp_path / "rich.db")
+    with database.connect() as conn, conn:
+        _plant_paths(conn)
+        for i in range(12):  # strong matches, 0.80 .. 0.99 cosine
+            content = _blend(
+                [0.99 - i * 0.017, 0.14 + i * 0.05, 0.0] + [0.0] * (DIMS - 3)
+            )
+            add_passage(conn, f"the answer, phrasing {i}\n".encode(), content)
+        for i in range(30):  # noise, slightly varied so the MAD is non-zero
+            content = _blend([0.01 * i, 1.0, 0.0] + [0.0] * (DIMS - 3))
+            add_passage(conn, f"unrelated topic {i}\n".encode(), content)
+    yield database
+    database.close()
+
+
+def test_an_on_topic_question_fills_the_window(rich: Database) -> None:
+    # the second half of #102's acceptance: a corpus with many genuine matches
+    # must return a full window, not the 1-2 the old mean/sd estimator left.
+    with rich.connect() as conn:
+        result = recall(conn, "the answer?", MODEL, const_encode(unit(0)))
+    assert result.message is None
+    assert len(result.hits) == 10  # the cap, not the floor, is what bounds it
+    assert all(hit.kind == "source" for hit in result.hits)
+
+
+def test_an_off_topic_question_still_explores(rich: Database) -> None:
+    # ... without letting the other half slip: the same corpus must still
+    # refuse a question it has no answer for.
+    with rich.connect() as conn:
+        result = recall(conn, "nothing like it?", MODEL, const_encode(unit(3)))
+    assert result.hits == ()
+    assert result.message == "no confident matches - explore the map."
