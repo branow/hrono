@@ -265,3 +265,94 @@ def test_a_parked_chunk_that_joins_is_unparked(db: Database) -> None:
     with db.connect() as conn:
         assert cluster_store.section_node(conn, TREE, latecomer) == node_a
         assert incubator.count(conn, TREE) == 0
+
+
+def test_a_moved_section_is_re_attached_on_the_terms_it_had(
+    db: Database,
+) -> None:
+    # the prior membership is the only record of how the section got there, and
+    # reconcile has already dropped the row it lived on — so placement must
+    # carry node, similarity AND the forced flag across a rename (#100).
+    with db.connect() as conn, conn:
+        node_a, _ = make_node(conn, topic=0, n=3)
+        make_node(conn, topic=1, n=3)
+        # the renamed section's content is topic 1, i.e. NOT node A's topic:
+        # only the carried membership can keep it where it belongs.
+        moved, digest = add_section(conn, b"was forced into topic 0\n", unit(1))
+    centroids = _centroids(db)
+    with db.connect() as conn, conn:
+        report = placement.place(
+            conn,
+            TREE,
+            [
+                SectionDelta(
+                    "moved",
+                    digest,
+                    PATH,
+                    section_id=moved,
+                    prior_node_id=node_a,
+                    prior_similarity=0.83,
+                    prior_forced=True,
+                )
+            ],
+            centroids,
+            MODEL,
+            batch=7,
+        )
+    assert report.stayed == 1
+    with db.connect() as conn:
+        member = cluster_store.membership(conn, TREE, moved)
+        assert member is not None
+        assert member.node_id == node_a
+        assert member.similarity == 0.83
+        assert member.forced is True
+        assert incubator.count(conn, TREE) == 0
+
+
+def test_a_moved_section_that_was_in_no_node_takes_the_placement_rule(
+    db: Database,
+) -> None:
+    with db.connect() as conn, conn:
+        make_node(conn, topic=0, n=3)
+        homeless, digest = add_section(conn, b"unrelated topic\n", unit(3))
+    centroids = _centroids(db)
+    with db.connect() as conn, conn:
+        report = placement.place(
+            conn,
+            TREE,
+            [SectionDelta("moved", digest, PATH, section_id=homeless)],
+            centroids,
+            MODEL,
+            batch=9,
+        )
+    assert report.parked == 1  # sub-TAU with nothing to preserve
+    with db.connect() as conn:
+        assert incubator.pending(conn, TREE)[0][3] == 9
+
+
+def test_a_renamed_parked_section_keeps_its_original_batch(
+    db: Database,
+) -> None:
+    with db.connect() as conn, conn:
+        make_node(conn, topic=0, n=3)
+        renamed, digest = add_section(conn, b"still unrelated\n", unit(3))
+    centroids = _centroids(db)
+    with db.connect() as conn, conn:
+        placement.place(
+            conn,
+            TREE,
+            [
+                SectionDelta(
+                    "moved",
+                    digest,
+                    PATH,
+                    section_id=renamed,
+                    prior_batch=2,  # the wait its predecessor had served
+                )
+            ],
+            centroids,
+            MODEL,
+            batch=9,
+        )
+    with db.connect() as conn:
+        assert incubator.pending(conn, TREE)[0][3] == 2

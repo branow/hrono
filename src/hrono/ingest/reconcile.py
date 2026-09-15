@@ -12,14 +12,20 @@ a deletion.
 A changed/deleted/moved file's old sections are dropped (their memberships
 cascade away); the placement rule re-attaches the survivors. Bodies are stored
 by content hash, so a moved file's content is reused and never re-embedded.
+Each delta therefore carries the membership its predecessor HAD — node,
+similarity, forced flag, and the incubator batch if it was parked — because
+once the old row is gone that is the only record of it, and a rename has to be
+re-attached on exactly those terms (#100).
 """
 
 from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
+from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import register_path_bodies
 from hrono.cluster.placement import SectionDelta
@@ -27,7 +33,16 @@ from hrono.ingest.diff import Change
 from hrono.ingest.split_op import store_file
 from hrono.recall import fts
 
-_OldSection = tuple[int, int, str, int | None]  # id, ordinal, hash, node_id
+
+@dataclass(frozen=True)
+class _Old:
+    """One superseded section: its identity and where it sat in the tree."""
+
+    section_id: int
+    ordinal: int
+    content_hash: str
+    member: cluster_store.Membership | None
+    batch: int | None  # the batch it was parked at, if it was pending
 
 
 def reconcile(
@@ -84,8 +99,13 @@ def _apply(
         old = _old_sections(conn, tree, source, change.path)
         _drop_path(conn, source, change.path)
         return [
-            SectionDelta("deleted", h, change.path, prior_node_id=node)
-            for _, _, h, node in old
+            SectionDelta(
+                "deleted",
+                entry.content_hash,
+                change.path,
+                prior_node_id=_node(entry),
+            )
+            for entry in old
         ]
     old_path = change.old_path if change.status == "moved" else change.path
     kind = "moved" if change.status == "moved" else "changed"
@@ -100,58 +120,83 @@ def _apply(
 def _match(
     kind: str,
     path: str,
-    old: Sequence[_OldSection],
+    old: Sequence[_Old],
     stored: Sequence[tuple[int, int, str]],
 ) -> list[SectionDelta]:
+    """Pair new sections with the ones they replace, hash first then ordinal.
+
+    A ``moved`` file's bytes are identical by definition, so its sections pair
+    by CONTENT HASH — which is what lets placement keep them in place (#100).
+    The exception is a rename that changes the extension: the file then splits
+    under a different grammar, so a section pairs by ordinal instead and is a
+    genuine ``changed`` for placement, not a move.
+    """
     consumed = [False] * len(old)
     deltas: list[SectionDelta] = []
     for section_id, ordinal, content_hash in stored:
-        prior = _consume(old, consumed, lambda e, h=content_hash: e[2] == h)
+        prior = _consume(
+            old, consumed, lambda e, h=content_hash: e.content_hash == h
+        )
+        same_content = prior is not None
         if prior is None:
-            prior = _consume(old, consumed, lambda e, o=ordinal: e[1] == o)
+            prior = _consume(old, consumed, lambda e, o=ordinal: e.ordinal == o)
+        member = prior.member if prior is not None else None
         deltas.append(
             SectionDelta(
-                kind,
+                kind if same_content else "changed",
                 content_hash,
                 path,
                 section_id=section_id,
-                prior_node_id=prior,
+                prior_node_id=None if member is None else member.node_id,
+                prior_similarity=None if member is None else member.similarity,
+                prior_forced=member is not None and member.forced,
+                prior_batch=prior.batch if prior is not None else None,
             )
         )
-    for index, (_, _, content_hash, node) in enumerate(old):
+    for index, entry in enumerate(old):
         if not consumed[index]:
             deltas.append(
-                SectionDelta("deleted", content_hash, path, prior_node_id=node)
+                SectionDelta(
+                    "deleted",
+                    entry.content_hash,
+                    path,
+                    prior_node_id=_node(entry),
+                )
             )
     return deltas
 
 
+def _node(entry: _Old) -> int | None:
+    return None if entry.member is None else entry.member.node_id
+
+
 def _consume(
-    old: Sequence[_OldSection],
+    old: Sequence[_Old],
     consumed: list[bool],
-    predicate: Callable[[_OldSection], bool],
-) -> int | None:
+    predicate: Callable[[_Old], bool],
+) -> _Old | None:
     for index, entry in enumerate(old):
         if not consumed[index] and predicate(entry):
             consumed[index] = True
-            return entry[3]
+            return entry
     return None
 
 
 def _old_sections(
     conn: sqlite3.Connection, tree: str, source: str, path: str
-) -> list[_OldSection]:
+) -> list[_Old]:
     rows = conn.execute(
         "SELECT id, ordinal, content_hash FROM sections "
         "WHERE source = ? AND path = ? ORDER BY ordinal, id",
         (source, path),
     ).fetchall()
     return [
-        (
-            int(r["id"]),
-            int(r["ordinal"]),
-            r["content_hash"],
-            cluster_store.section_node(conn, tree, int(r["id"])),
+        _Old(
+            section_id=int(r["id"]),
+            ordinal=int(r["ordinal"]),
+            content_hash=r["content_hash"],
+            member=cluster_store.membership(conn, tree, int(r["id"])),
+            batch=incubator.parked_batch(conn, tree, int(r["id"])),
         )
         for r in rows
     ]

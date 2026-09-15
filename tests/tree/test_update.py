@@ -448,3 +448,128 @@ def test_ageing_measures_runs_not_changed_sources(
     assert _batch(db) - parked_at == MAX_AGE + 1
     assert _pending(db) == []  # forced only now
     assert _forced_node(db, "alien/zz.txt") is not None
+
+
+def rename(origin: Path, old: str, new: str) -> None:
+    _git(origin, "mv", old, new)
+    _git(origin, "commit", "-qm", f"rename {old} -> {new}")
+
+
+def _node_of(db: Database, path: str) -> tuple[int | None, float | None]:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT m.node_id AS node, m.assignment_similarity AS sim "
+            "FROM node_members m JOIN sections s ON s.id = m.section_id "
+            "WHERE s.path = ?",
+            (path,),
+        ).fetchone()
+    return (None, None) if row is None else (int(row["node"]), row["sim"])
+
+
+def _counts(db: Database) -> tuple[int, int]:
+    with db.connect() as conn:
+        return (
+            int(
+                conn.execute("SELECT COUNT(*) FROM node_members").fetchone()[0]
+            ),
+            int(conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]),
+        )
+
+
+def _signatures(db: Database) -> dict[int, str]:
+    with db.connect() as conn:
+        return {
+            int(r["id"]): r["signature"]
+            for r in conn.execute("SELECT id, signature FROM nodes").fetchall()
+        }
+
+
+def test_a_pure_rename_keeps_the_section_in_its_node(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # F27: `git mv` of byte-identical content ejected the file from its cluster
+    # and parked it — ALPHA 0.5 makes the path half the blended vector's norm,
+    # so a rename alone can drop a working member below TAU.
+    db, origin = built
+    node_before, sim_before = _node_of(db, "f1.txt")
+    assert node_before is not None
+    members_before, _ = _counts(db)
+    signatures_before = _signatures(db)
+
+    rename(origin, "f1.txt", "renamed.txt")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+
+    assert _node_of(db, "f1.txt") == (None, None)  # the old path is gone
+    assert _node_of(db, "renamed.txt") == (node_before, sim_before)
+    members_after, _ = _counts(db)
+    assert members_after == members_before  # membership count unchanged
+    assert _pending(db) == []  # nothing parked
+    assert _signatures(db) == signatures_before  # content signature untouched
+    assert_pool_invariant(db, "default", "emb")
+
+
+def test_a_rename_does_not_re_embed_the_content(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    _, embeddings_before = _counts(db)
+    (origin / "moved").mkdir()
+    rename(origin, "f2.txt", "moved/f2.txt")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    _, embeddings_after = _counts(db)
+    # exactly one new vector: the new PATH string, never the content again
+    assert embeddings_after == embeddings_before + 1
+
+
+def test_a_rename_that_changes_the_grammar_is_a_normal_change(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the one move that is not in place: a new extension splits the file under
+    # a different grammar, so the sections are not the same content any more.
+    db, origin = built
+    rename(origin, "f3.txt", "f3.md")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    node, _ = _node_of(db, "f3.md")
+    assert node is not None  # still placed, just not short-circuited
+    assert_pool_invariant(db, "default", "emb")
+
+
+def test_renaming_a_parked_chunk_keeps_the_wait_it_has_served(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # a parked chunk has no membership to preserve, so it takes the placement
+    # rule again; if it parks once more it must keep its ORIGINAL batch, or a
+    # rename would postpone ageing for ever and strand it (#095's invariant).
+    db, origin = built
+    add_alien(origin, "zz.txt")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    assert _pending(db) == [("alien/zz.txt", 1)]
+
+    edit(origin, "f1.txt", "an unrelated edit to advance the batch\n")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    rename(origin, "alien/zz.txt", "alien/renamed-zz.txt")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+
+    assert _pending(db) == [("alien/renamed-zz.txt", 1)]  # still batch 1
+    assert_pool_invariant(db, "default", "emb")
+
+
+def test_a_rename_preserves_a_recorded_similarity(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the fixture's build records no similarity, so drive one first: a NEW file
+    # joins through the placement rule and its similarity is stored. The rename
+    # must carry THAT number, not re-derive or blank it.
+    db, origin = built
+    (origin / "f9.txt").write_text("module 9 does thing number 9\n")
+    _git(origin, "add", "-A")
+    _git(origin, "commit", "-qm", "add f9")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    node_before, sim_before = _node_of(db, "f9.txt")
+    assert node_before is not None
+    assert sim_before is not None  # a real recorded assignment
+
+    rename(origin, "f9.txt", "f9-renamed.txt")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+
+    assert _node_of(db, "f9-renamed.txt") == (node_before, sim_before)

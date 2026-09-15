@@ -89,6 +89,17 @@ def pending(conn: sqlite3.Connection, tree: str) -> tuple[Parked, ...]:
     )
 
 
+def parked_batch(
+    conn: sqlite3.Connection, tree: str, section_id: int
+) -> int | None:
+    """The batch a section was parked at, or None if it is not pending."""
+    row = conn.execute(
+        "SELECT batch FROM pending WHERE tree = ? AND section_id = ?",
+        (tree, section_id),
+    ).fetchone()
+    return None if row is None else int(row["batch"])
+
+
 def unpark(conn: sqlite3.Connection, tree: str, section_id: int) -> None:
     conn.execute(
         "DELETE FROM pending WHERE tree = ? AND section_id = ?",

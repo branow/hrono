@@ -19,6 +19,7 @@ import sqlite3
 from array import array
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hrono.cluster.blend import combined_vector
@@ -294,6 +295,40 @@ def node_centroids(
         if vectors:
             centroids[node_id] = _renormalized_mean(vectors)
     return centroids
+
+
+@dataclass(frozen=True)
+class Membership:
+    """A section's place in a leaf node: the node and how it got there."""
+
+    node_id: int
+    similarity: float | None
+    forced: bool
+
+
+def membership(
+    conn: sqlite3.Connection, tree: str, section_id: int
+) -> Membership | None:
+    """Return the section's level-0 membership in ``tree``, or None.
+
+    Carries the assignment as it was recorded, so a rename can re-attach the
+    replacement section on exactly the terms the original had (#100).
+    """
+    row = conn.execute(
+        "SELECT m.node_id AS n, m.assignment_similarity AS sim, "
+        "m.forced AS forced FROM node_members m "
+        "JOIN nodes ON nodes.id = m.node_id "
+        "WHERE nodes.tree = ? AND nodes.level = 0 AND m.section_id = ?",
+        (tree, section_id),
+    ).fetchone()
+    if row is None:
+        return None
+    sim = row["sim"]
+    return Membership(
+        node_id=int(row["n"]),
+        similarity=None if sim is None else float(sim),
+        forced=bool(row["forced"]),
+    )
 
 
 def section_node(

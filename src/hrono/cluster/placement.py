@@ -10,8 +10,13 @@ cannot move and churn equals changed content exactly:
   cluster is dissolved if it drops below two members (each survivor re-placed).
 - changed -> STICKY RE-CHECK vs its own PRE-BATCH centroid: >= TAU it stays put
   (only its brief goes stale via #064), else it re-enters the placement rule.
-- moved -> same sticky re-check on the recomputed (new-path) combined vector;
-  the content vector is reused (content-addressed, so embed skipped it).
+- moved -> IN PLACE: the content is byte-identical (that is what makes it a
+  move, #083), so the topic did not change and the section keeps the node,
+  similarity and forced flag its predecessor had. Re-scoring it instead ejected
+  working members: with ALPHA 0.5 the path is half the blended vector's norm, so
+  a rename alone can drop a section under TAU and park it (#100, F27). A move
+  that lands on a new EXTENSION splits differently, so those sections arrive as
+  ``changed`` and take the sticky path. Content is never re-embedded either way.
 - new -> placement rule: best similarity vs cluster CENTROIDS; >= TAU joins that
   cluster, otherwise it parks in the incubator (#086).
 
@@ -39,6 +44,9 @@ class SectionDelta:
     path: str
     section_id: int | None = None  # current section (None once deleted)
     prior_node_id: int | None = None  # sticky / dissolve target cluster
+    prior_similarity: float | None = None  # the assignment as it was recorded
+    prior_forced: bool = False  # ... including whether it was force-assigned
+    prior_batch: int | None = None  # the batch it was parked at, if pending
 
 
 @dataclass(frozen=True)
@@ -101,10 +109,36 @@ def _apply(state: _Batch, delta: SectionDelta) -> None:
             state.affected.add(delta.prior_node_id)
         state.deleted += 1
         return
-    if delta.kind in ("changed", "moved"):
+    if delta.kind == "moved":
+        _in_place(state, delta)
+        return
+    if delta.kind == "changed":
         _sticky(state, delta)
         return
     _placement(state, delta)  # new
+
+
+def _in_place(state: _Batch, delta: SectionDelta) -> None:
+    """Re-attach a renamed section on the terms its predecessor had.
+
+    A rename is not churn: the node's content signature is built from member
+    content HASHES, and the hash is unchanged, so the brief does not go stale
+    either. A section that was in no node has nothing to preserve and takes the
+    placement rule — its new path may well place it now — but if it parks again
+    it keeps the wait it had already served, so renaming cannot postpone ageing.
+    """
+    prior = delta.prior_node_id
+    if prior is None:
+        _placement(state, delta)
+        return
+    store.add_member(
+        state.conn,
+        prior,
+        _require(delta.section_id),
+        forced=delta.prior_forced,
+        similarity=delta.prior_similarity,
+    )
+    state.stayed += 1
 
 
 def _sticky(state: _Batch, delta: SectionDelta) -> None:
@@ -136,7 +170,9 @@ def _placement(state: _Batch, delta: SectionDelta) -> None:
         path=delta.path,
         centroids=state.working,
         model_name=state.model,
-        batch=state.batch,
+        batch=delta.prior_batch
+        if delta.prior_batch is not None
+        else state.batch,
     )
     if outcome == "joined":
         state.joined += 1

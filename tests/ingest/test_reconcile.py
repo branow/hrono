@@ -122,3 +122,63 @@ def test_moved_file_reuses_content_hash_under_new_path(
     assert _hashes(db, "new.txt") == old_hashes  # content reused, not re-hashed
     moved = [d for d in deltas if d.kind == "moved"]
     assert moved and all(d.prior_node_id == node for d in moved)
+
+
+def test_a_move_that_re_splits_the_file_is_a_change_not_a_move(
+    db: Database, cache: Path
+) -> None:
+    # placement keeps a `moved` section in its node untouched, which is only
+    # sound because a move means identical CONTENT. A rename that changes the
+    # extension re-splits under a different budget, so the sections that come
+    # out are new content and must take the sticky re-check instead (#100).
+    body = "".join(
+        f'  {{"i": {i}, "text": "padding value"}},\n' for i in range(160)
+    )
+    node = _seed(db, cache, "data.md", body)
+    _write(cache, "data.json", body)
+    with db.connect() as conn, conn:
+        deltas = reconcile.reconcile(
+            conn,
+            **COMMON,
+            cache=cache,
+            changes=[Change("data.json", "moved", old_path="data.md")],
+        )
+    kinds = {d.kind for d in deltas if d.section_id is not None}
+    assert len(_hashes(db, "data.json")) > 1  # the 2 KB data budget re-split it
+    assert "changed" in kinds  # the re-split slices are not the same content
+    assert all(
+        d.prior_node_id in (node, None)
+        for d in deltas
+        if d.section_id is not None
+    )
+
+
+def test_a_moved_delta_carries_the_membership_it_had(
+    db: Database, cache: Path
+) -> None:
+    node = _seed(db, cache, "old.txt", "portable content\n")
+    with db.connect() as conn, conn:
+        section = next(
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM sections WHERE path = 'old.txt'"
+            ).fetchall()
+        )
+        conn.execute(
+            "UPDATE node_members SET assignment_similarity = 0.77, forced = 1 "
+            "WHERE section_id = ?",
+            (section,),
+        )
+    _write(cache, "new.txt", "portable content\n")
+    with db.connect() as conn, conn:
+        deltas = reconcile.reconcile(
+            conn,
+            **COMMON,
+            cache=cache,
+            changes=[Change("new.txt", "moved", old_path="old.txt")],
+        )
+    moved = [d for d in deltas if d.kind == "moved"]
+    assert moved
+    assert all(d.prior_node_id == node for d in moved)
+    assert all(d.prior_similarity == 0.77 for d in moved)
+    assert all(d.prior_forced for d in moved)
