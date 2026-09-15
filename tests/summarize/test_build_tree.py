@@ -18,7 +18,10 @@ TREE = "default"
 
 class FakeCompletion:
     def complete(self, request: CompletionRequest) -> CompletionResult:
-        return CompletionResult("upper brief.", Usage(5, 2))
+        return CompletionResult(
+            "This branch gathers the signing and serialization modules.",
+            Usage(5, 2),
+        )
 
 
 def fake_encoder(model_id: str):

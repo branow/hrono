@@ -192,16 +192,19 @@ def upsert(
     input_tokens: int,
     output_tokens: int,
     unfaithful: str = "[]",
+    flagged: str = "",
 ) -> None:
     """Store one node's brief with its provenance and member signature.
 
     ``unfaithful`` is the faithfulness gate's JSON verdict (#063); default '[]'
-    keeps callers that do not run the gate unchanged.
+    keeps callers that do not run the gate unchanged. ``flagged`` is the shape
+    guard's reason (#103) — empty when the reply looked like a brief.
     """
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
-        "unfaithful, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "unfaithful, flagged, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             node_id,
             text,
@@ -212,6 +215,7 @@ def upsert(
             input_tokens,
             output_tokens,
             unfaithful,
+            flagged,
             _now(),
         ),
     )
@@ -221,8 +225,8 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     """Return a node's brief row, or None."""
     return conn.execute(
         "SELECT node_id, text, model_name, prompt_name, prompt_hash, "
-        "member_signature, input_tokens, output_tokens, unfaithful, stale "
-        "FROM briefs WHERE node_id = ?",
+        "member_signature, input_tokens, output_tokens, unfaithful, flagged, "
+        "stale FROM briefs WHERE node_id = ?",
         (node_id,),
     ).fetchone()
 

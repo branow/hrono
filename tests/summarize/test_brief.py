@@ -32,7 +32,9 @@ TREE = "default"
 
 class FakeCompletion:
     def __init__(
-        self, text: str = "the brief body.", fail_on: int | None = None
+        self,
+        text: str = "The brief body describes what this topic contains.",
+        fail_on: int | None = None,
     ) -> None:
         self.calls = 0
         self.contents: list[str] = []
@@ -159,7 +161,7 @@ def test_writes_one_brief_per_node_with_provenance(db: Database) -> None:
 def test_references_are_appended_mechanically(db: Database) -> None:
     # the fake LLM returns a fixed body with no URIs; every reference in the
     # stored brief therefore came from code, not the model.
-    brief(job(), JobContext(db), client=FakeCompletion(text="BODY"))
+    brief(job(), JobContext(db), client=FakeCompletion(text="BODY " * 12))
     nodes = _node_ids(db)
     with db.connect() as conn:
         first = briefs.get(conn, nodes[0])
@@ -323,3 +325,63 @@ def test_runs_as_a_job_through_the_worker(
     assert row is not None and row["status"] == "succeeded"
     with db.connect() as conn:
         assert conn.execute("SELECT COUNT(*) FROM briefs").fetchone()[0] == 2
+
+
+NON_ANSWER = (
+    "This appears to be a set of files rather than a request. Are you sharing "
+    "them so that I can summarise them for you, or did you want something "
+    "else entirely here?"
+)
+
+
+def test_a_non_answer_is_retried_and_the_good_retry_is_stored(
+    db: Database,
+) -> None:
+    class Talkback:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            self.calls += 1
+            text = (
+                NON_ANSWER
+                if self.calls % 2
+                else "A proper brief body describing the topic now."
+            )
+            return CompletionResult(text, Usage(40, 12))
+
+    client = Talkback()
+    brief(job(), JobContext(db), client=client)
+    assert client.calls == 4  # two nodes, each one retry
+    with db.connect() as conn:
+        for node_id in _node_ids(db):
+            row = briefs.get(conn, node_id)
+            assert row is not None
+            assert row["flagged"] == ""
+            assert "A proper brief body describing" in row["text"]
+            assert row["input_tokens"] == 80  # both calls are what it cost
+
+
+def test_a_persistent_non_answer_is_stored_flagged_not_dropped(
+    db: Database,
+) -> None:
+    client = FakeCompletion(text=NON_ANSWER)
+    brief(job(), JobContext(db), client=client)
+    assert client.calls == 4  # one retry per node, then it gives up
+    with db.connect() as conn:
+        for node_id in _node_ids(db):
+            row = briefs.get(conn, node_id)
+            assert row is not None  # the topic keeps a brief
+            assert row["flagged"] == "asks-the-caller"
+            assert NON_ANSWER in row["text"]
+
+
+def test_a_good_brief_is_never_flagged_or_retried(db: Database) -> None:
+    client = FakeCompletion()
+    brief(job(), JobContext(db), client=client)
+    assert client.calls == 2  # no retry
+    with db.connect() as conn:
+        for node_id in _node_ids(db):
+            row = briefs.get(conn, node_id)
+            assert row is not None
+            assert row["flagged"] == ""

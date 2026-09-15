@@ -1,3 +1,5 @@
+import pytest
+
 from hrono.summarize.faithfulness import faithfulness
 
 SOURCE = (
@@ -23,11 +25,18 @@ def test_a_fabricated_identifier_is_caught() -> None:
     assert "999" in missing
 
 
-def test_slash_compound_supported_when_every_part_is() -> None:
-    # "api/handlers" — both parts appear in source -> supported
+def test_a_slash_compound_is_prose_not_an_identifier() -> None:
+    # F22: reading any slashed token as a name made 6 of 7 flags on the QA
+    # corpus ordinary prose — CI/CD, tabs/spaces/line, binaries/packages.
     assert faithfulness("under api/handlers", SOURCE) == ()
-    # "api/ghost" — ghost is absent -> flagged
-    assert "api/ghost" in faithfulness("under api/ghost", SOURCE)
+    assert faithfulness("under api/ghost", SOURCE) == ()
+    for prose in (
+        "CI/CD",
+        "and/or",
+        "encoding/decoding",
+        "licensor/contributors",
+    ):
+        assert faithfulness(f"it covers {prose} concerns", SOURCE) == ()
 
 
 def test_case_insensitive_support() -> None:
@@ -51,4 +60,46 @@ def test_result_is_sorted_and_deterministic() -> None:
         "7777",
         "alpha_field",
         "zeta_field",
+    )
+
+
+# the eight tokens the QA run's gate flagged on real briefs (F22): only
+# Signer.rsplit is a genuine catch — the brief attributes a str.rsplit call to
+# the Signer API — and the other seven are ordinary prose.
+QA_SOURCE = (
+    "continuous integration runs CI and CD jobs. tabs and line endings. "
+    "the Signer class splits a signed value. TimedSerializer wraps loads and "
+    "dumps. packages ship as binaries for contributors and every licensor. "
+    "encoding helpers handle decoding too."
+)
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "CI/CD",
+        "tabs/spaces/line",
+        "TimedSerializer.loads",
+        "e.g",
+        "binaries/packages",
+        "licensor/contributors",
+        "encoding/decoding",
+    ],
+)
+def test_the_qa_false_positives_are_no_longer_flagged(token: str) -> None:
+    assert faithfulness(f"the brief mentions {token} here", QA_SOURCE) == ()
+
+
+def test_the_one_genuine_qa_catch_still_flags() -> None:
+    assert faithfulness("Signer.rsplit is called", QA_SOURCE) == (
+        "Signer.rsplit",
+    )
+
+
+def test_a_dotted_compound_is_supported_when_both_parts_are() -> None:
+    # the source naming the receiver AND the member supports the combination;
+    # a member that appears nowhere does not.
+    assert faithfulness("call TimedSerializer.loads", QA_SOURCE) == ()
+    assert faithfulness("call TimedSerializer.ghost", QA_SOURCE) == (
+        "TimedSerializer.ghost",
     )

@@ -293,3 +293,90 @@ def test_a_parentless_node_keeps_its_own_brief_path(
     assert len(briefs_written) == len(set(briefs_written)) == 2
     assert f"alpha-topic-{ids['n0']}/brief.md" in files
     assert f"beta-topic-{ids['n1']}/brief.md" in files
+
+
+def test_a_boilerplate_heading_does_not_become_the_directory_name(
+    tmp_path: object,
+) -> None:
+    # #103: a brief opening "## Summary" named its export directory summary-2
+    # in the real run — the brief's shape leaking into the map's navigation.
+    database = Database.at(tmp_path / "b.db")
+    with database.connect() as conn, conn:
+        s0 = add_section(conn, "a.py", b"alpha\n")
+        cluster_store.replace_tree(
+            conn, TREE, 0, [(0, s0, False, None)], [(s0, [0.1])]
+        )
+        root = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 0").fetchone()[
+                "id"
+            ]
+        )
+        brief(
+            conn,
+            root,
+            "## Summary\n\nThis is the signing library, key rotation and all."
+            " It also covers timestamps.",
+        )
+    try:
+        files = _files(database)
+        assert "root.md" in files
+        title = files["root.md"].splitlines()[0]
+        assert "Summary" in title  # the brief itself is rendered as written
+    finally:
+        database.close()
+
+
+def test_a_long_first_line_is_trimmed_to_a_usable_title(
+    tmp_path: object,
+) -> None:
+    database = Database.at(tmp_path / "t.db")
+    with database.connect() as conn, conn:
+        s0 = add_section(conn, "a.py", b"aaaa\n")
+        s1 = add_section(conn, "b.py", b"bbbb\n")
+        cluster_store.replace_tree(
+            conn,
+            TREE,
+            0,
+            [(0, s0, False, None), (1, s1, False, None)],
+            [(s0, [0.1]), (s1, [0.2])],
+        )
+        level0 = sorted(
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE level = 0"
+            ).fetchall()
+        )
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            1,
+            [(0, level0[0], False, None), (0, level0[1], False, None)],
+        )
+        root = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 1").fetchone()[
+                "id"
+            ]
+        )
+        brief(
+            conn,
+            level0[0],
+            "## Summary\n\nThis is a **specification document** for the "
+            "library, a signing and serialization toolkit with key rotation, "
+            "timestamp validation and URL-safe encoding. More follows.",
+        )
+        brief(conn, level0[1], "# Beta topic\n\nBeta stuff.")
+        brief(conn, root, "# Root\n\nAll of it.")
+    try:
+        files = _files(database)
+        directories = {p.rsplit("/", 1)[0] for p in files if "/" in p}
+        assert not [d for d in directories if d.startswith("summary-")]
+        long_one = next(d for d in directories if d.startswith("this-is-a-"))
+        assert len(long_one.rsplit("-", 1)[0]) <= 60  # slug stays a directory
+        links = [
+            line
+            for line in files["root.md"].splitlines()
+            if line.startswith("- [")
+        ]
+        assert all(len(line) < 160 for line in links)  # not a whole paragraph
+    finally:
+        database.close()

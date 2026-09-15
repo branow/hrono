@@ -7,6 +7,11 @@ from node membership — the LLM never writes a reference. Each brief records
 provenance (model, prompt name + template hash, token usage) that #064 freshness
 and the cost API read back.
 
+A reply that is not a summary at all — a question back to the caller, an
+assistant refusal — is retried ONCE and then stored WITH a flag (#103): the
+faithfulness gate cannot catch it, because a non-answer invents nothing, and
+dropping the node would cost the map a whole topic.
+
 A node that already has a brief is skipped, so a re-run over unchanged nodes
 makes zero LLM calls (membership-change invalidation is #064, out of scope).
 Lock discipline mirrors #058/#035: gather the nodes and their condensations
@@ -32,6 +37,7 @@ from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.shape import answer
 
 _CONTENT_PLACEHOLDER = "{content}"
 _LEVEL = 0
@@ -70,8 +76,9 @@ def brief(
     for node_id, condensations, uris, signature in pending:
         source = "\n\n".join(condensations)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
-        result = completion.complete(
-            CompletionRequest(model=model, system="", content=rendered)
+        result, flagged = answer(
+            completion,
+            CompletionRequest(model=model, system="", content=rendered),
         )
         unfaithful = faithfulness(result.text, source)
         text = result.text + _references(uris)
@@ -85,6 +92,7 @@ def brief(
                 prompt_hash=prompt_hash,
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
+                flagged=flagged,
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )

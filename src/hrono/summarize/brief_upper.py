@@ -30,6 +30,7 @@ from hrono.summarize import briefs
 from hrono.summarize.brief import _hash
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.shape import answer
 
 _CONTENT_PLACEHOLDER = "{content}"
 _DEFAULT_LEVEL = 1
@@ -69,8 +70,9 @@ def brief_upper(
     for node_id, child_texts, ids, signature in pending:
         source = "\n\n".join(child_texts)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
-        result = completion.complete(
-            CompletionRequest(model=model, system="", content=rendered)
+        result, flagged = answer(
+            completion,
+            CompletionRequest(model=model, system="", content=rendered),
         )
         unfaithful = faithfulness(result.text, source)
         text = result.text + _references(ids)
@@ -84,6 +86,7 @@ def brief_upper(
                 prompt_hash=prompt_hash,
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
+                flagged=flagged,
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )

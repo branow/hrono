@@ -135,9 +135,29 @@ def _brief_text(conn: sqlite3.Connection, node_id: int) -> str:
 
 
 def _heading(conn: sqlite3.Connection, node_id: int) -> str:
-    lines = _brief_text(conn, node_id).strip().splitlines()
-    first = lines[0].lstrip("#").strip() if lines else ""
-    return first or f"node {node_id}"
+    """A short title for a node, taken from its brief's first real line.
+
+    The brief's SHAPE used to leak into navigation (#103): a brief opening with
+    a generic ``## Summary`` heading named its export directory ``summary-2``,
+    and one opening with a paragraph made the whole paragraph a link title. The
+    brief is not at fault for either — a heading is a reasonable way to start a
+    summary — so the fix is here rather than a shape rule that would retry and
+    flag a perfectly good brief. A boilerplate heading is skipped, markdown
+    emphasis is dropped, and only the first sentence is kept.
+    """
+    for line in _brief_text(conn, node_id).strip().splitlines():
+        title = _title(line)
+        if title and _slug(title) not in _BOILERPLATE:
+            return title
+    return f"node {node_id}"
+
+
+def _title(line: str) -> str:
+    text = _EMPHASIS.sub("", line.lstrip("#").strip())
+    sentence = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0].strip()
+    if len(sentence) <= _TITLE_CHARS:
+        return sentence
+    return sentence[:_TITLE_CHARS].rsplit(" ", 1)[0].rstrip()  # whole words
 
 
 def _name(conn: sqlite3.Connection, node_id: int) -> str:
@@ -156,6 +176,24 @@ def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
 
 def _section_name(conn: sqlite3.Connection, section_id: int) -> str:
     return f"{_slug(_section_heading(conn, section_id))}-{section_id}"
+
+
+_TITLE_CHARS = 80
+_EMPHASIS = re.compile(r"[*_`]+")
+_BOILERPLATE = frozenset(
+    {
+        "summary",
+        "overview",
+        "brief",
+        "introduction",
+        "intro",
+        "description",
+        "topic",
+        "abstract",
+        "contents",
+        "notes",
+    }
+)
 
 
 def _slug(text: str) -> str:

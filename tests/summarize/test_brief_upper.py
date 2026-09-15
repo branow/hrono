@@ -33,7 +33,10 @@ class FakeCompletion:
         self.contents.append(request.content)
         if self._fail_on == self.calls:
             raise LLMError("call failed")
-        return CompletionResult("parent abstraction.", Usage(50, 20))
+        return CompletionResult(
+            "This branch gathers the signing and serialization modules.",
+            Usage(50, 20),
+        )
 
 
 def register(conn: object) -> None:

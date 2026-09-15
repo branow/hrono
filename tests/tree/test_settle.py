@@ -41,7 +41,10 @@ class FakeCompletion:
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         self.calls += 1
-        return CompletionResult("a plain summary.", Usage(10, 4))
+        return CompletionResult(
+            "This topic covers the module's API and how its parts fit.",
+            Usage(10, 4),
+        )
 
 
 def fake_encoder(model_id: str):
