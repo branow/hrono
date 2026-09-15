@@ -11,13 +11,21 @@ from hrono.cluster.build import ClusterResult
 from hrono.cluster.incubator import MAX_AGE, pending
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
+from hrono.export import store as export_store
+from hrono.export.collapse import collapse
+from hrono.export.render import render
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
+from hrono.tree.settle import settle
 from hrono.tree.update import update
-from tests.cluster.invariant import assert_pool_invariant
+from tests.cluster.harness import planted_groups
+from tests.cluster.invariant import (
+    assert_every_leaf_is_reachable,
+    assert_pool_invariant,
+)
 from tests.context import job_context
 
 DIMS = 8
@@ -576,3 +584,142 @@ def test_a_rename_preserves_a_recorded_similarity(
     update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
 
     assert _node_of(db, "f9-renamed.txt") == (node_before, sim_before)
+
+
+_PLANTED, _ = planted_groups(
+    groups=2, per_group=7, dim=DIMS - 1, spread=0.1, noise=0, seed=1
+)
+
+
+def planted(model_id: str):
+    """Aliens land in two real cores; the corpus keeps its flat direction."""
+
+    def encode(texts: list[str]) -> list[list[float]]:
+        out = []
+        for text in texts:
+            if "alien a" in text:
+                index = int(text.split("alien a")[1].split(".")[0])
+                out.append([0.0] + [float(v) for v in _PLANTED[index]])
+            else:
+                out.append([1.0] + [0.0] * (DIMS - 1))
+        return out
+
+    return encode
+
+
+def test_a_leaf_update_drained_in_is_healed_by_the_next_full_pass(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # AC1's residual, driven rather than argued. `update` makes no LLM calls,
+    # so a leaf its drain emits has no brief and cannot be placed by #114's
+    # rule: in a node, written to the export, unreachable from root.md.
+    db, origin = built
+    before = _leaf_ids(db)
+    for i in range(14):
+        add_alien(origin, f"a{i}.txt")
+
+    update(_job("update"), job_context(db, tmp_path), encoder_for=planted)
+
+    emitted = set(_leaf_ids(db)) - set(before)
+    assert emitted  # the drain turned the pool into a new topic
+    assert _nodes_holding(db, "alien/") & emitted  # the chunks live there
+    assert emitted.isdisjoint(_briefed(db))  # update never briefs
+    assert emitted.isdisjoint(_parented(db))  # ... so nothing to place it by
+    assert_pool_invariant(db, "default", "emb")
+
+    # a settle alone does NOT heal it, and the reason is not this ticket:
+    # `brief` needs member condensations and `update` ingests without
+    # condensing (#122), so there is still no brief to attach by.
+    settle(
+        _job("settle"),
+        job_context(db, tmp_path),
+        force=True,
+        build=fake_build,
+        encoder_for=planted,
+        client=FakeCompletion(),
+    )
+    homes = _nodes_holding(db, "alien/")
+    assert homes and not (homes & _briefed(db))
+    assert not _condensed(db, "alien/")  # the #122 dependency, measured
+
+    # the next full pass condenses, briefs, and rebuilds the level above, so
+    # the topic is reachable from root.md again: the residual is bounded.
+    maintain(
+        _job("maintain"),
+        job_context(db, tmp_path),
+        encoder_for=planted,
+        client=FakeCompletion(),
+        build=fake_build,
+    )
+
+    homes = _nodes_holding(db, "alien/")
+    assert homes
+    assert homes <= _briefed(db)
+    assert homes <= _parented(db)
+    files = _export(db)
+    for node_id in homes:
+        directory = next(
+            p.rsplit("/", 1)[0]
+            for p in files
+            if p.endswith(f"-{node_id}/brief.md")
+        )
+        assert directory in files["root.md"]  # reachable by walking the map
+    assert_every_leaf_is_reachable(db, "default")
+
+
+def _condensed(db: Database, prefix: str) -> int:
+    with db.connect() as conn:
+        return int(
+            conn.execute(
+                "SELECT COUNT(*) FROM condensations c "
+                "JOIN sections s ON s.content_hash = c.content_hash "
+                "WHERE s.path LIKE ?",
+                (f"{prefix}%",),
+            ).fetchone()[0]
+        )
+
+
+def _nodes_holding(db: Database, prefix: str) -> set[int]:
+    with db.connect() as conn:
+        return {
+            int(r["node_id"])
+            for r in conn.execute(
+                "SELECT m.node_id FROM node_members m "
+                "JOIN sections s ON s.id = m.section_id "
+                "WHERE s.path LIKE ?",
+                (f"{prefix}%",),
+            ).fetchall()
+        }
+
+
+def _leaf_ids(db: Database) -> list[int]:
+    with db.connect() as conn:
+        return [
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE tree = 'default' AND level = 0"
+            ).fetchall()
+        ]
+
+
+def _parented(db: Database) -> set[int]:
+    with db.connect() as conn:
+        return {
+            int(r["child_id"])
+            for r in conn.execute("SELECT child_id FROM node_children")
+        }
+
+
+def _briefed(db: Database) -> set[int]:
+    with db.connect() as conn:
+        return {
+            int(r["node_id"])
+            for r in conn.execute("SELECT node_id FROM briefs")
+        }
+
+
+def _export(db: Database) -> dict[str, str]:
+    with db.connect() as conn:
+        stored = export_store.load(conn, "default")
+        assert stored is not None
+        return render(conn, collapse(stored, 3))

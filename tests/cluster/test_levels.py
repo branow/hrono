@@ -6,6 +6,7 @@ import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import attach_orphans, cluster_briefs
+from hrono.cluster.placement import TAU
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -255,7 +256,15 @@ def test_a_late_leaf_is_attached_to_the_nearest_parent(
     parent, similarity = _parent_of(db, late)
     assert parent is not None
     assert _group_of_parent(db, parent, groups) == "beta"
-    assert similarity is not None and similarity > 0.5
+    assert similarity is not None and similarity >= TAU
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT attached FROM node_children WHERE child_id = ?", (late,)
+        ).fetchone()
+    # a confident placement is NOT "attached by proximity" (0009_nodes.sql),
+    # and #114 records its similarity anyway — node_children keeps the score on
+    # every row, unlike node_members.
+    assert int(row["attached"]) == 0
 
 
 def test_a_leaf_that_fits_nowhere_is_still_attached(
@@ -291,8 +300,9 @@ def test_a_leaf_that_fits_nowhere_is_still_attached(
         row = conn.execute(
             "SELECT attached FROM node_children WHERE child_id = ?", (late,)
         ).fetchone()
-    assert int(row["attached"]) == 0  # below TAU, recorded as such
-    assert similarity is not None
+    # 0009_nodes.sql: 1 = attached by PROXIMITY, 0 = a confident core member
+    assert int(row["attached"]) == 1
+    assert similarity is not None and similarity < TAU
 
 
 def test_attaching_refreshes_the_parents_signature_and_staleness(

@@ -101,11 +101,27 @@ def attach_orphans(
     the unit vector of its BRIEF against each candidate parent's centroid (the
     mean of its children's brief vectors), best dot product wins.
 
-    Below TAU it still attaches, to the nearest parent, with ``attached``
-    False. Parking is not available one level up — a node in no parent is
-    unreachable, which is worse than an imperfect parent — so this mirrors the
-    incubator's force-assign rather than its park. ``settle``'s drift counters
-    and the next reconcile are what correct a poor placement.
+    Below TAU it still attaches, to the nearest parent, recorded as
+    ``attached = 1`` — the schema's meaning of the flag (0009_nodes.sql): 1 is
+    "attached by proximity", 0 is a confident, density-core placement. Parking
+    is not available one level up: a node under no parent is unreachable, which
+    is worse than an imperfect parent, so this mirrors the incubator's
+    force-assign rather than its park.
+
+    Be honest about the bound: NOTHING currently reads that flag back. There is
+    no SELECT of ``node_children.attached`` or ``assignment_similarity``
+    anywhere; ``monitor`` measures level-0 misfits only; and no path re-clusters
+    an existing upper level (``cluster_briefs`` has one caller, and
+    ``build_tree`` starts at the highest briefed level — the root, once level-1
+    briefs exist — and stops). So a poor attachment stays until a full rebuild
+    re-derives the level, and the flag is a record for the reader that #123 will
+    add, not a safety net that already exists.
+
+    The similarity is recorded on EVERY row, confident or not: it costs nothing
+    (no reader to break), and a placement's score is exactly what a future
+    misfit check one level up needs. That differs from ``node_members``, whose
+    convention leaves it null for core members; 0012_node_children.sql records
+    the divergence.
 
     Returns (child, parent, similarity) per attachment; empty when there is
     nothing to attach or no level above yet (a corpus whose tree is a single
@@ -139,7 +155,9 @@ def attach_orphans(
             for node_id, text in orphans
         }
     if not centroids:
-        return ()
+        return _collect_under_single_parent(
+            context, tree, parent_level, orphans
+        )
 
     attached: list[tuple[int, int, float]] = []
     with context.database.write() as conn:
@@ -152,11 +170,45 @@ def attach_orphans(
                 conn,
                 parent,
                 node_id,
-                attached=similarity >= TAU,
+                attached=similarity < TAU,  # 1 = by proximity, not confident
                 similarity=similarity,
             )
             attached.append((node_id, parent, similarity))
     return tuple(attached)
+
+
+def _collect_under_single_parent(
+    context: JobContext,
+    tree: str,
+    parent_level: int,
+    orphans: Sequence[tuple[int, str]],
+) -> tuple[tuple[int, int, float], ...]:
+    """Re-collect leaves under a top node that has lost all its children.
+
+    A rebuild that re-mints leaf ids cascades the root's edges away with the
+    nodes they pointed at, and ``build_tree`` does not notice: it starts at the
+    highest BRIEFED level, finds the root there, and ``_collect_root`` sees one
+    top node and calls the tree built. The result is a childless root and a
+    level of unreachable leaves. With no children there is no centroid to place
+    by, so this collects rather than places — the same move ``_collect_root``
+    makes, recorded the same way (``attached`` 0, no similarity).
+    """
+    with context.database.connect() as conn:
+        parents = [
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM nodes WHERE tree = ? AND level = ?",
+                (tree, parent_level),
+            ).fetchall()
+        ]
+    if len(parents) != 1:
+        return ()
+    with context.database.write() as conn:
+        for node_id, _ in orphans:
+            store.add_child(
+                conn, parents[0], node_id, attached=False, similarity=None
+            )
+    return tuple((node_id, parents[0], 0.0) for node_id, _ in orphans)
 
 
 def _parent_level(conn: sqlite3.Connection, tree: str) -> int | None:
