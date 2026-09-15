@@ -1,3 +1,4 @@
+import statistics
 from pathlib import Path
 
 import pytest
@@ -108,15 +109,25 @@ def test_budgets_are_hard_maxima_apart_from_crumb_overshoot() -> None:
         assert section.end - section.start <= 2048 + MIN_PARA
 
 
-def test_min_group_lets_a_real_unit_stand_alone() -> None:
-    # each function body is well over MIN_GROUP, so functions do not glue
-    # together: roughly one passage per function.
-    passages = _passages(split(Path("code.py"), CODE))
-    assert len(passages) >= 15
-    # by contrast, tiny statements below MIN_GROUP pack together
+def test_passages_fill_the_budget_instead_of_stopping_at_a_crumb() -> None:
+    # F7: the packer used to flush a group at MIN_GROUP (100 B), capping
+    # passages at a tenth of their budget — a real corpus packed to a 152 B
+    # median with 68% under 200 B. A group is now flushed by the BUDGET alone.
+    for name, raw in (("code.py", CODE), ("doc.md", PROSE)):
+        sizes = sorted(
+            p.end - p.start for p in _passages(split(Path(name), raw))
+        )
+        median = statistics.median(sizes)
+        assert median >= PASSAGE_BYTES / 2, (name, median)
+        assert max(sizes) <= PASSAGE_BYTES
+        # nothing under 200 B in a corpus whose content is far larger
+        assert [s for s in sizes if s < 200] == [], (name, sizes)
+
+
+def test_a_dense_file_packs_into_few_passages_not_one_per_line() -> None:
     small = b"\n".join(b"a%d = %d" % (i, i) for i in range(60)) + b"\n"
     dense = _passages(split(Path("small.py"), small))
-    assert len(dense) < 60
+    assert len(dense) <= 2  # ~570 B of content, one passage's worth
 
 
 def test_byte_chop_splits_an_atomic_span_into_marked_raw_parts() -> None:
@@ -166,3 +177,62 @@ def test_sub_min_para_crumbs_merge_into_a_neighbour() -> None:
     # the crumbs ("x", "y") are not lost — reassembly still exact
     everything = b"".join(CRUMBS[p.start : p.end] for p in _passages(sections))
     assert everything == CRUMBS
+
+
+# structureless blobs: their only whitespace (a tab) is outside the delimiter
+# cascade, so the packer really does reach _chop instead of splitting on a
+# delimiter. TABBED's even target (423) falls mid-run, 61 bytes past a tab.
+TABBED = b"\t".join(b"A" * 120 for _ in range(7))
+UNBROKEN = b"q" * 1805
+
+
+def test_a_chop_cuts_at_whitespace_not_mid_token() -> None:
+    # F8: the smallest passage in the QA corpus was b'tColor = ', a fragment of
+    # an identifier, because _chop sliced raw byte offsets with no backoff.
+    passages = _passages(split(Path("blob.txt"), TABBED))
+    assert len(passages) == 2
+    assert all(p.part is not None for p in passages)  # really the chop path
+    cut = passages[0].end
+    assert TABBED[cut - 1 : cut] == b"\t"  # backed off to the token edge
+    assert cut != 423  # ... which is NOT where the even target fell
+    assert all(p.end - p.start <= PASSAGE_BYTES for p in passages)
+    assert b"".join(TABBED[p.start : p.end] for p in passages) == TABBED
+
+
+def test_a_chop_splits_evenly_rather_than_leaving_a_crumb() -> None:
+    # budget-then-remainder chopping ends in a tail no later pass can fold
+    # away (1805 B became 800/800/205); parts are sized from what is left.
+    sizes = [
+        p.end - p.start for p in _passages(split(Path("blob.txt"), UNBROKEN))
+    ]
+    assert sizes == [602, 602, 601]
+    assert max(sizes) <= PASSAGE_BYTES
+
+
+def test_a_crumb_never_costs_its_neighbour_its_structure(
+    tmp_path: Path,
+) -> None:
+    # a 15 B class header merged forward into an 800 B group, pushing it over
+    # budget, and the backstop then byte-CHOPPED that group: a structural run
+    # of methods came back as raw parts.
+    raw = (
+        b"class Contact:\n"
+        + b"".join(
+            b"    def m%d(self):\n        return %d\n" % (i, i)
+            for i in range(40)
+        )
+        + b"\ndef top():\n    pass\n"
+    )
+    passages = _passages(split(Path("c.py"), raw))
+    assert all(p.part is None for p in passages)  # structure, not raw parts
+    assert all(p.end - p.start <= PASSAGE_BYTES for p in passages)
+    assert b"".join(raw[p.start : p.end] for p in passages) == raw
+
+
+def test_a_chop_with_no_whitespace_still_respects_the_budget() -> None:
+    # the backoff is bounded: an unbroken blob has no token edge to find, so
+    # the hard edge stands rather than the budget being exceeded.
+    raw = b"q" * 5000
+    passages = _passages(split(Path("blob.js"), raw))
+    assert all(p.end - p.start <= PASSAGE_BYTES for p in passages)
+    assert b"".join(raw[p.start : p.end] for p in passages) == raw

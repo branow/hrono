@@ -72,7 +72,7 @@ def store_file(
     address = Address(source_type, instance, path, version)
     stored: list[tuple[int, int, str]] = []
     for ordinal, section in enumerate(
-        pack_sections(tree, section_budget(Path(path)))
+        pack_sections(tree, section_budget(Path(path)), raw)
     ):
         section_hash = _store_body(conn, raw, section.start, section.end)
         section_id = store.insert_section(

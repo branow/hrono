@@ -63,7 +63,7 @@ def store_brief(
     grammar = Path(f"{slug}.md")
     tree = structure(grammar, raw)
     for ordinal, section in enumerate(
-        pack_sections(tree, section_budget(grammar))
+        pack_sections(tree, section_budget(grammar), raw)
     ):
         section_hash = _body(conn, raw, section.start, section.end)
         section_id = store.insert_section(

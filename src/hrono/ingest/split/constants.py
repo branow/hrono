@@ -1,7 +1,7 @@
 """Baked splitting budgets, the delimiter cascade, and section categories.
 
 Operating constants from the settled recipe, not config: the passage budget and
-the tiny/group thresholds, the ordered delimiter cascade, and the extension ->
+the crumb threshold, the ordered delimiter cascade, and the extension ->
 category -> section-budget table (code and docs 10 KB, data 2 KB — each a
 log-scale Kneedle knee of file-size distributions measured over four large
 repos). Values live here as data so the packer walks a table, not literals.
@@ -21,7 +21,6 @@ from pathlib import Path
 
 PASSAGE_BYTES = 800
 MIN_PARA = 64
-MIN_GROUP = 100
 
 
 @dataclass(frozen=True)
