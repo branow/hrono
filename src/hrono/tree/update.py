@@ -14,6 +14,15 @@ force-assigned — and then drained, so a chunk is never pending for longer than
 the pool can justify. Age runs first: the drain re-homes the whole pool anyway,
 so ageing after it would only re-decide chunks the drain already placed.
 
+ONE BATCH NUMBER PER RUN, not per source (#099). ``tree_batch.batch`` is the
+clock incubator ageing measures against (``current_batch - parked_at >
+MAX_AGE``), so counting a run over three changed sources as three batches ages
+parked chunks three times too fast — and a force-assigned member is never
+revisited today (#113), which makes premature forcing permanent. The number is
+allocated LAZILY, by the first source that actually has changes, so a run over
+an unchanged corpus leaves the counter alone; every later source in the same
+run reuses it.
+
 Lock discipline like the other ops: the diff + centroid snapshot + section
 reconcile run under one #008 write lock (so the centroids are consistently
 pre-batch), embed runs its heavy compute under its own lock, then placement
@@ -53,9 +62,12 @@ def update(
         ]
         model_name = str(resolve_embedding_model(conn, job.scope)["name"])
 
+    batch: int | None = None
     for name in sources:
         sync(_stage(tree, "sync", {"type": "source", "name": name}), context)
-        _update_source(context, tree, name, model_name, encoder_for)
+        batch = _update_source(
+            context, tree, name, model_name, encoder_for, batch
+        )
 
 
 def _update_source(
@@ -64,7 +76,15 @@ def _update_source(
     name: str,
     model_name: str,
     encoder_for: object | None,
-) -> None:
+    batch: int | None,
+) -> int | None:
+    """Apply one source's delta; return the run's batch, allocating it once.
+
+    ``batch`` is the number already allocated by an earlier source in THIS run,
+    or None if nothing has changed yet — a source with no changes passes it
+    straight through, so a run over an unchanged corpus never touches the
+    counter at all.
+    """
     config, version = _load(context, name)
     raw_filter = config.get("filter")
     filter_config = raw_filter if isinstance(raw_filter, dict) else None
@@ -72,7 +92,7 @@ def _update_source(
     with context.database.write() as conn:
         changes = diff.diff(conn, name, cache, filter_config)
         if not changes:
-            return
+            return batch
         centroids = cluster_store.node_centroids(conn, tree, model_name)
         deltas = reconcile.reconcile(
             conn,
@@ -84,14 +104,15 @@ def _update_source(
             cache=cache,
             changes=changes,
         )
-        batch = _next_batch(conn, tree)
+        current = _next_batch(conn, tree) if batch is None else batch
 
     embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
 
     with context.database.write() as conn:
-        placement.place(conn, tree, deltas, centroids, model_name, batch)
-        incubator.age(conn, tree, model_name, batch)
+        placement.place(conn, tree, deltas, centroids, model_name, current)
+        incubator.age(conn, tree, model_name, current)
     incubator.drain(context.database, tree, model_name)
+    return current
 
 
 def _next_batch(conn: object, tree: str) -> int:

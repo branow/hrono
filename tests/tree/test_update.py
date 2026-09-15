@@ -343,3 +343,108 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
     assert _pending(db) == []
     assert _forced_node(db, "alien/g9.txt") is not None
     assert _forced_node(db, "g9.txt") is None  # its homed twin never moved
+
+
+def _batch(db: Database) -> int:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT batch FROM tree_batch WHERE tree = 'default'"
+        ).fetchone()
+    return 0 if row is None else int(row["batch"])
+
+
+def add_source(db: Database, name: str, url: str) -> None:
+    with db.connect() as conn, conn:
+        registry_store.insert(
+            conn,
+            "sources",
+            name,
+            json.dumps({"name": name, "type": "git", "url": url, "auth": {}}),
+            None,
+            "t",
+        )
+
+
+def test_n_update_runs_advance_the_batch_counter_by_exactly_n(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    start = _batch(db)
+    for i in range(4):
+        edit(origin, "f1.txt", f"module 1 revision {i}\n")
+        update(
+            _job("update"), job_context(db, tmp_path), encoder_for=fake_encoder
+        )
+        assert _batch(db) == start + i + 1
+
+
+def test_a_run_over_two_changed_sources_bumps_the_counter_once(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the defect: _next_batch lived in _update_source, so a run over three
+    # changed sources counted three batches and aged parked chunks that much
+    # faster than MAX_AGE intends (#099).
+    db, origin = built
+    second = tmp_path / "second-repo"
+    add_source(db, "second", make_repo(second, files=4))
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    start = _batch(db)
+
+    edit(origin, "f1.txt", "module 1 changed in the first source\n")
+    edit(second, "f1.txt", "module 1 changed in the second source\n")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+
+    assert _batch(db) == start + 1  # one run, one batch — not one per source
+    assert _hashes(db, "f1.txt")  # both sources' changes did land
+    with db.connect() as conn:
+        changed = {
+            row["source"]
+            for row in conn.execute(
+                "SELECT DISTINCT source FROM sections WHERE path = 'f1.txt'"
+            ).fetchall()
+        }
+    assert changed == {"repo", "second"}
+
+
+def test_a_run_with_no_changes_leaves_the_counter_alone(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, _origin = built
+    before = _batch(db)
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    assert _batch(db) == before
+
+
+def test_ageing_measures_runs_not_changed_sources(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the boundary the re-run watches: a chunk parked at batch B is forced only
+    # once current - B > MAX_AGE. With the counter bumping per SOURCE, two
+    # changed sources per run reached that in half the runs.
+    db, origin = built
+    second = tmp_path / "second-repo"
+    add_source(db, "second", make_repo(second, files=4))
+    add_alien(origin, "zz.txt")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    parked = _pending(db)
+    assert parked == [("alien/zz.txt", _batch(db))]
+    parked_at = parked[0][1]
+
+    for i in range(MAX_AGE):  # MAX_AGE runs, each touching BOTH sources
+        edit(origin, "f1.txt", f"first source revision {i}\n")
+        edit(second, "f1.txt", f"second source revision {i}\n")
+        update(
+            _job("update"), job_context(db, tmp_path), encoder_for=alien_encoder
+        )
+        assert_pool_invariant(db, "default", "emb")
+
+    assert _batch(db) - parked_at == MAX_AGE  # exactly at the boundary
+    assert _pending(db) == [("alien/zz.txt", parked_at)]  # not forced yet
+
+    edit(origin, "f1.txt", "one run past the boundary\n")
+    edit(second, "f1.txt", "one run past the boundary\n")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+
+    assert _batch(db) - parked_at == MAX_AGE + 1
+    assert _pending(db) == []  # forced only now
+    assert _forced_node(db, "alien/zz.txt") is not None

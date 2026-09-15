@@ -43,7 +43,13 @@ from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.db.update_log import record
 
-MAX_AGE = 5  # batches a chunk may wait while the pool stays below the minimum
+# A "batch" is ONE `update` RUN over the tree, not one changed source in it
+# (#099): the run allocates a single `tree_batch.batch` and every source it
+# touches stamps parked chunks with that number, so the wait below is measured
+# in runs. `park` keeps the batch a chunk was FIRST parked at
+# (ON CONFLICT DO NOTHING, #095), and a chunk that joins a node is unparked, so
+# the clock only ever runs while the chunk is genuinely homeless.
+MAX_AGE = 5  # update runs a chunk may wait while the pool stays too small
 
 CoreLabeler = Callable[[Sequence[Sequence[float]]], Sequence[int]]
 Parked = tuple[int, str, str, int]  # section id, content hash, path, batch
