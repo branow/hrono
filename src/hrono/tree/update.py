@@ -14,6 +14,16 @@ force-assigned — and then drained, so a chunk is never pending for longer than
 the pool can justify. Age runs first: the drain re-homes the whole pool anyway,
 so ageing after it would only re-decide chunks the drain already placed.
 
+A leaf the drain emits here is NOT parented, and not briefed either: both need
+the brief pass this op deliberately does not run (``update`` makes no LLM calls
+at all). #114's attach places a leaf by its BRIEF vector, so there is nothing to
+place until something briefs it — the next ``settle`` or ``maintain`` briefs,
+attaches and re-briefs its parent in one pass, and the drain's own churn is what
+tends to trigger that settle. Until then the chunks are in a node and written to
+the export, but unreachable from ``root.md``: better than parked and invisible,
+worse than reachable, and bounded by the next brief pass. Briefing inside
+``update`` is the same question #122 asks about condensing, and belongs there.
+
 ONE BATCH NUMBER PER RUN, not per source (#099). ``tree_batch.batch`` is the
 clock incubator ageing measures against (``current_batch - parked_at >
 MAX_AGE``), so counting a run over three changed sources as three batches ages

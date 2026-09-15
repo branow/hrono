@@ -8,6 +8,12 @@ from level 0 and a re-run over an already-built tree starts at the root and does
 nothing (idempotent, no duplicate levels — never rebuilding a level under an
 already-built parent, per #060's node_children cascade constraint).
 
+A leaf that appears AFTER the recursion — the incubator's drain emits them
+(#095) — cannot be seen by it: the pass starts at the highest briefed level,
+which is already the root. Such leaves are attached to their nearest parent
+afterwards and that parent is re-briefed (#114, attach-only); without the edge
+the topic is written to the export but unreachable from ``root.md``.
+
 Termination is guarded four ways so a pathological corpus cannot spin: a level
 of one node IS the root; a level too sparse to cluster raises ``ClusterError``
 near the root and stops (declaring the current top the root); a level that fails
@@ -22,7 +28,7 @@ import sqlite3
 
 from hrono.cluster import ClusterError
 from hrono.cluster import store as cluster_store
-from hrono.cluster.levels import cluster_briefs
+from hrono.cluster.levels import attach_orphans, cluster_briefs
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion
@@ -75,6 +81,47 @@ def build_tree(
         level += 1
 
     _collect_root(context, tree, client)
+    _adopt_late_leaves(context, tree, client, encoder_for)
+
+
+def _adopt_late_leaves(
+    context: JobContext,
+    tree: str,
+    client: Completion | None,
+    encoder_for: object | None,
+) -> None:
+    """Attach leaves born after the recursion, then re-brief their parents.
+
+    The incubator emits new leaves long after the tree was built (#095), and the
+    recursion cannot see them: it starts at the highest BRIEFED level, finds one
+    root there and stops. The leaf is briefed and written to the export but
+    nothing links to it from ``root.md`` (#114). ATTACH-ONLY, per #085's rule
+    one level up — see ``levels.attach_orphans``.
+
+    The parent gains a child, so its brief no longer describes its children:
+    ``brief_upper`` re-runs for that level, which #064 makes cheap — only the
+    node whose child-set signature changed is regenerated, its siblings are
+    skipped. Leaving it stale instead would ship a parent brief that omits the
+    topic underneath it, which is this ticket's harm one level up.
+    """
+    attached = attach_orphans(
+        _level_job(tree, 0), context, encoder_for=encoder_for
+    )
+    if not attached:
+        return
+    with context.database.connect() as conn:
+        levels = sorted(
+            {_level_of(conn, parent) for _, parent, _ in attached} - {None}
+        )
+    for level in levels:
+        brief_upper(_level_job(tree, int(level)), context, client=client)
+
+
+def _level_of(conn: sqlite3.Connection, node_id: int) -> int | None:
+    row = conn.execute(
+        "SELECT level FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()
+    return None if row is None else int(row["level"])
 
 
 def _collect_root(

@@ -26,15 +26,14 @@ obsoletes, and a ``drain`` clears any residue the rebuild could not reach. Its
 place in the chain is fixed by what it needs and what it produces — AFTER the
 embed pass that makes a late chunk placeable at all, and BEFORE ``brief``, so a
 leaf node the drain emits is briefed in this same settle rather than left blank
-until the next trigger. It is NOT parented: ``build_tree`` starts at the highest
-briefed level and never revisits level 0, so a leaf born after the recursion
-hangs under no parent. It is still written to the export (#096 gives every
-parentless node its own directory), but nothing links to it from ``root.md``, so
-an agent walking the map from the root never reaches it (backlog #114). The
-closing
-embed then vectorises the node:// brief passages, as ``maintain`` does. The
-drain runs its own mini-pipeline off the #008 lock, like every other heavy step
-here.
+until the next trigger. ``build_tree`` then attaches it: the recursion itself
+cannot see a leaf born after it (it starts at the highest briefed level, which
+is already the root), so the leaf is placed under its nearest parent afterwards
+and that parent is re-briefed (#114). Without that edge the topic is written to
+the export but unreachable from ``root.md``, whose child listing is rendered
+from parent edges. The closing embed then vectorises the node:// brief passages,
+as ``maintain`` does, and the drain runs its own mini-pipeline off the #008
+lock, like every other heavy step here.
 """
 
 from __future__ import annotations

@@ -12,6 +12,7 @@ from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
+from tests.cluster.invariant import assert_every_leaf_is_reachable
 from tests.context import job_context
 
 DIMS = 8
@@ -177,6 +178,7 @@ def test_builds_a_fresh_tree_end_to_end_to_a_single_root(
     by_level = {int(r["level"]): int(r["c"]) for r in levels}
     assert max(by_level) >= 1  # recursed above the leaf level
     assert by_level[max(by_level)] == 1  # to a single root
+    assert_every_leaf_is_reachable(db, "default")  # every topic on the map
 
 
 def _source_embeddings(db: Database) -> int:

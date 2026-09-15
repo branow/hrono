@@ -149,6 +149,58 @@ def replace_level(
             )
 
 
+def add_child(
+    conn: sqlite3.Connection,
+    parent_id: int,
+    child_id: int,
+    *,
+    attached: bool,
+    similarity: float | None,
+) -> None:
+    """Attach one existing node to a parent one level up (#114).
+
+    The late-arrival counterpart of ``add_member``: a leaf the incubator emits
+    after ``build_tree`` has recursed has no parent, and ``root.md``'s child
+    listing is rendered from parent EDGES, so an agent walking the map from the
+    root never reaches it. Refreshes the parent's signature over its child ids
+    — the same value ``replace_level`` writes — so #068 still matches the parent
+    to itself at the next rebuild, and #064 sees the parent's brief as stale.
+    """
+    conn.execute(
+        "INSERT INTO node_children(parent_id, child_id, attached, "
+        "assignment_similarity, created_at) VALUES (?, ?, ?, ?, ?)",
+        (parent_id, child_id, int(attached), similarity, _now()),
+    )
+    conn.execute(
+        "UPDATE nodes SET signature = ? WHERE id = ?",
+        (node_child_signature(conn, parent_id), parent_id),
+    )
+
+
+def node_child_signature(conn: sqlite3.Connection, node_id: int) -> str:
+    """The signature of an upper node's current child node ids."""
+    rows = conn.execute(
+        "SELECT child_id FROM node_children WHERE parent_id = ? "
+        "ORDER BY child_id",
+        (node_id,),
+    ).fetchall()
+    return _signature(f"n{int(row['child_id'])}" for row in rows)
+
+
+def unparented(
+    conn: sqlite3.Connection, tree: str, level: int = 0
+) -> tuple[int, ...]:
+    """Nodes at ``level`` with no parent edge — unreachable from the root."""
+    return tuple(
+        int(row["id"])
+        for row in conn.execute(
+            "SELECT id FROM nodes WHERE tree = ? AND level = ? AND id NOT IN "
+            "(SELECT child_id FROM node_children) ORDER BY id",
+            (tree, level),
+        ).fetchall()
+    )
+
+
 def _reconcile(
     conn: sqlite3.Connection,
     tree: str,

@@ -4,7 +4,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from hrono.cluster.levels import cluster_briefs
+from hrono.cluster import store as cluster_store
+from hrono.cluster.levels import attach_orphans, cluster_briefs
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -190,3 +191,164 @@ def test_clustering_is_deterministic(tmp_path: object) -> None:
         groups.append(sorted(_partition(database, node_group)))
         database.close()
     assert groups[0] == groups[1]
+
+
+def _new_leaf(conn: object, text: str) -> int:
+    cursor = conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO nodes(tree, level, label, created_at) "
+        "VALUES ('default', 0, -1, 't')"
+    )
+    node_id = int(cursor.lastrowid)
+    briefs.upsert(
+        conn,  # type: ignore[arg-type]
+        node_id,
+        text,
+        model_name="emb",
+        prompt_name="brief",
+        prompt_hash="h",
+        member_signature="sig",
+        input_tokens=1,
+        output_tokens=1,
+    )
+    return node_id
+
+
+def _parent_of(db: Database, child: int) -> tuple[int | None, float | None]:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT parent_id, assignment_similarity AS sim, attached "
+            "FROM node_children WHERE child_id = ?",
+            (child,),
+        ).fetchone()
+    return (None, None) if row is None else (int(row["parent_id"]), row["sim"])
+
+
+def _group_of_parent(db: Database, parent: int, groups: dict[int, str]) -> str:
+    with db.connect() as conn:
+        children = [
+            int(r["child_id"])
+            for r in conn.execute(
+                "SELECT child_id FROM node_children WHERE parent_id = ? "
+                "AND child_id IN (SELECT id FROM nodes WHERE level = 0)",
+                (parent,),
+            ).fetchall()
+        ]
+    named = [groups[c] for c in children if c in groups]
+    return max(set(named), key=named.count)
+
+
+def test_a_late_leaf_is_attached_to_the_nearest_parent(
+    seeded: tuple[Database, dict[int, str]],
+) -> None:
+    # #114: a leaf the incubator emitted after build_tree recursed has no
+    # parent, so root.md — whose children are rendered from parent edges —
+    # never links it. It joins the topic its BRIEF is nearest to.
+    db, groups = seeded
+    encoder = fake_encoder_for([])
+    cluster_briefs(job(), JobContext(db), encoder_for=encoder)
+    with db.connect() as conn, conn:
+        late = _new_leaf(conn, "beta topic number 99")
+
+    attached = attach_orphans(job(), JobContext(db), encoder_for=encoder)
+
+    assert [child for child, _, _ in attached] == [late]
+    parent, similarity = _parent_of(db, late)
+    assert parent is not None
+    assert _group_of_parent(db, parent, groups) == "beta"
+    assert similarity is not None and similarity > 0.5
+
+
+def test_a_leaf_that_fits_nowhere_is_still_attached(
+    seeded: tuple[Database, dict[int, str]],
+) -> None:
+    # parking is not available one level up: a node under no parent is
+    # unreachable, which is worse than an imperfect parent. It lands on the
+    # nearest one with attached=0 so the monitor/settle path can see it.
+    db, _ = seeded
+
+    def three_way(model_id: str):
+        def encode(texts: list[str]) -> list[list[float]]:
+            out = []
+            for text in texts:
+                base = [0.0] * DIMS
+                base[
+                    2 if "gamma" in text else (0 if "alpha" in text else 1)
+                ] = 1.0
+                out.append(base)
+            return out
+
+        return encode
+
+    cluster_briefs(job(), JobContext(db), encoder_for=three_way)
+    with db.connect() as conn, conn:
+        late = _new_leaf(conn, "gamma unrelated material entirely")
+
+    attach_orphans(job(), JobContext(db), encoder_for=three_way)
+
+    parent, similarity = _parent_of(db, late)
+    assert parent is not None
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT attached FROM node_children WHERE child_id = ?", (late,)
+        ).fetchone()
+    assert int(row["attached"]) == 0  # below TAU, recorded as such
+    assert similarity is not None
+
+
+def test_attaching_refreshes_the_parents_signature_and_staleness(
+    seeded: tuple[Database, dict[int, str]],
+) -> None:
+    # the parent gained a child, so #068 must still match it to itself at the
+    # next rebuild and #064 must see its brief as stale — a parent brief that
+    # omits the topic underneath it is this ticket's harm one level up.
+    db, _ = seeded
+    encoder = fake_encoder_for([])
+    cluster_briefs(job(), JobContext(db), encoder_for=encoder)
+    with db.connect() as conn, conn:
+        late = _new_leaf(conn, "beta topic number 98")
+    attach_orphans(job(), JobContext(db), encoder_for=encoder)
+
+    parent, _ = _parent_of(db, late)
+    assert parent is not None
+    with db.connect() as conn:
+        stored = conn.execute(
+            "SELECT signature FROM nodes WHERE id = ?", (parent,)
+        ).fetchone()["signature"]
+        assert stored == cluster_store.node_child_signature(conn, parent)
+        assert briefs.member_signature(conn, parent) != "sig"
+
+
+def test_attach_is_a_no_op_while_the_tree_is_a_single_level(
+    seeded: tuple[Database, dict[int, str]],
+) -> None:
+    # normal for a small corpus: build_tree's _collect_root gives it a root
+    # before there is anything to be reachable from.
+    db, _ = seeded
+    assert (
+        attach_orphans(job(), JobContext(db), encoder_for=fake_encoder_for([]))
+        == ()
+    )
+    with db.connect() as conn:
+        assert (
+            conn.execute("SELECT COUNT(*) FROM node_children").fetchone()[0]
+            == 0
+        )
+
+
+def test_a_leaf_with_no_brief_is_left_for_the_next_brief_pass(
+    seeded: tuple[Database, dict[int, str]],
+) -> None:
+    # the update path: its drain emits leaves and update never briefs, so there
+    # is no vector to place them by until a brief pass runs.
+    db, _ = seeded
+    encoder = fake_encoder_for([])
+    cluster_briefs(job(), JobContext(db), encoder_for=encoder)
+    with db.connect() as conn, conn:
+        cursor = conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('default', 0, -1, 't')"
+        )
+        unbriefed = int(cursor.lastrowid)
+
+    assert attach_orphans(job(), JobContext(db), encoder_for=encoder) == ()
+    assert _parent_of(db, unbriefed) == (None, None)

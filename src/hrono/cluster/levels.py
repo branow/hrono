@@ -18,9 +18,11 @@ path is invented. Heavy compute runs outside the #008 lock like #040.
 from __future__ import annotations
 
 import math
+import sqlite3
 from collections.abc import Callable, Sequence
 
 from hrono.cluster import ClusterError, store
+from hrono.cluster.placement import TAU
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
 from hrono.embed.store import get_vector
@@ -79,6 +81,138 @@ def cluster_briefs(
     ]
     with context.database.write() as conn:
         store.replace_level(conn, tree, source_level + 1, members)
+
+
+def attach_orphans(
+    job: Job,
+    context: JobContext,
+    *,
+    encoder_for: object | None = None,
+) -> tuple[tuple[int, int, float], ...]:
+    """Parent every unparented leaf under its nearest node one level up.
+
+    ATTACH-ONLY (#114): a leaf the incubator emits after ``build_tree`` has
+    recursed to a root is briefed but has no parent, and ``root.md``'s children
+    are rendered from parent edges — so the topic is written to the export and
+    unreachable in it. Re-clustering the level above for one new leaf would
+    churn every sibling's membership and invalidate the briefs over them, which
+    is the incremental promise inverted; this places the leaf by the same move
+    #085 makes at level 0, in the same space the level above was clustered in:
+    the unit vector of its BRIEF against each candidate parent's centroid (the
+    mean of its children's brief vectors), best dot product wins.
+
+    Below TAU it still attaches, to the nearest parent, with ``attached``
+    False. Parking is not available one level up — a node in no parent is
+    unreachable, which is worse than an imperfect parent — so this mirrors the
+    incubator's force-assign rather than its park. ``settle``'s drift counters
+    and the next reconcile are what correct a poor placement.
+
+    Returns (child, parent, similarity) per attachment; empty when there is
+    nothing to attach or no level above yet (a corpus whose tree is a single
+    level is normal — ``_collect_root`` gives it a root first).
+    """
+    tree = job.tree or "default"
+    with context.database.connect() as conn:
+        leaf_briefs = briefs.level_briefs(conn, tree, 0)
+        homeless = set(store.unparented(conn, tree, 0))
+        orphans = [(nid, text) for nid, text in leaf_briefs if nid in homeless]
+        parent_level = _parent_level(conn, tree)
+    if not orphans or parent_level is None:
+        return ()
+
+    # every leaf brief, not just the orphans': a candidate parent's centroid is
+    # the mean of its CHILDREN's brief vectors, and a sibling re-briefed since
+    # the level above was clustered has no vector for its current text yet.
+    with context.database.write() as conn:
+        for _, text in leaf_briefs:
+            body = text.encode("utf-8")
+            upsert_content(conn, content_hash(body), body)
+    embed(job, context, encoder_for=encoder_for)
+
+    with context.database.connect() as conn:
+        model_name = str(resolve_embedding_model(conn, job.scope)["name"])
+        centroids = _parent_centroids(conn, tree, parent_level, model_name)
+        vectors = {
+            node_id: get_vector(
+                conn, content_hash(text.encode("utf-8")), model_name
+            )
+            for node_id, text in orphans
+        }
+    if not centroids:
+        return ()
+
+    attached: list[tuple[int, int, float]] = []
+    with context.database.write() as conn:
+        for node_id, _ in orphans:
+            vector = vectors.get(node_id)
+            if vector is None:
+                continue
+            parent, similarity = _nearest(_unit(vector), centroids)
+            store.add_child(
+                conn,
+                parent,
+                node_id,
+                attached=similarity >= TAU,
+                similarity=similarity,
+            )
+            attached.append((node_id, parent, similarity))
+    return tuple(attached)
+
+
+def _parent_level(conn: sqlite3.Connection, tree: str) -> int | None:
+    row = conn.execute(
+        "SELECT MIN(level) AS level FROM nodes WHERE tree = ? AND level > 0",
+        (tree,),
+    ).fetchone()
+    return None if row is None or row["level"] is None else int(row["level"])
+
+
+def _parent_centroids(
+    conn: sqlite3.Connection, tree: str, level: int, model_name: str
+) -> dict[int, tuple[float, ...]]:
+    """Each parent's centroid: the mean of its children's brief vectors."""
+    children: dict[int, list[tuple[float, ...]]] = {}
+    parents = [
+        int(row["id"])
+        for row in conn.execute(
+            "SELECT id FROM nodes WHERE tree = ? AND level = ? ORDER BY id",
+            (tree, level),
+        ).fetchall()
+    ]
+    for parent_id in parents:
+        for row in conn.execute(
+            "SELECT b.text AS text FROM node_children c "
+            "JOIN briefs b ON b.node_id = c.child_id WHERE c.parent_id = ?",
+            (parent_id,),
+        ).fetchall():
+            vector = get_vector(
+                conn, content_hash(row["text"].encode("utf-8")), model_name
+            )
+            if vector is not None:
+                children.setdefault(parent_id, []).append(_unit(vector))
+    return {
+        parent_id: _mean(vectors)
+        for parent_id, vectors in children.items()
+        if vectors
+    }
+
+
+def _mean(vectors: Sequence[Sequence[float]]) -> tuple[float, ...]:
+    total = [
+        sum(values) / len(vectors) for values in zip(*vectors, strict=True)
+    ]
+    return _unit(total)
+
+
+def _nearest(
+    vector: Sequence[float], centroids: dict[int, tuple[float, ...]]
+) -> tuple[int, float]:
+    scored = [
+        (sum(a * b for a, b in zip(vector, centroid, strict=True)), parent_id)
+        for parent_id, centroid in centroids.items()
+    ]
+    similarity, parent_id = max(scored)
+    return parent_id, similarity
 
 
 def _source_level(scope: dict[str, object]) -> int:

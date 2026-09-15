@@ -28,7 +28,10 @@ from hrono.tree import settle as settle_mod
 from hrono.tree.maintain import maintain
 from hrono.tree.settle import CHURN_THRESHOLD, settle, should_settle
 from tests.cluster.harness import planted_groups
-from tests.cluster.invariant import assert_pool_invariant
+from tests.cluster.invariant import (
+    assert_every_leaf_is_reachable,
+    assert_pool_invariant,
+)
 from tests.context import job_context
 
 DIMS = 8
@@ -383,16 +386,15 @@ def planted_encoder(model_id: str):
     return encode
 
 
-def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
+def test_a_leaf_node_the_settle_drain_emits_is_briefed_and_reachable(
     built: Database,
     tmp_path: Path,
 ) -> None:
-    # the drain runs BEFORE the brief pass, so a leaf node it emits is
-    # summarised in the same settle rather than left blank until the next
-    # trigger — with drift already reset, nothing would re-trigger. It is not
-    # PARENTED: build_tree starts at the highest briefed level and never
-    # revisits level 0 (backlog #114). Pinned so settle's docstring and the
-    # code cannot drift apart again; #114 flips the second half.
+    # the drain runs BEFORE the brief pass, so a leaf it emits is summarised in
+    # the same settle; #114 then attaches it to its nearest parent, because
+    # root.md's children are rendered from parent EDGES — without one the topic
+    # is written to the export and unreachable in it. Pinned so settle's
+    # docstring and the code cannot drift apart again.
     before = _leaf_ids(built)
     _park_unembedded(built, 14)
     settle(
@@ -406,12 +408,8 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
     emitted = set(_leaf_ids(built)) - set(before)
     assert emitted  # the drain reduced the pool into real clusters
     assert emitted <= _briefed(built)
-    parented = _parented(built)
-    assert parented  # the pre-drain leaves DO hang under the root
-    assert emitted.isdisjoint(parented)
-    # and the harm that unparenting actually does (#096 changed it): the leaf
-    # IS written to the export, it is simply not linked from root.md, so an
-    # agent walking the map from the root never reaches it.
+    assert emitted <= _parented(built)  # #114: an edge, so root.md links it
+
     files = _export(built)
     for node_id in emitted:
         directory = next(
@@ -420,14 +418,9 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed_not_parented(
             if p.endswith(f"-{node_id}/brief.md")
         )
         assert f"{directory}/brief.md" in files
-        assert directory not in files["root.md"]
-    # a PARENTED leaf's directory is in root.md, so the check above bites
-    assert [
-        p.rsplit("/", 1)[0]
-        for p in files
-        if p.endswith("/brief.md") and p.rsplit("/", 1)[0] in files["root.md"]
-    ]
+        assert directory in files["root.md"]  # reachable by walking the map
     assert_pool_invariant(built, TREE, "emb")
+    assert_every_leaf_is_reachable(built, TREE)
 
 
 def _export(db: Database) -> dict[str, str]:

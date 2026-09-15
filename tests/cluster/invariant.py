@@ -62,3 +62,33 @@ def assert_pool_invariant(db: Database, tree: str, model: str) -> None:
 
     for path, wait in placeable:
         assert batch - wait <= MAX_AGE, f"{path} pending {batch - wait} batches"
+
+
+def assert_every_leaf_is_reachable(db: Database, tree: str) -> None:
+    """Assert no level-0 node is orphaned once the tree has a level above it.
+
+    ``root.md``'s child listing is rendered from parent EDGES (#079), so a leaf
+    with no parent is written to the export and unreachable in it — an agent
+    walking the map from the root never sees the topic (#114). Vacuous while a
+    tree is a single level: ``build_tree``'s ``_collect_root`` gives it a root
+    before there is anything to be reachable from.
+    """
+    with db.connect() as conn:
+        above = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE tree = ? AND level > 0", (tree,)
+        ).fetchone()[0]
+        if not above:
+            return
+        orphans = [
+            (int(row["id"]), row["path"])
+            for row in conn.execute(
+                "SELECT n.id AS id, "
+                "(SELECT s.path FROM node_members m "
+                " JOIN sections s ON s.id = m.section_id "
+                " WHERE m.node_id = n.id LIMIT 1) AS path "
+                "FROM nodes n WHERE n.tree = ? AND n.level = 0 "
+                "AND n.id NOT IN (SELECT child_id FROM node_children)",
+                (tree,),
+            ).fetchall()
+        ]
+    assert not orphans, f"leaf nodes unreachable from the root: {orphans}"
