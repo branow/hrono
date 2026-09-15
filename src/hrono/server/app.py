@@ -105,6 +105,10 @@ def create_app(
     cipher to use. ``app.state.db`` lends a connection per operation, so one
     failed op cannot leave the next one wedged, and jobs left ``running`` by a
     previous process go back on the queue before the worker starts.
+
+    The ingest cache hangs off ``db_path`` (#098), so an app built from an
+    injected ``connection`` has no cache root and its worker refuses ingest ops
+    instead of resolving one against the working directory.
     """
 
     @asynccontextmanager
@@ -129,7 +133,12 @@ def create_app(
             cipher = Cipher.from_key(master_key, app.state.key_id)
             reclaim_stranded(database)
             worker = Worker(
-                database, cipher=cipher, cache_root=cache_root(db_path)
+                database,
+                cipher=cipher,
+                # an injected connection says nothing about where its file is,
+                # so there is no anchor to hang a cache on: None makes an
+                # ingest op raise rather than guess a cwd-relative one (#098).
+                cache_root=cache_root(db_path) if owned else None,
             )
             app.state.worker = worker
             worker.start()

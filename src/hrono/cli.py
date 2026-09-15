@@ -103,12 +103,30 @@ def reset(
     try:
         removed = wipe(db_path)
     except AppError as exc:
+        # a wipe that stopped part-way still owes the operator the list of what
+        # it destroyed — that report is what recovery is planned from.
+        _report_removed(_removed_so_far(exc))
         typer.echo(cli_message(exc), err=True)
         raise typer.Exit(1) from exc
+    _report_removed(removed)
+    typer.echo("Run 'hrono serve' to bootstrap a fresh admin token.")
+
+
+def _removed_so_far(error: AppError) -> tuple[Path, ...]:
+    done = (error.details or {}).get("removed")
+    return (
+        tuple(Path(str(path)) for path in done)
+        if isinstance(done, list)
+        else ()
+    )
+
+
+def _report_removed(removed: tuple[Path, ...]) -> None:
+    if not removed:
+        return
     typer.echo("Removed:")
     for path in removed:
         typer.echo(f"  {path}")
-    typer.echo("Run 'hrono serve' to bootstrap a fresh admin token.")
 
 
 @app.command()

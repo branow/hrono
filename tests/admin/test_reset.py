@@ -4,7 +4,13 @@ import pytest
 from typer.testing import CliRunner
 
 from hrono import cli
-from hrono.admin.reset import NotHronoDatabase, targets, wipe
+from hrono.admin.reset import (
+    LinkedCache,
+    NotHronoDatabase,
+    ResetIncomplete,
+    targets,
+    wipe,
+)
 from hrono.auth.bootstrap import bootstrap_admin
 from hrono.auth.users import create_user, list_users
 from hrono.db.database import DEFAULT_PATH, open_database
@@ -132,3 +138,97 @@ def test_reset_targets_report_the_cache_before_deleting(
     (DEFAULT_PATH.parent / "cache" / "sources").mkdir(parents=True)
     listed = targets(DEFAULT_PATH)
     assert DEFAULT_PATH.parent / "cache" in listed
+
+
+def _hrono_db(root: Path) -> Path:
+    db_path = root / ".hrono" / "hrono.db"
+    db_path.parent.mkdir(parents=True)
+    open_database(db_path).close()
+    return db_path
+
+
+def test_a_symlinked_cache_is_refused_before_anything_is_deleted(
+    tmp_path: Path,
+) -> None:
+    # rmtree refuses a top-level symlink BY DESIGN, and the database is removed
+    # first, so an unguarded wipe destroyed the database and then raised —
+    # leaving the operator with no database, the clones intact, and no report.
+    db_path = _hrono_db(tmp_path)
+    elsewhere = tmp_path / "volume" / "cache"
+    (elsewhere / "sources" / "repo").mkdir(parents=True)
+    (elsewhere / "sources" / "repo" / "f.txt").write_text("cloned")
+    (db_path.parent / "cache").symlink_to(elsewhere)
+
+    with pytest.raises(LinkedCache) as caught:
+        wipe(db_path)
+
+    assert "symlink" in caught.value.message
+    assert db_path.exists()  # nothing was destroyed
+    assert (elsewhere / "sources" / "repo" / "f.txt").read_text() == "cloned"
+
+
+def test_the_cli_refuses_a_symlinked_cache_without_a_traceback(
+    tmp_path: Path,
+) -> None:
+    db_path = _hrono_db(tmp_path)
+    elsewhere = tmp_path / "volume" / "cache"
+    (elsewhere / "sources").mkdir(parents=True)
+    (db_path.parent / "cache").symlink_to(elsewhere)
+
+    result = runner.invoke(cli.app, ["reset", "--force", "--db", str(db_path)])
+
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+    assert "symlink" in result.output
+    assert db_path.exists()
+    assert elsewhere.exists()
+
+
+def test_a_wipe_that_stops_part_way_still_reports_what_it_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _hrono_db(tmp_path)
+    (db_path.parent / "cache" / "sources").mkdir(parents=True)
+    real = Path.unlink
+
+    def fail_on_the_lock(self: Path, *args: object, **kwargs: object) -> None:
+        if self.name.endswith(".lock"):
+            raise PermissionError(13, "Permission denied")
+        real(self, *args, **kwargs)
+
+    db_path.with_name(db_path.name + ".lock").write_bytes(b"")
+    monkeypatch.setattr(Path, "unlink", fail_on_the_lock)
+
+    with pytest.raises(ResetIncomplete) as caught:
+        wipe(db_path)
+
+    assert caught.value.details is not None
+    assert caught.value.details["removed"] == [str(db_path)]
+    assert str(db_path) in caught.value.message or "stopped at" in (
+        caught.value.message
+    )
+
+
+def test_the_cli_prints_the_removals_of_a_partial_wipe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the report is what an operator plans recovery from; losing it while the
+    # database is already gone is the real harm.
+    db_path = _hrono_db(tmp_path)
+    db_path.with_name(db_path.name + ".lock").write_bytes(b"")
+    real = Path.unlink
+
+    def fail_on_the_lock(self: Path, *args: object, **kwargs: object) -> None:
+        if self.name.endswith(".lock"):
+            raise PermissionError(13, "Permission denied")
+        real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_on_the_lock)
+
+    result = runner.invoke(cli.app, ["reset", "--force", "--db", str(db_path)])
+
+    assert result.exit_code == 1
+    assert "Traceback" not in result.output
+    assert "Removed:" in result.output
+    assert str(db_path) in result.output
+    assert "Permission denied" in result.output
