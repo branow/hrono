@@ -157,9 +157,16 @@ def test_a_user_source_named_like_a_node_is_untouched(
     with database.connect() as conn, conn:
         cluster_store.delete_node(conn, going)
     with database.connect() as conn:
-        survived = conn.execute(
+        sections = conn.execute(
             "SELECT COUNT(*) FROM sections WHERE source = ? AND "
             "source_type = 'git'",
             (f"node-{going}",),
         ).fetchone()[0]
-    assert survived == 1
+        indexed = conn.execute(
+            "SELECT COUNT(*) FROM passages_fts WHERE source = ?",
+            (f"node-{going}",),
+        ).fetchone()[0]
+    # BOTH halves: the FTS table has no source_type of its own, so a delete by
+    # source alone left this source in sections but out of the keyword index —
+    # silently half-indexed, which is worse than either outcome on its own.
+    assert (sections, indexed) == (1, 1)
