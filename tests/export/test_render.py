@@ -406,3 +406,42 @@ def test_the_member_references_are_re_attached_from_metadata(
         assert uri in rendered
     # ... and a node with no recorded members gets no empty section
     assert "## References" not in files[f"beta-topic-{ids['n1']}/brief.md"]
+
+
+def test_an_upper_node_does_not_repeat_its_children_as_references(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    # #102: an upper brief's member list is child NODE IDS. ## Children already
+    # renders them as titled links, and an id is only meaningful while that node
+    # exists — a brief written before a rebuild would have root.md cite topics
+    # that have since been retired (three of them, on the live corpus).
+    database, ids = db
+    with database.connect() as conn, conn:
+        conn.execute(
+            "UPDATE briefs SET members = ? WHERE node_id = ?",
+            (json.dumps(["node 3", "node 5", "node 6"]), ids["root"]),
+        )
+    files = _files(database)
+    assert "## Children" in files["root.md"]  # the real, live listing
+    assert "## References" not in files["root.md"]
+    for retired in ("node 3", "node 5", "node 6"):
+        assert retired not in files["root.md"]
+
+
+def test_a_leaf_still_shows_its_source_references(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    # the other side of the skip: a LEAF's member list is its members' source
+    # URIs — provenance the export shows nowhere else, and never a node id, so
+    # a retired id cannot reach the map through this path at all.
+    database, ids = db
+    uris = ("git://ex/repo/a.py@v1", "git://ex/repo/b.py@v1")
+    with database.connect() as conn, conn:
+        conn.execute(
+            "UPDATE briefs SET members = ? WHERE node_id = ?",
+            (json.dumps(list(uris)), ids["n0"]),
+        )
+    rendered = _files(database)[f"alpha-topic-{ids['n0']}/brief.md"]
+    assert "## References" in rendered
+    for uri in uris:
+        assert uri in rendered

@@ -87,18 +87,28 @@ def _node_markdown(
         )
     if note:
         parts.append(f"## Notes\n\n{note}")
-    references = _references(conn, node_id)
-    if references:
-        parts.append(references)
+    if not node.children:
+        references = _references(conn, node_id)
+        if references:
+            parts.append(references)
     return "\n\n".join(parts) + "\n"
 
 
 def _references(conn: sqlite3.Connection, node_id: int) -> str:
-    """Re-attach the brief's member list, which is stored beside its text.
+    """Re-attach a LEAF's member list, which is stored beside its text.
 
     #102 moved it out of ``briefs.text`` so a lexically dense path list stops
-    entering the vector index and FTS as if it were prose; the map still shows
-    every reference, and this is where it is put back.
+    entering the vector index and FTS as if it were prose; a leaf's list is its
+    members' source URIs — provenance the export shows nowhere else — so this is
+    where it is put back.
+
+    An UPPER node's list is child NODE IDS, and the caller skips it there for
+    two reasons: ``## Children`` already renders those children as titled links,
+    so it would be the same thing twice in the same file; and an id is only
+    meaningful while that node exists, so a brief written before a rebuild would
+    have the map cite topics that have since been retired. Nothing the renderer
+    emits names a node id, which is what keeps that impossible rather than
+    merely unlikely.
     """
     row = briefs.get(conn, node_id)
     members = json.loads(row["members"]) if row is not None else []

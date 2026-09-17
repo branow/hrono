@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from hrono.db.backfill import brief_members
+from hrono.db.connection import connect
 from hrono.db.database import Database
 
 LEAF = (
@@ -112,3 +113,41 @@ def test_a_retired_nodes_brief_passages_are_cleared(db: Database) -> None:
             "SELECT COUNT(*) FROM sections WHERE source = 'node-99'"
         ).fetchone()[0]
     assert left == 0
+
+
+def test_migrate_runs_the_step_for_its_version(tmp_path: Path) -> None:
+    # the registration is what makes EVERY existing database get fixed, exactly
+    # once, and it is the only part of this with no other test: emptying STEPS
+    # left the whole suite green. Driven through the real runner, from a
+    # database at the version before 0024.
+    from hrono.db import migrations
+
+    packaged = migrations.packaged()
+    version = max(m.version for m in packaged)
+    earlier = tuple(m for m in packaged if m.version < version)
+    conn = connect(tmp_path / "hrono.db")
+    migrations.Migrator(earlier).apply(conn)
+    with conn:
+        _brief(conn, 1, LEAF)
+
+    applied = migrations.migrate(conn)  # the real entry point, not the step
+
+    assert version in applied
+    row = conn.execute(
+        "SELECT text, members FROM briefs WHERE node_id = 1"
+    ).fetchone()
+    assert json.loads(row["members"]) == [
+        "git://ex/repo/a.py@v1",
+        "git://ex/repo/b.py@v1",
+    ]
+    assert "References:" not in row["text"]
+    conn.close()
+
+
+def test_the_step_is_registered_for_the_migration_that_needs_it() -> None:
+    from hrono.db.backfill import STEPS
+    from hrono.db.migrations import packaged
+
+    versions = {m.version for m in packaged()}
+    assert set(STEPS) <= versions  # no step for a migration that does not exist
+    assert STEPS  # ... and the one this ticket added is still wired
