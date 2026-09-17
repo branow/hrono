@@ -121,9 +121,10 @@ def test_migrate_runs_the_step_for_its_version(tmp_path: Path) -> None:
     # left the whole suite green. Driven through the real runner, from a
     # database at the version before 0024.
     from hrono.db import migrations
+    from hrono.db.backfill import STEPS
 
     packaged = migrations.packaged()
-    version = max(m.version for m in packaged)
+    version = max(STEPS)  # the migration this step belongs to, not the latest
     earlier = tuple(m for m in packaged if m.version < version)
     conn = connect(tmp_path / "hrono.db")
     migrations.Migrator(earlier).apply(conn)
