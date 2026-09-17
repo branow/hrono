@@ -7,6 +7,7 @@ separate tiny corpus proves the fail-safe (neither leg reaches its floor ->
 explore, never a low-confidence hit).
 """
 
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -16,6 +17,7 @@ from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
+from hrono.recall import fts
 from hrono.recall.engine import recall
 
 MODEL = "emb"
@@ -56,6 +58,15 @@ def add_passage(conn: object, body: bytes, content_vec: list[float]) -> str:
         "created_at) VALUES (?, 'repo', 'git', 'ex/repo', ?, 'v1', ?, 0, ?, ?, "
         "'[]', 0, 't')",
         (section_id, PATH, uri, len(body), digest),
+    )
+    fts.index_passage(  # production indexes every passage; so must a fixture
+        conn,  # type: ignore[arg-type]
+        passage_id=int(
+            conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]
+        ),
+        source="repo",
+        path=PATH,
+        body=body.decode(),
     )
     return uri
 
@@ -170,3 +181,121 @@ def test_an_off_topic_question_still_explores(rich: Database) -> None:
         result = recall(conn, "nothing like it?", MODEL, const_encode(unit(3)))
     assert result.hits == ()
     assert result.message == "no confident matches - explore the map."
+
+
+ABSENT = (
+    "how to train a labrador puppy",
+    "what is the capital of Peru",
+    "recipes for a chocolate cake",
+    "who won the 1998 world cup final",
+    "symptoms of vitamin D deficiency",
+    "best hiking trails in the Alps",
+    "how do I tune a violin",
+    "the plot of Anna Karenina",
+)
+PRESENT = "the bearer token authentication flow"
+
+# a toy embedding with the property real ones have: text that shares words is
+# near. Function words are IN the vocabulary on purpose — that is how an absent
+# question ends up near a passage it has nothing to do with, which is the leak
+# #102 introduced and this suite exists to catch.
+_VOCAB = (
+    "how",
+    "to",
+    "the",
+    "a",
+    "token",
+    "authentication",
+    "bearer",
+    "licence",
+)
+
+
+def bag_encode(texts: list[str]) -> list[list[float]]:
+    out = []
+    for text in texts:
+        terms = re.findall(r"[a-z0-9]+", text.lower())
+        vec = [float(terms.count(word)) for word in _VOCAB]
+        norm = sum(v * v for v in vec) ** 0.5
+        out.append([v / norm for v in vec] if norm else vec)
+    return out
+
+
+def _bag(text: str) -> list[float]:
+    return bag_encode([text])[0]
+
+
+@pytest.fixture
+def corpus(tmp_path: object) -> Iterator[Database]:
+    """One subject, a bulk of other material, and a few generic passages.
+
+    The generic ones share only FUNCTION words with an absent question, which
+    is exactly how "how to train a labrador puppy" reached chalk's
+    benchmark.js: the fixture has to be able to leak before the test can prove
+    it does not.
+    """
+    database = Database.at(tmp_path / "corpus.db")
+    with database.connect() as conn, conn:
+        _plant_paths(conn)
+        for i in range(3):
+            body = f"bearer token authentication {'bearer ' * (i % 3)}{i}\n"
+            add_passage(conn, body.encode(), _bag(body))
+        for i in range(36):
+            body = f"licence clause {i} licence licence licence\n"
+            add_passage(conn, body.encode(), _bag(body))
+        for i in range(3):
+            body = f"how to how to a the thing {i}\n"
+            add_passage(conn, body.encode(), _bag(body))
+    yield database
+    database.close()
+
+
+def test_every_absent_question_returns_the_explore_message(
+    corpus: Database,
+) -> None:
+    # ONE leak anywhere fails: seven of qa's eight absent questions held under
+    # the plain floor and the eighth did not, so a single probe proves nothing.
+    leaked = {}
+    for question in ABSENT:
+        with corpus.connect() as conn:
+            result = recall(conn, question, MODEL, bag_encode)
+        if result.hits:
+            leaked[question] = len(result.hits)
+    assert leaked == {}
+
+
+def test_the_absent_questions_could_have_leaked(corpus: Database) -> None:
+    # the suite above is only worth having if the corpus can leak: without
+    # corroboration these questions DO clear the vector floor, on passages that
+    # share nothing with them but function words.
+    from hrono.recall import vector_leg
+
+    reachable = 0
+    for question in ABSENT:
+        with corpus.connect() as conn:
+            z = vector_leg.scores(conn, _bag(question), MODEL)
+        reachable += sum(
+            1 for score in z.values() if score >= vector_leg.Z_FLOOR
+        )
+    assert reachable > 0
+
+
+def test_a_present_question_still_returns_hits(corpus: Database) -> None:
+    # the counterweight, in the same suite ON PURPOSE: without it the cheapest
+    # way to pass the test above is to raise the floor until everything is cut,
+    # which restores the defect #102 exists to fix. Direction, not magnitude.
+    with corpus.connect() as conn:
+        result = recall(conn, PRESENT, MODEL, bag_encode)
+    assert result.message is None
+    assert result.hits
+
+
+def test_the_present_question_mean_sd_got_wrong_is_recovered(
+    rich: Database,
+) -> None:
+    # the estimator's own regression: this shape returns ZERO candidates under
+    # mean/sd, so the suite fails if the median/MAD change is reverted.
+    with rich.connect() as conn:
+        result = recall(conn, "the answer?", MODEL, const_encode(unit(0)))
+    assert result.message is None
+    assert result.hits

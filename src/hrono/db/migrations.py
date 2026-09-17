@@ -1,8 +1,12 @@
-"""Forward-only SQL schema migrations.
+"""Forward-only schema migrations, with an optional data step per version.
 
 Migrations are plain ``.sql`` files named ``NNNN_description.sql``. The runner
 applies every unapplied migration in version order, each in its own
 transaction, and records it in ``schema_migrations`` so re-runs are a no-op.
+
+A version may also register a Python step in ``db/backfill.py`` — applied in the
+SAME transaction, after its SQL — for data surgery SQL cannot express. It is not
+an escape hatch for schema changes: the shape still lives in the ``.sql``.
 """
 
 from __future__ import annotations
@@ -14,6 +18,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+from hrono.db.backfill import STEPS
 
 _FILENAME = re.compile(r"^(\d+)_([a-z0-9_]+)\.sql$")
 
@@ -77,6 +83,9 @@ class Migrator:
         for migration in pending:
             with _atomic(conn), conn:
                 conn.executescript(migration.statements)
+                step = STEPS.get(migration.version)
+                if step is not None:
+                    step(conn)
                 conn.execute(
                     "INSERT INTO schema_migrations(version, name, "
                     "applied_at) VALUES (?, ?, ?)",

@@ -9,6 +9,7 @@ from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
+from hrono.recall import fts
 from hrono.recall.vector_leg import Z_FLOOR, search
 
 MODEL = "emb"
@@ -47,7 +48,15 @@ def add_passage(conn: object, body: bytes, content_vec: list[float]) -> int:
             content_hash(body),
         ),
     )
-    return int(cursor.lastrowid)
+    passage_id = int(cursor.lastrowid)
+    fts.index_passage(  # production indexes every passage; so must a fixture
+        conn,  # type: ignore[arg-type]
+        passage_id=passage_id,
+        source="repo",
+        path=PATH,
+        body=body.decode(),
+    )
+    return passage_id
 
 
 @pytest.fixture

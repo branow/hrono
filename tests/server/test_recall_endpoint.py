@@ -15,6 +15,7 @@ from hrono.db.database import open_database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
+from hrono.recall import fts
 from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 
@@ -48,6 +49,15 @@ def add_passage(conn: object, body: bytes, vec: list[float]) -> None:
         "created_at) VALUES (?, 'repo', 'git', 'ex/repo', ?, 'v1', ?, 0, ?, ?, "
         "'[]', 0, 't')",
         (section_id, PATH, f"git://ex/repo/{PATH}@v1", len(body), digest),
+    )
+    fts.index_passage(  # production indexes every passage; so must a fixture
+        conn,  # type: ignore[arg-type]
+        passage_id=int(
+            conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]  # type: ignore[attr-defined]
+        ),
+        source="repo",
+        path=PATH,
+        body=body.decode(),
     )
 
 

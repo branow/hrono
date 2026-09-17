@@ -41,7 +41,10 @@ from collections.abc import Sequence
 
 from hrono.cluster.blend import combine, combined_vector
 
-Z_FLOOR = 3.5
+Z_FLOOR = 3.5  # with keyword corroboration
+UNCORROBORATED_FLOOR = 4.5  # without it (#102): derived on the QA corpus
+KEYWORD_SUPPORT = 0.0  # keyword z that counts as corroboration
+_NO_SUPPORT = -1.0  # a passage the question's terms never matched
 _MAD_TO_SD = 1.4826  # MAD -> sd-equivalent for a normal distribution
 
 
@@ -77,6 +80,43 @@ def scores(
     return {
         passage_id: (score - centre) / spread for passage_id, score in scored
     }
+
+
+def qualify(
+    vector_z: dict[int, float],
+    keyword_z: dict[int, float],
+) -> tuple[tuple[int, float], ...]:
+    """Return (passage_id, z) for passages that qualify, best first.
+
+    Two bars, because similarity alone cannot tell "about this" from "nearest
+    of the available topics" (#102). A passage the question's own terms
+    corroborate — keyword z at or above ``KEYWORD_SUPPORT``, the average of
+    everything the query matched at all — qualifies at ``Z_FLOOR``. One no term
+    supports has to clear ``UNCORROBORATED_FLOOR``.
+
+    This is #073's rule applied symmetrically: a keyword hit already needs
+    vector support at z >= 3.0 because BM25's background is stopword matches,
+    and the mirror is that an embedding's nearest neighbours are never empty —
+    ask a corpus about labrador puppies and it still has a most-similar passage.
+    The keyword leg is the orthogonal evidence: measured on the QA corpus, the
+    absent question's five vector candidates carried no distinctive term of it
+    (its one FTS match scored keyword z -0.37, i.e. matched on stopwords), while
+    the on-topic questions' candidates carried uuid/v7/NewV7 and signer/unsign.
+
+    Accepted cost, deliberately: a question phrased in vocabulary the corpus
+    does not share is cut and fails safe to the explore message. Better to cut
+    than to leak — a confident wrong answer is what recall exists to avoid.
+    """
+    qualified = [
+        (passage_id, z)
+        for passage_id, z in vector_z.items()
+        if z >= UNCORROBORATED_FLOOR
+        or (
+            z >= Z_FLOOR
+            and keyword_z.get(passage_id, _NO_SUPPORT) >= KEYWORD_SUPPORT
+        )
+    ]
+    return tuple(sorted(qualified, key=lambda hit: hit[1], reverse=True))
 
 
 def search(

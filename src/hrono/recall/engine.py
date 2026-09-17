@@ -47,17 +47,8 @@ def recall(
     """Run the frozen recall recipe for ``question`` and return ranked hits."""
     query_vec = list(encode([question])[0])
     vector_z = vector_leg.scores(conn, query_vec, model_name)
-    vector_hits = tuple(
-        sorted(
-            (
-                (pid, z)
-                for pid, z in vector_z.items()
-                if z >= vector_leg.Z_FLOOR
-            ),
-            key=lambda hit: hit[1],
-            reverse=True,
-        )
-    )
+    keyword_z = keyword_leg.scores(conn, question)
+    vector_hits = vector_leg.qualify(vector_z, keyword_z)
     keyword_hits = keyword_leg.search(conn, question, vector_z)
 
     fused = fusion.fuse(vector_hits, keyword_hits)
