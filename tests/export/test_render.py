@@ -445,3 +445,22 @@ def test_a_leaf_still_shows_its_source_references(
     assert "## References" in rendered
     for uri in uris:
         assert uri in rendered
+
+
+def test_a_childless_upper_node_still_skips_its_references(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    # #114's transient state: a rebuild re-minted the leaf ids and cascaded the
+    # root's edges away, so the root has no children to render. A guard on the
+    # CHILD COUNT calls that a leaf and prints its stored node ids — three of
+    # which were retired on the live corpus. The guard is on the LEVEL.
+    database, ids = db
+    with database.connect() as conn, conn:
+        conn.execute("DELETE FROM node_children")
+        conn.execute(
+            "UPDATE briefs SET members = ? WHERE node_id = ?",
+            (json.dumps(["node 3", "node 5", "node 6"]), ids["root"]),
+        )
+    files = _files(database)
+    assert "## References" not in files["root.md"]
+    assert not [path for path, body in files.items() if "- node " in body]

@@ -87,7 +87,7 @@ def _node_markdown(
         )
     if note:
         parts.append(f"## Notes\n\n{note}")
-    if not node.children:
+    if node.level == tree.levels - 1:  # a LEAF: its members are source URIs
         references = _references(conn, node_id)
         if references:
             parts.append(references)
@@ -106,9 +106,14 @@ def _references(conn: sqlite3.Connection, node_id: int) -> str:
     two reasons: ``## Children`` already renders those children as titled links,
     so it would be the same thing twice in the same file; and an id is only
     meaningful while that node exists, so a brief written before a rebuild would
-    have the map cite topics that have since been retired. Nothing the renderer
-    emits names a node id, which is what keeps that impossible rather than
-    merely unlikely.
+    have the map cite topics that have since been retired.
+
+    The caller keys that on the node's LEVEL, not on whether it has children.
+    They differ in exactly one state, and it is a real one: #114's childless
+    upper node, where a rebuild re-minted the leaf ids and cascaded the root's
+    edges away. Such a root has no children to render, so a child-count guard
+    called it a leaf and printed its stored ids — three of which were retired on
+    the QA corpus. Level is the property the member list actually depends on.
     """
     row = briefs.get(conn, node_id)
     members = json.loads(row["members"]) if row is not None else []
