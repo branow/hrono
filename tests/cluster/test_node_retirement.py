@@ -1,10 +1,14 @@
 """#125: a retired node takes its brief passages with it."""
 
+import sqlite3
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 from hrono.cluster import store as cluster_store
+from hrono.db import migrations
+from hrono.db.connection import connect
 from hrono.db.database import Database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
@@ -13,6 +17,7 @@ from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 
 TREE = "default"
+SWEEP = 25  # the migration whose one-off half this file pins
 
 
 def _section(conn: object, path: str, body: bytes) -> int:
@@ -54,6 +59,105 @@ def _brief_passages(db: Database, node_id: int) -> tuple[int, int]:
             (f"node-{node_id}",),
         ).fetchone()[0]
     return int(sections), int(indexed)
+
+
+def _user_source(conn: sqlite3.Connection, source: str) -> int:
+    """A git source whose NAME collides with a node's (#076); return its id."""
+    body = b"user body\n"
+    address = Address("git", "ex/repo", "c.py", "v1")
+    istore.upsert_content(conn, content_hash(body), body)
+    section = istore.insert_section(
+        conn,
+        source=source,
+        address=address,
+        start=0,
+        end=len(body),
+        content_hash=content_hash(body),
+        ordinal=0,
+    )
+    passage = istore.insert_passage(
+        conn,
+        section_id=section,
+        source=source,
+        address=address,
+        start=0,
+        end=len(body),
+        content_hash=content_hash(body),
+        sp_paths=(),
+        ordinal=0,
+    )
+    fts.index_passage(
+        conn,
+        passage_id=passage,
+        source=source,
+        path="c.py",
+        body=body.decode(),
+    )
+    return passage
+
+
+def _orphan_brief(conn: sqlite3.Connection, node_id: int) -> None:
+    """A node:// brief whose node is gone — a past rebuild's leftover."""
+    body = b"a topic the map no longer contains\n"
+    address = Address("node", "hrono", f"nodes/{node_id}/topic", "sig")
+    source = f"node-{node_id}"
+    istore.upsert_content(conn, content_hash(body), body)
+    section = istore.insert_section(
+        conn,
+        source=source,
+        address=address,
+        start=0,
+        end=len(body),
+        content_hash=content_hash(body),
+        ordinal=0,
+    )
+    passage = istore.insert_passage(
+        conn,
+        section_id=section,
+        source=source,
+        address=address,
+        start=0,
+        end=len(body),
+        content_hash=content_hash(body),
+        sp_paths=(),
+        ordinal=0,
+    )
+    fts.index_passage(
+        conn,
+        passage_id=passage,
+        source=source,
+        path=address.path,
+        body=body.decode(),
+    )
+
+
+def _indexed(conn: sqlite3.Connection, source: str) -> tuple[int, ...]:
+    """Passage ids the keyword index still holds for ``source``, dangling ones
+    included — a count joined back to `passages` cannot see a row whose passage
+    has cascaded away, which is the orphan this migration exists to remove."""
+    rows = conn.execute(
+        "SELECT passage_id FROM passages_fts WHERE source = ? "
+        "ORDER BY passage_id",
+        (source,),
+    ).fetchall()
+    return tuple(int(row["passage_id"]) for row in rows)
+
+
+def _counts(
+    conn: sqlite3.Connection, source: str, source_type: str
+) -> tuple[int, int, int]:
+    return tuple(  # type: ignore[return-value]
+        conn.execute(sql, (source, source_type)).fetchone()[0]
+        for sql in (
+            "SELECT COUNT(*) FROM sections "
+            "WHERE source = ? AND source_type = ?",
+            "SELECT COUNT(*) FROM passages "
+            "WHERE source = ? AND source_type = ?",
+            "SELECT COUNT(*) FROM passages_fts f WHERE f.source = ? "
+            "AND EXISTS (SELECT 1 FROM passages p WHERE p.id = f.passage_id "
+            "            AND p.source_type = ?)",
+        )
+    )
 
 
 @pytest.fixture
@@ -135,38 +239,34 @@ def test_a_user_source_named_like_a_node_is_untouched(
     # survives node 9 being retired.
     database, _kept, going = db
     with database.connect() as conn, conn:
-        istore.upsert_content(
-            conn, content_hash(b"user body\n"), b"user body\n"
-        )
-        istore.insert_section(
-            conn,
-            source=f"node-{going}",  # a USER source with a colliding name
-            address=Address("git", "ex/repo", "c.py", "v1"),
-            start=0,
-            end=10,
-            content_hash=content_hash(b"user body\n"),
-            ordinal=0,
-        )
-        fts.index_passage(
-            conn,
-            passage_id=9999,
-            source=f"node-{going}",
-            path="c.py",
-            body="user body",
-        )
+        user = _user_source(conn, f"node-{going}")
     with database.connect() as conn, conn:
         cluster_store.delete_node(conn, going)
+
+    # all three halves, and through a REAL passage row: the FTS delete reaches
+    # its rows through `passages`, so a phantom passage id would survive every
+    # form of that subquery and prove nothing about the source_type guard.
     with database.connect() as conn:
-        sections = conn.execute(
-            "SELECT COUNT(*) FROM sections WHERE source = ? AND "
-            "source_type = 'git'",
-            (f"node-{going}",),
-        ).fetchone()[0]
-        indexed = conn.execute(
-            "SELECT COUNT(*) FROM passages_fts WHERE source = ?",
-            (f"node-{going}",),
-        ).fetchone()[0]
-    # BOTH halves: the FTS table has no source_type of its own, so a delete by
-    # source alone left this source in sections but out of the keyword index —
-    # silently half-indexed, which is worse than either outcome on its own.
-    assert (sections, indexed) == (1, 1)
+        assert _counts(conn, f"node-{going}", "git") == (1, 1, 1)
+        assert _indexed(conn, f"node-{going}") == (user,)
+
+
+def test_the_sweep_clears_existing_orphans_and_spares_a_colliding_source(
+    tmp_path: Path,
+) -> None:
+    # the one-off half of 0025, which the trigger cannot cover: a database
+    # built BEFORE it already carries the orphans of every past rebuild.
+    earlier = tuple(m for m in migrations.packaged() if m.version < SWEEP)
+    conn = connect(tmp_path / "hrono.db")
+    migrations.Migrator(earlier).apply(conn)
+    with conn:
+        user = _user_source(conn, "node-99")
+        _orphan_brief(conn, 99)
+
+    applied = migrations.migrate(conn)  # the real entry point, not the SQL
+
+    assert SWEEP in applied
+    assert _counts(conn, "node-99", "node") == (0, 0, 0)
+    assert _counts(conn, "node-99", "git") == (1, 1, 1)
+    assert _indexed(conn, "node-99") == (user,)
+    conn.close()
