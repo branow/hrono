@@ -13,6 +13,11 @@ member is a misfit while its own similarity is below TAU — which is what final
 makes 0017's promise ("flagged so the misfit monitor re-checks it preferentially
 and a mis-placed pioneer migrates once its real siblings form") readable (#113).
 
+Above the leaf the same question is asked in BRIEF space, over child edges
+rather than sections (#123): `levels.upper_misfits` counts a child attached by
+proximity below TAU as a misfit of its parent, and its rows land in this same
+table, so one rate and one set of repairs cover the whole tree.
+
 Cost stays scale-independent: the per-cluster counts persist in ``misfit``, and
 a batch re-checks only the DIRTY clusters it touched plus a bounded per-batch
 sample (deterministic, and preferring clusters that hold a forced member) — the
@@ -31,6 +36,7 @@ from datetime import UTC, datetime
 
 from hrono.cluster import store
 from hrono.cluster.blend import combined_vector
+from hrono.cluster.levels import upper_misfits
 from hrono.cluster.placement import TAU
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
@@ -67,8 +73,31 @@ def monitor(job: Job, context: JobContext) -> None:
         write_misfits(
             conn, tree, _misfits(conn, tree, model, targets, centroids)
         )
+        _measure_upper_levels(conn, tree, model)
         if first_run:
             capture_baseline(conn, tree, global_rate(conn, tree))
+
+
+def _measure_upper_levels(
+    conn: sqlite3.Connection, tree: str, model_name: str
+) -> None:
+    """Measure every level above the leaf, in brief space (#123).
+
+    Upper levels are small — a handful of parents per level — so they are
+    measured in full rather than sampled; the bounded sample exists for the
+    thousands of sections at the bottom.
+    """
+    for level in _upper_levels(conn, tree):
+        write_misfits(conn, tree, upper_misfits(conn, tree, level, model_name))
+
+
+def _upper_levels(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
+    rows = conn.execute(
+        "SELECT DISTINCT level FROM nodes WHERE tree = ? AND level > 0 "
+        "ORDER BY level",
+        (tree,),
+    ).fetchall()
+    return tuple(int(row["level"]) for row in rows)
 
 
 def refresh(

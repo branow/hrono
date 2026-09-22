@@ -280,6 +280,51 @@ def add_child(
     )
 
 
+def attached_children(
+    conn: sqlite3.Connection, parent_id: int
+) -> frozenset[int]:
+    """Child ids attached to this parent by PROXIMITY, not by clustering.
+
+    The level >= 1 counterpart of ``forced_members`` (#113): ``attached = 1``
+    means #114 placed the child under its nearest parent because a node under
+    no parent is unreachable, which is worse than an imperfect one.
+    """
+    rows = conn.execute(
+        "SELECT child_id FROM node_children "
+        "WHERE parent_id = ? AND attached = 1",
+        (parent_id,),
+    ).fetchall()
+    return frozenset(int(row["child_id"]) for row in rows)
+
+
+def move_child(
+    conn: sqlite3.Connection,
+    child_id: int,
+    parent_id: int,
+    *,
+    similarity: float | None,
+) -> None:
+    """Re-parent a node, recording the move as a confident placement (#123).
+
+    Both signatures are refreshed — the parent it left and the one it joins —
+    so #064 sees each of their briefs as stale and regenerates over the child
+    set it actually has now.
+    """
+    old = conn.execute(
+        "SELECT parent_id FROM node_children WHERE child_id = ?", (child_id,)
+    ).fetchone()
+    conn.execute("DELETE FROM node_children WHERE child_id = ?", (child_id,))
+    add_child(conn, parent_id, child_id, attached=False, similarity=similarity)
+    if old is not None:
+        conn.execute(
+            "UPDATE nodes SET signature = ? WHERE id = ?",
+            (
+                node_child_signature(conn, int(old["parent_id"])),
+                int(old["parent_id"]),
+            ),
+        )
+
+
 def node_child_signature(conn: sqlite3.Connection, node_id: int) -> str:
     """The signature of an upper node's current child node ids."""
     rows = conn.execute(

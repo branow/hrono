@@ -108,14 +108,13 @@ def attach_orphans(
     is worse than an imperfect parent, so this mirrors the incubator's
     force-assign rather than its park.
 
-    Be honest about the bound: NOTHING currently reads that flag back. There is
-    no SELECT of ``node_children.attached`` or ``assignment_similarity``
-    anywhere; ``monitor`` measures level-0 misfits only; and no path re-clusters
-    an existing upper level (``cluster_briefs`` has one caller, and
-    ``build_tree`` starts at the highest briefed level — the root, once level-1
-    briefs exist — and stops). So a poor attachment stays until a full rebuild
-    re-derives the level, and the flag is a record for the reader that #123 will
-    add, not a safety net that already exists.
+    The flag now has a reader (#123): ``upper_misfits`` counts a below-TAU
+    attached child as a misfit of its parent, and ``migrate_children`` moves it
+    once a better-fitting parent exists. Before that it had none, and this
+    docstring claimed the poor attachment would last "until a full rebuild
+    re-derives the level" — an escape that did not exist, because nothing
+    deletes an upper brief, so ``_highest_brief_level`` never drops back and
+    ``build_tree`` starts at the root and stops. The true bound was FOREVER.
 
     The similarity is recorded on EVERY row, confident or not: it costs nothing
     (no reader to break), and a placement's score is exactly what a future
@@ -175,6 +174,92 @@ def attach_orphans(
             )
             attached.append((node_id, parent, similarity))
     return tuple(attached)
+
+
+def upper_misfits(
+    conn: sqlite3.Connection, tree: str, level: int, model_name: str
+) -> tuple[tuple[int, int, int], ...]:
+    """Misfit counts for the parents at ``level``, measured over their children.
+
+    The level >= 1 twin of ``monitor._misfits`` (#113), in brief space rather
+    than combined-vector space: a child is a misfit of its parent when some
+    other parent's centroid is nearer, OR when it was attached by proximity
+    (#114) and sits below TAU. The second half is the one that matters — #114
+    attaches to the NEAREST parent, so ``best_other > own`` can never fire for
+    the placements this exists to review, exactly as a force-assigned member is
+    invisible to the level-0 rule.
+
+    Rows are ``(parent_id, misfits, children)``, the shape ``misfit`` stores, so
+    upper levels land in the same table the rate and the repairs already read.
+    """
+    centroids = _parent_centroids(conn, tree, level, model_name)
+    rows: list[tuple[int, int, int]] = []
+    for parent_id in sorted(centroids):
+        attached = store.attached_children(conn, parent_id)
+        misfits = children = 0
+        for child_id, vector in _child_vectors(conn, parent_id, model_name):
+            children += 1
+            own = _dot(vector, centroids[parent_id])
+            best_other = max(
+                (
+                    _dot(vector, centroid)
+                    for other, centroid in centroids.items()
+                    if other != parent_id
+                ),
+                default=-1.0,
+            )
+            if best_other > own or (child_id in attached and own < TAU):
+                misfits += 1
+        rows.append((parent_id, misfits, children))
+    return tuple(rows)
+
+
+def migrate_children(
+    conn: sqlite3.Connection, tree: str, level: int, model_name: str
+) -> int:
+    """Move this level's misfit children to the parent that fits them better.
+
+    ``repair.migrate`` one level up, and the same rule: a child moves only when
+    another parent actually scores higher, so a child with nowhere better keeps
+    its place AND its flag, and the next pass looks again. Moving it records the
+    placement unforced, so the flag keeps meaning "not yet revisited" (#123).
+    """
+    centroids = _parent_centroids(conn, tree, level, model_name)
+    moves: list[tuple[int, int, float]] = []
+    for parent_id in sorted(centroids):
+        others = {p: c for p, c in centroids.items() if p != parent_id}
+        if not others:
+            continue
+        for child_id, vector in _child_vectors(conn, parent_id, model_name):
+            target, best = _nearest(vector, others)
+            if best > _dot(vector, centroids[parent_id]):
+                moves.append((child_id, target, best))
+    for child_id, target, similarity in moves:
+        store.move_child(conn, child_id, target, similarity=similarity)
+    return len(moves)
+
+
+def _child_vectors(
+    conn: sqlite3.Connection, parent_id: int, model_name: str
+) -> tuple[tuple[int, tuple[float, ...]], ...]:
+    """(child id, unit brief vector) for a parent's children that have one."""
+    out: list[tuple[int, tuple[float, ...]]] = []
+    for row in conn.execute(
+        "SELECT c.child_id AS id, b.text AS text FROM node_children c "
+        "JOIN briefs b ON b.node_id = c.child_id WHERE c.parent_id = ? "
+        "ORDER BY c.child_id",
+        (parent_id,),
+    ).fetchall():
+        vector = get_vector(
+            conn, content_hash(row["text"].encode("utf-8")), model_name
+        )
+        if vector is not None:
+            out.append((int(row["id"]), _unit(vector)))
+    return tuple(out)
+
+
+def _dot(a: Sequence[float], b: Sequence[float]) -> float:
+    return sum(x * y for x, y in zip(a, b, strict=True))
 
 
 def _collect_under_single_parent(

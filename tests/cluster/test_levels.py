@@ -4,10 +4,19 @@ from collections.abc import Iterator
 
 import pytest
 
+from hrono.cluster import monitor, repair
 from hrono.cluster import store as cluster_store
-from hrono.cluster.levels import attach_orphans, cluster_briefs
+from hrono.cluster.levels import (
+    attach_orphans,
+    cluster_briefs,
+    migrate_children,
+    upper_misfits,
+)
 from hrono.cluster.placement import TAU
 from hrono.db.database import Database
+from hrono.embed.store import upsert_vector
+from hrono.ingest.identity import content_hash
+from hrono.ingest.store import upsert_content
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import store as registry_store
@@ -362,3 +371,273 @@ def test_a_leaf_with_no_brief_is_left_for_the_next_brief_pass(
 
     assert attach_orphans(job(), JobContext(db), encoder_for=encoder) == ()
     assert _parent_of(db, unbriefed) == (None, None)
+
+
+TREE = "default"
+MODEL = "emb"
+_TOPICS = {"alpha": 0, "beta": 1, "gamma": 2}
+
+
+def _leaf(conn: object, topic: str, i: int) -> int:
+    """A level-0 node whose brief text is embedded on ``topic``'s axis."""
+    text = f"{topic} topic number {i}"
+    cursor = conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO nodes(tree, level, label, created_at) "
+        "VALUES (?, 0, 0, 't')",
+        (TREE,),
+    )
+    node_id = int(cursor.lastrowid)
+    briefs.upsert(
+        conn,  # type: ignore[arg-type]
+        node_id,
+        text,
+        model_name=MODEL,
+        prompt_name="brief",
+        prompt_hash="h",
+        member_signature="sig",
+        input_tokens=1,
+        output_tokens=1,
+    )
+    body = text.encode("utf-8")
+    upsert_content(conn, content_hash(body), body)  # type: ignore[arg-type]
+    vector = [0.0] * DIMS
+    vector[_TOPICS[topic]] = 1.0
+    upsert_vector(conn, content_hash(body), MODEL, vector)  # type: ignore[arg-type]
+    return node_id
+
+
+def _parent(conn: object, children: list[int]) -> int:
+    cursor = conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO nodes(tree, level, label, created_at) "
+        "VALUES (?, 1, 0, 't')",
+        (TREE,),
+    )
+    parent_id = int(cursor.lastrowid)
+    for child in children:
+        cluster_store.add_child(
+            conn,  # type: ignore[arg-type]
+            parent_id,
+            child,
+            attached=False,
+            similarity=None,
+        )
+    return parent_id
+
+
+@pytest.fixture
+def db(tmp_path: object) -> Iterator[Database]:
+    database = Database.at(tmp_path / "hrono.db")
+    with database.connect() as conn, conn:
+        register_embedding_model(conn)
+    yield database
+    database.close()
+
+
+def _mis_attached(
+    db: Database, with_a_better_home: bool
+) -> tuple[int, int, int | None]:
+    """#114's real shape: a gamma leaf attached under the alpha parent.
+
+    The attach went to the NEAREST parent and the centroid then absorbed it, so
+    `own` (0.45) beats every `best_other` — the level-0 rule is blind to it,
+    which is the whole point of #123. Returns (alpha parent, stray, gamma home).
+    """
+    with db.connect() as conn, conn:
+        alpha = _parent(conn, [_leaf(conn, "alpha", i) for i in range(2)])
+        _parent(conn, [_leaf(conn, "beta", i) for i in range(2)])
+        stray = _leaf(conn, "gamma", 0)
+        cluster_store.add_child(
+            conn, alpha, stray, attached=True, similarity=0.281
+        )
+        home = (
+            _parent(conn, [_leaf(conn, "gamma", i) for i in (1, 2)])
+            if with_a_better_home
+            else None
+        )
+    return alpha, stray, home
+
+
+def test_a_below_tau_attached_child_is_a_misfit_of_its_parent(
+    db: Database,
+) -> None:
+    # #123: #114 attaches an orphan to its NEAREST parent and the parent's
+    # centroid then absorbs it, so `best_other > own` can never fire for the
+    # placements this exists to review — exactly as a force-assigned member is
+    # invisible to the level-0 rule (#113).
+    alpha, _stray, _home = _mis_attached(db, with_a_better_home=False)
+
+    with db.connect() as conn:
+        rows = upper_misfits(conn, TREE, 1, MODEL)
+    by_parent = {node_id: (m, c) for node_id, m, c in rows}
+
+    assert by_parent[alpha] == (1, 3)  # the stray, out of three children
+    assert [m for p, (m, _) in by_parent.items() if p != alpha] == [0]
+
+
+def test_the_same_child_unattached_is_not_a_misfit(db: Database) -> None:
+    # the control: identical vectors, identical geometry, flag off. It is the
+    # FLAG that is read — the stray is nearest to this parent either way, so
+    # the `best_other > own` rule still says nothing about it.
+    with db.connect() as conn, conn:
+        alpha = _parent(conn, [_leaf(conn, "alpha", i) for i in range(2)])
+        _parent(conn, [_leaf(conn, "beta", i) for i in range(2)])
+        stray = _leaf(conn, "gamma", 0)
+        cluster_store.add_child(
+            conn, alpha, stray, attached=False, similarity=0.281
+        )
+
+    with db.connect() as conn:
+        rows = upper_misfits(conn, TREE, 1, MODEL)
+
+    assert {m for _p, m, _c in rows} == {0}
+
+
+def test_an_attached_child_that_actually_fits_is_not_a_misfit(
+    db: Database,
+) -> None:
+    # attaching is not guilt: a child attached at or above TAU has nothing to
+    # correct and must not inflate its parent's rate for ever.
+    with db.connect() as conn, conn:
+        alpha = _parent(conn, [_leaf(conn, "alpha", i) for i in range(2)])
+        _parent(conn, [_leaf(conn, "beta", i) for i in range(2)])
+        close = _leaf(conn, "alpha", 9)
+        cluster_store.add_child(
+            conn, alpha, close, attached=True, similarity=0.99
+        )
+
+    with db.connect() as conn:
+        rows = upper_misfits(conn, TREE, 1, MODEL)
+
+    assert {m for _p, m, _c in rows} == {0}
+
+
+def test_a_mis_attached_child_moves_once_a_better_parent_exists(
+    db: Database,
+) -> None:
+    alpha, stray, home = _mis_attached(db, with_a_better_home=True)
+
+    with db.connect() as conn, conn:
+        moved = migrate_children(conn, TREE, 1, MODEL)
+
+    assert moved == 1
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT parent_id, attached FROM node_children WHERE child_id = ?",
+            (stray,),
+        ).fetchone()
+    assert int(row["parent_id"]) == home  # the parent it belongs under
+    assert int(row["parent_id"]) != alpha
+    assert int(row["attached"]) == 0  # re-parented normally: flag cleared
+
+
+def test_a_child_with_nowhere_better_keeps_its_place_and_its_flag(
+    db: Database,
+) -> None:
+    # the repair must not shuffle a child into a parent that fits it worse just
+    # because it is flagged: with no better home it keeps both, and the next
+    # pass looks again.
+    alpha, stray, _home = _mis_attached(db, with_a_better_home=False)
+
+    with db.connect() as conn, conn:
+        moved = migrate_children(conn, TREE, 1, MODEL)
+
+    assert moved == 0
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT parent_id, attached FROM node_children WHERE child_id = ?",
+            (stray,),
+        ).fetchone()
+    assert (int(row["parent_id"]), int(row["attached"])) == (alpha, 1)
+
+
+def test_a_move_restales_both_parents_briefs(db: Database) -> None:
+    # a parent's brief is written over its CHILDREN, so both the parent that
+    # lost one and the parent that gained one must re-brief (#064 reads the
+    # child-id signature). That is the harm #123 exists to stop: a badly
+    # attached child pollutes its parent's brief content.
+    alpha, stray, home = _mis_attached(db, with_a_better_home=True)
+    with db.connect() as conn:
+        before = {
+            p: conn.execute(
+                "SELECT signature FROM nodes WHERE id = ?", (p,)
+            ).fetchone()["signature"]
+            for p in (alpha, home)
+        }
+
+    with db.connect() as conn, conn:
+        migrate_children(conn, TREE, 1, MODEL)
+
+    with db.connect() as conn:
+        after = {
+            p: conn.execute(
+                "SELECT signature FROM nodes WHERE id = ?", (p,)
+            ).fetchone()["signature"]
+            for p in (alpha, home)
+        }
+    assert after[alpha] != before[alpha]  # lost a child
+    assert after[home] != before[home]  # gained one
+
+
+def _monitor_job() -> Job:
+    return Job(
+        id="mon",
+        parent_id=None,
+        tree=TREE,
+        op="monitor",
+        scope={},
+        status="running",
+        error=None,
+        created_at="t",
+        updated_at="t",
+    )
+
+
+def _repair_job() -> Job:
+    return Job(
+        id="rep",
+        parent_id=None,
+        tree=TREE,
+        op="repair",
+        scope={},
+        status="running",
+        error=None,
+        created_at="t",
+        updated_at="t",
+    )
+
+
+def test_the_monitor_op_stores_the_upper_level_count(db: Database) -> None:
+    # criterion 1 driven through the op, not the helper: the signal has to be
+    # observable in the monitor's stored counts, which is what repair and
+    # settle read — not only in a column nothing selects.
+    alpha, _stray, _home = _mis_attached(db, with_a_better_home=False)
+
+    monitor.monitor(_monitor_job(), JobContext(db))
+
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT misfits, members FROM misfit "
+            "WHERE tree = ? AND node_id = ?",
+            (TREE, alpha),
+        ).fetchone()
+        rate = monitor.cluster_rate(conn, TREE, alpha)
+    assert (int(row["misfits"]), int(row["members"])) == (1, 3)
+    assert rate > 0.0
+
+
+def test_the_repair_op_frees_a_mis_attached_child(db: Database) -> None:
+    # criterion 2 driven through the op: one badly attached child in three is a
+    # rate of 0.33 here, but the trigger must not depend on the rate — #114
+    # attaches to the NEAREST parent, so a larger parent hides it entirely.
+    alpha, stray, home = _mis_attached(db, with_a_better_home=True)
+
+    repair.repair(_repair_job(), JobContext(db))
+
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT parent_id, attached FROM node_children WHERE child_id = ?",
+            (stray,),
+        ).fetchone()
+    assert int(row["parent_id"]) == home
+    assert int(row["parent_id"]) != alpha
+    assert int(row["attached"]) == 0

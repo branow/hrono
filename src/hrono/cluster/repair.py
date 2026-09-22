@@ -18,6 +18,11 @@ later full rebuild matches them.
   member unforced, so the flag keeps meaning "not yet revisited".
 - ``dissolve`` — a cluster below two members retires; each survivor re-enters
   the placement rule against the remaining clusters.
+- upper levels get the migrate rule too (#123), in brief space over child edges:
+  a child #114 attached by proximity below TAU is the level >= 1 twin of a
+  forced member, and without this it stayed under the wrong parent for ever —
+  polluting that parent's brief, because a parent's brief is written over its
+  children.
 
 The ``repair`` op picks the repair per cluster from its size and stored misfit
 rate. Constants baked (MAX_CAP 30, min_cluster_size 5, misfit threshold 0.25).
@@ -32,6 +37,7 @@ from collections.abc import Callable, Sequence
 
 from hrono.cluster import monitor, placement, store
 from hrono.cluster.blend import combined_vector
+from hrono.cluster.levels import migrate_children
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -62,6 +68,43 @@ def repair(
                 split(conn, tree, node_id, model, core_labeler=core_labeler)
             elif _needs_migrate(conn, tree, node_id):
                 migrate(conn, tree, node_id, model)
+        _repair_upper_levels(conn, tree, model)
+
+
+def _repair_upper_levels(
+    conn: sqlite3.Connection, tree: str, model_name: str
+) -> None:
+    """Re-parent misfit children at every level above the leaf (#123).
+
+    A level runs the rule when its stored rate is over the threshold OR any of
+    its parents holds a child attached by proximity — the same either/or
+    `_needs_migrate` applies at level 0, and for the same reason: one poorly
+    attached child rarely moves a parent's rate past 0.25, and #114 attaches to
+    the NEAREST parent, so the rate can never see it.
+    """
+    for level in _upper_levels(conn, tree):
+        parents = [
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM nodes WHERE tree = ? AND level = ? ORDER BY id",
+                (tree, level),
+            ).fetchall()
+        ]
+        if any(
+            monitor.cluster_rate(conn, tree, p) > MISFIT_THRESHOLD
+            or store.attached_children(conn, p)
+            for p in parents
+        ):
+            migrate_children(conn, tree, level, model_name)
+
+
+def _upper_levels(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
+    rows = conn.execute(
+        "SELECT DISTINCT level FROM nodes WHERE tree = ? AND level > 0 "
+        "ORDER BY level",
+        (tree,),
+    ).fetchall()
+    return tuple(int(row["level"]) for row in rows)
 
 
 def _needs_migrate(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
