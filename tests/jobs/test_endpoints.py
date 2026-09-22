@@ -100,3 +100,43 @@ def test_a_job_with_nothing_to_report_carries_no_result(
 
     assert response.status_code == 200
     assert response.json()["result"] is None
+
+
+def test_an_admin_can_run_any_registered_op(harness: Harness) -> None:
+    # #139: the service door. The September run had to insert job rows into
+    # SQLite by hand to find out why a tree was stuck.
+    response = harness.client.post(
+        "/jobs",
+        json={"op": "monitor", "scope": {}, "tree": "default"},
+        headers=harness.auth("admin"),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["job_id"]
+
+
+def test_a_writer_cannot_open_the_service_door(harness: Harness) -> None:
+    # admin, not writer: this runs an expensive or destructive stage out of
+    # sequence, and the role should say so.
+    response = harness.client.post(
+        "/jobs",
+        json={"op": "monitor", "scope": {}},
+        headers=harness.auth("reader"),
+    )
+
+    assert response.status_code == 403
+
+
+def test_an_unknown_op_is_refused_at_the_boundary(harness: Harness) -> None:
+    # a typo must be a clear 4xx here, not a job that fails in a worker minutes
+    # later with nobody watching.
+    response = harness.client.post(
+        "/jobs",
+        json={"op": "propogate", "scope": {}},
+        headers=harness.auth("admin"),
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"]
+    assert "propagate" in body["error"]["details"]["registered"]

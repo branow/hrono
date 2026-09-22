@@ -174,3 +174,15 @@ def test_the_bootstrap_hint_addresses_the_server_that_was_started() -> None:
 
     assert "http://0.0.0.0:8299" in message
     assert "8080" not in message
+
+
+def test_there_is_no_command_that_runs_a_single_stage() -> None:
+    # #139: the service door is HTTP and admin-only, deliberately. A debugging
+    # tool that looks like a product feature invites users to build workflows
+    # on stages that are only safe in one order.
+    top = runner.invoke(app, ["--help"]).stdout
+    jobs = runner.invoke(app, ["jobs", "--help"]).stdout
+
+    assert "run" not in jobs.split("Commands")[-1]
+    for stage in ("propagate", "repair", "settle", "monitor"):
+        assert stage not in top
