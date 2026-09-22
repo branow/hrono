@@ -186,3 +186,22 @@ def test_there_is_no_command_that_runs_a_single_stage() -> None:
     assert "run" not in jobs.split("Commands")[-1]
     for stage in ("propagate", "repair", "settle", "monitor"):
         assert stage not in top
+
+
+def test_rm_says_whether_the_config_is_gone_or_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # a seeded default is RESET rather than removed, and which happened is a
+    # different thing for a user to know.
+    deleted = _patch(
+        monkeypatch, "hrono.registry.commands", FakeClient({"deleted": "x"})
+    )
+    gone = runner.invoke(app, ["prompts", "rm", "x"]).stdout
+    assert deleted.calls == [("DELETE", "/prompts/x", None)]
+    assert "Deleted" in gone
+
+    _patch(
+        monkeypatch, "hrono.registry.commands", FakeClient({"reset": "brief"})
+    )
+    reset = runner.invoke(app, ["prompts", "rm", "brief"]).stdout
+    assert "Reset" in reset

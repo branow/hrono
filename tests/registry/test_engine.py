@@ -72,3 +72,36 @@ def test_validation_hook_rejection_is_400(
     body = rejected.json()["error"]
     assert body["code"] == "bad-request"
     assert "non-negative" in body["message"]
+
+
+def test_a_put_that_creates_still_runs_the_validation_hook(
+    client: tuple[TestClient, dict[str, str]],
+) -> None:
+    # #138 made PUT the CREATE path, and `hrono <collection> set` uses it — so
+    # this is now the path a user actually types to register a source. The hook
+    # is what checks a connection's credential and a source's reachability
+    # (#107); skipping it here would accept an unreachable source silently and
+    # surface the failure hours later at sync time.
+    opened, admin = client
+
+    refused = opened.put(
+        "/widgets/fresh", json={"name": "fresh", "value": -1}, headers=admin
+    )
+
+    assert refused.status_code >= 400
+    assert opened.get("/widgets/fresh", headers=admin).status_code == 404
+
+
+def test_a_put_that_replaces_still_runs_the_validation_hook(
+    client: tuple[TestClient, dict[str, str]],
+) -> None:
+    opened, admin = client
+    opened.post("/widgets", json={"name": "w", "value": 1}, headers=admin)
+
+    refused = opened.put(
+        "/widgets/w", json={"name": "w", "value": -1}, headers=admin
+    )
+
+    assert refused.status_code >= 400
+    kept = opened.get("/widgets/w", headers=admin).json()
+    assert kept["value"] == 1  # the rejected config did not land
