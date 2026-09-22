@@ -9,6 +9,12 @@ stored brief (best-of-3, judge role via #057, OUTSIDE the #008 lock), and on a
 material verdict marks ancestor briefs stale up the path (bounded by D_MAX),
 bumping a per-tree drift counter that feeds the settle trigger (T39).
 
+IDEMPOTENT PER MEMBER SET (#110): a judged leaf records the signature it was
+judged against, so a reclaimed re-run of the same job re-issues no completions,
+writes no second audit row and bumps no drift — while a leaf whose membership
+genuinely changes afterwards is selected again. The drift bump needs no second
+guard of its own: ``_bump_drift`` is reachable only through that selection.
+
 MARKS ONLY: it never regenerates a brief. A later ``brief``/``brief-upper`` pass
 regenerates exactly the marked-stale ancestors (selectively, via #064). Every
 judged topic and every propagate/skip decision is written to ``update_log`` —
@@ -46,6 +52,7 @@ class _Topic:
     node_id: int
     source: str  # the leaf's new content (member condensations)
     summary: str  # its stored brief text
+    signature: str  # the member set being judged (#110's re-run marker)
 
 
 def propagate(
@@ -86,12 +93,15 @@ def _changed_leaves(
         brief = briefs.get(conn, node_id)
         if brief is None:
             continue
-        if briefs.member_signature(conn, node_id) == brief["member_signature"]:
+        signature = briefs.member_signature(conn, node_id)
+        if signature == brief["member_signature"]:
             continue
+        if signature == brief["judged_signature"]:
+            continue  # already judged at this exact member set (#110)
         source = "\n\n".join(
             briefs.member_condensations(conn, node_id, model_name)
         )
-        topics.append(_Topic(node_id, source, brief["text"]))
+        topics.append(_Topic(node_id, source, brief["text"], signature))
     return tuple(topics)
 
 
@@ -161,7 +171,8 @@ def _record(
 ) -> None:
     if verdict is None:  # the whole panel abstained: loud, not silent
         record(conn, tree, topic.node_id, "unparseable", "abstained")
-        return
+        return  # unjudged, so a re-run must try again: no marker
+    briefs.mark_judged(conn, topic.node_id, topic.signature)
     if verdict == "none":
         record(conn, tree, topic.node_id, verdict, "skipped")
         return

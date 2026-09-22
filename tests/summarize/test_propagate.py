@@ -520,3 +520,138 @@ def test_the_judge_call_is_capped_to_a_verdict(
             registry_store.get(conn, "models", "sonnet")["config"]
         )
     assert stored["params"] == {}  # the cap is per call, not a config write
+
+
+def _log_rows(db: Database) -> list[tuple[str, str]]:
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT verdict, action FROM update_log ORDER BY id"
+        ).fetchall()
+    return [(r["verdict"], r["action"]) for r in rows]
+
+
+def _drift(db: Database) -> int:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT drift FROM tree_batch WHERE tree = ?", (TREE,)
+        ).fetchone()
+    return int(row["drift"]) if row is not None else 0
+
+
+def test_a_reclaimed_re_run_judges_nothing_twice(
+    db: Database, tmp_path: Path
+) -> None:
+    # #093 reclaims a job whose work committed but whose status write failed,
+    # so the SAME propagate runs again over an unchanged tree.
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        parent = _upper(conn, 1, leaf)
+
+    judge = FakeJudge("major")
+    _run(db, judge, tmp_path)
+    first = (judge.calls, _log_rows(db), _drift(db), _stale(db, parent))
+
+    _run(db, judge, tmp_path)  # the reclaimed re-run
+
+    assert first == (BEST_OF, [("major", "propagated")], 2, 1)
+    assert judge.calls == BEST_OF  # no second panel: real money, not re-spent
+    assert _log_rows(db) == [
+        ("major", "propagated")
+    ]  # audit not double-counted
+    assert _drift(db) == 2  # one increment per judged topic, not two
+
+
+def test_a_membership_change_after_a_run_is_judged_again(
+    db: Database, tmp_path: Path
+) -> None:
+    # the fix must not suppress real work: the marker is per member SET.
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        _upper(conn, 1, leaf)
+
+    judge = FakeJudge("major")
+    _run(db, judge, tmp_path)
+    assert judge.calls == BEST_OF
+
+    with db.connect() as conn, conn:  # a new member arrives: real change
+        body = b"a section that joined after the judgement\n"
+        digest = content_hash(body)
+        upsert_content(conn, digest, body)
+        section = insert_section(
+            conn,
+            source="repo",
+            address=Address("git", "ex/repo", "new.txt", "v1"),
+            start=0,
+            end=len(body),
+            content_hash=digest,
+            ordinal=0,
+        )
+        conn.execute(
+            "INSERT INTO node_members(node_id, section_id, attached, forced, "
+            "assignment_similarity, created_at) VALUES (?, ?, 1, 0, NULL, 't')",
+            (leaf, section),
+        )
+
+    _run(db, judge, tmp_path)
+
+    assert judge.calls == BEST_OF * 2  # judged again, because it really changed
+    assert len(_log_rows(db)) == 2
+
+
+def test_a_re_brief_clears_the_judged_marker(
+    db: Database, tmp_path: Path
+) -> None:
+    # a regenerated brief has not been judged: `upsert` does not list the
+    # column, so INSERT OR REPLACE resets it.
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+
+    _run(db, FakeJudge("none"), tmp_path)
+    with db.connect() as conn:
+        assert briefs.get(conn, leaf)["judged_signature"] is not None
+
+    with db.connect() as conn, conn:
+        _brief(conn, leaf, member_sig="STILL-DOES-NOT-MATCH")
+
+    with db.connect() as conn:
+        assert briefs.get(conn, leaf)["judged_signature"] is None
+
+
+def test_an_abstained_topic_is_judged_again_on_the_next_run(
+    db: Database, tmp_path: Path
+) -> None:
+    # abstention is not a judgement; a re-run must try the topic again rather
+    # than inherit "already handled" from a panel that answered nothing.
+    with db.connect() as conn, conn:
+        _leaf(conn)
+
+    judge = FakeJudge("no idea what this change means")
+    _run(db, judge, tmp_path)
+    _run(db, judge, tmp_path)
+
+    assert (
+        judge.calls == BEST_OF * 4
+    )  # two runs, each a full panel with retries
+    assert _log_rows(db) == [
+        ("unparseable", "abstained"),
+        ("unparseable", "abstained"),
+    ]
+
+
+def test_judging_a_leaf_does_not_suppress_its_re_brief(
+    db: Database, tmp_path: Path
+) -> None:
+    # the ticket's flagged open question, answered as a test: the judged marker
+    # lives in its own column, so #064's freshness (which reads
+    # `member_signature`) still sees the leaf as owing a brief after judgement.
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+
+    with db.connect() as conn:
+        before = briefs.stale_or_missing(conn, TREE, 0, "h", "sonnet")
+
+    _run(db, FakeJudge("major"), tmp_path)
+
+    with db.connect() as conn:
+        after = briefs.stale_or_missing(conn, TREE, 0, "h", "sonnet")
+    assert before == after == (leaf,)

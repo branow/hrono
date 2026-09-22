@@ -31,7 +31,11 @@ parked chunks three times too fast — and a force-assigned member is never
 revisited today (#113), which makes premature forcing permanent. The number is
 allocated LAZILY, by the first source that actually has changes, so a run over
 an unchanged corpus leaves the counter alone; every later source in the same
-run reuses it.
+run reuses it. A RETRIED run — #093 reclaims a job stranded by a dead worker —
+is a fresh run and allocates another batch: a retry genuinely is another pass
+over the corpus, and per-job allocation state would be real machinery for
+semantics that already read correctly, bounded at one extra tick against a
+MAX_AGE tolerance of 5.
 
 Lock discipline like the other ops: the diff + centroid snapshot + section
 reconcile run under one #008 write lock (so the centroids are consistently

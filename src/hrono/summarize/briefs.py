@@ -231,7 +231,7 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT node_id, text, model_name, prompt_name, prompt_hash, "
         "member_signature, input_tokens, output_tokens, unfaithful, flagged, "
-        "members, stale FROM briefs WHERE node_id = ?",
+        "members, stale, judged_signature FROM briefs WHERE node_id = ?",
         (node_id,),
     ).fetchone()
 
@@ -243,6 +243,20 @@ def mark_stale(conn: sqlite3.Connection, node_id: int) -> None:
     propagate sets this so the next brief pass regenerates the ancestor anyway.
     """
     conn.execute("UPDATE briefs SET stale = 1 WHERE node_id = ?", (node_id,))
+
+
+def mark_judged(conn: sqlite3.Connection, node_id: int, signature: str) -> None:
+    """Record the member set propagate judged this brief against (#110).
+
+    Separate from ``member_signature`` on purpose: that one drives #064's
+    re-brief skip, and a judged marker written there would suppress a genuine
+    regeneration. A re-brief clears this (``upsert`` does not list the column),
+    because a new brief has not been judged.
+    """
+    conn.execute(
+        "UPDATE briefs SET judged_signature = ? WHERE node_id = ?",
+        (signature, node_id),
+    )
 
 
 def unfaithful_count(conn: sqlite3.Connection, tree: str, level: int) -> int:

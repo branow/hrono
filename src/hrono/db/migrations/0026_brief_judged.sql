@@ -1,0 +1,17 @@
+-- propagate must be idempotent on a re-run (#110). #093 turned reclaim-and-
+-- re-run from a never-event into a normal one, and `propagate` commits all its
+-- writes in one transaction at the end — so a status write that fails after
+-- that transaction leaves a job whose work is already done, and the re-run
+-- re-issues BEST_OF judge completions per leaf, writes a second `update_log`
+-- row, and bumps `tree_batch.drift` a second time.
+--
+-- `judged_signature` records WHICH member set a leaf was judged against, so
+-- `_changed_leaves` can skip a leaf already judged at its current signature and
+-- still select it the moment its membership genuinely changes again.
+--
+-- Deliberately NOT `member_signature`, which #064 reads to decide whether a
+-- brief may be skipped: marking a leaf judged there would suppress a genuine
+-- re-brief. A separate column keeps the two clocks independent. `briefs.upsert`
+-- is INSERT OR REPLACE and does not list this column, so a regenerated brief
+-- resets it to NULL — a new brief has not been judged.
+ALTER TABLE briefs ADD COLUMN judged_signature TEXT;
