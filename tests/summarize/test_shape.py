@@ -184,3 +184,29 @@ def test_a_brief_that_merely_ends_in_bullets_is_usable() -> None:
     )
 
     assert unusable(text) == ""
+
+
+def test_a_multi_line_brief_that_ends_by_interrogating_is_rejected() -> None:
+    # #121: the tail drop must remove ONLY the non-prose tail. F21's own reply
+    # is two sentences on one line; had the model put a blank line before its
+    # question — ordinary formatting — a tail drop that ate prose would have
+    # thrown the question away and read the brief as usable.
+    text = (
+        "This appears to be a condensation format guide with SVG examples.\n"
+        "\n"
+        "Are you sharing this as a reference pattern for what you want?"
+    )
+
+    assert unusable(text) == "asks-the-caller"
+
+
+def test_the_tail_drop_keeps_a_prose_closing_line() -> None:
+    # the same guard from the usable side: a brief whose last line is prose
+    # keeps that line, so what the check reads is the brief's real ending.
+    text = (
+        "The signer module builds and verifies signatures.\n"
+        "\n"
+        "It rejects a tampered payload and honours max_age."
+    )
+
+    assert unusable(text) == ""
