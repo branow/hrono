@@ -464,7 +464,30 @@ def _insert_member(
 
 
 def node_content_signature(conn: sqlite3.Connection, node_id: int) -> str:
-    """The content-hash signature of a node's current section members."""
+    """The content-hash signature of a node's current section members.
+
+    A WRITE HELPER, and only that (#120). Its result is what the three
+    membership writers stamp onto ``nodes.signature``; it is NOT the inverse of
+    the stored column and is not expected to equal it at an arbitrary moment.
+
+    ``nodes.signature`` is the member set **as of the last membership WRITE**, a
+    snapshot rather than a live value, and a cascade delete deliberately does
+    NOT refresh it. That retention is the mechanism, not an oversight: ``split``
+    drops a source's sections and re-inserts identical content under NEW section
+    ids, so by the time ``replace_tree`` runs the members have already cascaded
+    away — and the rebuild recognises the node by the signature it kept THROUGH
+    that teardown, which is what lets a re-split reuse node ids and their briefs
+    (#068). Refreshing on cascade sets it to the empty-set hash at delete time
+    and the node matches nothing;
+    ``tests/cluster/test_stable_ids.py`` fails in three places if anyone tries,
+    and ``test_a_cascade_delete_does_not_refresh_the_signature`` fails first.
+
+    So "stored != recomputed" is not drift and has no victim. The column has
+    exactly ONE reader in ``src/`` — ``_reconcile``'s label matching — and that
+    reader wants the snapshot. #064's brief freshness never touches it: it
+    compares ``briefs.member_signature``, computed on demand, against the value
+    stored on the brief row.
+    """
     rows = conn.execute(
         "SELECT s.content_hash AS h FROM node_members m "
         "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "

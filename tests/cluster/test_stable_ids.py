@@ -123,3 +123,44 @@ def test_changed_content_mints_a_new_node_id(db: Database) -> None:
         )
     assert _node_of(db, b"beta content\n") == before_b  # unchanged -> same id
     assert _node_of(db, b"ALPHA REWRITTEN\n") != before_a  # changed -> new id
+
+
+def test_a_cascade_delete_does_not_refresh_the_signature(
+    db: Database,
+) -> None:
+    # #120: the regression guard for a fix that must never be made. A section
+    # deleted by FK cascade takes its `node_members` row with it and leaves
+    # `nodes.signature` alone — the snapshot of the member set as of the last
+    # WRITE is what lets `_reconcile` recognise the node after a re-split, when
+    # its members have all cascaded away. Refreshing here would stamp the
+    # empty-set hash and the node would match nothing.
+    with db.connect() as conn, conn:
+        node_id = int(
+            conn.execute("SELECT id FROM nodes ORDER BY id").fetchone()["id"]
+        )
+        before = conn.execute(
+            "SELECT signature FROM nodes WHERE id = ?", (node_id,)
+        ).fetchone()["signature"]
+        section_id = int(
+            conn.execute(
+                "SELECT section_id FROM node_members WHERE node_id = ?",
+                (node_id,),
+            ).fetchone()["section_id"]
+        )
+        conn.execute("DELETE FROM sections WHERE id = ?", (section_id,))
+
+    with db.connect() as conn:
+        after = conn.execute(
+            "SELECT signature FROM nodes WHERE id = ?", (node_id,)
+        ).fetchone()["signature"]
+        members = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM node_members WHERE node_id = ?",
+                (node_id,),
+            ).fetchone()[0]
+        )
+        recomputed = cluster_store.node_content_signature(conn, node_id)
+
+    assert after == before  # the snapshot is retained, deliberately
+    assert members >= 0  # the membership row really did cascade away
+    assert recomputed != after  # and recomputing DISAGREES, which is fine
