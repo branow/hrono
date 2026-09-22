@@ -8,6 +8,7 @@ from hrono.admin.reset import (
     LinkedCache,
     NotHronoDatabase,
     ResetIncomplete,
+    _remove,
     targets,
     wipe,
 )
@@ -232,3 +233,23 @@ def test_the_cli_prints_the_removals_of_a_partial_wipe(
     assert "Removed:" in result.output
     assert str(db_path) in result.output
     assert "Permission denied" in result.output
+
+
+def test_remove_unlinks_a_symlinked_directory_instead_of_recursing(
+    tmp_path: Path,
+) -> None:
+    # #119: what makes the TOCTOU case safe. `_refuse_linked_cache` fires first
+    # in the normal flow, so this guard is unreachable there — and that is
+    # exactly why it needs a direct test: a swap between the refusal check and
+    # the delete loop must still not reach outside the bound.
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "precious.txt").write_text("do not delete me")
+    link = tmp_path / "cache"
+    link.symlink_to(outside, target_is_directory=True)
+
+    _remove(link)
+
+    assert not link.exists()  # the link is gone
+    assert not link.is_symlink()
+    assert (outside / "precious.txt").read_text() == "do not delete me"

@@ -7,11 +7,13 @@ from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from hrono.crypto.masterkey import WrongMasterKey
+from hrono.crypto.masterkey import WrongMasterKey, reconcile
 from hrono.db.connection import connect
 from hrono.db.database import open_database
 from hrono.db.migrations import packaged
+from hrono.errors import Internal
 from hrono.jobs import store
+from hrono.jobs.ops import JobContext
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -122,3 +124,25 @@ def test_startup_requeues_and_runs_a_job_left_running(tmp_path: Path) -> None:
             time.sleep(0.01)
     assert store.get(reader, "job_stranded")["status"] == "succeeded"
     reader.close()
+
+
+def test_an_injected_connection_app_has_no_cache_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #119/#098: the last route by which a cwd-relative cache could reach a
+    # worker. An app built from an injected connection does not own a database
+    # PATH, so it must hand its ops no cache root at all rather than resolve
+    # one against the working directory — F25 was two divergent clone sets for
+    # one database, and a diff that invented a reversed rename.
+    monkeypatch.chdir(tmp_path)
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    app = create_app(connection=conn, master_key=KEY, key_id=1)
+
+    with TestClient(app):
+        context = JobContext(app.state.db, None, app.state.worker._cache_root)
+        with pytest.raises(Internal, match="no cache root"):
+            context.cache_for("repo")
+
+    assert not (tmp_path / ".hrono").exists()  # nothing resolved against cwd
+    conn.close()

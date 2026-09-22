@@ -23,6 +23,21 @@ one:
   the wipe and is raised as ``ResetIncomplete`` carrying what HAD been removed,
   because a half-done destructive command is exactly when the operator needs
   that list.
+
+THE SYMLINK GUARD COVERS THE CACHE ROOT, NOT THE TREE BENEATH IT (#119), and
+that is deliberate. ``_remove`` additionally unlinks rather than recurses into
+any symlinked directory, so even a swap between the refusal check and the delete
+loop cannot reach outside the bound. What it does NOT do is scan the cache for
+links deeper down: a link at ``cache/sources`` is unlinked without being
+followed — the payload at the other end survives — but the command reports plain
+success while orphaned clones remain there. That is a reporting gap, not a
+safety gap.
+
+Deepening it would mean refusing a cache containing ANY symlink, and cloned
+repositories legitimately contain symlinks, so ``reset`` would begin refusing on
+ordinary corpora. A destructive command that refuses on a normal install is a
+far worse outcome than an orphan in a contrived layout. Guard the bound, not the
+tree.
 """
 
 from __future__ import annotations
