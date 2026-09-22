@@ -96,3 +96,82 @@ def test_empty_index_returns_no_hits(tmp_path: object) -> None:
 
 def test_z_floor_is_baked() -> None:
     assert Z_FLOOR == 3.5
+
+
+def _plant(database: Database, *, noise_path_matches_query: bool) -> int:
+    """A corpus whose answer is strong in one view and ordinary in the other.
+
+    The blend is a per-passage average, so a passage only stands out blended
+    when it beats the crowd THERE. When the crowd shares the query's path
+    signal, the answer's content advantage is halved into the noise (#127's
+    paraphrase case); when the crowd does not, a path-named answer is the only
+    thing the path half can see (#127's `uuid/version7.go` case). Returns the
+    planted answer's passage id.
+    """
+    answer_path = "src/answer.py"
+    crowd_path = "docs/topic.md"
+    with database.connect() as conn, conn:
+        register_path_bodies(conn, [answer_path, crowd_path])
+        # the query's own axis is e0; a path embedded on e0 matches the query
+        upsert_vector(
+            conn,
+            content_hash(path_body(crowd_path)),
+            MODEL,
+            _unit(0) if noise_path_matches_query else _unit(3),
+        )
+        upsert_vector(
+            conn,
+            content_hash(path_body(answer_path)),
+            MODEL,
+            _unit(3) if noise_path_matches_query else _unit(0),
+        )
+        answer = add_passage(
+            conn,
+            b"the query itself\n"
+            if noise_path_matches_query
+            else b"nothing like the query\n",
+            _unit(0) if noise_path_matches_query else _unit(1),
+        )
+        conn.execute(
+            "UPDATE passages SET path = ? WHERE id = ?", (answer_path, answer)
+        )
+        for i in range(40):
+            crowd = add_passage(conn, f"crowd body {i}\n".encode(), _unit(1))
+            conn.execute(
+                "UPDATE passages SET path = ? WHERE id = ?",
+                (crowd_path, crowd),
+            )
+    return answer
+
+
+def test_a_content_match_the_crowds_paths_drown_still_qualifies(
+    tmp_path: object,
+) -> None:
+    # #127: half a passage's norm in the blend is its FILE PATH. When the crowd
+    # shares the query's path signal, the answer's content advantage is halved
+    # into that noise and it never clears the floor. Measured on the QA corpus,
+    # "how do I style terminal output with colours" over a corpus holding the
+    # whole of chalk: ONE passage cleared blended, SEVENTEEN content-only.
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        answer = _plant(database, noise_path_matches_query=True)
+        with database.connect() as conn:
+            ids = [pid for pid, _ in search(conn, _unit(0), MODEL)]
+        assert answer in ids
+    finally:
+        database.close()
+
+
+def test_a_path_named_answer_still_qualifies(tmp_path: object) -> None:
+    # the other shape, and why dropping the blend is not the fix: "generate a
+    # version 7 uuid" went 10 hits to 1 content-only, because THAT question's
+    # vocabulary lives in the path (`uuid/version7.go`). The answer here says
+    # nothing like the query and is found only by where it lives.
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        answer = _plant(database, noise_path_matches_query=False)
+        with database.connect() as conn:
+            ids = [pid for pid, _ in search(conn, _unit(0), MODEL)]
+        assert answer in ids
+    finally:
+        database.close()

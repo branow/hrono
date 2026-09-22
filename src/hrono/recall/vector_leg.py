@@ -1,6 +1,6 @@
 """Recall's vector leg (T26.1): path-blended similarity, z-scored, z >= 3.5.
 
-Scores every embedded passage (source #069 and brief #071) by the same a=0.5
+Scores every embedded passage (source #069 and brief #071) by the a=0.5
 path-blended similarity used for clustering — the query is content-embedded and
 compared against each passage's content AND path components:
 
@@ -27,6 +27,21 @@ distribution stops them raising their own threshold: same corpus, same probe,
 half the population shares one score, so the spread falls back to the standard
 deviation there (see ``_spread``) rather than scoring everything zero.
 
+TWO VIEWS, BEST OF EITHER (#127). The blend above is the CLUSTERING vector, and
+half a passage's norm there is its file path — which a question phrased in
+ordinary English shares no vocabulary with, so the content signal is halved and
+dragged toward the median. Measured on the QA corpus, "how do I style terminal
+output with colours" over a corpus containing the whole of chalk: ONE passage
+cleared the floor blended, SEVENTEEN content-only. But dropping the blend is not
+the fix either — "generate a version 7 uuid" went 10 hits to 1, because THAT
+question's vocabulary lives in the path (`uuid/version7.go`). The two question
+shapes pull opposite ways, so a passage is scored in BOTH spaces, each z-scored
+against its own distribution, and keeps the better of the two: evidence that a
+passage is about the question can come from what it says or from where it lives,
+and requiring both halves at once was the defect. Measured, the union dominates
+— every question tested is at least as good as blended, and the eleven absent
+questions are unchanged at zero.
+
 The statistic is unchanged on purpose. An absolute cosine floor reads better on
 one corpus but is model-specific and would need recalibrating whenever the
 embedding model changes; the z-score is scale-free and portable, so ``Z_FLOOR``
@@ -39,7 +54,8 @@ import math
 import sqlite3
 from collections.abc import Sequence
 
-from hrono.cluster.blend import combine, combined_vector
+from hrono.cluster.blend import combine, combined_vector, unit
+from hrono.embed.store import get_vector
 
 Z_FLOOR = 3.5  # with keyword corroboration
 UNCORROBORATED_FLOOR = 4.5  # without it (#102): derived on the QA corpus
@@ -60,18 +76,34 @@ def scores(
     it, so the full z-map is exposed here and ``search`` just filters it.
     """
     query = combine(query_vec, query_vec)
-    scored: list[tuple[int, float]] = []
+    content_query = unit(query_vec)
+    blended: list[tuple[int, float]] = []
+    content: list[tuple[int, float]] = []
     for row in conn.execute(
         "SELECT id, content_hash, path FROM passages ORDER BY id"
     ).fetchall():
         passage = combined_vector(
             conn, row["content_hash"], row["path"], model_name
         )
-        if passage is not None:
-            scored.append((int(row["id"]), _dot(query, passage)))
-    if not scored:
+        body = get_vector(conn, row["content_hash"], model_name)
+        if passage is None or body is None:
+            continue
+        passage_id = int(row["id"])
+        blended.append((passage_id, _dot(query, passage)))
+        content.append((passage_id, _dot(content_query, unit(body))))
+    if not blended:
         return {}
 
+    by_blend = _z_scores(blended)
+    by_content = _z_scores(content)
+    return {
+        passage_id: max(z, by_content.get(passage_id, z))
+        for passage_id, z in by_blend.items()
+    }
+
+
+def _z_scores(scored: Sequence[tuple[int, float]]) -> dict[int, float]:
+    """z against the distribution's own median and MAD (#102)."""
     raw = [score for _, score in scored]
     centre = _median(raw)
     spread = _spread(raw, centre)

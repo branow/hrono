@@ -36,8 +36,8 @@ def combine(
     alpha: float = ALPHA,
 ) -> tuple[float, ...]:
     """Blend a content and path vector into one path-aware clustering vector."""
-    content_unit = _unit(content_vec)
-    path_unit = _unit(path_vec)
+    content_unit = unit(content_vec)
+    path_unit = unit(path_vec)
     content_weight = math.sqrt(1 - alpha)
     path_weight = math.sqrt(alpha)
     return tuple(
@@ -74,7 +74,8 @@ def combined_vector(
     return combine(content, path_component)
 
 
-def _unit(vec: Sequence[float]) -> tuple[float, ...]:
+def unit(vec: Sequence[float]) -> tuple[float, ...]:
+    """Scale a vector to unit length; a zero vector is returned as it is."""
     norm = math.sqrt(sum(value * value for value in vec))
     if norm == 0.0:
         return tuple(vec)
