@@ -51,7 +51,11 @@ def recall(
     vector_hits = vector_leg.qualify(vector_z, keyword_z)
     keyword_hits = keyword_leg.search(conn, question, vector_z)
 
-    fused = fusion.fuse(vector_hits, keyword_hits)
+    fused = fusion.fuse(
+        vector_hits,
+        keyword_hits,
+        _documents(conn, vector_hits, keyword_hits),
+    )
     if not fused.ranked:
         return Recall(hits=(), message=fused.message)
 
@@ -61,6 +65,28 @@ def recall(
         for passage_id, score in fused.ranked[:cap]
     )
     return Recall(hits=hits, message=None)
+
+
+def _documents(
+    conn: sqlite3.Connection,
+    vector_hits: Sequence[tuple[int, float]],
+    keyword_hits: Sequence[tuple[int, float]],
+) -> dict[int, str]:
+    """Map each candidate passage to the document it belongs to (#126).
+
+    A document is the passage's URI without its ``#chunk-n`` fragment — the
+    file, not the slice of it, which is the unit a reader would call "the same
+    place".
+    """
+    ids = {pid for pid, _ in vector_hits} | {pid for pid, _ in keyword_hits}
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT id, uri FROM passages WHERE id IN ({marks})",  # noqa: S608
+        tuple(ids),
+    ).fetchall()
+    return {int(row["id"]): str(row["uri"]).split("#")[0] for row in rows}
 
 
 def _render(conn: sqlite3.Connection, passage_id: int, score: float) -> Hit:

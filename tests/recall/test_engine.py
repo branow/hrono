@@ -299,3 +299,94 @@ def test_the_present_question_mean_sd_got_wrong_is_recovered(
         result = recall(conn, "the answer?", MODEL, const_encode(unit(0)))
     assert result.message is None
     assert result.hits
+
+
+def _add_at(conn: object, path: str, body: bytes, vec: list[float]) -> str:
+    """A passage under its OWN document, so the window can diversify."""
+    digest = content_hash(body)
+    upsert_content(conn, digest, body)  # type: ignore[arg-type]
+    upsert_vector(conn, digest, MODEL, vec)  # type: ignore[arg-type]
+    section_id = insert_section(
+        conn,  # type: ignore[arg-type]
+        source="repo",
+        address=Address("git", "ex/repo", path, "v1"),
+        start=0,
+        end=len(body),
+        content_hash=digest,
+        ordinal=0,
+    )
+    ordinal = int(
+        conn.execute(  # type: ignore[attr-defined]
+            "SELECT COUNT(*) FROM passages WHERE path = ?", (path,)
+        ).fetchone()[0]
+    )
+    uri = f"git://ex/repo/{path}@v1#chunk-{ordinal}"
+    conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO passages(section_id, source, source_type, instance, path, "
+        "version, uri, byte_start, byte_end, content_hash, sp_paths, ordinal, "
+        "created_at) VALUES (?, 'repo', 'git', 'ex/repo', ?, 'v1', ?, 0, ?, ?, "
+        "'[]', ?, 't')",
+        (section_id, path, uri, len(body), digest, ordinal),
+    )
+    fts.index_passage(
+        conn,  # type: ignore[arg-type]
+        passage_id=int(
+            conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]
+        ),
+        source="repo",
+        path=path,
+        body=body.decode(),
+    )
+    return uri
+
+
+def test_recall_lets_a_second_document_into_a_dominated_window(
+    tmp_path: object,
+) -> None:
+    # #126 end to end. The hog answers TWELVE times and scores higher every
+    # time; the quiet document answers once, slightly worse. In pure score
+    # order the window is ten hog hits and the quiet document never appears —
+    # so this test fails if the reserve is not wired in, and fails again if the
+    # document is taken to be the passage rather than the FILE (then every hit
+    # is its own document and nothing is ever held back).
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        with database.connect() as conn, conn:
+            register_path_bodies(conn, ["src/hog.py", "docs/other.md"])
+            for path in ("src/hog.py", "docs/other.md"):
+                upsert_vector(
+                    conn, content_hash(path_body(path)), MODEL, unit(2)
+                )
+            for i in range(12):
+                _add_at(
+                    conn,
+                    "src/hog.py",
+                    f"bearer token flow {i}\n".encode(),
+                    unit(0),
+                )
+            weaker = [0.94, 0.0, 0.0, 0.34, 0.0, 0.0, 0.0, 0.0]
+            quiet = _add_at(
+                conn,
+                "docs/other.md",
+                b"bearer token flow, documented\n",
+                weaker,
+            )
+            # noise sized from the estimator's own arithmetic: with n identical
+            # strong passages in a corpus of N the best reachable z is
+            # ~sqrt(N/n - 1), so thirteen strong hits need N > 146 to clear a
+            # floor of 3.2 at all (#102). This test is about the window, not
+            # the floor.
+            for i in range(150):
+                _add_at(
+                    conn, "src/hog.py", f"unrelated {i}\n".encode(), unit(1)
+                )
+
+        with database.connect() as conn:
+            result = recall(conn, "bearer?", MODEL, const_encode(unit(0)))
+
+        documents = {hit.uri.split("#")[0] for hit in result.hits}
+        assert len(result.hits) == 10  # a full window, not a truncated one
+        assert quiet.split("#")[0] in documents  # the quiet document got in
+        assert len(documents) == 2
+    finally:
+        database.close()
