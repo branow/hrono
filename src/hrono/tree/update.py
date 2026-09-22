@@ -126,6 +126,8 @@ def _update_source(
         placement.place(conn, tree, deltas, centroids, model_name, current)
         incubator.age(conn, tree, model_name, current)
     incubator.drain(context.database, tree, model_name)
+    with context.database.write() as conn:
+        cluster_store.backfill_coords(conn, tree, model_name)
     return current
 
 

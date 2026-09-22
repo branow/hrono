@@ -64,6 +64,109 @@ def stored_coords(
     return tuple(by_section[section_id] for section_id in section_ids)
 
 
+def backfill_coords(
+    conn: sqlite3.Connection, tree: str, model_name: str
+) -> int:
+    """Give every level-0 member a reduced coordinate; return how many written.
+
+    Warm init (T39.2) needs a coordinate for EVERY section in the build, and
+    only a full build produces real UMAP coordinates — incremental placement
+    (#085) decides by dot product and produces none. So one `update` was enough
+    to break coverage, `stored_coords` correctly returned None, and settle cold
+    -inits for ever: the warm path could never fire in practice (#101, F28).
+
+    A placed section has no coordinate of its own, so it inherits its cluster's:
+    the mean of the members that do have one, which keeps it inside the layout
+    it joined. A cluster where NOBODY has one — a drained pool, say — takes the
+    reduced centroid of the nearest cluster that does, which is the same
+    approximation one level out. With no coordinates anywhere there is no layout
+    to preserve, so nothing is written and the caller inits fresh.
+    """
+    covered: dict[int, tuple[float, ...]] = {}
+    for row in conn.execute(
+        "SELECT section_id, coords FROM section_coords WHERE tree = ?", (tree,)
+    ).fetchall():
+        values = array("f")
+        values.frombytes(row["coords"])
+        covered[int(row["section_id"])] = tuple(values)
+
+    members: dict[int, list[int]] = {}
+    for row in conn.execute(
+        "SELECT m.node_id AS n, m.section_id AS s FROM node_members m "
+        "JOIN nodes ON nodes.id = m.node_id "
+        "WHERE nodes.tree = ? AND nodes.level = 0 ORDER BY m.section_id",
+        (tree,),
+    ).fetchall():
+        members.setdefault(int(row["n"]), []).append(int(row["s"]))
+    missing = {
+        node_id: [s for s in sections if s not in covered]
+        for node_id, sections in members.items()
+    }
+    if not any(missing.values()):
+        return 0
+
+    anchors = {
+        node_id: _mean([covered[s] for s in sections if s in covered])
+        for node_id, sections in members.items()
+        if any(s in covered for s in sections)
+    }
+    if not anchors:
+        return 0
+    centroids = node_centroids(conn, tree, model_name)
+    now = _now()
+    written = 0
+    for node_id, sections in missing.items():
+        coord = anchors.get(node_id) or _nearest_anchor(
+            node_id, centroids, anchors
+        )
+        if coord is None:
+            continue
+        for section_id in sections:
+            _write_coord(conn, tree, section_id, coord, now)
+            written += 1
+    return written
+
+
+def _nearest_anchor(
+    node_id: int,
+    centroids: dict[int, tuple[float, ...]],
+    anchors: dict[int, tuple[float, ...]],
+) -> tuple[float, ...] | None:
+    """The reduced centroid of the nearest cluster that has one."""
+    own = centroids.get(node_id)
+    if own is None:
+        return None
+    candidates = [
+        (sum(a * b for a, b in zip(own, centroids[other], strict=True)), other)
+        for other in anchors
+        if other in centroids and other != node_id
+    ]
+    if not candidates:
+        return None
+    return anchors[max(candidates)[1]]
+
+
+def _mean(coords: Sequence[tuple[float, ...]]) -> tuple[float, ...]:
+    dims = len(coords[0])
+    return tuple(sum(c[i] for c in coords) / len(coords) for i in range(dims))
+
+
+def _write_coord(
+    conn: sqlite3.Connection,
+    tree: str,
+    section_id: int,
+    coord: Sequence[float],
+    now: str,
+) -> None:
+    conn.execute(
+        "INSERT INTO section_coords(tree, section_id, dims, coords, "
+        "created_at) VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(tree, section_id) DO UPDATE SET dims = excluded.dims, "
+        "coords = excluded.coords, created_at = excluded.created_at",
+        (tree, section_id, len(coord), array("f", coord).tobytes(), now),
+    )
+
+
 def replace_tree(
     conn: sqlite3.Connection,
     tree: str,

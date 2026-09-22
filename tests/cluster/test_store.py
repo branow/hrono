@@ -151,3 +151,74 @@ def test_stored_coords_aligns_or_none(db: Database) -> None:
         assert aligned[1] == pytest.approx((0.4, 0.5, 0.6))
         # a section with no stored coord -> None (fresh init)
         assert store.stored_coords(conn, "default", [s0, s1, 999]) is None
+
+
+def _placed(conn: object, path: str, body: bytes, vector: list[float]) -> int:
+    """An embedded section, ready to be a cluster member."""
+    section_id = _add_section(conn, path, body, 0)
+    register_path_bodies(conn, [path])  # type: ignore[arg-type]
+    _embed(conn, content_hash(body), vector)
+    _embed(conn, content_hash(path_body(path)), [0.0, 0.0, 1.0, 0.0])
+    return section_id
+
+
+def test_backfill_gives_a_placed_section_its_cluster_coordinate(
+    db: Database,
+) -> None:
+    # F28: incremental placement produces no UMAP coordinate, so a placed
+    # section inherits the one thing that is true of it — the cluster it joined.
+    with db.connect() as conn, conn:
+        covered = _placed(conn, "a.py", b"alpha\n", [1.0, 0.0, 0.0, 0.0])
+        placed = _placed(conn, "b.py", b"beta\n", [1.0, 0.0, 0.0, 0.0])
+        store.replace_tree(
+            conn,
+            "default",
+            0,
+            [(0, covered, False, None), (0, placed, False, None)],
+            [(covered, [1.0, 2.0])],
+        )
+        assert store.backfill_coords(conn, "default", MODEL) == 1
+
+    with db.connect() as conn:
+        aligned = store.stored_coords(conn, "default", [covered, placed])
+    assert aligned is not None  # the whole build is covered again
+    assert aligned[1] == pytest.approx((1.0, 2.0))
+
+
+def test_backfill_takes_the_nearest_cluster_when_its_own_has_none(
+    db: Database,
+) -> None:
+    # a drained pool mints a cluster where NOBODY has a coordinate; the nearest
+    # cluster that does is the same approximation one level out.
+    with db.connect() as conn, conn:
+        near = _placed(conn, "a.py", b"alpha\n", [1.0, 0.0, 0.0, 0.0])
+        far = _placed(conn, "b.py", b"beta\n", [0.0, 1.0, 0.0, 0.0])
+        drained = _placed(conn, "c.py", b"gamma\n", [0.0, 1.0, 0.0, 0.0])
+        store.replace_tree(
+            conn,
+            "default",
+            0,
+            [(0, near, False, None), (1, far, False, None)],
+            [(near, [5.0]), (far, [9.0])],
+        )
+        store.add_leaf_node(conn, "default", [(drained, False, None)])
+        assert store.backfill_coords(conn, "default", MODEL) == 1
+
+    with db.connect() as conn:
+        coord = store.stored_coords(conn, "default", [drained])
+    assert coord is not None
+    assert coord[0] == pytest.approx((9.0,))  # `far`'s cluster, which it fits
+
+
+def test_backfill_writes_nothing_when_there_is_no_layout_to_preserve(
+    db: Database,
+) -> None:
+    # a first build has no coordinates to inherit; `stored_coords` returning
+    # None is then correct, and the caller inits fresh.
+    with db.connect() as conn, conn:
+        lonely = _placed(conn, "a.py", b"alpha\n", [1.0, 0.0, 0.0, 0.0])
+        store.add_leaf_node(conn, "default", [(lonely, False, None)])
+        assert store.backfill_coords(conn, "default", MODEL) == 0
+
+    with db.connect() as conn:
+        assert store.stored_coords(conn, "default", [lonely]) is None

@@ -723,3 +723,55 @@ def _export(db: Database) -> dict[str, str]:
         stored = export_store.load(conn, "default")
         assert stored is not None
         return render(conn, collapse(stored, 3))
+
+
+def _uncovered_members(db: Database) -> int:
+    with db.connect() as conn:
+        return int(
+            conn.execute(
+                "SELECT COUNT(*) FROM node_members m "
+                "JOIN nodes n ON n.id = m.node_id "
+                "LEFT JOIN section_coords c "
+                "  ON c.tree = n.tree AND c.section_id = m.section_id "
+                "WHERE n.tree = 'default' AND n.level = 0 "
+                "AND c.section_id IS NULL"
+            ).fetchone()[0]
+        )
+
+
+def test_an_update_leaves_every_member_with_a_coordinate(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # F28: incremental placement decides by dot product and produces no UMAP
+    # coordinate, so ONE update was enough to break `stored_coords`' coverage.
+    db, origin = built
+    assert _uncovered_members(db) == 0  # the full build covers everything
+
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+
+    assert _uncovered_members(db) == 0
+
+
+def test_a_rebuild_after_an_update_warm_inits(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # and the consequence that matters: settle only runs BECAUSE churn
+    # accumulated, and churn is exactly what used to destroy the warm path.
+    from hrono.cluster import op as cluster_op
+
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+
+    seen: dict[str, object] = {}
+
+    def capture(vectors: object, *, init: object = None) -> ClusterResult:
+        seen["init"] = init
+        return fake_build(vectors, init=init)
+
+    cluster_op.cluster(
+        _job("cluster"), job_context(db, tmp_path), build=capture
+    )
+
+    assert seen["init"] is not None
