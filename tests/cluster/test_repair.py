@@ -1,17 +1,21 @@
 """T38: local cluster repairs — split, migrate, dissolve."""
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
-from hrono.cluster import incubator, repair
+from hrono.cluster import incubator, monitor, repair
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import path_body, register_path_bodies
 from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
+from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
+from hrono.registry import store as registry_store
+from tests.context import job_context
 
 MODEL = "emb"
 DIMS = 4
@@ -52,8 +56,31 @@ def db(tmp_path: object) -> Iterator[Database]:
     with database.connect() as conn, conn:
         register_path_bodies(conn, [PATH])
         upsert_vector(conn, content_hash(path_body(PATH)), MODEL, unit(2))
+        registry_store.insert(
+            conn,
+            "models",
+            MODEL,
+            '{"name":"emb","kind":"embedding","connection":null,'
+            '"model":"fake","params":{"dims":4}}',
+            None,
+            "t",
+        )
     yield database
     database.close()
+
+
+def _job() -> Job:
+    return Job(
+        id="rep",
+        parent_id=None,
+        tree=TREE,
+        op="repair",
+        scope={},
+        status="running",
+        error=None,
+        created_at="t",
+        updated_at="t",
+    )
 
 
 def test_registered() -> None:
@@ -166,3 +193,69 @@ def test_dissolve_parks_a_survivor_with_no_home(db: Database) -> None:
         assert repair.dissolve(conn, TREE, tiny, MODEL, batch=1) is True
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 1  # parked
+
+
+def _forced(conn: object, node_id: int, section_id: int) -> bool:
+    return section_id in cluster_store.forced_members(conn, node_id)  # type: ignore[arg-type]
+
+
+def test_a_forced_pioneer_leaves_once_its_real_siblings_form(
+    db: Database,
+) -> None:
+    # #113 / F29: `docs/unrelated-cooking-notes.md` force-assigned at 0.281 into
+    # a source-code topic. One alien member in seven is a rate of 0.14 — under
+    # MISFIT_THRESHOLD — so the rate alone never triggers the repair that frees
+    # it. The flag does.
+    with db.connect() as conn, conn:
+        members = [
+            add_section(conn, f"code{i}\n".encode(), unit(0)) for i in range(6)
+        ]
+        pioneer = add_section(conn, b"cooking notes\n", unit(3))
+        married = cluster_store.add_leaf_node(
+            conn,
+            TREE,
+            [(s, False, None) for s in members] + [(pioneer, True, 0.281)],
+        )
+        siblings = [  # its real siblings finally form a cluster of their own
+            add_section(conn, f"cooking{i}\n".encode(), unit(3))
+            for i in range(3)
+        ]
+        home = node_of(conn, siblings)
+        monitor.refresh(conn, TREE, MODEL, [married, home])
+
+    with db.connect() as conn:
+        assert monitor.cluster_rate(conn, TREE, married) < (
+            repair.MISFIT_THRESHOLD
+        )
+
+    with db.connect() as conn, conn:
+        repair.repair(_job(), job_context(db, Path(".")))
+
+    with db.connect() as conn:
+        assert cluster_store.section_node(conn, TREE, pioneer) == home
+        assert not _forced(conn, home, pioneer)  # re-placed normally: flag gone
+
+
+def test_a_forced_member_with_nowhere_better_stays_put(db: Database) -> None:
+    # the repair must not shuffle a pioneer into a cluster that fits it worse
+    # just because it is flagged: with no better home it keeps its place, and
+    # keeps its flag, so the next batch looks again.
+    with db.connect() as conn, conn:
+        members = [
+            add_section(conn, f"code{i}\n".encode(), unit(0)) for i in range(6)
+        ]
+        pioneer = add_section(conn, b"cooking notes\n", unit(3))
+        married = cluster_store.add_leaf_node(
+            conn,
+            TREE,
+            [(s, False, None) for s in members] + [(pioneer, True, 0.281)],
+        )
+        node_of(conn, [add_section(conn, b"other\n", unit(1))])
+        monitor.refresh(conn, TREE, MODEL, [married])
+
+    with db.connect() as conn, conn:
+        repair.repair(_job(), job_context(db, Path(".")))
+
+    with db.connect() as conn:
+        assert cluster_store.section_node(conn, TREE, pioneer) == married
+        assert _forced(conn, married, pioneer)

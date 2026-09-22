@@ -147,3 +147,84 @@ def test_first_monitor_captures_baseline(db: Database) -> None:
         assert base is not None
         assert base == pytest.approx(monitor.global_rate(conn, TREE))
         assert base > 0.0
+
+
+def forced_node(
+    conn: object, topic: int, pioneer_topic: int, size: int = 6
+) -> tuple[int, int]:
+    """A ``topic`` cluster carrying one force-assigned alien member."""
+    members = [
+        add_section(conn, f"t{topic}-{i}\n".encode(), unit(topic))
+        for i in range(size)
+    ]
+    pioneer = add_section(
+        conn, b"docs/unrelated-cooking-notes.md\n", unit(pioneer_topic)
+    )
+    node_id = cluster_store.add_leaf_node(
+        conn,
+        TREE,
+        [(s, False, None) for s in members] + [(pioneer, True, 0.281)],
+    )
+    return node_id, pioneer
+
+
+def test_a_forced_member_below_tau_is_a_misfit(db: Database) -> None:
+    # #113 / F29: a force-assigned chunk is attached to its NEAREST centroid by
+    # construction, so `best_other > own` can never see it however alien it is.
+    with db.connect() as conn, conn:
+        node, _pioneer = forced_node(conn, topic=0, pioneer_topic=3)
+        elsewhere = make_node(conn, topic=1, extra=[])
+        monitor.refresh(conn, TREE, MODEL, [node, elsewhere])
+
+    with db.connect() as conn:
+        assert monitor.cluster_rate(conn, TREE, node) == pytest.approx(1 / 7)
+
+
+def test_the_same_member_unforced_is_not_a_misfit(db: Database) -> None:
+    # the control: identical vectors, identical geometry, flag off. It is the
+    # FLAG that is read, not the similarity — the unforced twin is nearest to
+    # this cluster too, so the `best_other > own` rule still says nothing.
+    with db.connect() as conn, conn:
+        members = [
+            add_section(conn, f"t0-{i}\n".encode(), unit(0)) for i in range(6)
+        ]
+        twin = add_section(conn, b"docs/unrelated-cooking-notes.md\n", unit(3))
+        node = cluster_store.add_leaf_node(
+            conn, TREE, [(s, False, None) for s in [*members, twin]]
+        )
+        elsewhere = make_node(conn, topic=1, extra=[])
+        monitor.refresh(conn, TREE, MODEL, [node, elsewhere])
+
+    with db.connect() as conn:
+        assert monitor.cluster_rate(conn, TREE, node) == 0.0
+
+
+def test_a_forced_member_that_actually_fits_is_not_a_misfit(
+    db: Database,
+) -> None:
+    # forcing is not guilt: a member forced into a cluster it sits at or above
+    # TAU of has nothing to correct, and must not inflate the rate for ever.
+    with db.connect() as conn, conn:
+        members = [
+            add_section(conn, f"t0-{i}\n".encode(), unit(0)) for i in range(6)
+        ]
+        close = add_section(conn, b"on topic after all\n", unit(0))
+        node = cluster_store.add_leaf_node(
+            conn,
+            TREE,
+            [(s, False, None) for s in members] + [(close, True, 0.99)],
+        )
+        monitor.refresh(conn, TREE, MODEL, [node])
+
+    with db.connect() as conn:
+        assert monitor.cluster_rate(conn, TREE, node) == 0.0
+
+
+def test_the_sample_prefers_clusters_holding_a_forced_member() -> None:
+    nodes = [10, 20, 30, 40, 50]
+    picked = monitor.sample(nodes, exclude=[], k=2, seed=0, prefer=[50])
+    assert picked[0] == 50  # jumps the round-robin, which would start at 10
+    assert len(picked) == 2
+    # still deterministic, still bounded, still never a dirty cluster
+    assert picked == monitor.sample(nodes, [], k=2, seed=0, prefer=[50])
+    assert 20 not in monitor.sample(nodes, [20], k=4, seed=0, prefer=[20])

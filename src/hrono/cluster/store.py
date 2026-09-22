@@ -404,6 +404,26 @@ def member_count(conn: sqlite3.Connection, node_id: int) -> int:
     )
 
 
+def forced_members(conn: sqlite3.Connection, node_id: int) -> frozenset[int]:
+    """Section ids force-assigned into this node ignoring TAU (#086 T35.3)."""
+    rows = conn.execute(
+        "SELECT section_id FROM node_members WHERE node_id = ? AND forced = 1",
+        (node_id,),
+    ).fetchall()
+    return frozenset(int(row["section_id"]) for row in rows)
+
+
+def forced_holders(conn: sqlite3.Connection, tree: str) -> frozenset[int]:
+    """Level-0 node ids holding at least one force-assigned member."""
+    rows = conn.execute(
+        "SELECT DISTINCT m.node_id AS n FROM node_members m "
+        "JOIN nodes ON nodes.id = m.node_id "
+        "WHERE nodes.tree = ? AND nodes.level = 0 AND m.forced = 1",
+        (tree,),
+    ).fetchall()
+    return frozenset(int(row["n"]) for row in rows)
+
+
 def node_member_rows(
     conn: sqlite3.Connection, node_id: int
 ) -> tuple[tuple[int, str, str], ...]:

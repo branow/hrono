@@ -6,12 +6,20 @@ and a centroid is the renormalized mean of its members' combined vectors, so
 the decision is a plain dot product: for chunk c in cluster K, ``own = c.K`` and
 ``best_other = max over J != K of c.J``; c is a misfit iff ``best_other > own``.
 
+A FORCE-ASSIGNED member (#086 T35.3) is the exception that rule cannot see: it
+was attached to its NEAREST centroid ignoring TAU, so ``own`` is the maximum by
+construction and ``best_other > own`` is never true however alien it is. Such a
+member is a misfit while its own similarity is below TAU — which is what finally
+makes 0017's promise ("flagged so the misfit monitor re-checks it preferentially
+and a mis-placed pioneer migrates once its real siblings form") readable (#113).
+
 Cost stays scale-independent: the per-cluster counts persist in ``misfit``, and
 a batch re-checks only the DIRTY clusters it touched plus a bounded per-batch
-sample (deterministic) — the global rate aggregates the stored rows without
-rescanning the corpus. The first (post-build) run captures the baseline global
-rate; a fresh tree's rate is nonzero by nature (HDBSCAN edge members lean toward
-neighbours), so repair (T38) and settle (T39) compare RELATIVE to that baseline.
+sample (deterministic, and preferring clusters that hold a forced member) — the
+global rate aggregates the stored rows without rescanning the corpus. The first
+(post-build) run captures the baseline global rate; a fresh tree's rate is
+nonzero by nature (HDBSCAN edge members lean toward neighbours), so repair (T38)
+and settle (T39) compare RELATIVE to that baseline.
 Monitor only MEASURES — acting on the rate is repair/settle.
 """
 
@@ -23,6 +31,7 @@ from datetime import UTC, datetime
 
 from hrono.cluster import store
 from hrono.cluster.blend import combined_vector
+from hrono.cluster.placement import TAU
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -44,7 +53,16 @@ def monitor(job: Job, context: JobContext) -> None:
         else:
             batch = _batch(conn, tree)
             targets = sorted(
-                set(dirty) | set(sample(all_nodes, dirty, SAMPLE_SIZE, batch))
+                set(dirty)
+                | set(
+                    sample(
+                        all_nodes,
+                        dirty,
+                        SAMPLE_SIZE,
+                        batch,
+                        store.forced_holders(conn, tree),
+                    )
+                )
             )
         write_misfits(
             conn, tree, _misfits(conn, tree, model, targets, centroids)
@@ -76,8 +94,9 @@ def _misfits(
     rows: list[tuple[int, int, int]] = []
     for node_id in node_ids:
         own_centroid = centroids.get(node_id)
+        forced = store.forced_members(conn, node_id)
         misfits = members = 0
-        for _sid, content_hash, path in store.node_member_rows(conn, node_id):
+        for sid, content_hash, path in store.node_member_rows(conn, node_id):
             vector = combined_vector(conn, content_hash, path, model_name)
             if vector is None:
                 continue
@@ -91,7 +110,7 @@ def _misfits(
                 ),
                 default=-1.0,
             )
-            if best_other > own:
+            if best_other > own or (sid in forced and own < TAU):
                 misfits += 1
         rows.append((node_id, misfits, members))
     return tuple(rows)
@@ -158,15 +177,29 @@ def sample(
     exclude: Sequence[int],
     k: int,
     seed: int,
+    prefer: Iterable[int] = (),
 ) -> tuple[int, ...]:
-    """A deterministic, bounded pick of non-dirty clusters (batch-stamped)."""
+    """A deterministic, bounded pick of non-dirty clusters (batch-stamped).
+
+    ``prefer`` jumps the round-robin: clusters holding a force-assigned member
+    are the ones 0017 promised to re-check preferentially, and a pioneer only
+    leaves once someone looks at it again (#113).
+    """
     candidates = sorted(set(node_ids) - set(exclude))
     if not candidates or k <= 0:
         return ()
     if k >= len(candidates):
         return tuple(candidates)
-    start = seed % len(candidates)
-    return tuple(candidates[(start + i) % len(candidates)] for i in range(k))
+    preferred = set(prefer)
+    first = [n for n in candidates if n in preferred][:k]
+    rest = [n for n in candidates if n not in preferred]
+    room = k - len(first)
+    if room <= 0 or not rest:
+        return tuple(first)
+    if room >= len(rest):
+        return tuple(first + rest)
+    start = seed % len(rest)
+    return tuple(first + [rest[(start + i) % len(rest)] for i in range(room)])
 
 
 def _batch(conn: sqlite3.Connection, tree: str) -> int:

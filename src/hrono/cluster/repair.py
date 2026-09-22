@@ -11,7 +11,11 @@ later full rebuild matches them.
   own members into density-core children; residual noise attaches to the nearest
   child. The oversized node retires.
 - ``migrate`` — a cluster over the misfit threshold sheds its misfit members
-  (best_other > own), each moving to the cluster that actually fits it.
+  (best_other > own), each moving to the cluster that actually fits it. A
+  cluster holding a FORCED member runs the rule whatever its rate: one alien
+  pioneer rarely moves a rate past 0.25, and leaving it married to the topic for
+  ever is the defect 0017 promised not to have (#113). Moving it re-records the
+  member unforced, so the flag keeps meaning "not yet revisited".
 - ``dissolve`` — a cluster below two members retires; each survivor re-enters
   the placement rule against the remaining clusters.
 
@@ -56,8 +60,15 @@ def repair(
                 dissolve(conn, tree, node_id, model, batch)
             elif size > MAX_CAP:
                 split(conn, tree, node_id, model, core_labeler=core_labeler)
-            elif monitor.cluster_rate(conn, tree, node_id) > MISFIT_THRESHOLD:
+            elif _needs_migrate(conn, tree, node_id):
                 migrate(conn, tree, node_id, model)
+
+
+def _needs_migrate(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
+    """Over the misfit threshold, or holding a member forced past TAU (#113)."""
+    if monitor.cluster_rate(conn, tree, node_id) > MISFIT_THRESHOLD:
+        return True
+    return bool(store.forced_members(conn, node_id))
 
 
 def split(
