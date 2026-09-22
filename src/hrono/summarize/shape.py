@@ -13,11 +13,22 @@ pollutes the triage queue the flag exists to serve. Only three shapes are
 rejected, each a thing a summary of code or docs does not do:
 
 - ``empty`` — nothing, or too short to be a summary of anything.
-- ``asks-the-caller`` — a question containing "you"/"your". A summary describes
-  material; it does not interrogate the person who asked for it.
-- ``addresses-the-caller`` — an assistant meta-opener in the FIRST sentence
-  ("I cannot", "as an AI", "I'd be happy to", "let me know if"). Restricted to
-  the opening so a brief that merely quotes such a phrase mid-text is safe.
+- ``asks-the-caller`` — a ``you``-bearing question that is the LAST sentence and
+  carries no reporting cue. A summary describes material; it does not
+  interrogate the person who asked for it. Both qualifiers are what let it tell
+  interrogating from QUOTING (#121): a brief that quotes a question out of its
+  source carries on afterwards, because the quote is evidence for a point it
+  then makes, and one that REPORTS a question says so ("the docstring opens
+  with", "the final entry asks:"). A brief that interrogates ends on its
+  question and introduces nobody. Without those two the check rejected an FAQ
+  summary, a docstring that opens by asking, and any brief reporting a question
+  in its material — which is what a Confluence or Notion corpus is largely made
+  of.
+- ``addresses-the-caller`` — an assistant meta-opener that STARTS the first
+  sentence ("I cannot", "as an AI", "I'd be happy to", "let me know if").
+  Anchored to the opening so a brief that quotes such a phrase mid-text is safe
+  — which the rule always claimed, while actually scanning the whole first
+  sentence (#121).
 
 Everything else passes, including shapes that are merely untidy: a brief with a
 generic "## Summary" heading, no heading at all, bullet lists, or an unusual
@@ -49,6 +60,15 @@ _ADDRESSES = re.compile(
     re.IGNORECASE,
 )
 _YOU = re.compile(r"\byou\b|\byour\b", re.IGNORECASE)
+_REPORTS = re.compile(
+    r"\basks?\b|\basking\b|\bopens? with\b|\bbegins? with\b"
+    r"|\bquestions?\s+(?:answered|include|covered)\b|\breads\b"
+    r"|\btitled\b|\bentitled\b"
+    r"|[\"\u201c\u2018]",  # a QUOTE mark, never an apostrophe: "you'd" is not
+    re.IGNORECASE,
+)
+_LEADING = re.compile(r"^[^A-Za-z]*")
+_TAIL = re.compile(r"^(?:$|[-*+]\s|references:|sources:|\w+://)", re.IGNORECASE)
 
 
 def unusable(text: str) -> str:
@@ -56,12 +76,42 @@ def unusable(text: str) -> str:
     stripped = text.strip()
     if len(stripped) < MIN_CHARS:
         return "empty"
-    sentences = [s.strip() for s in _SENTENCE.findall(stripped) if s.strip()]
-    if any(s.endswith("?") and _YOU.search(s) for s in sentences):
+    sentences = _prose(stripped)
+    if sentences and _interrogates(sentences[-1]):
         return "asks-the-caller"
-    if sentences and _ADDRESSES.search(sentences[0]):
+    if sentences and _ADDRESSES.match(_LEADING.sub("", sentences[0])):
         return "addresses-the-caller"
     return ""
+
+
+def _prose(text: str) -> list[str]:
+    """The reply's sentences, with any trailing NON-prose tail dropped (#121).
+
+    "The question must be last" is a signal about prose only. A brief that ends
+    with a reference list or bullets — which stored briefs did before #102 moved
+    the URI footer out of the text — would otherwise hide an interrogating
+    question behind its own footer and read as usable.
+
+    The tail is dropped by LINE rather than by sentence, because the sentence
+    splitter cuts a URI at every dot and the fragments look like prose.
+    """
+    lines = text.splitlines()
+    while lines and _TAIL.match(lines[-1].strip()):
+        lines.pop()
+    body = "\n".join(lines)
+    return [s.strip() for s in _SENTENCE.findall(body) if s.strip()]
+
+
+def _interrogates(last: str) -> bool:
+    """Is this closing sentence a question AT the caller (#121)?
+
+    Three things have to hold together: it is a question, it is about "you",
+    and nothing marks it as reported or quoted. Any one of them alone catches
+    ordinary material — an FAQ, a how-to, a docstring that opens by asking.
+    """
+    if not last.endswith("?") or not _YOU.search(last):
+        return False
+    return not _REPORTS.search(last)
 
 
 def answer(

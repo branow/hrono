@@ -100,3 +100,87 @@ def test_a_model_that_always_talks_back_terminates_and_flags() -> None:
     assert client.calls == 2  # exactly one retry, never a loop
     assert flag == "asks-the-caller"
     assert result.text == F21  # stored anyway: never drop the node
+
+
+F21 = (
+    "This appears to be a condensation format guide with SVG examples, not a "
+    "request for me to act on something. Are you sharing this as a reference "
+    "pattern for how you want complex data summarized going forward, or do "
+    "you have actual SVG content or documentation you'd like me to condense "
+    "right now?"
+)
+
+QUOTED_QUESTIONS = [
+    # a docstring that opens by asking, then answers itself
+    'The module\'s docstring opens with "How do you sign a cookie?" and then '
+    "answers it: Signer.sign appends a timestamp and an HMAC.",
+    # an FAQ page, which is what a Confluence corpus is largely made of
+    "A FAQ covering deployment. Questions answered include: how do I rotate a "
+    "key? Can you run this behind a proxy? What happens when a token expires?",
+    # a REPORTED question, closing the brief
+    "The troubleshooting guide walks through three failure modes. The final "
+    "entry asks: why does your token expire early?",
+    # a quoted question opening the brief, with the summary continuing
+    '"Have you ever needed a signed cookie?" it asks, before introducing '
+    "URLSafeTimedSerializer and its max_age parameter.",
+]
+
+
+def test_the_real_f21_brief_is_still_rejected() -> None:
+    # the true positive, from the actual stored text in .e2e/run rather than a
+    # lookalike: the map's first topic was the model talking back.
+    assert unusable(F21) == "asks-the-caller"
+
+
+@pytest.mark.parametrize("text", QUOTED_QUESTIONS)
+def test_a_quoted_or_reported_question_is_usable(text: str) -> None:
+    # #121: the rule could not tell interrogating the caller from quoting a
+    # question that is IN the material. The exposure is FAQs, troubleshooting
+    # pages and second-person how-to docs — exactly the source types on the
+    # roadmap.
+    assert unusable(text) == ""
+
+
+def test_an_assistant_phrase_quoted_mid_sentence_is_usable() -> None:
+    # the module docstring always promised this; the check actually scanned the
+    # whole first sentence, so a quote inside a long opener was rejected.
+    text = (
+        "The contributing guide tells reviewers to reply 'let me know if you "
+        "need more detail' when requesting changes, and documents the "
+        "two-approval rule."
+    )
+
+    assert unusable(text) == ""
+
+
+def test_a_genuine_meta_opener_is_still_rejected() -> None:
+    text = (
+        "I cannot summarise this content because it appears to be a binary "
+        "file rather than source code or documentation."
+    )
+
+    assert unusable(text) == "addresses-the-caller"
+
+
+def test_a_footer_cannot_hide_an_interrogating_question() -> None:
+    # stored briefs carried a URI footer before #102 moved it out of the text,
+    # and the sentence splitter cuts a URI at every dot — so the fragments look
+    # like prose and the question stops being "last". Measured: with the tail
+    # dropped by LINE, the `.e2e/run` corpus rejects exactly F21 again, which is
+    # what the PO recorded before this change.
+    with_footer = (
+        F21 + "\n\nReferences:\n- git:///repos/chalk/media/logo.svg@661317e\n"
+        "- git:///repos/itsdangerous/docs/_static/name.svg@672971d\n"
+    )
+
+    assert unusable(with_footer) == "asks-the-caller"
+
+
+def test_a_brief_that_merely_ends_in_bullets_is_usable() -> None:
+    text = (
+        "The signer module builds and verifies signatures. It covers:\n"
+        "- sign, which appends a timestamp and an HMAC\n"
+        "- unsign, which rejects a tampered payload\n"
+    )
+
+    assert unusable(text) == ""
