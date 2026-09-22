@@ -10,7 +10,8 @@ from __future__ import annotations
 import sqlite3
 
 _COLUMNS = (
-    "id, parent_id, tree, op, scope, status, error, created_at, updated_at"
+    "id, parent_id, tree, op, scope, status, error, result, "
+    "created_at, updated_at"
 )
 
 
@@ -129,12 +130,19 @@ def set_status(
     status: str,
     error: str | None,
     now: str,
+    result: str | None = None,
 ) -> None:
+    """Record a job's terminal state, and what it did while it was there.
+
+    ``result`` is the op's outcome as JSON counts (#132); None leaves the
+    stored value alone, so a status flip that carries no outcome — a reclaim,
+    a cancel — never erases one.
+    """
     with conn:
         conn.execute(
-            "UPDATE jobs SET status = ?, error = ?, updated_at = ? "
-            "WHERE id = ?",
-            (status, error, now, job_id),
+            "UPDATE jobs SET status = ?, error = ?, updated_at = ?, "
+            "result = COALESCE(?, result) WHERE id = ?",
+            (status, error, now, result, job_id),
         )
 
 

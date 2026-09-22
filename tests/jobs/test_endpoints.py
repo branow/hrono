@@ -34,6 +34,15 @@ def harness(tmp_path: Path) -> Iterator[Harness]:
     store.set_status(conn, "job_a", "succeeded", None, "t")
     store.insert(conn, "job_b", None, None, "split", '{"type":"all"}', "t")
     store.set_status(conn, "job_b", "failed", "boom", "t")
+    store.insert(conn, "job_c", None, None, "propagate", '{"type":"all"}', "t")
+    store.set_status(
+        conn,
+        "job_c",
+        "succeeded",
+        None,
+        "t",
+        '{"judged": 0, "incomplete": true}',
+    )
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
         yield Harness(client, tokens)
@@ -47,7 +56,7 @@ def test_unauthenticated_is_401(harness: Harness) -> None:
 def test_reader_lists_jobs(harness: Harness) -> None:
     response = harness.client.get("/jobs", headers=harness.auth("reader"))
     assert response.status_code == 200
-    assert {j["id"] for j in response.json()} == {"job_a", "job_b"}
+    assert {j["id"] for j in response.json()} == {"job_a", "job_b", "job_c"}
 
 
 def test_list_filters_by_status(harness: Harness) -> None:
@@ -73,3 +82,21 @@ def test_unknown_job_is_404(harness: Harness) -> None:
         ).status_code
         == 404
     )
+
+
+def test_the_job_read_path_carries_the_ops_outcome(harness: Harness) -> None:
+    # #132: the operator surface that exists today. A run that declined part of
+    # its work has to be visible HERE, not only in a table nothing selects.
+    response = harness.client.get("/jobs/job_c", headers=harness.auth("reader"))
+
+    assert response.status_code == 200
+    assert response.json()["result"] == {"judged": 0, "incomplete": True}
+
+
+def test_a_job_with_nothing_to_report_carries_no_result(
+    harness: Harness,
+) -> None:
+    response = harness.client.get("/jobs/job_a", headers=harness.auth("reader"))
+
+    assert response.status_code == 200
+    assert response.json()["result"] is None

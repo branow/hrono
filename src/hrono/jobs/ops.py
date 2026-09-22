@@ -7,7 +7,7 @@ ops exist.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,7 +44,7 @@ class JobContext:
         return self.cache_root / source
 
 
-Handler = Callable[[Job, JobContext], None]
+Handler = Callable[[Job, JobContext], Mapping[str, object] | None]
 
 
 def _noop(job: Job, context: JobContext) -> None:

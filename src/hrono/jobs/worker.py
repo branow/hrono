@@ -19,13 +19,19 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
 from hrono.jobs import store
-from hrono.jobs.model import Job, serialize_scope, to_job
+from hrono.jobs.model import (
+    Job,
+    serialize_result,
+    serialize_scope,
+    to_job,
+)
 from hrono.jobs.ops import OPS, Handler, JobContext
 
 HEARTBEAT_INTERVAL = 5.0
@@ -172,20 +178,34 @@ class Worker(threading.Thread):
         try:
             if handler is None:
                 raise LookupError(f"unknown op: {job.op}")
-            handler(
+            outcome = handler(
                 job,
                 JobContext(self._database, self._cipher, self._cache_root),
             )
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
             self._finish(job, "failed", str(exc))
         else:
-            self._finish(job, "succeeded", None)
+            self._finish(job, "succeeded", None, outcome)
         finally:
             self._held = None
 
-    def _finish(self, job: Job, status: str, error: str | None) -> None:
+    def _finish(
+        self,
+        job: Job,
+        status: str,
+        error: str | None,
+        outcome: object = None,
+    ) -> None:
+        """Record the terminal status and, when the op reported one, its counts.
+
+        An op that returns nothing persists nothing (#132): most ops have no
+        outcome worth a reader's time, and a null column says exactly that.
+        """
+        result = (
+            serialize_result(outcome) if isinstance(outcome, Mapping) else None
+        )
         with self._database.write() as conn:
-            store.set_status(conn, job.id, status, error, _now())
+            store.set_status(conn, job.id, status, error, _now(), result)
 
 
 def _backoff(failures: int) -> float:

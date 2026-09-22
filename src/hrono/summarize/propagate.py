@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import sqlite3
 import string
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from hrono.db.update_log import record
@@ -60,7 +60,7 @@ def propagate(
     context: JobContext,
     *,
     client: Completion | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Judge each changed leaf and mark its ancestors stale on drift."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
@@ -68,7 +68,7 @@ def propagate(
         _prompt_name, template = resolve_prompt(conn, "judge")
         topics = _changed_leaves(conn, tree, str(model["name"]))
     if not topics:
-        return
+        return _outcome(())
 
     completion = client if client is not None else _default_client(context)
     verdicts = [
@@ -78,6 +78,25 @@ def propagate(
     with context.database.write() as conn:
         for topic, verdict in verdicts:
             _record(conn, tree, topic, verdict)
+    return _outcome(tuple(verdict for _topic, verdict in verdicts))
+
+
+def _outcome(verdicts: Sequence[str | None]) -> Mapping[str, object]:
+    """What this run did, for the operator rather than the audit table (#132).
+
+    ``abstained`` is the count that matters: those topics CHANGED and were not
+    judged, so their ancestors were correctly left unmarked and a stale brief
+    is still being served. ``incomplete`` is the one field a reader has to
+    check to know the job did less than it was asked.
+    """
+    abstained = sum(1 for verdict in verdicts if verdict is None)
+    return {
+        "judged": len(verdicts) - abstained,
+        "propagated": sum(1 for v in verdicts if v is not None and v != "none"),
+        "skipped": sum(1 for v in verdicts if v == "none"),
+        "abstained": abstained,
+        "incomplete": abstained > 0,
+    }
 
 
 def _changed_leaves(

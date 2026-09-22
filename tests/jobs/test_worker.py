@@ -11,6 +11,7 @@ import pytest
 from hrono.db.connection import connect
 from hrono.db.database import Database, Pool
 from hrono.jobs import store
+from hrono.jobs.model import to_job
 from hrono.jobs.ops import Handler, JobContext
 from hrono.jobs.worker import Worker, enqueue, reclaim_stranded
 
@@ -314,3 +315,63 @@ def test_the_startup_sweep_requeues_every_running_job(tmp_path: Path) -> None:
 
 def _stamp() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _result_of(db: Database, job_id: str) -> object:
+    with db.connect() as conn:
+        return to_job(store.get(conn, job_id)).result
+
+
+def test_an_ops_outcome_is_persisted_with_the_job(tmp_path: Path) -> None:
+    # #132: a job that succeeded incompletely must be distinguishable from a
+    # clean one by reading the JOB, with no SQL against an audit table.
+    db = database(tmp_path)
+    workers = run_workers(
+        db,
+        {
+            "reports": lambda job, ctx: {"judged": 2, "incomplete": True},
+            "quiet": lambda job, ctx: None,
+        },
+    )
+    try:
+        loud = enqueue(db, "reports", {})
+        quiet = enqueue(db, "quiet", {})
+        assert wait_terminal(db, loud) == "succeeded"
+        assert wait_terminal(db, quiet) == "succeeded"
+    finally:
+        stop(workers)
+
+    assert _result_of(db, loud) == {"judged": 2, "incomplete": True}
+    assert _result_of(db, quiet) is None  # nothing to say, nothing stored
+    db.close()
+
+
+def test_a_failed_job_keeps_the_error_and_reports_no_outcome(
+    tmp_path: Path,
+) -> None:
+    def boom(job: object, ctx: object) -> None:
+        raise RuntimeError("kaboom")
+
+    db = database(tmp_path)
+    workers = run_workers(db, {"boom": boom})
+    try:
+        bad = enqueue(db, "boom", {})
+        assert wait_terminal(db, bad) == "failed"
+    finally:
+        stop(workers)
+
+    assert _result_of(db, bad) is None  # an error is not an outcome
+    db.close()
+
+
+def test_a_reclaim_does_not_erase_a_recorded_outcome(tmp_path: Path) -> None:
+    # `set_status` COALESCEs the result, so a status flip that carries no
+    # outcome — a reclaim, a cancel — never wipes what the run reported.
+    db = database(tmp_path)
+    job_id = enqueue(db, "noop", {})
+    with db.connect() as conn:
+        store.set_status(conn, job_id, "succeeded", None, "t", '{"judged": 1}')
+        store.set_status(conn, job_id, "pending", None, "t")
+
+    assert _result_of(db, job_id) == {"judged": 1}
+    db.close()

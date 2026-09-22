@@ -28,6 +28,7 @@ def _job(row: sqlite3.Row) -> dict[str, object]:
         "scope": job.scope,
         "status": job.status,
         "error": job.error,
+        "result": job.result,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
     }

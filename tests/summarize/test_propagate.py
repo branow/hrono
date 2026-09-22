@@ -655,3 +655,47 @@ def test_judging_a_leaf_does_not_suppress_its_re_brief(
     with db.connect() as conn:
         after = briefs.stale_or_missing(conn, TREE, 0, "h", "sonnet")
     assert before == after == (leaf,)
+
+
+def _run_outcome(db: Database, judge: Completion, tmp_path: Path) -> object:
+    return propagate.propagate(_job(), job_context(db, tmp_path), client=judge)
+
+
+def test_a_clean_run_reports_what_it_judged(
+    db: Database, tmp_path: Path
+) -> None:
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        _upper(conn, 1, leaf)
+
+    outcome = _run_outcome(db, FakeJudge("major"), tmp_path)
+
+    assert outcome == {
+        "judged": 1,
+        "propagated": 1,
+        "skipped": 0,
+        "abstained": 0,
+        "incomplete": False,
+    }
+
+
+def test_a_run_that_declined_its_work_says_so(
+    db: Database, tmp_path: Path
+) -> None:
+    # #132: the abstention #105 added was recorded only in `update_log`, which
+    # has no readers — so hrono could leave a changed topic unjudged, finish as
+    # `succeeded`, and no operator could learn a stale brief is still served.
+    with db.connect() as conn, conn:
+        _leaf(conn)
+
+    outcome = _run_outcome(
+        db, FakeJudge("I cannot determine the significance"), tmp_path
+    )
+
+    assert outcome == {
+        "judged": 0,
+        "propagated": 0,
+        "skipped": 0,
+        "abstained": 1,
+        "incomplete": True,
+    }
