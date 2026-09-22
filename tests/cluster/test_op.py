@@ -324,3 +324,34 @@ def database_status(conn: object, job_id: str) -> str | None:
     ).fetchone()
     status = row["status"]
     return status if status in ("succeeded", "failed") else None
+
+
+def test_a_collected_build_says_it_collected(tmp_path: object) -> None:
+    # #133: a one-topic tree is a legitimate answer for a small corpus and a
+    # surprising one for a large one. From outside they look identical unless
+    # the run says which happened.
+    database = Database.at(tmp_path / "small.db")
+    try:
+        with database.connect() as conn, conn:
+            register_model(conn)
+            for i in range(3):  # below MIN_POINTS: the ladder declines
+                add_embedded_section(
+                    conn, f"src/t{i}.py", f"tiny {i}\n".encode(), i
+                )
+
+        outcome = cluster_op.cluster(cluster_job(), JobContext(database))
+
+        assert outcome["collected"] is True
+        assert outcome["topics"] == 1
+        assert outcome["sections"] == 3
+    finally:
+        database.close()
+
+
+def test_a_real_clustered_build_says_it_did_not_collect(db: Database) -> None:
+    outcome = cluster_op.cluster(
+        cluster_job(), JobContext(db), build=fake_build({})
+    )
+
+    assert outcome["collected"] is False
+    assert outcome["sections"] > 0

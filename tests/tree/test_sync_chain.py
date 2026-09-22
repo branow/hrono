@@ -165,15 +165,30 @@ def test_the_result_says_what_the_run_did(
 
     outcome = _run(db, tmp_path, Judge())
 
+    # every stage that makes a judgement contributes its counts (#133)
     assert set(outcome) == {
+        "changed",
+        "forced",
+        "parked",
         "judged",
         "propagated",
         "skipped",
         "abstained",
+        "misfit_rate",
+        "above_baseline",
+        "repaired",
         "settle_due",
         "incomplete",
     }
     assert outcome["incomplete"] is False
+    assert outcome["changed"] is True  # a file really did change
+    assert set(outcome["repaired"]) == {
+        "dissolved",
+        "split",
+        "migrated",
+        "freed",
+        "reparented",
+    }
 
 
 def test_settle_is_reported_never_run(
@@ -360,3 +375,39 @@ def test_repair_acts_on_what_it_finds(
     _run(db, tmp_path, Judge())
 
     assert lonely not in _node_ids(db)  # dissolved, its member re-placed
+
+
+def test_a_run_over_an_unchanged_corpus_says_nothing_changed(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # #133: "succeeded" is not an answer to "did anything happen?".
+    db, _origin = built
+
+    outcome = _run(db, tmp_path, Judge())
+
+    assert outcome["changed"] is False
+
+
+def test_a_forced_assignment_is_counted(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # a force-assign is the system deciding that an alien member is better than
+    # an unreachable one (#086 T35.3) — a real judgement call, and until #133 a
+    # silent one.
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    with db.connect() as conn, conn:
+        member = conn.execute(  # an UNTOUCHED file: the edit would re-place
+            "SELECT m.node_id, m.section_id FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id "
+            "WHERE s.path != 'f0.txt' LIMIT 1"
+        ).fetchone()
+        conn.execute(
+            "UPDATE node_members SET forced = 1 WHERE node_id = ? "
+            "AND section_id = ?",
+            (int(member["node_id"]), int(member["section_id"])),
+        )
+
+    outcome = _run(db, tmp_path, Judge())
+
+    assert outcome["forced"] >= 1

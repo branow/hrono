@@ -33,7 +33,7 @@ from __future__ import annotations
 import math
 import sqlite3
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from hrono.cluster import monitor, placement, store
 from hrono.cluster.blend import combined_vector
@@ -54,26 +54,37 @@ def repair(
     context: JobContext,
     *,
     core_labeler: CoreLabeler | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Apply the fitting local repair to each cluster from its size + misfit."""
     tree = job.tree or "default"
+    done = {"dissolved": 0, "split": 0, "migrated": 0, "freed": 0}
     with context.database.write() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
         batch = _batch(conn, tree)
         for node_id in sorted(store.node_centroids(conn, tree, model)):
             size = store.member_count(conn, node_id)
+            forced = len(store.forced_members(conn, node_id))
             if size < 2:
-                dissolve(conn, tree, node_id, model, batch)
+                done["dissolved"] += int(
+                    dissolve(conn, tree, node_id, model, batch)
+                )
             elif size > MAX_CAP:
-                split(conn, tree, node_id, model, core_labeler=core_labeler)
+                done["split"] += len(
+                    split(conn, tree, node_id, model, core_labeler=core_labeler)
+                )
             elif _needs_migrate(conn, tree, node_id):
-                migrate(conn, tree, node_id, model)
-        _repair_upper_levels(conn, tree, model)
+                moved = migrate(conn, tree, node_id, model)
+                done["migrated"] += moved
+                # a forced member that MOVED is a pioneer freed (#113): the
+                # decision an operator most wants to see the system revisit.
+                done["freed"] += min(moved, forced)
+        done["reparented"] = _repair_upper_levels(conn, tree, model)
+    return done
 
 
 def _repair_upper_levels(
     conn: sqlite3.Connection, tree: str, model_name: str
-) -> None:
+) -> int:
     """Re-parent misfit children at every level above the leaf (#123).
 
     A level runs the rule when its stored rate is over the threshold OR any of
@@ -82,6 +93,7 @@ def _repair_upper_levels(
     attached child rarely moves a parent's rate past 0.25, and #114 attaches to
     the NEAREST parent, so the rate can never see it.
     """
+    moved = 0
     for level in _upper_levels(conn, tree):
         parents = [
             int(row["id"])
@@ -95,7 +107,8 @@ def _repair_upper_levels(
             or store.attached_children(conn, p)
             for p in parents
         ):
-            migrate_children(conn, tree, level, model_name)
+            moved += migrate_children(conn, tree, level, model_name)
+    return moved
 
 
 def _upper_levels(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:

@@ -228,3 +228,19 @@ def test_the_sample_prefers_clusters_holding_a_forced_member() -> None:
     # still deterministic, still bounded, still never a dirty cluster
     assert picked == monitor.sample(nodes, [], k=2, seed=0, prefer=[50])
     assert 20 not in monitor.sample(nodes, [20], k=4, seed=0, prefer=[20])
+
+
+def test_the_monitor_reports_the_rate_and_whether_it_moved(
+    db: Database,
+) -> None:
+    # #133: what an operator acts on is the MOVE against the baseline, not the
+    # bare number — a fresh tree's rate is nonzero by nature.
+    with db.connect() as conn, conn:
+        make_node(conn, topic=0, extra=[1])
+        make_node(conn, topic=1, extra=[])
+
+    first = monitor.monitor(_job(), JobContext(db))
+
+    assert first["measured"] > 0
+    assert first["rate"] == first["baseline"]  # the first run IS the baseline
+    assert first["above_baseline"] is False

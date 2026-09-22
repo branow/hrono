@@ -31,7 +31,7 @@ Monitor only MEASURES — acting on the rate is repair/settle.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from hrono.cluster import store
@@ -45,7 +45,7 @@ from hrono.jobs.ops import OPS, JobContext
 SAMPLE_SIZE = 32  # bounded per-batch re-check beyond the dirty clusters
 
 
-def monitor(job: Job, context: JobContext) -> None:
+def monitor(job: Job, context: JobContext) -> Mapping[str, object]:
     """Refresh misfit counts for the batch's dirty clusters (+ a sample)."""
     tree = job.tree or "default"
     dirty = [int(node_id) for node_id in job.scope.get("dirty", [])]
@@ -76,6 +76,15 @@ def monitor(job: Job, context: JobContext) -> None:
         _measure_upper_levels(conn, tree, model)
         if first_run:
             capture_baseline(conn, tree, global_rate(conn, tree))
+        rate = global_rate(conn, tree)
+        base = baseline(conn, tree)
+    return {
+        "measured": len(targets),
+        "rate": round(rate, 4),
+        "baseline": None if base is None else round(base, 4),
+        # what an operator acts on is the MOVE, not the number (#133)
+        "above_baseline": bool(base is not None and base > 0 and rate > base),
+    }
 
 
 def _measure_upper_levels(

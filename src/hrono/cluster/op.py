@@ -26,7 +26,7 @@ dispatches ``cluster``.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from hrono.cluster import ClusterError, TooFewPoints, incubator, store
 from hrono.cluster.build import ClusterResult
@@ -44,7 +44,7 @@ def cluster(
     context: JobContext,
     *,
     build: Builder | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Cluster the tree's embedded sections into bottom-level topics."""
     builder = build if build is not None else _load_builder()
     tree = job.tree or "default"
@@ -54,13 +54,17 @@ def cluster(
         section_ids = tuple(section_id for section_id, _ in pairs)
         init = store.stored_coords(conn, tree, section_ids)
     if not pairs:
-        return
+        return {"sections": 0, "topics": 0, "collected": False}
 
     vectors = [vector for _, vector in pairs]
+    collected = False
     try:
         result = builder(vectors, init=init)
     except TooFewPoints:
         result = _one_topic(len(vectors))
+        collected = True  # a one-topic tree is a legitimate answer for a small
+        # corpus and a surprising one for a large one; from outside they look
+        # identical unless the run says which happened (#133).
 
     members = [
         (label, section_ids[i], result.attached[i], sim)
@@ -74,6 +78,12 @@ def cluster(
     with context.database.write() as conn:
         store.replace_tree(conn, tree, _LEVEL, members, coords)
         incubator.sweep(conn, tree)
+    return {
+        "sections": len(vectors),
+        "topics": len(set(result.labels)),
+        "attached": sum(1 for flag in result.attached if flag),
+        "collected": collected,
+    }
 
 
 def _one_topic(count: int) -> ClusterResult:

@@ -60,7 +60,7 @@ def sync(
 ) -> Mapping[str, object]:
     """Run the incremental chain over ``tree``; report what each stage did."""
     tree = job.tree or _DEFAULT_TREE
-    update(
+    ingested = update(
         _stage(tree, "update"),
         context,
         encoder_for=encoder_for,
@@ -69,27 +69,43 @@ def sync(
     judged = propagate(_stage(tree, "propagate"), context, client=client)
     brief(_stage(tree, "brief"), context, client=client)
     brief_upper(_stage(tree, "brief-upper"), context, client=client)
-    monitor(_stage(tree, "monitor"), context)
-    repair(_stage(tree, "repair"), context, core_labeler=core_labeler)
+    measured = monitor(_stage(tree, "monitor"), context)
+    repaired = repair(
+        _stage(tree, "repair"), context, core_labeler=core_labeler
+    )
     with context.database.connect() as conn:
         settle_due = should_settle(conn, tree)
-    return _outcome(judged, settle_due=settle_due)
+    return _outcome(ingested, judged, measured, repaired, settle_due=settle_due)
 
 
 def _outcome(
-    judged: Mapping[str, object], *, settle_due: bool
+    ingested: Mapping[str, object],
+    judged: Mapping[str, object],
+    measured: Mapping[str, object],
+    repaired: Mapping[str, object],
+    *,
+    settle_due: bool,
 ) -> Mapping[str, object]:
     """What the run did, for the operator (#132).
 
     One verb over six stages is a black box unless it says what happened, which
     is the honest objection to this design and the thing that answers it.
     ``settle_due`` is the trigger INFORMING: hrono has not run it and will not.
+    Every stage that makes a judgement contributes its counts (#133) — a
+    force-assign, a freed pioneer, a collected build — because those are the
+    decisions an operator would act on and they used to be visible nowhere.
     """
     return {
+        "changed": ingested.get("changed", False),
+        "forced": ingested.get("forced", 0),
+        "parked": ingested.get("parked", 0),
         "judged": judged.get("judged", 0),
         "propagated": judged.get("propagated", 0),
         "skipped": judged.get("skipped", 0),
         "abstained": judged.get("abstained", 0),
+        "misfit_rate": measured.get("rate"),
+        "above_baseline": measured.get("above_baseline", False),
+        "repaired": dict(repaired),
         "settle_due": settle_due,
         "incomplete": bool(judged.get("incomplete", False)),
     }

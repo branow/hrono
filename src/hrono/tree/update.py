@@ -69,6 +69,8 @@ the automated gate; production passes none.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from hrono.cluster import incubator, placement
 from hrono.cluster import store as cluster_store
 from hrono.embed.model import resolve_embedding_model
@@ -90,7 +92,7 @@ def update(
     *,
     encoder_for: object | None = None,
     client: object | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Apply each source's change batch incrementally to the tree."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
@@ -107,6 +109,41 @@ def update(
         )
     if batch is not None:  # nothing changed -> no stage, no credential asked
         condense(_stage(tree, "condense", {}), context, client=client)
+    return _outcome(context, tree, batch)
+
+
+def _outcome(
+    context: JobContext, tree: str, batch: int | None
+) -> Mapping[str, object]:
+    """What this run changed, for the operator rather than the log (#133).
+
+    ``forced`` is the count that matters: a force-assign is the system deciding
+    that an alien member is better than an unreachable one (#086 T35.3) — a real
+    judgement call, and until now a silent one. ``parked`` is its counterpart,
+    chunks still waiting outside the tree.
+    """
+    if batch is None:
+        return {"changed": False, "batch": None}
+    with context.database.connect() as conn:
+        forced = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM node_members m "
+                "JOIN nodes n ON n.id = m.node_id "
+                "WHERE n.tree = ? AND m.forced = 1",
+                (tree,),
+            ).fetchone()[0]
+        )
+        parked = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM pending WHERE tree = ?", (tree,)
+            ).fetchone()[0]
+        )
+    return {
+        "changed": True,
+        "batch": batch,
+        "forced": forced,
+        "parked": parked,
+    }
 
 
 def _update_source(

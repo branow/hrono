@@ -259,3 +259,31 @@ def test_a_forced_member_with_nowhere_better_stays_put(db: Database) -> None:
     with db.connect() as conn:
         assert cluster_store.section_node(conn, TREE, pioneer) == married
         assert _forced(conn, married, pioneer)
+
+
+def test_repair_reports_what_it_did(db: Database) -> None:
+    # #133: "succeeded" does not say whether a cluster was dissolved, a pioneer
+    # freed, or nothing needed doing at all.
+    with db.connect() as conn, conn:
+        members = [
+            add_section(conn, f"code{i}\n".encode(), unit(0)) for i in range(6)
+        ]
+        node_of(conn, members)
+        lonely = node_of(conn, [add_section(conn, b"alone\n", unit(1))])
+
+    outcome = repair.repair(_job(), job_context(db, Path(".")))
+
+    assert set(outcome) == {
+        "dissolved",
+        "split",
+        "migrated",
+        "freed",
+        "reparented",
+    }
+    assert outcome["dissolved"] == 1  # the below-two cluster
+    assert lonely not in [int(r["id"]) for r in _nodes(db)]
+
+
+def _nodes(db: Database):
+    with db.connect() as conn:
+        return conn.execute("SELECT id FROM nodes").fetchall()
