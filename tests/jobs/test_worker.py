@@ -13,7 +13,12 @@ from hrono.db.database import Database, Pool
 from hrono.jobs import store
 from hrono.jobs.model import to_job
 from hrono.jobs.ops import Handler, JobContext
-from hrono.jobs.worker import Worker, enqueue, reclaim_stranded
+from hrono.jobs.worker import (
+    _BEAT_GRACE,
+    Worker,
+    enqueue,
+    reclaim_stranded,
+)
 
 
 def database(tmp_path: Path) -> Database:
@@ -374,4 +379,99 @@ def test_a_reclaim_does_not_erase_a_recorded_outcome(tmp_path: Path) -> None:
         store.set_status(conn, job_id, "pending", None, "t")
 
     assert _result_of(db, job_id) == {"judged": 1}
+    db.close()
+
+
+def wait_healthy(worker: Worker, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if worker.healthy():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def test_a_worker_with_both_threads_running_is_healthy(tmp_path: Path) -> None:
+    db = database(tmp_path)
+    workers = run_workers(db, {"noop": lambda job, ctx: None})
+    try:
+        assert wait_healthy(workers[0])  # idle, holding no job: still healthy
+    finally:
+        stop(workers)
+    assert not workers[0].healthy()  # stopped: not healthy
+    db.close()
+
+
+def test_a_dead_reclaimer_makes_the_worker_unhealthy(tmp_path: Path) -> None:
+    # #111: `is_alive()` reports the SUPERVISOR. If the reclaimer thread ended
+    # while the supervisor lived, nothing would requeue a stranded job and
+    # /health would still answer alive — a quieter replay of F24.
+    db = database(tmp_path)
+    workers = run_workers(db, {"noop": lambda job, ctx: None})
+    try:
+        worker = workers[0]
+        assert wait_healthy(worker)
+        worker._beat_thread = threading.Thread(target=lambda: None)  # never run
+        assert worker.is_alive()  # the supervisor is untouched
+        assert not worker.healthy()  # the reclaimer is not
+    finally:
+        stop(workers)
+    db.close()
+
+
+def test_a_wedged_reclaimer_makes_the_worker_unhealthy(tmp_path: Path) -> None:
+    # a beat whose thread lives but has stopped coming round is as bad as a
+    # dead one: nothing is being stamped or swept either way.
+    db = database(tmp_path)
+    workers = run_workers(db, {"noop": lambda job, ctx: None})
+    try:
+        worker = workers[0]
+        assert wait_healthy(worker)
+        worker._last_beat -= 10 * worker._heartbeat_interval
+        assert not worker.healthy()
+    finally:
+        stop(workers)
+    db.close()
+
+
+def test_a_worker_running_a_long_job_stays_healthy(tmp_path: Path) -> None:
+    # the beat runs BESIDE the loop, so a job that takes a while must not make
+    # the worker look dead — the whole point of stamping from a second thread.
+    started, release = threading.Event(), threading.Event()
+
+    def slow(job: object, ctx: object) -> None:
+        started.set()
+        release.wait(timeout=5)
+
+    db = database(tmp_path)
+    workers = run_workers(db, {"slow": slow})
+    try:
+        assert wait_healthy(workers[0])
+        enqueue(db, "slow", {})
+        assert started.wait(timeout=5)
+        assert workers[0].healthy()  # mid-execution
+    finally:
+        release.set()
+        stop(workers)
+    db.close()
+
+
+def test_health_depends_on_the_beat_actually_coming_round(
+    tmp_path: Path,
+) -> None:
+    # the stamp is what makes a WEDGED beat detectable, so it has to be proven
+    # to happen: a worker left running past several grace windows stays healthy
+    # only because its beat keeps arriving.
+    db = database(tmp_path)
+    worker = Worker(
+        db, {"noop": lambda job, ctx: None}, heartbeat_interval=0.02
+    )
+    worker.start()
+    try:
+        assert wait_healthy(worker)
+        time.sleep(_BEAT_GRACE * 0.02 * 3)  # three grace windows
+        assert worker.healthy()
+    finally:
+        worker.stop()
+        worker.join(timeout=5)
     db.close()

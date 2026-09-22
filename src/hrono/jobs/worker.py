@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -35,6 +36,7 @@ from hrono.jobs.model import (
 from hrono.jobs.ops import OPS, Handler, JobContext
 
 HEARTBEAT_INTERVAL = 5.0
+_BEAT_GRACE = 4  # missed beats before the reclaimer counts as gone (#111)
 
 STALE_AFTER = 60.0
 
@@ -102,14 +104,43 @@ class Worker(threading.Thread):
         self._stale_after = stale_after
         self._held: str | None = None
         self._stopped = threading.Event()
+        self._beat_thread = threading.Thread(target=self._beat, daemon=True)
+        self._last_beat = time.monotonic()
 
     def run(self) -> None:
-        beat = threading.Thread(target=self._beat, daemon=True)
+        beat = self._beat_thread
         beat.start()
         try:
             self._supervise()
         finally:
             beat.join(timeout=5)
+
+    def healthy(self) -> bool:
+        """True when BOTH of this worker's threads are doing their job (#111).
+
+        ``is_alive()`` reports the supervisor, which claims and executes; the
+        reclaimer that stamps heartbeats and requeues stranded jobs is a second
+        thread, and if it ended while the supervisor lived nothing would recover
+        a stranded job while ``/health`` still answered ``alive`` — a quieter
+        replay of the failure #092's health check exists to catch.
+
+        A worker that has started but whose beat has not begun answers False —
+        starting is not yet healthy, which is the honest answer for a readiness
+        probe and the one that keeps a half-up server out of rotation.
+
+        Derived from an IN-MEMORY stamp rather than ``jobs.heartbeat``: health
+        is unauthenticated and may be polled hard, so it must add no query, and
+        an idle worker holds no job to stamp a row with. A beat that has not
+        come round within ``_BEAT_GRACE`` intervals is treated as gone even if
+        its thread is technically alive, which covers a wedged beat as well as a
+        dead one.
+        """
+        if not self.is_alive():
+            return False
+        if not self._beat_thread.is_alive():
+            return False
+        grace = _BEAT_GRACE * self._heartbeat_interval
+        return time.monotonic() - self._last_beat <= grace
 
     def stop(self) -> None:
         self._stopped.set()
@@ -155,6 +186,7 @@ class Worker(threading.Thread):
             except Exception as exc:  # noqa: BLE001 - the beat must outlive it
                 _logger.warning("heartbeat failed: %s", exc)
                 continue
+            self._last_beat = time.monotonic()
             for job_id in reclaimed:
                 _logger.warning("requeued stranded job: %s", job_id)
 

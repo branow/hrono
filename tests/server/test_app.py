@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from collections.abc import Iterator
 from importlib.metadata import version
 from pathlib import Path
@@ -74,3 +75,18 @@ def test_liveness_routes_need_no_authorization_header(
 
 def test_unknown_route_is_not_found(client: TestClient) -> None:
     assert client.get("/nope").status_code == 404
+
+
+def test_health_is_degraded_when_only_the_reclaimer_is_dead(
+    client: TestClient,
+) -> None:
+    # #111: the supervisor still runs, so `is_alive()` says alive; the thread
+    # that requeues stranded jobs is gone, and /health must not paper over it.
+    worker = client.app.state.worker  # type: ignore[attr-defined]
+    worker._beat_thread = threading.Thread(target=lambda: None)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json()["worker"] == "dead"
+    assert worker.is_alive()  # the supervisor never stopped

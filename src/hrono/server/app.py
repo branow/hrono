@@ -54,22 +54,31 @@ def health(request: Request) -> JSONResponse:
 
     Being up is not being healthy: the run that produced #092 stayed up with an
     unusable database and a dead worker. So this probes the database and the
-    worker thread, and answers 503 when either is gone.
+    worker, and answers 503 when either is gone. "The worker" is both of its
+    threads (#111): the supervisor that executes jobs AND the reclaimer that
+    requeues stranded ones, because a dead reclaimer is exactly the silence
+    #093 exists to break.
     """
     database = getattr(request.app.state, "db", None)
     worker = getattr(request.app.state, "worker", None)
     body: dict[str, object] = {
         "status": "ok",
         "database": _probe(database),
-        "worker": "alive"
-        if worker is not None and worker.is_alive()
-        else "dead",
+        "worker": "alive" if _working(worker) else "dead",
     }
     healthy = body["database"] == {"ok": True, "in_transaction": False}
     if not healthy or body["worker"] != "alive":
         body["status"] = "degraded"
         return JSONResponse(status_code=503, content=body)
     return JSONResponse(status_code=200, content=body)
+
+
+def _working(worker: object) -> bool:
+    """Whether the worker can still do its whole job (#111)."""
+    if worker is None:
+        return False
+    healthy = getattr(worker, "healthy", None)
+    return bool(healthy()) if callable(healthy) else False
 
 
 def _probe(database: Database | None) -> dict[str, object]:
