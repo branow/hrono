@@ -306,7 +306,7 @@ def test_runs_as_a_job_through_the_worker(
     import hrono.summarize.brief as brief_mod
 
     monkeypatch.setattr(
-        brief_mod, "_default_client", lambda context: FakeCompletion()
+        brief_mod, "client_for", lambda context, model: FakeCompletion()
     )
     worker = Worker(db)
     worker.start()

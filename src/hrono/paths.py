@@ -35,5 +35,18 @@ def cache_root(db_path: Path) -> Path:
     return db_path.parent / "cache" / "sources"
 
 
+def cli_workdir(db_path: Path) -> Path:
+    """Where a subprocess LLM backend runs, anchored on the database (#107).
+
+    The Claude Code CLI reads the project memory of whatever directory it is
+    started in. Run from inside a repo carrying a ``CLAUDE.md`` it answers as
+    that project's agent — measured during the QA run, a probe of
+    ``def add(a,b): return a+b`` came back "Ready to implement T1 (SQLite
+    connection + migration runner)". So the CLI gets a directory hrono owns and
+    keeps empty, next to the cache, never the server's cwd.
+    """
+    return db_path.parent / "cache" / "cli"
+
+
 def _absolute(path: Path) -> Path:
     return path.expanduser().resolve()

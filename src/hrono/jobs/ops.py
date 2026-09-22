@@ -34,6 +34,19 @@ class JobContext:
     cipher: Cipher | None = None
     cache_root: Path | None = None
 
+    def cli_dir(self) -> Path:
+        """Where a subprocess LLM backend runs (#107), beside the clone cache.
+
+        Derived from the same anchor as ``cache_for`` rather than re-resolved
+        from the database path, so nothing downstream can point a subprocess at
+        a directory the server did not choose.
+        """
+        if self.cache_root is None:
+            raise Internal(
+                "no cache root: this job context cannot run a CLI backend"
+            )
+        return self.cache_root.parent / "cli"
+
     def cache_for(self, source: str) -> Path:
         """The synced clone directory for ``source`` under this cache root."""
         if self.cache_root is None:

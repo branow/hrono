@@ -32,8 +32,8 @@ from hrono.db.update_log import record
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion, CompletionRequest
+from hrono.llm.providers import client_for
 from hrono.summarize import briefs
-from hrono.summarize.brief import _default_client
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _DEFAULT_TREE = "default"
@@ -70,7 +70,7 @@ def propagate(
     if not topics:
         return _outcome(())
 
-    completion = client if client is not None else _default_client(context)
+    completion = client if client is not None else client_for(context, model)
     verdicts = [
         (topic, _judge(completion, model, template, topic)) for topic in topics
     ]

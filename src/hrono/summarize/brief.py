@@ -34,11 +34,10 @@ import json
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
-    AnthropicClient,
     Completion,
     CompletionRequest,
-    LLMError,
 )
+from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 from hrono.summarize.faithfulness import faithfulness
@@ -77,7 +76,7 @@ def brief(
     if not pending:
         return
 
-    completion = client if client is not None else _default_client(context)
+    completion = client if client is not None else client_for(context, model)
     for node_id, inputs, signature in pending:
         source = "\n\n".join(inputs.texts)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
@@ -115,12 +114,6 @@ def _uncondensed(dropped: int) -> str:
 
 def _hash(template: str) -> str:
     return hashlib.sha256(template.encode("utf-8")).hexdigest()
-
-
-def _default_client(context: JobContext) -> Completion:
-    if context.cipher is None:
-        raise LLMError("no cipher available for the completion client")
-    return AnthropicClient(context.database, context.cipher)
 
 
 OPS["brief"] = brief

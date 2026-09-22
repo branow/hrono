@@ -20,11 +20,10 @@ from __future__ import annotations
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
-    AnthropicClient,
     Completion,
     CompletionRequest,
-    LLMError,
 )
+from hrono.llm.providers import client_for
 from hrono.summarize import store
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
@@ -46,7 +45,7 @@ def condense(
     if not sections:
         return
 
-    completion = client if client is not None else _default_client(context)
+    completion = client if client is not None else client_for(context, model)
     for content_hash, body in sections:
         rendered = template.replace(
             _CONTENT_PLACEHOLDER, body.decode("utf-8", "replace")
@@ -63,12 +62,6 @@ def condense(
                 result.usage.input_tokens,
                 result.usage.output_tokens,
             )
-
-
-def _default_client(context: JobContext) -> Completion:
-    if context.cipher is None:
-        raise LLMError("no cipher available for the completion client")
-    return AnthropicClient(context.database, context.cipher)
 
 
 OPS["condense"] = condense
