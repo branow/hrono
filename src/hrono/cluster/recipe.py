@@ -16,15 +16,17 @@ settled recipe keeps running wherever it is valid, and a level too small for it
 drops to the spec's smaller one rather than to unscaled parameters.
 
 Below the smallest rung there is no honest reduction left — that level cannot be
-clustered, which is exactly the ``ClusterError`` ``build-tree`` reads as "the
-current top is the root".
+clustered. That is a ``TooFewPoints``, the one clustering failure a caller may
+answer by collecting: ``build-tree`` reads it as "the current top is the root"
+and the ``cluster`` op as "then the corpus is one topic" (#112). It is a
+distinct type precisely so neither of them catches a BROKEN backend by mistake.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from hrono.cluster import ClusterError
+from hrono.cluster import TooFewPoints
 
 
 @dataclass(frozen=True)
@@ -50,4 +52,4 @@ def recipe_for(points: int) -> Recipe:
     for recipe in LADDER:
         if points >= recipe.min_points:
             return recipe
-    raise ClusterError(f"too few vectors to cluster: {points} < {MIN_POINTS}")
+    raise TooFewPoints(f"too few vectors to cluster: {points} < {MIN_POINTS}")

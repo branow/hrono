@@ -324,3 +324,25 @@ def test_the_recipe_ladder_still_refuses_below_its_floor() -> None:
     # this same ClusterError as "the current top is the root" (#094).
     with pytest.raises(ClusterError):
         recipe_for(MIN_POINTS - 1)
+
+
+def test_a_broken_backend_fails_the_job_it_does_not_collect(
+    db: Database, tmp_path: Path
+) -> None:
+    # #112's collect is decided by the point count, never by catching the
+    # backend's error: `build_clusters` raises the same `ClusterError` when the
+    # reduction fails, when the clusterer fails, when it produces no clusters
+    # and when it is not installed. Collapsing a corpus into one topic because
+    # its clustering BROKE would answer with a confident, wrong map.
+    def broken(vectors: object, *, init: object = None) -> ClusterResult:
+        raise ClusterError("the reduction failed on these vectors")
+
+    with pytest.raises(ClusterError):
+        maintain(
+            job(),
+            job_context(db, tmp_path),
+            encoder_for=fake_encoder,
+            client=FakeCompletion(),
+            build=broken,
+        )
+    assert _count(db, "nodes") == 0  # nothing invented on the way out

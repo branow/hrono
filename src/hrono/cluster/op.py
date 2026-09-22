@@ -12,8 +12,13 @@ at all; it is then ONE topic holding every section (#112) — the same collect
 ``build_tree._collect_root`` makes at the top of the tree, where "too few points
 to reduce" already means "then this IS the node" rather than "then fail". A tree
 of one topic is a correct, walkable map of a small repo, and recall and export
-run over it unchanged. A full build homes every embedded section, so the
-incubator pool (#086) is swept in the same transaction — its rows would
+run over it unchanged. Only ``TooFewPoints`` is answered that way: the builder
+raises a plain ``ClusterError`` when the reduction fails, when the clusterer
+fails, when it produces no clusters and when it is not installed, and collapsing
+a large corpus into one topic because its clustering BROKE would answer with a
+confident, wrong map instead of failing. Every one of those still fails the
+job. A full build homes every embedded section, so the incubator pool (#086) is
+swept in the same transaction — its rows would
 otherwise claim a re-homed chunk is still stranded. Reads only local vectors —
 no secret — so it needs no cipher. Registers into the op registry so the worker
 dispatches ``cluster``.
@@ -23,7 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from hrono.cluster import ClusterError, incubator, store
+from hrono.cluster import ClusterError, TooFewPoints, incubator, store
 from hrono.cluster.build import ClusterResult
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
@@ -54,7 +59,7 @@ def cluster(
     vectors = [vector for _, vector in pairs]
     try:
         result = builder(vectors, init=init)
-    except ClusterError:
+    except TooFewPoints:
         result = _one_topic(len(vectors))
 
     members = [
