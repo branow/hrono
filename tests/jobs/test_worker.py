@@ -475,3 +475,31 @@ def test_health_depends_on_the_beat_actually_coming_round(
         worker.stop()
         worker.join(timeout=5)
     db.close()
+
+
+def test_a_dead_supervisor_makes_the_worker_unhealthy(tmp_path: Path) -> None:
+    # the mirror of the dead-reclaimer case. Every other unhealthy path gets
+    # there by stopping the worker, which ends BOTH threads — so the supervisor
+    # branch was never the reason any test failed, and deleting it left the
+    # suite green. A worker whose supervisor ended claims and executes nothing.
+    db = database(tmp_path)
+    worker = Worker(
+        db, {"noop": lambda job, ctx: None}, heartbeat_interval=0.02
+    )
+    worker.start()
+    try:
+        assert wait_healthy(worker)
+    finally:
+        worker.stop()
+        worker.join(timeout=5)
+
+    beating = threading.Thread(target=lambda: time.sleep(2), daemon=True)
+    beating.start()
+    worker._beat_thread = beating  # a reclaimer that is still going
+    worker._last_beat = time.monotonic()  # ... and beating right now
+    try:
+        assert not worker.is_alive()  # only the supervisor is gone
+        assert not worker.healthy()
+    finally:
+        beating.join(timeout=3)
+    db.close()
