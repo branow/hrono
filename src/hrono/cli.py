@@ -1,8 +1,13 @@
 """The ``hrono`` command-line entry point.
 
-Only ``serve`` exists today; it runs the server. The client subcommands
-(``recall``, ``sources``, ...) that make this a thin HTTP client land with the
-CLI foundation milestone.
+``serve`` runs the server and owns the database; everything else is a thin HTTP
+client of it, so the CLI and the future dashboard see one surface.
+
+The operator verb is ``hrono tree sync <name>`` — one command that brings a
+knowledge base up to date (#137/#138). ``hrono tree maintain`` is the cold
+build. The lifecycle's individual stages are deliberately NOT commands: they
+must run in a particular order and a wrong order produces a map that looks right
+and is quietly wrong, so they live behind an admin-only HTTP door (#139).
 """
 
 from __future__ import annotations
@@ -24,9 +29,11 @@ from hrono.crypto.masterkey import load_key, reconcile
 from hrono.db.database import open_database
 from hrono.db.lock import exclusive
 from hrono.errors import AppError, cli_message
+from hrono.jobs.commands import app as jobs_app
 from hrono.paths import ENV_DB, database_path
 from hrono.profile.commands import app as profile_app
 from hrono.registry.collections import COLLECTIONS
+from hrono.registry.commands import build_app
 from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
 from hrono.tree.commands import app as tree_app
@@ -35,6 +42,9 @@ app = typer.Typer(add_completion=False)
 app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
 app.add_typer(tree_app, name="tree")
+app.add_typer(jobs_app, name="jobs")
+for _collection in ("sources", "connections", "models", "prompts"):
+    app.add_typer(build_app(_collection), name=_collection)
 
 
 @app.command()
@@ -149,7 +159,7 @@ def serve(
     try:
         key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
         with exclusive(db_path):
-            _bootstrap(key, db_path)
+            _bootstrap(key, db_path, host, port)
             uvicorn.run(
                 create_app(db_path=db_path, master_key=key),
                 host=host,
@@ -160,14 +170,14 @@ def serve(
         raise typer.Exit(1) from exc
 
 
-def _bootstrap(key: bytes, db_path: Path) -> None:
+def _bootstrap(key: bytes, db_path: Path, host: str, port: int) -> None:
     """Reconcile the master key, seed defaults, and print a first-run token."""
     connection = open_database(db_path)
     try:
         record = reconcile(connection, key)
         token = bootstrap_admin(connection)
         if token is not None:
-            typer.echo(_bootstrap_message(token))
+            typer.echo(_bootstrap_message(token, host, port))
         seed_defaults(
             connection, Cipher.from_key(key, record.key_id), COLLECTIONS
         )
@@ -175,7 +185,14 @@ def _bootstrap(key: bytes, db_path: Path) -> None:
         connection.close()
 
 
-def _bootstrap_message(token: str) -> str:
+def _bootstrap_message(token: str, host: str, port: int) -> str:
+    """The first-run hint, addressed at the server the user actually started.
+
+    It used to print a literal ``http://127.0.0.1:8080`` whatever ``--host`` and
+    ``--port`` were given, so the one copy-pasteable line in hrono's first-run
+    experience pointed somewhere that was not listening. A hint that does not
+    work is worse than no hint (#138, F3).
+    """
     return (
         "\nThe users table was empty, so a bootstrap admin was created.\n"
         f"  user:  {BOOTSTRAP_ADMIN}\n"
@@ -184,7 +201,7 @@ def _bootstrap_message(token: str) -> str:
         "\nThis token is shown ONCE and is stored only as a hash. "
         "Save it now.\n"
         "Use it with the CLI:\n"
-        "  hrono profile add local --server http://127.0.0.1:8080 "
+        f"  hrono profile add local --server http://{host}:{port} "
         "--token <token>\n"
         "or call the API directly with a Bearer token:\n"
         "  Authorization: Bearer <token>\n"

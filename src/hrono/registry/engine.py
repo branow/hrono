@@ -4,6 +4,14 @@ Every collection shares this engine; behaviour differences live in the
 ``Descriptor`` (model, secret fields, write role, validation hook), never in a
 per-collection branch here. Secrets are encrypted at rest via the request's
 active key and masked on the way out, so plaintext is write-only.
+
+``PUT`` CREATES OR REPLACES, idempotently (#138). The spec and ``CLAUDE.md``
+both say "config is data you PUT", and this engine used to 404 a PUT to a name
+that did not exist yet — so registering a source meant knowing whether it was
+already there and choosing POST or PUT accordingly. A configuration write should
+be declarative: say what the config IS, get that, whether or not it was there
+before. POST keeps its create-only meaning (409 on conflict) for a caller that
+wants to be told.
 """
 
 from __future__ import annotations
@@ -73,6 +81,7 @@ def build_router(descriptor: Descriptor) -> APIRouter:
         _run_hook(descriptor, config, _context(request))
         stored, key_id = encrypt(config, descriptor, _cipher(request))
         payload = json.dumps(stored)
+        now = _now()
         with request.app.state.db.write() as conn:
             existed = store.replace(
                 conn,
@@ -80,11 +89,19 @@ def build_router(descriptor: Descriptor) -> APIRouter:
                 name,
                 payload,
                 key_id,
-                _now(),
+                now,
                 content_hash(payload),
             )
-        if not existed:
-            raise _not_found(collection, name)
+            if not existed:  # PUT CREATES (#138 F2): config is data you PUT
+                store.insert(
+                    conn,
+                    collection,
+                    name,
+                    payload,
+                    key_id,
+                    now,
+                    content_hash=content_hash(payload),
+                )
         return mask(stored, descriptor)
 
     def delete_item(name: str, request: Request) -> dict[str, str]:

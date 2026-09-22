@@ -1,5 +1,7 @@
-"""Tree routes: kick the whole-pipeline ``maintain`` job (writer+).
+"""Tree routes: kick a tree's work (writer+) and read what it holds.
 
+``POST /trees/{name}/sync`` is the operator verb: it enqueues the incremental
+chain (#137) that brings an existing tree up to date.
 ``POST /trees/{name}/maintain`` enqueues a maintain job for the named tree and
 returns its id; the background worker runs the ordered pipeline. Writing this
 does the work of a job, so it is a POST behind the writer role, and it returns
@@ -45,6 +47,20 @@ class RecallRequest(BaseModel):
 def maintain_tree(name: str, request: Request, _: Writer) -> dict[str, str]:
     """Enqueue a maintain job for ``name`` and return its job id."""
     job_id = enqueue(request.app.state.db, "maintain", {}, tree=name)
+    return {"job_id": job_id}
+
+
+@router.post("/trees/{name}/sync")
+def sync_tree(name: str, request: Request, _: Writer) -> dict[str, str]:
+    """Enqueue the incremental chain for ``name`` and return its job id.
+
+    THE operator verb (#137/#138): one call brings an existing tree up to date —
+    ingest the diff, re-place what moved, judge what changed, regenerate the
+    briefs that are now wrong, measure and repair. `maintain` stays for the
+    COLD build of a tree that does not exist yet; the two have very different
+    costs and conflating them is how a user pays for a rebuild by accident.
+    """
+    job_id = enqueue(request.app.state.db, "sync-tree", {}, tree=name)
     return {"job_id": job_id}
 
 

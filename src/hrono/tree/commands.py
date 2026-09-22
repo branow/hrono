@@ -1,5 +1,10 @@
 """The ``hrono tree`` command group — the CLI face of the tree routes.
 
+``hrono tree sync <name>`` is THE operator verb: one command brings an existing
+tree up to date after its sources changed. ``hrono tree maintain <name>`` is the
+COLD build, for a tree that does not exist yet — they have very different costs
+and are deliberately separate commands.
+
 ``hrono tree maintain <name>`` POSTs to ``/trees/<name>/maintain`` through the
 current profile's client and prints the job id to track. (The spec writes it
 kubectl-style as ``tree <name> maintain``; Typer groups put the subcommand
@@ -48,6 +53,18 @@ def maintain(name: str) -> None:
         result = from_profile().post(f"/trees/{name}/maintain", {})
         job_id = result.get("job_id") if isinstance(result, dict) else None
         typer.echo(f"Started maintain job {job_id} for tree '{name}'.")
+
+    _run(action)
+
+
+@app.command("sync")
+def sync(name: str) -> None:
+    """Bring a tree up to date after its sources changed; prints the job id."""
+
+    def action() -> None:
+        result = from_profile().post(f"/trees/{name}/sync", {})
+        job_id = result.get("job_id") if isinstance(result, dict) else None
+        typer.echo(f"Started sync job {job_id} for tree '{name}'.")
 
     _run(action)
 

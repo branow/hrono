@@ -30,6 +30,7 @@ import hrono.summarize.condense  # noqa: F401 - registers the condense op
 import hrono.summarize.propagate  # noqa: F401 - registers the propagate op
 import hrono.tree.maintain  # noqa: F401 - registers the maintain op
 import hrono.tree.settle  # noqa: F401 - registers the settle op
+import hrono.tree.sync_chain  # noqa: F401 - registers the sync-tree op
 import hrono.tree.update  # noqa: F401 - registers the update op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
