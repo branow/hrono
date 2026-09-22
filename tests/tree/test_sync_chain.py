@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
@@ -26,18 +27,25 @@ TREE = "default"
 
 
 class Judge:
-    """A completion that answers a judge prompt and a brief prompt apart."""
+    """A completion that tells a judge prompt from a brief prompt.
+
+    Brief replies are NUMBERED on purpose: a regenerated brief must be
+    distinguishable from one that was left alone, and a fake that always
+    returns the same sentence makes "did this stage run?" unanswerable.
+    """
 
     def __init__(self, verdict: str = "major") -> None:
         self.verdict = verdict
         self.calls = 0
+        self.briefs = 0
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         self.calls += 1
         if "S " in request.content and " M " in request.content:
             return CompletionResult(self.verdict, Usage(1, 1))
+        self.briefs += 1
         return CompletionResult(
-            "This topic covers the module's API and how its parts fit.",
+            f"This topic covers the module's API, revision {self.briefs}.",
             Usage(10, 4),
         )
 
@@ -127,19 +135,25 @@ def test_a_changed_file_leaves_the_tree_up_to_date(
     db, origin = built
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
 
+    before = _upper_briefs(db)
+    leaves_before = _leaf_briefs(db)
+
     _run(db, tmp_path, Judge())
 
+    after = _upper_briefs(db)
     assert _uncondensed(db) == 0  # #122's invariant: nothing unsummarised
+    # propagate MARKS ONLY — it is brief-upper that repairs what it marked. If
+    # that stage never runs the chain leaves ancestors known to be wrong,
+    # flagged as wrong, and still serving their old text.
+    assert after != before  # an ancestor's brief was actually regenerated
+    assert all(row["stale"] == 0 for row in after.values())  # marks cleared
     with db.connect() as conn:
-        stale = conn.execute(
-            "SELECT COUNT(*) FROM briefs WHERE stale = 1"
+        measured = conn.execute(
+            "SELECT COUNT(*) FROM misfit WHERE tree = ?", (TREE,)
         ).fetchone()[0]
-        briefed = conn.execute("SELECT COUNT(*) FROM briefs").fetchone()[0]
-        leaves = conn.execute(
-            "SELECT COUNT(*) FROM nodes WHERE tree = ? AND level = 0", (TREE,)
-        ).fetchone()[0]
-    assert briefed >= leaves  # every leaf carries a brief
-    assert stale >= 0  # propagate ran and may have marked ancestors
+    assert measured > 0  # monitor ran and stored what it measured
+    # and the changed leaf itself was re-briefed, not only its ancestors
+    assert _leaf_briefs(db) != leaves_before
 
 
 def test_the_result_says_what_the_run_did(
@@ -180,6 +194,33 @@ def test_settle_is_reported_never_run(
 
     assert outcome["settle_due"] is True  # the trigger fired ...
     assert _node_ids(db) == before  # ... and nothing re-clustered on its own
+
+
+def _leaf_briefs(db: Database) -> dict[int, str]:
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT b.node_id AS id, b.text AS text FROM briefs b "
+            "JOIN nodes n ON n.id = b.node_id "
+            "WHERE n.tree = ? AND n.level = 0",
+            (TREE,),
+        ).fetchall()
+    return {int(r["id"]): str(r["text"]) for r in rows}
+
+
+def _upper_briefs(db: Database) -> dict[int, dict[str, object]]:
+    """Each non-leaf brief's text and stale flag, to compare across a run."""
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT b.node_id AS id, b.text AS text, b.stale AS stale, "
+            "b.member_signature AS sig FROM briefs b "
+            "JOIN nodes n ON n.id = b.node_id "
+            "WHERE n.tree = ? AND n.level > 0",
+            (TREE,),
+        ).fetchall()
+    return {
+        int(r["id"]): {"text": r["text"], "stale": r["stale"], "sig": r["sig"]}
+        for r in rows
+    }
 
 
 def _node_ids(db: Database) -> list[int]:
@@ -249,3 +290,73 @@ def test_propagate_runs_before_the_leaf_is_re_briefed(
     outcome = _run(db, tmp_path, judge)
 
     assert outcome["judged"] > 0  # something was actually judged
+
+
+def test_repair_is_reached(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # repair is the stage that acts on what monitor measured; deleting it from
+    # the chain changed nothing any test could see.
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    reached: list[int] = []
+
+    def labeler(vectors: object) -> list[int]:
+        reached.append(len(vectors))  # type: ignore[arg-type]
+        return [0] * len(vectors)  # type: ignore[arg-type]
+
+    sync(
+        _job("sync-tree"),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=Judge(),
+        core_labeler=labeler,
+    )
+
+    with db.connect() as conn:
+        rate_rows = conn.execute(
+            "SELECT COUNT(*) FROM misfit WHERE tree = ?", (TREE,)
+        ).fetchone()[0]
+    assert rate_rows > 0  # monitor fed repair something to act on
+
+
+def test_a_declining_judge_makes_the_run_incomplete(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # #105 made a whole-panel abstention reachable, and #132 made it reportable.
+    # One verb over six stages must say when it did less than it was asked.
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+
+    outcome = _run(db, tmp_path, Judge(verdict="I cannot determine that"))
+
+    assert outcome["abstained"] > 0
+    assert outcome["incomplete"] is True
+
+
+def test_repair_acts_on_what_it_finds(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # repair is the stage that ACTS on what monitor measured. A healthy little
+    # tree gives it nothing to do, so deleting it from the chain was invisible;
+    # this plants a cluster it must dissolve (below two members) and asserts it
+    # is gone afterwards.
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    with db.connect() as conn, conn:
+        victim = conn.execute(
+            "SELECT m.section_id AS s, m.node_id AS n FROM node_members m "
+            "JOIN nodes o ON o.id = m.node_id WHERE o.level = 0 LIMIT 1"
+        ).fetchone()
+        lonely = cluster_store.add_leaf_node(
+            conn, TREE, [(int(victim["s"]), False, None)]
+        )
+        conn.execute(
+            "DELETE FROM node_members WHERE node_id = ? AND section_id = ?",
+            (int(victim["n"]), int(victim["s"])),
+        )
+    assert lonely in _node_ids(db)
+
+    _run(db, tmp_path, Judge())
+
+    assert lonely not in _node_ids(db)  # dissolved, its member re-placed
