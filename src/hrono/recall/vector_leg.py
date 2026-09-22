@@ -42,6 +42,31 @@ and requiring both halves at once was the defect. Measured, the union dominates
 — every question tested is at least as good as blended, and the eleven absent
 questions are unchanged at zero.
 
+``Z_FLOOR`` is 3.2, swept not guessed (#134). #127 left two paraphrases failing
+with the RIGHT documents ranked #1-5 at z=3.19-3.62, and the suspicion was that
+corroboration was the binding constraint. The sweep says otherwise. Relaxing
+corroboration is the wrong lever and leaks badly — dropping ``KEYWORD_SUPPORT``
+to -1.0 takes the eleven absent questions from 1 answered to 5, and lowering
+``UNCORROBORATED_FLOOR`` takes it to 2. Lowering the CORROBORATED floor leaks
+nothing: corroboration still gates, the bar simply sits where the evidence puts
+it.
+
+    Z_FLOOR  UNCORROB  KW_SUPPORT | paraphrases | corpus-vocab | absent answered
+       3.5       4.5         0.0  |     4/6     |     5/5      |   1/11 (was)
+       3.2       4.5         0.0  |     6/6     |     5/5      |   1/11 (is)
+       3.0       4.5         0.0  |     6/6     |     5/5      |   1/11
+
+3.0 works too, so 3.2 is not a cliff edge — it is the smaller move with headroom
+below it. The one absent question that answers is "sourdough starter hydration"
+at a single hit, and it did that before this change as well.
+
+REJECTED, with numbers: letting a BRIEF passage corroborate a source hit under
+the same topic. Briefs describe topics conceptually, so they looked like the
+natural corroborator for a conceptually-phrased question. Measured, a brief
+passage cleared z 3.5 for ONE of twenty-two questions — a summary competes
+against source passages in the same distribution and loses — so the rule had
+nothing to fire on and changed not one result on any suite.
+
 The statistic is unchanged on purpose. An absolute cosine floor reads better on
 one corpus but is model-specific and would need recalibrating whenever the
 embedding model changes; the z-score is scale-free and portable, so ``Z_FLOOR``
@@ -57,7 +82,7 @@ from collections.abc import Sequence
 from hrono.cluster.blend import combine, combined_vector, unit
 from hrono.embed.store import get_vector
 
-Z_FLOOR = 3.5  # with keyword corroboration
+Z_FLOOR = 3.2  # with keyword corroboration (#134; was 3.5)
 UNCORROBORATED_FLOOR = 4.5  # without it (#102): derived on the QA corpus
 KEYWORD_SUPPORT = 0.0  # keyword z that counts as corroboration
 _NO_SUPPORT = -1.0  # a passage the question's terms never matched

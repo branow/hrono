@@ -95,7 +95,10 @@ def test_empty_index_returns_no_hits(tmp_path: object) -> None:
 
 
 def test_z_floor_is_baked() -> None:
-    assert Z_FLOOR == 3.5
+    # swept across the paraphrase, corpus-vocabulary and absent suites (#134);
+    # 3.5 left 4/6 paraphrases failing, 3.2 recovers all six and the eleven
+    # absent questions are unchanged.
+    assert Z_FLOOR == 3.2
 
 
 def _plant(database: Database, *, noise_path_matches_query: bool) -> int:
