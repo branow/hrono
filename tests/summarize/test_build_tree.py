@@ -3,7 +3,7 @@ from collections.abc import Callable, Iterator
 
 import pytest
 
-from hrono.cluster import ClusterError
+from hrono.cluster import ClusterError, TooFewPoints
 from hrono.cluster.build import ClusterResult
 from hrono.db.database import Database
 from hrono.jobs.model import Job
@@ -46,7 +46,13 @@ def make_build(labels_of: Callable[[int], list[int]]):
 
 
 def raising_build(vectors: object, *, init: object = None) -> ClusterResult:
-    raise ClusterError("too sparse")
+    """The LADDER declining to reduce — a stop, not a failure (#112, #131)."""
+    raise TooFewPoints("too sparse")
+
+
+def broken_build(vectors: object, *, init: object = None) -> ClusterResult:
+    """The backend BREAKING — build_clusters raises this for four reasons."""
+    raise ClusterError("the reduction failed on these vectors")
 
 
 def register(conn: object) -> None:
@@ -290,3 +296,40 @@ def test_real_recipe_over_a_tiny_level_declares_a_root(db: Database) -> None:
     _top_is_single_root(db)
     levels = _levels(db)
     assert levels == {0: 7, 1: 1}
+
+
+def test_a_broken_clusterer_fails_the_build_it_does_not_truncate(
+    db: Database,
+) -> None:
+    # #131: the same defect #112 closed one level down. `build_clusters` raises
+    # ClusterError when the reduction fails, when the clusterer fails, when it
+    # produces no clusters and when the backend is missing — none of which mean
+    # "the current top is the root". A tree that stops early and reports success
+    # is a map an operator has no reason to distrust.
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 12)
+
+    with pytest.raises(ClusterError):
+        build_tree(
+            job(),
+            JobContext(db),
+            client=FakeCompletion(),
+            encoder_for=fake_encoder,
+            build=broken_build,
+        )
+
+
+def test_the_ladder_declining_still_stops_the_climb(db: Database) -> None:
+    # the behaviour that must NOT change: a level too sparse to reduce means
+    # the current top is the root, and #112's type is what says so.
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 12)
+
+    run(db)  # raising_build -> TooFewPoints
+
+    # no exception: the climb stopped and `_collect_root` parented the
+    # survivors under one root, which is what "the current top is the root"
+    # means in practice.
+    assert _levels(db) == {0: 12, 1: 1}

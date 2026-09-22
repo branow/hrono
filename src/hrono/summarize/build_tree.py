@@ -20,13 +20,21 @@ near the root and stops (declaring the current top the root); a level that fails
 to REDUCE the node count is discarded and stops; and depth is hard-capped at
 ``D_MAX`` (clustering-lifecycle.md). Deterministic under the fixed clustering
 seed.
+
+ONLY ``TooFewPoints`` stops the climb (#131). It used to catch ``ClusterError``
+broadly, and ``build_clusters`` raises that when the reduction fails, when the
+clusterer fails, when it produces no clusters and when the backend is not
+installed — so a BROKEN backend at any level was read as "the current top is the
+root" and produced a TRUNCATED tree reported as success. #112 hit the same
+defect one level down and created the type that tells the two apart: a ladder
+that declines to reduce is not a failure, and everything else is.
 """
 
 from __future__ import annotations
 
 import sqlite3
 
-from hrono.cluster import ClusterError
+from hrono.cluster import TooFewPoints
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import attach_orphans, cluster_briefs
 from hrono.jobs.model import Job
@@ -67,8 +75,8 @@ def build_tree(
                 build=build,
                 encoder_for=encoder_for,
             )
-        except ClusterError:
-            break  # too sparse to cluster near the root -> current top is root
+        except TooFewPoints:
+            break  # too sparse to reduce further -> the current top IS the root
 
         with context.database.connect() as conn:
             formed = _count(conn, tree, level + 1)
