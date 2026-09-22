@@ -31,9 +31,14 @@ condensations while its reference list did not, so the brief cited sources it
 had never read. Condensing here costs one call per genuinely NEW section
 (``condense`` is a content-hash cache, #058) and nothing for unchanged content,
 so it is proportional to the change and the incremental promise holds. It runs
-once per RUN, after every source has been reconciled — unguarded, because
-``condense`` already returns without a call when nothing is pending, and that
-makes a run over a corpus carrying OLD gaps heal them rather than skip them.
+once per RUN, after every source has been reconciled, and only when a source
+actually reported changes. That guard is not an optimization: ``condense``
+resolves the text model BEFORE it looks at what is pending, so an unguarded call
+made `hrono update` fail with "no text model available" on a fresh install with
+no sources and nothing to do — an error naming a stage the user never asked for,
+from a run that should have been a no-op. The cost is that a corpus carrying OLD
+gaps heals them on the next run WITH changes rather than on any run at all,
+which is a wait, not a hole.
 
 Accepting LLM calls inside ``update`` is the decision this ticket made: the
 promise is that work is proportional to the change, not that the op is free —
@@ -100,7 +105,8 @@ def update(
         batch = _update_source(
             context, tree, name, model_name, encoder_for, batch
         )
-    condense(_stage(tree, "condense", {}), context, client=client)
+    if batch is not None:  # nothing changed -> no stage, no credential asked
+        condense(_stage(tree, "condense", {}), context, client=client)
 
 
 def _update_source(

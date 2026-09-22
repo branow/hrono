@@ -884,3 +884,38 @@ def test_a_second_update_over_unchanged_content_condenses_nothing(
     second = run_update(db, tmp_path)
 
     assert second.calls == 0
+
+
+def test_an_update_with_nothing_to_do_needs_no_text_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #122's condense stage resolves the text model before it looks at what is
+    # pending, so an unguarded call made a no-op run fail with "no text model
+    # available" — an error naming a stage the user never asked for.
+    monkeypatch.chdir(tmp_path)
+    database = Database.at(tmp_path / "bare.db")
+    try:
+        with database.connect() as conn, conn:
+            registry_store.insert(
+                conn,
+                "models",
+                "emb",
+                json.dumps(
+                    {
+                        "name": "emb",
+                        "kind": "embedding",
+                        "connection": None,
+                        "model": "fake",
+                        "params": {"dims": DIMS, "batch_size": 8},
+                    }
+                ),
+                None,
+                "t",
+            )
+        update(  # no sources, no text model, nothing to do
+            _job("update"),
+            job_context(database, tmp_path),
+            encoder_for=fake_encoder,
+        )
+    finally:
+        database.close()
