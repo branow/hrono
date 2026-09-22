@@ -170,8 +170,10 @@ def test_references_are_recorded_mechanically_beside_the_text(
     with db.connect() as conn:
         first = briefs.get(conn, nodes[0])
         assert first is not None
-        uris = briefs.member_uris(conn, nodes[0])
+        inputs = briefs.reduce_input(conn, nodes[0], MODEL)
+        uris = inputs.uris
         assert uris
+        assert inputs.dropped == 0  # every member reduced AND is cited
         assert json.loads(first["members"]) == list(uris)
         for uri in uris:
             assert uri not in first["text"]
@@ -389,3 +391,36 @@ def test_a_good_brief_is_never_flagged_or_retried(db: Database) -> None:
             row = briefs.get(conn, node_id)
             assert row is not None
             assert row["flagged"] == ""
+
+
+def test_a_brief_never_cites_a_section_it_did_not_read(db: Database) -> None:
+    # #122: the reduce input INNER JOINed `condensations` and the reference
+    # list did not, so a member with no condensation was dropped from the LLM
+    # input while still being cited. An incomplete map is a gap; a map that
+    # cites a source it never read is an error, and citations are the one thing
+    # we tell agents is mechanical.
+    with db.connect() as conn, conn:
+        orphan = add_condensed_section(conn, "uncondensed.py", b"zzz\n", 8)
+        conn.execute(
+            "DELETE FROM condensations WHERE content_hash = "
+            "(SELECT content_hash FROM sections WHERE id = ?)",
+            (orphan,),
+        )
+        node = conn.execute(
+            "SELECT id FROM nodes WHERE tree = ? AND level = 0 ORDER BY id",
+            (TREE,),
+        ).fetchone()["id"]
+        cluster_store.add_member(
+            conn, int(node), orphan, forced=False, similarity=None
+        )
+
+    brief(job(), JobContext(db), client=FakeCompletion(text="BODY " * 12))
+
+    with db.connect() as conn:
+        row = briefs.get(conn, int(node))
+        inputs = briefs.reduce_input(conn, int(node), MODEL)
+    cited = json.loads(row["members"])
+    assert inputs.dropped == 1
+    assert not any("uncondensed.py" in uri for uri in cited)
+    assert list(inputs.uris) == cited  # the two halves agree, by construction
+    assert "no condensation" in row["flagged"]  # and the gap is not silent

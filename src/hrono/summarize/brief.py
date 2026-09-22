@@ -66,21 +66,20 @@ def brief(
         pending = [
             (
                 node_id,
-                briefs.member_condensations(conn, node_id, model_name),
-                briefs.member_uris(conn, node_id),
+                briefs.reduce_input(conn, node_id, model_name),
                 briefs.member_signature(conn, node_id),
             )
             for node_id in briefs.stale_or_missing(
                 conn, tree, _LEVEL, prompt_hash, model_name
             )
         ]
-    pending = [(n, c, u, s) for (n, c, u, s) in pending if c]
+    pending = [(n, i, s) for (n, i, s) in pending if i.texts]
     if not pending:
         return
 
     completion = client if client is not None else _default_client(context)
-    for node_id, condensations, uris, signature in pending:
-        source = "\n\n".join(condensations)
+    for node_id, inputs, signature in pending:
+        source = "\n\n".join(inputs.texts)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
         result, flagged = answer(
             completion,
@@ -88,6 +87,7 @@ def brief(
         )
         unfaithful = faithfulness(result.text, source)
         text = result.text
+        flagged = flagged or _uncondensed(inputs.dropped)
         with context.database.write() as conn:
             briefs.upsert(
                 conn,
@@ -99,11 +99,18 @@ def brief(
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
                 flagged=flagged,
-                members=json.dumps(uris),
+                members=json.dumps(list(inputs.uris)),
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
+
+
+def _uncondensed(dropped: int) -> str:
+    """#122: a member that contributed nothing is a flag, never a silence."""
+    if dropped == 0:
+        return ""
+    return f"{dropped} member section(s) had no condensation to reduce"
 
 
 def _hash(template: str) -> str:

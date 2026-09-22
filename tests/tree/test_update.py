@@ -32,7 +32,11 @@ DIMS = 8
 
 
 class FakeCompletion:
+    def __init__(self) -> None:
+        self.calls = 0
+
     def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.calls += 1
         return CompletionResult(
             "This topic covers the module's API and how its parts fit.",
             Usage(10, 4),
@@ -130,6 +134,18 @@ def register(conn: object, url: str) -> None:
         )
 
 
+def run_update(db: Database, tmp_path: Path) -> FakeCompletion:
+    """Drive `update` the way the worker does; #122 made it an LLM caller."""
+    client = FakeCompletion()
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=client,
+    )
+    return client
+
+
 def _job(op: str) -> Job:
     return Job(
         id=op,
@@ -205,7 +221,7 @@ def test_update_swaps_changed_file_and_leaves_untouched_alone(
     old_f0 = _hashes(db, "f0.txt")
 
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     assert _hashes(db, "f0.txt") and _hashes(db, "f0.txt") != old_f0
     assert _section_ids(db, "f1.txt") == before_f1  # never touched
@@ -222,7 +238,7 @@ def test_update_with_no_change_is_a_noop(
             conn.execute("SELECT COUNT(*) FROM sections").fetchone()[0]
         )
 
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     with db.connect() as conn:
         sections_after = int(
@@ -295,7 +311,12 @@ def test_update_parks_an_alien_chunk_then_ages_it_in(
 ) -> None:
     db, origin = built
     add_alien(origin, "zz.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
 
     assert _pending(db) == [("alien/zz.txt", 1)]  # sub-TAU, parked
     assert_pool_invariant(db, "default", "emb")
@@ -303,7 +324,10 @@ def test_update_parks_an_alien_chunk_then_ages_it_in(
     for i in range(MAX_AGE + 1):  # batches 2..6 carry it past MAX_AGE
         edit(origin, "f1.txt", f"module 1 revision {i}\n")
         update(
-            _job("update"), job_context(db, tmp_path), encoder_for=alien_encoder
+            _job("update"),
+            job_context(db, tmp_path),
+            encoder_for=alien_encoder,
+            client=FakeCompletion(),
         )
         assert_pool_invariant(db, "default", "emb")
 
@@ -320,7 +344,12 @@ def test_update_drains_a_full_pool_in_the_same_batch(
     for i in range(MIN_POINTS):
         add_alien(origin, f"a{i}.txt")
 
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
 
     # a pool the real mini-pipeline can reduce never survives its own batch:
     # cores emit as leaf nodes, residual noise is force-assigned.
@@ -339,7 +368,12 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
     # precisely so it can hold one without claiming the other is homeless.
     db, origin = built
     add_twins(origin, "g9.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
 
     assert _pending(db) == [("alien/g9.txt", 1)]
     assert_pool_invariant(db, "default", "emb")
@@ -347,7 +381,10 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
     for i in range(MAX_AGE + 1):  # batches 2..7 carry the twin past MAX_AGE
         edit(origin, "f1.txt", f"module 1 revision {i}\n")
         update(
-            _job("update"), job_context(db, tmp_path), encoder_for=alien_encoder
+            _job("update"),
+            job_context(db, tmp_path),
+            encoder_for=alien_encoder,
+            client=FakeCompletion(),
         )
         assert_pool_invariant(db, "default", "emb")
 
@@ -384,7 +421,10 @@ def test_n_update_runs_advance_the_batch_counter_by_exactly_n(
     for i in range(4):
         edit(origin, "f1.txt", f"module 1 revision {i}\n")
         update(
-            _job("update"), job_context(db, tmp_path), encoder_for=fake_encoder
+            _job("update"),
+            job_context(db, tmp_path),
+            encoder_for=fake_encoder,
+            client=FakeCompletion(),
         )
         assert _batch(db) == start + i + 1
 
@@ -398,12 +438,12 @@ def test_a_run_over_two_changed_sources_bumps_the_counter_once(
     db, origin = built
     second = tmp_path / "second-repo"
     add_source(db, "second", make_repo(second, files=4))
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
     start = _batch(db)
 
     edit(origin, "f1.txt", "module 1 changed in the first source\n")
     edit(second, "f1.txt", "module 1 changed in the second source\n")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     assert _batch(db) == start + 1  # one run, one batch — not one per source
     assert _hashes(db, "f1.txt")  # both sources' changes did land
@@ -422,7 +462,7 @@ def test_a_run_with_no_changes_leaves_the_counter_alone(
 ) -> None:
     db, _origin = built
     before = _batch(db)
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
     assert _batch(db) == before
 
 
@@ -436,7 +476,12 @@ def test_ageing_measures_runs_not_changed_sources(
     second = tmp_path / "second-repo"
     add_source(db, "second", make_repo(second, files=4))
     add_alien(origin, "zz.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
     parked = _pending(db)
     assert parked == [("alien/zz.txt", _batch(db))]
     parked_at = parked[0][1]
@@ -445,7 +490,10 @@ def test_ageing_measures_runs_not_changed_sources(
         edit(origin, "f1.txt", f"first source revision {i}\n")
         edit(second, "f1.txt", f"second source revision {i}\n")
         update(
-            _job("update"), job_context(db, tmp_path), encoder_for=alien_encoder
+            _job("update"),
+            job_context(db, tmp_path),
+            encoder_for=alien_encoder,
+            client=FakeCompletion(),
         )
         assert_pool_invariant(db, "default", "emb")
 
@@ -454,7 +502,12 @@ def test_ageing_measures_runs_not_changed_sources(
 
     edit(origin, "f1.txt", "one run past the boundary\n")
     edit(second, "f1.txt", "one run past the boundary\n")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
 
     assert _batch(db) - parked_at == MAX_AGE + 1
     assert _pending(db) == []  # forced only now
@@ -508,7 +561,7 @@ def test_a_pure_rename_keeps_the_section_in_its_node(
     signatures_before = _signatures(db)
 
     rename(origin, "f1.txt", "renamed.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     assert _node_of(db, "f1.txt") == (None, None)  # the old path is gone
     assert _node_of(db, "renamed.txt") == (node_before, sim_before)
@@ -526,7 +579,7 @@ def test_a_rename_does_not_re_embed_the_content(
     _, embeddings_before = _counts(db)
     (origin / "moved").mkdir()
     rename(origin, "f2.txt", "moved/f2.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
     _, embeddings_after = _counts(db)
     # exactly one new vector: the new PATH string, never the content again
     assert embeddings_after == embeddings_before + 1
@@ -539,7 +592,7 @@ def test_a_rename_that_changes_the_grammar_is_a_normal_change(
     # a different grammar, so the sections are not the same content any more.
     db, origin = built
     rename(origin, "f3.txt", "f3.md")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
     node, _ = _node_of(db, "f3.md")
     assert node is not None  # still placed, just not short-circuited
     assert_pool_invariant(db, "default", "emb")
@@ -553,13 +606,28 @@ def test_renaming_a_parked_chunk_keeps_the_wait_it_has_served(
     # rename would postpone ageing for ever and strand it (#095's invariant).
     db, origin = built
     add_alien(origin, "zz.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
     assert _pending(db) == [("alien/zz.txt", 1)]
 
     edit(origin, "f1.txt", "an unrelated edit to advance the batch\n")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
     rename(origin, "alien/zz.txt", "alien/renamed-zz.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=alien_encoder)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
 
     assert _pending(db) == [("alien/renamed-zz.txt", 1)]  # still batch 1
     assert_pool_invariant(db, "default", "emb")
@@ -575,13 +643,13 @@ def test_a_rename_preserves_a_recorded_similarity(
     (origin / "f9.txt").write_text("module 9 does thing number 9\n")
     _git(origin, "add", "-A")
     _git(origin, "commit", "-qm", "add f9")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
     node_before, sim_before = _node_of(db, "f9.txt")
     assert node_before is not None
     assert sim_before is not None  # a real recorded assignment
 
     rename(origin, "f9.txt", "f9-renamed.txt")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     assert _node_of(db, "f9-renamed.txt") == (node_before, sim_before)
 
@@ -607,29 +675,36 @@ def planted(model_id: str):
     return encode
 
 
-def test_a_leaf_update_drained_in_is_healed_by_the_next_full_pass(
+def test_a_leaf_update_drained_in_is_healed_by_the_next_settle(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # AC1's residual, driven rather than argued. `update` makes no LLM calls,
-    # so a leaf its drain emits has no brief and cannot be placed by #114's
-    # rule: in a node, written to the export, unreachable from root.md.
+    # #114's residual, driven rather than argued — and #122 SHORTENED it.
+    # `update` still writes no brief, so a drained leaf is unreachable from
+    # root.md the moment it is born. But update now condenses what it ingests,
+    # so the next settle can brief that leaf, which gives it the brief vector
+    # #114's rule places it by. The bound used to be "the next FULL PASS".
     db, origin = built
     before = _leaf_ids(db)
     for i in range(14):
         add_alien(origin, f"a{i}.txt")
 
-    update(_job("update"), job_context(db, tmp_path), encoder_for=planted)
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=planted,
+        client=FakeCompletion(),
+    )
 
     emitted = set(_leaf_ids(db)) - set(before)
     assert emitted  # the drain turned the pool into a new topic
     assert _nodes_holding(db, "alien/") & emitted  # the chunks live there
-    assert emitted.isdisjoint(_briefed(db))  # update never briefs
+    assert emitted.isdisjoint(_briefed(db))  # update still never briefs
     assert emitted.isdisjoint(_parented(db))  # ... so nothing to place it by
     assert_pool_invariant(db, "default", "emb")
+    assert _condensed(db, "alien/")  # but #122 DID condense what it ingested
 
-    # a settle alone does NOT heal it, and the reason is not this ticket:
-    # `brief` needs member condensations and `update` ingests without
-    # condensing (#122), so there is still no brief to attach by.
+    # so a settle now heals it: the condensations are there, so the leaf briefs,
+    # so it has a brief vector, so #114's attach can parent it.
     settle(
         _job("settle"),
         job_context(db, tmp_path),
@@ -637,19 +712,6 @@ def test_a_leaf_update_drained_in_is_healed_by_the_next_full_pass(
         build=fake_build,
         encoder_for=planted,
         client=FakeCompletion(),
-    )
-    homes = _nodes_holding(db, "alien/")
-    assert homes and not (homes & _briefed(db))
-    assert not _condensed(db, "alien/")  # the #122 dependency, measured
-
-    # the next full pass condenses, briefs, and rebuilds the level above, so
-    # the topic is reachable from root.md again: the residual is bounded.
-    maintain(
-        _job("maintain"),
-        job_context(db, tmp_path),
-        encoder_for=planted,
-        client=FakeCompletion(),
-        build=fake_build,
     )
 
     homes = _nodes_holding(db, "alien/")
@@ -748,7 +810,7 @@ def test_an_update_leaves_every_member_with_a_coordinate(
     assert _uncovered_members(db) == 0  # the full build covers everything
 
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     assert _uncovered_members(db) == 0
 
@@ -762,7 +824,7 @@ def test_a_rebuild_after_an_update_warm_inits(
 
     db, origin = built
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
-    update(_job("update"), job_context(db, tmp_path), encoder_for=fake_encoder)
+    run_update(db, tmp_path)
 
     seen: dict[str, object] = {}
 
@@ -775,3 +837,50 @@ def test_a_rebuild_after_an_update_warm_inits(
     )
 
     assert seen["init"] is not None
+
+
+def _uncondensed_members(db: Database) -> list[str]:
+    with db.connect() as conn:
+        return [
+            r["path"]
+            for r in conn.execute(
+                "SELECT DISTINCT s.path AS path FROM node_members m "
+                "JOIN sections s ON s.id = m.section_id "
+                "WHERE NOT EXISTS (SELECT 1 FROM condensations d "
+                "                  WHERE d.content_hash = s.content_hash)"
+            ).fetchall()
+        ]
+
+
+def test_update_condenses_what_it_ingests(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # #122: `condense` used to have one caller, `maintain`, so a section an
+    # update brought in reached the tree unsummarised until a full build — and
+    # a brief reduces over condensations while its citations did not.
+    db, origin = built
+    assert _uncondensed_members(db) == []
+
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    (origin / "brand-new.txt").write_text("a module that did not exist\n")
+    _git(origin, "add", "-A")
+    _git(origin, "commit", "-qm", "add a new file")
+
+    client = run_update(db, tmp_path)
+
+    assert _uncondensed_members(db) == []  # new AND changed, both covered
+    assert client.calls  # it really did call out, not skip the stage
+
+
+def test_a_second_update_over_unchanged_content_condenses_nothing(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the #058 content-hash cache is what keeps this proportional to the change.
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    first = run_update(db, tmp_path)
+    assert first.calls
+
+    second = run_update(db, tmp_path)
+
+    assert second.calls == 0

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 
@@ -134,29 +135,55 @@ def level_briefs(
     return tuple((int(row["id"]), row["text"]) for row in rows)
 
 
-def member_condensations(
+@dataclass(frozen=True)
+class ReduceInput:
+    """What a node's brief is written from, and what it may therefore cite.
+
+    ``texts`` and ``uris`` come from the SAME rows by construction (#122). They
+    used to be two queries and the reference list did not join ``condensations``
+    — so a member with no condensation was silently dropped from the LLM input
+    while still being cited, and the brief claimed provenance it did not have.
+    ``dropped`` is how many members contributed nothing, which is the node's
+    flag, not a silence.
+    """
+
+    texts: tuple[str, ...]
+    uris: tuple[str, ...]
+    dropped: int
+
+
+def reduce_input(
     conn: sqlite3.Connection, node_id: int, model_name: str
-) -> tuple[str, ...]:
-    """Return a node's member condensation texts (the reduce input)."""
+) -> ReduceInput:
+    """A node's condensations and the URIs of exactly those condensations."""
     rows = conn.execute(
-        "SELECT d.text AS text FROM node_members m "
+        "SELECT d.text AS text, s.uri AS uri FROM node_members m "
         "JOIN sections s ON s.id = m.section_id "
         "JOIN condensations d ON d.content_hash = s.content_hash "
         "AND d.model_name = ? WHERE m.node_id = ? ORDER BY s.uri, s.id",
         (model_name, node_id),
     ).fetchall()
-    return tuple(row["text"] for row in rows)
+    members = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM node_members WHERE node_id = ?", (node_id,)
+        ).fetchone()[0]
+    )
+    seen: list[str] = []
+    for row in rows:
+        if row["uri"] not in seen:
+            seen.append(row["uri"])
+    return ReduceInput(
+        texts=tuple(row["text"] for row in rows),
+        uris=tuple(seen),
+        dropped=members - len(rows),
+    )
 
 
-def member_uris(conn: sqlite3.Connection, node_id: int) -> tuple[str, ...]:
-    """Return a node's distinct member section URIs (the mechanical refs)."""
-    rows = conn.execute(
-        "SELECT DISTINCT s.uri AS uri FROM node_members m "
-        "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
-        "ORDER BY s.uri",
-        (node_id,),
-    ).fetchall()
-    return tuple(row["uri"] for row in rows)
+def member_condensations(
+    conn: sqlite3.Connection, node_id: int, model_name: str
+) -> tuple[str, ...]:
+    """Return a node's member condensation texts (the reduce input)."""
+    return reduce_input(conn, node_id, model_name).texts
 
 
 def child_briefs(conn: sqlite3.Connection, node_id: int) -> tuple[str, ...]:

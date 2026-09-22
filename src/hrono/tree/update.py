@@ -24,6 +24,22 @@ the export, but unreachable from ``root.md``: better than parked and invisible,
 worse than reachable, and bounded by the next brief pass. Briefing inside
 ``update`` is the same question #122 asks about condensing, and belongs there.
 
+CONDENSES WHAT IT INGESTS (#122). ``condense`` used to have exactly one caller,
+``maintain``, so every section an incremental update brought in reached the tree
+with no condensation until somebody ran a full build — and a brief reduces over
+condensations while its reference list did not, so the brief cited sources it
+had never read. Condensing here costs one call per genuinely NEW section
+(``condense`` is a content-hash cache, #058) and nothing for unchanged content,
+so it is proportional to the change and the incremental promise holds. It runs
+once per RUN, after every source has been reconciled — unguarded, because
+``condense`` already returns without a call when nothing is pending, and that
+makes a run over a corpus carrying OLD gaps heal them rather than skip them.
+
+Accepting LLM calls inside ``update`` is the decision this ticket made: the
+promise is that work is proportional to the change, not that the op is free —
+and the alternative left a leaf with no condensation, therefore no brief,
+therefore no brief vector, therefore no parent (#114).
+
 ONE BATCH NUMBER PER RUN, not per source (#099). ``tree_batch.batch`` is the
 clock incubator ageing measures against (``current_batch - parked_at >
 MAX_AGE``), so counting a run over three changed sources as three batches ages
@@ -58,6 +74,7 @@ from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import store as registry_store
+from hrono.summarize.condense import condense
 
 _DEFAULT_TREE = "default"
 
@@ -67,6 +84,7 @@ def update(
     context: JobContext,
     *,
     encoder_for: object | None = None,
+    client: object | None = None,
 ) -> None:
     """Apply each source's change batch incrementally to the tree."""
     tree = job.tree or _DEFAULT_TREE
@@ -82,6 +100,7 @@ def update(
         batch = _update_source(
             context, tree, name, model_name, encoder_for, batch
         )
+    condense(_stage(tree, "condense", {}), context, client=client)
 
 
 def _update_source(
