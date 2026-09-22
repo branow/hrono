@@ -287,6 +287,8 @@ def _collect_under_single_parent(
             ).fetchall()
         ]
     if len(parents) != 1:
+        parents = _sole_ancestor(context, tree, parent_level)
+    if len(parents) != 1:
         return ()
     with context.database.write() as conn:
         for node_id, _ in orphans:
@@ -294,6 +296,34 @@ def _collect_under_single_parent(
                 conn, parents[0], node_id, attached=False, similarity=None
             )
     return tuple((node_id, parents[0], 0.0) for node_id, _ in orphans)
+
+
+def _sole_ancestor(
+    context: JobContext, tree: str, from_level: int
+) -> list[int]:
+    """The nearest level ABOVE ``from_level`` holding exactly one node (#124).
+
+    When SEVERAL candidate parents are childless there is no centroid to place
+    by and no single node to collect under, so the search moves up: a level
+    whose every node lost its children carries no information, and the node
+    above it does. Collecting there keeps every leaf reachable instead of
+    leaving the whole corpus linked from nothing.
+    """
+    with context.database.connect() as conn:
+        rows = conn.execute(
+            "SELECT level, COUNT(*) AS n FROM nodes WHERE tree = ? "
+            "AND level > ? GROUP BY level ORDER BY level",
+            (tree, from_level),
+        ).fetchall()
+        for row in rows:
+            if int(row["n"]) != 1:
+                continue
+            sole = conn.execute(
+                "SELECT id FROM nodes WHERE tree = ? AND level = ?",
+                (tree, int(row["level"])),
+            ).fetchone()
+            return [int(sole["id"])]
+    return []
 
 
 def _parent_level(conn: sqlite3.Connection, tree: str) -> int | None:

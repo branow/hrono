@@ -10,8 +10,12 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
-from hrono.summarize import briefs
-from hrono.summarize.build_tree import D_MAX, build_tree
+from hrono.summarize import UnreachableTree, briefs
+from hrono.summarize.build_tree import (
+    D_MAX,
+    _require_reachable,
+    build_tree,
+)
 
 TREE = "default"
 
@@ -333,3 +337,75 @@ def test_the_ladder_declining_still_stops_the_climb(db: Database) -> None:
     # survivors under one root, which is what "the current top is the root"
     # means in practice.
     assert _levels(db) == {0: 12, 1: 1}
+
+
+def test_build_tree_refuses_to_report_success_over_an_unreachable_map(
+    db: Database,
+) -> None:
+    # #124: the half that matters. `root.md`'s children are rendered from
+    # parent EDGES, so an unparented level-0 node is written to the export and
+    # unreachable in it. Reporting success over that map is the shape F16, F20
+    # and F29 all share.
+    #
+    # Tested on the guard DIRECTLY, and deliberately: every route that produces
+    # the state has been closed as it was found (#114, #124's collect), so the
+    # normal flow repairs anything plantable here. This guard exists for the
+    # routes nobody has thought of yet, which is exactly the kind a front-door
+    # test cannot reach — the same reasoning as #119's `_remove`.
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 3)
+        conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('default', 1, 0, 't')"
+        )
+
+    with pytest.raises(UnreachableTree, match="unreachable from the root"):
+        _require_reachable(JobContext(db), "default")
+
+
+def test_a_one_topic_tree_is_not_an_orphan(db: Database) -> None:
+    # #112: a corpus too small to cluster builds ONE level-0 node, which IS the
+    # root. It has no parent because there is nothing above it, and the guard
+    # must not read that as an unreachable map.
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 1)
+
+    run(db)  # no exception
+    _require_reachable(JobContext(db), "default")  # nor from the guard
+
+    assert _levels(db) == {0: 1}
+
+
+def test_a_parented_leaf_passes_the_guard(db: Database) -> None:
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 12)
+
+    run(db, lambda n: [i // 3 for i in range(n)])  # 12 -> 4 -> 2 -> 1
+
+    _require_reachable(JobContext(db), "default")  # no exception
+
+
+def test_build_tree_always_runs_the_reachability_guard(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the guard is only worth having if it is reached. Every shape I can plant
+    # is repaired by the collect or the recursion — which is the point of it —
+    # so what a test CAN assert is that the pipeline always ends by checking.
+    import hrono.summarize.build_tree as module
+
+    checked: list[str] = []
+    monkeypatch.setattr(
+        module,
+        "_require_reachable",
+        lambda context, tree: checked.append(tree),
+    )
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 12)
+
+    run(db, lambda n: [i // 3 for i in range(n)])
+
+    assert checked == ["default"]

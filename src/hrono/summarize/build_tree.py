@@ -34,12 +34,13 @@ from __future__ import annotations
 
 import sqlite3
 
-from hrono.cluster import TooFewPoints
+from hrono.cluster import TooFewPoints, store
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import attach_orphans, cluster_briefs
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion
+from hrono.summarize import UnreachableTree
 from hrono.summarize.brief_upper import brief_upper
 
 D_MAX = 5
@@ -90,6 +91,35 @@ def build_tree(
 
     _collect_root(context, tree, client)
     _adopt_late_leaves(context, tree, client, encoder_for)
+    _require_reachable(context, tree)
+
+
+def _require_reachable(context: JobContext, tree: str) -> None:
+    """Refuse to call a tree built while any topic is linked from nothing.
+
+    ``root.md``'s children are rendered from parent EDGES, so an unparented
+    level-0 node is written to the export and unreachable in it. Every route
+    that produces one has been closed as it was found (#114, #124), and this is
+    the guard for the routes nobody has thought of yet: reporting success over
+    an unreachable map is the shape F16, F20 and F29 all share.
+    """
+    with context.database.connect() as conn:
+        orphans = store.unparented(conn, tree, 0)
+        top = _top_level(conn, tree)
+    if top == 0:
+        return  # a one-topic tree: the leaf IS the root (#112), not an orphan
+    if orphans:
+        raise UnreachableTree(
+            f"{len(orphans)} topic(s) unreachable from the root: "
+            f"{list(orphans)[:10]}"
+        )
+
+
+def _top_level(conn: sqlite3.Connection, tree: str) -> int:
+    row = conn.execute(
+        "SELECT MAX(level) AS top FROM nodes WHERE tree = ?", (tree,)
+    ).fetchone()
+    return 0 if row is None or row["top"] is None else int(row["top"])
 
 
 def _adopt_late_leaves(

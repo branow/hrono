@@ -7,6 +7,7 @@ import pytest
 from hrono.cluster import monitor, repair
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import (
+    _sole_ancestor,
     attach_orphans,
     cluster_briefs,
     migrate_children,
@@ -641,3 +642,63 @@ def test_the_repair_op_frees_a_mis_attached_child(db: Database) -> None:
     assert int(row["parent_id"]) == home
     assert int(row["parent_id"]) != alpha
     assert int(row["attached"]) == 0
+
+
+def _childless_upper(conn: object, level: int, count: int) -> list[int]:
+    ids = []
+    for _ in range(count):
+        cursor = conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, ?, 0, 't')",
+            (TREE, level),
+        )
+        ids.append(int(cursor.lastrowid))
+    return ids
+
+
+def test_orphans_collect_one_level_up_when_every_parent_is_childless(
+    db: Database,
+) -> None:
+    # #124: #114 handles ONE childless parent. With several there is no
+    # centroid to place by and no single node to collect under, and the driven
+    # result was the whole corpus written to the export and linked from
+    # nothing. A level whose every node lost its children carries no
+    # information; the node above it does.
+    with db.connect() as conn, conn:
+        leaves = [_leaf(conn, "alpha", i) for i in range(3)]
+        _childless_upper(conn, 1, 2)  # TWO childless candidate parents
+        root = _childless_upper(conn, 2, 1)[0]
+
+    attached = attach_orphans(
+        Job(
+            id="ao",
+            parent_id=None,
+            tree=TREE,
+            op="attach-orphans",
+            scope={},
+            status="running",
+            error=None,
+            created_at="t",
+            updated_at="t",
+        ),
+        JobContext(db),
+        encoder_for=fake_encoder_for([]),
+    )
+
+    assert {child for child, _p, _s in attached} == set(leaves)
+    assert {parent for _c, parent, _s in attached} == {root}
+    with db.connect() as conn:
+        assert cluster_store.unparented(conn, TREE, 0) == ()
+
+
+def test_the_ancestor_search_skips_a_level_that_offers_a_choice(
+    db: Database,
+) -> None:
+    # #124: collecting orphans is only safe under a node that is the ONLY
+    # candidate. A level holding several is a choice, and picking one of them
+    # arbitrarily buries the orphans under a topic nothing says they belong to.
+    with db.connect() as conn, conn:
+        _childless_upper(conn, 1, 2)  # a choice: skip it
+        sole = _childless_upper(conn, 2, 1)[0]  # the only candidate: take it
+
+    assert _sole_ancestor(JobContext(db), TREE, 0) == [sole]
