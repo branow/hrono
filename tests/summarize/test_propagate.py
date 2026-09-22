@@ -22,20 +22,28 @@ from hrono.llm.client import (
 )
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs, propagate
-from hrono.summarize.propagate import _majority, _verdict
+from hrono.summarize.propagate import (
+    _JUDGE_MAX_TOKENS,
+    BEST_OF,
+    _majority,
+    _verdict,
+)
 from tests.context import job_context
 
 TREE = "default"
 
 
 class FakeJudge:
-    def __init__(self, word: str) -> None:
-        self.word = word
+    def __init__(self, *replies: str) -> None:
+        self.replies = replies
         self.calls = 0
+        self.requests: list[CompletionRequest] = []
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         self.calls += 1
-        return CompletionResult(self.word, Usage(1, 1))
+        self.requests.append(request)
+        reply = self.replies[min(self.calls - 1, len(self.replies) - 1)]
+        return CompletionResult(reply, Usage(1, 1))
 
 
 def _register(conn: object) -> None:
@@ -176,10 +184,26 @@ def test_majority_of_three() -> None:
     assert _majority(["none", "minor", "major"]) == "minor"
 
 
-def test_verdict_parsing() -> None:
-    assert _verdict("This is a MAJOR change") == "major"
-    assert _verdict("only a minor tweak") == "minor"
-    assert _verdict("no meaningful change") == "none"
+def test_a_verdict_is_the_leading_word_not_a_substring() -> None:
+    # F33: the prompt asks for one word, the model explains itself half the
+    # time, and an explanation repeats the prompt's own vocabulary.
+    assert _verdict("none") == "none"
+    assert _verdict("minor\n\nThe removal of `as name` aliasing is...") == (
+        "minor"
+    )
+    assert _verdict("none - this is not a major change") == "none"
+    assert _verdict("minor, certainly not major") == "minor"
+    assert _verdict("**MAJOR**\nthe API changed shape") == "major"
+
+
+def test_prose_that_leads_with_no_verdict_is_not_a_verdict() -> None:
+    # the old substring rule scored each of these; none of them answers the
+    # question, and a guessed `none` is the direction that suppresses a climb.
+    assert _verdict("This is a MAJOR change") is None
+    assert _verdict("only a minor tweak") is None
+    assert _verdict("no meaningful change") is None
+    assert _verdict("") is None
+    assert _verdict("   ") is None
 
 
 def test_material_verdict_climbs_ancestors_bounded_by_d_max(
@@ -418,3 +442,81 @@ def test_marked_ancestor_regenerates_only_the_path(
         assert after.calls >= 1  # only the marked ancestor path regenerates
     finally:
         database.close()
+
+
+def test_a_panel_member_is_re_asked_once_then_abstains(
+    db: Database, tmp_path: Path
+) -> None:
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        parent = _upper(conn, 1, leaf)
+
+    # member 1 answers on the retry; members 2 and 3 answer first time
+    judge = FakeJudge("waffle", "major", "major", "major")
+    _run(db, judge, tmp_path)
+
+    assert judge.calls == BEST_OF + 1  # exactly one retry, not a retry storm
+    assert _stale(db, parent) == 1
+    with db.connect() as conn:
+        row = conn.execute("SELECT verdict, action FROM update_log").fetchone()
+    assert (row["verdict"], row["action"]) == ("major", "propagated")
+
+
+def test_a_panel_that_never_parses_abstains_loudly(
+    db: Database, tmp_path: Path
+) -> None:
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        parent = _upper(conn, 1, leaf)
+
+    judge = FakeJudge("I cannot determine the significance of this change")
+    _run(db, judge, tmp_path)
+
+    # every member re-asked once, then abstained: no verdict, and no silent
+    # `none` quietly suppressing a real cascade
+    assert judge.calls == BEST_OF * 2
+    assert _stale(db, parent) == 0
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT verdict, action, climbed_to FROM update_log"
+        ).fetchone()
+        drift = conn.execute(
+            "SELECT COUNT(*) FROM tree_batch WHERE tree = ?", (TREE,)
+        ).fetchone()[0]
+    assert (row["verdict"], row["action"]) == ("unparseable", "abstained")
+    assert row["climbed_to"] is None
+    assert drift == 0  # an abstention is not drift
+
+
+def test_a_partial_panel_still_decides(db: Database, tmp_path: Path) -> None:
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        parent = _upper(conn, 1, leaf)
+
+    # member 1 abstains (two unparseable replies), members 2 and 3 say major
+    judge = FakeJudge("waffle", "waffle", "major", "major")
+    _run(db, judge, tmp_path)
+
+    assert _stale(db, parent) == 1
+    with db.connect() as conn:
+        row = conn.execute("SELECT verdict, action FROM update_log").fetchone()
+    assert (row["verdict"], row["action"]) == ("major", "propagated")
+
+
+def test_the_judge_call_is_capped_to_a_verdict(
+    db: Database, tmp_path: Path
+) -> None:
+    with db.connect() as conn, conn:
+        _leaf(conn)
+
+    judge = FakeJudge("none")
+    _run(db, judge, tmp_path)
+
+    assert judge.calls == BEST_OF  # BEST_OF calls per topic and no more
+    params = [r.model["params"] for r in judge.requests]
+    assert all(p["max_tokens"] == _JUDGE_MAX_TOKENS for p in params)
+    with db.connect() as conn:
+        stored = json.loads(
+            registry_store.get(conn, "models", "sonnet")["config"]
+        )
+    assert stored["params"] == {}  # the cap is per call, not a config write

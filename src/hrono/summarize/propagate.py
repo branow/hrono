@@ -18,6 +18,7 @@ the audit trail the dashboard reads. Constants are baked (D_MAX 5, best-of-3).
 from __future__ import annotations
 
 import sqlite3
+import string
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -35,6 +36,9 @@ D_MAX = 5  # cap the climb at five levels above the changed leaf
 BEST_OF = 3  # judge panel size; majority verdict
 _RANK = {"none": 0, "minor": 1, "major": 2}
 _DRIFT = {"minor": 1, "major": 2}
+_VERDICTS = frozenset(_RANK)
+_RETRIES = 1  # one re-ask per panel member before it abstains
+_JUDGE_MAX_TOKENS = 16  # a verdict is one word; prose replies stay cheap
 
 
 @dataclass(frozen=True)
@@ -96,24 +100,55 @@ def _judge(
     model: dict[str, object],
     template: str,
     topic: _Topic,
-) -> str:
+) -> str | None:
+    """The panel's majority verdict, or ``None`` if every member abstained."""
     content = template.replace("{source}", topic.source).replace(
         "{summary}", topic.summary
     )
-    request = CompletionRequest(model=model, system="", content=content)
-    verdicts = [
-        _verdict(completion.complete(request).text) for _ in range(BEST_OF)
-    ]
-    return _majority(verdicts)
+    request = CompletionRequest(
+        model=_capped(model), system="", content=content
+    )
+    votes = tuple(
+        vote
+        for vote in (_vote(completion, request) for _ in range(BEST_OF))
+        if vote is not None
+    )
+    return _majority(votes) if votes else None
 
 
-def _verdict(text: str) -> str:
-    lowered = text.lower()
-    if "major" in lowered:
-        return "major"
-    if "minor" in lowered:
-        return "minor"
-    return "none"
+def _vote(completion: Completion, request: CompletionRequest) -> str | None:
+    """One panel member, re-asked once; ``None`` rather than a guessed verdict.
+
+    Abstaining costs a vote, defaulting to ``none`` costs the cascade: a false
+    ``none`` silently suppresses a real climb, which is the dangerous direction.
+    """
+    for _ in range(1 + _RETRIES):
+        verdict = _verdict(completion.complete(request).text)
+        if verdict is not None:
+            return verdict
+    return None
+
+
+def _verdict(text: str) -> str | None:
+    """The reply's LEADING word, if it is a verdict at all.
+
+    The prompt asks for one word and the model answers in prose half the time
+    (F33). Substring matching over prose reads the prompt's own vocabulary back:
+    "none - not a major change" scores major. The first word is the answer; the
+    rest is explanation.
+    """
+    head = text.strip().split(maxsplit=1)
+    if not head:
+        return None
+    word = head[0].strip(string.punctuation).lower()
+    return word if word in _VERDICTS else None
+
+
+def _capped(model: dict[str, object]) -> dict[str, object]:
+    """The judge's model with a verdict-sized output cap."""
+    params = model.get("params")
+    base = dict(params) if isinstance(params, dict) else {}
+    return {**model, "params": {**base, "max_tokens": _JUDGE_MAX_TOKENS}}
 
 
 def _majority(verdicts: Sequence[str]) -> str:
@@ -122,8 +157,11 @@ def _majority(verdicts: Sequence[str]) -> str:
 
 
 def _record(
-    conn: sqlite3.Connection, tree: str, topic: _Topic, verdict: str
+    conn: sqlite3.Connection, tree: str, topic: _Topic, verdict: str | None
 ) -> None:
+    if verdict is None:  # the whole panel abstained: loud, not silent
+        record(conn, tree, topic.node_id, "unparseable", "abstained")
+        return
     if verdict == "none":
         record(conn, tree, topic.node_id, verdict, "skipped")
         return
