@@ -346,3 +346,76 @@ def test_a_broken_backend_fails_the_job_it_does_not_collect(
             build=broken,
         )
     assert _count(db, "nodes") == 0  # nothing invented on the way out
+
+
+def _brief_texts(db: Database) -> dict[int, str]:
+    with db.connect() as conn:
+        rows = conn.execute("SELECT node_id, text FROM briefs").fetchall()
+    return {int(r["node_id"]): str(r["text"]) for r in rows}
+
+
+class CountingCompletion:
+    """A fake LLM that NUMBERS its replies, so a re-brief is visible."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.calls += 1
+        return CompletionResult(
+            f"This topic covers the module's API, revision {self.calls}.",
+            Usage(10, 4),
+        )
+
+
+def test_one_changed_file_re_briefs_only_its_own_path(
+    db: Database, tmp_path: Path
+) -> None:
+    # #084: hrono's core promise, as a committed regression guard. A second
+    # maintain over a CHANGED corpus must do partial work — more than nothing,
+    # far less than a full build — and must leave the untouched topics' node
+    # ids and brief TEXT exactly as they were.
+    full = CountingCompletion()
+    maintain(
+        job(),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=full,
+        build=fake_build,
+    )
+    first_texts = _brief_texts(db)
+    assert full.calls > 0
+
+    origin = tmp_path / "src-repo"
+    (origin / "f0.txt").write_text("module 0 is completely different now\n")
+    subprocess.run(["git", "-C", str(origin), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(origin), "commit", "-qm", "edit one file"], check=True
+    )
+
+    partial = CountingCompletion()
+    maintain(
+        job(),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=partial,
+        build=fake_build,
+    )
+
+    # strictly partial: not a full rebuild, and not a no-op either
+    assert 0 < partial.calls < full.calls
+
+    after = _brief_texts(db)
+    kept = set(first_texts) & set(after)
+    assert kept  # most topics survive a one-file edit, ids and all
+    regenerated = {n for n in kept if first_texts[n] != after[n]}
+    untouched = kept - regenerated
+
+    # NOT a no-op either: the changed path really was re-briefed. `partial.calls
+    # alone cannot say this — condense pays for the new section whether or not
+    # any brief regenerates, so the count is nonzero even when nothing is.
+    assert regenerated
+    assert untouched  # the topics that did not change were not re-briefed
+    assert len(untouched) > len(regenerated)  # and they are the majority
+    for node in untouched:
+        assert after[node] == first_texts[node]  # byte-identical, not redone
