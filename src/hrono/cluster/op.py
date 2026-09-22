@@ -7,10 +7,16 @@ release it, run the heavy UMAP -> HDBSCAN -> attach pipeline OUTSIDE the lock
 section reduced coords, and flags. The tree is named by the job's ``tree`` (the
 topic hierarchy over a corpus), defaulting to ``default``. Warm-init reads the
 tree's stored coords, so a rebuild extends the prior layout; a first build inits
-fresh. A full build homes every embedded section, so the incubator pool (#086)
-is swept in the same transaction — its rows would otherwise claim a re-homed
-chunk is still stranded. Reads only local vectors — no secret — so it needs no
-cipher. Registers into the op registry so the worker dispatches ``cluster``.
+fresh. A corpus below the smallest rung of the ladder (#094) cannot be reduced
+at all; it is then ONE topic holding every section (#112) — the same collect
+``build_tree._collect_root`` makes at the top of the tree, where "too few points
+to reduce" already means "then this IS the node" rather than "then fail". A tree
+of one topic is a correct, walkable map of a small repo, and recall and export
+run over it unchanged. A full build homes every embedded section, so the
+incubator pool (#086) is swept in the same transaction — its rows would
+otherwise claim a re-homed chunk is still stranded. Reads only local vectors —
+no secret — so it needs no cipher. Registers into the op registry so the worker
+dispatches ``cluster``.
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 from hrono.cluster import ClusterError, incubator, store
+from hrono.cluster.build import ClusterResult
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -45,7 +52,10 @@ def cluster(
         return
 
     vectors = [vector for _, vector in pairs]
-    result = builder(vectors, init=init)
+    try:
+        result = builder(vectors, init=init)
+    except ClusterError:
+        result = _one_topic(len(vectors))
 
     members = [
         (label, section_ids[i], result.attached[i], sim)
@@ -59,6 +69,20 @@ def cluster(
     with context.database.write() as conn:
         store.replace_tree(conn, tree, _LEVEL, members, coords)
         incubator.sweep(conn, tree)
+
+
+def _one_topic(count: int) -> ClusterResult:
+    """Every section in one level-0 node, for a corpus too small to cluster.
+
+    No reduction ran, so there are no coordinates to keep: the next build inits
+    fresh, which is correct — there is no layout to preserve.
+    """
+    return ClusterResult(
+        labels=tuple(0 for _ in range(count)),
+        attached=tuple(False for _ in range(count)),
+        assignment_similarity=tuple(None for _ in range(count)),
+        coords=(),
+    )
 
 
 def _load_builder() -> Builder:

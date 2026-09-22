@@ -5,8 +5,13 @@ from pathlib import Path
 
 import pytest
 
+from hrono.cluster import ClusterError
 from hrono.cluster.build import ClusterResult
+from hrono.cluster.recipe import MIN_POINTS, recipe_for
 from hrono.db.database import Database
+from hrono.export import store as export_store
+from hrono.export.collapse import collapse
+from hrono.export.render import render
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
@@ -254,3 +259,68 @@ def test_missing_embedding_model_fails_the_maintain_run(
         conn.execute("DELETE FROM registry WHERE name = 'emb'")
     with pytest.raises(Exception):  # noqa: B017 - any clean stage error aborts
         run(db, tmp_path)
+
+
+def _tiny_db(tmp_path: Path) -> Database:
+    """A corpus of three files — far below the smallest clustering rung."""
+    url = make_repo(tmp_path / "tiny-repo", files=3)
+    database = Database.at(tmp_path / "tiny.db")
+    with database.connect() as conn, conn:
+        register(conn, url)
+    return database
+
+
+def test_a_corpus_below_the_smallest_rung_builds_one_topic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #112: the REAL clustering backend over a sub-MIN_POINTS corpus. The ladder
+    # (#094) cannot reduce it, and "cannot reduce" must mean "then this IS the
+    # topic" — the move `_collect_root` already makes at the top of the tree —
+    # not a failed job and a user with no tree.
+    monkeypatch.chdir(tmp_path)
+    database = _tiny_db(tmp_path)
+    try:
+        maintain(  # no `build=`: the real recipe, which raises below the rung
+            job(),
+            job_context(database, tmp_path),
+            encoder_for=fake_encoder,
+            client=FakeCompletion(),
+        )
+        assert _count(database, "sections") < MIN_POINTS
+        with database.connect() as conn:
+            levels = conn.execute(
+                "SELECT level, COUNT(*) c FROM nodes GROUP BY level"
+            ).fetchall()
+            root = conn.execute(
+                "SELECT b.text AS t FROM briefs b JOIN nodes n "
+                "ON n.id = b.node_id WHERE n.level = ("
+                "SELECT MAX(level) FROM nodes)"
+            ).fetchone()
+        by_level = {int(r["level"]): int(r["c"]) for r in levels}
+        assert by_level == {0: 1}  # one topic, which is also the root
+        assert root["t"]  # briefed, with content
+        with database.connect() as conn:
+            how = conn.execute(
+                "SELECT DISTINCT attached, assignment_similarity AS sim "
+                "FROM node_members"
+            ).fetchall()
+        # nothing was attached by proximity because nothing clustered: the flag
+        # is a claim about HOW a member arrived, and #114/#124 read it.
+        assert [(int(r["attached"]), r["sim"]) for r in how] == [(0, None)]
+        assert_every_leaf_is_reachable(database, "default")
+
+        with database.connect() as conn:
+            stored = export_store.load(conn, "default")
+            assert stored is not None
+            exported = render(conn, collapse(stored, 3))
+        assert "root.md" in exported
+        assert exported["root.md"].strip()
+    finally:
+        database.close()
+
+
+def test_the_recipe_ladder_still_refuses_below_its_floor() -> None:
+    # the collect is the CALLER's decision, not a new rung: `build_tree` reads
+    # this same ClusterError as "the current top is the root" (#094).
+    with pytest.raises(ClusterError):
+        recipe_for(MIN_POINTS - 1)
