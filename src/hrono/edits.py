@@ -33,6 +33,14 @@ def require_node(conn: sqlite3.Connection, tree: str, node_id: int) -> None:
         raise NotFound(f"node not found in tree {tree}: {node_id}")
 
 
+def require_section(conn: sqlite3.Connection, section_id: int) -> None:
+    row = conn.execute(
+        "SELECT 1 FROM sections WHERE id = ?", (section_id,)
+    ).fetchone()
+    if row is None:
+        raise NotFound(f"section not found: {section_id}")
+
+
 def rename(
     conn: sqlite3.Connection, tree: str, node_id: int, title: str
 ) -> None:

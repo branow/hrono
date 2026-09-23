@@ -12,13 +12,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
-from hrono import edits
+from hrono import edits, notes
 from hrono.auth.users import User
 from hrono.server.auth import require_role
 
 router = APIRouter()
 
 Admin = Annotated[User, Depends(require_role("admin"))]
+Reader = Annotated[User, Depends(require_role("reader"))]
 
 
 class Rename(BaseModel):
@@ -27,6 +28,10 @@ class Rename(BaseModel):
 
 class BriefText(BaseModel):
     text: str = Field(min_length=1)
+
+
+class NoteText(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
 
 
 @router.patch("/trees/{name}/nodes/{node_id}")
@@ -57,3 +62,52 @@ def unpin_node(
     with request.app.state.db.write() as conn:
         released = edits.release(conn, name, node_id)
     return {"node_id": node_id, "released": released}
+
+
+@router.post("/trees/{name}/nodes/{node_id}/notes")
+def note_node(
+    name: str, node_id: int, body: NoteText, request: Request, _: Admin
+) -> dict[str, object]:
+    """Annotate a topic; the export shows it to the traversing agent."""
+    with request.app.state.db.write() as conn:
+        edits.require_node(conn, name, node_id)
+        note_id = notes.add(conn, notes.NODE, node_id, body.text)
+    return {"note_id": note_id, "node_id": node_id}
+
+
+@router.post("/trees/{name}/sections/{section_id}/notes")
+def note_section(
+    name: str, section_id: int, body: NoteText, request: Request, _: Admin
+) -> dict[str, object]:
+    """Annotate one chunk of a source."""
+    with request.app.state.db.write() as conn:
+        edits.require_section(conn, section_id)
+        note_id = notes.add(conn, notes.SECTION, section_id, body.text)
+    return {"note_id": note_id, "section_id": section_id}
+
+
+@router.get("/trees/{name}/nodes/{node_id}/notes")
+def read_node_notes(
+    name: str, node_id: int, request: Request, _: Reader
+) -> dict[str, object]:
+    """A topic's notes, newest first."""
+    with request.app.state.db.connect() as conn:
+        edits.require_node(conn, name, node_id)
+        found = notes.get(conn, notes.NODE, node_id)
+    return {"notes": [_note(row) for row in found]}
+
+
+@router.get("/trees/{name}/sections/{section_id}/notes")
+def read_section_notes(
+    name: str, section_id: int, request: Request, _: Reader
+) -> dict[str, object]:
+    """A section's notes, newest first."""
+    with request.app.state.db.connect() as conn:
+        edits.require_section(conn, section_id)
+        found = notes.get(conn, notes.SECTION, section_id)
+    return {"notes": [_note(row) for row in found]}
+
+
+def _note(row: tuple[int, str, str]) -> dict[str, object]:
+    note_id, text, created_at = row
+    return {"id": note_id, "text": text, "created_at": created_at}

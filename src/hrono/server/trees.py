@@ -18,6 +18,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
+from hrono import notes
 from hrono.auth.users import User
 from hrono.cluster import incubator
 from hrono.embed.model import resolve_embedding_model
@@ -104,7 +105,11 @@ def export_tree(
         stored = export_store.load(conn, name)
         if stored is None:
             raise NotFound(f"tree not built: {name}")
-        files = render(conn, collapse(stored, levels))
+        files = render(
+            conn,
+            collapse(stored, levels),
+            notes=notes.rendered(conn, notes.NODE),
+        )
     return {
         "files": [
             {"path": path, "content": files[path]} for path in sorted(files)
