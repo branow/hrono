@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from typer.testing import CliRunner
@@ -254,3 +255,30 @@ def test_a_command_body_has_no_error_handling() -> None:
         source = inspect.getsource(module)
         assert "except ClientError" not in source
         assert "def _run(" not in source
+
+
+def test_a_more_specific_renderer_wins_over_its_base() -> None:
+    # the boundary's lookup is first-match by isinstance, so ORDER decides when
+    # one entry subclasses another. No two entries are related today, so this
+    # pins the RULE rather than a current behaviour — the next person to add a
+    # subclass entry gets a failing test instead of a silent wrong message.
+    from hrono.cli_boundary import RENDERERS, render
+
+    class Base(Exception):
+        pass
+
+    class Specific(Base):
+        pass
+
+    ordered = {Specific: lambda _e: "specific", Base: lambda _e: "base"}
+    with mock.patch.dict(RENDERERS, ordered, clear=True):
+        assert render(Specific()) == "specific"
+        assert render(Base()) == "base"
+
+
+def test_an_error_the_table_does_not_know_is_not_rendered() -> None:
+    # a boundary that renders everything would swallow real bugs into a
+    # one-line message; anything unmapped must escape as itself.
+    from hrono.cli_boundary import render
+
+    assert render(RuntimeError("a genuine bug")) is None

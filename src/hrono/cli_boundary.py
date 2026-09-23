@@ -8,8 +8,13 @@ commands raise typed domain errors and this renders them.
 
 It is a data table, not a ladder. ``RENDERERS`` maps an exception type to the
 function that turns it into one line; a new domain error is an entry, never a
-new ``except``. The mapping is ordered most-specific first, so a subclass can
-render differently from its base.
+new ``except``.
+
+Lookup is first-match by ``isinstance``, so ORDER decides when one entry is a
+subclass of another. No two entries are related today — ``ClientError``,
+``AppError``, ``JSONDecodeError`` and ``UnsafePath`` all descend straight from
+``Exception`` — so the order is currently inert, and this is a rule for whoever
+adds the entry that changes that, not a description of what happens now.
 
 Applied ONCE, as the Typer group's ``invoke``, which is what makes "no new
 boilerplate per command" true rather than aspirational: a command body has no
