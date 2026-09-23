@@ -13,9 +13,11 @@ node back to automation.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 
 from hrono import pins
-from hrono.errors import NotFound
+from hrono.cluster import repair, store
+from hrono.errors import Invalid, NotFound
 from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 
@@ -91,3 +93,102 @@ def release(conn: sqlite3.Connection, tree: str, node_id: int) -> int:
     """
     require_node(conn, tree, node_id)
     return pins.unpin_all(conn, node_id)
+
+
+def reparent(
+    conn: sqlite3.Connection, tree: str, node_id: int, parent_id: int
+) -> None:
+    """Hang a node under a chosen parent, and pin it there.
+
+    Without the pin the next `repair` run re-attaches it by proximity, which
+    is the machine disagreeing with a human and winning quietly (#155).
+    """
+    require_node(conn, tree, node_id)
+    require_node(conn, tree, parent_id)
+    if node_id == parent_id:
+        raise Invalid("a node cannot be its own parent")
+    if parent_id in _descendants(conn, node_id):
+        # a cycle here does not fail loudly: it detaches a whole subtree from
+        # the root, and the export simply stops mentioning it.
+        raise Invalid("that parent is below this node")
+    store.move_child(conn, node_id, parent_id, similarity=None)
+    pins.pin(
+        conn,
+        pins.PARENTING,
+        node_id,
+        reason="reparented by hand",
+        anchor=parent_id,
+    )
+
+
+def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
+    """Fold several topics into one; return the surviving node's id.
+
+    The survivor is the LOWEST id, so the result does not depend on the order
+    an operator happened to list them. Its membership is pinned — the operator
+    decided these belong together — but its BRIEF is not: a merged topic needs
+    a new summary and the next run should write one.
+    """
+    if len(set(node_ids)) < 2:
+        raise Invalid("a merge needs at least two distinct nodes")
+    for node_id in node_ids:
+        require_node(conn, tree, node_id)
+    survivor, *rest = sorted(set(node_ids))
+    for node_id in rest:
+        for section_id, _hash, _path in store.node_member_rows(conn, node_id):
+            conn.execute(
+                "DELETE FROM node_members WHERE section_id = ?", (section_id,)
+            )
+            store.add_member(
+                conn, survivor, section_id, forced=False, similarity=None
+            )
+        store.delete_node(conn, node_id)  # its brief and passages cascade
+    for section_id, _hash, _path in store.node_member_rows(conn, survivor):
+        pins.pin(
+            conn,
+            pins.MEMBERSHIP,
+            section_id,
+            reason="merged by hand",
+            anchor=survivor,
+        )
+    return survivor
+
+
+def dissolve(
+    conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
+) -> int:
+    """Retire a topic; its members re-enter the placement rule (#085).
+
+    Nothing is pinned: the operator asked for these chunks to be re-placed, not
+    fixed somewhere else.
+    """
+    require_node(conn, tree, node_id)
+    members = store.node_member_rows(conn, node_id)
+    for section_id, _hash, _path in members:
+        pins.unpin(conn, pins.MEMBERSHIP, section_id)
+    repair.dissolve(conn, tree, node_id, model_name, _batch(conn, tree))
+    return len(members)
+
+
+def _descendants(conn: sqlite3.Connection, node_id: int) -> set[int]:
+    """Every node below ``node_id``, so a reparent cannot form a cycle."""
+    seen: set[int] = set()
+    frontier = [node_id]
+    while frontier:
+        current = frontier.pop()
+        for row in conn.execute(
+            "SELECT child_id FROM node_children WHERE parent_id = ?",
+            (current,),
+        ).fetchall():
+            child = int(row["child_id"])
+            if child not in seen:
+                seen.add(child)
+                frontier.append(child)
+    return seen
+
+
+def _batch(conn: sqlite3.Connection, tree: str) -> int:
+    row = conn.execute(
+        "SELECT batch FROM tree_batch WHERE tree = ?", (tree,)
+    ).fetchone()
+    return int(row["batch"]) if row is not None else 0

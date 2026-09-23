@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from hrono import edits, notes
 from hrono.auth.users import User
+from hrono.embed.model import resolve_embedding_model
 from hrono.server.auth import require_role
 
 router = APIRouter()
@@ -32,6 +33,14 @@ class BriefText(BaseModel):
 
 class NoteText(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
+
+
+class Reparent(BaseModel):
+    to: int
+
+
+class Merge(BaseModel):
+    ids: list[int] = Field(min_length=2)
 
 
 @router.patch("/trees/{name}/nodes/{node_id}")
@@ -111,3 +120,36 @@ def read_section_notes(
 def _note(row: tuple[int, str, str]) -> dict[str, object]:
     note_id, text, created_at = row
     return {"id": note_id, "text": text, "created_at": created_at}
+
+
+@router.post("/trees/{name}/nodes/{node_id}/reparent")
+def reparent_node(
+    name: str, node_id: int, body: Reparent, request: Request, _: Admin
+) -> dict[str, object]:
+    """Hang a topic under a chosen parent (pins)."""
+    with request.app.state.db.write() as conn:
+        edits.reparent(conn, name, node_id, body.to)
+    return {"node_id": node_id, "parent_id": body.to, "pinned": True}
+
+
+@router.post("/trees/{name}/nodes/merge")
+def merge_nodes(
+    name: str, body: Merge, request: Request, _: Admin
+) -> dict[str, object]:
+    """Fold topics into one; the lowest id survives."""
+    with request.app.state.db.write() as conn:
+        survivor = edits.merge(conn, name, body.ids)
+    return {"node_id": survivor, "merged": sorted(set(body.ids))}
+
+
+@router.post("/trees/{name}/nodes/{node_id}/dissolve")
+def dissolve_node(
+    name: str, node_id: int, request: Request, _: Admin
+) -> dict[str, object]:
+    """Retire a topic; its members re-enter the placement rule."""
+    database = request.app.state.db
+    with database.connect() as conn:
+        model = str(resolve_embedding_model(conn, {})["name"])
+    with database.write() as conn:
+        replaced = edits.dissolve(conn, name, node_id, model)
+    return {"node_id": node_id, "members_replaced": replaced}
