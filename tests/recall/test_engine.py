@@ -16,7 +16,11 @@ from hrono.cluster.blend import path_body, register_path_bodies
 from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
-from hrono.ingest.store import insert_section, upsert_content
+from hrono.ingest.store import (
+    insert_passage,
+    insert_section,
+    upsert_content,
+)
 from hrono.recall import fts
 from hrono.recall.engine import recall
 
@@ -302,42 +306,51 @@ def test_the_present_question_mean_sd_got_wrong_is_recovered(
 
 
 def _add_at(conn: object, path: str, body: bytes, vec: list[float]) -> str:
-    """A passage under its OWN document, so the window can diversify."""
+    """A passage stored the way production stores one; returns its URI.
+
+    It used to write `...@v1#chunk-<n>` by hand — a URI shape nothing in hrono
+    emits (#144). Every passage then looked like its own document, so the
+    reserve this test is about was being exercised against fabricated data.
+    Real passages of one file share one URI, which is what makes a document a
+    file at all.
+    """
     digest = content_hash(body)
     upsert_content(conn, digest, body)  # type: ignore[arg-type]
     upsert_vector(conn, digest, MODEL, vec)  # type: ignore[arg-type]
-    section_id = insert_section(
-        conn,  # type: ignore[arg-type]
-        source="repo",
-        address=Address("git", "ex/repo", path, "v1"),
-        start=0,
-        end=len(body),
-        content_hash=digest,
-        ordinal=0,
-    )
+    address = Address("git", "ex/repo", path, "v1")
     ordinal = int(
         conn.execute(  # type: ignore[attr-defined]
             "SELECT COUNT(*) FROM passages WHERE path = ?", (path,)
         ).fetchone()[0]
     )
-    uri = f"git://ex/repo/{path}@v1#chunk-{ordinal}"
-    conn.execute(  # type: ignore[attr-defined]
-        "INSERT INTO passages(section_id, source, source_type, instance, path, "
-        "version, uri, byte_start, byte_end, content_hash, sp_paths, ordinal, "
-        "created_at) VALUES (?, 'repo', 'git', 'ex/repo', ?, 'v1', ?, 0, ?, ?, "
-        "'[]', ?, 't')",
-        (section_id, path, uri, len(body), digest, ordinal),
+    section_id = insert_section(
+        conn,  # type: ignore[arg-type]
+        source="repo",
+        address=address,
+        start=0,
+        end=len(body),
+        content_hash=digest,
+        ordinal=ordinal,
+    )
+    passage_id = insert_passage(
+        conn,  # type: ignore[arg-type]
+        section_id=section_id,
+        source="repo",
+        address=address,
+        start=0,
+        end=len(body),
+        content_hash=digest,
+        sp_paths=(),
+        ordinal=ordinal,
     )
     fts.index_passage(
         conn,  # type: ignore[arg-type]
-        passage_id=int(
-            conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]
-        ),
+        passage_id=passage_id,
         source="repo",
         path=path,
         body=body.decode(),
     )
-    return uri
+    return address.uri
 
 
 def test_recall_lets_a_second_document_into_a_dominated_window(
@@ -384,9 +397,9 @@ def test_recall_lets_a_second_document_into_a_dominated_window(
         with database.connect() as conn:
             result = recall(conn, "bearer?", MODEL, const_encode(unit(0)))
 
-        documents = {hit.uri.split("#")[0] for hit in result.hits}
+        documents = {hit.uri for hit in result.hits}
         assert len(result.hits) == 10  # a full window, not a truncated one
-        assert quiet.split("#")[0] in documents  # the quiet document got in
+        assert quiet in documents  # the quiet document got in
         assert len(documents) == 2
     finally:
         database.close()

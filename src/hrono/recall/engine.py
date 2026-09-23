@@ -74,9 +74,11 @@ def _documents(
 ) -> dict[int, str]:
     """Map each candidate passage to the document it belongs to (#126).
 
-    A document is the passage's URI without its ``#chunk-n`` fragment — the
-    file, not the slice of it, which is the unit a reader would call "the same
-    place".
+    A document is the passage's URI, which addresses the FILE and not the
+    slice of it — the unit a reader would call "the same place". hrono's URIs
+    carry no position (#144): every passage of a file at one version shares
+    one, and where the passage sits inside it lives in ``ordinal`` and
+    ``sp_paths``. So the URI IS the document key, with nothing to strip.
     """
     ids = {pid for pid, _ in vector_hits} | {pid for pid, _ in keyword_hits}
     if not ids:
@@ -86,7 +88,7 @@ def _documents(
         f"SELECT id, uri FROM passages WHERE id IN ({marks})",  # noqa: S608
         tuple(ids),
     ).fetchall()
-    return {int(row["id"]): str(row["uri"]).split("#")[0] for row in rows}
+    return {int(row["id"]): str(row["uri"]) for row in rows}
 
 
 def _render(conn: sqlite3.Connection, passage_id: int, score: float) -> Hit:
