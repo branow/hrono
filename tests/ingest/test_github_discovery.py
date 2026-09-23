@@ -22,12 +22,12 @@ import pytest
 
 from hrono.db.database import Database
 from hrono.ingest import SyncError
+from hrono.ingest.discovery import unit as discovered_unit
+from hrono.ingest.discovery import units as discovered_units
 from hrono.ingest.github import (
     API,
     github_instance,
     github_sync,
-    github_unit,
-    github_units,
     repos,
     validate_github_user,
 )
@@ -108,11 +108,11 @@ def _page(names: list[str], root: Path) -> list[dict[str, str]]:
 
 
 def _fetch_through(base: str):
-    """The real `_get`, pointed at the stub instead of api.github.com."""
-    from hrono.ingest.github import _get
+    """The real HTTP GET, pointed at the stub instead of api.github.com."""
+    from hrono.ingest.api import get_json
 
     def fetch(url: str, headers: dict[str, str], timeout: float):
-        return _get(url.replace(API, base), headers, timeout)
+        return get_json(url.replace(API, base), headers, timeout)
 
     return fetch
 
@@ -202,19 +202,19 @@ def test_each_discovered_repo_keeps_its_own_commit(
             _page(["alpha", "beta"], origins),
         )
     }
-    monkeypatch.setattr(github, "_get", _fetch_through(api))
+    monkeypatch.setattr(github, "get_json", _fetch_through(api))
 
     config = {"name": "acme", "owner": OWNER, "auth": {"method": "none"}}
     cache = tmp_path / "cache" / "acme"
     version = github_sync(config, cache, 60.0)
 
-    units = {u.path: u for u in github_units(config, cache)}
+    units = {u.path: u for u in discovered_units(config, cache)}
     assert set(units) == {"alpha/readme.md", "beta/docs/guide.md"}
     assert units["alpha/readme.md"].version == head_a
     assert units["beta/docs/guide.md"].version == head_b
     assert version not in (head_a, head_b)  # the source's own digest
 
-    one = github_unit(config, cache, "beta/docs/guide.md")
+    one = discovered_unit(config, cache, "beta/docs/guide.md")
     assert one.body == units["beta/docs/guide.md"].body
     assert one.version == head_b
 
@@ -234,7 +234,7 @@ def test_split_addresses_every_repo_as_its_own(
             _page(["alpha", "beta"], origins),
         )
     }
-    monkeypatch.setattr(github, "_get", _fetch_through(api))
+    monkeypatch.setattr(github, "get_json", _fetch_through(api))
 
     database = Database.at(tmp_path / "hrono.db")
     config = {
@@ -288,7 +288,7 @@ def test_the_instance_is_the_owner_root() -> None:
 
 def test_reading_before_a_sync_says_so(tmp_path: Path) -> None:
     with pytest.raises(SyncError) as raised:
-        list(github_units({"owner": OWNER}, tmp_path / "never-synced"))
+        list(discovered_units({"owner": OWNER}, tmp_path / "never-synced"))
 
     assert "synced" in str(raised.value)
 
@@ -315,7 +315,7 @@ def test_an_update_addresses_a_changed_unit_the_same_way(
             _page(["alpha"], origins),
         )
     }
-    monkeypatch.setattr(github, "_get", _fetch_through(api))
+    monkeypatch.setattr(github, "get_json", _fetch_through(api))
 
     database = Database.at(tmp_path / "hrono.db")
     config = {

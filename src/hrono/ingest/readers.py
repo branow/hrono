@@ -8,13 +8,10 @@ it is looking at.
 
 from __future__ import annotations
 
-from hrono.ingest import Reader, SplitError, Unit
+from hrono.ingest import Reader, SplitError, Unit, discovery
+from hrono.ingest.bitbucket import bitbucket_instance
 from hrono.ingest.git_reader import git_instance, git_unit, git_units
-from hrono.ingest.github import (
-    github_instance,
-    github_unit,
-    github_units,
-)
+from hrono.ingest.github import github_instance
 
 __all__ = [
     "READERS",
@@ -28,7 +25,16 @@ __all__ = [
 READERS: dict[str, Reader] = {
     "git": Reader(git_instance, git_units, git_unit),
     "github-user": Reader(
-        github_instance, github_units, github_unit, addresses_as="git"
+        github_instance,
+        discovery.units,
+        discovery.unit,
+        addresses_as="git",
+    ),
+    "bitbucket-workspace": Reader(
+        bitbucket_instance,
+        discovery.units,
+        discovery.unit,
+        addresses_as="git",
     ),
 }
 

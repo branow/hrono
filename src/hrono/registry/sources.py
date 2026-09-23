@@ -82,9 +82,32 @@ class GithubUserSource(BaseModel):
     _not_reserved = field_validator("name")(_reject_reserved)
 
 
+class BitbucketWorkspaceSource(BaseModel):
+    """A workspace's repos, discovered through the provider API (T41.1).
+
+    Same shape as ``GithubUserSource`` — ``owner`` is the workspace slug — and
+    deliberately a separate variant rather than a shared model with a provider
+    field: the discriminator IS the provider, and one type per provider is what
+    lets the tables dispatch without a second branch inside them.
+    """
+
+    name: str
+    type: Literal["bitbucket-workspace"]
+    owner: str
+    auth: GitAuth
+    include: list[str] | None = None
+    exclude: list[str] | None = None
+    filter: GitFilter | None = None
+
+    _not_reserved = field_validator("name")(_reject_reserved)
+
+
 class Source(
     RootModel[
-        Annotated[GitSource | GithubUserSource, Field(discriminator="type")]
+        Annotated[
+            GitSource | GithubUserSource | BitbucketWorkspaceSource,
+            Field(discriminator="type"),
+        ]
     ]
 ):
     """A source, discriminated by its ``type`` (#141).

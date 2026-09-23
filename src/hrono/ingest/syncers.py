@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from hrono.ingest.bitbucket import bitbucket_sync
 from hrono.ingest.git_syncer import git_sync
 from hrono.ingest.github import github_sync
 
@@ -22,4 +23,5 @@ Syncer = Callable[[dict[str, object], Path, float], str]
 SYNCERS: dict[str, Syncer] = {
     "git": git_sync,
     "github-user": github_sync,
+    "bitbucket-workspace": bitbucket_sync,
 }
