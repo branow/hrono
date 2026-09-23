@@ -11,9 +11,11 @@ contributing a term only for the leg(s) where the passage qualified, then cap at
 (#140), so in practice this has weighted one list rather than two; the mechanism
 stays because it is the recipe and a different corpus or embedding model could
 make the other leg fire — but a reader should not infer from the 70/30 that
-both legs are currently in play. There is NO gap-based cutoff — the legs' z-floors alone decide
-membership. Ordering is deterministic (ties break by passage id). An empty union
-returns no hits and the exact explore message. All constants are baked.
+both legs are currently in play.
+
+There is NO gap-based cutoff — the legs' z-floors alone decide membership.
+Ordering is deterministic (ties break by passage id). An empty union returns no
+hits and the exact explore message. All constants are baked.
 
 DIVERSITY IS A RESERVE, NOT A CAP (#126). The window used to have no notion of
 where its hits came from, so one document could fill all ten. A hard per-doc
