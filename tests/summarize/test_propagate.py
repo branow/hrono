@@ -730,8 +730,24 @@ def test_the_judge_reads_what_the_condense_model_wrote(
             )
         leaf = _leaf(conn)
         _upper(conn, 1, leaf)
+        # the condensations exist under the CHEAP model, as condense wrote them
+        for row in conn.execute(
+            "SELECT s.content_hash AS h FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ?",
+            (leaf,),
+        ).fetchall():
+            conn.execute(
+                "INSERT INTO condensations(content_hash, model_name, text, "
+                "input_tokens, output_tokens, created_at) "
+                "VALUES (?, 'cheap', 'the condensed leaf content', 1, 1, 't')",
+                (row["h"],),
+            )
 
     judge = FakeJudge("major")
     _run(db, judge, tmp_path)
 
-    assert judge.calls == BEST_OF  # the leaf WAS judged
+    assert judge.calls == BEST_OF  # the leaf WAS judged ...
+    # ... and judged against REAL content. Under the judge's own model name the
+    # lookup finds nothing, the source is empty, and the panel votes on a blank
+    # page while every call count still looks correct.
+    assert "the condensed leaf content" in judge.requests[0].content
