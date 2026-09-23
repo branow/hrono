@@ -26,6 +26,7 @@ from hrono.jobs import store
 from hrono.jobs.model import Job
 from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import Worker, enqueue
+from hrono.llm.client import LLMError
 
 KEBAB = "abcdefghijklmnopqrstuvwxyz-"
 
@@ -74,6 +75,7 @@ def _run(db: Database, error: Exception) -> sqlite3.Row:
         (ClusterError("the backend is not installed"), "cluster-error"),
         (TooFewPoints("11 < 12"), "too-few-points"),
         (DecryptError("the token is malformed"), "decrypt-error"),
+        (LLMError("no text model available"), "llm-error"),
     ],
 )
 def test_a_job_records_the_failures_own_code(
@@ -114,6 +116,7 @@ def test_every_domain_error_declares_a_unique_kebab_case_code() -> None:
     import hrono.embed.runner  # noqa: F401
     import hrono.ingest  # noqa: F401
     import hrono.ingest.split_op  # noqa: F401
+    import hrono.llm.client  # noqa: F401
 
     codes: dict[str, str] = {}
     for kind in _subclasses(DomainError):

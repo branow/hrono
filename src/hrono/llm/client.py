@@ -22,13 +22,16 @@ from typing import Protocol
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
+from hrono.errors import DomainError
 from hrono.registry import store
 
 _DEFAULT_MAX_TOKENS = 4096
 
 
-class LLMError(Exception):
+class LLMError(DomainError):
     """A completion call failed (reason is client-safe, never a traceback)."""
+
+    code = "llm-error"
 
 
 @dataclass(frozen=True)
