@@ -389,3 +389,68 @@ def test_drain_labels_the_pool_off_the_write_lock(planted: Database) -> None:
 
     assert incubator.drain(planted, TREE, MODEL, core_labeler=labeler) is True
     assert done == [True]
+
+
+def test_a_section_homed_mid_drain_is_not_homed_twice(db: Database) -> None:
+    # #115: the pool is read under the read door and the clustering runs off
+    # the lock, so the write block acts on a SNAPSHOT. Trusting it writes a
+    # second level-0 membership for any section that found a home in between —
+    # the "is in 2 nodes" half of the #086 invariant, in a tree nobody touched.
+    with db.connect() as conn, conn:
+        parked = [
+            add_section(conn, f"core{i}\n".encode(), unit(1))
+            for i in range(MIN_POINTS)
+        ]
+        for section_id in parked:
+            incubator.park(conn, TREE, section_id, batch=1)
+
+    stolen = parked[0]
+
+    def labeler_that_homes_one(vectors: object) -> list[int]:
+        # something else places `stolen` while this drain is computing
+        with db.connect() as conn, conn:
+            incubator.unpark(conn, TREE, stolen)
+            cluster_store.add_member(
+                conn, 1, stolen, forced=False, similarity=0.9
+            )
+        return content_core_labeler(vectors)
+
+    incubator.drain(db, TREE, MODEL, core_labeler=labeler_that_homes_one)
+
+    with db.connect() as conn:
+        homes = conn.execute(
+            "SELECT COUNT(*) FROM node_members m JOIN nodes n "
+            "ON n.id = m.node_id WHERE n.level = 0 AND m.section_id = ?",
+            (stolen,),
+        ).fetchone()[0]
+    assert homes == 1  # exactly one level-0 node, not two
+
+
+def test_a_drain_whose_pool_empties_mid_run_writes_nothing(
+    db: Database,
+) -> None:
+    # the degenerate case of the same race: every section finds a home while
+    # the clustering runs, so there is nothing left to persist.
+    with db.connect() as conn, conn:
+        parked = [
+            add_section(conn, f"core{i}\n".encode(), unit(1))
+            for i in range(MIN_POINTS)
+        ]
+        for section_id in parked:
+            incubator.park(conn, TREE, section_id, batch=1)
+    before = _node_count(db)
+
+    def labeler_that_empties_the_pool(vectors: object) -> list[int]:
+        with db.connect() as conn, conn:
+            for section_id in parked:
+                incubator.unpark(conn, TREE, section_id)
+        return content_core_labeler(vectors)
+
+    incubator.drain(db, TREE, MODEL, core_labeler=labeler_that_empties_the_pool)
+
+    assert _node_count(db) == before  # no node minted for a pool that is gone
+
+
+def _node_count(db: Database) -> int:
+    with db.connect() as conn:
+        return int(conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0])

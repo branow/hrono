@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 
 from hrono.cluster import store
@@ -139,25 +139,61 @@ def drain(
         # residual noise attaches to a pre-existing cluster, so snapshot
         # centroids BEFORE the new cores are added.
         centroids = store.node_centroids(conn, tree, model_name)
+        still = _still_pending(conn, tree, grouped)
         for label, group in grouped.items():
             if label < 0:
                 continue
-            for section_id, _chash, _path in group:
+            members = [s for s, _, _ in group if s in still]
+            if not members:
+                continue
+            for section_id in members:
                 unpark(conn, tree, section_id)
             node_id = store.add_leaf_node(
                 conn,
                 tree,
-                [(section_id, False, None) for section_id, _, _ in group],
+                [(section_id, False, None) for section_id in members],
             )
             record(conn, tree, node_id, "drain", "core")
 
         for section_id, chash, path in grouped.get(-1, []):
+            if section_id not in still:
+                continue
             node_id = _force_assign(
                 conn, tree, section_id, chash, path, model_name, centroids
             )
             if node_id is not None:
                 record(conn, tree, node_id, "drain", "forced")
     return True
+
+
+def _still_pending(
+    conn: sqlite3.Connection,
+    tree: str,
+    grouped: Mapping[int, Sequence[tuple[int, str, str]]],
+) -> frozenset[int]:
+    """Of the sections this drain computed over, which are STILL parked (#115).
+
+    The pool is read under the read door and the clustering runs off the lock,
+    so the write block is acting on a SNAPSHOT. Trusting it writes a second
+    level-0 membership for any section that found a home in between — the "is
+    in 2 nodes" half of the #086 invariant, in a tree nobody has touched since.
+
+    Unreachable while one process owns the database and the worker runs one job
+    at a time, which is why this is a re-check rather than a lock: it costs one
+    query, changes nothing about the shape every heavy op uses (read under the
+    door, reduce off the lock, re-acquire to persist), and makes the persist
+    depend on the state it is persisting into rather than on a promise.
+    """
+    ids = [section for group in grouped.values() for section, _, _ in group]
+    if not ids:
+        return frozenset()
+    marks = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT section_id FROM pending WHERE tree = ? "  # noqa: S608
+        f"AND section_id IN ({marks})",
+        (tree, *ids),
+    ).fetchall()
+    return frozenset(int(row["section_id"]) for row in rows)
 
 
 def age(
