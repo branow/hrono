@@ -22,8 +22,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from hrono.ingest.filter import ingestable
 from hrono.ingest.identity import content_hash
+from hrono.ingest.readers import Reader
 from hrono.ingest.store import get_content
 
 
@@ -72,12 +72,17 @@ def classify(
 
 
 def current_files(
-    cache: Path, filter_config: dict[str, object] | None
+    reader: Reader, config: dict[str, object], cache: Path
 ) -> dict[str, str]:
-    """Return path -> content hash for the cache's ingestable files."""
+    """Return unit path -> content hash for what the source holds NOW.
+
+    The units come from the source's own reader (#143), so a diff over a
+    non-filesystem source asks that source what it has rather than walking a
+    directory that does not exist.
+    """
     return {
-        path: content_hash((cache / path).read_bytes())
-        for path in ingestable(cache, filter_config)
+        unit.path: content_hash(unit.body)
+        for unit in reader.units(config, cache)
     }
 
 
@@ -105,10 +110,11 @@ def stored_files(conn: sqlite3.Connection, source: str) -> dict[str, str]:
 def diff(
     conn: sqlite3.Connection,
     source: str,
+    reader: Reader,
+    config: dict[str, object],
     cache: Path,
-    filter_config: dict[str, object] | None,
 ) -> tuple[Change, ...]:
-    """Classify the source's diff from its stored version to the cache."""
+    """Classify the source's diff from its stored version to its units now."""
     return classify(
-        stored_files(conn, source), current_files(cache, filter_config)
+        stored_files(conn, source), current_files(reader, config, cache)
     )

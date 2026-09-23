@@ -9,6 +9,10 @@ first (an unchanged section inside an edited file maps to itself and stays put),
 then by ordinal for the genuinely edited slots; an old section left unmatched is
 a deletion.
 
+The bytes of a changed unit come from ``fetch``, the source reader's
+by-path lookup (#143), so this path is no more filesystem-bound than the full
+split is.
+
 A changed/deleted/moved file's old sections are dropped (their memberships
 cascade away); the placement rule re-attaches the survivors. Bodies are stored
 by content hash, so a moved file's content is reused and never re-embedded.
@@ -23,14 +27,14 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import register_path_bodies
 from hrono.cluster.placement import SectionDelta
 from hrono.ingest.diff import Change
-from hrono.ingest.split_op import store_file
+from hrono.ingest.readers import Unit
+from hrono.ingest.split_op import store_unit
 from hrono.recall import fts
 
 
@@ -53,7 +57,7 @@ def reconcile(
     source_type: str,
     instance: str,
     version: str,
-    cache: Path,
+    fetch: Callable[[str], Unit],
     changes: Sequence[Change],
 ) -> tuple[SectionDelta, ...]:
     """Mutate the store for a file diff; return the section-level deltas."""
@@ -70,7 +74,7 @@ def reconcile(
                 source_type,
                 instance,
                 version,
-                cache,
+                fetch,
                 change,
             )
         )
@@ -84,12 +88,17 @@ def _apply(
     source_type: str,
     instance: str,
     version: str,
-    cache: Path,
+    fetch: Callable[[str], Unit],
     change: Change,
 ) -> list[SectionDelta]:
     if change.status == "new":
-        stored = store_file(
-            conn, cache, change.path, source, source_type, instance, version
+        stored = store_unit(
+            conn,
+            fetch(change.path),
+            source,
+            source_type,
+            instance,
+            version,
         )
         return [
             SectionDelta("new", h, change.path, section_id=sid)
@@ -111,8 +120,8 @@ def _apply(
     kind = "moved" if change.status == "moved" else "changed"
     old = _old_sections(conn, tree, source, old_path)
     _drop_path(conn, source, old_path)
-    stored = store_file(
-        conn, cache, change.path, source, source_type, instance, version
+    stored = store_unit(
+        conn, fetch(change.path), source, source_type, instance, version
     )
     return _match(kind, change.path, old, stored)
 

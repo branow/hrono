@@ -15,6 +15,7 @@ from hrono.ingest.diff import (
     stored_files,
 )
 from hrono.ingest.identity import Address, content_hash
+from hrono.ingest.readers import READERS
 
 
 def test_new_changed_deleted_unchanged() -> None:
@@ -65,7 +66,9 @@ def cache(tmp_path: Path) -> Path:
 
 
 def test_current_files_honours_the_filter(cache: Path) -> None:
-    files = current_files(cache, {"exclude": ["*.log"]})
+    files = current_files(
+        READERS["git"], {"filter": {"exclude": ["*.log"]}}, cache
+    )
     assert set(files) == {"a.py", "b.py"}  # skip.log excluded -> absent
     assert files["a.py"] == content_hash(b"alpha bytes\n")
 
@@ -111,7 +114,7 @@ def test_diff_end_to_end(db: Database, tmp_path: Path) -> None:
     (root / "new.py").write_text("MOVED")  # same bytes as old.py -> moved
     (root / "added.py").write_text("brand new")  # new
     with db.connect() as conn:
-        changes = set(diff(conn, "repo", root, None))
+        changes = set(diff(conn, "repo", READERS["git"], {}, root))
     assert Change("new.py", "moved", old_path="old.py") in changes
     assert Change("added.py", "new") in changes
     assert not any(c.path == "a.py" for c in changes)  # unchanged, silent

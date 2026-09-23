@@ -1,8 +1,9 @@
 """The ``split`` ingest op: turn a synced source into stored sections/passages.
 
-For a source leaf, reads the source's synced cache (#025), filters the candidate
-files (#026), splits each into sections + passages (#029/#030), assigns identity
-(#031), and persists them with content-addressed bodies (#032 store). The whole
+For a source leaf, asks the type's READER for the source's units (#143 — git's
+are the ingestable files of its synced working tree, #025/#026), splits each
+into sections + passages (#029/#030), assigns identity (#031), and persists
+them with content-addressed bodies (#032 store). The whole
 source is replaced in one transaction (delete-by-source then insert), so a
 re-split of an unchanged cache is idempotent: identical bytes reuse their
 content rows and no sections are duplicated. Registers into the op registry so
@@ -18,13 +19,13 @@ from pathlib import Path
 
 from hrono.cluster.blend import register_path_bodies
 from hrono.ingest import store
-from hrono.ingest.filter import ingestable
 from hrono.ingest.identity import (
     Address,
     content_hash,
     sp_render,
     structure_paths,
 )
+from hrono.ingest.readers import READERS, Unit
 from hrono.ingest.split import structure
 from hrono.ingest.split.constants import section_budget
 from hrono.ingest.split.pack import sections as pack_sections
@@ -43,31 +44,30 @@ def split_source(job: Job, context: JobContext) -> None:
     name = str(job.scope["name"])
     config, version = _load(context, name)
     source_type = str(config["type"])
-    instance = _instance(str(config["url"]))
-    filter_config = config.get("filter")
-    cache = context.cache_for(name)
-    files = ingestable(
-        cache, filter_config if isinstance(filter_config, dict) else None
-    )
+    reader = READERS.get(source_type)
+    if reader is None:
+        raise SplitError(f"no reader for source type: {source_type}")
+    instance = reader.instance(config)
+    paths: list[str] = []
     with context.database.write() as conn:
         store.clear_source(conn, name)
         fts.clear_source(conn, name)
-        register_path_bodies(conn, files)
-        for path in files:
-            store_file(conn, cache, path, name, source_type, instance, version)
+        for unit in reader.units(config, context.cache_for(name)):
+            paths.append(unit.path)
+            store_unit(conn, unit, name, source_type, instance, version)
+        register_path_bodies(conn, paths)
 
 
-def store_file(
+def store_unit(
     conn: sqlite3.Connection,
-    cache: Path,
-    path: str,
+    unit: Unit,
     source: str,
     source_type: str,
     instance: str,
     version: str,
 ) -> tuple[tuple[int, int, str], ...]:
-    """Split one file into sections/passages, returning (id, ordinal, hash)."""
-    raw = (cache / path).read_bytes()
+    """Split one unit into sections/passages, returning (id, ordinal, hash)."""
+    path, raw = unit.path, unit.body
     tree = structure(Path(path), raw)
     address = Address(source_type, instance, path, version)
     stored: list[tuple[int, int, str]] = []
@@ -137,23 +137,6 @@ def _load(context: JobContext, name: str) -> tuple[dict[str, object], str]:
         raise SplitError(f"source not synced: {name}")
     config: dict[str, object] = json.loads(row["config"])
     return config, str(state["version"])
-
-
-def _instance(url: str) -> str:
-    text = url.strip()
-    if "://" in text:
-        text = text.split("://", 1)[1]
-    head = text.split("/", 1)[0]
-    if "@" in head:
-        text = text[text.index("@") + 1 :]
-    text = text.rstrip("/")
-    if text.endswith(".git"):
-        text = text[:-4]
-    slash = text.find("/")
-    colon = text.find(":")
-    if colon != -1 and (slash == -1 or colon < slash):
-        text = text[:colon] + "/" + text[colon + 1 :]
-    return text
 
 
 OPS["split"] = split_source

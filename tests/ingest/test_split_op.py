@@ -10,7 +10,8 @@ from cryptography.fernet import Fernet
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
 from hrono.ingest import diff, store
-from hrono.ingest.split_op import SplitError, _instance, split_source
+from hrono.ingest.readers import READERS, git_instance
+from hrono.ingest.split_op import SplitError, split_source
 from hrono.ingest.sync import sync
 from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job
@@ -235,13 +236,13 @@ def test_split_runs_as_a_registered_job_op(
 
 
 def test_instance_normalises_url_forms() -> None:
-    assert _instance("https://github.com/acme/webphone") == (
+    assert git_instance({"url": "https://github.com/acme/webphone"}) == (
         "github.com/acme/webphone"
     )
-    assert _instance("git@github.com:acme/webphone.git") == (
+    assert git_instance({"url": "git@github.com:acme/webphone.git"}) == (
         "github.com/acme/webphone"
     )
-    assert _instance("ssh://git@gitlab.com/x/y") == "gitlab.com/x/y"
+    assert git_instance({"url": "ssh://git@gitlab.com/x/y"}) == "gitlab.com/x/y"
 
 
 def test_two_working_directories_share_one_cache(
@@ -301,6 +302,12 @@ def test_a_second_process_directory_sees_no_phantom_change(
     monkeypatch.chdir(elsewhere)
     sync(job("sync", "repo"), context)
     with db.connect() as conn:
-        changes = diff.diff(conn, "repo", context.cache_for("repo"), None)
+        changes = diff.diff(
+            conn,
+            "repo",
+            READERS["git"],
+            {"url": "https://example.com/repo.git"},
+            context.cache_for("repo"),
+        )
     assert changes == ()
     db.close()

@@ -1,6 +1,6 @@
 """T34 reconcile: file diff -> section-store mutation + section deltas."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -9,6 +9,7 @@ from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.ingest import reconcile
 from hrono.ingest.diff import Change
+from hrono.ingest.readers import READERS, Unit
 
 SOURCE = "repo"
 TREE = "default"
@@ -35,6 +36,11 @@ def db(tmp_path: Path) -> Iterator[Database]:
     database.close()
 
 
+def _fetch(cache: Path) -> Callable[[str], Unit]:
+    """What `update` hands reconcile: the git reader's by-path unit lookup."""
+    return lambda path: READERS["git"].unit({}, cache, path)
+
+
 def _write(cache: Path, path: str, text: str) -> None:
     (cache / path).write_text(text)
 
@@ -54,7 +60,7 @@ def _seed(db: Database, cache: Path, path: str, text: str) -> int:
     _write(cache, path, text)
     with db.connect() as conn, conn:
         deltas = reconcile.reconcile(
-            conn, **COMMON, cache=cache, changes=[Change(path, "new")]
+            conn, **COMMON, fetch=_fetch(cache), changes=[Change(path, "new")]
         )
         sids = [d.section_id for d in deltas if d.section_id is not None]
         return cluster_store.add_leaf_node(
@@ -68,7 +74,10 @@ def test_new_file_stores_sections_and_new_deltas(
     _write(cache, "f.txt", "alpha content here\n")
     with db.connect() as conn, conn:
         deltas = reconcile.reconcile(
-            conn, **COMMON, cache=cache, changes=[Change("f.txt", "new")]
+            conn,
+            **COMMON,
+            fetch=_fetch(cache),
+            changes=[Change("f.txt", "new")],
         )
     assert deltas and all(d.kind == "new" for d in deltas)
     assert all(d.prior_node_id is None for d in deltas)
@@ -83,7 +92,10 @@ def test_changed_file_swaps_content_and_carries_prior_node(
     _write(cache, "f.txt", "beta rewritten content\n")
     with db.connect() as conn, conn:
         deltas = reconcile.reconcile(
-            conn, **COMMON, cache=cache, changes=[Change("f.txt", "changed")]
+            conn,
+            **COMMON,
+            fetch=_fetch(cache),
+            changes=[Change("f.txt", "changed")],
         )
     new = _hashes(db, "f.txt")
     assert new and new != old  # content swapped in the store
@@ -97,7 +109,10 @@ def test_deleted_file_removes_sections_and_emits_deleted(
     node = _seed(db, cache, "f.txt", "alpha content here\n")
     with db.connect() as conn, conn:
         deltas = reconcile.reconcile(
-            conn, **COMMON, cache=cache, changes=[Change("f.txt", "deleted")]
+            conn,
+            **COMMON,
+            fetch=_fetch(cache),
+            changes=[Change("f.txt", "deleted")],
         )
     assert not _hashes(db, "f.txt")  # gone from the store
     assert deltas and all(
@@ -115,7 +130,7 @@ def test_moved_file_reuses_content_hash_under_new_path(
         deltas = reconcile.reconcile(
             conn,
             **COMMON,
-            cache=cache,
+            fetch=_fetch(cache),
             changes=[Change("new.txt", "moved", old_path="old.txt")],
         )
     assert not _hashes(db, "old.txt")  # old path emptied
@@ -140,7 +155,7 @@ def test_a_move_that_re_splits_the_file_is_a_change_not_a_move(
         deltas = reconcile.reconcile(
             conn,
             **COMMON,
-            cache=cache,
+            fetch=_fetch(cache),
             changes=[Change("data.json", "moved", old_path="data.md")],
         )
     kinds = {d.kind for d in deltas if d.section_id is not None}
@@ -174,7 +189,7 @@ def test_a_moved_delta_carries_the_membership_it_had(
         deltas = reconcile.reconcile(
             conn,
             **COMMON,
-            cache=cache,
+            fetch=_fetch(cache),
             changes=[Change("new.txt", "moved", old_path="old.txt")],
         )
     moved = [d for d in deltas if d.kind == "moved"]

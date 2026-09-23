@@ -76,7 +76,8 @@ from hrono.cluster import store as cluster_store
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
 from hrono.ingest import diff, reconcile
-from hrono.ingest.split_op import _instance, _load
+from hrono.ingest.readers import READERS
+from hrono.ingest.split_op import SplitError, _load
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -162,11 +163,13 @@ def _update_source(
     counter at all.
     """
     config, version = _load(context, name)
-    raw_filter = config.get("filter")
-    filter_config = raw_filter if isinstance(raw_filter, dict) else None
+    source_type = str(config["type"])
+    reader = READERS.get(source_type)
+    if reader is None:
+        raise SplitError(f"no reader for source type: {source_type}")
     cache = context.cache_for(name)
     with context.database.write() as conn:
-        changes = diff.diff(conn, name, cache, filter_config)
+        changes = diff.diff(conn, name, reader, config, cache)
         if not changes:
             return batch
         centroids = cluster_store.node_centroids(conn, tree, model_name)
@@ -174,10 +177,10 @@ def _update_source(
             conn,
             tree=tree,
             source=name,
-            source_type=str(config["type"]),
-            instance=_instance(str(config["url"])),
+            source_type=source_type,
+            instance=reader.instance(config),
             version=version,
-            cache=cache,
+            fetch=lambda path: reader.unit(config, cache, path),
             changes=changes,
         )
         current = _next_batch(conn, tree) if batch is None else batch
