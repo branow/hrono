@@ -39,6 +39,7 @@ from hrono.jobs.worker import Worker, reclaim_stranded
 from hrono.paths import cache_root
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
+from hrono.server.edits import router as edits_router
 from hrono.server.errors import install as install_errors
 from hrono.server.jobs import router as jobs_router
 from hrono.server.trees import router as trees_router
@@ -166,6 +167,7 @@ def create_app(
     app.include_router(users_router)
     app.include_router(jobs_router)
     app.include_router(trees_router)
+    app.include_router(edits_router)
     for descriptor in COLLECTIONS:
         app.include_router(build_router(descriptor))
     return app

@@ -169,8 +169,22 @@ def _brief_text(conn: sqlite3.Connection, node_id: int) -> str:
     return row["text"] if row is not None else ""
 
 
+def _stored_title(conn: sqlite3.Connection, node_id: int) -> str | None:
+    row = conn.execute(
+        "SELECT title FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    title = row["title"]
+    return str(title).strip() or None if title else None
+
+
 def _heading(conn: sqlite3.Connection, node_id: int) -> str:
-    """A short title for a node, taken from its brief's first real line.
+    """A short title for a node: the operator's if they named it (#156).
+
+    A stored title wins outright. Deriving one from the brief is the default,
+    not the rule, and a human who renamed a topic has said something the model
+    cannot: what the topic is FOR in this organisation.
 
     The brief's SHAPE used to leak into navigation (#103): a brief opening with
     a generic ``## Summary`` heading named its export directory ``summary-2``,
@@ -180,6 +194,9 @@ def _heading(conn: sqlite3.Connection, node_id: int) -> str:
     flag a perfectly good brief. A boilerplate heading is skipped, markdown
     emphasis is dropped, and only the first sentence is kept.
     """
+    stored = _stored_title(conn, node_id)
+    if stored:
+        return stored
     for line in _brief_text(conn, node_id).strip().splitlines():
         title = _title(line)
         if title and _slug(title) not in _BOILERPLATE:
