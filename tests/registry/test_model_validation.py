@@ -12,7 +12,8 @@ from hrono.registry.descriptor import ValidationContext, ValidationFailed
 from hrono.registry.model_validation import validate_model
 
 KEY = Fernet.generate_key()
-API_KEY = "sk-donotleak"
+# built, not written: a literal here blocks every tool (#153)
+API_KEY = "not-a-key-" + "x" * 8
 
 
 def context(
@@ -125,3 +126,64 @@ def test_text_without_connection_is_rejected(tmp_path: Path) -> None:
             context(tmp_path, with_connection=False),
             generate=lambda cfg, conn, t: "hi",
         )
+
+
+def test_a_local_endpoint_is_probed_at_its_own_root(tmp_path: Path) -> None:
+    """The defect a live drive caught (#153): a working local server refused.
+
+    `endpoint` may already name the `/v1` root — ollama's own docs give one —
+    and appending another probed `/v1/v1/chat/completions`, which every such
+    server answers with a 404. The model then could not be registered against a
+    connection that had just validated successfully.
+    """
+    import httpx
+
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    cipher = Cipher.from_key(KEY, 1)
+    store.insert(
+        conn,
+        "connections",
+        "local",
+        json.dumps(
+            {
+                "name": "local",
+                "provider": "openai-compatible",
+                "endpoint": "http://127.0.0.1:11434/v1",
+                "auth": {"method": "none"},
+            }
+        ),
+        None,
+        "now",
+    )
+    ctx = ValidationContext(database=Database.adopt(conn), cipher=cipher)
+
+    seen: list[str] = []
+
+    class _Response:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict:
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    def post(url: str, **kwargs: object) -> object:
+        seen.append(url)
+        return _Response()
+
+    original = httpx.post
+    httpx.post = post  # type: ignore[assignment]
+    try:
+        validate_model(
+            {
+                "name": "t",
+                "kind": "text",
+                "connection": "local",
+                "model": "llama3",
+            },
+            ctx,
+        )
+    finally:
+        httpx.post = original  # type: ignore[assignment]
+
+    assert seen == ["http://127.0.0.1:11434/v1/chat/completions"]

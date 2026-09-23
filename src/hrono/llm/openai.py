@@ -16,7 +16,7 @@ A connection's ``endpoint`` overrides the base url — required for
 ``openai-compatible``, optional for ``openai`` (a proxy or gateway) — and its
 key may be absent entirely, which is the normal case for a local server. The
 endpoint may or may not already include the ``/v1`` root; both spellings are in
-the wild and ``_root`` accepts either.
+the wild and ``llm.urls.api_root`` accepts either.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from hrono.llm.client import (
     LLMError,
     Usage,
 )
+from hrono.llm.urls import api_root
 from hrono.registry import store
 
 BASE = "https://api.openai.com"
@@ -66,7 +67,7 @@ class OpenAIClient:
             messages.append({"role": "system", "content": request.system})
         messages.append({"role": "user", "content": request.content})
         payload = self._send(  # type: ignore[operator]
-            _root(base) + "/chat/completions",
+            api_root(base) + "/chat/completions",
             _headers(key),
             {
                 "model": str(request.model["model"]),
@@ -93,7 +94,7 @@ def embeddings(
 
     def encode(texts: list[str]) -> Sequence[Sequence[float]]:
         payload = poster(  # type: ignore[operator]
-            _root(base) + "/embeddings",
+            api_root(base) + "/embeddings",
             _headers(key),
             {"model": name, "input": texts},
             timeout,
@@ -196,18 +197,6 @@ def _vectors(
             raise LLMError("the model server returned a vector out of range")
         ordered[index] = [float(value) for value in vector]
     return ordered
-
-
-def _root(base: str) -> str:
-    """The API root a connection's endpoint names.
-
-    Both conventions are in the wild and both are right: ollama's own docs give
-    ``http://localhost:11434/v1`` while a proxy is usually configured as a bare
-    host. Appending ``/v1`` unconditionally would post to ``/v1/v1/...`` for
-    half the users, so an endpoint that already ends there is taken as it is.
-    """
-    trimmed = base.rstrip("/")
-    return trimmed if trimmed.endswith("/v1") else f"{trimmed}/v1"
 
 
 def _headers(key: str | None) -> dict[str, str]:

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
+from hrono.llm.urls import api_root
 from hrono.registry.descriptor import ValidationFailed
 
 if TYPE_CHECKING:
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 _TIMEOUT = 10.0
 _CLI_TIMEOUT = 15.0
 _DEFAULT_ENDPOINT = "https://api.anthropic.com"
+_OPENAI_ENDPOINT = "https://api.openai.com"
+_BEARER = ("openai", "openai-compatible")
 
 Runner = Callable[[str, str, float], int]
 Probe = Callable[[], bool]
@@ -49,7 +52,19 @@ def validate_connection(
     validator = _VALIDATORS.get(provider)
     if validator is None:
         return
-    validator(config, run if run is not None else _get, timeout)
+    validator(config, run if run is not None else _default(provider), timeout)
+
+
+def _default(provider: str) -> Runner:
+    """The runner a provider authenticates with, resolved at CALL time.
+
+    Anthropic sends ``x-api-key``; the openai-shaped providers send a bearer
+    header. Looked up here rather than held in a table of function objects so
+    that patching either name in this module actually takes effect — a table
+    would capture the original function at import and quietly ignore the
+    patch.
+    """
+    return _bearer_get if provider in _BEARER else _get
 
 
 def _validate_anthropic(
@@ -59,6 +74,44 @@ def _validate_anthropic(
     endpoint = config.get("endpoint") or _DEFAULT_ENDPOINT
     url = str(endpoint).rstrip("/") + "/v1/models"
     status = run(url, key, timeout)
+    if status == 200:
+        return
+    if status in (401, 403):
+        raise ValidationFailed("authentication failed")
+    raise ValidationFailed("cannot reach provider")
+
+
+def _validate_openai(
+    config: dict[str, object], run: Runner, timeout: float
+) -> None:
+    """Listing models costs nothing and proves the key authenticates."""
+    _check_models(config, run, timeout, _OPENAI_ENDPOINT)
+
+
+def _validate_openai_compatible(
+    config: dict[str, object], run: Runner, timeout: float
+) -> None:
+    """A local server has no default address, so it must declare one.
+
+    The model already requires ``endpoint`` for this provider; this is the
+    same rule at the other boundary, so a config that reaches here another way
+    still cannot register something nothing can call.
+    """
+    endpoint = config.get("endpoint")
+    if not endpoint:
+        raise ValidationFailed(
+            "an openai-compatible connection needs an endpoint"
+        )
+    _check_models(config, run, timeout, str(endpoint))
+
+
+def _check_models(
+    config: dict[str, object], run: Runner, timeout: float, fallback: str
+) -> None:
+    auth = config.get("auth")
+    key = str(auth.get("key") or "") if isinstance(auth, dict) else ""
+    endpoint = config.get("endpoint") or fallback
+    status = run(api_root(str(endpoint)) + "/models", key, timeout)
     if status == 200:
         return
     if status in (401, 403):
@@ -105,6 +158,18 @@ def _get(url: str, api_key: str, timeout: float) -> int:
     return response.status_code
 
 
+def _bearer_get(url: str, api_key: str, timeout: float) -> int:
+    """A plain bearer GET, which is what an openai-shaped server expects."""
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        response = httpx.get(url, headers=headers, timeout=timeout)
+    except httpx.HTTPError:
+        return 0
+    return response.status_code
+
+
 _VALIDATORS: dict[str, Callable[..., None]] = {
     "anthropic": _validate_anthropic,
+    "openai": _validate_openai,
+    "openai-compatible": _validate_openai_compatible,
 }

@@ -14,15 +14,26 @@ from hrono.server.app import create_app
 KEY = Fernet.generate_key()
 
 
+# Built rather than written, so this file holds no literal that a secret
+# scanner can mistake for a real key — three tickets were blocked by one that
+# did (#146, #152, #153).
+API_KEY = "not-a-key-" + "x" * 8
+
+
 @pytest.fixture(autouse=True)
 def _valid_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep provider validation offline: every key reports as valid (200)."""
-    monkeypatch.setattr(
-        connection_validation, "_get", lambda url, key, timeout: 200
-    )
+    """Keep provider validation offline: every key reports as valid (200).
 
+    Both runners are patched: anthropic authenticates with `x-api-key` and the
+    openai-shaped providers with a bearer header, so they have different
+    defaults (#153) and a test that patched only one would reach the network
+    for the other.
+    """
+    for name in ("_get", "_bearer_get"):
+        monkeypatch.setattr(
+            connection_validation, name, lambda url, key, timeout: 200
+        )
 
-API_KEY = "sk-provider-supersecret"
 
 ANTHROPIC = {
     "name": "anthropic-main",

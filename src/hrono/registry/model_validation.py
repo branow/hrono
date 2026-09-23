@@ -5,6 +5,11 @@ input) and injectable so the suite runs offline. A model that names a
 ``connection`` resolves it from the connections registry and decrypts its key
 only to reach the provider; the credential never appears in a reason, log, or
 stored row.
+
+The endpoint is resolved through ``llm.urls.api_root`` — the same rule the
+completion client and the connection validator use — because an endpoint may
+already name its ``/v1`` root. Appending one regardless probed
+``/v1/v1/chat/completions`` and refused every working local server (#153).
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Sequence
 
+from hrono.llm.urls import api_root
 from hrono.registry import store
 from hrono.registry.descriptor import ValidationContext, ValidationFailed
 
@@ -135,7 +141,7 @@ def _embed_remote(
 ) -> Sequence:
     import httpx
 
-    url = _base_url(connection) + "/v1/embeddings"
+    url = api_root(_base_url(connection)) + "/embeddings"
     response = httpx.post(
         url,
         headers=_headers(connection),
@@ -161,10 +167,12 @@ def _default_generate(
         "max_tokens": 1,
         "messages": [{"role": "user", "content": "hi"}],
     }
-    if provider == "anthropic":
-        url = _base_url(connection) + "/v1/messages"
-    else:
-        url = _base_url(connection) + "/v1/chat/completions"
+    root = api_root(_base_url(connection))
+    url = (
+        f"{root}/messages"
+        if provider == "anthropic"
+        else (f"{root}/chat/completions")
+    )
     response = httpx.post(
         url, headers=_headers(connection), json=body, timeout=timeout
     )
