@@ -702,3 +702,15 @@ def test_the_ancestor_search_skips_a_level_that_offers_a_choice(
         sole = _childless_upper(conn, 2, 1)[0]  # the only candidate: take it
 
     assert _sole_ancestor(JobContext(db), TREE, 0) == [sole]
+
+
+def test_repair_reports_the_children_it_reparented(db: Database) -> None:
+    # #133: `reparented` is `freed` one level up — a child #123 moved out of a
+    # parent it was attached below TAU into. Without a value assertion the
+    # count could be pinned at zero and the operator would never learn that the
+    # map's shape changed underneath them.
+    _alpha, _stray, _home = _mis_attached(db, with_a_better_home=True)
+
+    outcome = repair.repair(_repair_job(), JobContext(db))
+
+    assert outcome["reparented"] == 1

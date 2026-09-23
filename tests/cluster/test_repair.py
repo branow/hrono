@@ -287,3 +287,39 @@ def test_repair_reports_what_it_did(db: Database) -> None:
 def _nodes(db: Database):
     with db.connect() as conn:
         return conn.execute("SELECT id FROM nodes").fetchall()
+
+
+def test_freed_counts_pioneers_not_migrations(db: Database) -> None:
+    # #133: `freed` is this ticket's headline number — a pioneer #113 released.
+    # It must be able to DISAGREE with `migrated`, or it is just a second name
+    # for the same count and an operator reading "freed: 7" would believe seven
+    # alien members were revisited when the true number is one.
+    with db.connect() as conn, conn:
+        members = [
+            add_section(conn, f"code{i}\n".encode(), unit(0)) for i in range(4)
+        ]
+        pioneer = add_section(conn, b"cooking notes\n", unit(3))
+        strays = [  # ordinary misfits: nearer another cluster, NOT forced
+            add_section(conn, f"cooking-stray{i}\n".encode(), unit(3))
+            for i in range(2)
+        ]
+        married = cluster_store.add_leaf_node(
+            conn,
+            TREE,
+            [(s, False, None) for s in members]
+            + [(pioneer, True, 0.281)]
+            + [(s, False, None) for s in strays],
+        )
+        home = node_of(
+            conn,
+            [
+                add_section(conn, f"cooking{i}\n".encode(), unit(3))
+                for i in range(3)
+            ],
+        )
+        monitor.refresh(conn, TREE, MODEL, [married, home])
+
+    outcome = repair.repair(_job(), job_context(db, Path(".")))
+
+    assert outcome["migrated"] > outcome["freed"]  # they really do disagree
+    assert outcome["freed"] == 1  # exactly the one that was forced
