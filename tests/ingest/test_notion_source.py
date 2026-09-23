@@ -297,7 +297,10 @@ def test_the_instance_is_read_back_from_the_sync(
 
     notion_sync(_config(), cache, 5.0, get=get, post=post)
 
-    assert notion_instance(_config(), cache) == WORKSPACE
+    # a workspace NAME is free text and an instance lands verbatim in a URI:
+    # "Acme HQ" must not produce `notion://Acme HQ/...`, which is not a URI.
+    assert " " not in notion_instance(_config(), cache)
+    assert notion_instance(_config(), cache) == "Acme%20HQ"
     with pytest.raises(SyncError):
         notion_instance(_config(), tmp_path / "never-synced")
 
@@ -373,4 +376,4 @@ def test_split_addresses_a_page_by_workspace_and_edited_time(
         ]
     database.close()
 
-    assert uris == [f"notion://{WORKSPACE}/page-p1.md@2026-09-01T10:00Z"]
+    assert uris == ["notion://Acme%20HQ/page-p1.md@2026-09-01T10:00Z"]

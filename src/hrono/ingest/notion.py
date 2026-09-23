@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from urllib.parse import quote
 
 from hrono.ingest import SyncError
 from hrono.ingest.api import TIMEOUT, get_json, post_json
@@ -264,11 +265,16 @@ def notion_instance(config: dict[str, object], cache: Path) -> str:
     provider once should keep addressing its content the same way afterwards,
     offline included, and a workspace renamed between two calls would
     otherwise split one source's pages across two identities.
+
+    A workspace NAME is free text — "Acme HQ" is a normal one — and an
+    instance lands verbatim in a URI, so it is percent-encoded here. The cache
+    keeps the name as the provider spelled it; only the address is escaped.
     """
     path = cache / WORKSPACE_FILE
     if not path.exists():
         raise SyncError("this source has not been synced yet")
-    return path.read_text().strip() or "workspace"
+    name = path.read_text().strip() or "workspace"
+    return quote(name, safe="")
 
 
 def validate_notion(
