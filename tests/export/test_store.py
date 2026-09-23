@@ -6,7 +6,7 @@ import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
-from hrono.errors import Internal
+from hrono.errors import Conflict, Internal
 from hrono.export.store import load
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
@@ -107,3 +107,75 @@ def test_an_unparented_leaf_below_the_root_still_loads(db: Database) -> None:
 def test_an_empty_tree_is_still_none(db: Database) -> None:
     with db.connect() as conn:
         assert load(conn, "ghost") is None
+
+
+def _forest(conn: object) -> None:
+    """Two nodes at the top level — what a half-built tree looks like."""
+    for level in (1, 1):
+        conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('default', ?, 0, 't')",
+            (level,),
+        )
+
+
+def _job(conn: object, op: str, status: str) -> None:
+    conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO jobs(id, parent_id, tree, op, scope, status, "
+        "created_at, updated_at) VALUES (?, NULL, 'default', ?, '{}', ?, "
+        "'t', 't')",
+        (f"{op}-{status}", op, status),
+    )
+
+
+def test_a_forest_with_no_running_build_is_still_a_defect(
+    db: Database,
+) -> None:
+    # #096: a build that died half-way leaves a PERMANENT forest, and rendering
+    # one silently drops briefs. That must stay loud.
+    with db.connect() as conn, conn:
+        _forest(conn)
+
+    with db.connect() as conn, pytest.raises(Internal, match="single root"):
+        load(conn, "default")
+
+
+def test_a_forest_during_a_build_is_a_conflict_not_a_fault(
+    db: Database,
+) -> None:
+    # #116: `build_tree` commits each level as it recurses, so a read landing
+    # between two levels sees a forest with nothing wrong. 500 there reads as a
+    # server fault, pages an operator and spends the error budget on a tree
+    # that is simply not ready yet.
+    with db.connect() as conn, conn:
+        _forest(conn)
+        _job(conn, "maintain", "running")
+
+    with db.connect() as conn, pytest.raises(Conflict, match="being built"):
+        load(conn, "default")
+
+
+def test_a_finished_build_does_not_excuse_a_forest(db: Database) -> None:
+    # only an IN-FLIGHT job explains it; a job that finished and left a forest
+    # is exactly #096's defect.
+    with db.connect() as conn, conn:
+        _forest(conn)
+        _job(conn, "maintain", "succeeded")
+
+    with db.connect() as conn, pytest.raises(Internal, match="single root"):
+        load(conn, "default")
+
+
+def test_another_trees_build_does_not_excuse_this_forest(
+    db: Database,
+) -> None:
+    with db.connect() as conn, conn:
+        _forest(conn)
+        conn.execute(
+            "INSERT INTO jobs(id, parent_id, tree, op, scope, status, "
+            "created_at, updated_at) VALUES ('other', NULL, 'elsewhere', "
+            "'maintain', '{}', 'running', 't', 't')"
+        )
+
+    with db.connect() as conn, pytest.raises(Internal, match="single root"):
+        load(conn, "default")

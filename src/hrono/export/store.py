@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from hrono.errors import Internal
+from hrono.errors import Conflict, Internal
 from hrono.export.collapse import StoredTree
 
 
@@ -51,7 +51,7 @@ def load(conn: sqlite3.Connection, tree: str) -> StoredTree | None:
     ).fetchall():
         sections.setdefault(int(row["node"]), []).append(int(row["section"]))
 
-    root = _root(tree, node_level)
+    root = _root(conn, tree, node_level)
     return StoredTree(
         root=root,
         node_level=node_level,
@@ -60,14 +60,40 @@ def load(conn: sqlite3.Connection, tree: str) -> StoredTree | None:
     )
 
 
-def _root(tree: str, node_level: dict[int, int]) -> int:
-    """The single node at the top level; a forest there is a DEFECT (#096)."""
+def _root(
+    conn: sqlite3.Connection, tree: str, node_level: dict[int, int]
+) -> int:
+    """The single node at the top level; a forest there is a DEFECT (#096).
+
+    Unless a build is RUNNING (#116). `build_tree` commits each level as it
+    recurses and only `_collect_root` collapses the top, so a read that lands
+    between two levels sees a forest with nothing wrong — and answering 500
+    there reads as a server fault, pages an operator and spends the error
+    budget on a tree that is simply not ready. Same state, two meanings; the
+    tree's own job row is what tells them apart.
+    """
     top = max(node_level.values())
     roots = sorted(nid for nid, level in node_level.items() if level == top)
-    if len(roots) != 1:
-        raise Internal(
-            f"tree is not built to a single root: {len(roots)} nodes at its "
-            f"top level",
-            details={"tree": tree, "level": top, "nodes": roots},
+    if len(roots) == 1:
+        return roots[0]
+    if _building(conn, tree):
+        raise Conflict(
+            f"tree is being built: {tree}",
+            details={"tree": tree, "retry": "after the running job finishes"},
         )
-    return roots[0]
+    raise Internal(
+        f"tree is not built to a single root: {len(roots)} nodes at its "
+        f"top level",
+        details={"tree": tree, "level": top, "nodes": roots},
+    )
+
+
+def _building(conn: sqlite3.Connection, tree: str) -> bool:
+    """Is a job that RESHAPES this tree in flight right now?"""
+    row = conn.execute(
+        "SELECT 1 FROM jobs WHERE tree = ? AND status IN ('pending', 'running')"
+        " AND op IN ('maintain', 'sync-tree', 'build-tree', 'cluster', "
+        "'cluster-briefs', 'settle') LIMIT 1",
+        (tree,),
+    ).fetchone()
+    return row is not None

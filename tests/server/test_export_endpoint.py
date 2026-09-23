@@ -60,9 +60,15 @@ def brief(conn: object, node_id: int, text: str) -> None:
 
 
 class Harness:
-    def __init__(self, client: TestClient, tokens: dict[str, str]) -> None:
+    def __init__(
+        self,
+        client: TestClient,
+        tokens: dict[str, str],
+        conn: object = None,
+    ) -> None:
         self.client = client
         self.tokens = tokens
+        self.conn = conn
 
     def auth(self, role: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.tokens[role]}"}
@@ -105,7 +111,7 @@ def harness(tmp_path: Path) -> Iterator[Harness]:
     conn.commit()
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
-        yield Harness(client, tokens)
+        yield Harness(client, tokens, conn)
     conn.close()
 
 
@@ -216,3 +222,27 @@ def test_a_tree_that_is_not_built_to_one_root_fails_loudly(
     conn.close()
     assert resp.status_code == 500
     assert "single root" in resp.json()["error"]["message"]
+
+
+def test_export_during_a_build_is_409_not_500(harness: Harness) -> None:
+    # #116: the 500 path logs at error level with a traceback, so a transient
+    # mid-build read pages an operator for a tree that is simply not ready.
+    conn = harness.conn
+    for _ in range(2):
+        conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('default', 1, 0, 't')"
+        )
+    conn.execute(
+        "INSERT INTO jobs(id, parent_id, tree, op, scope, status, "
+        "created_at, updated_at) VALUES ('m1', NULL, 'default', 'maintain', "
+        "'{}', 'running', 't', 't')"
+    )
+    conn.commit()
+
+    response = harness.client.get(
+        "/trees/default/export", headers=harness.auth("reader")
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
