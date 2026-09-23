@@ -22,6 +22,15 @@ for a caller who wants to own the list. The size, symlink and binary gates are
 not patterns and are never dropped. A zero-byte file is skipped here (#099's
 first half): it carries no content by definition, so admitting it only makes
 every ``diff`` report it as new for ever.
+
+CASE: the baked ignore list matches a LOWERCASED path; the caller's own
+``exclude`` and ``include`` match literally. That asymmetry is deliberate and
+stays (#118). The baked list is a safety net and must be case-insensitive, or
+``LOGO.SVG`` walks straight past the asset rule and F5 reopens. The caller's
+globs are their instructions, and every ordinary glob tool treats those
+literally — making them case-insensitive would silently widen an ``exclude``
+beyond what was written. Unifying breaks something in either direction, so the
+behaviour is kept and written down instead.
 """
 
 from __future__ import annotations

@@ -166,3 +166,55 @@ def test_a_zero_byte_file_is_never_ingestable(tmp_path: Path) -> None:
     (tmp_path / "py.typed").write_text("")
     (tmp_path / "real.py").write_text("x = 1\n")
     assert ingestable(tmp_path, None) == ("real.py",)
+
+
+def _lockfile_tree(root: "Path") -> None:
+    """A JS-shaped repo: the lockfiles npm and pnpm actually write."""
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "app.js").write_text("run()\n")
+    (root / "src" / "locking.py").write_text("import threading\n")
+    for name in (
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "npm-shrinkwrap.json",
+        "yarn.lock",
+        "package-lock.example.json",
+    ):
+        (root / name).write_text("{}\n")
+    (root / "nested").mkdir()
+    (root / "nested" / "package-lock.json").write_text("{}\n")
+
+
+def test_lockfiles_are_not_ingested_by_default(tmp_path: Path) -> None:
+    # #118: `**/*.lock` alone missed npm's DEFAULT lockfile — typically the
+    # largest file in a JS repo and pure resolved-dependency metadata, i.e.
+    # exactly the per-section embed and condense cost #104 exists to avoid.
+    _lockfile_tree(tmp_path)
+
+    kept = ingestable(tmp_path, None)
+
+    assert "package-lock.json" not in kept
+    assert "pnpm-lock.yaml" not in kept
+    assert "npm-shrinkwrap.json" not in kept
+    assert "nested/package-lock.json" not in kept
+    assert "yarn.lock" not in kept
+
+
+def test_a_file_that_merely_mentions_lock_is_ingested(tmp_path: Path) -> None:
+    # exact names, never prefixes.
+    _lockfile_tree(tmp_path)
+
+    kept = ingestable(tmp_path, None)
+
+    assert "src/locking.py" in kept
+    assert "package-lock.example.json" in kept
+
+
+def test_an_explicit_include_re_admits_a_lockfile(tmp_path: Path) -> None:
+    # every baked group is re-admissible file by file — someone auditing a
+    # supply chain may want exactly this file.
+    _lockfile_tree(tmp_path)
+
+    kept = ingestable(tmp_path, {"include": ["package-lock.json"]})
+
+    assert "package-lock.json" in kept

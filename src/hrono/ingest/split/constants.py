@@ -82,7 +82,15 @@ DEFAULT_IGNORE: dict[str, tuple[str, ...]] = {
         "**/vendor/**",
         "**/third_party/**",
     ),
-    "locks": ("**/*.lock",),
+    # exact NAMES, never prefixes: a real file called
+    # `package-lock.example.json` is documentation, not a lockfile (#118).
+    "locks": (
+        "**/*.lock",  # yarn, uv, poetry, Cargo, composer, Gemfile
+        "**/package-lock.json",  # npm's default, and the biggest miss
+        "**/npm-shrinkwrap.json",
+        "**/pnpm-lock.yaml",
+        "**/bun.lockb",  # binary, so the null-byte sniff catches it too
+    ),
     "assets": (
         "**/*.svg",
         "**/*.eps",
