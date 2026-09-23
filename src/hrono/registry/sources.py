@@ -102,10 +102,41 @@ class BitbucketWorkspaceSource(BaseModel):
     _not_reserved = field_validator("name")(_reject_reserved)
 
 
+class BasicAuth(BaseModel):
+    """Atlassian's api-token scheme: the account email plus a token."""
+
+    method: Literal["basic"]
+    email: str
+    token: str
+
+
+class Selector(BaseModel):
+    """One scope selector; the fields it needs depend on its own type."""
+
+    type: str
+    key: str | None = None
+    id: str | None = None
+
+
+class ConfluenceSource(BaseModel):
+    """Pages from a confluence site, narrowed by a union of selectors (T42)."""
+
+    name: str
+    type: Literal["confluence"]
+    base_url: str
+    auth: BasicAuth
+    scope: list[Selector] | None = None
+
+    _not_reserved = field_validator("name")(_reject_reserved)
+
+
 class Source(
     RootModel[
         Annotated[
-            GitSource | GithubUserSource | BitbucketWorkspaceSource,
+            GitSource
+            | GithubUserSource
+            | BitbucketWorkspaceSource
+            | ConfluenceSource,
             Field(discriminator="type"),
         ]
     ]

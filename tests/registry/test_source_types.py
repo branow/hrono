@@ -91,9 +91,12 @@ def test_an_unknown_source_type_is_rejected_by_name(
     client: tuple[TestClient, dict[str, str]],
 ) -> None:
     opened, admin = client
+    # an unregistered tag, deliberately: `confluence` became a real variant in
+    # #149, and a test that keeps using it would stop testing the discriminator
+    # and start testing a body with missing fields.
     response = opened.post(
         "/sources",
-        json={"name": "wiki", "type": "confluence", "space": SPACE},
+        json={"name": "wiki", "type": "sharepoint", "space": SPACE},
         headers=admin,
     )
 

@@ -15,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from hrono.ingest.bitbucket import bitbucket_sync
+from hrono.ingest.confluence import confluence_sync
 from hrono.ingest.git_syncer import git_sync
 from hrono.ingest.github import github_sync
 
@@ -24,4 +25,5 @@ SYNCERS: dict[str, Syncer] = {
     "git": git_sync,
     "github-user": github_sync,
     "bitbucket-workspace": bitbucket_sync,
+    "confluence": confluence_sync,
 }

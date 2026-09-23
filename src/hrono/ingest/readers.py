@@ -8,8 +8,9 @@ it is looking at.
 
 from __future__ import annotations
 
-from hrono.ingest import Reader, SplitError, Unit, discovery
+from hrono.ingest import Reader, SplitError, Unit, discovery, pages
 from hrono.ingest.bitbucket import bitbucket_instance
+from hrono.ingest.confluence import confluence_instance
 from hrono.ingest.git_reader import git_instance, git_unit, git_units
 from hrono.ingest.github import github_instance
 
@@ -36,6 +37,7 @@ READERS: dict[str, Reader] = {
         discovery.unit,
         addresses_as="git",
     ),
+    "confluence": Reader(confluence_instance, pages.units, pages.unit),
 }
 
 

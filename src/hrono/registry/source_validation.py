@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from hrono.ingest.bitbucket import validate_bitbucket_workspace
+from hrono.ingest.confluence import validate_confluence
 from hrono.ingest.github import validate_github_user
 from hrono.registry.git_validation import validate_git
 
@@ -26,6 +27,7 @@ VALIDATORS: dict[str, Validator] = {
     "git": validate_git,
     "github-user": validate_github_user,
     "bitbucket-workspace": validate_bitbucket_workspace,
+    "confluence": validate_confluence,
 }
 
 
