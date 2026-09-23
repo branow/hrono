@@ -1,4 +1,4 @@
-"""The ``sources`` collection: declarative git repo config (T7.1).
+"""The ``sources`` collection: source config, discriminated by type (T7.1).
 
 Registering a source stores config only; nothing is pulled. Reach + auth
 validation fills the descriptor's hook in a follow-up (#013).
@@ -19,12 +19,12 @@ matches on ``source_type`` as well as name — so this is the remaining one.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, RootModel, field_validator
 
 from hrono.registry.descriptor import Descriptor
-from hrono.registry.git_validation import validate_git
+from hrono.registry.source_validation import validate_source
 
 RESERVED_PREFIX = "node-"
 
@@ -62,10 +62,21 @@ class GitSource(BaseModel):
         return value
 
 
+class Source(RootModel[Annotated[GitSource, Field(discriminator="type")]]):
+    """A source, discriminated by its ``type`` (#141).
+
+    One variant today, and the union is the point: a reader M8 adds is a model
+    variant plus a validator entry, with no change to the registry engine that
+    stores it. An unknown ``type`` is rejected here, by pydantic, with the known
+    tags in the message — the engine turns that into a 422 like any other
+    invalid body.
+    """
+
+
 SOURCES = Descriptor(
     collection="sources",
-    model=GitSource,
+    model=Source,
     secret_paths=(("auth", "token"), ("auth", "key")),
     write_role="writer",
-    validate=validate_git,
+    validate=validate_source,
 )
