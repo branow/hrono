@@ -53,13 +53,17 @@ def test_the_cli_client_runs_in_the_contexts_own_directory(
 ) -> None:
     # anchored on the database like every other data path (#098), never the
     # server's cwd — the CLI would otherwise read that project's memory.
+    # #136: assert the PROPERTY, not the path. The earlier version compared
+    # `cli_dir()` to itself and checked a parent that holds however it is
+    # computed, so `cli_dir()` returning the clone cache passed both.
     context = job_context(db, tmp_path)
-    client = client_for(context, _model("cli"))
+    cli_dir = client_for(context, _model("cli"))._workdir  # noqa: SLF001
+    clones = context.cache_root
 
-    assert client._workdir == context.cli_dir()  # noqa: SLF001
-    assert (
-        context.cli_dir().parent == context.cache_root.parent.parent / "cache"
-    )
+    assert cli_dir != clones  # not the clone root itself
+    assert clones not in cli_dir.parents  # and not inside it
+    assert cli_dir not in clones.parents  # nor an ancestor of the clones
+    assert cli_dir.is_relative_to(clones.parent)  # still hrono-owned
 
 
 def test_an_anthropic_connection_still_resolves_to_the_sdk_client(
