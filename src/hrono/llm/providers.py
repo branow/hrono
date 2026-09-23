@@ -20,6 +20,7 @@ from collections.abc import Callable
 from hrono.jobs.ops import JobContext
 from hrono.llm.claude_code import ClaudeCodeClient
 from hrono.llm.client import AnthropicClient, Completion, LLMError
+from hrono.llm.openai import OpenAIClient
 from hrono.registry import store
 
 _DEFAULT_PROVIDER = "anthropic"
@@ -27,13 +28,19 @@ _DEFAULT_PROVIDER = "anthropic"
 
 def client_for(context: JobContext, model: dict[str, object]) -> Completion:
     """The completion client this model's connection asks for."""
-    builder = _PROVIDERS.get(_provider(context, model))
+    builder = _PROVIDERS.get(provider_for(context, model))
     if builder is None:
         raise LLMError(f"unsupported provider for model: {model.get('name')}")
     return builder(context)
 
 
-def _provider(context: JobContext, model: dict[str, object]) -> str:
+def provider_for(context: JobContext, model: dict[str, object]) -> str:
+    """The provider named by this model's connection (#151).
+
+    Shared with the embedding side, which dispatches on the same answer: a
+    model is remote or local by whether it HAS a connection, and which remote
+    by what that connection says it is.
+    """
     name = model.get("connection")
     if name is None:
         return _DEFAULT_PROVIDER
@@ -60,7 +67,14 @@ def _claude_code(context: JobContext) -> Completion:
     return ClaudeCodeClient(context.cli_dir())
 
 
+def _openai(context: JobContext) -> Completion:
+    """Both openai-shaped providers are one client; the connection differs."""
+    return OpenAIClient(context.database, context.cipher)
+
+
 _PROVIDERS: dict[str, Callable[[JobContext], Completion]] = {
     "anthropic": _anthropic,
     "claude-code": _claude_code,
+    "openai": _openai,
+    "openai-compatible": _openai,
 }

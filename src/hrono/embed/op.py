@@ -2,16 +2,19 @@
 
 Resolves the target embedding model (named by the job scope, or the sole
 embedding-kind model in the registry), selects the content hashes that have no
-vector for it yet (#032 ``contents``), embeds only those in batches via the
-injectable runner, and stores each vector keyed by (hash, model). A re-run finds
-nothing missing (idempotent); a different model embeds under its own key. Reads
-only local content — no secret — so it needs no cipher. Registers into the op
+vector for it yet (#032 ``contents``), embeds only those in batches through the
+encoder that model asks for — in process, or over HTTP when it names a
+connection (#151) — and stores each vector keyed by (hash, model). A re-run
+finds nothing missing (idempotent); a different model embeds under its own
+key. A local model reads only local content and needs no cipher; a remote one
+needs it to read its connection's key. Registers into the op
 registry so the worker dispatches ``embed``.
 """
 
 from __future__ import annotations
 
 from hrono.embed import store
+from hrono.embed.encoders import encoder_for_model
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import EmbedError, Encoder, batch_size, embed_texts
 from hrono.embed.runner import encoder_for as _default_encoder_for
@@ -38,7 +41,7 @@ def embed(
         return
 
     texts = [(body or b"").decode("utf-8", "replace") for body in bodies]
-    encode: Encoder = factory(str(config["model"]))  # type: ignore[operator]
+    encode: Encoder = encoder_for_model(context, config, factory)
     vectors = embed_texts(texts, batch_size(_params(config)), encode)
 
     dims = _declared_dims(config)

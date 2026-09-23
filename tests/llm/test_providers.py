@@ -97,10 +97,11 @@ def test_an_unknown_connection_is_one_llm_error(
 def test_an_unsupported_provider_is_one_llm_error(
     db: Database, tmp_path: Path
 ) -> None:
-    # openai / openai-compatible are later MAP ENTRIES (T44.1/T44.3), and until
-    # then a user who registers one must be told, not left to fail at call time.
+    # a provider hrono does not serve must be told at RESOLVE time, not left
+    # to fail at call time. `openai` was this test's example until #151 made
+    # it real; the point is the table, so any absent name does.
     with db.connect() as conn, conn:
-        _connection(conn, "future", "openai")
+        _connection(conn, "future", "gemini")
 
     with pytest.raises(LLMError, match="unsupported provider"):
         client_for(job_context(db, tmp_path), _model("future"))
