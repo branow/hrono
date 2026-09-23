@@ -222,22 +222,35 @@ def sample(
     ``prefer`` jumps the round-robin: clusters holding a force-assigned member
     are the ones 0017 promised to re-check preferentially, and a pioneer only
     leaves once someone looks at it again (#113).
+
+    The preferred slice ROTATES with the batch, exactly as the remainder does
+    (#129). Taking it in sorted id order looked harmless while a corpus held
+    fewer forced holders than ``SAMPLE_SIZE`` — and starved every holder past
+    the thirty-second for ever once it did not, because the same lowest ids
+    were re-checked on every batch regardless of the clock.
     """
     candidates = sorted(set(node_ids) - set(exclude))
     if not candidates or k <= 0:
         return ()
     if k >= len(candidates):
         return tuple(candidates)
-    preferred = set(prefer)
-    first = [n for n in candidates if n in preferred][:k]
-    rest = [n for n in candidates if n not in preferred]
+    preferred = [n for n in candidates if n in set(prefer)]
+    first = _rotate(preferred, k, seed)
+    rest = [n for n in candidates if n not in set(prefer)]
     room = k - len(first)
     if room <= 0 or not rest:
         return tuple(first)
     if room >= len(rest):
         return tuple(first + rest)
-    start = seed % len(rest)
-    return tuple(first + [rest[(start + i) % len(rest)] for i in range(room)])
+    return tuple(first + _rotate(rest, room, seed))
+
+
+def _rotate(pool: Sequence[int], k: int, seed: int) -> list[int]:
+    """Up to ``k`` from ``pool``, starting where the batch clock points."""
+    if len(pool) <= k:
+        return list(pool)
+    start = seed % len(pool)
+    return [pool[(start + i) % len(pool)] for i in range(k)]
 
 
 def _batch(conn: sqlite3.Connection, tree: str) -> int:

@@ -244,3 +244,49 @@ def test_the_monitor_reports_the_rate_and_whether_it_moved(
     assert first["measured"] > 0
     assert first["rate"] == first["baseline"]  # the first run IS the baseline
     assert first["above_baseline"] is False
+
+
+def test_the_preferred_slice_rotates_with_the_batch() -> None:
+    # #129: taking the preferred clusters in sorted id order starved every
+    # holder past the thirty-second FOR EVER once a corpus had more forced
+    # holders than SAMPLE_SIZE — the same lowest ids re-checked on every batch,
+    # whatever the clock said.
+    holders = list(range(1, 50))
+    nodes = list(range(1, 200))
+
+    # the window advances one holder per batch, so covering a pool of P with a
+    # window of k takes P - k + 1 batches — a BOUND, derived rather than tuned.
+    batches = len(holders) - 32 + 1
+    picks = [
+        monitor.sample(nodes, [], k=32, seed=seed, prefer=holders)
+        for seed in range(batches)
+    ]
+
+    assert len(set(picks)) > 1  # the clock actually moves it
+    covered = {node for pick in picks for node in pick if node in holders}
+    assert covered == set(holders)  # no holder starves
+
+    # and it really is bounded: one batch short leaves someone out
+    short = {node for pick in picks[:-1] for node in pick if node in holders}
+    assert short != set(holders)
+
+
+def test_rotation_is_still_deterministic_and_bounded() -> None:
+    holders = list(range(1, 50))
+    nodes = list(range(1, 200))
+
+    first = monitor.sample(nodes, [], k=32, seed=7, prefer=holders)
+
+    assert first == monitor.sample(nodes, [], k=32, seed=7, prefer=holders)
+    assert len(first) == 32
+    assert set(first) <= set(nodes)
+
+
+def test_a_small_preferred_pool_is_taken_whole() -> None:
+    # below the cap there is nothing to rotate: every holder is checked every
+    # batch, which is the behaviour #113 shipped and must not change.
+    nodes = list(range(1, 200))
+
+    for seed in range(3):
+        picked = monitor.sample(nodes, [], k=32, seed=seed, prefer=[5, 9])
+        assert set(picked) >= {5, 9}
