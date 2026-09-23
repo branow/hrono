@@ -19,13 +19,12 @@ rerooting the export (#096), and a refused entry costs only itself.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from hrono.client.http import ClientError, from_profile, message
+from hrono.client.http import from_profile
 
 app = typer.Typer(add_completion=False, help="Build and maintain trees.")
 
@@ -34,39 +33,22 @@ class UnsafePath(Exception):
     """A payload path tried to escape the output directory."""
 
 
-def _run(action: Callable[[], None]) -> None:
-    try:
-        action()
-    except ClientError as exc:
-        typer.echo(message(exc), err=True)
-        raise typer.Exit(1) from exc
-    except UnsafePath as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
-
-
 @app.command("maintain")
 def maintain(name: str) -> None:
     """Kick a full build-to-root maintain for a tree; prints the job id."""
 
-    def action() -> None:
-        result = from_profile().post(f"/trees/{name}/maintain", {})
-        job_id = result.get("job_id") if isinstance(result, dict) else None
-        typer.echo(f"Started maintain job {job_id} for tree '{name}'.")
-
-    _run(action)
+    result = from_profile().post(f"/trees/{name}/maintain", {})
+    job_id = result.get("job_id") if isinstance(result, dict) else None
+    typer.echo(f"Started maintain job {job_id} for tree '{name}'.")
 
 
 @app.command("sync")
 def sync(name: str) -> None:
     """Bring a tree up to date after its sources changed; prints the job id."""
 
-    def action() -> None:
-        result = from_profile().post(f"/trees/{name}/sync", {})
-        job_id = result.get("job_id") if isinstance(result, dict) else None
-        typer.echo(f"Started sync job {job_id} for tree '{name}'.")
-
-    _run(action)
+    result = from_profile().post(f"/trees/{name}/sync", {})
+    job_id = result.get("job_id") if isinstance(result, dict) else None
+    typer.echo(f"Started sync job {job_id} for tree '{name}'.")
 
 
 @app.command("export")
@@ -77,35 +59,29 @@ def export(
 ) -> None:
     """Materialize a tree's rendered map into a folder under ``--out``."""
 
-    def action() -> None:
-        result = from_profile().get(f"/trees/{name}/export?levels={levels}")
-        files = result.get("files", []) if isinstance(result, dict) else []
-        written, refused = _materialize(out, files)
-        plural = "file" if written == 1 else "files"
-        typer.echo(f"Wrote {written} {plural} to {out}.")
-        if refused:
-            listed = ", ".join(repr(path) for path in refused[:3])
-            raise UnsafePath(
-                f"refused {len(refused)} of {len(files)} files that would "
-                f"write outside {out}: {listed}"
-            )
-
-    _run(action)
+    result = from_profile().get(f"/trees/{name}/export?levels={levels}")
+    files = result.get("files", []) if isinstance(result, dict) else []
+    written, refused = _materialize(out, files)
+    plural = "file" if written == 1 else "files"
+    typer.echo(f"Wrote {written} {plural} to {out}.")
+    if refused:
+        listed = ", ".join(repr(path) for path in refused[:3])
+        raise UnsafePath(
+            f"refused {len(refused)} of {len(files)} files that would "
+            f"write outside {out}: {listed}"
+        )
 
 
 @app.command("pending")
 def pending(name: str) -> None:
     """List the tree's incubator pool — chunks parked in no node yet."""
 
-    def action() -> None:
-        result = from_profile().get(f"/trees/{name}/pending")
-        pool = result.get("pending", []) if isinstance(result, dict) else []
-        for entry in pool:
-            typer.echo(f"{entry['path']} (batch {entry['batch']})")
-        chunks = "chunk" if len(pool) == 1 else "chunks"
-        typer.echo(f"{len(pool)} pending {chunks} in tree '{name}'.")
-
-    _run(action)
+    result = from_profile().get(f"/trees/{name}/pending")
+    pool = result.get("pending", []) if isinstance(result, dict) else []
+    for entry in pool:
+        typer.echo(f"{entry['path']} (batch {entry['batch']})")
+    chunks = "chunk" if len(pool) == 1 else "chunks"
+    typer.echo(f"{len(pool)} pending {chunks} in tree '{name}'.")
 
 
 def _materialize(

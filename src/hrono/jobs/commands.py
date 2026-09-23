@@ -12,21 +12,12 @@ command (#139).
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 
 import typer
 
-from hrono.client.http import ClientError, from_profile, message
+from hrono.client.http import from_profile
 
 app = typer.Typer(add_completion=False, help="Inspect background jobs.")
-
-
-def _run(action: Callable[[], None]) -> None:
-    try:
-        action()
-    except ClientError as exc:
-        typer.echo(message(exc), err=True)
-        raise typer.Exit(1) from exc
 
 
 @app.command("list")
@@ -36,42 +27,34 @@ def list_jobs(
 ) -> None:
     """List jobs, most useful filtered by op or status."""
 
-    def action() -> None:
-        query = [
-            f"{key}={value}"
-            for key, value in (("op", op), ("status", status))
-            if value
-        ]
-        suffix = f"?{'&'.join(query)}" if query else ""
-        rows = from_profile().get(f"/jobs{suffix}")
-        if not isinstance(rows, list) or not rows:
-            typer.echo("no jobs")
-            return
-        for row in rows:
-            typer.echo(
-                f"{row.get('id')}  {row.get('op'):<12} {row.get('status')}"
-            )
-
-    _run(action)
+    query = [
+        f"{key}={value}"
+        for key, value in (("op", op), ("status", status))
+        if value
+    ]
+    suffix = f"?{'&'.join(query)}" if query else ""
+    rows = from_profile().get(f"/jobs{suffix}")
+    if not isinstance(rows, list) or not rows:
+        typer.echo("no jobs")
+        return
+    for row in rows:
+        typer.echo(f"{row.get('id')}  {row.get('op'):<12} {row.get('status')}")
 
 
 @app.command("get")
 def get_job(job_id: str) -> None:
     """Show one job, including what it reported doing."""
 
-    def action() -> None:
-        job = from_profile().get(f"/jobs/{job_id}")
-        if not isinstance(job, dict):
-            typer.echo("no such job", err=True)
-            raise typer.Exit(1)
-        typer.echo(f"{job.get('id')}  {job.get('op')}  {job.get('status')}")
-        if job.get("error"):
-            typer.echo(f"error: {job['error']}")
-        result = job.get("result")
-        if result is None:
-            typer.echo("result: none reported")
-            return
-        typer.echo("result:")
-        typer.echo(json.dumps(result, indent=2))
-
-    _run(action)
+    job = from_profile().get(f"/jobs/{job_id}")
+    if not isinstance(job, dict):
+        typer.echo("no such job", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"{job.get('id')}  {job.get('op')}  {job.get('status')}")
+    if job.get("error"):
+        typer.echo(f"error: {job['error']}")
+    result = job.get("result")
+    if result is None:
+        typer.echo("result: none reported")
+        return
+    typer.echo("result:")
+    typer.echo(json.dumps(result, indent=2))

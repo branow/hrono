@@ -205,3 +205,52 @@ def test_rm_says_whether_the_config_is_gone_or_reset(
     )
     reset = runner.invoke(app, ["prompts", "rm", "brief"]).stdout
     assert "Reset" in reset
+
+
+def test_one_boundary_renders_every_cli_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # #048: six near-identical `_run` helpers rendered CLI errors, and #138
+    # added two more while building the config CLI. Presentation is not each
+    # command's business — commands raise, the boundary renders, and a command
+    # body carries no error handling at all.
+    from hrono.client.http import ClientError
+
+    def boom() -> object:
+        raise ClientError(401, {"error": {"message": "bad token"}})
+
+    monkeypatch.setattr(
+        "hrono.tree.commands.from_profile", lambda: _Raiser(boom)
+    )
+
+    result = runner.invoke(app, ["tree", "sync", "default"])
+
+    assert result.exit_code == 1
+    assert "Traceback" not in result.stderr
+    assert result.stderr.strip()  # a line, not silence
+
+
+class _Raiser:
+    def __init__(self, fn: object) -> None:
+        self.fn = fn
+
+    def __getattr__(self, name: str) -> object:
+        def call(*_args: object, **_kw: object) -> object:
+            return self.fn()  # type: ignore[operator]
+
+        return call
+
+
+def test_a_command_body_has_no_error_handling() -> None:
+    # the criterion that makes this stick: adding a command must require no new
+    # error-handling boilerplate, so there must be none to copy.
+    import inspect
+
+    from hrono.jobs import commands as jobs_cmds
+    from hrono.registry import commands as reg_cmds
+    from hrono.tree import commands as tree_cmds
+
+    for module in (tree_cmds, jobs_cmds, reg_cmds):
+        source = inspect.getsource(module)
+        assert "except ClientError" not in source
+        assert "def _run(" not in source

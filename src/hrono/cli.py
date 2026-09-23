@@ -22,13 +22,13 @@ import uvicorn
 from hrono.admin.commands import app as admin_app
 from hrono.admin.reset import targets, wipe
 from hrono.auth.bootstrap import BOOTSTRAP_ADMIN, bootstrap_admin
-from hrono.client.http import ClientError, from_profile
-from hrono.client.http import message as client_message
+from hrono.cli_boundary import Boundary
+from hrono.client.http import from_profile
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import load_key, reconcile
 from hrono.db.database import open_database
 from hrono.db.lock import exclusive
-from hrono.errors import AppError, cli_message
+from hrono.errors import AppError
 from hrono.jobs.commands import app as jobs_app
 from hrono.paths import ENV_DB, database_path
 from hrono.profile.commands import app as profile_app
@@ -38,7 +38,7 @@ from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
 from hrono.tree.commands import app as tree_app
 
-app = typer.Typer(add_completion=False)
+app = typer.Typer(add_completion=False, cls=Boundary)
 app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
 app.add_typer(tree_app, name="tree")
@@ -54,13 +54,9 @@ def recall(
     limit: Annotated[int, typer.Option("--limit")] = 10,
 ) -> None:
     """Recall passages from a tree for a question (the fast read door)."""
-    try:
-        result = from_profile().post(
-            f"/trees/{tree}/recall", {"question": question, "limit": limit}
-        )
-    except ClientError as exc:
-        typer.echo(client_message(exc), err=True)
-        raise typer.Exit(1) from exc
+    result = from_profile().post(
+        f"/trees/{tree}/recall", {"question": question, "limit": limit}
+    )
     hits = result.get("hits") if isinstance(result, dict) else []
     message = result.get("message") if isinstance(result, dict) else None
     if not hits:
@@ -114,10 +110,11 @@ def reset(
         removed = wipe(db_path)
     except AppError as exc:
         # a wipe that stopped part-way still owes the operator the list of what
-        # it destroyed — that report is what recovery is planned from.
+        # it destroyed — that report is what recovery is planned from. The
+        # MESSAGE is the boundary's job (#048); this handler exists only for
+        # the report, and re-raises.
         _report_removed(_removed_so_far(exc))
-        typer.echo(cli_message(exc), err=True)
-        raise typer.Exit(1) from exc
+        raise
     _report_removed(removed)
     typer.echo("Run 'hrono serve' to bootstrap a fresh admin token.")
 
@@ -156,18 +153,14 @@ def serve(
     against the same --db share one cache instead of re-cloning (#098).
     """
     db_path = database_path(db)
-    try:
-        key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
-        with exclusive(db_path):
-            _bootstrap(key, db_path, host, port)
-            uvicorn.run(
-                create_app(db_path=db_path, master_key=key),
-                host=host,
-                port=port,
-            )
-    except AppError as exc:
-        typer.echo(cli_message(exc), err=True)
-        raise typer.Exit(1) from exc
+    key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
+    with exclusive(db_path):
+        _bootstrap(key, db_path, host, port)
+        uvicorn.run(
+            create_app(db_path=db_path, master_key=key),
+            host=host,
+            port=port,
+        )
 
 
 def _bootstrap(key: bytes, db_path: Path, host: str, port: int) -> None:

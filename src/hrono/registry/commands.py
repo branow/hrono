@@ -18,24 +18,12 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from hrono.client.http import ClientError, from_profile, message
-
-
-def _run(action: Callable[[], None]) -> None:
-    try:
-        action()
-    except ClientError as exc:
-        typer.echo(message(exc), err=True)
-        raise typer.Exit(1) from exc
-    except json.JSONDecodeError as exc:
-        typer.echo(f"config is not valid JSON: {exc}", err=True)
-        raise typer.Exit(1) from exc
+from hrono.client.http import from_profile
 
 
 def _read(source: Path | None) -> dict[str, object]:
@@ -57,28 +45,18 @@ def build_app(collection: str) -> typer.Typer:
     def list_items() -> None:
         """List every configured item in this collection."""
 
-        def action() -> None:
-            rows = from_profile().get(f"/{collection}")
-            names = (
-                [row.get("name") for row in rows]
-                if isinstance(rows, list)
-                else []
-            )
-            typer.echo(
-                "\n".join(str(name) for name in names) or f"no {collection}"
-            )
-
-        _run(action)
+        rows = from_profile().get(f"/{collection}")
+        names = (
+            [row.get("name") for row in rows] if isinstance(rows, list) else []
+        )
+        typer.echo("\n".join(str(name) for name in names) or f"no {collection}")
 
     @group.command("get")
     def get_item(name: str) -> None:
         """Print one item's configuration, secrets masked."""
 
-        def action() -> None:
-            item = from_profile().get(f"/{collection}/{name}")
-            typer.echo(json.dumps(item, indent=2))
-
-        _run(action)
+        item = from_profile().get(f"/{collection}/{name}")
+        typer.echo(json.dumps(item, indent=2))
 
     @group.command("set")
     def set_item(
@@ -90,24 +68,18 @@ def build_app(collection: str) -> typer.Typer:
     ) -> None:
         """Create or replace an item from a JSON config (file or stdin)."""
 
-        def action() -> None:
-            body = _read(file)
-            body.setdefault("name", name)
-            from_profile().put(f"/{collection}/{name}", body)
-            typer.echo(f"Wrote {collection}/{name}.")
-
-        _run(action)
+        body = _read(file)
+        body.setdefault("name", name)
+        from_profile().put(f"/{collection}/{name}", body)
+        typer.echo(f"Wrote {collection}/{name}.")
 
     @group.command("rm")
     def remove(name: str) -> None:
         """Delete an item; a seeded default is reset rather than removed."""
 
-        def action() -> None:
-            result = from_profile().delete(f"/{collection}/{name}")
-            reset = isinstance(result, dict) and "reset" in result
-            verb = "Reset" if reset else "Deleted"
-            typer.echo(f"{verb} {collection}/{name}.")
-
-        _run(action)
+        result = from_profile().delete(f"/{collection}/{name}")
+        reset = isinstance(result, dict) and "reset" in result
+        verb = "Reset" if reset else "Deleted"
+        typer.echo(f"{verb} {collection}/{name}.")
 
     return group

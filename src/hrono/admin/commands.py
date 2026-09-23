@@ -16,7 +16,6 @@ import typer
 
 from hrono.auth.users import reset_token as reissue
 from hrono.db.database import open_database
-from hrono.errors import AppError, cli_message
 from hrono.paths import ENV_DB, database_path
 
 app = typer.Typer(
@@ -56,9 +55,6 @@ def reset_token(
     connection = open_database(db_path)
     try:
         record, token = reissue(connection, user)
-    except AppError as exc:
-        typer.echo(cli_message(exc), err=True)
-        raise typer.Exit(1) from exc
     finally:
         connection.close()
     typer.echo(_reset_message(record.name, record.role, token))
