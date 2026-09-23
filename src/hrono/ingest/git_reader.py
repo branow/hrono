@@ -24,7 +24,7 @@ def git_units(config: dict[str, object], cache: Path) -> Iterator[Unit]:
         yield git_unit(config, cache, path)
 
 
-def git_instance(config: dict[str, object]) -> str:
+def git_instance(config: dict[str, object], cache: Path) -> str:
     """The host+path a git url reduces to, free of scheme and credentials."""
     text = str(config["url"]).strip()
     if "://" in text:

@@ -163,8 +163,8 @@ def _update_source(
     counter at all.
     """
     config, version = _load(context, name)
-    reader, addressed, instance = resolve(config)
     cache = context.cache_for(name)
+    reader, addressed, instance = resolve(config, cache)
     with context.database.write() as conn:
         changes = diff.diff(conn, name, reader, config, cache)
         if not changes:

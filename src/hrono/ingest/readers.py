@@ -8,11 +8,14 @@ it is looking at.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from hrono.ingest import Reader, SplitError, Unit, discovery, pages
 from hrono.ingest.bitbucket import bitbucket_instance
 from hrono.ingest.confluence import confluence_instance
 from hrono.ingest.git_reader import git_instance, git_unit, git_units
 from hrono.ingest.github import github_instance
+from hrono.ingest.notion import notion_instance
 
 __all__ = [
     "READERS",
@@ -38,10 +41,11 @@ READERS: dict[str, Reader] = {
         addresses_as="git",
     ),
     "confluence": Reader(confluence_instance, pages.units, pages.unit),
+    "notion": Reader(notion_instance, pages.units, pages.unit),
 }
 
 
-def resolve(config: dict[str, object]) -> tuple[Reader, str, str]:
+def resolve(config: dict[str, object], cache: Path) -> tuple[Reader, str, str]:
     """Return (reader, address type, instance) for a source's config.
 
     ONE answer to "how is this source read, and how are its pieces addressed",
@@ -53,4 +57,8 @@ def resolve(config: dict[str, object]) -> tuple[Reader, str, str]:
     reader = READERS.get(source_type)
     if reader is None:
         raise SplitError(f"no reader for source type: {source_type}")
-    return reader, reader.addresses_as or source_type, reader.instance(config)
+    return (
+        reader,
+        reader.addresses_as or source_type,
+        reader.instance(config, cache),
+    )

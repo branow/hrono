@@ -65,10 +65,15 @@ class Reader:
     """How one source type presents itself to the ingest ops.
 
     ``instance`` is the addressable identity of the source itself — the host
-    and path a git url reduces to, an owner root for a discovery source — and
-    is the reader's to derive, because only the reader knows the shape of its
-    own config. ``units`` enumerates the whole source, which a full split and
-    the diff's current side both need; ``unit`` fetches ONE by path, which is
+    and path a git url reduces to, an owner root for a discovery source, the
+    workspace a notion token belongs to — and is the reader's to derive,
+    because only the reader knows the shape of its own config. It is given the
+    CACHE as well, because some identities are not in the config at all: a
+    notion integration's workspace is a property of the token, learned at sync
+    time and recorded there (#150).
+
+    ``units`` enumerates the whole source, which a full split and the diff's
+    current side both need; ``unit`` fetches ONE by path, which is
     what the incremental path needs: a diff naming three changed units must not
     re-read the other nine thousand.
 
@@ -79,7 +84,7 @@ class Reader:
     as the type that produced it.
     """
 
-    instance: Callable[[dict[str, object]], str]
+    instance: Callable[[dict[str, object], Path], str]
     units: Callable[[dict[str, object], Path], Iterator[Unit]]
     unit: Callable[[dict[str, object], Path, str], Unit]
     addresses_as: str | None = None

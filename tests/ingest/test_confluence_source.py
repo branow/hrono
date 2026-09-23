@@ -219,8 +219,11 @@ def test_validation_checks_the_site_answers(site: str) -> None:
         validate_confluence(_config(site))
 
 
-def test_the_instance_is_the_site_host() -> None:
-    assert confluence_instance({"base_url": f"https://{SITE}/wiki"}) == SITE
+def test_the_instance_is_the_site_host(tmp_path: Path) -> None:
+    assert (
+        confluence_instance({"base_url": f"https://{SITE}/wiki"}, tmp_path)
+        == SITE
+    )
 
 
 def test_a_page_that_left_the_scope_leaves_the_cache(

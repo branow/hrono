@@ -195,8 +195,11 @@ def test_validation_rejects_a_workspace_that_does_not_resolve(
         validate_bitbucket_workspace({"owner": "ghost"}, None, fetch=fetch)
 
 
-def test_the_instance_is_the_workspace_root() -> None:
-    assert bitbucket_instance({"owner": WORKSPACE}) == "bitbucket.org/acme"
+def test_the_instance_is_the_workspace_root(tmp_path: Path) -> None:
+    assert (
+        bitbucket_instance({"owner": WORKSPACE}, tmp_path)
+        == "bitbucket.org/acme"
+    )
 
 
 def test_split_addresses_a_discovered_repo_as_git(

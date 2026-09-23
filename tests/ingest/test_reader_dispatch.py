@@ -63,7 +63,9 @@ def wiki(tmp_path: Path) -> Iterator[tuple[Database, JobContext, dict]]:
     def unit(config: dict[str, object], cache: Path, path: str) -> Unit:
         return Unit(path, pages[path])
 
-    READERS["wiki"] = Reader(lambda config: str(config["site"]), units, unit)
+    READERS["wiki"] = Reader(
+        lambda config, cache: str(config["site"]), units, unit
+    )
     database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn:
         registry_store.insert(
@@ -186,10 +188,12 @@ def test_a_type_with_no_reader_fails_by_name(
     with database.connect() as conn, conn:
         conn.execute(
             "UPDATE registry SET config = ? WHERE name = 'docs'",
-            (json.dumps({"name": "docs", "type": "notion"}),),
+            # an unregistered type on purpose: `notion` became real in
+            # #150, and every named type eventually does.
+            (json.dumps({"name": "docs", "type": "sharepoint"}),),
         )
 
     with pytest.raises(SplitError) as raised:
         split_source(_job("docs"), context)
 
-    assert "notion" in str(raised.value)
+    assert "sharepoint" in str(raised.value)

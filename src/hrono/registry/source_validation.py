@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from hrono.ingest.bitbucket import validate_bitbucket_workspace
 from hrono.ingest.confluence import validate_confluence
 from hrono.ingest.github import validate_github_user
+from hrono.ingest.notion import validate_notion
 from hrono.registry.git_validation import validate_git
 
 if TYPE_CHECKING:
@@ -28,6 +29,7 @@ VALIDATORS: dict[str, Validator] = {
     "github-user": validate_github_user,
     "bitbucket-workspace": validate_bitbucket_workspace,
     "confluence": validate_confluence,
+    "notion": validate_notion,
 }
 
 

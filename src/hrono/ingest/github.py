@@ -74,7 +74,7 @@ def github_sync(config: dict[str, object], cache: Path, timeout: float) -> str:
     return clone_all(config, cache, timeout, lambda c: repos(c))
 
 
-def github_instance(config: dict[str, object]) -> str:
+def github_instance(config: dict[str, object], cache: Path) -> str:
     """The owner's root: a repo's name is the first segment of a unit path."""
     return f"{HOST}/{config['owner']}"
 

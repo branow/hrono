@@ -154,7 +154,7 @@ def _raise_for(status: int, kind: str) -> None:
         raise SyncError(f"confluence returned {status}")
 
 
-def confluence_instance(config: dict[str, object]) -> str:
+def confluence_instance(config: dict[str, object], cache: Path) -> str:
     """The site's host: the base url without scheme, path or credentials."""
     return urlparse(_base(config)).netloc
 

@@ -130,13 +130,37 @@ class ConfluenceSource(BaseModel):
     _not_reserved = field_validator("name")(_reject_reserved)
 
 
+class TokenAuth(BaseModel):
+    """A bearer integration token; no user, no endpoint."""
+
+    method: Literal["token"]
+    token: str
+
+
+class NotionSource(BaseModel):
+    """Pages shared with a notion integration (T43).
+
+    No base url — always api.notion.com — and no owner: an integration sees
+    exactly what has been shared with it, so the token IS the scope's outer
+    bound and the selectors only narrow it.
+    """
+
+    name: str
+    type: Literal["notion"]
+    auth: TokenAuth
+    scope: list[Selector] | None = None
+
+    _not_reserved = field_validator("name")(_reject_reserved)
+
+
 class Source(
     RootModel[
         Annotated[
             GitSource
             | GithubUserSource
             | BitbucketWorkspaceSource
-            | ConfluenceSource,
+            | ConfluenceSource
+            | NotionSource,
             Field(discriminator="type"),
         ]
     ]

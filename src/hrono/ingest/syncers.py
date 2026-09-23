@@ -18,6 +18,7 @@ from hrono.ingest.bitbucket import bitbucket_sync
 from hrono.ingest.confluence import confluence_sync
 from hrono.ingest.git_syncer import git_sync
 from hrono.ingest.github import github_sync
+from hrono.ingest.notion import notion_sync
 
 Syncer = Callable[[dict[str, object], Path, float], str]
 
@@ -26,4 +27,5 @@ SYNCERS: dict[str, Syncer] = {
     "github-user": github_sync,
     "bitbucket-workspace": bitbucket_sync,
     "confluence": confluence_sync,
+    "notion": notion_sync,
 }

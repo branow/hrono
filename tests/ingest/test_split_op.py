@@ -236,13 +236,16 @@ def test_split_runs_as_a_registered_job_op(
 
 
 def test_instance_normalises_url_forms() -> None:
-    assert git_instance({"url": "https://github.com/acme/webphone"}) == (
-        "github.com/acme/webphone"
+    assert git_instance(
+        {"url": "https://github.com/acme/webphone"}, Path(".")
+    ) == ("github.com/acme/webphone")
+    assert git_instance(
+        {"url": "git@github.com:acme/webphone.git"}, Path(".")
+    ) == ("github.com/acme/webphone")
+    assert (
+        git_instance({"url": "ssh://git@gitlab.com/x/y"}, Path("."))
+        == "gitlab.com/x/y"
     )
-    assert git_instance({"url": "git@github.com:acme/webphone.git"}) == (
-        "github.com/acme/webphone"
-    )
-    assert git_instance({"url": "ssh://git@gitlab.com/x/y"}) == "gitlab.com/x/y"
 
 
 def test_two_working_directories_share_one_cache(

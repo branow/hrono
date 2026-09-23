@@ -39,12 +39,13 @@ def split_source(job: Job, context: JobContext) -> None:
     """Split the job's synced source into stored sections and passages."""
     name = str(job.scope["name"])
     config, version = _load(context, name)
-    reader, addressed, instance = resolve(config)
+    cache = context.cache_for(name)
+    reader, addressed, instance = resolve(config, cache)
     paths: list[str] = []
     with context.database.write() as conn:
         store.clear_source(conn, name)
         fts.clear_source(conn, name)
-        for unit in reader.units(config, context.cache_for(name)):
+        for unit in reader.units(config, cache):
             paths.append(unit.path)
             store_unit(conn, unit, name, addressed, instance, version)
         register_path_bodies(conn, paths)

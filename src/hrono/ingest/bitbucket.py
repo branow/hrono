@@ -15,6 +15,7 @@ github's in exactly two ways worth naming:
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 
 from hrono.ingest import SyncError
 from hrono.ingest.api import TIMEOUT, get_json
@@ -83,7 +84,7 @@ def bitbucket_sync(
     return clone_all(config, cache, timeout, lambda c: repos(c))  # type: ignore[arg-type]
 
 
-def bitbucket_instance(config: dict[str, object]) -> str:
+def bitbucket_instance(config: dict[str, object], cache: Path) -> str:
     """The workspace root: a repo's slug is the first segment of a unit path."""
     return f"{HOST}/{config['owner']}"
 

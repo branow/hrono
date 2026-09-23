@@ -282,8 +282,8 @@ def test_split_addresses_every_repo_as_its_own(
     )
 
 
-def test_the_instance_is_the_owner_root() -> None:
-    assert github_instance({"owner": OWNER}) == f"github.com/{OWNER}"
+def test_the_instance_is_the_owner_root(tmp_path: Path) -> None:
+    assert github_instance({"owner": OWNER}, tmp_path) == f"github.com/{OWNER}"
 
 
 def test_reading_before_a_sync_says_so(tmp_path: Path) -> None:
@@ -362,7 +362,7 @@ def test_an_update_addresses_a_changed_unit_the_same_way(
             tree="default",
             source="acme",
             source_type=reader.addresses_as or "github-user",
-            instance=reader.instance(config),
+            instance=reader.instance(config, cache),
             version="ignored",
             fetch=lambda path: reader.unit(config, cache, path),
             changes=changes,
