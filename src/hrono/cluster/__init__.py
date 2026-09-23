@@ -10,9 +10,13 @@ report a missing ``cluster`` extra cleanly without importing ``build``.
 
 from __future__ import annotations
 
+from hrono.errors import DomainError
 
-class ClusterError(Exception):
+
+class ClusterError(DomainError):
     """Clustering could not run (reason is client-safe, never a traceback)."""
+
+    code = "cluster-error"
 
 
 class TooFewPoints(ClusterError):
@@ -24,3 +28,5 @@ class TooFewPoints(ClusterError):
     one topic" (#112). Every other ``ClusterError`` means the backend broke and
     must still fail the job, so the two must not be caught together.
     """
+
+    code = "too-few-points"

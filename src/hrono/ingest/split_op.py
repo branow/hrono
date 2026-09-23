@@ -18,6 +18,7 @@ import sqlite3
 from pathlib import Path
 
 from hrono.cluster.blend import register_path_bodies
+from hrono.errors import DomainError
 from hrono.ingest import store
 from hrono.ingest.identity import (
     Address,
@@ -35,8 +36,10 @@ from hrono.recall import fts
 from hrono.registry import store as registry_store
 
 
-class SplitError(Exception):
+class SplitError(DomainError):
     """A source could not be split (reason is credential-free)."""
+
+    code = "split-error"
 
 
 def split_source(job: Job, context: JobContext) -> None:

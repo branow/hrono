@@ -14,13 +14,17 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable, Sequence
 
+from hrono.errors import DomainError
+
 Encoder = Callable[[list[str]], Sequence[Sequence[float]]]
 
 _DEFAULT_BATCH = 32
 _LOAD_TIMEOUT = 300.0
 
 
-class EmbedError(Exception):
+class EmbedError(DomainError):
+    code = "embed-error"
+
     """Embedding could not run (reason is client-safe, never a traceback)."""
 
 

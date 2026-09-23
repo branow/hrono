@@ -10,8 +10,12 @@ from dataclasses import dataclass
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from hrono.errors import DomainError
 
-class DecryptError(Exception):
+
+class DecryptError(DomainError):
+    code = "decrypt-error"
+
     """A ciphertext could not be decrypted with the active key."""
 
 

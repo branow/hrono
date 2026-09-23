@@ -7,6 +7,10 @@ other — the same place ``ClusterError`` sits for the same reason.
 
 from __future__ import annotations
 
+from hrono.errors import DomainError
 
-class SyncError(Exception):
+
+class SyncError(DomainError):
     """A source could not be synced (reason is credential-free)."""
+
+    code = "sync-error"

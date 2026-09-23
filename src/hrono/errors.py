@@ -12,6 +12,22 @@ Envelope (settled here; the spec is silent): ``{"error": {"code": <kebab-case>,
 from __future__ import annotations
 
 
+class DomainError(Exception):
+    """A failure inside hrono, carrying its own kebab-case ``code`` (#145).
+
+    These live in the package that raises them — ``SyncError`` in ``ingest``,
+    ``ClusterError`` in ``cluster`` — and know nothing about transport. This
+    base exists here, in the module that imports nothing, so every package can
+    inherit it without a cycle, and so a boundary can tell "hrono failed, and
+    this is which failure" from "something threw".
+
+    ``code`` is the whole contract. A subclass that forgets to set one is a
+    bug, and the test that walks the subclasses says so.
+    """
+
+    code: str = "internal-error"
+
+
 class AppError(Exception):
     """Base domain error; subclasses bake status_code + code."""
 
@@ -20,11 +36,19 @@ class AppError(Exception):
     headers: dict[str, str] | None = None
 
     def __init__(
-        self, message: str, *, details: dict[str, object] | None = None
+        self,
+        message: str,
+        *,
+        details: dict[str, object] | None = None,
+        code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
         self.details = details
+        if code is not None:
+            # a per-instance override, for a boundary relaying a DomainError's
+            # own code through a generic AppError class (#145)
+            self.code = code
 
 
 class BadRequest(AppError):
@@ -87,8 +111,9 @@ def cli_message(error: AppError) -> str:
 def as_app_error(error: BaseException) -> AppError:
     """Any exception as an ``AppError``, so a failure has a CODE (#109).
 
-    An ``AppError`` already carries one. Anything else raised from hrono's own
-    code — ``SyncError``, ``ClusterError``, ``LLMError`` — is hrono speaking,
+    An ``AppError`` already carries one, and a ``DomainError`` carries the one
+    its own class declares (#145). Anything else raised from hrono's own code
+    keeps its message under ``internal-error`` — it is hrono speaking,
     already written for a reader, and keeps its message. A FOREIGN exception is
     the one whose wording must not become hrono's answer: sqlite's
     ``RAISE(ABORT, 'poisoned mid-transaction')`` is the driver's phrasing, and
@@ -102,6 +127,8 @@ def as_app_error(error: BaseException) -> AppError:
     if isinstance(error, AppError):
         return error
     details: dict[str, object] = {"type": type(error).__name__}
+    if isinstance(error, DomainError):
+        return Internal(str(error), details=details, code=error.code)
     if type(error).__module__.startswith("hrono."):
         return Internal(str(error), details=details)
     return Internal("the job failed", details=details)

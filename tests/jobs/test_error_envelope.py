@@ -137,7 +137,7 @@ def test_hronos_own_wording_survives(db: Database) -> None:
 
     row = _run(db, "ours", op)
 
-    assert row["error_code"] == "internal-error"
+    assert row["error_code"] == "sync-error"  # its own code (#145)
     assert row["error"] == "no text model is registered for this tree"
     assert json.loads(row["error_details"]) == {"type": "SyncError"}
 
