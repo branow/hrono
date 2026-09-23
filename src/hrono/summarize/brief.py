@@ -41,7 +41,11 @@ from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
 from hrono.summarize.faithfulness import faithfulness
-from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.resolve import (
+    producer_model_name,
+    resolve_prompt,
+    resolve_text_model,
+)
 from hrono.summarize.shape import answer
 
 _CONTENT_PLACEHOLDER = "{content}"
@@ -58,14 +62,18 @@ def brief(
     """Write a brief per stale-or-missing bottom-level node, with provenance."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
-        model = resolve_text_model(conn, job.scope)
+        model = resolve_text_model(conn, job.scope, "brief")
         model_name = str(model["name"])
+        # the condensations were written by the CONDENSE model (#067): reading
+        # them under this op's own name finds none the moment the two differ,
+        # and briefs nothing without saying so.
+        source_model = producer_model_name(conn, job.scope, "condense")
         prompt_name, template = resolve_prompt(conn, "brief")
         prompt_hash = _hash(template)
         pending = [
             (
                 node_id,
-                briefs.reduce_input(conn, node_id, model_name),
+                briefs.reduce_input(conn, node_id, source_model),
                 briefs.member_signature(conn, node_id),
             )
             for node_id in briefs.stale_or_missing(

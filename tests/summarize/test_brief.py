@@ -424,3 +424,44 @@ def test_a_brief_never_cites_a_section_it_did_not_read(db: Database) -> None:
     assert not any("uncondensed.py" in uri for uri in cited)
     assert list(inputs.uris) == cited  # the two halves agree, by construction
     assert "no condensation" in row["flagged"]  # and the gap is not silent
+
+
+def test_brief_reduces_what_the_condense_model_wrote(db: Database) -> None:
+    # #067's landmine, driven end to end: with a cheap condense model and a
+    # smart brief model, `brief` must still find the condensations. Reading
+    # them under its OWN name finds none and briefs nothing — silently, because
+    # an empty reduce input is not an error anywhere.
+    with db.connect() as conn, conn:
+        conn.execute("DELETE FROM registry WHERE collection = 'models'")
+        for name, role in (("cheap", "condense"), ("smart", "brief")):
+            registry_store.insert(
+                conn,
+                "models",
+                name,
+                json.dumps(
+                    {
+                        "name": name,
+                        "kind": "text",
+                        "connection": "c",
+                        "model": name,
+                        "role": role,
+                    }
+                ),
+                None,
+                "t",
+            )
+        # the condensations exist under the CHEAP model, as condense wrote them
+        conn.execute(
+            "UPDATE condensations SET model_name = 'cheap' "
+            "WHERE model_name = ?",
+            (MODEL,),
+        )
+
+    client = FakeCompletion(text="BODY " * 12)
+    brief(job(), JobContext(db), client=client)
+
+    assert client.contents  # it had something to reduce
+    joined = "\n".join(client.contents)
+    assert "condensation of a.py" in joined
+    with db.connect() as conn:
+        assert briefs.get(conn, _node_ids(db)[0]) is not None

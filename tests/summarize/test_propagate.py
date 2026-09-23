@@ -699,3 +699,39 @@ def test_a_run_that_declined_its_work_says_so(
         "abstained": 1,
         "incomplete": True,
     }
+
+
+def test_the_judge_reads_what_the_condense_model_wrote(
+    db: Database, tmp_path: Path
+) -> None:
+    # #067's landmine in propagate: the judge compares a leaf's NEW content
+    # against its stored brief, and that content is the member CONDENSATIONS —
+    # keyed by the condense model's name, not the judge's. Reading them under
+    # the judge's name finds none, so every leaf looks unchanged and the whole
+    # cascade silently stops.
+    with db.connect() as conn, conn:
+        conn.execute("DELETE FROM registry WHERE collection = 'models'")
+        for name, role in (("cheap", "condense"), ("picky", "judge")):
+            registry_store.insert(
+                conn,
+                "models",
+                name,
+                json.dumps(
+                    {
+                        "name": name,
+                        "kind": "text",
+                        "connection": "c",
+                        "model": name,
+                        "role": role,
+                    }
+                ),
+                None,
+                "t",
+            )
+        leaf = _leaf(conn)
+        _upper(conn, 1, leaf)
+
+    judge = FakeJudge("major")
+    _run(db, judge, tmp_path)
+
+    assert judge.calls == BEST_OF  # the leaf WAS judged

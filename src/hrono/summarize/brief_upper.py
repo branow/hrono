@@ -46,7 +46,7 @@ def brief_upper(
     tree = job.tree or _DEFAULT_TREE
     level = _level(job.scope)
     with context.database.connect() as conn:
-        model = resolve_text_model(conn, job.scope)
+        model = resolve_text_model(conn, job.scope, "brief-upper")
         model_name = str(model["name"])
         prompt_name, template = resolve_prompt(conn, "brief-upper")
         prompt_hash = _hash(template)

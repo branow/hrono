@@ -34,7 +34,11 @@ from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion, CompletionRequest
 from hrono.llm.providers import client_for
 from hrono.summarize import briefs
-from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.resolve import (
+    producer_model_name,
+    resolve_prompt,
+    resolve_text_model,
+)
 
 _DEFAULT_TREE = "default"
 _LEAF_LEVEL = 0
@@ -64,9 +68,13 @@ def propagate(
     """Judge each changed leaf and mark its ancestors stale on drift."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
-        model = resolve_text_model(conn, job.scope)
+        model = resolve_text_model(conn, job.scope, "judge")
         _prompt_name, template = resolve_prompt(conn, "judge")
-        topics = _changed_leaves(conn, tree, str(model["name"]))
+        # the judge reads what CONDENSE produced, not what the judge model is
+        # called (#067) — the same producer rule `brief` follows.
+        topics = _changed_leaves(
+            conn, tree, producer_model_name(conn, job.scope, "condense")
+        )
     if not topics:
         return _outcome(())
 

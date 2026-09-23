@@ -38,7 +38,7 @@ def condense(
 ) -> None:
     """Condense every stored section missing a condensation for the model."""
     with context.database.connect() as conn:
-        model = resolve_text_model(conn, job.scope)
+        model = resolve_text_model(conn, job.scope, "condense")
         model_name = str(model["name"])
         _, template = resolve_prompt(conn, "condense")
         sections = store.pending(conn, model_name)
