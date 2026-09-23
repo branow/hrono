@@ -15,7 +15,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from hrono.ingest.git_syncer import git_sync
+from hrono.ingest.github import github_sync
 
 Syncer = Callable[[dict[str, object], Path, float], str]
 
-SYNCERS: dict[str, Syncer] = {"git": git_sync}
+SYNCERS: dict[str, Syncer] = {
+    "git": git_sync,
+    "github-user": github_sync,
+}

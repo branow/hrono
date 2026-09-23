@@ -76,8 +76,8 @@ from hrono.cluster import store as cluster_store
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
 from hrono.ingest import diff, reconcile
-from hrono.ingest.readers import READERS
-from hrono.ingest.split_op import SplitError, _load
+from hrono.ingest.readers import resolve
+from hrono.ingest.split_op import _load
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -163,10 +163,7 @@ def _update_source(
     counter at all.
     """
     config, version = _load(context, name)
-    source_type = str(config["type"])
-    reader = READERS.get(source_type)
-    if reader is None:
-        raise SplitError(f"no reader for source type: {source_type}")
+    reader, addressed, instance = resolve(config)
     cache = context.cache_for(name)
     with context.database.write() as conn:
         changes = diff.diff(conn, name, reader, config, cache)
@@ -177,8 +174,8 @@ def _update_source(
             conn,
             tree=tree,
             source=name,
-            source_type=source_type,
-            instance=reader.instance(config),
+            source_type=addressed,
+            instance=instance,
             version=version,
             fetch=lambda path: reader.unit(config, cache, path),
             changes=changes,

@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from hrono.ingest.github import validate_github_user
 from hrono.registry.git_validation import validate_git
 
 if TYPE_CHECKING:
@@ -20,7 +21,10 @@ if TYPE_CHECKING:
 
 Validator = Callable[[dict[str, object], "ValidationContext | None"], None]
 
-VALIDATORS: dict[str, Validator] = {"git": validate_git}
+VALIDATORS: dict[str, Validator] = {
+    "git": validate_git,
+    "github-user": validate_github_user,
+}
 
 
 def validate_source(

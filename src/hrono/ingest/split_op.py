@@ -18,15 +18,14 @@ import sqlite3
 from pathlib import Path
 
 from hrono.cluster.blend import register_path_bodies
-from hrono.errors import DomainError
-from hrono.ingest import store
+from hrono.ingest import SplitError, Unit, store
 from hrono.ingest.identity import (
     Address,
     content_hash,
     sp_render,
     structure_paths,
 )
-from hrono.ingest.readers import READERS, Unit
+from hrono.ingest.readers import resolve
 from hrono.ingest.split import structure
 from hrono.ingest.split.constants import section_budget
 from hrono.ingest.split.pack import sections as pack_sections
@@ -36,28 +35,18 @@ from hrono.recall import fts
 from hrono.registry import store as registry_store
 
 
-class SplitError(DomainError):
-    """A source could not be split (reason is credential-free)."""
-
-    code = "split-error"
-
-
 def split_source(job: Job, context: JobContext) -> None:
     """Split the job's synced source into stored sections and passages."""
     name = str(job.scope["name"])
     config, version = _load(context, name)
-    source_type = str(config["type"])
-    reader = READERS.get(source_type)
-    if reader is None:
-        raise SplitError(f"no reader for source type: {source_type}")
-    instance = reader.instance(config)
+    reader, addressed, instance = resolve(config)
     paths: list[str] = []
     with context.database.write() as conn:
         store.clear_source(conn, name)
         fts.clear_source(conn, name)
         for unit in reader.units(config, context.cache_for(name)):
             paths.append(unit.path)
-            store_unit(conn, unit, name, source_type, instance, version)
+            store_unit(conn, unit, name, addressed, instance, version)
         register_path_bodies(conn, paths)
 
 
@@ -72,7 +61,7 @@ def store_unit(
     """Split one unit into sections/passages, returning (id, ordinal, hash)."""
     path, raw = unit.path, unit.body
     tree = structure(Path(path), raw)
-    address = Address(source_type, instance, path, version)
+    address = Address(source_type, instance, path, unit.version or version)
     stored: list[tuple[int, int, str]] = []
     for ordinal, section in enumerate(
         pack_sections(tree, section_budget(Path(path)), raw)
@@ -141,5 +130,7 @@ def _load(context: JobContext, name: str) -> tuple[dict[str, object], str]:
     config: dict[str, object] = json.loads(row["config"])
     return config, str(state["version"])
 
+
+__all__ = ["SplitError", "split_source", "store_unit"]
 
 OPS["split"] = split_source

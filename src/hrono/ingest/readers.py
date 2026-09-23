@@ -1,93 +1,48 @@
-"""The reader table: what a source type yields to ``split`` (#143, T40).
+"""The reader table: one entry per source type (#143, T40).
 
-``sync`` (#142) generalized the WRITE half of ingest — bring content into the
-cache and pin a version. This is the READ half. What `split` needs from a
-source is not files: it is a sequence of addressable UNITS, each with an
-identity inside the source and the bytes to split. Git's units are the
-ingestable files of its working tree; a Confluence space's units are its pages.
-Nothing above this line knows which.
-
-Two rules the contract carries, because hrono's identity scheme depends on
-them:
-
-- a unit's ``path`` is its identity inside the source, and lands verbatim in
-  the URI ``<source-type>://<instance>/<path>@<version>``. It is the same
-  string across syncs for the same logical unit, or every sync re-ingests the
-  whole source as new.
-- that path carries an EXTENSION, because the splitters pick a grammar from it
-  (``structure``) and the section budget scales by it. A reader over a system
-  with no file names still names its units as if it had them
-  (``spaces/ENG/onboarding.md``) rather than teaching the splitters a second
-  way to choose.
-
-``instance`` is the addressable identity of the source itself — the host and
-path a git url reduces to, a site for a wiki — and is the reader's to derive
-because only the reader knows the shape of its own config.
+The contract itself lives in ``hrono.ingest``; this is only the map from a
+source's ``type`` to the reader that answers it, in the same shape as the op,
+syncer and validator tables. Nothing above this line knows which source type
+it is looking at.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
-from pathlib import Path
+from hrono.ingest import Reader, SplitError, Unit
+from hrono.ingest.git_reader import git_instance, git_unit, git_units
+from hrono.ingest.github import (
+    github_instance,
+    github_unit,
+    github_units,
+)
 
-from hrono.ingest.filter import ingestable
+__all__ = [
+    "READERS",
+    "Reader",
+    "Unit",
+    "git_instance",
+    "git_units",
+    "resolve",
+]
+
+READERS: dict[str, Reader] = {
+    "git": Reader(git_instance, git_units, git_unit),
+    "github-user": Reader(
+        github_instance, github_units, github_unit, addresses_as="git"
+    ),
+}
 
 
-@dataclass(frozen=True)
-class Unit:
-    """One addressable piece of a source: its identity and its bytes."""
+def resolve(config: dict[str, object]) -> tuple[Reader, str, str]:
+    """Return (reader, address type, instance) for a source's config.
 
-    path: str
-    body: bytes
-
-
-@dataclass(frozen=True)
-class Reader:
-    """How one source type presents itself to the ingest ops.
-
-    ``units`` enumerates the whole source — what a full split and the diff's
-    current side both need. ``unit`` fetches ONE by path, which is what the
-    incremental path needs: a diff naming three changed units must not re-read
-    the other nine thousand.
+    ONE answer to "how is this source read, and how are its pieces addressed",
+    because there are two callers — the full split and the incremental update —
+    and a source addressed one way by one and another way by the other would
+    make every unit look changed on the next diff (#147).
     """
-
-    instance: Callable[[dict[str, object]], str]
-    units: Callable[[dict[str, object], Path], Iterator[Unit]]
-    unit: Callable[[dict[str, object], Path, str], Unit]
-
-
-def git_units(config: dict[str, object], cache: Path) -> Iterator[Unit]:
-    """Every ingestable file in the synced working tree, in path order."""
-    filter_config = config.get("filter")
-    paths = ingestable(
-        cache, filter_config if isinstance(filter_config, dict) else None
-    )
-    for path in paths:
-        yield git_unit(config, cache, path)
-
-
-def git_instance(config: dict[str, object]) -> str:
-    """The host+path a git url reduces to, free of scheme and credentials."""
-    text = str(config["url"]).strip()
-    if "://" in text:
-        text = text.split("://", 1)[1]
-    head = text.split("/", 1)[0]
-    if "@" in head:
-        text = text[text.index("@") + 1 :]
-    text = text.rstrip("/")
-    if text.endswith(".git"):
-        text = text[:-4]
-    slash = text.find("/")
-    colon = text.find(":")
-    if colon != -1 and (slash == -1 or colon < slash):
-        text = text[:colon] + "/" + text[colon + 1 :]
-    return text
-
-
-def git_unit(config: dict[str, object], cache: Path, path: str) -> Unit:
-    """One file of the synced working tree, by its repo-relative path."""
-    return Unit(path, (cache / path).read_bytes())
-
-
-READERS: dict[str, Reader] = {"git": Reader(git_instance, git_units, git_unit)}
+    source_type = str(config["type"])
+    reader = READERS.get(source_type)
+    if reader is None:
+        raise SplitError(f"no reader for source type: {source_type}")
+    return reader, reader.addresses_as or source_type, reader.instance(config)

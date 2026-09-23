@@ -43,6 +43,16 @@ class GitFilter(BaseModel):
     max_size_mb: float | None = None
 
 
+def _reject_reserved(value: str) -> str:
+    """`node-` is hrono's own source namespace, not a user's (#076)."""
+    if value.lower().startswith(RESERVED_PREFIX):
+        raise ValueError(
+            f"source names starting with {RESERVED_PREFIX!r} are reserved "
+            f"for hrono's own brief passages"
+        )
+    return value
+
+
 class GitSource(BaseModel):
     name: str
     type: Literal["git"]
@@ -50,26 +60,40 @@ class GitSource(BaseModel):
     auth: GitAuth
     filter: GitFilter | None = None
 
-    @field_validator("name")
-    @classmethod
-    def _not_reserved(cls, value: str) -> str:
-        """`node-` is hrono's own source namespace, not a user's (#076)."""
-        if value.lower().startswith(RESERVED_PREFIX):
-            raise ValueError(
-                f"source names starting with {RESERVED_PREFIX!r} are reserved "
-                f"for hrono's own brief passages"
-            )
-        return value
+    _not_reserved = field_validator("name")(_reject_reserved)
 
 
-class Source(RootModel[Annotated[GitSource, Field(discriminator="type")]]):
+class GithubUserSource(BaseModel):
+    """An owner's repos, discovered through the provider API (T41.2).
+
+    ``owner`` is a github username or org; the optional globs filter REPO
+    NAMES, not paths — a source's file filter is the git type's job and applies
+    to every discovered clone unchanged.
+    """
+
+    name: str
+    type: Literal["github-user"]
+    owner: str
+    auth: GitAuth
+    include: list[str] | None = None
+    exclude: list[str] | None = None
+    filter: GitFilter | None = None
+
+    _not_reserved = field_validator("name")(_reject_reserved)
+
+
+class Source(
+    RootModel[
+        Annotated[GitSource | GithubUserSource, Field(discriminator="type")]
+    ]
+):
     """A source, discriminated by its ``type`` (#141).
 
-    One variant today, and the union is the point: a reader M8 adds is a model
-    variant plus a validator entry, with no change to the registry engine that
-    stores it. An unknown ``type`` is rejected here, by pydantic, with the known
-    tags in the message — the engine turns that into a 422 like any other
-    invalid body.
+    The union is the point: a reader M8 adds is a model variant plus table
+    entries, with no change to the registry engine that stores it —
+    ``github-user`` (#147) was exactly that. An unknown ``type`` is rejected
+    here, by pydantic, with the known tags in the message, and the engine turns
+    that into a 422 like any other invalid body.
     """
 
 
