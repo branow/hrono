@@ -26,6 +26,7 @@ from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
+from hrono.errors import BadRequest, as_app_error
 from hrono.jobs import store
 from hrono.jobs.model import (
     Job,
@@ -209,13 +210,19 @@ class Worker(threading.Thread):
         handler = self._ops.get(job.op)
         try:
             if handler is None:
-                raise LookupError(f"unknown op: {job.op}")
+                # the op name came from the client's own request, so it is
+                # safe to say back — and useless to hide behind "the job
+                # failed" (#109).
+                raise BadRequest(f"unknown op: {job.op}")
             outcome = handler(
                 job,
                 JobContext(self._database, self._cipher, self._cache_root),
             )
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
-            self._finish(job, "failed", str(exc))
+            # the record keeps the CODE; the driver's own wording lives here,
+            # where an operator can read it and a client cannot (#109).
+            _logger.exception("job %s (%s) failed", job.id, job.op)
+            self._finish(job, "failed", exc)
         else:
             self._finish(job, "succeeded", None, outcome)
         finally:
@@ -225,19 +232,34 @@ class Worker(threading.Thread):
         self,
         job: Job,
         status: str,
-        error: str | None,
+        error: BaseException | None,
         outcome: object = None,
     ) -> None:
-        """Record the terminal status and, when the op reported one, its counts.
+        """Record the terminal status, the failure's CODE, and the op's counts.
 
         An op that returns nothing persists nothing (#132): most ops have no
         outcome worth a reader's time, and a null column says exactly that.
+
+        A failure is recorded in the envelope every other surface answers in
+        (#109): a kebab-case code, a client-safe message, and details. The
+        exception is mapped through ``as_app_error`` first, so a job never
+        records the driver's phrasing as hrono's answer.
         """
         result = (
             serialize_result(outcome) if isinstance(outcome, Mapping) else None
         )
+        mapped = as_app_error(error) if error is not None else None
         with self._database.write() as conn:
-            store.set_status(conn, job.id, status, error, _now(), result)
+            store.set_status(
+                conn,
+                job.id,
+                status,
+                mapped.message if mapped else None,
+                _now(),
+                result,
+                code=mapped.code if mapped else None,
+                details=serialize_result(mapped.details if mapped else None),
+            )
 
 
 def _backoff(failures: int) -> float:

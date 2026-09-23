@@ -24,6 +24,8 @@ def test_jobs_table_shape(tmp_path: Path) -> None:
         "scope",
         "status",
         "error",
+        "error_code",
+        "error_details",
         "created_at",
         "updated_at",
         "heartbeat",

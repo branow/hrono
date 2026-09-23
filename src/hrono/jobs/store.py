@@ -10,8 +10,8 @@ from __future__ import annotations
 import sqlite3
 
 _COLUMNS = (
-    "id, parent_id, tree, op, scope, status, error, result, "
-    "created_at, updated_at"
+    "id, parent_id, tree, op, scope, status, error, error_code, "
+    "error_details, result, created_at, updated_at"
 )
 
 
@@ -131,6 +131,8 @@ def set_status(
     error: str | None,
     now: str,
     result: str | None = None,
+    code: str | None = None,
+    details: str | None = None,
 ) -> None:
     """Record a job's terminal state, and what it did while it was there.
 
@@ -140,9 +142,10 @@ def set_status(
     """
     with conn:
         conn.execute(
-            "UPDATE jobs SET status = ?, error = ?, updated_at = ?, "
+            "UPDATE jobs SET status = ?, error = ?, error_code = ?, "
+            "error_details = ?, updated_at = ?, "
             "result = COALESCE(?, result) WHERE id = ?",
-            (status, error, now, result, job_id),
+            (status, error, code, details, now, result, job_id),
         )
 
 

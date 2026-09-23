@@ -71,7 +71,12 @@ def test_fetch_one_job(harness: Harness) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "failed"
-    assert body["error"] == "boom"
+    # #109: a job's failure is served in the same envelope as an HTTP error
+    assert body["error"] == {
+        "code": "internal-error",
+        "message": "boom",
+        "details": None,
+    }
     assert body["scope"] == {"type": "all"}
 
 

@@ -50,8 +50,9 @@ def get_job(job_id: str) -> None:
         typer.echo("no such job", err=True)
         raise typer.Exit(1)
     typer.echo(f"{job.get('id')}  {job.get('op')}  {job.get('status')}")
-    if job.get("error"):
-        typer.echo(f"error: {job['error']}")
+    error = job.get("error")
+    if isinstance(error, dict):  # the envelope, as every surface serves it
+        typer.echo(f"error: {error.get('code')}: {error.get('message')}")
     result = job.get("result")
     if result is None:
         typer.echo("result: none reported")

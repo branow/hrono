@@ -38,6 +38,8 @@ class Job:
     created_at: str
     updated_at: str
     result: dict[str, object] | None = None  # what the op did (#132)
+    error_code: str | None = None  # kebab-case, the envelope's (#109)
+    error_details: dict[str, object] | None = None
 
 
 def serialize_scope(scope: dict[str, object]) -> str:
@@ -71,6 +73,8 @@ def to_job(row: sqlite3.Row) -> Job:
         status=row["status"],
         error=row["error"],
         result=deserialize_result(row["result"]),
+        error_code=row["error_code"],
+        error_details=deserialize_result(row["error_details"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

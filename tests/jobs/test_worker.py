@@ -1,3 +1,4 @@
+import json
 import logging
 import sqlite3
 import threading
@@ -80,7 +81,13 @@ def test_a_failing_leaf_fails_without_killing_siblings(tmp_path: Path) -> None:
         assert wait_terminal(db, bad) == "failed"
         assert wait_terminal(db, good) == "succeeded"
         with db.connect() as conn:
-            assert "kaboom" in store.get(conn, bad)["error"]
+            row = store.get(conn, bad)
+        # #109: the record is the ENVELOPE, and the op's own wording
+        # ("kaboom" — here a RuntimeError, in the field sqlite's ABORT text)
+        # never becomes hrono's answer; the type is all a client learns.
+        assert row["error_code"] == "internal-error"
+        assert "kaboom" not in row["error"]
+        assert json.loads(row["error_details"]) == {"type": "RuntimeError"}
     finally:
         stop(workers)
     db.close()

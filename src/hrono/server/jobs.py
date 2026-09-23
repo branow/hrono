@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from hrono.auth.users import User
 from hrono.errors import BadRequest, NotFound
 from hrono.jobs import store
-from hrono.jobs.model import to_job
+from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
 from hrono.jobs.worker import enqueue
 from hrono.server.auth import require_role
@@ -42,6 +42,17 @@ class JobRequest(BaseModel):
     tree: str | None = None
 
 
+def _error(job: Job) -> dict[str, object] | None:
+    """A failure in the SAME envelope every other surface answers in (#109)."""
+    if job.error is None and job.error_code is None:
+        return None
+    return {
+        "code": job.error_code or "internal-error",
+        "message": job.error,
+        "details": job.error_details,
+    }
+
+
 def _job(row: sqlite3.Row) -> dict[str, object]:
     job = to_job(row)
     return {
@@ -51,7 +62,7 @@ def _job(row: sqlite3.Row) -> dict[str, object]:
         "op": job.op,
         "scope": job.scope,
         "status": job.status,
-        "error": job.error,
+        "error": _error(job),
         "result": job.result,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
