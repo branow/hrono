@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 
+from hrono import pins
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -58,10 +60,11 @@ def brief(
     context: JobContext,
     *,
     client: Completion | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Write a brief per stale-or-missing bottom-level node, with provenance."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
+        held = len(pins.pinned(conn, pins.BRIEF))
         model = resolve_text_model(conn, job.scope, "brief")
         model_name = str(model["name"])
         # the condensations were written by the CONDENSE model (#067): reading
@@ -82,7 +85,7 @@ def brief(
         ]
     pending = [(n, i, s) for (n, i, s) in pending if i.texts]
     if not pending:
-        return
+        return {"briefed": 0, "skipped_pinned": held}
 
     completion = client if client is not None else client_for(context, model)
     for node_id, inputs, signature in pending:
@@ -111,6 +114,10 @@ def brief(
                 output_tokens=result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
+    # what a pin HELD is as much the run's outcome as what it wrote: an
+    # operator who sees "briefed 0" needs to know whether there was nothing to
+    # do or whether they froze it themselves (#154).
+    return {"briefed": len(pending), "skipped_pinned": held}
 
 
 def _uncondensed(dropped: int) -> str:

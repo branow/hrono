@@ -16,7 +16,9 @@ the child node ids, appended in code from membership, never LLM-written.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 
+from hrono import pins
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -41,11 +43,12 @@ def brief_upper(
     context: JobContext,
     *,
     client: Completion | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Write a brief per stale-or-missing upper node from its child briefs."""
     tree = job.tree or _DEFAULT_TREE
     level = _level(job.scope)
     with context.database.connect() as conn:
+        held = len(pins.pinned(conn, pins.BRIEF))
         model = resolve_text_model(conn, job.scope, "brief-upper")
         model_name = str(model["name"])
         prompt_name, template = resolve_prompt(conn, "brief-upper")
@@ -63,7 +66,7 @@ def brief_upper(
         ]
     pending = [(n, c, ids, s) for (n, c, ids, s) in pending if c]
     if not pending:
-        return
+        return {"briefed": 0, "skipped_pinned": held}
 
     completion = client if client is not None else client_for(context, model)
     for node_id, child_texts, ids, signature in pending:
@@ -91,6 +94,7 @@ def brief_upper(
                 output_tokens=result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
+    return {"briefed": len(pending), "skipped_pinned": held}
 
 
 def _level(scope: dict[str, object]) -> int:

@@ -17,6 +17,8 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from hrono import pins
+
 
 def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
     """Return a stable content-derived hash of a node's members.
@@ -77,6 +79,11 @@ def stale_or_missing(
     A node needs work when it has no brief, or when its brief is stale — its
     member set changed, or the resolved prompt template hash / model no longer
     match the provenance it was written with.
+
+    A node whose brief is PINNED needs no work whatever its signature says
+    (#154): the text is the operator's, and re-briefing it is the silent
+    revert the pin exists to prevent. Held back here, at selection, so no
+    caller can forget — and so the LLM call is never made in the first place.
     """
     node_ids = [
         int(row["id"])
@@ -85,8 +92,11 @@ def stale_or_missing(
             (tree, level),
         ).fetchall()
     ]
+    held = pins.pinned(conn, pins.BRIEF)
     result: list[int] = []
     for node_id in node_ids:
+        if node_id in held:
+            continue
         row = get(conn, node_id)
         if row is None or not _is_fresh(
             row, member_signature(conn, node_id), prompt_hash, model_name
