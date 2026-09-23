@@ -5,10 +5,12 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from hrono.db.database import Database
 from hrono.llm.client import LLMError
 from hrono.registry import store as registry_store
+from hrono.registry.models import Model
 from hrono.summarize.resolve import producer_model_name, resolve_text_model
 
 
@@ -103,3 +105,28 @@ def test_the_consumer_reads_the_producers_model_name(db: Database) -> None:
     with db.connect() as conn:
         assert resolve_text_model(conn, {}, "brief")["name"] == "smart"
         assert producer_model_name(conn, {}, "condense") == "cheap"
+
+
+def test_an_invalid_role_is_refused_at_write_time(db: Database) -> None:
+    # #067: a typo'd role is config that validates and then does nothing — the
+    # model is never selected for any stage, and the operator believes they
+    # configured a mapping. Same bar as #107's connection: refuse at WRITE
+    # time, never at condense time.
+    with pytest.raises(ValidationError):
+        Model(
+            name="oops",
+            kind="text",
+            connection="c",
+            model="m",
+            role="condence",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("role", ["condense", "brief", "brief-upper", "judge"])
+def test_every_stage_name_is_a_valid_role(role: str) -> None:
+    # the four roles are exactly the stages that resolve a text model; if a
+    # fifth stage appears, this fails until the Literal grows.
+    assert (
+        Model(name="m", kind="text", connection="c", model="m", role=role).role
+        == role
+    )
