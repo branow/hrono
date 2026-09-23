@@ -39,7 +39,9 @@ lock, like every other heavy step here.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping, Sequence
 
+from hrono import pins
 from hrono.cluster import incubator, monitor, store
 from hrono.cluster.op import cluster
 from hrono.embed.model import resolve_embedding_model
@@ -62,14 +64,25 @@ def settle(
     build: object | None = None,
     encoder_for: object | None = None,
     client: object | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Warm-reconcile the tree when churn/misfit crosses the trigger."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
         if not (force or should_settle(conn, tree)):
-            return
+            return {"settled": False, "held": 0, "released": 0}
+
+    # WHERE a pinned chunk belongs has to be read before the rebuild, because
+    # the rebuild is what erases it.
+    with context.database.connect() as conn:
+        anchored = _anchor_members(conn, tree)
 
     cluster(_stage(tree, "cluster"), context, build=build)
+    # the re-cluster rewrote every membership from scratch, so a hand-placed
+    # chunk has just been moved by the machine. Put it back BEFORE anything
+    # reads the new map: `brief` below writes summaries from membership, and a
+    # brief written over the wrong members is the revert, one step removed.
+    with context.database.write() as conn:
+        held, released = _restore_pinned(conn, tree, anchored)
     embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
     with context.database.connect() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
@@ -89,6 +102,92 @@ def settle(
             conn, tree, model, sorted(store.node_centroids(conn, tree, model))
         )
         _reset_drift(conn, tree)
+    return {"settled": True, "held": held, "released": released}
+
+
+def _anchor_members(
+    conn: sqlite3.Connection, tree: str
+) -> dict[int, tuple[int, tuple[int, ...]]]:
+    """For each pinned section: its anchor, and that anchor's OTHER members.
+
+    The other members are what makes the anchor findable afterwards. A node is
+    identified by the content of its members (#068), and a hand-move changes
+    that content — so the very act the pin protects is what can retire the node
+    the pin names. Its company survives the rebuild even when its id does not.
+    """
+    out: dict[int, tuple[int, tuple[int, ...]]] = {}
+    for section_id, anchor in pins.anchors(conn, pins.MEMBERSHIP).items():
+        company = tuple(
+            int(row["section_id"])
+            for row in conn.execute(
+                "SELECT m.section_id FROM node_members m JOIN nodes n "
+                "ON n.id = m.node_id WHERE m.node_id = ? AND n.tree = ? "
+                "AND m.section_id != ?",
+                (anchor, tree, section_id),
+            ).fetchall()
+        )
+        out[section_id] = (anchor, company)
+    return out
+
+
+def _restore_pinned(
+    conn: sqlite3.Connection,
+    tree: str,
+    anchored: dict[int, tuple[int, tuple[int, ...]]],
+) -> tuple[int, int]:
+    """Return each pinned section to its topic; report what could not be.
+
+    The topic is the anchor node if it survived, and otherwise whichever node
+    inherited most of its other members — that node IS the topic the operator
+    pointed at, under a new id. A pin is RELEASED only when the topic is gone
+    entirely: guessing at that point would park the chunk somewhere nobody
+    chose, invisibly.
+    """
+    held = released = 0
+    live = {
+        int(row["id"])
+        for row in conn.execute(
+            "SELECT id FROM nodes WHERE tree = ?", (tree,)
+        ).fetchall()
+    }
+    for section_id, (anchor, company) in anchored.items():
+        target = anchor if anchor in live else _successor(conn, company)
+        if target is None:
+            pins.unpin(conn, pins.MEMBERSHIP, section_id)
+            released += 1
+            continue
+        current = conn.execute(
+            "SELECT node_id FROM node_members WHERE section_id = ?",
+            (section_id,),
+        ).fetchone()
+        if current is None or int(current["node_id"]) != target:
+            conn.execute(
+                "DELETE FROM node_members WHERE section_id = ?", (section_id,)
+            )
+            store.add_member(
+                conn, target, section_id, forced=False, similarity=None
+            )
+        if target != anchor:
+            pins.pin(conn, pins.MEMBERSHIP, section_id, anchor=target)
+        held += 1
+    return held, released
+
+
+def _successor(conn: sqlite3.Connection, company: Sequence[int]) -> int | None:
+    """The node that inherited most of a retired anchor's other members."""
+    counts: dict[int, int] = {}
+    for section_id in company:
+        row = conn.execute(
+            "SELECT node_id FROM node_members WHERE section_id = ?",
+            (section_id,),
+        ).fetchone()
+        if row is None:
+            continue
+        node_id = int(row["node_id"])
+        counts[node_id] = counts.get(node_id, 0) + 1
+    if not counts:
+        return None
+    return max(sorted(counts), key=lambda node_id: counts[node_id])
 
 
 def should_settle(conn: sqlite3.Connection, tree: str) -> bool:

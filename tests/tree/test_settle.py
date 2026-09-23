@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
+from hrono import pins
 from hrono.cluster import monitor
+from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import register_path_bodies
 from hrono.cluster.build import ClusterResult
 from hrono.cluster.incubator import count as incubator_count
@@ -438,3 +440,102 @@ def _parented(db: Database) -> set[int]:
                 "SELECT child_id FROM node_children"
             ).fetchall()
         }
+
+
+def _members(database: Database) -> dict[int, int]:
+    with database.connect() as conn:
+        return {
+            int(r["section_id"]): int(r["node_id"])
+            for r in conn.execute(
+                "SELECT section_id, node_id FROM node_members"
+            ).fetchall()
+        }
+
+
+def test_settle_returns_a_pinned_member_to_its_anchor(
+    built: Database, tmp_path: Path
+) -> None:
+    """#155: the rebuild rewrites every membership, so the pin restores it.
+
+    `settle` re-clusters the whole leaf level — `replace_tree` writes every
+    `node_members` row fresh — so honouring a pin here cannot mean "do not
+    move it". It means putting it back before anything reads the new map, and
+    `brief` reads membership two steps later.
+    """
+    placed = _members(built)
+    section, home = next(iter(placed.items()))
+    elsewhere = next(
+        (node for sec, node in placed.items() if node != home), None
+    )
+    if elsewhere is None:  # a one-topic corpus cannot show the property
+        pytest.skip("the built corpus has a single topic")
+
+    company = {sec for sec, node in placed.items() if node == elsewhere}
+    with built.write() as conn:
+        # a human moved it, then pinned it there
+        conn.execute(
+            "DELETE FROM node_members WHERE section_id = ?", (section,)
+        )
+        cluster_store.add_member(
+            conn, elsewhere, section, forced=False, similarity=None
+        )
+        pins.pin(conn, pins.MEMBERSHIP, section, anchor=elsewhere)
+
+    outcome = settle(
+        _job(),
+        job_context(built, tmp_path),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    # assert the PROPERTY, not the id (#136): the hand-move changed the
+    # anchor's content, so #068 may retire that node and give the topic a new
+    # id. What must hold is that the chunk is still with the neighbours the
+    # operator put it among, and did not drift back to where it came from.
+    after = _members(built)
+    landed = after[section]
+    assert {sec for sec, node in after.items() if node == landed} >= company
+    assert landed != home
+    assert outcome["held"] == 1
+    assert outcome["released"] == 0
+
+
+def test_a_pin_whose_anchor_is_gone_is_released_not_guessed(
+    built: Database, tmp_path: Path
+) -> None:
+    # the topic a human chose no longer exists. Parking the chunk in whichever
+    # cluster inherited its neighbours would be a worse answer than admitting
+    # the pin is spent, and it would be invisible.
+    placed = _members(built)
+    section = next(iter(placed))
+    with built.write() as conn:
+        pins.pin(conn, pins.MEMBERSHIP, section, anchor=999_999)
+
+    outcome = settle(
+        _job(),
+        job_context(built, tmp_path),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    assert outcome["released"] == 1
+    with built.connect() as conn:
+        assert pins.is_pinned(conn, pins.MEMBERSHIP, section) is False
+
+
+def test_an_untriggered_settle_reports_that_it_did_nothing(
+    built: Database, tmp_path: Path
+) -> None:
+    outcome = settle_mod.settle(
+        _job(),
+        job_context(built, tmp_path),
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    assert outcome == {"settled": False, "held": 0, "released": 0}

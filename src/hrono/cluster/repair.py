@@ -10,6 +10,8 @@ later full rebuild matches them.
 - ``split``  — a cluster over MAX_CAP (the summarization budget) re-clusters its
   own members into density-core children; residual noise attaches to the nearest
   child. The oversized node retires.
+- a PINNED member is never moved by any of these (#155): a hand-placed chunk
+  that migrates on the next batch is the silent revert pins exist to prevent.
 - ``migrate`` — a cluster over the misfit threshold sheds its misfit members
   (best_other > own), each moving to the cluster that actually fits it. A
   cluster holding a FORCED member runs the rule whatever its rate: one alien
@@ -35,6 +37,7 @@ import sqlite3
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 
+from hrono import pins
 from hrono.cluster import monitor, placement, store
 from hrono.cluster.blend import combined_vector
 from hrono.cluster.levels import migrate_children
@@ -59,6 +62,8 @@ def repair(
     tree = job.tree or "default"
     done = {"dissolved": 0, "split": 0, "migrated": 0, "freed": 0}
     with context.database.write() as conn:
+        # what a pin HELD is part of this run's outcome (#155)
+        done["pinned"] = len(pins.pinned(conn, pins.MEMBERSHIP))
         model = str(resolve_embedding_model(conn, job.scope)["name"])
         batch = _batch(conn, tree)
         for node_id in sorted(store.node_centroids(conn, tree, model)):
@@ -180,8 +185,11 @@ def migrate(
     centroids = centroids or store.node_centroids(conn, tree, model_name)
     own = centroids.get(node_id)
     others = {nid: c for nid, c in centroids.items() if nid != node_id}
+    held = pins.pinned(conn, pins.MEMBERSHIP)
     moves: list[tuple[int, int, float]] = []
     for section_id, content_hash, path in store.node_member_rows(conn, node_id):
+        if section_id in held:
+            continue  # a human put it here (#155)
         vector = combined_vector(conn, content_hash, path, model_name)
         if vector is None or not others:
             continue

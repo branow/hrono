@@ -4,6 +4,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from hrono import pins
 from hrono.cluster import monitor, repair
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import (
@@ -714,3 +715,30 @@ def test_repair_reports_the_children_it_reparented(db: Database) -> None:
     outcome = repair.repair(_repair_job(), JobContext(db))
 
     assert outcome["reparented"] == 1
+
+
+def test_a_pinned_child_keeps_the_parent_a_human_chose(db: Database) -> None:
+    """#155: the upper-level twin of a pinned membership.
+
+    The same corpus as the migrate test above, which moves the child — so the
+    pin is what makes the difference here, not an absent better home.
+    """
+    alpha, stray, home = _mis_attached(db, with_a_better_home=True)
+    with db.connect() as conn, conn:
+        pins.pin(conn, pins.PARENTING, stray, anchor=alpha)
+
+    with db.connect() as conn, conn:
+        moved = migrate_children(conn, TREE, 1, MODEL)
+
+    assert moved == 0
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT parent_id FROM node_children WHERE child_id = ?",
+            (stray,),
+        ).fetchone()
+    assert int(row["parent_id"]) == alpha
+    assert int(row["parent_id"]) != home
+
+    with db.connect() as conn, conn:
+        pins.unpin(conn, pins.PARENTING, stray)
+        assert migrate_children(conn, TREE, 1, MODEL) == 1

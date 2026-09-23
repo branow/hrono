@@ -188,6 +188,7 @@ def test_the_result_says_what_the_run_did(
         "migrated",
         "freed",
         "reparented",
+        "pinned",
     }
 
 

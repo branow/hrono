@@ -1,0 +1,11 @@
+-- A membership pin has to say WHERE (#155).
+--
+-- `pins(kind, target_id)` was enough for a brief: the target is the node and
+-- the pin means "do not rewrite this". A membership pin means "this section
+-- belongs in THAT topic", and `settle` rebuilds the leaf level wholesale —
+-- every `node_members` row is written fresh — so by the time the pin is read
+-- there is no current membership left to infer the answer from.
+--
+-- `anchor_id` is the node a membership must return to, and the parent a
+-- pinned child must hang under. Null for a brief pin, which anchors nothing.
+ALTER TABLE pins ADD COLUMN anchor_id INTEGER;

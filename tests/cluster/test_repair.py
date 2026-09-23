@@ -279,6 +279,7 @@ def test_repair_reports_what_it_did(db: Database) -> None:
         "migrated",
         "freed",
         "reparented",
+        "pinned",
     }
     assert outcome["dissolved"] == 1  # the below-two cluster
     assert lonely not in [int(r["id"]) for r in _nodes(db)]

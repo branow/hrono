@@ -36,15 +36,22 @@ def pin(
     kind: str,
     target_id: int,
     reason: str | None = None,
+    anchor: int | None = None,
 ) -> None:
-    """Hold ``target_id`` against the pipeline; re-pinning refreshes the why."""
+    """Hold ``target_id`` against the pipeline; re-pinning refreshes the why.
+
+    ``anchor`` says WHERE, for the kinds that need one: the node a membership
+    must stay in, the parent a child must hang under. A brief anchors nothing —
+    it is held in place by being itself (#155).
+    """
     if kind not in KINDS:
         raise ValueError(f"unknown pin kind: {kind}")
     conn.execute(
-        "INSERT INTO pins(kind, target_id, reason, pinned_at) "
-        "VALUES (?, ?, ?, ?) ON CONFLICT(kind, target_id) DO UPDATE SET "
-        "reason = excluded.reason, pinned_at = excluded.pinned_at",
-        (kind, target_id, reason, _now()),
+        "INSERT INTO pins(kind, target_id, reason, pinned_at, anchor_id) "
+        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(kind, target_id) DO UPDATE SET "
+        "reason = excluded.reason, pinned_at = excluded.pinned_at, "
+        "anchor_id = excluded.anchor_id",
+        (kind, target_id, reason, _now(), anchor),
     )
 
 
@@ -81,6 +88,23 @@ def pinned(conn: sqlite3.Connection, kind: str) -> frozenset[int]:
             "SELECT target_id FROM pins WHERE kind = ?", (kind,)
         ).fetchall()
     )
+
+
+def anchors(conn: sqlite3.Connection, kind: str) -> dict[int, int]:
+    """target -> anchor for every pin of ``kind`` that names one.
+
+    Read once per run and asked per candidate: the pipeline decides this for
+    every member of every cluster, and a query per decision would put a pin's
+    cost on the corpus rather than on the pins.
+    """
+    return {
+        int(row["target_id"]): int(row["anchor_id"])
+        for row in conn.execute(
+            "SELECT target_id, anchor_id FROM pins "
+            "WHERE kind = ? AND anchor_id IS NOT NULL",
+            (kind,),
+        ).fetchall()
+    }
 
 
 def reasons(

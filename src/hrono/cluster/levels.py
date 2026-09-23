@@ -21,6 +21,7 @@ import math
 import sqlite3
 from collections.abc import Callable, Sequence
 
+from hrono import pins
 from hrono.cluster import ClusterError, store
 from hrono.cluster.placement import TAU
 from hrono.embed.model import resolve_embedding_model
@@ -219,18 +220,23 @@ def migrate_children(
 ) -> int:
     """Move this level's misfit children to the parent that fits them better.
 
+    A child whose PARENTING is pinned is never moved (#155).
+
     ``repair.migrate`` one level up, and the same rule: a child moves only when
     another parent actually scores higher, so a child with nowhere better keeps
     its place AND its flag, and the next pass looks again. Moving it records the
     placement unforced, so the flag keeps meaning "not yet revisited" (#123).
     """
     centroids = _parent_centroids(conn, tree, level, model_name)
+    held = pins.pinned(conn, pins.PARENTING)
     moves: list[tuple[int, int, float]] = []
     for parent_id in sorted(centroids):
         others = {p: c for p, c in centroids.items() if p != parent_id}
         if not others:
             continue
         for child_id, vector in _child_vectors(conn, parent_id, model_name):
+            if child_id in held:
+                continue  # a human hung it here (#155)
             target, best = _nearest(vector, others)
             if best > _dot(vector, centroids[parent_id]):
                 moves.append((child_id, target, best))
