@@ -390,3 +390,76 @@ def test_recall_lets_a_second_document_into_a_dominated_window(
         assert len(documents) == 2
     finally:
         database.close()
+
+
+def _add_brief(
+    conn: object, node_id: int, body: bytes, vec: list[float]
+) -> str:
+    """A `node://` brief passage, the way #071 stores one."""
+    path = f"nodes/{node_id}/topic"
+    digest = content_hash(body)
+    upsert_content(conn, digest, body)  # type: ignore[arg-type]
+    upsert_vector(conn, digest, MODEL, vec)  # type: ignore[arg-type]
+    register_path_bodies(conn, [path])  # type: ignore[arg-type]
+    upsert_vector(  # type: ignore[arg-type]
+        conn, content_hash(path_body(path)), MODEL, unit(2)
+    )
+    section_id = insert_section(
+        conn,  # type: ignore[arg-type]
+        source=f"node-{node_id}",
+        address=Address("node", "hrono", path, "sig"),
+        start=0,
+        end=len(body),
+        content_hash=digest,
+        ordinal=0,
+    )
+    uri = f"node://hrono/{path}@sig"
+    conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO passages(section_id, source, source_type, instance, path, "
+        "version, uri, byte_start, byte_end, content_hash, sp_paths, ordinal, "
+        "created_at) VALUES (?, ?, 'node', 'hrono', ?, 'sig', ?, 0, ?, ?, "
+        "'[]', 0, 't')",
+        (section_id, f"node-{node_id}", path, uri, len(body), digest),
+    )
+    fts.index_passage(
+        conn,  # type: ignore[arg-type]
+        passage_id=int(
+            conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]
+        ),
+        source=f"node-{node_id}",
+        path=path,
+        body=body.decode(),
+    )
+    return uri
+
+
+def test_a_summary_can_win_the_window(tmp_path: object) -> None:
+    # #135: #071 indexed briefs so a CONCEPTUAL question could be answered by a
+    # summary, and a later measurement over 22 questions found a brief clearing
+    # the floor exactly once — which read as "the summary layer never
+    # competes". It was an artefact of the question set: all 22 were specific.
+    # Measured on the live corpus, an overview question puts a summary in the
+    # TOP slot ("give me an overview of the architecture" -> 5 hits, all
+    # summaries). Nothing about `source_type` disadvantages a brief; the score
+    # decides, and for an overview question the brief deserves to win.
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        with database.connect() as conn, conn:
+            _plant_paths(conn)
+            brief = _add_brief(
+                conn,
+                1,
+                b"an overview: this project signs and verifies tokens\n",
+                unit(0),
+            )
+            for i in range(15):
+                add_passage(conn, f"unrelated detail {i}\n".encode(), unit(1))
+
+        with database.connect() as conn:
+            result = recall(conn, "overview?", MODEL, const_encode(unit(0)))
+
+        assert result.hits
+        assert result.hits[0].kind == "summary"
+        assert result.hits[0].uri == brief
+    finally:
+        database.close()

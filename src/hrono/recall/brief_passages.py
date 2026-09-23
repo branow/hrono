@@ -13,6 +13,19 @@ passages are content-addressed like source passages, so the #035 embed op
 vectorises them and the #070 FTS index covers them with no extra wiring; recall
 (#072-075) unions source and ``node`` passages and labels each by source_type.
 
+MEASURED, and the premise holds (#135). A brief competes on score like any
+other passage, and for the questions it is FOR it wins: on the QA corpus "give
+me an overview of the architecture" returns five hits, all summaries; "what does
+this project do overall" and "what are the main components of this codebase"
+both put a summary in the TOP slot. For a SPECIFIC question — the signer, uuid
+v7, chalk's colour levels — source passages take the whole window, which is the
+right answer: a question about one function is best answered by that function.
+
+That is worth writing down because a measurement over 22 questions once found a
+brief clearing the vector floor exactly ONCE, which read as "the summary layer
+never competes". Every one of those 22 was a specific question. The layer was
+doing its job; the question set could not see it.
+
 A per-node ``source`` key (``node-<id>``) scopes the replace: clearing it drops
 the node's old brief section (passages cascade) and FTS rows before re-storing.
 Brief sections live in ``sections`` but are excluded from clustering/condensing
