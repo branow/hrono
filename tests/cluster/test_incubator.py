@@ -454,3 +454,48 @@ def test_a_drain_whose_pool_empties_mid_run_writes_nothing(
 def _node_count(db: Database) -> int:
     with db.connect() as conn:
         return int(conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0])
+
+
+def test_a_residual_homed_mid_drain_is_not_force_assigned(
+    db: Database,
+) -> None:
+    # #115's other half: a residual takes the force-assign path, not the core
+    # path, and it needs the same re-check. A section homed while the drain
+    # computes would be force-assigned on top of the home it already found —
+    # and flagged `forced`, so #113 would later "free" a pioneer that never was.
+    with db.connect() as conn, conn:
+        for i in range(MIN_POINTS - 1):
+            section_id = add_section(conn, f"core{i}\n".encode(), unit(1))
+            incubator.park(conn, TREE, section_id, batch=1)
+        residual = add_section(conn, b"residual\n", unit(0))
+        incubator.park(conn, TREE, residual, batch=1)
+
+    def labeler_that_homes_the_residual(vectors: object) -> list[int]:
+        # homed into a DIFFERENT node than the force-assign would pick —
+        # `_insert_member` is INSERT OR IGNORE, so a second membership in the
+        # SAME node is silently absorbed and would hide the defect.
+        with db.connect() as conn, conn:
+            incubator.unpark(conn, TREE, residual)
+            elsewhere = add_section(conn, b"elsewhere\n", unit(2))
+            cluster_store.add_leaf_node(
+                conn, TREE, [(elsewhere, False, None), (residual, False, None)]
+            )
+        return content_core_labeler(vectors)
+
+    incubator.drain(
+        db, TREE, MODEL, core_labeler=labeler_that_homes_the_residual
+    )
+
+    with db.connect() as conn:
+        homes = conn.execute(
+            "SELECT COUNT(*) FROM node_members m JOIN nodes n "
+            "ON n.id = m.node_id WHERE n.level = 0 AND m.section_id = ?",
+            (residual,),
+        ).fetchone()[0]
+        forced = conn.execute(
+            "SELECT COUNT(*) FROM node_members WHERE forced = 1 "
+            "AND section_id = ?",
+            (residual,),
+        ).fetchone()[0]
+    assert homes == 1  # the home it already found, not a second one
+    assert forced == 0  # and not mis-flagged as a forced pioneer
