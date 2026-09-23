@@ -34,6 +34,31 @@ def encrypt(
     return stored, key_id
 
 
+def decrypt(
+    config: dict[str, object],
+    descriptor: Descriptor,
+    cipher: Cipher,
+    key_id: int,
+) -> dict[str, object]:
+    """Return the config with its declared secrets decrypted in place.
+
+    The inverse of ``encrypt``, and reading the SAME ``secret_paths``: a source
+    type whose credential sits somewhere other than ``auth.token`` is then
+    decrypted by declaring that path, not by editing the reader that needs it
+    (#142).
+    """
+    plain = deepcopy(config)
+    for path in descriptor.secret_paths:
+        holder = _holder(plain, path)
+        if holder is None:
+            continue
+        parent, key = holder
+        if parent[key] is None:
+            continue
+        parent[key] = cipher.decrypt(key_id, str(parent[key]))
+    return plain
+
+
 def mask(
     config: dict[str, object], descriptor: Descriptor
 ) -> dict[str, object]:

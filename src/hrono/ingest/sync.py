@@ -1,45 +1,40 @@
-"""The ``sync`` ingest op: pull a git source into a cache and pin its version.
+"""The ``sync`` ingest op: bring a source's content into the cache (T25).
 
-First run clones into the context's cache root under the source name — that
-root hangs off the database file, never the working directory (#098); later
-runs fetch and hard-reset to the remote's current bytes. The synced version is
-the resolved commit SHA — content-addressed, so it is the same whether the repo
-was fetched over SSH or HTTPS (fetch-method-independent identity, per the
-design sketch).
+The op itself knows nothing about how any source type is fetched: it resolves
+the source's config, decrypts its secrets, and hands both to the syncer
+registered for its ``type`` (#142). What comes back is the version, opaque
+text, which it pins in ``source_state``.
+
 Registers into the op registry so the worker dispatches ``sync`` per source.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from datetime import UTC, datetime
-from pathlib import Path
 
+from hrono.ingest import SyncError
+from hrono.ingest.syncers import SYNCERS
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import store as registry_store
-from hrono.registry.git_auth import git_auth
+from hrono.registry.sources import SOURCES
+from hrono.registry.write import decrypt
 
 _TIMEOUT = 120.0
 
-
-class SyncError(Exception):
-    """A source could not be synced (reason is credential-free)."""
+__all__ = ["SyncError", "sync"]
 
 
 def sync(job: Job, context: JobContext) -> None:
-    """Clone/pull the job's source and record its commit as the version."""
+    """Sync the job's source through its type's syncer and pin the version."""
     name = str(job.scope["name"])
     config = _load_source(context, name)
-    version = _sync_repo(
-        context.cache_for(name),
-        name,
-        str(config["url"]),
-        config["auth"],
-        _TIMEOUT,
-    )
+    source_type = str(config["type"])
+    syncer = SYNCERS.get(source_type)
+    if syncer is None:
+        raise SyncError(f"no syncer for source type: {source_type}")
+    version = syncer(config, context.cache_for(name), _TIMEOUT)
     _record_version(context, name, version)
 
 
@@ -49,73 +44,10 @@ def _load_source(context: JobContext, name: str) -> dict[str, object]:
     if row is None:
         raise SyncError(f"unknown source: {name}")
     config: dict[str, object] = json.loads(row["config"])
-    auth = config.get("auth")
     key_id = row["key_id"]
-    if isinstance(auth, dict) and key_id is not None and context.cipher:
-        for field in ("token", "key"):
-            if auth.get(field):
-                auth[field] = context.cipher.decrypt(key_id, str(auth[field]))
-    return config
-
-
-def _sync_repo(
-    cache: Path, name: str, url: str, auth: object, timeout: float
-) -> str:
-    auth_dict = auth if isinstance(auth, dict) else {"method": "none"}
-    with git_auth(url, auth_dict) as (clean_url, env, config_args):
-        if cache.exists():
-            _run(["fetch", "origin"], name, cache, env, config_args, timeout)
-            _run(
-                ["reset", "--hard", "FETCH_HEAD"],
-                name,
-                cache,
-                env,
-                config_args,
-                timeout,
-            )
-        else:
-            cache.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                _run(
-                    ["clone", clean_url, str(cache)],
-                    name,
-                    None,
-                    env,
-                    config_args,
-                    timeout,
-                )
-            except SyncError:
-                shutil.rmtree(cache, ignore_errors=True)
-                raise
-        return _run(
-            ["rev-parse", "HEAD"], name, cache, env, config_args, timeout
-        ).strip()
-
-
-def _run(
-    args: list[str],
-    name: str,
-    cwd: Path | None,
-    env: dict[str, str],
-    config_args: list[str],
-    timeout: float,
-) -> str:
-    prefix = ["-C", str(cwd)] if cwd is not None else []
-    command = ["git", *prefix, *config_args, *args]
-    try:
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise SyncError(f"sync timed out for source: {name}") from exc
-    if completed.returncode != 0:
-        raise SyncError(f"sync failed for source: {name}")
-    return completed.stdout
+    if key_id is None or context.cipher is None:
+        return config
+    return decrypt(config, SOURCES, context.cipher, int(key_id))
 
 
 def _record_version(context: JobContext, name: str, version: str) -> None:
