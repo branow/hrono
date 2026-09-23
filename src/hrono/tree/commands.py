@@ -19,12 +19,19 @@ rerooting the export (#096), and a refused entry costs only itself.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from hrono.client.http import from_profile
+
+_WHY = {
+    "escapes": "write outside",
+    "collides": "collide with a path already written under",
+}
 
 app = typer.Typer(add_completion=False, help="Build and maintain trees.")
 
@@ -65,11 +72,7 @@ def export(
     plural = "file" if written == 1 else "files"
     typer.echo(f"Wrote {written} {plural} to {out}.")
     if refused:
-        listed = ", ".join(repr(path) for path in refused[:3])
-        raise UnsafePath(
-            f"refused {len(refused)} of {len(files)} files that would "
-            f"write outside {out}: {listed}"
-        )
+        raise UnsafePath(_refusal(out, len(files), refused))
 
 
 @app.command("pending")
@@ -84,10 +87,37 @@ def pending(name: str) -> None:
     typer.echo(f"{len(pool)} pending {chunks} in tree '{name}'.")
 
 
+@dataclass(frozen=True)
+class Refusal:
+    """One entry that was not written, and which KIND of problem it was."""
+
+    path: str
+    reason: str  # "escapes" | "collides"
+
+
+def _refusal(out: Path, total: int, refused: Sequence[Refusal]) -> str:
+    """One line that says how many were refused and WHY (#117).
+
+    The message used to say every refusal "would write outside" the folder,
+    which is untrue of half of them: a degenerate path ("/", ".", "") writes
+    ONTO the folder, and a directory collision writes inside it. A user who saw
+    that line was told something false about their own data.
+    """
+    kinds: dict[str, list[str]] = {}
+    for item in refused:
+        kinds.setdefault(item.reason, []).append(item.path)
+    parts = [
+        f"{len(paths)} that would {_WHY[reason]} "
+        f"({', '.join(repr(p) for p in paths[:3])})"
+        for reason, paths in sorted(kinds.items())
+    ]
+    return f"refused {len(refused)} of {total} files: " + "; ".join(parts)
+
+
 def _materialize(
     out: Path, files: list[dict[str, str]]
-) -> tuple[int, tuple[str, ...]]:
-    """Write every entry under ``out``; return (written, refused paths).
+) -> tuple[int, tuple[Refusal, ...]]:
+    """Write every entry under ``out``; return (written, refusals).
 
     A leading slash is NORMALISED rather than obeyed: ``out / "/a.md"`` is
     ``/a.md`` to pathlib, which would reroot the whole export out of the output
@@ -95,17 +125,33 @@ def _materialize(
     under ``out``: one that escapes, or that lands ON ``out`` itself ("/", ".",
     "" — a directory, not a file), is refused and counted instead. One bad
     entry costs its own file, not the other ninety-three.
+
+    The WRITE is guarded the same way (#117): a payload whose entries collide on
+    disk — ``alpha-1/brief.md`` and then ``alpha-1`` — raises ``OSError`` from
+    the ``mkdir`` or the write, and an unguarded loop would lose every entry
+    after it AND skip the report entirely, which is the same shape the path
+    guard above removed. Unreachable from hrono's own renderer (every key it
+    emits ends in ``.md``, and a node directory can never equal a section file
+    name), so this is robustness against a hostile or buggy server and against
+    the filesystem itself.
     """
     out.mkdir(parents=True, exist_ok=True)
     base = out.resolve()
     written = 0
-    refused: list[str] = []
+    refused: list[Refusal] = []
     for entry in files:
         target = (out / entry["path"].lstrip("/")).resolve()
         if target == base or base not in target.parents:
-            refused.append(entry["path"])
+            refused.append(Refusal(entry["path"], "escapes"))
             continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(entry.get("content", ""), encoding="utf-8")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(entry.get("content", ""), encoding="utf-8")
+        except OSError:
+            # a payload naming a path that collides with one already written
+            # (`alpha-1/brief.md` then `alpha-1`) costs its own file, like any
+            # other bad entry — not the ninety-three after it (#117).
+            refused.append(Refusal(entry["path"], "collides"))
+            continue
         written += 1
     return written, tuple(refused)

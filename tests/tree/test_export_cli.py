@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from hrono import cli
 from hrono.client.http import NoProfile
+from hrono.tree.commands import _materialize, _refusal
 
 runner = CliRunner()
 
@@ -138,3 +139,61 @@ def test_a_path_resolving_onto_the_output_directory_is_refused(
     assert out.is_dir()  # the output directory itself was never written over
     assert "Wrote 2 files" in result.output
     assert "refused 1 of 3" in result.output
+
+
+def test_a_directory_collision_costs_only_its_own_entry(tmp_path: Path) -> None:
+    # #117: `alpha-1/brief.md` makes `alpha-1` a directory, so writing `alpha-1`
+    # as a FILE raises IsADirectoryError. An unguarded loop lost every entry
+    # after it and skipped the report entirely — the same shape #096's path
+    # guard removed, one layer down.
+    files = [
+        {"path": "alpha-1/brief.md", "content": "first"},
+        {"path": "alpha-1", "content": "the collision"},
+        {"path": "beta-2.md", "content": "after the failure"},
+    ]
+
+    written, refused = _materialize(tmp_path / "out", files)
+
+    assert written == 2
+    assert [r.path for r in refused] == ["alpha-1"]
+    assert [r.reason for r in refused] == ["collides"]
+    # the entry AFTER the failure was still attempted
+    assert (tmp_path / "out" / "beta-2.md").read_text() == "after the failure"
+
+
+def test_a_file_blocking_a_directory_costs_only_its_own_entry(
+    tmp_path: Path,
+) -> None:
+    # the mirror: `a.md` is a file, so `a.md/b.md` cannot be created under it.
+    files = [
+        {"path": "a.md", "content": "first"},
+        {"path": "a.md/b.md", "content": "blocked"},
+        {"path": "c.md", "content": "after"},
+    ]
+
+    written, refused = _materialize(tmp_path / "out", files)
+
+    assert written == 2
+    assert [r.path for r in refused] == ["a.md/b.md"]
+    assert (tmp_path / "out" / "c.md").exists()
+
+
+def test_the_refusal_message_says_which_kind_each_was(
+    tmp_path: Path,
+) -> None:
+    # #117's folded-in fix: the line used to say every refusal "would write
+    # outside" the folder, which is untrue of a collision (inside it) and of a
+    # degenerate path (onto it). A user who saw it was told something false
+    # about their own data.
+    files = [
+        {"path": "alpha-1/brief.md", "content": "first"},
+        {"path": "alpha-1", "content": "collides"},
+        {"path": "../escape.md", "content": "escapes"},
+    ]
+
+    _written, refused = _materialize(tmp_path / "out", files)
+    message = _refusal(tmp_path / "out", len(files), refused)
+
+    assert "collide with a path already written under" in message
+    assert "write outside" in message
+    assert "refused 2 of 3" in message
