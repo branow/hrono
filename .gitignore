@@ -23,3 +23,4 @@ __pycache__/
 .venv/
 .hrono/
 .autodev/
+.e2e/
