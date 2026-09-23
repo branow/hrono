@@ -179,3 +179,18 @@ def test_another_trees_build_does_not_excuse_this_forest(
 
     with db.connect() as conn, pytest.raises(Internal, match="single root"):
         load(conn, "default")
+
+
+def test_a_job_that_does_not_reshape_the_tree_excuses_nothing(
+    db: Database,
+) -> None:
+    # #116: only ops that RESHAPE a tree explain a forest. An embed or recall
+    # job says nothing about its shape, and letting one excuse a forest would
+    # turn #096's permanent defect into a polite "try again" for as long as any
+    # unrelated job sat in the queue.
+    with db.connect() as conn, conn:
+        _forest(conn)
+        _job(conn, "embed", "running")
+
+    with db.connect() as conn, pytest.raises(Internal, match="single root"):
+        load(conn, "default")
