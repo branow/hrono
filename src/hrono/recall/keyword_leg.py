@@ -13,6 +13,28 @@ dropped, #102), each quoted as a phrase and OR-ed, so an empty, all-punctuation
 or all-stopword query yields no matches, not a crash.
 BM25 is negative (more negative = better), so relevance is ``-bm25`` and higher
 relevance means a higher z.
+
+IT CORROBORATES; IT DOES NOT RETRIEVE — measured, on the QA corpus (#140).
+``search`` has never qualified a single passage, on any question tried, and
+there are two independent reasons:
+
+1. **``Z_FLOOR`` 6.0 is unreachable.** The best BM25 z any question produced is
+   4.37, and most sit near 3. A floor 38% above the observed maximum is not a
+   bar, it is a ceiling.
+2. **Lowering it would change nothing.** Swept to 2.5 — well into the noise —
+   it adds ONE hit across nine on-topic questions, because ``VECTOR_SUPPORT``
+   3.0 already demands nearly what the vector leg's own floor (3.2) demands. The
+   keyword leg can only admit passages in that 0.2-wide band, and there are
+   almost none.
+
+``scores`` is a different matter and is LOAD-BEARING: the vector leg reads this
+z-map for corroboration (#102), and #134 measured that weakening it takes the
+eleven absent questions from 1 answered to 5, 6 or 8. So this module earns its
+place entirely through ``scores`` and the FTS index behind it.
+
+The constants are left where they are deliberately: nothing measured says a
+different floor retrieves anything worth having, and #134's rule is to adopt no
+change that does not pay for itself against both suites.
 """
 
 from __future__ import annotations

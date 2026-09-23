@@ -127,3 +127,19 @@ def test_without_documents_the_window_is_pure_score_order() -> None:
     hits = [(i, 1.0 - i / 100) for i in range(1, 13)]
 
     assert fuse(hits, []).hits == tuple(range(1, 11))
+
+
+def test_one_empty_leg_is_ranked_by_the_other_alone() -> None:
+    # #140: the keyword leg has never qualified a passage on the QA corpus, so
+    # this is not an edge case — it is every query we have measured. The fusion
+    # must rank cleanly from one leg, and the weighting must not scale the
+    # surviving scores into meaninglessness.
+    vector_only = fuse([(1, 9.0), (2, 8.0), (3, 7.0)], [])
+    keyword_only = fuse([], [(1, 9.0), (2, 8.0), (3, 7.0)])
+
+    assert vector_only.hits == (1, 2, 3)
+    assert keyword_only.hits == (1, 2, 3)
+    assert vector_only.message is None
+    # each leg alone contributes only its own weight, and order is preserved
+    assert vector_only.ranked[0][1] > vector_only.ranked[1][1]
+    assert keyword_only.ranked[0][1] > keyword_only.ranked[1][1]

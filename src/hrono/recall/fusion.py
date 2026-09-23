@@ -7,7 +7,11 @@ fusion
     score(p) = 0.7/(60 + vector_rank) + 0.3/(60 + keyword_rank)
 
 contributing a term only for the leg(s) where the passage qualified, then cap at
-10 hits. There is NO gap-based cutoff — the legs' z-floors alone decide
+10 hits. **On the QA corpus the keyword leg has never contributed a passage**
+(#140), so in practice this has weighted one list rather than two; the mechanism
+stays because it is the recipe and a different corpus or embedding model could
+make the other leg fire — but a reader should not infer from the 70/30 that
+both legs are currently in play. There is NO gap-based cutoff — the legs' z-floors alone decide
 membership. Ordering is deterministic (ties break by passage id). An empty union
 returns no hits and the exact explore message. All constants are baked.
 
