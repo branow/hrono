@@ -43,6 +43,10 @@ class Merge(BaseModel):
     ids: list[int] = Field(min_length=2)
 
 
+class SectionMove(BaseModel):
+    to_node: int
+
+
 @router.patch("/trees/{name}/nodes/{node_id}")
 def rename_node(
     name: str, node_id: int, body: Rename, request: Request, _: Admin
@@ -173,3 +177,22 @@ def split_node(
         model = str(resolve_embedding_model(conn, {})["name"])
         children = edits.split(conn, name, node_id, model)
     return {"node_id": node_id, "children": list(children)}
+
+
+@router.post("/trees/{name}/sections/{section_id}/move")
+def move_section(
+    name: str,
+    section_id: int,
+    body: SectionMove,
+    request: Request,
+    _: Admin,
+) -> dict[str, object]:
+    """File a chunk under a chosen topic (pins)."""
+    with request.app.state.db.write() as conn:
+        left = edits.move_section(conn, name, section_id, body.to_node)
+    return {
+        "section_id": section_id,
+        "from_node": left,
+        "to_node": body.to_node,
+        "pinned": True,
+    }

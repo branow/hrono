@@ -37,22 +37,25 @@ def require_node(conn: sqlite3.Connection, tree: str, node_id: int) -> None:
 
 
 def require_leaf(conn: sqlite3.Connection, node_id: int) -> None:
-    """Refuse a topic above the leaves for an operation that moves MEMBERS.
+    """Refuse a topic above the leaves where sections are what moves.
 
     A leaf topic's content is its sections, in ``node_members``; an upper
-    topic's is its children, in ``node_children``. ``merge`` and ``dissolve``
-    move the first and would silently drop the second — the node retires, its
-    child edges cascade away with it, and nothing collects an orphan above
-    level 0 (``attach_orphans`` reads level 0 only), so the subtree is gone
-    from the root and from the export with no bound on how long. #163 decides
-    what these should do up there; until then they say so.
+    topic's is its children, in ``node_children``. Every operation here that
+    touches members needs the first: ``merge`` and ``dissolve`` move them out
+    of a node and would silently drop the children — the node retires, its
+    child edges cascade away, and nothing collects an orphan above level 0
+    (``attach_orphans`` reads level 0 only), so the subtree leaves the root
+    and the export with no bound on how long — and ``move_section`` puts one
+    IN, which above level 0 would file a chunk under a topic that is not made
+    of chunks. #163 decides what surgery up there should do; until then they
+    say so.
     """
     level = _level(conn, node_id)
     if level != 0:
         raise Invalid(
-            f"this operates on leaf topics, and node {node_id} is at level "
-            f"{level}: merging or dissolving a topic above the leaves would "
-            f"detach every topic beneath it"
+            f"only a leaf topic holds sections, and node {node_id} is at "
+            f"level {level}: an upper topic's content is the topics beneath "
+            f"it, not chunks"
         )
 
 
@@ -199,6 +202,49 @@ def dissolve(
     for section_id, _hash, _path in store.node_member_rows(conn, node_id):
         pins.unpin(conn, pins.MEMBERSHIP, section_id)
     return repair.retire(conn, tree, node_id, model_name, _batch(conn, tree))
+
+
+def move_section(
+    conn: sqlite3.Connection, tree: str, section_id: int, node_id: int
+) -> int:
+    """File a chunk under the topic an operator can see it belongs to.
+
+    Returns the node it left. The new membership is recorded UNFORCED and with
+    no similarity: it was placed by a human, not by proximity, and inventing a
+    score would feed the misfit rate a number nobody measured — the monitor
+    would then act on it, which is the machine deciding from a figure the
+    machine made up.
+
+    Pinned, or the misfit monitor migrates it back inside one batch and the
+    operator watches their own correction undone (#155).
+    """
+    require_node(conn, tree, node_id)
+    require_leaf(conn, node_id)
+    current = _member_node(conn, tree, section_id)
+    if current is None:
+        raise NotFound(f"section not a member of tree {tree}: {section_id}")
+    store.remove_member(conn, current, section_id)
+    store.add_member(conn, node_id, section_id, forced=False, similarity=None)
+    pins.pin(
+        conn,
+        pins.MEMBERSHIP,
+        section_id,
+        reason="moved by hand",
+        anchor=node_id,
+    )
+    return current
+
+
+def _member_node(
+    conn: sqlite3.Connection, tree: str, section_id: int
+) -> int | None:
+    """The node of THIS tree holding the section, if any holds it."""
+    row = conn.execute(
+        "SELECT m.node_id AS id FROM node_members m JOIN nodes n "
+        "ON n.id = m.node_id WHERE m.section_id = ? AND n.tree = ?",
+        (section_id, tree),
+    ).fetchone()
+    return None if row is None else int(row["id"])
 
 
 def _level(conn: sqlite3.Connection, node_id: int) -> int:

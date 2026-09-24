@@ -1,6 +1,6 @@
-"""#158: reparent, merge and dissolve a topic by hand.
+"""Surgery on the tree by hand: #158's node operations and #160's section move.
 
-Two of these already existed as pipeline primitives; what is new is the
+Several of these already existed as pipeline primitives; what is new is the
 operator's hand on them, the pin that keeps the result, and the refusals that
 stop a hand-edit corrupting the tree. Each test checks the tree AFTER, not the
 status code.
@@ -19,6 +19,7 @@ from hrono import pins
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import migrate_children
+from hrono.cluster.repair import migrate
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.embed.store import upsert_vector
@@ -623,3 +624,129 @@ def test_a_reparented_node_survives_the_pipeline(
         pins.unpin(h.conn, pins.PARENTING, ids["third"])
         assert migrate_children(h.conn, TREE, 1, MODEL) == 1
     assert _parent_of(h, ids["third"]) == ids["other_parent"]
+
+
+def test_a_section_moves_into_the_topic_a_human_chose(
+    harness: tuple[Harness, dict],
+) -> None:
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["from_node"] == ids["third"]
+    assert _members(h, ids["first"]) == {ids["alpha"], ids["gamma"]}
+    assert _members(h, ids["third"]) == set()
+    assert pins.is_pinned(h.conn, pins.MEMBERSHIP, ids["gamma"]) is True
+    assert pins.anchors(h.conn, pins.MEMBERSHIP)[ids["gamma"]] == ids["first"]
+
+
+def test_a_moved_section_carries_no_invented_similarity(
+    harness: tuple[Harness, dict],
+) -> None:
+    # it was placed by a human, not by proximity. A score here would be a
+    # number nobody measured, and the misfit monitor acts on those numbers.
+    h, ids = harness
+
+    h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    row = h.conn.execute(
+        "SELECT attached, assignment_similarity AS sim, forced FROM "
+        "node_members WHERE node_id = ? AND section_id = ?",
+        (ids["first"], ids["gamma"]),
+    ).fetchone()
+    assert row["sim"] is None
+    assert int(row["attached"]) == 0
+    assert int(row["forced"]) == 0
+
+
+def test_a_moved_section_is_not_migrated_back(
+    harness: tuple[Harness, dict],
+) -> None:
+    # gamma sits with `first` only because a human put it there; by proximity
+    # it belongs with `fourth`, which is exactly when the monitor moves a chunk
+    # and the operator watches their own correction undone.
+    #
+    # ONE migrate run decides both members of the node, and the pin is the only
+    # difference between them: gamma stays, alpha -- which nobody pinned and
+    # which now fits `second` better -- leaves. A run that moved neither would
+    # prove nothing about the pin.
+    h, ids = harness
+    h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    with h.conn:
+        migrate(h.conn, TREE, ids["first"], MODEL)
+
+    assert ids["gamma"] in _members(h, ids["first"])
+    assert ids["alpha"] not in _members(h, ids["first"])
+
+
+def test_a_section_cannot_be_filed_under_an_upper_topic(
+    harness: tuple[Harness, dict],
+) -> None:
+    # a topic above the leaves is made of topics, not chunks.
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["parent"]},
+        headers=h.headers,
+    )
+
+    assert response.status_code == 422
+    assert "level 1" in response.json()["error"]["message"]
+    assert _members(h, ids["third"]) == {ids["gamma"]}
+    assert ids["gamma"] not in pins.pinned(h.conn, pins.MEMBERSHIP)
+
+
+def test_a_section_move_refuses_what_this_tree_does_not_hold(
+    harness: tuple[Harness, dict],
+) -> None:
+    h, ids = harness
+    with h.conn:
+        foreign = cluster_store.add_leaf_node(
+            h.conn, OTHER_TREE, [(ids["alpha"], False, None)]
+        )
+        loose = _section(h.conn, "loose.md", [0.5, 0.5])
+
+    for section, node, expected in (
+        (ids["gamma"], foreign, 404),  # a real node, another tree's
+        (ids["gamma"], 99999, 404),  # no such node
+        (loose, ids["first"], 404),  # a real section, in no node here
+        (99999, ids["first"], 404),  # no such section
+    ):
+        response = h.client.post(
+            f"/trees/{TREE}/sections/{section}/move",
+            json={"to_node": node},
+            headers=h.headers,
+        )
+        assert response.status_code == expected, (section, node)
+
+    assert _members(h, ids["third"]) == {ids["gamma"]}
+    assert pins.pinned(h.conn, pins.MEMBERSHIP) == frozenset()
+
+
+def test_a_section_move_is_admin_only(harness: tuple[Harness, dict]) -> None:
+    h, ids = harness
+    writer = create_user(h.conn, "writer2", "writer")[1]
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["first"]},
+        headers={"Authorization": f"Bearer {writer}"},
+    )
+
+    assert response.status_code == 403
+    assert _members(h, ids["third"]) == {ids["gamma"]}
