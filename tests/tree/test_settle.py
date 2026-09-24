@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from hrono import pins
-from hrono.cluster import monitor
+from hrono.cluster import monitor, repair
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import register_path_bodies
 from hrono.cluster.build import ClusterResult
@@ -16,6 +16,7 @@ from hrono.cluster.incubator import count as incubator_count
 from hrono.cluster.incubator import park
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
+from hrono.embed.model import resolve_embedding_model
 from hrono.export import store as export_store
 from hrono.export.collapse import collapse
 from hrono.export.render import render
@@ -500,6 +501,54 @@ def test_settle_returns_a_pinned_member_to_its_anchor(
     assert landed != home
     assert outcome["held"] == 1
     assert outcome["released"] == 0
+
+
+def test_a_pin_survives_a_hand_split_of_the_topic_it_names(
+    built: Database, tmp_path: Path
+) -> None:
+    """#162: the AC of the ticket, driven end to end.
+
+    A split retires the anchor AND scatters the company `_restore_pinned`
+    would otherwise follow, so before the re-anchor this settle reported the
+    pin RELEASED — the operator's correction dropped by their own later
+    division of the same topic.
+    """
+    placed = _members(built)
+    section, home = next(iter(placed.items()))
+    if sum(1 for node in placed.values() if node == home) < 2:
+        pytest.skip("a one-member topic cannot be split")
+    with built.write() as conn:
+        pins.pin(
+            conn, pins.MEMBERSHIP, section, reason="moved by hand", anchor=home
+        )
+        model = str(resolve_embedding_model(conn, {})["name"])
+        # the seam, because the subject here is the PIN and not the recipe:
+        # the built corpus is smaller than the clustering floor, and #159's
+        # server tests already drive the real UMAP -> HDBSCAN split.
+        children = repair.split(
+            conn,
+            TREE,
+            home,
+            model,
+            over=0,
+            core_labeler=lambda vectors: [i % 2 for i in range(len(vectors))],
+        )
+    if len(children) < 2:
+        pytest.skip("the built corpus has an indivisible topic")
+
+    outcome = settle(
+        _job(),
+        job_context(built, tmp_path),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    assert outcome["released"] == 0
+    assert outcome["held"] == 1
+    with built.connect() as conn:
+        assert pins.is_pinned(conn, pins.MEMBERSHIP, section) is True
 
 
 def test_a_pin_whose_anchor_is_gone_is_released_not_guessed(

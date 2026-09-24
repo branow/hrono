@@ -173,12 +173,18 @@ def split(
         best = max(positive, key=lambda label: _dot(vector, centroids[label]))
         positive[best].append((member, vector))
 
-    new_ids = [
-        store.add_leaf_node(
+    anchored = pins.anchors(conn, pins.MEMBERSHIP)
+    new_ids: list[int] = []
+    for group in positive.values():
+        child = store.add_leaf_node(
             conn, tree, [(member[0], False, None) for member, _ in group]
         )
-        for group in positive.values()
-    ]
+        for member, _vector in group:
+            if anchored.get(member[0]) == node_id:
+                # the topic was divided, not lost: the child holding this
+                # chunk IS what the operator pointed at, narrowed (#162).
+                pins.reanchor(conn, pins.MEMBERSHIP, member[0], child)
+        new_ids.append(child)
     store.delete_node(conn, node_id)  # its brief cascades (#068)
     return tuple(new_ids)
 

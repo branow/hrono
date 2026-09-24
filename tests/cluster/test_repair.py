@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from hrono import pins
 from hrono.cluster import incubator, monitor, repair
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import path_body, register_path_bodies
@@ -131,6 +132,54 @@ def test_split_leaves_a_within_cap_cluster_alone(db: Database) -> None:
         assert repair.split(conn, TREE, small, MODEL) == ()
     with db.connect() as conn:
         assert cluster_store.member_count(conn, small) == 6
+
+
+def test_split_re_anchors_a_pin_to_the_child_that_inherits_it(
+    db: Database,
+) -> None:
+    """#162: a divided topic is not a vanished one.
+
+    `_restore_pinned` follows a dead anchor's surviving COMPANY to the node
+    that inherited it — but a split moves the company into the children too,
+    so there is nothing left to follow and the pin reads as spent. Here the
+    successor is known exactly, so the pin is re-addressed at the moment it
+    would otherwise be orphaned.
+    """
+    with db.connect() as conn, conn:
+        left = [
+            add_section(conn, f"p{i}\n".encode(), unit(0)) for i in range(16)
+        ]
+        right = [
+            add_section(conn, f"q{i}\n".encode(), unit(1)) for i in range(16)
+        ]
+        big = node_of(conn, left + right)
+        elsewhere = node_of(conn, [add_section(conn, b"other\n", unit(0))])
+        held = left[0]
+        pins.pin(
+            conn, pins.MEMBERSHIP, held, reason="moved by hand", anchor=big
+        )
+        # a member of the SAME node whose pin names somewhere else: the split
+        # is not entitled to re-address a decision about another topic, and
+        # `_restore_pinned` will return this one to where it points.
+        foreign = right[0]
+        pins.pin(conn, pins.MEMBERSHIP, foreign, anchor=elsewhere)
+
+    def labeler(vectors: list[list[float]]) -> list[int]:
+        return [0 if v[1] > 0.5 else 1 for v in vectors]
+
+    with db.connect() as conn, conn:
+        children = repair.split(conn, TREE, big, MODEL, core_labeler=labeler)
+
+    with db.connect() as conn:
+        anchor = pins.anchors(conn, pins.MEMBERSHIP)[held]
+        assert anchor in children
+        assert held in {
+            section
+            for section, _h, _p in cluster_store.node_member_rows(conn, anchor)
+        }
+        # the operator's reason is theirs, and the split did not author it
+        assert pins.reasons(conn, held)["membership"] == "moved by hand"
+        assert pins.anchors(conn, pins.MEMBERSHIP)[foreign] == elsewhere
 
 
 def test_split_refuses_a_cluster_that_yields_one_core(db: Database) -> None:

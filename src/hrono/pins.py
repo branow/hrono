@@ -72,6 +72,23 @@ def unpin_all(conn: sqlite3.Connection, target_id: int) -> int:
     return cursor.rowcount
 
 
+def reanchor(
+    conn: sqlite3.Connection, kind: str, target_id: int, anchor: int
+) -> None:
+    """Point an existing pin at a new node, keeping its reason and its date.
+
+    A split retires the node an anchor names and hands its members to fresh
+    children (#162). The operator's decision has not changed and neither has
+    when they made it — only the id that expresses it — so this is an UPDATE
+    of the address and not a re-pin, which would rewrite the reason with
+    whatever the pipeline happened to be doing at the time.
+    """
+    conn.execute(
+        "UPDATE pins SET anchor_id = ? WHERE kind = ? AND target_id = ?",
+        (anchor, kind, target_id),
+    )
+
+
 def is_pinned(conn: sqlite3.Connection, kind: str, target_id: int) -> bool:
     row = conn.execute(
         "SELECT 1 FROM pins WHERE kind = ? AND target_id = ?",

@@ -247,3 +247,40 @@ def test_split_is_admin_only(
     )
 
     assert response.status_code == 403
+
+
+def test_a_pin_follows_the_chunk_into_the_child_it_lands_in(
+    harness: tuple[Harness, int, list[int]],
+) -> None:
+    # the operator's whole story: file a chunk under this topic, then divide
+    # the topic. Their first decision is about the chunk's company, and the
+    # division does not change that company -- it narrows it.
+    h, node, _sections = harness
+    with h.conn:
+        stray = _section(h.conn, "stray.md", [1.0, 0.02])
+        origin = cluster_store.add_leaf_node(
+            h.conn, TREE, [(stray, False, None)]
+        )
+    assert origin is not None
+
+    moved = h.client.post(
+        f"/trees/{TREE}/sections/{stray}/move",
+        json={"to_node": node},
+        headers=h.headers,
+    )
+    assert moved.status_code == 200
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/{node}/split", headers=h.headers
+    )
+
+    assert response.status_code == 200, response.json()
+    anchor = pins.anchors(h.conn, pins.MEMBERSHIP)[stray]
+    assert anchor in response.json()["children"]
+    members = {
+        int(r["section_id"])
+        for r in h.conn.execute(
+            "SELECT section_id FROM node_members WHERE node_id = ?", (anchor,)
+        ).fetchall()
+    }
+    assert stray in members
