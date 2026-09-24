@@ -747,12 +747,18 @@ def test_a_section_move_refuses_what_this_tree_does_not_hold(
             h.conn, OTHER_TREE, [(ids["alpha"], False, None)]
         )
         loose = _section(h.conn, "loose.md", [0.5, 0.5])
+        # the pending pool is one table for every tree, and only its query
+        # scopes it: without that scope an operator here could pull another
+        # tree's homeless chunk into this map.
+        parked_elsewhere = _section(h.conn, "theirs.md", [0.5, 0.5])
+        park(h.conn, OTHER_TREE, parked_elsewhere, 1)
 
     for section, node, expected in (
         (ids["gamma"], foreign, 404),  # a real node, another tree's
         (ids["gamma"], 99999, 404),  # no such node
         (loose, ids["first"], 404),  # a real section, in no node OR pool here
         (99999, ids["first"], 404),  # no such section
+        (parked_elsewhere, ids["first"], 404),  # parked, in ANOTHER tree
     ):
         response = h.client.post(
             f"/trees/{TREE}/sections/{section}/move",
@@ -763,6 +769,8 @@ def test_a_section_move_refuses_what_this_tree_does_not_hold(
 
     assert _members(h, ids["third"]) == {ids["gamma"]}
     assert pins.pinned(h.conn, pins.MEMBERSHIP) == frozenset()
+    assert incubator_count(h.conn, OTHER_TREE) == 1  # still theirs
+    assert parked_elsewhere not in _members(h, ids["first"])
 
 
 def test_a_section_move_is_admin_only(harness: tuple[Harness, dict]) -> None:
