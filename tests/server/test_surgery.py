@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from hrono import pins
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
+from hrono.cluster.levels import migrate_children
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.embed.store import upsert_vector
@@ -29,6 +30,7 @@ from hrono.summarize import briefs
 
 KEY = Fernet.generate_key()
 TREE = "default"
+OTHER_TREE = "other"
 MODEL = "emb"
 
 
@@ -86,21 +88,50 @@ def harness(tmp_path: Path) -> Iterator[tuple[Harness, dict]]:
         ids["second"] = cluster_store.add_leaf_node(
             conn, TREE, [(beta, False, None)]
         )
+        delta = _section(conn, "d.md", [0.0, 0.95])
         ids["third"] = cluster_store.add_leaf_node(
             conn, TREE, [(gamma, False, None)]
         )
-        ids["alpha"], ids["beta"], ids["gamma"] = alpha, beta, gamma
-        for node in (ids["first"], ids["second"], ids["third"]):
+        ids["fourth"] = cluster_store.add_leaf_node(
+            conn, TREE, [(delta, False, None)]
+        )
+        ids["alpha"], ids["beta"] = alpha, beta
+        ids["gamma"], ids["delta"] = gamma, delta
+        # a node's brief vector is what the upper level sorts it by, so the
+        # topics it belongs WITH is what these say: first/second are one
+        # subject, third/fourth another.
+        subject = {
+            ids["first"]: [1.0, 0.0],
+            ids["second"]: [1.0, 0.0],
+            ids["third"]: [0.0, 1.0],
+            ids["fourth"]: [0.0, 1.0],
+        }
+        for node in (
+            ids["first"],
+            ids["second"],
+            ids["third"],
+            ids["fourth"],
+        ):
+            text = f"A summary of topic {node}."
             briefs.upsert(
                 conn,
                 node,
-                f"A summary of topic {node}.",
+                text,
                 model_name="m",
                 prompt_name="brief",
                 prompt_hash="h",
                 member_signature=briefs.member_signature(conn, node),
                 input_tokens=1,
                 output_tokens=1,
+            )
+            # the brief's vector is keyed by its own content hash, and the
+            # vector table FKs content -- so the text has to be stored the
+            # way `brief` stores it, not just embedded.
+            istore.upsert_content(
+                conn, content_hash(text.encode()), text.encode()
+            )
+            upsert_vector(
+                conn, content_hash(text.encode()), MODEL, subject[node]
             )
         conn.execute(
             "INSERT INTO nodes(tree, level, label, created_at) "
@@ -122,13 +153,14 @@ def harness(tmp_path: Path) -> Iterator[tuple[Harness, dict]]:
             cluster_store.add_child(
                 conn, ids["parent"], child, attached=False, similarity=None
             )
-        cluster_store.add_child(
-            conn,
-            ids["other_parent"],
-            ids["third"],
-            attached=False,
-            similarity=None,
-        )
+        for child in (ids["third"], ids["fourth"]):
+            cluster_store.add_child(
+                conn,
+                ids["other_parent"],
+                child,
+                attached=False,
+                similarity=None,
+            )
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
         yield Harness(client, conn, token), ids
@@ -270,9 +302,21 @@ def test_merge_needs_two_distinct_nodes(
     )
 
 
-def test_dissolve_retires_the_topic_and_frees_its_members(
+def _node_of(h: Harness, section: int) -> int | None:
+    row = h.conn.execute(
+        "SELECT m.node_id AS id FROM node_members m JOIN nodes n "
+        "ON n.id = m.node_id WHERE m.section_id = ? AND n.tree = ?",
+        (section, TREE),
+    ).fetchone()
+    return None if row is None else int(row["id"])
+
+
+def test_dissolve_retires_the_topic_and_re_places_its_members(
     harness: tuple[Harness, dict],
 ) -> None:
+    # every member gets a NEW HOME, which is the half of "dissolve" that the
+    # node's death does not prove: a member left in no node at all is a chunk
+    # recall can no longer reach, and the node is just as gone either way.
     h, ids = harness
 
     response = h.client.post(
@@ -286,8 +330,72 @@ def test_dissolve_retires_the_topic_and_frees_its_members(
         ).fetchone()
         is None
     )
+    home = _node_of(h, ids["gamma"])
+    assert home is not None and home != ids["third"]
+    assert response.json()["members"] == {
+        "joined": 1,
+        "parked": 0,
+        "skipped": 0,
+    }
     # nothing is pinned: the operator asked for a re-placement, not a new home
     assert ids["gamma"] not in pins.pinned(h.conn, pins.MEMBERSHIP)
+
+
+def test_dissolve_works_on_a_topic_of_any_size(
+    harness: tuple[Harness, dict],
+) -> None:
+    # `repair.dissolve` carries the automatic repair's BELOW-TWO rule, and an
+    # operator is not asking about size. Routed through it, this endpoint
+    # reported success over a node it had left standing, having already
+    # released the membership pins of every member on the way past.
+    h, ids = harness
+    h.client.post(
+        f"/trees/{TREE}/nodes/merge",
+        json={"ids": [ids["first"], ids["second"]]},
+        headers=h.headers,
+    )
+    survivor = min(ids["first"], ids["second"])
+    assert len(_members(h, survivor)) == 2
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/{survivor}/dissolve", headers=h.headers
+    )
+
+    assert response.status_code == 200
+    assert (
+        h.conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (survivor,)
+        ).fetchone()
+        is None
+    )
+    for section in (ids["alpha"], ids["beta"]):
+        assert _node_of(h, section) != survivor
+    counts = response.json()["members"]
+    assert counts["joined"] + counts["parked"] + counts["skipped"] == 2
+
+
+def test_dissolve_reports_a_member_it_could_not_place(
+    harness: tuple[Harness, dict],
+) -> None:
+    # a member whose best topic scores below TAU is PARKED, not placed, and
+    # "2 members replaced" would have said it found them homes (#133).
+    h, ids = harness
+
+    # delta finds a home: `third` is the same subject, well above TAU
+    first = h.client.post(
+        f"/trees/{TREE}/nodes/{ids['fourth']}/dissolve", headers=h.headers
+    )
+    assert first.json()["members"] == {"joined": 1, "parked": 0, "skipped": 0}
+
+    # now BOTH of them have nowhere to go: what is left of the tree is the
+    # other subject entirely, and nothing there scores TAU.
+    second = h.client.post(
+        f"/trees/{TREE}/nodes/{ids['third']}/dissolve", headers=h.headers
+    )
+
+    assert second.json()["members"] == {"joined": 0, "parked": 2, "skipped": 0}
+    for section in (ids["gamma"], ids["delta"]):
+        assert _node_of(h, section) is None  # parked, not placed
 
 
 def test_surgery_is_admin_only(harness: tuple[Harness, dict]) -> None:
@@ -305,15 +413,109 @@ def test_surgery_is_admin_only(harness: tuple[Harness, dict]) -> None:
         assert response.status_code == 403
 
 
-def test_a_node_from_another_tree_is_refused(
+def test_an_id_this_tree_does_not_hold_is_not_found(
     harness: tuple[Harness, dict],
 ) -> None:
+    # PO ruling 2026-09-24: 422 is for a conflict between ids that both live
+    # in THIS tree; an id the tree does not hold is a 404, another tree's
+    # included -- the API must not answer differently because of the contents
+    # of a tree the caller did not ask about.
     h, ids = harness
+    with h.conn:
+        foreign = cluster_store.add_leaf_node(
+            h.conn, OTHER_TREE, [(ids["alpha"], False, None)]
+        )
+
     assert (
         h.client.post(
             f"/trees/{TREE}/nodes/{ids['third']}/reparent",
-            json={"to": 99999},
+            json={"to": foreign},
             headers=h.headers,
         ).status_code
         == 404
     )
+    assert (
+        h.client.post(
+            f"/trees/{TREE}/nodes/merge",
+            json={"ids": [ids["first"], foreign]},
+            headers=h.headers,
+        ).status_code
+        == 404
+    )
+    assert (
+        h.client.post(
+            f"/trees/{TREE}/nodes/99999/reparent",
+            json={"to": ids["parent"]},
+            headers=h.headers,
+        ).status_code
+        == 404
+    )
+    assert _parent_of(h, ids["third"]) == ids["other_parent"]  # unchanged
+
+
+def test_dissolve_of_an_unknown_id_without_an_embedding_model(
+    tmp_path: Path,
+) -> None:
+    # the endpoint resolved the embedding model before it confirmed the node,
+    # so a server with no model answered an unknown id with a 500. Found by
+    # driving a real `hrono serve`, which the test client cannot show: its
+    # fixtures always have a model registered.
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    token = create_user(conn, "admin", "admin")[1]
+    app = create_app(connection=conn, master_key=KEY, key_id=1)
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/trees/{TREE}/nodes/99999/dissolve",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 404
+    conn.close()
+
+
+def test_merge_leaves_another_trees_membership_alone(
+    harness: tuple[Harness, dict],
+) -> None:
+    # a section can be a member in more than one tree -- the primary key is
+    # (node_id, section_id) -- so a merge that deletes membership by SECTION
+    # alone reaches into a tree nobody asked it to touch.
+    h, ids = harness
+    with h.conn:
+        elsewhere = cluster_store.add_leaf_node(
+            h.conn, OTHER_TREE, [(ids["beta"], False, None)]
+        )
+
+    h.client.post(
+        f"/trees/{TREE}/nodes/merge",
+        json={"ids": [ids["first"], ids["second"]]},
+        headers=h.headers,
+    )
+
+    assert _members(h, elsewhere) == {ids["beta"]}
+
+
+def test_a_reparented_node_survives_the_pipeline(
+    harness: tuple[Harness, dict],
+) -> None:
+    # the pin is not the point; what the pin BUYS is. `migrate_children` is
+    # the upper-level rule that would take the node back by proximity, and
+    # this corpus is built so that it wants to: `third`'s brief sits with
+    # `fourth` under other_parent, so its own subject scores higher there.
+    h, ids = harness
+    h.client.post(
+        f"/trees/{TREE}/nodes/{ids['third']}/reparent",
+        json={"to": ids["parent"]},
+        headers=h.headers,
+    )
+
+    with h.conn:
+        assert migrate_children(h.conn, TREE, 1, MODEL) == 0
+    assert _parent_of(h, ids["third"]) == ids["parent"]
+
+    # and it is the pin doing it, not an absent better home
+    with h.conn:
+        pins.unpin(h.conn, pins.PARENTING, ids["third"])
+        assert migrate_children(h.conn, TREE, 1, MODEL) == 1
+    assert _parent_of(h, ids["third"]) == ids["other_parent"]

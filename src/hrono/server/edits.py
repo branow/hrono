@@ -146,13 +146,16 @@ def merge_nodes(
 def dissolve_node(
     name: str, node_id: int, request: Request, _: Admin
 ) -> dict[str, object]:
-    """Retire a topic; its members re-enter the placement rule."""
-    database = request.app.state.db
-    with database.connect() as conn:
+    """Retire a topic; its members re-enter the placement rule.
+
+    The node is confirmed before the embedding model is resolved, so an
+    unknown id is a 404 rather than the 500 a server with no model gave.
+    """
+    with request.app.state.db.write() as conn:
+        edits.require_node(conn, name, node_id)
         model = str(resolve_embedding_model(conn, {})["name"])
-    with database.write() as conn:
-        replaced = edits.dissolve(conn, name, node_id, model)
-    return {"node_id": node_id, "members_replaced": replaced}
+        members = edits.dissolve(conn, name, node_id, model)
+    return {"node_id": node_id, "members": members}
 
 
 @router.post("/trees/{name}/nodes/{node_id}/split")

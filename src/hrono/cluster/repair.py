@@ -228,22 +228,49 @@ def dissolve(
     """Retire a below-two cluster; re-place survivors via the rule (#085)."""
     if store.member_count(conn, node_id) >= 2:
         return False
+    retire(conn, tree, node_id, model_name, batch, centroids)
+    return True
+
+
+def retire(
+    conn: sqlite3.Connection,
+    tree: str,
+    node_id: int,
+    model_name: str,
+    batch: int,
+    centroids: dict[int, tuple[float, ...]] | None = None,
+) -> dict[str, int]:
+    """Retire a node and re-place every member; report where they landed.
+
+    The operation ``dissolve`` performs once its BELOW-TWO rule says it may.
+    They are separate because the rule is the automatic repair's, not the
+    operation's: an operator dissolving a topic they can see is wrong is not
+    asking about its size, and #158 shipped `dissolve` reporting success over
+    a node it had silently left standing because of it.
+
+    The counts are the honest answer to "what happened to my chunks": a member
+    whose best topic scores below TAU is PARKED, not placed, and an operator
+    told only "6 members replaced" would never learn that (#133).
+    """
     centroids = centroids or store.node_centroids(conn, tree, model_name)
     others = {nid: c for nid, c in centroids.items() if nid != node_id}
     survivors = store.node_member_rows(conn, node_id)
     store.delete_node(conn, node_id)
+    outcomes = dict.fromkeys(("joined", "parked", "skipped"), 0)
     for section_id, content_hash, path in survivors:
-        placement.assign_or_park(
-            conn,
-            tree,
-            section_id=section_id,
-            content_hash=content_hash,
-            path=path,
-            centroids=others,
-            model_name=model_name,
-            batch=batch,
-        )
-    return True
+        outcomes[
+            placement.assign_or_park(
+                conn,
+                tree,
+                section_id=section_id,
+                content_hash=content_hash,
+                path=path,
+                centroids=others,
+                model_name=model_name,
+                batch=batch,
+            )
+        ] += 1
+    return outcomes
 
 
 def _vectors(

@@ -137,9 +137,7 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
     survivor, *rest = sorted(set(node_ids))
     for node_id in rest:
         for section_id, _hash, _path in store.node_member_rows(conn, node_id):
-            conn.execute(
-                "DELETE FROM node_members WHERE section_id = ?", (section_id,)
-            )
+            store.remove_member(conn, node_id, section_id)
             store.add_member(
                 conn, survivor, section_id, forced=False, similarity=None
             )
@@ -157,18 +155,21 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
 
 def dissolve(
     conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
-) -> int:
+) -> dict[str, int]:
     """Retire a topic; its members re-enter the placement rule (#085).
+
+    Through ``repair.retire`` and NOT ``repair.dissolve``: the latter carries
+    the automatic repair's below-two rule, so a topic of any real size was left
+    standing while the operator was told it had been dissolved, with their
+    membership pins released on the way past.
 
     Nothing is pinned: the operator asked for these chunks to be re-placed, not
     fixed somewhere else.
     """
     require_node(conn, tree, node_id)
-    members = store.node_member_rows(conn, node_id)
-    for section_id, _hash, _path in members:
+    for section_id, _hash, _path in store.node_member_rows(conn, node_id):
         pins.unpin(conn, pins.MEMBERSHIP, section_id)
-    repair.dissolve(conn, tree, node_id, model_name, _batch(conn, tree))
-    return len(members)
+    return repair.retire(conn, tree, node_id, model_name, _batch(conn, tree))
 
 
 def _descendants(conn: sqlite3.Connection, node_id: int) -> set[int]:
