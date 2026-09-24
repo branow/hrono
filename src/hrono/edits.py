@@ -16,7 +16,7 @@ import sqlite3
 from collections.abc import Sequence
 
 from hrono import pins
-from hrono.cluster import TooFewPoints, repair, store
+from hrono.cluster import TooFewPoints, incubator, repair, store
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.errors import Invalid, NotFound
 from hrono.recall.brief_passages import store_brief
@@ -206,10 +206,17 @@ def dissolve(
 
 def move_section(
     conn: sqlite3.Connection, tree: str, section_id: int, node_id: int
-) -> int:
+) -> int | None:
     """File a chunk under the topic an operator can see it belongs to.
 
-    Returns the node it left. The new membership is recorded UNFORCED and with
+    Returns the node it left, or None when it came from the PENDING POOL. A
+    parked chunk is the case an operator most needs this for (#164): a chunk
+    in the wrong topic is at least on the map, and one the placement rule
+    declined is invisible until the incubator's own rules reach it. Joining
+    unparks, exactly as ``assign_or_park`` does and for its reason — a chunk
+    left clustered AND pending is the state that function exists to prevent.
+
+    The new membership is recorded UNFORCED and with
     no similarity: it was placed by a human, not by proximity, and inventing a
     score would feed the misfit rate a number nobody measured — the monitor
     would then act on it, which is the machine deciding from a figure the
@@ -221,10 +228,15 @@ def move_section(
     require_node(conn, tree, node_id)
     require_leaf(conn, node_id)
     current = _member_node(conn, tree, section_id)
-    if current is None:
-        raise NotFound(f"section not a member of tree {tree}: {section_id}")
-    store.remove_member(conn, current, section_id)
+    if current is None and not _is_parked(conn, tree, section_id):
+        raise NotFound(
+            f"tree {tree} holds no section {section_id}: it is in no topic "
+            f"here and not in the pending pool"
+        )
+    if current is not None:
+        store.remove_member(conn, current, section_id)
     store.add_member(conn, node_id, section_id, forced=False, similarity=None)
+    incubator.unpark(conn, tree, section_id)
     pins.pin(
         conn,
         pins.MEMBERSHIP,
@@ -233,6 +245,11 @@ def move_section(
         anchor=node_id,
     )
     return current
+
+
+def _is_parked(conn: sqlite3.Connection, tree: str, section_id: int) -> bool:
+    """Whether the pending pool is holding this chunk for this tree."""
+    return incubator.parked_batch(conn, tree, section_id) is not None
 
 
 def _member_node(

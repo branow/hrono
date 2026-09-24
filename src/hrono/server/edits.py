@@ -187,7 +187,11 @@ def move_section(
     request: Request,
     _: Admin,
 ) -> dict[str, object]:
-    """File a chunk under a chosen topic (pins)."""
+    """File a chunk under a chosen topic (pins).
+
+    ``from_node`` is null when the chunk came from the pending pool rather
+    than from another topic.
+    """
     with request.app.state.db.write() as conn:
         left = edits.move_section(conn, name, section_id, body.to_node)
     return {

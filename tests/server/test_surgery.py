@@ -18,6 +18,8 @@ from fastapi.testclient import TestClient
 from hrono import pins
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
+from hrono.cluster.incubator import count as incubator_count
+from hrono.cluster.incubator import park
 from hrono.cluster.levels import migrate_children
 from hrono.cluster.repair import migrate
 from hrono.crypto.masterkey import reconcile
@@ -711,6 +713,31 @@ def test_a_section_cannot_be_filed_under_an_upper_topic(
     assert ids["gamma"] not in pins.pinned(h.conn, pins.MEMBERSHIP)
 
 
+def test_a_parked_chunk_can_be_filed_under_a_topic(
+    harness: tuple[Harness, dict],
+) -> None:
+    # the case an operator most needs this for: a chunk the placement rule
+    # declined is in NO topic, so it is invisible in the map until the
+    # incubator's own rules happen to reach it.
+    h, ids = harness
+    with h.conn:
+        homeless = _section(h.conn, "homeless.md", [0.4, 0.4])
+        park(h.conn, TREE, homeless, 1)
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{homeless}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["from_node"] is None
+    assert homeless in _members(h, ids["first"])
+    # joining unparks: clustered AND pending is the state that must not exist
+    assert incubator_count(h.conn, TREE) == 0
+    assert pins.anchors(h.conn, pins.MEMBERSHIP)[homeless] == ids["first"]
+
+
 def test_a_section_move_refuses_what_this_tree_does_not_hold(
     harness: tuple[Harness, dict],
 ) -> None:
@@ -724,7 +751,7 @@ def test_a_section_move_refuses_what_this_tree_does_not_hold(
     for section, node, expected in (
         (ids["gamma"], foreign, 404),  # a real node, another tree's
         (ids["gamma"], 99999, 404),  # no such node
-        (loose, ids["first"], 404),  # a real section, in no node here
+        (loose, ids["first"], 404),  # a real section, in no node OR pool here
         (99999, ids["first"], 404),  # no such section
     ):
         response = h.client.post(
