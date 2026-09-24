@@ -36,6 +36,26 @@ def require_node(conn: sqlite3.Connection, tree: str, node_id: int) -> None:
         raise NotFound(f"node not found in tree {tree}: {node_id}")
 
 
+def require_leaf(conn: sqlite3.Connection, node_id: int) -> None:
+    """Refuse a topic above the leaves for an operation that moves MEMBERS.
+
+    A leaf topic's content is its sections, in ``node_members``; an upper
+    topic's is its children, in ``node_children``. ``merge`` and ``dissolve``
+    move the first and would silently drop the second — the node retires, its
+    child edges cascade away with it, and nothing collects an orphan above
+    level 0 (``attach_orphans`` reads level 0 only), so the subtree is gone
+    from the root and from the export with no bound on how long. #163 decides
+    what these should do up there; until then they say so.
+    """
+    level = _level(conn, node_id)
+    if level != 0:
+        raise Invalid(
+            f"this operates on leaf topics, and node {node_id} is at level "
+            f"{level}: merging or dissolving a topic above the leaves would "
+            f"detach every topic beneath it"
+        )
+
+
 def require_section(conn: sqlite3.Connection, section_id: int) -> None:
     row = conn.execute(
         "SELECT 1 FROM sections WHERE id = ?", (section_id,)
@@ -112,6 +132,13 @@ def reparent(
         # a cycle here does not fail loudly: it detaches a whole subtree from
         # the root, and the export simply stops mentioning it.
         raise Invalid("that parent is below this node")
+    own, above = _level(conn, node_id), _level(conn, parent_id)
+    if above != own + 1:
+        raise Invalid(
+            f"a parent sits exactly one level up: node {node_id} is at level "
+            f"{own}, so its parent must be at level {own + 1}, and node "
+            f"{parent_id} is at level {above}"
+        )
     store.move_child(conn, node_id, parent_id, similarity=None)
     pins.pin(
         conn,
@@ -134,6 +161,7 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
         raise Invalid("a merge needs at least two distinct nodes")
     for node_id in node_ids:
         require_node(conn, tree, node_id)
+        require_leaf(conn, node_id)
     survivor, *rest = sorted(set(node_ids))
     for node_id in rest:
         for section_id, _hash, _path in store.node_member_rows(conn, node_id):
@@ -167,9 +195,18 @@ def dissolve(
     fixed somewhere else.
     """
     require_node(conn, tree, node_id)
+    require_leaf(conn, node_id)
     for section_id, _hash, _path in store.node_member_rows(conn, node_id):
         pins.unpin(conn, pins.MEMBERSHIP, section_id)
     return repair.retire(conn, tree, node_id, model_name, _batch(conn, tree))
+
+
+def _level(conn: sqlite3.Connection, node_id: int) -> int:
+    """The node's level; callers have already proved it exists."""
+    row = conn.execute(
+        "SELECT level FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()
+    return int(row["level"])
 
 
 def _descendants(conn: sqlite3.Connection, node_id: int) -> set[int]:

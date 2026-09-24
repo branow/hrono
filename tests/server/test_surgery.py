@@ -149,6 +149,14 @@ def harness(tmp_path: Path) -> Iterator[tuple[Harness, dict]]:
         ids["other_parent"] = int(
             conn.execute("SELECT MAX(id) FROM nodes").fetchone()[0]
         )
+        conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, 2, 0, 't')",
+            (TREE,),
+        )
+        ids["grandparent"] = int(
+            conn.execute("SELECT MAX(id) FROM nodes").fetchone()[0]
+        )
         for child in (ids["first"], ids["second"]):
             cluster_store.add_child(
                 conn, ids["parent"], child, attached=False, similarity=None
@@ -396,6 +404,102 @@ def test_dissolve_reports_a_member_it_could_not_place(
     assert second.json()["members"] == {"joined": 0, "parked": 2, "skipped": 0}
     for section in (ids["gamma"], ids["delta"]):
         assert _node_of(h, section) is None  # parked, not placed
+
+
+def _children(h: Harness, node: int) -> set[int]:
+    return {
+        int(r["child_id"])
+        for r in h.conn.execute(
+            "SELECT child_id FROM node_children WHERE parent_id = ?", (node,)
+        ).fetchall()
+    }
+
+
+def test_merge_refuses_a_topic_above_the_leaves(
+    harness: tuple[Harness, dict],
+) -> None:
+    # an upper topic's content is its CHILDREN, which a merge does not move:
+    # the loser retires, its child edges cascade away with it, and nothing
+    # collects an orphan above level 0 -- the subtree leaves the root and the
+    # export for good. #163 decides what these should do up there.
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/merge",
+        json={"ids": [ids["parent"], ids["other_parent"]]},
+        headers=h.headers,
+    )
+
+    assert response.status_code == 422
+    assert "level 1" in response.json()["error"]["message"]
+    assert _children(h, ids["parent"]) == {ids["first"], ids["second"]}
+    assert _children(h, ids["other_parent"]) == {ids["third"], ids["fourth"]}
+    for node in ("first", "second", "third", "fourth"):
+        assert _parent_of(h, ids[node]) is not None
+
+
+def test_merge_refuses_to_mix_levels(harness: tuple[Harness, dict]) -> None:
+    # the survivor is the lowest id, which is deterministic and says nothing
+    # about which node is the right KIND: a leaf would have survived and taken
+    # a whole branch's place.
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/merge",
+        json={"ids": [ids["first"], ids["parent"]]},
+        headers=h.headers,
+    )
+
+    assert response.status_code == 422
+    assert _children(h, ids["parent"]) == {ids["first"], ids["second"]}
+    assert _members(h, ids["first"]) == {ids["alpha"]}
+
+
+def test_dissolve_refuses_a_topic_above_the_leaves(
+    harness: tuple[Harness, dict],
+) -> None:
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/{ids['other_parent']}/dissolve",
+        headers=h.headers,
+    )
+
+    assert response.status_code == 422
+    assert "level 1" in response.json()["error"]["message"]
+    assert _children(h, ids["other_parent"]) == {ids["third"], ids["fourth"]}
+    for node in ("third", "fourth"):
+        assert _parent_of(h, ids[node]) == ids["other_parent"]
+
+
+def test_reparent_refuses_a_parent_that_is_not_one_level_up(
+    harness: tuple[Harness, dict],
+) -> None:
+    # a leaf under a leaf broke 0012_node_children.sql's invariant in one
+    # keystroke, and the pin made it permanent.
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/{ids['third']}/reparent",
+        json={"to": ids["first"]},
+        headers=h.headers,
+    )
+
+    assert response.status_code == 422
+    assert "one level up" in response.json()["error"]["message"]
+    assert _parent_of(h, ids["third"]) == ids["other_parent"]
+    assert pins.is_pinned(h.conn, pins.PARENTING, ids["third"]) is False
+
+    # and the other direction: a parent TOO FAR up skips a level, which leaves
+    # the tree just as broken as a parent beside the node.
+    skipped = h.client.post(
+        f"/trees/{TREE}/nodes/{ids['third']}/reparent",
+        json={"to": ids["grandparent"]},
+        headers=h.headers,
+    )
+
+    assert skipped.status_code == 422
+    assert _parent_of(h, ids["third"]) == ids["other_parent"]
 
 
 def test_surgery_is_admin_only(harness: tuple[Harness, dict]) -> None:
