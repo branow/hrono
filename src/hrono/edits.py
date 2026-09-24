@@ -16,7 +16,8 @@ import sqlite3
 from collections.abc import Sequence
 
 from hrono import pins
-from hrono.cluster import repair, store
+from hrono.cluster import TooFewPoints, repair, store
+from hrono.cluster.recipe import MIN_POINTS
 from hrono.errors import Invalid, NotFound
 from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs
@@ -192,3 +193,30 @@ def _batch(conn: sqlite3.Connection, tree: str) -> int:
         "SELECT batch FROM tree_batch WHERE tree = ?", (tree,)
     ).fetchone()
     return int(row["batch"]) if row is not None else 0
+
+
+def split(
+    conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
+) -> tuple[int, ...]:
+    """Divide a topic through the same mini-pipeline the repair uses.
+
+    The children are NOT pinned: the operator asked for a division, and where
+    each member lands inside it is still the pipeline's judgement — which is
+    what they were asking it to redo.
+    """
+    require_node(conn, tree, node_id)
+    try:
+        children = repair.split(conn, tree, node_id, model_name, over=0)
+    except TooFewPoints as exc:
+        # the ladder's floor, not a budget: below it there is no honest
+        # reduction to run, so there is nothing to divide BY (#094).
+        raise Invalid(
+            f"too few members to divide this topic: the clustering recipe "
+            f"needs at least {MIN_POINTS}"
+        ) from exc
+    if not children:
+        raise Invalid(
+            "this topic does not divide: its members form a single dense "
+            "group, so a split would invent a boundary that is not there"
+        )
+    return children

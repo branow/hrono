@@ -133,6 +133,24 @@ def test_split_leaves_a_within_cap_cluster_alone(db: Database) -> None:
         assert cluster_store.member_count(conn, small) == 6
 
 
+def test_split_refuses_a_cluster_that_yields_one_core(db: Database) -> None:
+    # one core plus noise is not a division: attaching the noise to the single
+    # core would rebuild the cluster that was already there, under a new id.
+    with db.connect() as conn, conn:
+        sections = [
+            add_section(conn, f"c{i}\n".encode(), unit(0)) for i in range(32)
+        ]
+        big = node_of(conn, sections)
+
+    def one_core(vectors: list[list[float]]) -> list[int]:
+        return [-1 if i < 3 else 0 for i in range(len(vectors))]
+
+    with db.connect() as conn, conn:
+        assert repair.split(conn, TREE, big, MODEL, core_labeler=one_core) == ()
+    with db.connect() as conn:
+        assert cluster_store.member_count(conn, big) == 32
+
+
 def test_migrate_moves_misfit_chunks_to_their_best_cluster(
     db: Database,
 ) -> None:

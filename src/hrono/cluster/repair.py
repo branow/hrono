@@ -139,10 +139,19 @@ def split(
     model_name: str,
     *,
     core_labeler: CoreLabeler | None = None,
+    over: int = MAX_CAP,
 ) -> tuple[int, ...]:
-    """Split an over-MAX_CAP cluster into density-core children (new ids)."""
+    """Split an over-``over`` cluster into density-core children (new ids).
+
+    ``over`` is the size that makes a split WANTED, and it is MAX_CAP for the
+    automatic repair because that is the summarization budget. A human asking
+    for a split is not subject to that budget — a six-member topic they can see
+    is really two is exactly the case #159 exists for — so they pass their own
+    floor. What does not change is the refusal below: fewer than two density
+    cores is not a split, whoever asked.
+    """
     members = _vectors(conn, node_id, model_name)
-    if len(members) <= MAX_CAP:
+    if len(members) <= over:
         return ()
     labeler = core_labeler if core_labeler is not None else _default_core
     labels = labeler([vector for _, vector in members])

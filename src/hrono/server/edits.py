@@ -153,3 +153,20 @@ def dissolve_node(
     with database.write() as conn:
         replaced = edits.dissolve(conn, name, node_id, model)
     return {"node_id": node_id, "members_replaced": replaced}
+
+
+@router.post("/trees/{name}/nodes/{node_id}/split")
+def split_node(
+    name: str, node_id: int, request: Request, _: Admin
+) -> dict[str, object]:
+    """Divide a topic; the old node retires, its children take over.
+
+    The node is confirmed BEFORE the embedding model is resolved: a server
+    with no embedding model answered an unknown node with a 500, because the
+    model it did not need yet was the first thing it went looking for.
+    """
+    with request.app.state.db.write() as conn:
+        edits.require_node(conn, name, node_id)
+        model = str(resolve_embedding_model(conn, {})["name"])
+        children = edits.split(conn, name, node_id, model)
+    return {"node_id": node_id, "children": list(children)}
