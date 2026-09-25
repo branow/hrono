@@ -19,7 +19,13 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from hrono.errors import AppError, Invalid, envelope
+from hrono.errors import (
+    AppError,
+    DomainError,
+    Invalid,
+    as_app_error,
+    envelope,
+)
 
 _logger = logging.getLogger("hrono")
 
@@ -33,8 +39,9 @@ _INTERNAL = {
 
 
 def install(app: FastAPI) -> None:
-    """Register the AppError and catch-all handlers on the app."""
+    """Register the AppError, DomainError and catch-all handlers on the app."""
     app.add_exception_handler(AppError, _handle_app_error)
+    app.add_exception_handler(DomainError, _handle_domain_error)
     app.add_exception_handler(RequestValidationError, _handle_request_invalid)
     app.add_exception_handler(Exception, _handle_unexpected)
 
@@ -50,6 +57,23 @@ def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
         content=envelope(error),
         headers=error.headers,
     )
+
+
+def _handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
+    """Render a domain failure with the code its own class declares (#161).
+
+    Through ``as_app_error``, which is the conversion #109 already settled for
+    the JOB door — so `hrono jobs get` and an HTTP call describe one failure the
+    same way, rather than the same `EmbedError` reading as `embed-error` in a
+    job record and `internal-error` over HTTP.
+
+    The status stays 500, as #145 ruled: this gives the failure back its NAME,
+    not a new place in the HTTP status space. Without it the operator whose
+    server has no embedding model was told "internal error" while the log
+    underneath said "no embedding model available" — the one line that would
+    have told them what to do.
+    """
+    return _handle_app_error(request, as_app_error(exc))
 
 
 def _handle_request_invalid(request: Request, exc: Exception) -> JSONResponse:
