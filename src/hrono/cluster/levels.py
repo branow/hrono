@@ -88,14 +88,25 @@ def attach_orphans(
     job: Job,
     context: JobContext,
     *,
+    level: int = 0,
     encoder_for: object | None = None,
 ) -> tuple[tuple[int, int, float], ...]:
-    """Parent every unparented leaf under its nearest node one level up.
+    """Parent every unparented node at ``level`` under its nearest node above.
 
     ATTACH-ONLY (#114): a leaf the incubator emits after ``build_tree`` has
     recursed to a root is briefed but has no parent, and ``root.md``'s children
     are rendered from parent edges — so the topic is written to the export and
-    unreachable in it. Re-clustering the level above for one new leaf would
+    unreachable in it.
+
+    ``level`` generalises that rule upward (#163). It was 0 because in #114 the
+    orphan was always a leaf, and that stopped being the whole truth: a node at
+    ANY level can lose its parent. ``cluster_briefs`` groups only the nodes
+    that HAVE briefs, so an upper node whose brief failed or was rejected
+    (#121) is simply absent from its parent's grouping — and with the collector
+    stopping at level 0, nothing ever came back for it. An orphan up there
+    takes its whole subtree out of the export with it.
+
+    Re-clustering the level above for one new leaf would
     churn every sibling's membership and invalidate the briefs over them, which
     is the incremental promise inverted; this places the leaf by the same move
     #085 makes at level 0, in the same space the level above was clustered in:
@@ -129,10 +140,10 @@ def attach_orphans(
     """
     tree = job.tree or "default"
     with context.database.connect() as conn:
-        leaf_briefs = briefs.level_briefs(conn, tree, 0)
-        homeless = set(store.unparented(conn, tree, 0))
+        leaf_briefs = briefs.level_briefs(conn, tree, level)
+        homeless = set(store.unparented(conn, tree, level))
         orphans = [(nid, text) for nid, text in leaf_briefs if nid in homeless]
-        parent_level = _parent_level(conn, tree)
+        parent_level = _parent_level(conn, tree, level)
     if not orphans or parent_level is None:
         return ()
 
@@ -245,6 +256,61 @@ def migrate_children(
     return len(moves)
 
 
+def replace_children(
+    conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
+) -> tuple[tuple[int, int, float], ...]:
+    """Re-place a retiring node's children under the best REMAINING parent.
+
+    The upper-level twin of ``repair.retire``: that re-places a leaf topic's
+    MEMBERS through #085's rule, and this re-places an upper topic's CHILDREN
+    through #114's — the child's unit brief vector against each candidate
+    parent's centroid, nearest wins, attaching below TAU rather than parking
+    because a node with no parent is unreachable and that is worse than an
+    imperfect parent.
+
+    A child moves to a SIBLING of the node being retired, never to its
+    grandparent: a parent sits exactly one level up (0012_node_children.sql),
+    and a child promoted two levels would break the invariant #158 now refuses
+    by hand.
+
+    Returns (child, new parent, similarity) per move. Empty when the node has
+    no children, or when nothing is left at its level to receive them — the
+    caller decides whether that is a refusal.
+    """
+    level = _level_of(conn, node_id)
+    if level is None:
+        return ()
+    centroids = _parent_centroids(conn, tree, level, model_name)
+    others = {nid: c for nid, c in centroids.items() if nid != node_id}
+    if not others:
+        return ()
+    moved: list[tuple[int, int, float]] = []
+    for child_id, vector in _child_vectors(conn, node_id, model_name):
+        target, similarity = _nearest(vector, others)
+        store.move_child(conn, child_id, target, similarity=similarity)
+        moved.append((child_id, target, similarity))
+    return tuple(moved)
+
+
+def has_siblings(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
+    """Whether any OTHER node shares this node's level in this tree."""
+    level = _level_of(conn, node_id)
+    if level is None:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM nodes WHERE tree = ? AND level = ? AND id != ? LIMIT 1",
+        (tree, level, node_id),
+    ).fetchone()
+    return row is not None
+
+
+def _level_of(conn: sqlite3.Connection, node_id: int) -> int | None:
+    row = conn.execute(
+        "SELECT level FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()
+    return None if row is None else int(row["level"])
+
+
 def _child_vectors(
     conn: sqlite3.Connection, parent_id: int, model_name: str
 ) -> tuple[tuple[int, tuple[float, ...]], ...]:
@@ -332,10 +398,13 @@ def _sole_ancestor(
     return []
 
 
-def _parent_level(conn: sqlite3.Connection, tree: str) -> int | None:
+def _parent_level(
+    conn: sqlite3.Connection, tree: str, level: int = 0
+) -> int | None:
+    """The lowest level above ``level`` that any node lives at, if any."""
     row = conn.execute(
-        "SELECT MIN(level) AS level FROM nodes WHERE tree = ? AND level > 0",
-        (tree,),
+        "SELECT MIN(level) AS level FROM nodes WHERE tree = ? AND level > ?",
+        (tree, level),
     ).fetchone()
     return None if row is None or row["level"] is None else int(row["level"])
 

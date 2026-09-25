@@ -418,14 +418,15 @@ def _children(h: Harness, node: int) -> set[int]:
     }
 
 
-def test_merge_refuses_a_topic_above_the_leaves(
+def test_merging_upper_topics_carries_every_child_of_both(
     harness: tuple[Harness, dict],
 ) -> None:
-    # an upper topic's content is its CHILDREN, which a merge does not move:
-    # the loser retires, its child edges cascade away with it, and nothing
-    # collects an orphan above level 0 -- the subtree leaves the root and the
-    # export for good. #163 decides what these should do up there.
+    # an upper topic's content is its CHILDREN. #158 refused this rather than
+    # guess; #163 is the rule: they come with it, or the loser's child edges
+    # cascade away and a whole subtree leaves the root and the export.
     h, ids = harness
+    survivor = min(ids["parent"], ids["other_parent"])
+    gone = max(ids["parent"], ids["other_parent"])
 
     response = h.client.post(
         f"/trees/{TREE}/nodes/merge",
@@ -433,12 +434,47 @@ def test_merge_refuses_a_topic_above_the_leaves(
         headers=h.headers,
     )
 
-    assert response.status_code == 422
-    assert "level 1" in response.json()["error"]["message"]
-    assert _children(h, ids["parent"]) == {ids["first"], ids["second"]}
-    assert _children(h, ids["other_parent"]) == {ids["third"], ids["fourth"]}
+    assert response.status_code == 200
+    assert response.json()["node_id"] == survivor
+    assert _children(h, survivor) == {
+        ids["first"],
+        ids["second"],
+        ids["third"],
+        ids["fourth"],
+    }
+    assert (
+        h.conn.execute("SELECT 1 FROM nodes WHERE id = ?", (gone,)).fetchone()
+        is None
+    )
     for node in ("first", "second", "third", "fourth"):
-        assert _parent_of(h, ids[node]) is not None
+        assert _parent_of(h, ids[node]) == survivor
+        # the operator put them together, so the pipeline may not take them
+        # apart -- the upper twin of the membership pin a leaf merge sets
+        assert pins.is_pinned(h.conn, pins.PARENTING, ids[node]) is True
+
+
+def test_a_merge_folds_more_than_two(harness: tuple[Harness, dict]) -> None:
+    # the AC says "retires the OTHERS", and every other merge test here folds
+    # exactly one, so the loop over the losers was unguarded (#158 po review).
+    h, ids = harness
+    three = [ids["first"], ids["second"], ids["third"]]
+    survivor = min(three)
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/merge", json={"ids": three}, headers=h.headers
+    )
+
+    assert response.status_code == 200
+    assert _members(h, survivor) == {ids["alpha"], ids["beta"], ids["gamma"]}
+    for node in three:
+        if node == survivor:
+            continue
+        assert (
+            h.conn.execute(
+                "SELECT 1 FROM nodes WHERE id = ?", (node,)
+            ).fetchone()
+            is None
+        )
 
 
 def test_merge_refuses_to_mix_levels(harness: tuple[Harness, dict]) -> None:
@@ -458,9 +494,12 @@ def test_merge_refuses_to_mix_levels(harness: tuple[Harness, dict]) -> None:
     assert _members(h, ids["first"]) == {ids["alpha"]}
 
 
-def test_dissolve_refuses_a_topic_above_the_leaves(
+def test_dissolving_an_upper_topic_re_places_its_children(
     harness: tuple[Harness, dict],
 ) -> None:
+    # the upper twin of a leaf dissolve: the members that re-enter the rule are
+    # CHILDREN, and they go to a SIBLING of the retired node -- never to its
+    # grandparent, which would put them two levels under their parent.
     h, ids = harness
 
     response = h.client.post(
@@ -468,11 +507,37 @@ def test_dissolve_refuses_a_topic_above_the_leaves(
         headers=h.headers,
     )
 
-    assert response.status_code == 422
-    assert "level 1" in response.json()["error"]["message"]
-    assert _children(h, ids["other_parent"]) == {ids["third"], ids["fourth"]}
+    assert response.status_code == 200
+    assert (
+        h.conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (ids["other_parent"],)
+        ).fetchone()
+        is None
+    )
     for node in ("third", "fourth"):
-        assert _parent_of(h, ids[node]) == ids["other_parent"]
+        assert _parent_of(h, ids[node]) == ids["parent"]
+    assert response.json()["members"]["joined"] == 2
+
+
+def test_dissolving_the_only_topic_at_its_level_is_refused(
+    harness: tuple[Harness, dict],
+) -> None:
+    # with no sibling left there is nowhere for the children to go, and doing
+    # it anyway would detach them from the root -- which is the harm #163
+    # exists to close, not a thing to do on request.
+    h, ids = harness
+    h.client.post(
+        f"/trees/{TREE}/nodes/{ids['other_parent']}/dissolve",
+        headers=h.headers,
+    )
+
+    response = h.client.post(
+        f"/trees/{TREE}/nodes/{ids['parent']}/dissolve", headers=h.headers
+    )
+
+    assert response.status_code == 422
+    assert "nowhere to go" in response.json()["error"]["message"]
+    assert _children(h, ids["parent"])
 
 
 def test_reparent_refuses_a_parent_that_is_not_one_level_up(

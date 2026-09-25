@@ -98,16 +98,26 @@ def _require_reachable(context: JobContext, tree: str) -> None:
     """Refuse to call a tree built while any topic is linked from nothing.
 
     ``root.md``'s children are rendered from parent EDGES, so an unparented
-    level-0 node is written to the export and unreachable in it. Every route
-    that produces one has been closed as it was found (#114, #124), and this is
-    the guard for the routes nobody has thought of yet: reporting success over
-    an unreachable map is the shape F16, F20 and F29 all share.
+    node is written to the export and unreachable in it. Every route that
+    produces one has been closed as it was found (#114, #124), and this is the
+    guard for the routes nobody has thought of yet: reporting success over an
+    unreachable map is the shape F16, F20 and F29 all share.
+
+    EVERY level below the top, not just the leaves (#163). Checking only level
+    0 let a whole subtree hang off nothing and still pass: the orphan was an
+    upper node, so its own children were parented — to it — and the leaf-level
+    check saw a tidy map. This guard is the one that would have caught that,
+    and did not.
     """
     with context.database.connect() as conn:
-        orphans = store.unparented(conn, tree, 0)
         top = _top_level(conn, tree)
-    if top == 0:
-        return  # a one-topic tree: the leaf IS the root (#112), not an orphan
+        if top == 0:
+            return  # a one-topic tree: the leaf IS the root (#112)
+        orphans = tuple(
+            node
+            for level in range(top)
+            for node in store.unparented(conn, tree, level)
+        )
     if orphans:
         raise UnreachableTree(
             f"{len(orphans)} topic(s) unreachable from the root: "
@@ -128,7 +138,7 @@ def _adopt_late_leaves(
     client: Completion | None,
     encoder_for: object | None,
 ) -> None:
-    """Attach leaves born after the recursion, then re-brief their parents.
+    """Attach nodes born or orphaned after the recursion, then re-brief.
 
     The incubator emits new leaves long after the tree was built (#095), and the
     recursion cannot see them: it starts at the highest BRIEFED level, finds one
@@ -142,9 +152,19 @@ def _adopt_late_leaves(
     skipped. Leaving it stale instead would ship a parent brief that omits the
     topic underneath it, which is this ticket's harm one level up.
     """
-    attached = attach_orphans(
-        _level_job(tree, 0), context, encoder_for=encoder_for
-    )
+    with context.database.connect() as conn:
+        top = _top_level(conn, tree)
+    attached: tuple[tuple[int, int, float], ...] = ()
+    # every level, bottom up: an orphan at level N is adopted before level N+1
+    # is swept, so a subtree that had come loose is whole again by the time its
+    # own parent is looked at (#163).
+    for level in range(top):
+        attached += attach_orphans(
+            _level_job(tree, level),
+            context,
+            level=level,
+            encoder_for=encoder_for,
+        )
     if not attached:
         return
     with context.database.connect() as conn:

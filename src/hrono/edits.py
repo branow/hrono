@@ -16,7 +16,7 @@ import sqlite3
 from collections.abc import Sequence
 
 from hrono import pins
-from hrono.cluster import TooFewPoints, incubator, repair, store
+from hrono.cluster import TooFewPoints, incubator, levels, repair, store
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.errors import Invalid, NotFound
 from hrono.recall.brief_passages import store_brief
@@ -34,6 +34,24 @@ def require_node(conn: sqlite3.Connection, tree: str, node_id: int) -> None:
     """A node of ANOTHER tree is not found here, however real it is."""
     if not node_exists(conn, tree, node_id):
         raise NotFound(f"node not found in tree {tree}: {node_id}")
+
+
+def require_one_level(
+    conn: sqlite3.Connection, node_ids: Sequence[int]
+) -> None:
+    """Refuse a merge that mixes levels; a survivor is one kind or the other.
+
+    The survivor is the lowest id, which is deterministic and says nothing
+    about which node is the right KIND: a leaf surviving a merge with its own
+    grandparent would hold that branch's children under a node whose content is
+    chunks (#158 G4).
+    """
+    seen = {_level(conn, node_id) for node_id in node_ids}
+    if len(seen) > 1:
+        raise Invalid(
+            "a merge folds topics of ONE level: these are at levels "
+            + ", ".join(str(level) for level in sorted(seen))
+        )
 
 
 def require_leaf(conn: sqlite3.Connection, node_id: int) -> None:
@@ -164,7 +182,7 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
         raise Invalid("a merge needs at least two distinct nodes")
     for node_id in node_ids:
         require_node(conn, tree, node_id)
-        require_leaf(conn, node_id)
+    require_one_level(conn, node_ids)
     survivor, *rest = sorted(set(node_ids))
     for node_id in rest:
         for section_id, _hash, _path in store.node_member_rows(conn, node_id):
@@ -172,12 +190,26 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
             store.add_member(
                 conn, survivor, section_id, forced=False, similarity=None
             )
+        # an upper topic's content is its CHILDREN, and they have to come too:
+        # the loser's child edges cascade away with it, and a subtree detached
+        # up here left the root and the export with nothing to say about it
+        # (#163).
+        for child_id in _children(conn, node_id):
+            store.move_child(conn, child_id, survivor, similarity=None)
         store.delete_node(conn, node_id)  # its brief and passages cascade
     for section_id, _hash, _path in store.node_member_rows(conn, survivor):
         pins.pin(
             conn,
             pins.MEMBERSHIP,
             section_id,
+            reason="merged by hand",
+            anchor=survivor,
+        )
+    for child_id in _children(conn, survivor):
+        pins.pin(
+            conn,
+            pins.PARENTING,
+            child_id,
             reason="merged by hand",
             anchor=survivor,
         )
@@ -198,10 +230,34 @@ def dissolve(
     fixed somewhere else.
     """
     require_node(conn, tree, node_id)
-    require_leaf(conn, node_id)
+    if _level(conn, node_id) != 0:
+        return _dissolve_upper(conn, tree, node_id, model_name)
     for section_id, _hash, _path in store.node_member_rows(conn, node_id):
         pins.unpin(conn, pins.MEMBERSHIP, section_id)
     return repair.retire(conn, tree, node_id, model_name, _batch(conn, tree))
+
+
+def _dissolve_upper(
+    conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
+) -> dict[str, int]:
+    """Retire an upper topic; its CHILDREN re-enter the attach rule (#163).
+
+    Refused when nothing is left at its level to receive them: a node with no
+    siblings IS the level, and retiring it would leave every child of it
+    hanging from nothing — which is the harm this ticket exists to close, not
+    a thing to do on request.
+    """
+    if not levels.has_siblings(conn, tree, node_id):
+        raise Invalid(
+            f"node {node_id} is the only topic at its level, so its children "
+            f"have nowhere to go: dissolving it would detach them from the "
+            f"root"
+        )
+    for child_id in _children(conn, node_id):
+        pins.unpin(conn, pins.PARENTING, child_id)
+    moved = levels.replace_children(conn, tree, node_id, model_name)
+    store.delete_node(conn, node_id)
+    return {"joined": len(moved), "parked": 0, "skipped": 0}
 
 
 def move_section(
@@ -262,6 +318,17 @@ def _member_node(
         (section_id, tree),
     ).fetchone()
     return None if row is None else int(row["id"])
+
+
+def _children(conn: sqlite3.Connection, node_id: int) -> tuple[int, ...]:
+    return tuple(
+        int(row["child_id"])
+        for row in conn.execute(
+            "SELECT child_id FROM node_children WHERE parent_id = ? "
+            "ORDER BY child_id",
+            (node_id,),
+        ).fetchall()
+    )
 
 
 def _level(conn: sqlite3.Connection, node_id: int) -> int:

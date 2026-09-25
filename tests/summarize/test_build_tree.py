@@ -4,6 +4,7 @@ from collections.abc import Callable, Iterator
 import pytest
 
 from hrono.cluster import ClusterError, TooFewPoints
+from hrono.cluster import store as cluster_store
 from hrono.cluster.build import ClusterResult
 from hrono.db.database import Database
 from hrono.jobs.model import Job
@@ -13,6 +14,7 @@ from hrono.registry import store as registry_store
 from hrono.summarize import UnreachableTree, briefs
 from hrono.summarize.build_tree import (
     D_MAX,
+    _adopt_late_leaves,
     _require_reachable,
     build_tree,
 )
@@ -362,6 +364,113 @@ def test_build_tree_refuses_to_report_success_over_an_unreachable_map(
 
     with pytest.raises(UnreachableTree, match="unreachable from the root"):
         _require_reachable(JobContext(db), "default")
+
+
+def test_the_guard_sees_an_orphan_above_the_leaves(db: Database) -> None:
+    """#163: a detached SUBTREE passed this guard, and it is the worse case.
+
+    The orphan is an upper node, so its own children are parented — to it — and
+    `unparented(level 0)` is empty. Checking only the leaves read a map with a
+    branch hanging from nothing as a tidy one, and reported the build a
+    success. Every level below the top now, for the same reason the level-0
+    check existed at all.
+    """
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 3)
+
+        def node(level: int) -> int:
+            cursor = conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES ('default', ?, 0, 't')",
+                (level,),
+            )
+            return int(cursor.lastrowid)
+
+        root, good, orphan = node(2), node(1), node(1)
+        conn.execute(
+            "INSERT INTO node_children(parent_id, child_id, attached, "
+            "assignment_similarity, created_at) VALUES (?, ?, 0, NULL, 't')",
+            (root, good),
+        )
+        for leaf in _leaf_ids(conn):
+            conn.execute(
+                "INSERT INTO node_children(parent_id, child_id, attached, "
+                "assignment_similarity, created_at) "
+                "VALUES (?, ?, 0, NULL, 't')",
+                (orphan if leaf % 2 else good, leaf),
+            )
+
+    with db.connect() as conn:
+        assert cluster_store.unparented(conn, "default", 0) == ()  # tidy below
+
+    with pytest.raises(UnreachableTree, match="unreachable from the root"):
+        _require_reachable(JobContext(db), "default")
+
+
+def test_the_build_sweeps_every_level_for_orphans(db: Database) -> None:
+    """#163: the wiring, not the function.
+
+    `attach_orphans(level=1)` is tested where it lives, and proving a function
+    is not proving that anything calls it — the sweep here ran `range(1)` for
+    its whole life and every unit test of the collector stayed green.
+    """
+    with db.connect() as conn, conn:
+        register(conn)
+        seed_leaves(conn, 4)
+
+        def upper(level: int, label: int) -> int:
+            cursor = conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES ('default', ?, ?, 't')",
+                (level, label),
+            )
+            node = int(cursor.lastrowid)
+            briefs.upsert(
+                conn,
+                node,
+                f"upper brief {level}-{label}",
+                model_name="sonnet",
+                prompt_name="brief-upper",
+                prompt_hash="h",
+                member_signature=f"u{level}{label}",
+                input_tokens=1,
+                output_tokens=1,
+            )
+            return node
+
+        root, good, orphan = upper(2, 0), upper(1, 0), upper(1, 1)
+        leaves = _leaf_ids(conn)
+        cluster_store.add_child(
+            conn, root, good, attached=False, similarity=None
+        )
+        for i, leaf in enumerate(leaves):
+            cluster_store.add_child(
+                conn,
+                orphan if i % 2 else good,
+                leaf,
+                attached=False,
+                similarity=None,
+            )
+
+    with db.connect() as conn:
+        assert cluster_store.unparented(conn, "default", 0) == ()
+        assert orphan in cluster_store.unparented(conn, "default", 1)
+
+    _adopt_late_leaves(JobContext(db), TREE, FakeCompletion(), fake_encoder)
+
+    with db.connect() as conn:
+        assert cluster_store.unparented(conn, "default", 1) == ()
+    _require_reachable(JobContext(db), TREE)  # and the guard agrees
+
+
+def _leaf_ids(conn: object) -> list[int]:
+    return [
+        int(row["id"])
+        for row in conn.execute(  # type: ignore[attr-defined]
+            "SELECT id FROM nodes WHERE tree='default' AND level=0 ORDER BY id"
+        ).fetchall()
+    ]
 
 
 def test_a_one_topic_tree_is_not_an_orphan(db: Database) -> None:

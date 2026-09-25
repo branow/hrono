@@ -742,3 +742,74 @@ def test_a_pinned_child_keeps_the_parent_a_human_chose(db: Database) -> None:
     with db.connect() as conn, conn:
         pins.unpin(conn, pins.PARENTING, stray)
         assert migrate_children(conn, TREE, 1, MODEL) == 1
+
+
+def test_an_orphan_above_level_zero_is_collected(
+    seeded: tuple[Database, dict[int, str]],
+) -> None:
+    """#163: the collector stopped at level 0 and the guard looked there too.
+
+    An upper orphan hides from a leaf-level check by construction: its OWN
+    children are parented -- to it -- so `unparented(level 0)` is empty and the
+    map looks tidy while a whole subtree hangs from nothing.
+    """
+    database, _groups = seeded
+    calls: list[int] = []
+    cluster_briefs(
+        job(0), JobContext(database), encoder_for=fake_encoder_for(calls)
+    )
+
+    with database.connect() as conn, conn:
+        parents = [
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM nodes WHERE tree='default' AND level=1 "
+                "ORDER BY id"
+            ).fetchall()
+        ]
+        assert len(parents) >= 2
+        orphan = parents[0]
+        # what a rejected or failed brief looks like to the level above (#121):
+        # `cluster_briefs` groups only the nodes that HAVE briefs, so this one
+        # is simply absent from the grouping and never gains a parent.
+        conn.execute("DELETE FROM node_children WHERE child_id = ?", (orphan,))
+        for node in parents:
+            briefs.upsert(
+                conn,
+                node,
+                f"alpha upper summary {node}",
+                model_name="emb",
+                prompt_name="brief-upper",
+                prompt_hash="h",
+                member_signature="sig",
+                input_tokens=1,
+                output_tokens=1,
+            )
+        cursor = conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('default', 2, 0, 't')"
+        )
+        top = int(cursor.lastrowid)
+        for node in parents[1:]:
+            cluster_store.add_child(
+                conn, top, node, attached=False, similarity=None
+            )
+
+    with database.connect() as conn:
+        assert cluster_store.unparented(conn, "default", 0) == ()
+        assert orphan in cluster_store.unparented(conn, "default", 1)
+
+    attached = attach_orphans(
+        job(1),
+        JobContext(database),
+        level=1,
+        encoder_for=fake_encoder_for(calls),
+    )
+
+    assert [child for child, _, _ in attached] == [orphan]
+    with database.connect() as conn:
+        assert cluster_store.unparented(conn, "default", 1) == ()
+        row = conn.execute(
+            "SELECT parent_id FROM node_children WHERE child_id = ?", (orphan,)
+        ).fetchone()
+    assert int(row["parent_id"]) == top
