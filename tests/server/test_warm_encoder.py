@@ -10,6 +10,7 @@ skipped outright (#108).
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -26,12 +27,13 @@ from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
 
-pytestmark = pytest.mark.skipif(
+_NEEDS_WEIGHTS = pytest.mark.skipif(
     not os.environ.get("HRONO_TEST_REAL_MODEL"),
     reason="set HRONO_TEST_REAL_MODEL=<id> to load real weights",
 )
 
 
+@_NEEDS_WEIGHTS
 def test_starting_the_server_warms_the_query_encoder(tmp_path: Path) -> None:
     model_id = os.environ["HRONO_TEST_REAL_MODEL"]
     conn = open_database(tmp_path / "hrono.db")
@@ -66,14 +68,40 @@ def test_starting_the_server_warms_the_query_encoder(tmp_path: Path) -> None:
     conn.close()
 
 
-def test_a_server_with_no_embedding_model_still_starts(tmp_path: Path) -> None:
-    # the warm-up must never be fatal: a database with nothing registered yet
-    # is a perfectly ordinary first boot.
+def test_a_server_with_no_embedding_model_starts_and_says_why_quietly(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A first boot with nothing registered is ordinary, and must stay quiet.
+
+    NOT guarded by the env var: this registers no model, so it needs no
+    weights, no network and no cache, and it is the guard that must run
+    everywhere (qa, 2026-09-25).
+
+    The assertion is on the LOG, not on the server surviving. The warm-up runs
+    in a daemon thread, so a raise there could never take the server down and
+    "it still starts" would pass with the error handling deleted -- it did,
+    when this test was first written. What the try/except actually buys is
+    that the failure is a debug line instead of a traceback on the operator's
+    stderr at every boot, so that is what is measured here.
+    """
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)
 
-    app = create_app(connection=conn, master_key=KEY, key_id=1)
-    with TestClient(app) as client:
-        assert client.get("/health").status_code in (200, 401, 403)
+    with caplog.at_level(logging.DEBUG, logger="hrono"):
+        app = create_app(connection=conn, master_key=KEY, key_id=1)
+        with TestClient(app):
+            deadline = time.monotonic() + 10
+            while not _warned(caplog):
+                if time.monotonic() > deadline:
+                    pytest.fail("the warm-up neither warmed nor reported")
+                time.sleep(0.05)
 
+    assert _warned(caplog)
     conn.close()
+
+
+def _warned(caplog: pytest.LogCaptureFixture) -> bool:
+    return any(
+        "query encoder not warmed" in record.message
+        for record in caplog.records
+    )
