@@ -17,6 +17,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from hrono.recall import fusion, keyword_leg, vector_leg
+from hrono.recall.scope import passages_of
 
 Encode = Callable[[list[str]], Sequence[Sequence[float]]]
 
@@ -43,13 +44,20 @@ def recall(
     encode: Encode,
     *,
     limit: int = fusion.CAP,
+    tree: str | None = None,
 ) -> Recall:
-    """Run the frozen recall recipe for ``question`` and return ranked hits."""
+    """Run the frozen recall recipe for ``question`` and return ranked hits.
+
+    ``tree`` scopes the corpus to that tree's passages (#166). Omitted, or a
+    tree that declares no sources, searches everything — which is what a
+    single-corpus database is, and why its scores are unchanged.
+    """
     query_vec = list(encode([question])[0])
-    vector_z = vector_leg.scores(conn, query_vec, model_name)
-    keyword_z = keyword_leg.scores(conn, question)
+    allowed = None if tree is None else passages_of(conn, tree)
+    vector_z = vector_leg.scores(conn, query_vec, model_name, allowed)
+    keyword_z = keyword_leg.scores(conn, question, allowed)
     vector_hits = vector_leg.qualify(vector_z, keyword_z)
-    keyword_hits = keyword_leg.search(conn, question, vector_z)
+    keyword_hits = keyword_leg.search(conn, question, vector_z, allowed)
 
     fused = fusion.fuse(
         vector_hits,

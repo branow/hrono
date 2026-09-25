@@ -93,12 +93,19 @@ def scores(
     conn: sqlite3.Connection,
     query_vec: Sequence[float],
     model_name: str,
+    scope: frozenset[int] | None = None,
 ) -> dict[int, float]:
-    """Return the vector z-score for EVERY embedded passage (support map).
+    """Return the vector z-score for every embedded passage IN SCOPE.
 
     The keyword leg (#073) needs a passage's vector z even when it is below the
     3.5 qualify floor (its support bar is 3.0), and the endpoint (#074) fuses on
     it, so the full z-map is exposed here and ``search`` just filters it.
+
+    ``scope`` is the tree's passages, or None for every one of them (#166). It
+    is applied before the z, not after: a passage's z is measured against the
+    passages that could have answered the question, which is its tree's. It
+    also skips the blend for a passage out of scope, which is the expensive
+    part of this loop.
     """
     query = combine(query_vec, query_vec)
     content_query = unit(query_vec)
@@ -107,6 +114,8 @@ def scores(
     for row in conn.execute(
         "SELECT id, content_hash, path FROM passages ORDER BY id"
     ).fetchall():
+        if scope is not None and int(row["id"]) not in scope:
+            continue
         passage = combined_vector(
             conn, row["content_hash"], row["path"], model_name
         )

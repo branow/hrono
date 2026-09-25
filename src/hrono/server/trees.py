@@ -76,7 +76,12 @@ def recall_tree(
     encode = _query_encode(str(model["model"]))  # loads the model off the lock
     with database.connect() as conn:
         result = engine.recall(
-            conn, body.question, str(model["name"]), encode, limit=body.limit
+            conn,
+            body.question,
+            str(model["name"]),
+            encode,
+            limit=body.limit,
+            tree=name,
         )
     return {
         "hits": [asdict(hit) for hit in result.hits],

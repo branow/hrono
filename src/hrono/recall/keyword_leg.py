@@ -120,12 +120,13 @@ def search(
     conn: sqlite3.Connection,
     query: str,
     vector_z: dict[int, float],
+    scope: frozenset[int] | None = None,
 ) -> tuple[tuple[int, float], ...]:
     """Return (passage_id, keyword z) for passages clearing both floors."""
     match = _match_expr(query)
     if match is None:
         return ()
-    return _qualify(fts.search(conn, match), vector_z)
+    return _qualify(_in_scope(fts.search(conn, match), scope), vector_z)
 
 
 def _match_expr(query: str) -> str | None:
@@ -136,7 +137,11 @@ def _match_expr(query: str) -> str | None:
     return " OR ".join(f'"{term}"' for term in sorted(content))
 
 
-def scores(conn: sqlite3.Connection, query: str) -> dict[int, float]:
+def scores(
+    conn: sqlite3.Connection,
+    query: str,
+    scope: frozenset[int] | None = None,
+) -> dict[int, float]:
     """Return the keyword z of every passage the query MATCHED at all.
 
     Below the leg's own 6.0 floor this is not a hit — it is lexical SUPPORT,
@@ -147,7 +152,16 @@ def scores(conn: sqlite3.Connection, query: str) -> dict[int, float]:
     match = _match_expr(query)
     if match is None:
         return {}
-    return _z(fts.search(conn, match))
+    return _z(_in_scope(fts.search(conn, match), scope))
+
+
+def _in_scope(
+    hits: tuple[tuple[int, float], ...], scope: frozenset[int] | None
+) -> tuple[tuple[int, float], ...]:
+    """Drop hits from other trees before the z, never after (#166)."""
+    if scope is None:
+        return hits
+    return tuple(hit for hit in hits if hit[0] in scope)
 
 
 def _z(hits: tuple[tuple[int, float], ...]) -> dict[int, float]:
