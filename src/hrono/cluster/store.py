@@ -26,12 +26,24 @@ from hrono.cluster.blend import combined_vector
 
 
 def section_combined_vectors(
-    conn: sqlite3.Connection, model_name: str
+    conn: sqlite3.Connection,
+    model_name: str,
+    sources: Sequence[str] | None = None,
 ) -> tuple[tuple[int, tuple[float, ...]], ...]:
-    """Return (section_id, combined vector) for every embedded section."""
+    """Return (section_id, combined vector) for the sections in scope.
+
+    ``sources`` is the tree's own sources (#054); None means every embedded
+    section, which is what a tree with no registry entry still gets and what
+    kept two named trees identical before this existed.
+    """
     rows = conn.execute(
         "SELECT id, path, content_hash FROM sections "
         "WHERE source_type != 'node' ORDER BY id"
+        if sources is None
+        else "SELECT id, path, content_hash FROM sections "
+        f"WHERE source_type != 'node' AND source IN ({_marks(sources)}) "
+        "ORDER BY id",
+        () if sources is None else tuple(sources),
     ).fetchall()
     pairs: list[tuple[int, tuple[float, ...]]] = []
     for row in rows:
@@ -41,6 +53,11 @@ def section_combined_vectors(
         if combined is not None:
             pairs.append((int(row["id"]), combined))
     return tuple(pairs)
+
+
+def _marks(values: Sequence[str]) -> str:
+    """Placeholders for an IN clause; the values are always bound."""
+    return ",".join("?" * len(values))
 
 
 def stored_coords(

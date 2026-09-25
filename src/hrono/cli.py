@@ -43,8 +43,15 @@ app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
 app.add_typer(tree_app, name="tree")
 app.add_typer(jobs_app, name="jobs")
-for _collection in ("sources", "connections", "models", "prompts"):
-    app.add_typer(build_app(_collection), name=_collection)
+# `trees` config hangs under `hrono tree config` rather than beside it: a
+# `hrono trees` next to `hrono tree` reads as a typo, and the work commands and
+# the config for the same noun belong together (#054).
+tree_app.add_typer(build_app("trees"), name="config")
+for _descriptor in COLLECTIONS:
+    if _descriptor.collection != "trees":
+        app.add_typer(
+            build_app(_descriptor.collection), name=_descriptor.collection
+        )
 
 
 @app.command()

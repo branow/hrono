@@ -28,7 +28,7 @@ from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry import store as registry_store
+from hrono.registry.trees import scoped_sources
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense
@@ -47,9 +47,7 @@ def maintain(
     """Build a tree end to end: ingest, embed, condense, cluster, brief."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
-        sources = [
-            row["name"] for row in registry_store.list_all(conn, "sources")
-        ]
+        sources = scoped_sources(conn, tree)
 
     for name in sources:
         source_scope = {"type": "source", "name": name}

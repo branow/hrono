@@ -35,7 +35,9 @@ def register_model(conn: object) -> None:
     registry_store.insert(conn, "models", MODEL, json.dumps(body), None, "t")  # type: ignore[arg-type]
 
 
-def add_embedded_section(conn: object, path: str, body: bytes, i: int) -> int:
+def add_embedded_section(
+    conn: object, path: str, body: bytes, i: int, source: str = "repo"
+) -> int:
     istore.upsert_content(conn, content_hash(body), body)  # type: ignore[arg-type]
     register_path_bodies(conn, [path])  # type: ignore[arg-type]
     vstore.upsert_vector(  # type: ignore[arg-type]
@@ -46,8 +48,8 @@ def add_embedded_section(conn: object, path: str, body: bytes, i: int) -> int:
     )
     return istore.insert_section(
         conn,  # type: ignore[arg-type]
-        source="repo",
-        address=Address("git", "example.com/repo", path, "v1"),
+        source=source,
+        address=Address("git", f"example.com/{source}", path, "v1"),
         start=0,
         end=len(body),
         content_hash=content_hash(body),
@@ -355,3 +357,114 @@ def test_a_real_clustered_build_says_it_did_not_collect(db: Database) -> None:
 
     assert outcome["collected"] is False
     assert outcome["sections"] > 0
+
+
+def _register_source(conn: object, name: str) -> None:
+    from hrono.registry import store as registry_store
+
+    body = {
+        "name": name,
+        "type": "git",
+        "url": f"https://example.com/{name}.git",
+        "auth": None,
+    }
+    registry_store.insert(  # type: ignore[arg-type]
+        conn, "sources", name, json.dumps(body), None, "t"
+    )
+
+
+def _declare_tree(conn: object, tree: str, sources: list[str]) -> None:
+    from hrono.registry import store as registry_store
+
+    registry_store.insert(  # type: ignore[arg-type]
+        conn,
+        "trees",
+        tree,
+        json.dumps({"name": tree, "sources": sources}),
+        None,
+        "t",
+    )
+
+
+@pytest.fixture
+def two_sources(tmp_path: object) -> Iterator[Database]:
+    """Six sections from `alpha-src` and six from `beta-src`."""
+    database = Database.at(tmp_path / "hrono.db")
+    with database.connect() as conn, conn:
+        register_model(conn)
+        for name in ("alpha-src", "beta-src"):
+            _register_source(conn, name)
+        for i in range(6):
+            add_embedded_section(
+                conn, f"a/f{i}.py", f"alpha {i}\n".encode(), i, "alpha-src"
+            )
+            add_embedded_section(
+                conn, f"b/f{i}.py", f"beta {i}\n".encode(), i, "beta-src"
+            )
+    yield database
+    database.close()
+
+
+def _tree_sections(db: Database, tree: str) -> set[int]:
+    with db.connect() as conn:
+        return {
+            int(row["section_id"])
+            for row in conn.execute(
+                "SELECT m.section_id FROM node_members m JOIN nodes n "
+                "ON n.id = m.node_id WHERE n.tree = ?",
+                (tree,),
+            ).fetchall()
+        }
+
+
+def test_two_trees_over_disjoint_sources_do_not_mix(
+    two_sources: Database,
+) -> None:
+    """#054: a named tree is a map over ITS sources, not over everything.
+
+    Before this, `hrono tree maintain alpha` then `maintain beta` produced two
+    trees of identical contents and every section belonged to both -- the
+    command took a name, echoed it back, and ignored it.
+    """
+    with two_sources.connect() as conn, conn:
+        _declare_tree(conn, "alpha", ["alpha-src"])
+        _declare_tree(conn, "beta", ["beta-src"])
+    with two_sources.connect() as conn:
+        alpha_sections = {
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM sections WHERE source = 'alpha-src'"
+            ).fetchall()
+        }
+
+    cluster_op.cluster(
+        cluster_job("a", "alpha"), JobContext(two_sources), build=fake_build({})
+    )
+    cluster_op.cluster(
+        cluster_job("b", "beta"), JobContext(two_sources), build=fake_build({})
+    )
+
+    assert _tree_sections(two_sources, "alpha") == alpha_sections
+    assert not _tree_sections(two_sources, "alpha") & _tree_sections(
+        two_sources, "beta"
+    )
+    with two_sources.connect() as conn:
+        for tree, expected in (("alpha", 6), ("beta", 6)):
+            coords = conn.execute(
+                "SELECT COUNT(*) FROM section_coords WHERE tree = ?", (tree,)
+            ).fetchone()[0]
+            assert int(coords) == expected
+
+
+def test_an_undeclared_tree_still_clusters_everything(
+    two_sources: Database,
+) -> None:
+    # the single-corpus case, unchanged: a database nobody has partitioned
+    # contains exactly what it contained before this collection existed.
+    cluster_op.cluster(
+        cluster_job("a", "default"),
+        JobContext(two_sources),
+        build=fake_build({}),
+    )
+
+    assert len(_tree_sections(two_sources, "default")) == 12

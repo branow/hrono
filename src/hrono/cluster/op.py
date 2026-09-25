@@ -33,6 +33,7 @@ from hrono.cluster.build import ClusterResult
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.registry.trees import sources_of
 
 _LEVEL = 0
 
@@ -50,7 +51,9 @@ def cluster(
     tree = job.tree or "default"
     with context.database.connect() as conn:
         config = resolve_embedding_model(conn, job.scope)
-        pairs = store.section_combined_vectors(conn, str(config["name"]))
+        pairs = store.section_combined_vectors(
+            conn, str(config["name"]), sources_of(conn, tree)
+        )
         section_ids = tuple(section_id for section_id, _ in pairs)
         init = store.stored_coords(conn, tree, section_ids)
     if not pairs:

@@ -11,5 +11,12 @@ from hrono.registry.descriptor import Descriptor
 from hrono.registry.models import MODELS
 from hrono.registry.prompts import PROMPTS
 from hrono.registry.sources import SOURCES
+from hrono.registry.trees import TREES
 
-COLLECTIONS: tuple[Descriptor, ...] = (SOURCES, CONNECTIONS, MODELS, PROMPTS)
+COLLECTIONS: tuple[Descriptor, ...] = (
+    SOURCES,
+    CONNECTIONS,
+    MODELS,
+    PROMPTS,
+    TREES,
+)

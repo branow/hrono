@@ -919,3 +919,40 @@ def test_an_update_with_nothing_to_do_needs_no_text_model(
         )
     finally:
         database.close()
+
+
+def test_update_ingests_only_the_sources_its_tree_declares(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    """#054: the incremental door had the same hole as the build.
+
+    `update` iterated the WHOLE source registry regardless of the job's tree,
+    so `hrono tree sync beta` pulled another tree's sources into beta even
+    after the cluster build learned to scope itself.
+    """
+    db, origin = built
+    second = tmp_path / "second-repo"
+    add_source(db, "second", make_repo(second, files=4))
+    with db.connect() as conn, conn:
+        registry_store.insert(
+            conn,
+            "trees",
+            "default",
+            json.dumps({"name": "default", "sources": ["repo"]}),
+            None,
+            "t",
+        )
+
+    edit(origin, "f1.txt", "the declared source changed\n")
+    edit(second, "f1.txt", "the undeclared source changed too\n")
+    run_update(db, tmp_path)
+
+    with db.connect() as conn:
+        ingested = {
+            row["source"]
+            for row in conn.execute(
+                "SELECT DISTINCT source FROM sections "
+                "WHERE source_type != 'node'"
+            ).fetchall()
+        }
+    assert ingested == {"repo"}  # `second` was never this tree's to ingest

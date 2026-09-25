@@ -81,7 +81,7 @@ from hrono.ingest.split_op import _load
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry import store as registry_store
+from hrono.registry.trees import scoped_sources
 from hrono.summarize.condense import condense
 
 _DEFAULT_TREE = "default"
@@ -97,9 +97,7 @@ def update(
     """Apply each source's change batch incrementally to the tree."""
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
-        sources = [
-            row["name"] for row in registry_store.list_all(conn, "sources")
-        ]
+        sources = scoped_sources(conn, tree)
         model_name = str(resolve_embedding_model(conn, job.scope)["name"])
 
     batch: int | None = None
