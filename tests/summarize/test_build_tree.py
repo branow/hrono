@@ -7,6 +7,8 @@ from hrono.cluster import ClusterError, TooFewPoints
 from hrono.cluster import store as cluster_store
 from hrono.cluster.build import ClusterResult
 from hrono.db.database import Database
+from hrono.export import store as export_store
+from hrono.export.collapse import collapse
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
@@ -457,11 +459,45 @@ def test_the_build_sweeps_every_level_for_orphans(db: Database) -> None:
         assert cluster_store.unparented(conn, "default", 0) == ()
         assert orphan in cluster_store.unparented(conn, "default", 1)
 
+    # the harm in the product's own terms: the export renders `root.md`'s
+    # children from parent EDGES, so a node nothing points at is written and
+    # unreachable. Three of these were -- the orphan and both its leaves.
+    before = _export_reaches(db)
+    assert orphan not in before
+    assert set(leaves[1::2]).isdisjoint(before)
+
     _adopt_late_leaves(JobContext(db), TREE, FakeCompletion(), fake_encoder)
 
     with db.connect() as conn:
         assert cluster_store.unparented(conn, "default", 1) == ()
     _require_reachable(JobContext(db), TREE)  # and the guard agrees
+    after = _export_reaches(db)
+    assert {root, good, orphan, *leaves} <= after
+
+
+def _export_reaches(db: Database) -> set[int]:
+    """Every node the export actually renders, walked from its root.
+
+    Not `unparented`, and deliberately: that reads the edge TABLE, while this
+    reads what an agent is handed. `test_settle`'s existing helper walks every
+    LEAF, which an upper orphan passes — its own leaves are parented, to it.
+    """
+    with db.connect() as conn:
+        stored = export_store.load(conn, TREE)
+    if stored is None:
+        return set()
+    tree = collapse(stored, 4)
+    seen: set[int] = set()
+    frontier = [tree.root]
+    while frontier:
+        node_id = frontier.pop()
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+        node = tree.nodes.get(node_id)
+        if node is not None:
+            frontier.extend(node.children)
+    return seen
 
 
 def _leaf_ids(conn: object) -> list[int]:

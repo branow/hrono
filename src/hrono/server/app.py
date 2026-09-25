@@ -112,18 +112,30 @@ def _warm_query_encoder(database: Database) -> None:
     later one 14ms, which is the whole cost sitting on one arbitrary user's
     question. Loading here moves it off the request path entirely.
 
-    In a daemon thread and never fatal: a server with no embedding model
-    registered yet is perfectly valid and must still start, and a model that
-    cannot load is a problem for the request that needs it to report, not for
-    startup to die of.
+    The DATABASE is read here, on the startup thread, and only the weights are
+    read in the background. The first version read the config inside the thread
+    and that was wrong: an adopted connection is lent to one thread at a time
+    by ``Shared``'s lock, but a caller holding the raw connection — every test
+    that writes through ``with conn:`` — is not going through that lock, so a
+    background reader could be executing on the same sqlite3 connection at the
+    same moment. Nothing needs the database off the request path; only the
+    weights are slow.
+
+    Never fatal: a server with no embedding model registered yet is perfectly
+    valid and must still start, and a model that cannot load is a problem for
+    the request that needs it to report, not for startup to die of.
     """
+    try:
+        with database.connect() as conn:
+            model_id = str(resolve_embedding_model(conn, {})["model"])
+    except Exception:  # noqa: BLE001 - a cold cache is not a failed boot
+        _logger.debug("query encoder not warmed", exc_info=True)
+        return
 
     def warm() -> None:
         try:
-            with database.connect() as conn:
-                model_id = str(resolve_embedding_model(conn, {})["model"])
             cached_encoder_for(model_id)
-        except Exception:  # noqa: BLE001 - a cold cache is not a failed boot
+        except Exception:  # noqa: BLE001 - the request that needs it reports
             _logger.debug("query encoder not warmed", exc_info=True)
 
     threading.Thread(target=warm, daemon=True, name="warm-encoder").start()
