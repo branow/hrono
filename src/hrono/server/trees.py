@@ -22,7 +22,7 @@ from hrono import notes
 from hrono.auth.users import User
 from hrono.cluster import incubator
 from hrono.embed.model import resolve_embedding_model
-from hrono.embed.runner import Encoder, encoder_for
+from hrono.embed.runner import Encoder, cached_encoder_for
 from hrono.errors import NotFound
 from hrono.export import store as export_store
 from hrono.export.collapse import collapse
@@ -90,8 +90,8 @@ def recall_tree(
 
 
 def _query_encode(model_id: str) -> Encoder:
-    """Build the query encoder for a model (overridable in tests)."""
-    return encoder_for(model_id)
+    """The query encoder for a model, loaded once per process (#168)."""
+    return cached_encoder_for(model_id)
 
 
 @router.get("/trees/{name}/export")

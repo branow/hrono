@@ -7,7 +7,9 @@ entry points build isolated apps instead of sharing a module singleton.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -35,6 +37,8 @@ import hrono.tree.update  # noqa: F401 - registers the update op
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database
+from hrono.embed.model import resolve_embedding_model
+from hrono.embed.runner import cached_encoder_for
 from hrono.jobs.worker import Worker, reclaim_stranded
 from hrono.paths import cache_root
 from hrono.registry.collections import COLLECTIONS
@@ -98,6 +102,33 @@ def report_version() -> dict[str, str]:
     return {"name": "hrono", "version": _VERSION}
 
 
+_logger = logging.getLogger("hrono")
+
+
+def _warm_query_encoder(database: Database) -> None:
+    """Load the query encoder in the background while the server boots (#168).
+
+    Recall's first request paid 13.3s to read the model's weights and every
+    later one 14ms, which is the whole cost sitting on one arbitrary user's
+    question. Loading here moves it off the request path entirely.
+
+    In a daemon thread and never fatal: a server with no embedding model
+    registered yet is perfectly valid and must still start, and a model that
+    cannot load is a problem for the request that needs it to report, not for
+    startup to die of.
+    """
+
+    def warm() -> None:
+        try:
+            with database.connect() as conn:
+                model_id = str(resolve_embedding_model(conn, {})["model"])
+            cached_encoder_for(model_id)
+        except Exception:  # noqa: BLE001 - a cold cache is not a failed boot
+            _logger.debug("query encoder not warmed", exc_info=True)
+
+    threading.Thread(target=warm, daemon=True, name="warm-encoder").start()
+
+
 def create_app(
     *,
     db_path: Path = DEFAULT_PATH,
@@ -153,6 +184,7 @@ def create_app(
             )
             app.state.worker = worker
             worker.start()
+            _warm_query_encoder(database)
             yield
         finally:
             if worker is not None:

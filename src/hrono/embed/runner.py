@@ -71,6 +71,45 @@ def encoder_for(
     return encode
 
 
+_CACHE: dict[str, Encoder] = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def cached_encoder_for(
+    model_id: str,
+    *,
+    load_timeout: float = _LOAD_TIMEOUT,
+    build: Callable[[str], Encoder] | None = None,
+) -> Encoder:
+    """``encoder_for``, with the loaded model kept for the process's life.
+
+    The weights are identical for every question and cost SECONDS to read from
+    disk, so a caller that encodes once per request pays that over and over:
+    `hrono recall` measured 11.9s then 7.7s against a 10s client timeout, and
+    the CLI reported the product's read door as an unreachable server (#168).
+
+    A long-lived process wants this; a one-shot op does not care either way. The
+    lock is held across the load so a second caller arriving mid-load WAITS for
+    the first model rather than reading a second copy of the weights into
+    memory beside it.
+
+    A FAILED load is not cached: the key is the model id, and an id that could
+    not load once may load on the next attempt once whatever was wrong is
+    fixed. Caching the failure would make the server need a restart to notice.
+    """
+    make = (
+        build
+        if build is not None
+        else lambda name: encoder_for(name, load_timeout=load_timeout)
+    )
+    with _CACHE_LOCK:
+        encoder = _CACHE.get(model_id)
+        if encoder is None:
+            encoder = make(model_id)
+            _CACHE[model_id] = encoder
+        return encoder
+
+
 def _load(model_id: str, timeout: float) -> object:
     try:
         from sentence_transformers import SentenceTransformer

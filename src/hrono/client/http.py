@@ -24,11 +24,25 @@ class NoProfile(ClientError):
 
 
 class Unreachable(ClientError):
-    """The server could not be reached (connection refused / DNS / timeout)."""
+    """The server could not be reached (connection refused, DNS)."""
 
     def __init__(self, server_url: str) -> None:
         super().__init__("unreachable")
         self.server_url = server_url
+
+
+class TimedOut(ClientError):
+    """The server was reached and did not answer inside the budget (#168).
+
+    Its own type because it sends the reader somewhere else entirely: an
+    unreachable server is not running, and a timed-out one is working. Told
+    "cannot reach", an operator goes to check a process that is fine.
+    """
+
+    def __init__(self, server_url: str, seconds: float) -> None:
+        super().__init__("timed out")
+        self.server_url = server_url
+        self.seconds = seconds
 
 
 class Unauthorized(ClientError):
@@ -68,24 +82,37 @@ class Client:
         self._http = http
         self._timeout = timeout
 
-    def get(self, path: str) -> object:
-        return self._request("GET", path, None)
+    def get(self, path: str, *, timeout: float | None = None) -> object:
+        return self._request("GET", path, None, timeout)
 
-    def post(self, path: str, body: dict[str, object]) -> object:
-        return self._request("POST", path, body)
+    def post(
+        self,
+        path: str,
+        body: dict[str, object],
+        *,
+        timeout: float | None = None,
+    ) -> object:
+        return self._request("POST", path, body, timeout)
 
     def put(self, path: str, body: dict[str, object]) -> object:
-        return self._request("PUT", path, body)
+        return self._request("PUT", path, body, None)
 
     def delete(self, path: str) -> object:
-        return self._request("DELETE", path, None)
+        return self._request("DELETE", path, None, None)
 
     def _request(
-        self, method: str, path: str, body: dict[str, object] | None
+        self,
+        method: str,
+        path: str,
+        body: dict[str, object] | None,
+        timeout: float | None,
     ) -> object:
         headers = {"Authorization": f"Bearer {self._token}"}
+        budget = self._timeout if timeout is None else timeout
         try:
-            response = self._send(method, path, body, headers)
+            response = self._send(method, path, body, headers, budget)
+        except httpx.TimeoutException as exc:
+            raise TimedOut(self._base, budget) from exc
         except httpx.HTTPError as exc:
             raise Unreachable(self._base) from exc
         if response.status_code >= 400:
@@ -98,10 +125,11 @@ class Client:
         path: str,
         body: dict[str, object] | None,
         headers: dict[str, str],
+        timeout: float,
     ) -> httpx.Response:
         if self._http is not None:
             return self._http.request(method, path, json=body, headers=headers)
-        with httpx.Client(base_url=self._base, timeout=self._timeout) as http:
+        with httpx.Client(base_url=self._base, timeout=timeout) as http:
             return http.request(method, path, json=body, headers=headers)
 
 
@@ -155,6 +183,10 @@ _MESSAGES: dict[type[ClientError], Callable[[ClientError], str]] = {
     ),
     Unreachable: lambda e: (
         f"Cannot reach hrono server at {e.server_url}."  # type: ignore[attr-defined]
+    ),
+    TimedOut: lambda e: (
+        f"hrono server at {e.server_url} did not answer within "  # type: ignore[attr-defined]
+        f"{e.seconds:g}s. It is running — the request is just slow."  # type: ignore[attr-defined]
     ),
     Unauthorized: lambda _: "Unauthorized — check the token for this profile.",
     Forbidden: lambda _: "Forbidden — this token's role lacks permission.",

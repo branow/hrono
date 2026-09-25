@@ -54,6 +54,15 @@ for _descriptor in COLLECTIONS:
         )
 
 
+# A recall that finds a WARM server answers in milliseconds (measured: 14ms over
+# 34 passages once the encoder is cached). This budget is for the cold one: a
+# server whose startup warm-up has not finished, or that had no embedding model
+# registered when it booted, pays the weights once -- 13.3s on the machine this
+# was measured on, and more on a slower disk or a larger model. The registry
+# CRUD default of 10s was never chosen for this and fell just under it (#168).
+RECALL_TIMEOUT = 120.0
+
+
 @app.command()
 def recall(
     tree: str,
@@ -62,7 +71,9 @@ def recall(
 ) -> None:
     """Recall passages from a tree for a question (the fast read door)."""
     result = from_profile().post(
-        f"/trees/{tree}/recall", {"question": question, "limit": limit}
+        f"/trees/{tree}/recall",
+        {"question": question, "limit": limit},
+        timeout=RECALL_TIMEOUT,
     )
     hits = result.get("hits") if isinstance(result, dict) else []
     message = result.get("message") if isinstance(result, dict) else None
