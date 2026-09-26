@@ -18,6 +18,7 @@ import sqlite3
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from hrono.auth.users import User
@@ -29,6 +30,7 @@ from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
 from hrono.jobs.scope import fan_out, fans_out
 from hrono.jobs.worker import enqueue
+from hrono.server import events
 from hrono.server.auth import require_role
 
 router = APIRouter()
@@ -131,6 +133,25 @@ def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
         if row is None:
             raise NotFound(f"job not found: {job_id}")
         return _job(row, _rolled(conn, job_id))
+
+
+@router.get("/jobs/{job_id}/events")
+def watch_job(job_id: str, request: Request, _: Reader) -> StreamingResponse:
+    """Live progress as SSE; the stream ends when the job does.
+
+    The job is confirmed BEFORE the stream starts, so an unknown id is a 404
+    an HTTP client can act on rather than an empty `text/event-stream` that
+    looks like a job with nothing to say.
+    """
+    database = request.app.state.db
+    with database.connect() as conn:
+        if store.get(conn, job_id) is None:
+            raise NotFound(f"job not found: {job_id}")
+    return StreamingResponse(
+        events.stream(database, job_id),
+        media_type="text/event-stream",
+        headers={"cache-control": "no-store"},
+    )
 
 
 @router.post("/jobs/{job_id}/cancel")

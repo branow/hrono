@@ -84,3 +84,18 @@ def cancel_job(job_id: str) -> None:
         # risking a half-written transaction, so it finishes (#173)
         stage = "stage is" if running == 1 else "stages are"
         typer.echo(f"{running} {stage} already running and will finish.")
+
+
+@app.command("watch")
+def watch_job(job_id: str) -> None:
+    """Follow a job's progress until it ends (SSE)."""
+
+    for line in from_profile().stream(f"/jobs/{job_id}/events"):
+        if not line.startswith("data: "):
+            continue  # the event name and the blank separator
+        state = json.loads(line[len("data: ") :])
+        progress = state.get("progress")
+        shown = f"{state.get('status')}"
+        if isinstance(progress, dict):
+            shown += f"  {progress.get('done')}/{progress.get('total')}"
+        typer.echo(shown)

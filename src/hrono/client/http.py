@@ -8,7 +8,7 @@ exception, or log line.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import httpx
 
@@ -93,6 +93,31 @@ class Client:
         timeout: float | None = None,
     ) -> object:
         return self._request("POST", path, body, timeout)
+
+    def stream(self, path: str) -> Iterator[str]:
+        """Yield each line of a streaming response (SSE).
+
+        Its own method because the JSON path cannot serve it: `_request`
+        decodes a whole body, and a stream has no whole body until the job it
+        is watching finishes. No read timeout either — a watch is meant to sit
+        there quietly, and the 10s that suits registry CRUD would end it
+        mid-job (#168's lesson, one endpoint over).
+        """
+        headers = {"Authorization": f"Bearer {self._token}"}
+        timeout = httpx.Timeout(None, connect=self._timeout)
+        try:
+            with (
+                httpx.Client(base_url=self._base, timeout=timeout) as http,
+                http.stream("GET", path, headers=headers) as response,
+            ):
+                if response.status_code >= 400:
+                    response.read()
+                    raise _error(response)
+                yield from response.iter_lines()
+        except httpx.TimeoutException as exc:
+            raise TimedOut(self._base, self._timeout) from exc
+        except httpx.HTTPError as exc:
+            raise Unreachable(self._base) from exc
 
     def put(self, path: str, body: dict[str, object]) -> object:
         return self._request("PUT", path, body, None)
