@@ -33,6 +33,26 @@ def resolve(
     return resolver(database, selector)
 
 
+# The ops whose unit of work is ONE SOURCE — they read `scope["name"]` and do
+# nothing without it, so a scope naming many sources is a job per source. Every
+# other op takes the whole tree at once and a fan-out would give it a scope it
+# cannot read. Data rather than a branch, like `OPS` itself (#175).
+SOURCE_SCOPED = frozenset({"sync", "split"})
+
+
+def fans_out(op: str, scope: dict[str, object] | None) -> bool:
+    """Whether this op and scope describe more than one unit of work.
+
+    An explicit single source is one job, not a parent with one child: the
+    parent would add a layer the operator has to click through to reach the
+    thing they asked for.
+    """
+    if op not in SOURCE_SCOPED:
+        return False
+    kind = str((scope or {}).get("type", "all"))
+    return kind == "all"
+
+
 def fan_out(
     database: Database,
     op: str,

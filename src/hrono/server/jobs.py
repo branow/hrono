@@ -26,6 +26,7 @@ from hrono.jobs import store
 from hrono.jobs.aggregate import Rollup, rollup
 from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
+from hrono.jobs.scope import fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.server.auth import require_role
 
@@ -97,7 +98,16 @@ def run_job(body: JobRequest, request: Request, _: Admin) -> dict[str, str]:
             f"unknown op: {body.op}",
             details={"registered": sorted(OPS)},
         )
-    job_id = enqueue(request.app.state.db, body.op, body.scope, tree=body.tree)
+    database = request.app.state.db
+    if fans_out(body.op, body.scope):
+        # a source-scoped op over every source is a job PER SOURCE, under one
+        # parent that reports what they add up to (#172). Until #175 this
+        # machinery existed and nothing called it, so every such request ran as
+        # one opaque job.
+        return {
+            "job_id": fan_out(database, body.op, body.scope, tree=body.tree)
+        }
+    job_id = enqueue(database, body.op, body.scope, tree=body.tree)
     return {"job_id": job_id}
 
 
