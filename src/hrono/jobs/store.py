@@ -155,6 +155,19 @@ def get(conn: sqlite3.Connection, job_id: str) -> sqlite3.Row | None:
     ).fetchone()
 
 
+def children(
+    conn: sqlite3.Connection, parent_id: str
+) -> tuple[sqlite3.Row, ...]:
+    """A parent's child jobs, oldest first (T57.1)."""
+    return tuple(
+        conn.execute(
+            f"SELECT {_COLUMNS} FROM jobs WHERE parent_id = ? "  # noqa: S608
+            "ORDER BY created_at, id",
+            (parent_id,),
+        ).fetchall()
+    )
+
+
 def list_jobs(
     conn: sqlite3.Connection,
     op: str | None = None,

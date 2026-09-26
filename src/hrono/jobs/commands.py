@@ -50,6 +50,12 @@ def get_job(job_id: str) -> None:
         typer.echo("no such job", err=True)
         raise typer.Exit(1)
     typer.echo(f"{job.get('id')}  {job.get('op')}  {job.get('status')}")
+    progress = job.get("progress")
+    if isinstance(progress, dict):  # a parent, answering for its children
+        typer.echo(
+            f"progress: {progress.get('done')} of {progress.get('total')} "
+            f"stages done"
+        )
     error = job.get("error")
     if isinstance(error, dict):  # the envelope, as every surface serves it
         typer.echo(f"error: {error.get('code')}: {error.get('message')}")

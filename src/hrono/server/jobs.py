@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from hrono.auth.users import User
 from hrono.errors import BadRequest, NotFound
 from hrono.jobs import store
+from hrono.jobs.aggregate import Rollup, rollup
 from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
 from hrono.jobs.worker import enqueue
@@ -53,20 +54,33 @@ def _error(job: Job) -> dict[str, object] | None:
     }
 
 
-def _job(row: sqlite3.Row) -> dict[str, object]:
+def _job(row: sqlite3.Row, rolled: Rollup | None = None) -> dict[str, object]:
     job = to_job(row)
-    return {
+    answer: dict[str, object] = {
         "id": job.id,
         "parent_id": job.parent_id,
         "tree": job.tree,
         "op": job.op,
         "scope": job.scope,
-        "status": job.status,
+        "status": rolled.status if rolled is not None else job.status,
         "error": _error(job),
         "result": job.result,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
     }
+    if rolled is not None:
+        answer["progress"] = {"done": rolled.done, "total": rolled.total}
+    return answer
+
+
+def _rolled(conn: sqlite3.Connection, job_id: str) -> Rollup | None:
+    """A parent's children as one answer; None for a leaf (T57.1).
+
+    The parent's OWN status row is not consulted: the work is in the children,
+    and a parent row that says `running` while every child has finished is the
+    stale second source of truth this avoids having.
+    """
+    return rollup([str(row["status"]) for row in store.children(conn, job_id)])
 
 
 @router.post("/jobs", status_code=status.HTTP_201_CREATED)
@@ -103,6 +117,17 @@ def list_jobs(
 def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
     with request.app.state.db.connect() as conn:
         row = store.get(conn, job_id)
-    if row is None:
-        raise NotFound(f"job not found: {job_id}")
-    return _job(row)
+        if row is None:
+            raise NotFound(f"job not found: {job_id}")
+        return _job(row, _rolled(conn, job_id))
+
+
+@router.get("/jobs/{job_id}/children")
+def get_children(
+    job_id: str, request: Request, _: Reader
+) -> list[dict[str, object]]:
+    """The child jobs a parent fanned out into."""
+    with request.app.state.db.connect() as conn:
+        if store.get(conn, job_id) is None:
+            raise NotFound(f"job not found: {job_id}")
+        return [_job(row) for row in store.children(conn, job_id)]
