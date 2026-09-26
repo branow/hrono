@@ -676,6 +676,8 @@ def test_a_clean_run_reports_what_it_judged(
         "skipped": 0,
         "abstained": 0,
         "incomplete": False,
+        # what the panel cost (#179): three votes, each one a completion
+        "tokens": {"input": 3, "output": 3},
     }
 
 
@@ -698,6 +700,9 @@ def test_a_run_that_declined_its_work_says_so(
         "skipped": 0,
         "abstained": 1,
         "incomplete": True,
+        # an abstention is not free: three votes, each RE-ASKED once, and
+        # until #179 the most expensive outcome reported no cost at all
+        "tokens": {"input": 6, "output": 6},
     }
 
 

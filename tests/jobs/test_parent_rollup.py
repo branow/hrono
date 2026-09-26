@@ -192,3 +192,70 @@ def test_the_cli_says_nothing_about_progress_for_a_leaf(
 
     assert result.exit_code == 0
     assert "progress" not in result.output
+
+
+def _spent(h: Harness, job_id: str, inp: int, out: int) -> None:
+    import json
+
+    store.set_status(  # type: ignore[arg-type]
+        h.conn,
+        job_id,
+        "succeeded",
+        None,
+        "t",
+        result=json.dumps(
+            {"briefed": 1, "tokens": {"input": inp, "output": out}}
+        ),
+    )
+
+
+def test_a_leaf_reports_the_tokens_it_spent(harness: Harness) -> None:
+    _spent(harness, "job_alone", 120, 30)
+
+    assert harness.get("/jobs/job_alone")["cost"] == {
+        "input": 120,
+        "output": 30,
+    }
+
+
+def test_a_parents_cost_is_its_childrens_summed(harness: Harness) -> None:
+    # the same derivation as its status (#172): nothing stores it, so nothing
+    # can go stale.
+    _spent(harness, "job_one", 100, 10)
+    _spent(harness, "job_two", 200, 20)
+    _finish(harness, "job_three", "succeeded")  # a stage that called no model
+
+    assert harness.get("/jobs/job_parent")["cost"] == {
+        "input": 300,
+        "output": 30,
+    }
+
+
+def test_a_run_that_called_no_model_has_no_cost_at_all(
+    harness: Harness,
+) -> None:
+    # not a zero: `{"input": 0}` on a cluster job invites the reader to ask
+    # which model it used.
+    _finish(harness, "job_alone", "succeeded")
+
+    assert "cost" not in harness.get("/jobs/job_alone")
+
+
+def test_the_cli_shows_what_it_spent(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from hrono import cli
+
+    _spent(harness, "job_one", 100, 10)
+    _spent(harness, "job_two", 200, 20)
+
+    class Wired:
+        def get(self, path: str, **_: object) -> object:
+            return harness.get(path)
+
+    monkeypatch.setattr("hrono.jobs.commands.from_profile", lambda: Wired())
+    result = CliRunner().invoke(cli.app, ["jobs", "get", "job_parent"])
+
+    assert "tokens: 300 in, 30 out" in result.output

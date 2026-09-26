@@ -33,7 +33,7 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion, CompletionRequest
 from hrono.llm.providers import client_for
-from hrono.summarize import briefs
+from hrono.summarize import briefs, spend
 from hrono.summarize.resolve import (
     producer_model_name,
     resolve_prompt,
@@ -79,17 +79,22 @@ def propagate(
         return _outcome(())
 
     completion = client if client is not None else client_for(context, model)
+    spent: list[tuple[int, int]] = []
     verdicts = [
-        (topic, _judge(completion, model, template, topic)) for topic in topics
+        (topic, _judge(completion, model, template, topic, spent))
+        for topic in topics
     ]
 
     with context.database.write() as conn:
         for topic, verdict in verdicts:
             _record(conn, tree, topic, verdict)
-    return _outcome(tuple(verdict for _topic, verdict in verdicts))
+    return _outcome(tuple(verdict for _topic, verdict in verdicts), spent)
 
 
-def _outcome(verdicts: Sequence[str | None]) -> Mapping[str, object]:
+def _outcome(
+    verdicts: Sequence[str | None],
+    spent: Sequence[tuple[int, int]] = (),
+) -> Mapping[str, object]:
     """What this run did, for the operator rather than the audit table (#132).
 
     ``abstained`` is the count that matters: those topics CHANGED and were not
@@ -104,6 +109,7 @@ def _outcome(verdicts: Sequence[str | None]) -> Mapping[str, object]:
         "skipped": sum(1 for v in verdicts if v == "none"),
         "abstained": abstained,
         "incomplete": abstained > 0,
+        **({"tokens": tokens} if (tokens := spend.counts(spent)) else {}),
     }
 
 
@@ -137,6 +143,7 @@ def _judge(
     model: dict[str, object],
     template: str,
     topic: _Topic,
+    spent: list[tuple[int, int]],
 ) -> str | None:
     """The panel's majority verdict, or ``None`` if every member abstained."""
     content = template.replace("{source}", topic.source).replace(
@@ -147,20 +154,31 @@ def _judge(
     )
     votes = tuple(
         vote
-        for vote in (_vote(completion, request) for _ in range(BEST_OF))
+        for vote in (_vote(completion, request, spent) for _ in range(BEST_OF))
         if vote is not None
     )
     return _majority(votes) if votes else None
 
 
-def _vote(completion: Completion, request: CompletionRequest) -> str | None:
+def _vote(
+    completion: Completion,
+    request: CompletionRequest,
+    spent: list[tuple[int, int]],
+) -> str | None:
     """One panel member, re-asked once; ``None`` rather than a guessed verdict.
 
     Abstaining costs a vote, defaulting to ``none`` costs the cascade: a false
     ``none`` silently suppresses a real climb, which is the dangerous direction.
+
+    ``spent`` collects what each attempt cost, retries and abstentions
+    included — this op issues BEST_OF votes per changed leaf and re-asks on a
+    bad reply, so it is the most expensive stage in a run and reported nothing
+    at all until #179.
     """
     for _ in range(1 + _RETRIES):
-        verdict = _verdict(completion.complete(request).text)
+        result = completion.complete(request)
+        spent.append((result.usage.input_tokens, result.usage.output_tokens))
+        verdict = _verdict(result.text)
         if verdict is not None:
             return verdict
     return None

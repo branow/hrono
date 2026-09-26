@@ -41,7 +41,7 @@ from hrono.llm.client import (
 )
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
-from hrono.summarize import briefs
+from hrono.summarize import briefs, spend
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import (
     producer_model_name,
@@ -88,6 +88,7 @@ def brief(
         return {"briefed": 0, "skipped_pinned": held}
 
     completion = client if client is not None else client_for(context, model)
+    spent: list[tuple[int, int]] = []
     for node_id, inputs, signature in pending:
         source = "\n\n".join(inputs.texts)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
@@ -114,10 +115,18 @@ def brief(
                 output_tokens=result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
+        spent.append((result.usage.input_tokens, result.usage.output_tokens))
     # what a pin HELD is as much the run's outcome as what it wrote: an
     # operator who sees "briefed 0" needs to know whether there was nothing to
     # do or whether they froze it themselves (#154).
-    return {"briefed": len(pending), "skipped_pinned": held}
+    outcome: dict[str, object] = {
+        "briefed": len(pending),
+        "skipped_pinned": held,
+    }
+    tokens = spend.counts(spent)
+    if tokens is not None:
+        outcome["tokens"] = tokens
+    return outcome
 
 
 def _uncondensed(dropped: int) -> str:

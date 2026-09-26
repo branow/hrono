@@ -59,6 +59,9 @@ def get_job(job_id: str) -> None:
     error = job.get("error")
     if isinstance(error, dict):  # the envelope, as every surface serves it
         typer.echo(f"error: {error.get('code')}: {error.get('message')}")
+    cost = job.get("cost")
+    if isinstance(cost, dict):
+        typer.echo(f"tokens: {cost.get('input')} in, {cost.get('output')} out")
     result = job.get("result")
     if result is None:
         typer.echo("result: none reported")

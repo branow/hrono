@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from hrono.auth.users import User
 from hrono.errors import BadRequest, NotFound
 from hrono.jobs import store
-from hrono.jobs.aggregate import Rollup, rollup
+from hrono.jobs.aggregate import Rollup, rollup, total_spend
 from hrono.jobs.cancel import cancel
 from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
@@ -58,7 +58,11 @@ def _error(job: Job) -> dict[str, object] | None:
     }
 
 
-def _job(row: sqlite3.Row, rolled: Rollup | None = None) -> dict[str, object]:
+def _job(
+    row: sqlite3.Row,
+    rolled: Rollup | None = None,
+    spent: dict[str, int] | None = None,
+) -> dict[str, object]:
     job = to_job(row)
     answer: dict[str, object] = {
         "id": job.id,
@@ -74,6 +78,10 @@ def _job(row: sqlite3.Row, rolled: Rollup | None = None) -> dict[str, object]:
     }
     if rolled is not None:
         answer["progress"] = {"done": rolled.done, "total": rolled.total}
+    # a leaf's own tokens; a parent's are its children's, summed (#179)
+    cost = spent if rolled is not None else total_spend([job.result])
+    if cost is not None:
+        answer["cost"] = cost
     return answer
 
 
@@ -132,7 +140,10 @@ def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
         row = store.get(conn, job_id)
         if row is None:
             raise NotFound(f"job not found: {job_id}")
-        return _job(row, _rolled(conn, job_id))
+        children = store.children(conn, job_id)
+        rolled = rollup([str(child["status"]) for child in children])
+        spent = total_spend([to_job(child).result for child in children])
+        return _job(row, rolled, spent)
 
 
 @router.get("/jobs/{job_id}/events")

@@ -17,6 +17,8 @@ recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -24,7 +26,7 @@ from hrono.llm.client import (
     CompletionRequest,
 )
 from hrono.llm.providers import client_for
-from hrono.summarize import store
+from hrono.summarize import spend, store
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _CONTENT_PLACEHOLDER = "{content}"
@@ -35,7 +37,7 @@ def condense(
     context: JobContext,
     *,
     client: Completion | None = None,
-) -> None:
+) -> Mapping[str, object]:
     """Condense every stored section missing a condensation for the model."""
     with context.database.connect() as conn:
         model = resolve_text_model(conn, job.scope, "condense")
@@ -43,9 +45,10 @@ def condense(
         _, template = resolve_prompt(conn, "condense")
         sections = store.pending(conn, model_name)
     if not sections:
-        return
+        return {"condensed": 0}
 
     completion = client if client is not None else client_for(context, model)
+    spent: list[tuple[int, int]] = []
     for content_hash, body in sections:
         rendered = template.replace(
             _CONTENT_PLACEHOLDER, body.decode("utf-8", "replace")
@@ -62,6 +65,15 @@ def condense(
                 result.usage.input_tokens,
                 result.usage.output_tokens,
             )
+        spent.append((result.usage.input_tokens, result.usage.output_tokens))
+    # an op that calls a model says what it spent (#179); until now condense
+    # reported nothing at all, which made the most expensive stage of a first
+    # build the one nobody could account for.
+    outcome: dict[str, object] = {"condensed": len(sections)}
+    tokens = spend.counts(spent)
+    if tokens is not None:
+        outcome["tokens"] = tokens
+    return outcome
 
 
 OPS["condense"] = condense

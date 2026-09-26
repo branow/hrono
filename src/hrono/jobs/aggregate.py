@@ -73,3 +73,24 @@ def _status(counts: Counter[str], done: int, total: int) -> str:
     if counts[JobStatus.RUNNING]:
         return JobStatus.RUNNING
     return JobStatus.PENDING
+
+
+def total_spend(results: Sequence[object]) -> dict[str, int] | None:
+    """Sum the token counts a set of job results carry, or None if none do.
+
+    A parent's cost is its children's, added up — the same derivation as its
+    status (#172), for the same reason: nothing stores it, so nothing can go
+    stale. A run where no stage called a model has no cost key at all rather
+    than a zero, which would invite the reader to ask which model it used.
+    """
+    tokens = [
+        result["tokens"]
+        for result in results
+        if isinstance(result, dict) and isinstance(result.get("tokens"), dict)
+    ]
+    if not tokens:
+        return None
+    return {
+        "input": sum(int(t.get("input", 0)) for t in tokens),
+        "output": sum(int(t.get("output", 0)) for t in tokens),
+    }

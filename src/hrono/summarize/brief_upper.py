@@ -27,7 +27,7 @@ from hrono.llm.client import (
 )
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
-from hrono.summarize import briefs
+from hrono.summarize import briefs, spend
 from hrono.summarize.brief import _hash
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
@@ -69,6 +69,7 @@ def brief_upper(
         return {"briefed": 0, "skipped_pinned": held}
 
     completion = client if client is not None else client_for(context, model)
+    spent: list[tuple[int, int]] = []
     for node_id, child_texts, ids, signature in pending:
         source = "\n\n".join(child_texts)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
@@ -93,8 +94,18 @@ def brief_upper(
                 input_tokens=result.usage.input_tokens,
                 output_tokens=result.usage.output_tokens,
             )
+            spent.append(
+                (result.usage.input_tokens, result.usage.output_tokens)
+            )
             store_brief(conn, node_id, text, signature)
-    return {"briefed": len(pending), "skipped_pinned": held}
+    outcome: dict[str, object] = {
+        "briefed": len(pending),
+        "skipped_pinned": held,
+    }
+    tokens = spend.counts(spent)
+    if tokens is not None:
+        outcome["tokens"] = tokens
+    return outcome
 
 
 def _level(scope: dict[str, object]) -> int:
