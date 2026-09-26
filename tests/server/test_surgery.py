@@ -27,6 +27,7 @@ from hrono.db.database import open_database
 from hrono.embed.store import upsert_vector
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
+from hrono.recall.brief_passages import store_brief
 from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 from hrono.summarize import briefs
@@ -850,3 +851,86 @@ def test_a_section_move_is_admin_only(harness: tuple[Harness, dict]) -> None:
 
     assert response.status_code == 403
     assert _members(h, ids["third"]) == {ids["gamma"]}
+
+
+def test_a_move_that_empties_a_topic_says_so(
+    harness: tuple[Harness, dict],
+) -> None:
+    # the pipeline retires an empty topic on its next repair and #125's trigger
+    # takes the summary with it -- but the operator holding the context only
+    # gets to act on it if anyone tells them (#165).
+    h, ids = harness
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    assert _members(h, ids["third"]) == set()
+    note = response.json()["note"]
+    assert f"topic {ids['third']} is now empty" in note
+    assert "dissolve" in note
+
+
+def test_a_move_that_leaves_a_topic_standing_is_quiet(
+    harness: tuple[Harness, dict],
+) -> None:
+    # a note every time is noise that teaches people to skip notes (#167)
+    h, ids = harness
+    h.client.post(
+        f"/trees/{TREE}/sections/{ids['beta']}/move",
+        json={"to_node": ids["third"]},
+        headers=h.headers,
+    )
+    with h.conn:
+        extra = _section(h.conn, "extra.md", [0.0, 0.9])
+        cluster_store.add_member(
+            h.conn, ids["third"], extra, forced=False, similarity=None
+        )
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{extra}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    assert _members(h, ids["third"])  # still holds gamma and beta
+    assert "note" not in response.json()
+
+
+def test_the_emptied_topic_stops_answering_once_dissolved(
+    harness: tuple[Harness, dict],
+) -> None:
+    """The loop the note points at, closed end to end.
+
+    The note tells the operator the topic still answers recall from its
+    summary. Dissolving it is what stops that, and #125's trigger is what
+    makes dissolving enough — the `node://` passages go with the node.
+    """
+    h, ids = harness
+    emptied = ids["third"]
+    with h.conn:
+        store_brief(h.conn, emptied, "A summary of a topic about gamma.", "sig")
+    assert _brief_passages(h, emptied)
+
+    h.client.post(
+        f"/trees/{TREE}/sections/{ids['gamma']}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+    assert _brief_passages(h, emptied)  # still answering, as the note says
+
+    h.client.post(f"/trees/{TREE}/nodes/{emptied}/dissolve", headers=h.headers)
+
+    assert _brief_passages(h, emptied) == 0
+
+
+def _brief_passages(h: Harness, node: int) -> int:
+    return int(
+        h.conn.execute(
+            "SELECT COUNT(*) FROM passages WHERE source_type = 'node' "
+            "AND source = ?",
+            (f"node-{node}",),
+        ).fetchone()[0]
+    )

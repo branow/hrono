@@ -190,13 +190,21 @@ def move_section(
     """File a chunk under a chosen topic (pins).
 
     ``from_node`` is null when the chunk came from the pending pool rather
-    than from another topic.
+    than from another topic. A ``note`` appears when the move emptied the topic
+    it came from (#165).
     """
     with request.app.state.db.write() as conn:
-        left = edits.move_section(conn, name, section_id, body.to_node)
-    return {
+        move = edits.move_section(conn, name, section_id, body.to_node)
+    answer: dict[str, object] = {
         "section_id": section_id,
-        "from_node": left,
+        "from_node": move.from_node,
         "to_node": body.to_node,
         "pinned": True,
     }
+    if move.emptied:
+        answer["note"] = (
+            f"topic {move.from_node} is now empty; it still answers recall "
+            f"from its summary until a repair run retires it, or dissolve it "
+            f"here"
+        )
+    return answer

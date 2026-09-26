@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from hrono import pins
 from hrono.cluster import TooFewPoints, incubator, levels, repair, store
@@ -260,12 +261,28 @@ def _dissolve_upper(
     return {"joined": len(moved), "parked": 0, "skipped": 0}
 
 
+@dataclass(frozen=True)
+class Move:
+    """What a hand-move did, and what it left behind (#165).
+
+    ``emptied`` is the old topic having no members left. The pipeline retires
+    an empty topic on its next `repair` run and #125's trigger takes its
+    summary with it, so the stale brief answers recall for at most one cycle —
+    but the operator who emptied it is the one holding the context, and they
+    only get to act on it if anyone tells them.
+    """
+
+    from_node: int | None
+    emptied: bool
+
+
 def move_section(
     conn: sqlite3.Connection, tree: str, section_id: int, node_id: int
-) -> int | None:
+) -> Move:
     """File a chunk under the topic an operator can see it belongs to.
 
-    Returns the node it left, or None when it came from the PENDING POOL. A
+    Returns what it did: the node it left (None when the chunk came from the
+    PENDING POOL) and whether that node is now empty. A
     parked chunk is the case an operator most needs this for (#164): a chunk
     in the wrong topic is at least on the map, and one the placement rule
     declined is invisible until the incubator's own rules reach it. Joining
@@ -300,7 +317,8 @@ def move_section(
         reason="moved by hand",
         anchor=node_id,
     )
-    return current
+    emptied = current is not None and not store.node_member_rows(conn, current)
+    return Move(from_node=current, emptied=emptied)
 
 
 def _is_parked(conn: sqlite3.Connection, tree: str, section_id: int) -> bool:
