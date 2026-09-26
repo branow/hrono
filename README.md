@@ -25,3 +25,9 @@ with a clear "in-process embedding backend is not installed" message.
 ## Status
 
 Early development. See the build order for milestone progress.
+
+## Contributing
+
+How this codebase is built — its settled design decisions, code-quality
+rules, and testing rules, each with the ticket that taught it — is in
+[CONTRIBUTING.md](CONTRIBUTING.md). Read it before writing code.

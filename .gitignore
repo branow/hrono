@@ -7,6 +7,7 @@
 # Root files we track.
 !/.gitignore
 !/.python-version
+!/CONTRIBUTING.md
 !/README.md
 !/pyproject.toml
 !/uv.lock
