@@ -210,3 +210,11 @@ def test_failing_parent_keeps_earlier_progress(db: Database) -> None:
     resumed = FakeCompletion()
     brief_upper(job(), JobContext(database), client=resumed)
     assert resumed.calls == 1
+
+
+def test_the_run_reports_the_tokens_it_spent(db: Database) -> None:
+    database, _ = db
+    outcome = brief_upper(job(), JobContext(database), client=FakeCompletion())
+
+    assert isinstance(outcome["tokens"], dict)
+    assert outcome["tokens"]["input"] > 0  # type: ignore[index]

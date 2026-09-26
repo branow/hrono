@@ -230,3 +230,13 @@ def test_runs_as_a_job_through_the_worker(
     assert row is not None and row["status"] == "succeeded"
     with db.connect() as conn:
         assert store.count(conn, MODEL) == 2
+
+
+def test_the_run_reports_what_it_condensed_and_spent(db: Database) -> None:
+    # condense returned NO outcome at all until #179 -- the most expensive
+    # stage of a first build was the one nobody could account for.
+    outcome = condense(job(), JobContext(db), client=FakeCompletion())
+
+    assert outcome["condensed"] > 0
+    assert isinstance(outcome["tokens"], dict)
+    assert outcome["tokens"]["input"] > 0  # type: ignore[index]

@@ -465,3 +465,20 @@ def test_brief_reduces_what_the_condense_model_wrote(db: Database) -> None:
     assert "condensation of a.py" in joined
     with db.connect() as conn:
         assert briefs.get(conn, _node_ids(db)[0]) is not None
+
+
+def test_the_run_reports_the_tokens_it_spent(db: Database) -> None:
+    # #179, and #176's rule: the job tests plant this result by hand, so only
+    # calling the OP proves anything about the op that writes it.
+    outcome = brief(job(), JobContext(db), client=FakeCompletion())
+
+    assert outcome["tokens"] == {"input": 80, "output": 24}  # two nodes
+
+
+def test_a_run_with_nothing_to_brief_reports_no_tokens(db: Database) -> None:
+    brief(job(), JobContext(db), client=FakeCompletion())
+
+    again = brief(job(), JobContext(db), client=FakeCompletion())
+
+    assert again["briefed"] == 0
+    assert "tokens" not in again
