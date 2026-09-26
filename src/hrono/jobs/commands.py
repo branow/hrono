@@ -65,3 +65,22 @@ def get_job(job_id: str) -> None:
         return
     typer.echo("result:")
     typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("cancel")
+def cancel_job(job_id: str) -> None:
+    """Stop a job and its pending children; say what could not be stopped."""
+
+    outcome = from_profile().post(f"/jobs/{job_id}/cancel", {})
+    if not isinstance(outcome, dict):
+        typer.echo("no such job", err=True)
+        raise typer.Exit(1)
+    stopped = outcome.get("stopped", 0)
+    running = outcome.get("running", 0)
+    plural = "job" if stopped == 1 else "jobs"
+    typer.echo(f"Stopped {stopped} pending {plural}.")
+    if running:
+        # the honest half: a running handler cannot be interrupted without
+        # risking a half-written transaction, so it finishes (#173)
+        stage = "stage is" if running == 1 else "stages are"
+        typer.echo(f"{running} {stage} already running and will finish.")

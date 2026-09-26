@@ -24,6 +24,7 @@ from hrono.auth.users import User
 from hrono.errors import BadRequest, NotFound
 from hrono.jobs import store
 from hrono.jobs.aggregate import Rollup, rollup
+from hrono.jobs.cancel import cancel
 from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
 from hrono.jobs.scope import fan_out, fans_out
@@ -130,6 +131,25 @@ def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
         if row is None:
             raise NotFound(f"job not found: {job_id}")
         return _job(row, _rolled(conn, job_id))
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, request: Request, _: Admin) -> dict[str, object]:
+    """Stop what can be stopped under this job; report what could not.
+
+    Admin, like `POST /jobs`: stopping a run mid-flight leaves a tree partly
+    updated, which is an operator decision rather than a writer's.
+    """
+    with request.app.state.db.write() as conn:
+        if store.get(conn, job_id) is None:
+            raise NotFound(f"job not found: {job_id}")
+        outcome = cancel(conn, job_id)
+    return {
+        "job_id": job_id,
+        "stopped": outcome.stopped,
+        "running": outcome.running,
+        "finished": outcome.finished,
+    }
 
 
 @router.get("/jobs/{job_id}/children")
