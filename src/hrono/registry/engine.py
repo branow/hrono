@@ -124,9 +124,20 @@ def build_router(descriptor: Descriptor) -> APIRouter:
                     content_hash(payload),
                 )
             return {"reset": name}
+        note = None
+        if descriptor.before_delete is not None:
+            note = descriptor.before_delete(
+                name,
+                ValidationContext(
+                    database=request.app.state.db, cipher=_cipher(request)
+                ),
+            )
         with request.app.state.db.write() as conn:
             store.delete(conn, collection, name)
-        return {"deleted": name}
+        deleted: dict[str, str] = {"deleted": name}
+        if note is not None:
+            deleted["note"] = note
+        return deleted
 
     base = f"/{collection}"
     named = f"/{collection}/{{name}}"

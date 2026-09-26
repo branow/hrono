@@ -81,5 +81,10 @@ def build_app(collection: str) -> typer.Typer:
         reset = isinstance(result, dict) and "reset" in result
         verb = "Reset" if reset else "Deleted"
         typer.echo(f"{verb} {collection}/{name}.")
+        note = result.get("note") if isinstance(result, dict) else None
+        if note:
+            # a collection may have a consequence worth hearing at the moment
+            # of the delete rather than at the moment it takes effect (#167)
+            typer.echo(str(note))
 
     return group

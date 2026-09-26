@@ -130,3 +130,63 @@ def test_scoped_sources_drops_a_source_that_was_deleted(
     registry_store.delete(conn, "sources", "beta-src")  # type: ignore[arg-type]
 
     assert scoped_sources(conn, "alpha") == ("alpha-src",)  # type: ignore[arg-type]
+
+
+def test_deleting_a_built_tree_s_config_says_what_it_arms(
+    client: tuple[TestClient, dict, object],
+) -> None:
+    """#167: one small row, a corpus-wide recluster, and nothing said so.
+
+    An absent row means UNSCOPED, which is the right meaning — so the next
+    `maintain` on a tree whose config is gone clusters EVERY source into it.
+    """
+    http, headers, conn = client
+    http.put(
+        "/trees/alpha",
+        json={"name": "alpha", "sources": ["alpha-src"]},
+        headers=headers,
+    )
+    with conn:  # type: ignore[union-attr]
+        conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('alpha', 0, 0, 't')"
+        )
+
+    response = http.delete("/trees/alpha", headers=headers)
+
+    assert response.status_code == 200
+    note = response.json()["note"]
+    assert "EVERY source" in note
+    assert "1 topic(s)" in note
+    assert sources_of(conn, "alpha") is None  # type: ignore[arg-type]
+
+
+def test_deleting_an_unbuilt_tree_s_config_is_quiet(
+    client: tuple[TestClient, dict, object],
+) -> None:
+    # nothing has been built into it, so there is no consequence to warn about
+    # and a note every time would be noise that teaches people to skip notes.
+    http, headers, _conn = client
+    http.put(
+        "/trees/alpha",
+        json={"name": "alpha", "sources": ["alpha-src"]},
+        headers=headers,
+    )
+
+    response = http.delete("/trees/alpha", headers=headers)
+
+    assert response.status_code == 200
+    assert "note" not in response.json()
+
+
+def test_a_collection_with_no_hook_deletes_exactly_as_before(
+    client: tuple[TestClient, dict, object],
+) -> None:
+    # the hook is data on the descriptor; a collection that declares none must
+    # behave byte-for-byte as it did.
+    http, headers, _conn = client
+
+    response = http.delete("/sources/beta-src", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"deleted": "beta-src"}

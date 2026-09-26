@@ -51,12 +51,39 @@ def _validate(config: dict[str, object], context: ValidationContext) -> None:
         )
 
 
+def _before_delete(name: str, context: ValidationContext) -> str | None:
+    """Say what deleting a tree's config arms, at the moment it is done.
+
+    An absent row means UNSCOPED, which is the right meaning and the whole
+    reason this collection is additive over every database built before it
+    (#054) — so the next `maintain` on a tree whose config is gone clusters
+    EVERY source in the corpus into it. One small row, a very large operation,
+    and nothing said so until it happened (#167).
+
+    Not a refusal: wanting a tree unscoped again is legitimate, and the config
+    is one PUT away from coming back. What was missing is that the operator
+    hears it.
+    """
+    with context.database.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM nodes WHERE tree = ?", (name,)
+        ).fetchone()
+    built = int(row["n"]) if row is not None else 0
+    if built == 0:
+        return None
+    return (
+        f"tree {name} now maps EVERY source: the next maintain will cluster "
+        f"the whole corpus into it, over the {built} topic(s) it holds today"
+    )
+
+
 TREES = Descriptor(
     collection="trees",
     model=Tree,
     secret_paths=(),
     write_role="writer",
     validate=_validate,
+    before_delete=_before_delete,
 )
 
 

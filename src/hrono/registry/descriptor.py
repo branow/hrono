@@ -46,4 +46,11 @@ class Descriptor:
     validate: Callable[[dict[str, object], ValidationContext], None] | None = (
         None
     )
+    # Asked before a row is removed (#167). It may RAISE to refuse, and it may
+    # return a note for the response — deleting one small config row can arm a
+    # very large operation, and the operator has to hear about it at the moment
+    # they do it, not at the moment it happens. `validate` covers writes only,
+    # and "may this be deleted" is a different question that more than one
+    # collection will eventually have.
+    before_delete: Callable[[str, ValidationContext], str | None] | None = None
     defaults: tuple[dict[str, object], ...] = ()
