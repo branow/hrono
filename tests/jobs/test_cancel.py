@@ -188,6 +188,19 @@ def test_cancelling_a_standalone_job_stops_it(harness: Harness) -> None:
     assert harness.status_of(job_id) == "canceled"
 
 
+def test_cancelling_one_run_leaves_another_alone(harness: Harness) -> None:
+    # a fixture with ONE parent cannot show this: cancelling everything
+    # pending and cancelling the target's own children look identical when
+    # there is nothing else in the queue (qa, 2026-09-26).
+    mine = harness.fan_out()
+    theirs = harness.fan_out()
+
+    harness.cancel(mine)
+
+    assert harness.statuses(mine) == ["canceled"] * 3
+    assert harness.statuses(theirs) == ["pending"] * 3
+
+
 def test_cancel_is_admin_only(harness: Harness) -> None:
     parent = harness.fan_out()
 
