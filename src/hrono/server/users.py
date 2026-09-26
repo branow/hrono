@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 
 from hrono.auth.users import User, create_user, delete_user, list_users
+from hrono.crypto.rotate import rotate
 from hrono.errors import NotFound
 from hrono.server.auth import require_role
 
@@ -58,3 +59,35 @@ def delete_named_user(
     if not removed:
         raise NotFound(f"user not found: {name}")
     return {"deleted": name}
+
+
+class RotateKey(BaseModel):
+    old_key: str
+    new_key: str
+
+
+@router.post("/admin/rotate-key")
+def rotate_master_key(
+    body: RotateKey, request: Request, _: Admin
+) -> dict[str, object]:
+    """Re-encrypt every secret under a new master key (#177).
+
+    Synchronous and not the queued job the spec describes, deliberately: a
+    job's ``scope`` is persisted, and the inputs here are two master keys. The
+    secret-bearing rows are registry config — tens of them, not millions.
+
+    The cipher this process holds still uses the OLD key, so the response tells
+    the operator to update their key file. The next restart reconciles against
+    the new fingerprint and refuses to start on the old one, which is the
+    protection working rather than a surprise.
+    """
+    with request.app.state.db.write() as conn:
+        result = rotate(conn, body.old_key.encode(), body.new_key.encode())
+    return {
+        "key_id": result.key_id,
+        "rotated": result.rows,
+        "next": (
+            "update the key file to the new key: this server is still running "
+            "on the old one and will refuse to start with it"
+        ),
+    }
