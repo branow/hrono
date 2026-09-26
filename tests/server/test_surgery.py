@@ -873,6 +873,27 @@ def test_a_move_that_empties_a_topic_says_so(
     assert "dissolve" in note
 
 
+def test_a_chunk_from_the_pool_empties_nothing(
+    harness: tuple[Harness, dict],
+) -> None:
+    # a parked chunk came from NO topic (#164), so there is none to empty. The
+    # note is built from `from_node`, and without this the operator would be
+    # told "topic None is now empty".
+    h, ids = harness
+    with h.conn:
+        homeless = _section(h.conn, "pooled.md", [0.4, 0.4])
+        park(h.conn, TREE, homeless, 1)
+
+    response = h.client.post(
+        f"/trees/{TREE}/sections/{homeless}/move",
+        json={"to_node": ids["first"]},
+        headers=h.headers,
+    )
+
+    assert response.json()["from_node"] is None
+    assert "note" not in response.json()
+
+
 def test_a_move_that_leaves_a_topic_standing_is_quiet(
     harness: tuple[Harness, dict],
 ) -> None:
