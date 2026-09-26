@@ -76,10 +76,13 @@ def rotate_master_key(
     job's ``scope`` is persisted, and the inputs here are two master keys. The
     secret-bearing rows are registry config — tens of them, not millions.
 
-    The cipher this process holds still uses the OLD key, so the response tells
-    the operator to update their key file. The next restart reconciles against
-    the new fingerprint and refuses to start on the old one, which is the
-    protection working rather than a surprise.
+    The cipher this process holds still uses the OLD key, and every secret is
+    now on the new one — so until this server restarts it can read no
+    credential at all (`KeyMismatch`). Masked reads still answer, which is what
+    makes that easy to miss, so the response says it in as many words rather
+    than only mentioning the key file. The next start reconciles against the
+    new fingerprint and refuses the old key, which is the protection working
+    rather than a surprise.
     """
     with request.app.state.db.write() as conn:
         result = rotate(conn, body.old_key.encode(), body.new_key.encode())
@@ -87,7 +90,9 @@ def rotate_master_key(
         "key_id": result.key_id,
         "rotated": result.rows,
         "next": (
-            "update the key file to the new key: this server is still running "
-            "on the old one and will refuse to start with it"
+            "update the key file and RESTART: this server still holds the old "
+            "key, so nothing needing a credential — syncing a source, calling "
+            "a provider — will work until it does, and it will refuse to "
+            "start on the old key"
         ),
     }

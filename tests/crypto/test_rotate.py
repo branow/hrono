@@ -16,7 +16,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from hrono.auth.users import create_user
-from hrono.crypto.cipher import Cipher
+from hrono.crypto.cipher import Cipher, KeyMismatch
 from hrono.crypto.masterkey import reconcile
 from hrono.crypto.rotate import rotate
 from hrono.db.database import open_database
@@ -181,11 +181,43 @@ def test_no_key_reaches_the_response_or_the_row(harness: Harness) -> None:
     assert NEW.decode() not in stored
 
 
-def test_the_response_says_to_update_the_key_file(harness: Harness) -> None:
-    # this server keeps running on the old key; the next restart refuses it.
+def test_the_response_says_the_running_server_is_now_blind(
+    harness: Harness,
+) -> None:
+    """Not just "update the key file" — say what is broken until they do.
+
+    Every secret is on the new key and this process holds the old one, so it
+    can decrypt NOTHING (`KeyMismatch`). Masked reads still answer 200, which
+    is exactly what makes that easy to miss.
+    """
     body = harness.rotate().json()  # type: ignore[attr-defined]
 
     assert "key file" in body["next"]
+    assert "RESTART" in body["next"]
+    assert "credential" in body["next"]
+
+
+def test_the_running_server_really_is_blind_until_it_restarts(
+    harness: Harness,
+) -> None:
+    harness.rotate()
+    row = harness.row()
+
+    with pytest.raises(KeyMismatch):
+        decrypt(
+            json.loads(row["config"]),  # type: ignore[index]
+            SOURCES,
+            Cipher.from_key(OLD, 1),  # what this process still holds
+            int(row["key_id"]),  # type: ignore[index]
+        )
+
+    # and a masked read still answers, which is the trap
+    assert (
+        harness.client.get(
+            "/sources/gh", headers=harness.auth("admin")
+        ).status_code
+        == 200
+    )
 
 
 def _key_count(harness: Harness) -> int:
