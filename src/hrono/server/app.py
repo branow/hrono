@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -38,7 +37,7 @@ from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import MasterKeyError, reconcile
 from hrono.db.database import DEFAULT_PATH, Database
 from hrono.embed.model import resolve_embedding_model
-from hrono.embed.runner import cached_encoder_for
+from hrono.embed.runner import start_loading
 from hrono.jobs.worker import Worker, reclaim_stranded
 from hrono.paths import cache_root
 from hrono.registry.collections import COLLECTIONS
@@ -124,6 +123,10 @@ def _warm_query_encoder(database: Database) -> None:
     Never fatal: a server with no embedding model registered yet is perfectly
     valid and must still start, and a model that cannot load is a problem for
     the request that needs it to report, not for startup to die of.
+
+    The background load itself is ``runner.start_loading``, which recall also
+    calls on a miss (#169) — one loader, so a question arriving mid-boot joins
+    the load already running rather than starting a second one.
     """
     try:
         with database.connect() as conn:
@@ -132,13 +135,7 @@ def _warm_query_encoder(database: Database) -> None:
         _logger.debug("query encoder not warmed", exc_info=True)
         return
 
-    def warm() -> None:
-        try:
-            cached_encoder_for(model_id)
-        except Exception:  # noqa: BLE001 - the request that needs it reports
-            _logger.debug("query encoder not warmed", exc_info=True)
-
-    threading.Thread(target=warm, daemon=True, name="warm-encoder").start()
+    start_loading(model_id)
 
 
 def create_app(

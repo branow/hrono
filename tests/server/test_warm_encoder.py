@@ -19,6 +19,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
+from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.embed import runner
@@ -105,3 +106,45 @@ def _warned(caplog: pytest.LogCaptureFixture) -> bool:
         "query encoder not warmed" in record.message
         for record in caplog.records
     )
+
+
+def test_a_recall_before_the_model_is_ready_says_so(tmp_path: Path) -> None:
+    """#169: a question does not queue behind a load it cannot see.
+
+    Needs no weights: an id nothing can load stays absent from the cache, which
+    is exactly the state a real cold start passes through.
+    """
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    token = create_user(conn, "admin", "admin")[1]
+    registry_store.insert(
+        conn,
+        "models",
+        "emb",
+        json.dumps(
+            {
+                "name": "emb",
+                "kind": "embedding",
+                "connection": None,
+                "model": "not-a-real-model-id",
+                "params": {"dims": 2},
+            }
+        ),
+        None,
+        "t",
+    )
+    runner._CACHE.clear()
+    app = create_app(connection=conn, master_key=KEY, key_id=1)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/trees/default/recall",
+            json={"question": "anything"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 503
+    body = response.json()["error"]
+    assert body["code"] == "unavailable"
+    assert "still loading" in body["message"]
+    conn.close()

@@ -22,8 +22,8 @@ from hrono import notes
 from hrono.auth.users import User
 from hrono.cluster import incubator
 from hrono.embed.model import resolve_embedding_model
-from hrono.embed.runner import Encoder, cached_encoder_for
-from hrono.errors import NotFound
+from hrono.embed.runner import Encoder, ready_encoder_for
+from hrono.errors import NotFound, Unavailable
 from hrono.export import store as export_store
 from hrono.export.collapse import collapse
 from hrono.export.render import render
@@ -73,7 +73,7 @@ def recall_tree(
     database = request.app.state.db
     with database.connect() as conn:
         model = resolve_embedding_model(conn, {})
-    encode = _query_encode(str(model["model"]))  # loads the model off the lock
+    encode = _query_encode(str(model["model"]))
     with database.connect() as conn:
         result = engine.recall(
             conn,
@@ -90,8 +90,20 @@ def recall_tree(
 
 
 def _query_encode(model_id: str) -> Encoder:
-    """The query encoder for a model, loaded once per process (#168)."""
-    return cached_encoder_for(model_id)
+    """The query encoder, if it is ready; otherwise say so and do not wait.
+
+    A question has someone waiting on it, so it does not queue behind a load it
+    cannot see — it reports that the model is still arriving and asks them back
+    (#169). The miss starts the load, so "shortly" is true rather than
+    hopeful.
+    """
+    encoder = ready_encoder_for(model_id)
+    if encoder is None:
+        raise Unavailable(
+            f"the embedding model is still loading ({model_id}); "
+            f"recall will answer once it is in memory"
+        )
+    return encoder
 
 
 @router.get("/trees/{name}/export")

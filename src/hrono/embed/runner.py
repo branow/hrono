@@ -11,6 +11,7 @@ emitting fixed-dim vectors.
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable, Sequence
 
@@ -73,6 +74,62 @@ def encoder_for(
 
 _CACHE: dict[str, Encoder] = {}
 _CACHE_LOCK = threading.Lock()
+_INFLIGHT: set[str] = set()
+_INFLIGHT_LOCK = threading.Lock()
+_logger = logging.getLogger("hrono")
+
+
+def ready_encoder_for(
+    model_id: str,
+    *,
+    load_timeout: float = _LOAD_TIMEOUT,
+    build: Callable[[str], Encoder] | None = None,
+) -> Encoder | None:
+    """The encoder if it is ALREADY loaded; otherwise None, loading started.
+
+    For a caller with a user waiting (#169). ``cached_encoder_for`` holds its
+    lock across the load, so a request arriving mid-load waits for the whole of
+    it — correct for an op, which has nobody waiting and should not read a
+    second copy of the weights, and wrong for a question, which would spend its
+    client budget queued behind something it cannot see.
+
+    Never a dead end: a miss STARTS the load, so a retry finds it. The first
+    caller after a cold start is told to come back rather than told nothing.
+    """
+    encoder = _CACHE.get(model_id)
+    if encoder is not None:
+        return encoder
+    start_loading(model_id, load_timeout=load_timeout, build=build)
+    return None
+
+
+def start_loading(
+    model_id: str,
+    *,
+    load_timeout: float = _LOAD_TIMEOUT,
+    build: Callable[[str], Encoder] | None = None,
+) -> None:
+    """Load a model in the background if it is not cached or already in flight.
+
+    Its own short-lived lock, deliberately: ``_CACHE_LOCK`` is held for the
+    duration of a load, so asking it "is one already running" would be the
+    blocking this exists to avoid.
+    """
+    with _INFLIGHT_LOCK:
+        if model_id in _CACHE or model_id in _INFLIGHT:
+            return
+        _INFLIGHT.add(model_id)
+
+    def load() -> None:
+        try:
+            cached_encoder_for(model_id, load_timeout=load_timeout, build=build)
+        except Exception:  # noqa: BLE001 - the caller that needs it reports
+            _logger.debug("encoder not loaded: %s", model_id, exc_info=True)
+        finally:
+            with _INFLIGHT_LOCK:
+                _INFLIGHT.discard(model_id)
+
+    threading.Thread(target=load, daemon=True, name="load-encoder").start()
 
 
 def cached_encoder_for(

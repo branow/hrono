@@ -1,5 +1,7 @@
 import importlib.util
 import os
+import threading
+import time
 
 import pytest
 
@@ -160,3 +162,47 @@ def test_the_cache_holds_a_REAL_encoder() -> None:
     vectors = second(["a question about bearer tokens"])
     assert len(vectors) == 1
     assert len(vectors[0]) > 1
+
+
+def test_a_ready_encoder_is_returned_without_waiting() -> None:
+    runner._CACHE.clear()
+    runner._INFLIGHT.clear()
+    encoder = runner.cached_encoder_for(
+        "warm", build=lambda _id: lambda texts: [[0.0] for _ in texts]
+    )
+
+    assert runner.ready_encoder_for("warm") is encoder
+
+
+def test_a_cold_encoder_reports_a_miss_and_starts_loading() -> None:
+    # never a dead end: the miss is what makes "shortly" true rather than
+    # hopeful, so a retry finds it (#169).
+    started = threading.Event()
+    runner._CACHE.clear()
+    runner._INFLIGHT.clear()
+
+    def build(model_id: str):
+        started.set()
+        return lambda texts: [[0.0] for _ in texts]
+
+    assert runner.ready_encoder_for("cold", build=build) is None
+    assert started.wait(timeout=5)
+
+    deadline = time.monotonic() + 5
+    while "cold" not in runner._CACHE and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert runner.ready_encoder_for("cold", build=build) is not None
+
+
+def test_a_second_caller_does_not_start_a_second_load() -> None:
+    # `_CACHE_LOCK` is held across a load, so the in-flight set needs its own
+    # short-lived lock -- asking the big one would be the blocking this avoids.
+    runner._CACHE.clear()
+    runner._INFLIGHT.clear()
+    runner._INFLIGHT.add("busy")
+    try:
+        before = threading.active_count()
+        assert runner.ready_encoder_for("busy") is None
+        assert threading.active_count() == before
+    finally:
+        runner._INFLIGHT.clear()
