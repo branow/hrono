@@ -206,3 +206,43 @@ def test_a_second_caller_does_not_start_a_second_load() -> None:
         assert threading.active_count() == before
     finally:
         runner._INFLIGHT.clear()
+
+
+def test_a_remembered_failure_is_raised_not_hidden_behind_loading() -> None:
+    # "still loading" is the one message an operator waits on rather than acts
+    # on, and it was said forever about a model that could never load (#169).
+    runner._CACHE.clear()
+    runner._INFLIGHT.clear()
+    runner._FAILED.clear()
+
+    def failing(model_id: str):
+        raise EmbedError(f"embedding model failed to load: {model_id}")
+
+    assert runner.ready_encoder_for("bad", build=failing) is None  # first try
+    deadline = time.monotonic() + 5
+    while "bad" not in runner._FAILED and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    with pytest.raises(EmbedError, match="failed to load"):
+        runner.ready_encoder_for("bad", build=failing)
+    runner._FAILED.clear()
+
+
+def test_a_failure_does_not_stop_the_retry() -> None:
+    # a model can start working once whatever was wrong is fixed, so the
+    # memory stops the lie and not the loading.
+    runner._CACHE.clear()
+    runner._INFLIGHT.clear()
+    runner._FAILED["flaky"] = "it was broken"
+
+    def working(model_id: str):
+        return lambda texts: [[0.0] for _ in texts]
+
+    with pytest.raises(EmbedError):
+        runner.ready_encoder_for("flaky", build=working)  # reports the old one
+
+    deadline = time.monotonic() + 5
+    while "flaky" not in runner._CACHE and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert runner.ready_encoder_for("flaky", build=working) is not None
+    assert "flaky" not in runner._FAILED  # and the memory is cleared

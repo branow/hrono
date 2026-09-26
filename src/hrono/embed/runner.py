@@ -75,6 +75,7 @@ def encoder_for(
 _CACHE: dict[str, Encoder] = {}
 _CACHE_LOCK = threading.Lock()
 _INFLIGHT: set[str] = set()
+_FAILED: dict[str, str] = {}
 _INFLIGHT_LOCK = threading.Lock()
 _logger = logging.getLogger("hrono")
 
@@ -95,11 +96,21 @@ def ready_encoder_for(
 
     Never a dead end: a miss STARTS the load, so a retry finds it. The first
     caller after a cold start is told to come back rather than told nothing.
+
+    RAISES the last failure instead, when the model tried to load and could
+    not. "Still loading" is the one message an operator waits on rather than
+    acts on, and saying it forever about a mistyped model id turns a
+    diagnosable failure into something indistinguishable from a slow start. A
+    remembered failure does not stop the retry — a model can start working once
+    whatever was wrong is fixed — it only stops the lie.
     """
     encoder = _CACHE.get(model_id)
     if encoder is not None:
         return encoder
+    failure = _FAILED.get(model_id)
     start_loading(model_id, load_timeout=load_timeout, build=build)
+    if failure is not None:
+        raise EmbedError(failure)
     return None
 
 
@@ -121,13 +132,19 @@ def start_loading(
         _INFLIGHT.add(model_id)
 
     def load() -> None:
+        reason: str | None = None
         try:
             cached_encoder_for(model_id, load_timeout=load_timeout, build=build)
-        except Exception:  # noqa: BLE001 - the caller that needs it reports
+        except Exception as exc:  # noqa: BLE001 - reported to the next caller
+            reason = str(exc) or type(exc).__name__
             _logger.debug("encoder not loaded: %s", model_id, exc_info=True)
         finally:
             with _INFLIGHT_LOCK:
                 _INFLIGHT.discard(model_id)
+                if reason is None:
+                    _FAILED.pop(model_id, None)
+                else:
+                    _FAILED[model_id] = reason
 
     threading.Thread(target=load, daemon=True, name="load-encoder").start()
 

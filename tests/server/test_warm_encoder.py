@@ -108,12 +108,7 @@ def _warned(caplog: pytest.LogCaptureFixture) -> bool:
     )
 
 
-def test_a_recall_before_the_model_is_ready_says_so(tmp_path: Path) -> None:
-    """#169: a question does not queue behind a load it cannot see.
-
-    Needs no weights: an id nothing can load stays absent from the cache, which
-    is exactly the state a real cold start passes through.
-    """
+def _server_with_model(tmp_path: Path, model_id: str) -> tuple[object, str]:
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)
     token = create_user(conn, "admin", "admin")[1]
@@ -126,25 +121,75 @@ def test_a_recall_before_the_model_is_ready_says_so(tmp_path: Path) -> None:
                 "name": "emb",
                 "kind": "embedding",
                 "connection": None,
-                "model": "not-a-real-model-id",
+                "model": model_id,
                 "params": {"dims": 2},
             }
         ),
         None,
         "t",
     )
+    return conn, token
+
+
+def test_a_recall_before_the_model_is_ready_says_so(tmp_path: Path) -> None:
+    """#169: a question does not queue behind a load it cannot see.
+
+    The in-flight set is seeded rather than raced for: "loading" and "failed"
+    are different answers and a test that reaches one by arriving first would
+    pass through a version that could not tell them apart (qa, 2026-09-26).
+    """
+    model_id = "a-model-that-is-loading"
+    conn, token = _server_with_model(tmp_path, model_id)
     runner._CACHE.clear()
+    runner._FAILED.clear()
+    runner._INFLIGHT.add(model_id)  # in flight: nothing has failed yet
     app = create_app(connection=conn, master_key=KEY, key_id=1)
 
-    with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.post(
-            "/trees/default/recall",
-            json={"question": "anything"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/trees/default/recall",
+                json={"question": "anything"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        runner._INFLIGHT.discard(model_id)
 
     assert response.status_code == 503
     body = response.json()["error"]
     assert body["code"] == "unavailable"
     assert "still loading" in body["message"]
-    conn.close()
+    conn.close()  # type: ignore[attr-defined]
+
+
+def test_a_model_that_cannot_load_says_why_instead(tmp_path: Path) -> None:
+    """The regression this ticket first shipped: "still loading", forever.
+
+    A mistyped model id answered 503 "still loading" on every attempt while
+    three failures sat in the log. That sentence is the one an operator WAITS
+    on, and before #169 the same typo said `embed-error: embedding model failed
+    to load`.
+    """
+    model_id = "totally/not-a-model"
+    conn, token = _server_with_model(tmp_path, model_id)
+    runner._CACHE.clear()
+    runner._INFLIGHT.add(model_id)  # keep the real loader out of this test
+    runner._FAILED[model_id] = f"embedding model failed to load: {model_id}"
+    app = create_app(connection=conn, master_key=KEY, key_id=1)
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/trees/default/recall",
+                json={"question": "anything"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        runner._INFLIGHT.discard(model_id)
+        runner._FAILED.clear()
+
+    body = response.json()["error"]
+    assert body["code"] == "embed-error"
+    assert "failed to load" in body["message"]
+    assert "still loading" not in body["message"]
+    conn.close()  # type: ignore[attr-defined]
