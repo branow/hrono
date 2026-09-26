@@ -51,6 +51,9 @@ class Descriptor:
     # very large operation, and the operator has to hear about it at the moment
     # they do it, not at the moment it happens. `validate` covers writes only,
     # and "may this be deleted" is a different question that more than one
-    # collection will eventually have.
+    # collection will eventually have. A seeded default RESETS rather than
+    # deletes and returns before this is reached, which is correct — a reset is
+    # not a delete — but the first collection to want both will have to say
+    # which it means.
     before_delete: Callable[[str, ValidationContext], str | None] | None = None
     defaults: tuple[dict[str, object], ...] = ()
