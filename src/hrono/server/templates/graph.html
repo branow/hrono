@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }} map{% endblock %}
+{% block main %}
+<h1>map</h1>
+{% if not graph.nodes %}
+<p>{{ tree }} has no topics yet.</p>
+{% else %}
+<p class="notes">bigger holds more · <span class="stale-key">orange</span> is a stale or missing brief · click a topic to open or close it</p>
+<div class="canvas">
+<svg width="{{ graph.width }}" height="{{ graph.height }}" role="img" aria-label="topic map">
+  {% for x1, y1, x2, y2 in graph.edges %}
+  <line x1="{{ x1 }}" y1="{{ y1 }}" x2="{{ x2 }}" y2="{{ y2 }}" class="edge"/>
+  {% endfor %}
+  {% for node in graph.nodes %}
+  <g class="node{% if node.stale %} stale{% endif %}">
+    <a href="{{ node.toggle }}">
+      <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"
+              {% if node.has_hidden_children %}class="closed"{% endif %}/>
+    </a>
+    {% if node.has_hidden_children %}
+    <text x="{{ node.x }}" y="{{ node.y + 4 }}" class="more">+</text>
+    {% endif %}
+    <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">
+      <text x="{{ node.x }}" y="{{ node.y + node.radius + 14 }}" class="label">{{ node.title }}</text>
+    </a>
+    <title>{{ node.title }} — holds {{ node.holds }}{% if node.stale %}, brief stale{% endif %}</title>
+  </g>
+  {% endfor %}
+</svg>
+</div>
+{% endif %}
+{% endblock %}

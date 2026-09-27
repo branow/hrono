@@ -26,6 +26,14 @@
   .where, .notes { opacity: .8; }
   ul.members { list-style: none; padding: 0; }
   pre.preview { white-space: pre-wrap; opacity: .85; margin: .3rem 0 .8rem 1rem; }
+  .canvas { overflow-x: auto; }
+  svg .edge { stroke: var(--edge); stroke-width: 1.5; }
+  svg circle { fill: #6a9fd8; stroke: #3336; }
+  svg .stale circle { fill: #e08a3c; }
+  svg circle.closed { stroke-dasharray: 3 2; stroke-width: 2; }
+  svg text { font: 11px system-ui, sans-serif; text-anchor: middle; fill: currentColor; }
+  svg text.more { fill: #fff; font-weight: 700; }
+  .stale-key { color: #e08a3c; }
 </style>
 </head>
 <body>
@@ -41,6 +49,7 @@
   </form>
   <nav>
     <a href="/ui?tree={{ tree }}">overview</a>
+    <a href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">map</a>
     <a href="/ui/jobs?tree={{ tree }}">runs</a>
     <span class="role">{{ user.name }} ({{ user.role }})</span>
     <form class="inline" method="post" action="/ui/logout">

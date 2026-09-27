@@ -30,6 +30,7 @@ from hrono.jobs.cancel import cancel
 from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
+from hrono.server import graph
 from hrono.server.auth import COOKIE, require_role
 from hrono.summarize import briefs
 
@@ -169,6 +170,73 @@ _LIVE = frozenset({"pending", "running", "partial"})
 # Enough to recognise a chunk, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
+
+
+@router.get("/ui/trees/{tree}/graph", response_class=HTMLResponse)
+def graph_page(
+    tree: str, request: Request, user: Reader, open: str = ""
+) -> Response:
+    """The tree, drawn — and every view of it is a URL.
+
+    The expand state rides in `open` rather than in the page, so a graph
+    someone is looking at can be pasted to someone else. It is also why this
+    needs no JavaScript: toggling is a link.
+    """
+    opened = _opened(open)
+    with request.app.state.db.connect() as conn:
+        trees = _trees(conn)
+        drawn = graph.build(conn, tree, sorted(opened))
+    return templates.TemplateResponse(
+        request,
+        "graph.html",
+        {
+            "user": user,
+            "trees": trees,
+            "tree": tree,
+            "graph": {
+                "nodes": [
+                    _with_toggle(node, tree, opened) for node in drawn.nodes
+                ],
+                "edges": drawn.edges,
+                "width": drawn.width,
+                "height": drawn.height,
+            },
+            "can_write": user.role in {"writer", "admin"},
+        },
+    )
+
+
+def _opened(raw: str) -> set[int]:
+    """The ids in `?open=`, ignoring anything that is not one.
+
+    A hand-edited or truncated URL should draw a smaller graph, never a 500 —
+    this parameter is a view, and a view cannot be invalid.
+    """
+    out: set[int] = set()
+    for part in raw.split(","):
+        if part.strip().isdigit():
+            out.add(int(part))
+    return out
+
+
+def _with_toggle(
+    node: object, tree: str, opened: set[int]
+) -> dict[str, object]:
+    """Each node carries the URL that opens or closes it."""
+    node_id = node.id  # type: ignore[attr-defined]
+    after = opened - {node_id} if node_id in opened else opened | {node_id}
+    query = ",".join(str(value) for value in sorted(after))
+    return {
+        "id": node_id,
+        "title": node.title,  # type: ignore[attr-defined]
+        "holds": node.holds,  # type: ignore[attr-defined]
+        "stale": node.stale,  # type: ignore[attr-defined]
+        "has_hidden_children": node.has_hidden_children,  # type: ignore[attr-defined]
+        "x": node.x,  # type: ignore[attr-defined]
+        "y": node.y,  # type: ignore[attr-defined]
+        "radius": round(node.radius, 1),  # type: ignore[attr-defined]
+        "toggle": f"/ui/trees/{tree}/graph?tree={tree}&open={query}",
+    }
 
 
 @router.get("/ui/trees/{tree}/nodes/{node_id}", response_class=HTMLResponse)
