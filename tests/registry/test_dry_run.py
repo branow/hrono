@@ -636,3 +636,109 @@ def test_the_roles_are_told_apart_by_role_not_by_their_text(
     alpha = _by_tree(answer)["alpha"]
     assert alpha["stale"]["levels"] == [0]
     assert alpha["stale"]["nodes"] == 2  # the two leaves, not the topic above
+
+
+def _cost(answer: object, tree: str = "alpha") -> dict:
+    return _by_tree(answer)[tree]["estimated_cost"]
+
+
+def _edit() -> dict:
+    return {
+        "name": "brief",
+        "role": "brief",
+        "template": "Different: {content}",
+    }
+
+
+def _measure(api: Api, tree: str, tokens: tuple[int, int]) -> None:
+    """Give this tree's briefs a recorded cost, as a real brief run does."""
+    with api.conn:  # type: ignore[union-attr]
+        api.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET input_tokens = ?, output_tokens = ? "
+            "WHERE node_id IN (?, ?)",
+            (*tokens, *api.nodes[tree]),
+        )
+
+
+def test_the_call_count_matches_the_nodes_to_rewrite(api: Api) -> None:
+    _measure(api, "alpha", (1000, 200))
+
+    answer = api.dry_run("prompts", "brief", _edit())
+
+    assert _cost(answer)["brief_calls"] == 2
+    assert _by_tree(answer)["alpha"]["stale"]["nodes"] == 2
+
+
+def test_tokens_are_projected_from_what_briefs_here_have_cost(
+    api: Api,
+) -> None:
+    """A measured mean, times the calls — not a constant from nowhere."""
+    _measure(api, "alpha", (1000, 200))
+
+    answer = api.dry_run("prompts", "brief", _edit())
+
+    assert _cost(answer)["tokens"] == {"input": 2000, "output": 400}
+    assert "2 measured brief(s)" in _cost(answer)["basis"]
+
+
+def test_a_hand_written_brief_does_not_drag_the_mean_down(
+    api: Api,
+) -> None:
+    """#156 records zero tokens because no model wrote it.
+
+    Averaging those in would quietly halve every estimate an operator is
+    shown, in the direction that makes spending look cheaper.
+    """
+    _measure(api, "alpha", (1000, 200))
+    with api.conn:  # type: ignore[union-attr]
+        api.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET input_tokens = 0, output_tokens = 0 "
+            "WHERE node_id = ?",
+            (api.nodes["alpha"][0],),
+        )
+
+    answer = api.dry_run("prompts", "brief", _edit())
+
+    assert _cost(answer)["tokens"] == {"input": 2000, "output": 400}
+    assert "1 measured brief(s)" in _cost(answer)["basis"]
+
+
+def test_no_history_means_null_and_a_reason(api: Api) -> None:
+    with api.conn:  # type: ignore[union-attr]
+        api.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET input_tokens = 0, output_tokens = 0"
+        )
+
+    answer = api.dry_run("prompts", "brief", _edit())
+
+    assert _cost(answer)["tokens"] is None
+    assert (
+        "no brief here has recorded what it cost yet" in _cost(answer)["basis"]
+    )
+
+
+def test_the_estimate_is_per_tree(api: Api) -> None:
+    # beta has measured nothing; alpha's numbers are not beta's
+    _measure(api, "alpha", (1000, 200))
+    with api.conn:  # type: ignore[union-attr]
+        api.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET input_tokens = 0, output_tokens = 0 "
+            "WHERE node_id IN (?, ?)",
+            tuple(api.nodes["beta"]),
+        )
+
+    answer = api.dry_run("prompts", "brief", _edit())
+
+    assert _cost(answer, "alpha")["tokens"] is not None
+    assert _cost(answer, "beta")["tokens"] is None
+
+
+def test_there_is_no_money_in_the_answer(api: Api) -> None:
+    """`summarize/spend.py` already says why: a price per model is config this
+    project does not have, and it goes stale the moment a provider changes it.
+    """
+    _measure(api, "alpha", (1000, 200))
+
+    answer = api.dry_run("prompts", "brief", _edit())
+
+    assert "usd" not in json.dumps(answer.json())  # type: ignore[attr-defined]

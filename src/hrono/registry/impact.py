@@ -45,11 +45,64 @@ class Stale:
 
 
 @dataclass(frozen=True)
+class Estimate:
+    """What the work would cost. ``tokens`` is null with no history (#192)."""
+
+    brief_calls: int
+    tokens: dict[str, int] | None
+    basis: str
+
+
+@dataclass(frozen=True)
 class TreeImpact:
     tree: str
     stale: Stale
     ops: tuple[str, ...]
     reason: str
+    estimate: Estimate | None = None
+
+
+def estimate(
+    conn: sqlite3.Connection,
+    tree: str,
+    levels: Sequence[int],
+    calls: int,
+) -> Estimate:
+    """Project the cost of ``calls`` briefs from what briefs HERE have cost.
+
+    From this install's own measurements, never a constant: `briefs` records
+    the input and output tokens of every brief it wrote (#179's question, one
+    row lower down), so the mean at the affected levels of THIS tree is a
+    number somebody measured. With nothing measured yet it is null and says so
+    — a made-up figure shown to someone deciding whether to spend is worse than
+    no figure.
+
+    Hand-written briefs (#156) record zero tokens because no model wrote them,
+    and averaging them in would quietly halve every estimate.
+    """
+    if not levels or not calls:
+        return Estimate(calls, None, "nothing to do")
+    marks = ", ".join("?" * len(levels))
+    row = conn.execute(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(b.input_tokens), 0) AS i, "  # noqa: S608
+        "COALESCE(SUM(b.output_tokens), 0) AS o "
+        "FROM briefs b JOIN nodes n ON n.id = b.node_id "
+        f"WHERE n.tree = ? AND n.level IN ({marks}) AND b.input_tokens > 0",
+        (tree, *levels),
+    ).fetchone()
+    measured = int(row["n"])
+    if not measured:
+        return Estimate(
+            calls, None, "no brief here has recorded what it cost yet"
+        )
+    return Estimate(
+        brief_calls=calls,
+        tokens={
+            "input": round(int(row["i"]) / measured * calls),
+            "output": round(int(row["o"]) / measured * calls),
+        },
+        basis=f"the mean of {measured} measured brief(s) in this tree",
+    )
 
 
 def preview(
@@ -149,6 +202,7 @@ def _prompt_impact(
                     "these briefs were written under the old template and the "
                     "next run would rewrite them; nothing re-runs on its own"
                 ),
+                estimate=estimate(conn, tree, touched, len(newly)),
             )
         )
     return tuple(impacts)
@@ -297,6 +351,9 @@ def _model_impact(
                     "these briefs were written by the model this name used to "
                     "point at; nothing re-runs on its own"
                 ),
+                estimate=estimate(
+                    conn, tree, sorted(set(levels)), len(set(nodes))
+                ),
             )
         )
     return tuple(impacts)
@@ -386,6 +443,17 @@ def as_json(impacts: Sequence[TreeImpact]) -> dict[str, object]:
                 },
                 "ops": list(impact.ops),
                 "reason": impact.reason,
+                **(
+                    {}
+                    if impact.estimate is None
+                    else {
+                        "estimated_cost": {
+                            "brief_calls": impact.estimate.brief_calls,
+                            "tokens": impact.estimate.tokens,
+                            "basis": impact.estimate.basis,
+                        }
+                    }
+                ),
             }
             for impact in impacts
         ]
