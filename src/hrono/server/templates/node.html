@@ -7,8 +7,36 @@
   {% if node.parent %} · under <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent }}?tree={{ tree }}">topic {{ node.parent }}</a>{% endif %}
   {% if node.pins %} · pinned: {{ node.pins|join(', ') }}{% endif %}
 </p>
+{% if error %}<p class="needs">{{ error }}</p>{% endif %}
+{% if done %}<p class="clean">{{ done }}</p>{% endif %}
 {% if node.brief %}<blockquote>{{ node.brief }}</blockquote>{% else %}<p><em>no brief yet</em></p>{% endif %}
 {% if node.notes %}<p class="notes">{{ node.notes }}</p>{% endif %}
+
+{% if can_edit %}
+<details class="surgery">
+  <summary>edit this topic</summary>
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/rename">
+    <label>name <input name="title" value="{{ node.title }}" maxlength="200"></label>
+    <button type="submit">rename</button>
+  </form>
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/brief">
+    <label for="brief-text">brief</label>
+    <textarea id="brief-text" name="text" rows="4">{{ node.brief or "" }}</textarea>
+    <button type="submit">write the brief by hand</button>
+  </form>
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/note">
+    <label for="note-text">note</label>
+    <textarea id="note-text" name="text" rows="2" maxlength="4000"></textarea>
+    <button type="submit">add a note</button>
+  </form>
+  {% if node.pins %}
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
+    <button type="submit">hand back to automation</button>
+    <span class="notes">releases {{ node.pins|length }} pin{{ "s" if node.pins|length != 1 }}</span>
+  </form>
+  {% endif %}
+</details>
+{% endif %}
 
 {% if node.children %}
 <h2>topics beneath</h2>

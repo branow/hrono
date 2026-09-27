@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, quote, urlencode
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ValidationError
 
 from hrono import edits, notes, pins
 from hrono.auth.users import User, authenticate
@@ -34,6 +35,7 @@ from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
 from hrono.server import config_view, graph, overlays, triage
 from hrono.server.auth import COOKIE, require_role
+from hrono.server.edits import BriefText, NoteText, Rename
 from hrono.summarize import briefs
 
 router = APIRouter()
@@ -87,6 +89,10 @@ def _viewer(minimum: str):
 
 Reader = Annotated[User, Depends(_viewer("reader"))]
 Writer = Annotated[User, Depends(_viewer("writer"))]
+# The API's edit routes are admin-gated (`server/edits.py`). A page that
+# accepted a writer for the same operation would be a second, weaker
+# authorization for it — the thing #180 refused, said as a role.
+Admin = Annotated[User, Depends(_viewer("admin"))]
 
 
 @router.get("/ui/login", response_class=HTMLResponse)
@@ -410,9 +416,19 @@ def _with_toggle(
 
 @router.get("/ui/trees/{tree}/nodes/{node_id}", response_class=HTMLResponse)
 def node_page(
-    tree: str, node_id: int, request: Request, user: Reader
+    tree: str,
+    node_id: int,
+    request: Request,
+    user: Reader,
+    error: str = "",
+    done: str = "",
 ) -> Response:
-    """One topic: what it says, where it sits, and what it is made of."""
+    """One topic: what it says, where it sits, and what it is made of.
+
+    `error` and `done` carry the result of a write back through the redirect,
+    so the page a write lands on is a URL like any other and a refresh repeats
+    nothing.
+    """
     with request.app.state.db.connect() as conn:
         if not edits.node_exists(conn, tree, node_id):
             raise NotFound(f"node not found in tree {tree}: {node_id}")
@@ -426,9 +442,92 @@ def node_page(
             "trees": trees,
             "tree": tree,
             "node": node,
+            "error": error,
+            "done": done,
             "can_write": user.role in {"writer", "admin"},
+            "can_edit": user.role == "admin",
         },
     )
+
+
+def _back(tree: str, node_id: int, **outcome: str) -> Response:
+    """Redirect-after-POST to the topic, carrying what happened."""
+    query = urlencode({"tree": tree, **{k: v for k, v in outcome.items() if v}})
+    return RedirectResponse(
+        f"/ui/trees/{tree}/nodes/{node_id}?{query}", status_code=303
+    )
+
+
+async def _edit(
+    request: Request,
+    model: type[BaseModel],
+) -> tuple[BaseModel | None, str]:
+    """Read a form through the API's OWN validation model.
+
+    "A title may not be blank" is one rule, in `server/edits.py`, not a second
+    one written here that could drift from it.
+    """
+    fields = await _fields(request)
+    try:
+        return model(**fields), ""
+    except ValidationError as exc:
+        return None, _first_problem(exc)
+
+
+def _first_problem(exc: ValidationError) -> str:
+    problem = exc.errors()[0]
+    field = ".".join(str(part) for part in problem["loc"]) or "input"
+    return f"{field}: {problem['msg']}"
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/rename")
+async def rename_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Name a topic by hand; `edits.rename` pins the brief so it sticks."""
+    body, problem = await _edit(request, Rename)
+    if body is None:
+        return _back(tree, node_id, error=problem)
+    with request.app.state.db.write() as conn:
+        edits.rename(conn, tree, node_id, body.title)  # type: ignore[attr-defined]
+    return _back(tree, node_id, done="renamed")
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/brief")
+async def brief_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Write the brief by hand — through the path that also feeds recall."""
+    body, problem = await _edit(request, BriefText)
+    if body is None:
+        return _back(tree, node_id, error=problem)
+    with request.app.state.db.write() as conn:
+        edits.override_brief(conn, tree, node_id, body.text)  # type: ignore[attr-defined]
+    return _back(tree, node_id, done="brief written")
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/note")
+async def note_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Annotate a topic; the export shows it to the traversing agent."""
+    body, problem = await _edit(request, NoteText)
+    if body is None:
+        return _back(tree, node_id, error=problem)
+    with request.app.state.db.write() as conn:
+        edits.require_node(conn, tree, node_id)
+        notes.add(conn, notes.NODE, node_id, body.text)  # type: ignore[attr-defined]
+    return _back(tree, node_id, done="note added")
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/release")
+def release_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Hand the topic back to automation: release every pin on it."""
+    with request.app.state.db.write() as conn:
+        released = edits.release(conn, tree, node_id)
+    return _back(tree, node_id, done=f"handed back, {released} pins released")
 
 
 def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
