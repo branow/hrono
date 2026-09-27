@@ -29,6 +29,39 @@
     <textarea id="note-text" name="text" rows="2" maxlength="4000"></textarea>
     <button type="submit">add a note</button>
   </form>
+  {% if candidates.parents %}
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/reparent">
+    <label>under
+      <select name="to">
+        {% for parent in candidates.parents %}
+        <option value="{{ parent.id }}"{% if parent.id == node.parent %} selected{% endif %}>{{ parent.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">move it there</button>
+  </form>
+  {% endif %}
+  {% if candidates.siblings %}
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/merge">
+    <label>merge with
+      <select name="with">
+        {% for sibling in candidates.siblings %}
+        <option value="{{ sibling.id }}">{{ sibling.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label><input type="checkbox" name="confirm" value="yes"> I mean it</label>
+    <button type="submit">merge</button>
+  </form>
+  {% endif %}
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
+    <label><input type="checkbox" name="confirm" value="yes"> I mean it</label>
+    <button type="submit">dissolve — its contents are re-placed</button>
+  </form>
+  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
+    <label><input type="checkbox" name="confirm" value="yes"> I mean it</label>
+    <button type="submit">split — this topic retires, its parts take over</button>
+  </form>
   {% if node.pins %}
   <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
     <button type="submit">hand back to automation</button>
@@ -60,6 +93,19 @@
         {% else %}<span class="score">core</span>{% endif %}
       </summary>
       <pre class="preview">{{ member.preview }}</pre>
+      {% if can_edit and candidates.siblings %}
+      <form method="post" action="/ui/trees/{{ tree }}/sections/{{ member.id }}/move" class="move">
+        <input type="hidden" name="from_node" value="{{ node.id }}">
+        <label>move to
+          <select name="to_node">
+            {% for sibling in candidates.siblings %}
+            <option value="{{ sibling.id }}">{{ sibling.title }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit">move</button>
+      </form>
+      {% endif %}
     </details>
   </li>
 {% endfor %}

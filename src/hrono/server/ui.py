@@ -26,7 +26,8 @@ from pydantic import BaseModel, ValidationError
 from hrono import edits, notes, pins
 from hrono.auth.users import User, authenticate
 from hrono.db import update_log
-from hrono.errors import AppError, NotFound
+from hrono.embed.model import resolve_embedding_model
+from hrono.errors import AppError, DomainError, NotFound
 from hrono.jobs import store as job_store
 from hrono.jobs.aggregate import rollup, total_spend
 from hrono.jobs.cancel import cancel
@@ -433,6 +434,7 @@ def node_page(
         if not edits.node_exists(conn, tree, node_id):
             raise NotFound(f"node not found in tree {tree}: {node_id}")
         node = _node(conn, tree, node_id)
+        candidates = _candidates(conn, tree, node_id, int(node["level"]))  # type: ignore[arg-type]
         trees = _trees(conn)
     return templates.TemplateResponse(
         request,
@@ -442,6 +444,7 @@ def node_page(
             "trees": trees,
             "tree": tree,
             "node": node,
+            "candidates": candidates,
             "error": error,
             "done": done,
             "can_write": user.role in {"writer", "admin"},
@@ -518,6 +521,140 @@ async def note_from_the_page(
         edits.require_node(conn, tree, node_id)
         notes.add(conn, notes.NODE, node_id, body.text)  # type: ignore[attr-defined]
     return _back(tree, node_id, done="note added")
+
+
+def _candidates(conn: object, tree: str, node_id: int, level: int) -> dict:
+    """The topics an operator may pick, so nobody has to type an id.
+
+    A parent sits exactly one level up and a merge partner at the same level
+    (`edits.reparent`, `edits.require_one_level`). Offering anything else
+    teaches the rule through a refusal, which is the worse way to learn it.
+    """
+
+    def at(wanted: int) -> list[dict[str, object]]:
+        return [
+            {
+                "id": int(row["id"]),
+                "title": row["title"] or f"topic {row['id']}",
+            }
+            for row in conn.execute(  # type: ignore[attr-defined]
+                "SELECT id, title FROM nodes WHERE tree = ? AND level = ? "
+                "AND id != ? ORDER BY id",
+                (tree, wanted, node_id),
+            ).fetchall()
+        ]
+
+    return {"parents": at(level + 1), "siblings": at(level)}
+
+
+def _confirmed(fields: dict[str, str]) -> bool:
+    """A destructive form has to be ticked.
+
+    No JS on this dashboard, so no `confirm()`. A checkbox is the same promise
+    and it still works with scripting off — and it is refused HERE, not hidden
+    in the markup, so a hand-made POST is refused too.
+    """
+    return fields.get("confirm", "") != ""
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/reparent")
+async def reparent_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Hang a topic under a chosen parent; `edits.reparent` pins it there."""
+    fields = await _fields(request)
+    parent = fields.get("to", "")
+    if not parent.isdigit():
+        return _back(tree, node_id, error="choose a parent")
+    try:
+        with request.app.state.db.write() as conn:
+            edits.reparent(conn, tree, node_id, int(parent))
+    except AppError as exc:
+        return _back(tree, node_id, error=str(exc))
+    return _back(tree, node_id, done=f"moved under topic {parent}")
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/merge")
+async def merge_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Fold two topics into one and land on the survivor.
+
+    The topic the operator was looking at may be the one that goes, so where
+    they end up is computed rather than assumed: `edits.merge` returns the
+    survivor, and the lowest id wins (#158).
+    """
+    fields = await _fields(request)
+    partner = fields.get("with", "")
+    if not partner.isdigit():
+        return _back(tree, node_id, error="choose a topic to merge with")
+    if not _confirmed(fields):
+        return _back(tree, node_id, error="tick the box to confirm a merge")
+    try:
+        with request.app.state.db.write() as conn:
+            survivor = edits.merge(conn, tree, [node_id, int(partner)])
+    except AppError as exc:
+        return _back(tree, node_id, error=str(exc))
+    return _back(tree, survivor, done=f"merged with topic {partner}")
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/dissolve")
+async def dissolve_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Retire a topic; its contents re-enter the placement rule."""
+    if not _confirmed(await _fields(request)):
+        return _back(tree, node_id, error="tick the box to confirm a dissolve")
+    try:
+        with request.app.state.db.write() as conn:
+            edits.require_node(conn, tree, node_id)
+            model = str(resolve_embedding_model(conn, {})["name"])
+            moved = edits.dissolve(conn, tree, node_id, model)
+    except (AppError, DomainError) as exc:
+        return _back(tree, node_id, error=str(exc))
+    return RedirectResponse(
+        f"/ui/trees/{tree}/graph?tree={tree}&done=dissolved: {moved}",
+        status_code=303,
+    )
+
+
+@router.post("/ui/trees/{tree}/nodes/{node_id}/split")
+async def split_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Divide a topic through the same mini-pipeline repair uses."""
+    if not _confirmed(await _fields(request)):
+        return _back(tree, node_id, error="tick the box to confirm a split")
+    try:
+        with request.app.state.db.write() as conn:
+            edits.require_node(conn, tree, node_id)
+            model = str(resolve_embedding_model(conn, {})["name"])
+            children = edits.split(conn, tree, node_id, model)
+    except (AppError, DomainError) as exc:
+        return _back(tree, node_id, error=str(exc))
+    # the topic they were on has retired; its children took over
+    return _back(tree, children[0], done=f"split into {len(children)} topics")
+
+
+@router.post("/ui/trees/{tree}/sections/{section_id}/move")
+async def move_section_from_the_page(
+    tree: str, section_id: int, request: Request, user: Admin
+) -> Response:
+    """File a chunk under the topic an operator can see it belongs to."""
+    fields = await _fields(request)
+    target, origin = fields.get("to_node", ""), fields.get("from_node", "")
+    back = int(origin) if origin.isdigit() else 0
+    if not target.isdigit():
+        return _back(tree, back, error="choose a topic")
+    try:
+        with request.app.state.db.write() as conn:
+            move = edits.move_section(conn, tree, section_id, int(target))
+    except AppError as exc:
+        return _back(tree, back, error=str(exc))
+    emptied = " — that topic is now empty" if move.emptied else ""
+    return _back(
+        tree, int(target), done=f"chunk {section_id} moved here{emptied}"
+    )
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/release")
