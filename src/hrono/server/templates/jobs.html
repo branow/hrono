@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }} jobs{% endblock %}
+{% block main %}
+<h1>runs</h1>
+{% if not jobs %}
+<p>no runs for {{ tree }} yet.</p>
+{% endif %}
+<table>
+  <thead><tr><th>op</th><th>status</th><th>progress</th><th>tokens</th><th></th></tr></thead>
+  <tbody>
+  {% for job in jobs %}
+  <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
+    <td>{{ job.op }}</td>
+    <td class="status">{{ job.status }}</td>
+    <td class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</td>
+    <td>{% if job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% endif %}</td>
+    <td>
+      {% if job.live and can_write %}
+      <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel">
+        <button type="submit">cancel</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% if job.error %}
+  <tr class="error"><td colspan="5">{{ job.error.code }}: {{ job.error.message }}</td></tr>
+  {% endif %}
+  {% for child in job.children %}
+  <tr class="child"><td>&nbsp;&nbsp;{{ child.op }}{% if child.scope.name %} · {{ child.scope.name }}{% endif %}</td>
+      <td>{{ child.status }}</td><td colspan="3"></td></tr>
+  {% endfor %}
+  {% endfor %}
+  </tbody>
+</table>
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+<script>
+// EventSource is a browser built-in and /jobs/<id>/events already speaks it
+// (#174) — so this view is live with no library and nothing vendored. The
+// cookie rides along and no script can read it (#180).
+for (const row of document.querySelectorAll('tr[data-live]')) {
+  const source = new EventSource('/jobs/' + row.dataset.job + '/events');
+  source.addEventListener('state', (event) => {
+    const state = JSON.parse(event.data);
+    row.querySelector('.status').textContent = state.status;
+    row.querySelector('.progress').textContent =
+      state.progress ? state.progress.done + '/' + state.progress.total : '';
+  });
+  // the stream ends when the job does (#174), and so does the connection
+  source.onerror = () => source.close();
+}
+</script>
+{% endblock %}

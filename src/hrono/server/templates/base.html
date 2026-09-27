@@ -16,6 +16,10 @@
   select, button, input { font: inherit; padding: .25rem .4rem; }
   .role { opacity: .7; }
   .error { color: #c33; }
+  table { border-collapse: collapse; }
+  th, td { text-align: left; padding: .2rem .8rem .2rem 0; }
+  tr.child { opacity: .75; }
+  .notice { opacity: .8; }
 </style>
 </head>
 <body>
@@ -30,6 +34,8 @@
     </select>
   </form>
   <nav>
+    <a href="/ui?tree={{ tree }}">overview</a>
+    <a href="/ui/jobs?tree={{ tree }}">runs</a>
     <span class="role">{{ user.name }} ({{ user.role }})</span>
     <form class="inline" method="post" action="/ui/logout">
       <button type="submit">log out</button>
