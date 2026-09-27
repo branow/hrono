@@ -515,13 +515,28 @@ def node_content_signature(conn: sqlite3.Connection, node_id: int) -> str:
 
 
 def node_centroids(
-    conn: sqlite3.Connection, tree: str, model_name: str
+    conn: sqlite3.Connection,
+    tree: str,
+    model_name: str,
+    node_ids: Sequence[int] | None = None,
 ) -> dict[int, tuple[float, ...]]:
-    """Return each leaf node's unit centroid (mean of member vectors)."""
+    """Return each leaf node's unit centroid (mean of member vectors).
+
+    ``node_ids`` bounds the work to those leaves. A centroid costs every member
+    vector it is made of, so a page that wants a handful of them (#184) must be
+    able to ask for a handful rather than for the corpus — and must get the
+    SAME centroid the monitor uses, which is why this is one function.
+    """
     centroids: dict[int, tuple[float, ...]] = {}
-    for row in conn.execute(
-        "SELECT id FROM nodes WHERE tree = ? AND level = 0", (tree,)
-    ).fetchall():
+    sql = "SELECT id FROM nodes WHERE tree = ? AND level = 0"
+    params: tuple[object, ...] = (tree,)
+    if node_ids is not None:
+        if not node_ids:
+            return {}
+        holes = ", ".join("?" * len(node_ids))
+        sql += f" AND id IN ({holes})"
+        params += tuple(node_ids)
+    for row in conn.execute(sql, params).fetchall():
         node_id = int(row["id"])
         vectors = []
         for member in conn.execute(

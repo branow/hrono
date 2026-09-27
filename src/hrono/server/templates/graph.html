@@ -6,10 +6,27 @@
 <p>{{ tree }} has no topics yet.</p>
 {% else %}
 <p class="notes">bigger holds more · <span class="stale-key">orange</span> is a stale or missing brief · click a topic to open or close it</p>
+<p class="notes">edges:
+  {% for toggle in overlay.toggles %}
+  <a href="{{ toggle.href }}" class="{% if toggle.on %}edge-on{% endif %}">{{ toggle.kind }}{% if toggle.on %} on{% endif %}</a>
+  {% endfor %}
+  <span class="edge-key pull">pull</span> chunks nearer another topic
+  <span class="edge-key proximity">proximity</span> siblings close enough to merge
+  <span class="edge-key propagation">propagation</span> where a change climbed
+  — pull and proximity are chunk-level, so they are drawn between leaf topics only
+</p>
+{% if overlay.unavailable %}
+<p class="needs">pull and proximity need an embedding model: {{ overlay.unavailable }}</p>
+{% endif %}
 <div class="canvas">
 <svg width="{{ graph.width }}" height="{{ graph.height }}" role="img" aria-label="topic map">
   {% for x1, y1, x2, y2 in graph.edges %}
   <line x1="{{ x1 }}" y1="{{ y1 }}" x2="{{ x2 }}" y2="{{ y2 }}" class="edge"/>
+  {% endfor %}
+  {% for link in overlay.links %}
+  <line x1="{{ link.x1 }}" y1="{{ link.y1 }}" x2="{{ link.x2 }}" y2="{{ link.y2 }}" class="link {{ link.kind }}">
+    <title>{{ link.kind }}: {{ link.label }}</title>
+  </line>
   {% endfor %}
   {% for node in graph.nodes %}
   <g class="node{% if node.stale %} stale{% endif %}">

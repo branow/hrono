@@ -13,9 +13,10 @@ FAILURE — an API caller gets a 401, a browser gets the login page, because a
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import parse_qs, quote
+from urllib.parse import parse_qs, quote, urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -31,7 +32,7 @@ from hrono.jobs.cancel import cancel
 from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import config_view, graph, triage
+from hrono.server import config_view, graph, overlays, triage
 from hrono.server.auth import COOKIE, require_role
 from hrono.summarize import briefs
 
@@ -265,7 +266,11 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
 
 @router.get("/ui/trees/{tree}/graph", response_class=HTMLResponse)
 def graph_page(
-    tree: str, request: Request, user: Reader, open: str = ""
+    tree: str,
+    request: Request,
+    user: Reader,
+    open: str = "",
+    edges: str = "",
 ) -> Response:
     """The tree, drawn — and every view of it is a URL.
 
@@ -274,9 +279,13 @@ def graph_page(
     needs no JavaScript: toggling is a link.
     """
     opened = _opened(open)
+    kinds = overlays.parse(edges)
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         drawn = graph.build(conn, tree, sorted(opened))
+        overlay = overlays.build(
+            conn, tree, [node.id for node in drawn.nodes], kinds
+        )
     return templates.TemplateResponse(
         request,
         "graph.html",
@@ -292,9 +301,78 @@ def graph_page(
                 "width": drawn.width,
                 "height": drawn.height,
             },
+            "overlay": {
+                "links": _drawn_links(overlay, drawn),
+                "unavailable": overlay.unavailable,
+                "toggles": _edge_toggles(tree, open, kinds),
+            },
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+def _drawn_links(
+    overlay: overlays.Overlay, drawn: graph.Graph
+) -> list[dict[str, object]]:
+    """Give each link the coordinates of the topics it joins.
+
+    A link whose end is not on the page is dropped rather than drawn to
+    nowhere: the overlay describes what is DRAWN, and `?open=` decides that.
+    """
+    placed = {node.id: (node.x, node.y) for node in drawn.nodes}
+    return [
+        {
+            "kind": link.kind,
+            "label": link.label,
+            "x1": placed[link.source][0],
+            "y1": placed[link.source][1],
+            "x2": placed[link.target][0],
+            "y2": placed[link.target][1],
+        }
+        for link in overlay.links
+        if link.source in placed and link.target in placed
+    ]
+
+
+def _edge_toggles(
+    tree: str, open: str, kinds: Sequence[str]
+) -> list[dict[str, object]]:
+    """One on/off link per overlay, keeping the expand state.
+
+    The overlay is part of the URL for the same reason the expand state is: a
+    graph someone is looking at can be pasted to someone else.
+    """
+    toggles = []
+    for kind in overlays.KINDS:
+        rest = (
+            [k for k in kinds if k != kind]
+            if kind in kinds
+            else [
+                *kinds,
+                kind,
+            ]
+        )
+        query = urlencode(
+            {
+                k: v
+                for k, v in (
+                    ("tree", tree),
+                    ("open", open),
+                    ("edges", ",".join(rest)),
+                )
+                if v
+            },
+            quote_via=quote,
+            safe=",",
+        )
+        toggles.append(
+            {
+                "kind": kind,
+                "on": kind in kinds,
+                "href": f"/ui/trees/{tree}/graph?{query}",
+            }
+        )
+    return toggles
 
 
 def _opened(raw: str) -> set[int]:

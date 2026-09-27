@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hrono.cluster import store
@@ -122,6 +123,76 @@ def refresh(
     )
 
 
+@dataclass(frozen=True)
+class Verdict:
+    """One member's standing in the cluster that holds it.
+
+    ``puller`` is the candidate cluster whose centroid is NEARER than the
+    holder's — the thing `_misfits` used to compute and throw away, keeping
+    only the count. The graph draws it (#184) and the health signal counts it,
+    from this one comparison, so the picture and the number cannot disagree.
+    """
+
+    node_id: int
+    section_id: int
+    own: float
+    puller: int | None
+    misfit: bool
+
+
+def verdicts(
+    conn: sqlite3.Connection,
+    model_name: str,
+    node_ids: Sequence[int],
+    centroids: Mapping[int, Sequence[float]],
+) -> tuple[Verdict, ...]:
+    """Judge every member of ``node_ids`` against the given candidates.
+
+    The CANDIDATE SET is the caller's: the monitor judges against every cluster
+    in the tree, the graph against the topics it has drawn. The rule is not the
+    caller's.
+    """
+    judged: list[Verdict] = []
+    for node_id in node_ids:
+        own_centroid = centroids.get(node_id)
+        forced = store.forced_members(conn, node_id)
+        for sid, content_hash, path in store.node_member_rows(conn, node_id):
+            vector = combined_vector(conn, content_hash, path, model_name)
+            if vector is None:
+                continue
+            own = _dot(vector, own_centroid) if own_centroid else -1.0
+            nearest, best_other = _nearest_other(vector, centroids, node_id)
+            # ONE comparison, read twice: the edge the graph draws and the
+            # count the health signal stores cannot disagree about it.
+            pulled = best_other > own
+            judged.append(
+                Verdict(
+                    node_id=node_id,
+                    section_id=sid,
+                    own=own,
+                    puller=nearest if pulled else None,
+                    misfit=pulled or (sid in forced and own < TAU),
+                )
+            )
+    return tuple(judged)
+
+
+def _nearest_other(
+    vector: Sequence[float],
+    centroids: Mapping[int, Sequence[float]],
+    node_id: int,
+) -> tuple[int | None, float]:
+    best: int | None = None
+    score = -1.0
+    for other, centroid in centroids.items():
+        if other == node_id:
+            continue
+        dot = _dot(vector, centroid)
+        if dot > score:
+            best, score = other, dot
+    return best, score
+
+
 def _misfits(
     conn: sqlite3.Connection,
     tree: str,
@@ -129,29 +200,15 @@ def _misfits(
     node_ids: Sequence[int],
     centroids: dict[int, tuple[float, ...]],
 ) -> tuple[tuple[int, int, int], ...]:
-    rows: list[tuple[int, int, int]] = []
-    for node_id in node_ids:
-        own_centroid = centroids.get(node_id)
-        forced = store.forced_members(conn, node_id)
-        misfits = members = 0
-        for sid, content_hash, path in store.node_member_rows(conn, node_id):
-            vector = combined_vector(conn, content_hash, path, model_name)
-            if vector is None:
-                continue
-            members += 1
-            own = _dot(vector, own_centroid) if own_centroid else -1.0
-            best_other = max(
-                (
-                    _dot(vector, centroid)
-                    for other, centroid in centroids.items()
-                    if other != node_id
-                ),
-                default=-1.0,
-            )
-            if best_other > own or (sid in forced and own < TAU):
-                misfits += 1
-        rows.append((node_id, misfits, members))
-    return tuple(rows)
+    judged = verdicts(conn, model_name, node_ids, centroids)
+    return tuple(
+        (
+            node_id,
+            sum(1 for v in judged if v.node_id == node_id and v.misfit),
+            sum(1 for v in judged if v.node_id == node_id),
+        )
+        for node_id in node_ids
+    )
 
 
 def write_misfits(

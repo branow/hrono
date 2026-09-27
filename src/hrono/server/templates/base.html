@@ -28,6 +28,15 @@
   pre.preview { white-space: pre-wrap; opacity: .85; margin: .3rem 0 .8rem 1rem; }
   .canvas { overflow-x: auto; }
   svg .edge { stroke: var(--edge); stroke-width: 1.5; }
+  svg .link { stroke-width: 2; fill: none; }
+  svg .link.pull { stroke: #d1495b; stroke-dasharray: 5 3; }
+  svg .link.proximity { stroke: #2a8; stroke-dasharray: 2 3; }
+  svg .link.propagation { stroke: #7a5cc6; }
+  .edge-key { padding: 0 .25rem; border-radius: 3px; font-weight: 600; }
+  .edge-key.pull { color: #d1495b; }
+  .edge-key.proximity { color: #2a8; }
+  .edge-key.propagation { color: #7a5cc6; }
+  a.edge-on { font-weight: 700; }
   svg circle { fill: #6a9fd8; stroke: #3336; }
   svg .stale circle { fill: #e08a3c; }
   svg circle.closed { stroke-dasharray: 3 2; stroke-width: 2; }
