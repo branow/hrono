@@ -12,6 +12,7 @@ from hrono.auth.users import (
     delete_user,
     get_user,
     list_users,
+    reset_token,
 )
 from hrono.crypto.tokens import hash_token
 from hrono.db.database import open_database
@@ -21,12 +22,23 @@ def db(tmp_path: Path) -> sqlite3.Connection:
     return open_database(tmp_path / "hrono.db")
 
 
+@pytest.fixture
+def conn(tmp_path: Path) -> sqlite3.Connection:
+    return db(tmp_path)
+
+
 def test_users_migration_creates_table_shape(tmp_path: Path) -> None:
     conn = db(tmp_path)
     columns = {
         row["name"]: row for row in conn.execute("PRAGMA table_info(users)")
     }
-    assert set(columns) == {"name", "role", "token_hash", "created_at"}
+    assert set(columns) == {
+        "name",
+        "role",
+        "token_hash",
+        "created_at",
+        "modified_at",
+    }
     assert columns["name"]["pk"] == 1
     assert columns["role"]["notnull"] == 1
     assert columns["token_hash"]["notnull"] == 1
@@ -62,7 +74,7 @@ def test_create_user_returns_token_once_and_stores_only_hash(
 ) -> None:
     conn = db(tmp_path)
     user, token = create_user(conn, "alice", "admin")
-    assert user == User("alice", "admin", user.created_at)
+    assert user == User("alice", "admin", user.created_at, user.created_at)
     assert token
     stored = conn.execute(
         "SELECT token_hash FROM users WHERE name = 'alice'"
@@ -130,6 +142,57 @@ def test_create_user_rejects_invalid_role_before_writing(
 
 
 def test_user_is_frozen() -> None:
-    user = User("x", "reader", "2026-08-15")
+    user = User("x", "reader", "2026-08-15", "2026-08-15")
     with pytest.raises(dataclasses.FrozenInstanceError):
         user.role = "admin"  # type: ignore[misc]
+
+
+def test_a_fresh_user_was_last_modified_when_it_was_created(
+    conn: sqlite3.Connection,
+) -> None:
+    user, _ = create_user(conn, "alice", "admin")
+
+    assert user.modified_at == user.created_at
+
+
+def test_a_token_rotation_moves_modified_at_and_leaves_created_at(
+    conn: sqlite3.Connection,
+) -> None:
+    """The audit this column exists for: when was this credential last rotated.
+
+    Before #042 a rotation changed only the hash, so a token issued two years
+    ago and never touched looked exactly like one rotated this morning.
+    """
+    made, _ = create_user(conn, "alice", "admin")
+
+    rotated, _ = reset_token(conn, "alice")
+
+    assert rotated.created_at == made.created_at
+    assert rotated.modified_at > made.modified_at
+    assert get_user(conn, "alice") == rotated
+
+
+def test_the_rotation_returns_the_new_stamp_not_the_old_one(
+    conn: sqlite3.Connection,
+) -> None:
+    # a caller that printed what it was handed would report the moment BEFORE
+    # the rotation it had just performed
+    made, _ = create_user(conn, "alice", "admin")
+
+    rotated, _ = reset_token(conn, "alice")
+
+    assert rotated.modified_at != made.modified_at
+
+
+def test_every_read_path_carries_the_stamp(
+    conn: sqlite3.Connection,
+) -> None:
+    _, token = create_user(conn, "alice", "admin")
+    reset_token(conn, "alice")
+    _, fresh = reset_token(conn, "alice")
+    stamped = get_user(conn, "alice")
+    assert stamped is not None
+
+    assert list_users(conn) == (stamped,)
+    assert authenticate(conn, fresh) == stamped
+    assert authenticate(conn, token) is None

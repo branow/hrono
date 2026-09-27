@@ -7,7 +7,7 @@ returned exactly once at creation and never read back. No HTTP lives here.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from hrono.crypto.tokens import generate_token, hash_token
@@ -29,6 +29,7 @@ class User:
     name: str
     role: str
     created_at: str
+    modified_at: str
 
 
 def create_user(
@@ -45,37 +46,43 @@ def create_user(
     try:
         with conn:
             conn.execute(
-                "INSERT INTO users (name, role, token_hash, created_at) "
-                "VALUES (?, ?, ?, ?)",
-                (name, role, hash_token(token), created_at),
+                "INSERT INTO users (name, role, token_hash, created_at, "
+                "modified_at) VALUES (?, ?, ?, ?, ?)",
+                (name, role, hash_token(token), created_at, created_at),
             )
     except sqlite3.IntegrityError as exc:
         raise Conflict(f"user already exists: {name}") from exc
-    return User(name, role, created_at), token
+    return User(name, role, created_at, created_at), token
 
 
 def reset_token(conn: sqlite3.Connection, name: str) -> tuple[User, str]:
     """Reissue an existing user's token; return the ``User`` and raw token once.
 
-    Only the new token's hash is persisted (the old one stops authenticating);
-    no other column or row changes. Raises ``NotFound`` for an unknown user.
+    Only the new token's hash is persisted (the old one stops authenticating),
+    and `modified_at` moves — a rotation that left no trace is the gap #042
+    closed. Raises ``NotFound`` for an unknown user.
+
+    The returned ``User`` carries the NEW timestamp: a caller that printed the
+    one it was handed would report the moment before the rotation it just did.
     """
     user = get_user(conn, name)
     if user is None:
         raise NotFound(f"user not found: {name}")
     token = generate_token()
+    modified_at = datetime.now(UTC).isoformat()
     with conn:
         conn.execute(
-            "UPDATE users SET token_hash = ? WHERE name = ?",
-            (hash_token(token), name),
+            "UPDATE users SET token_hash = ?, modified_at = ? WHERE name = ?",
+            (hash_token(token), modified_at, name),
         )
-    return user, token
+    return replace(user, modified_at=modified_at), token
 
 
 def get_user(conn: sqlite3.Connection, name: str) -> User | None:
     """Return the user with ``name``, or None if there is none."""
     row = conn.execute(
-        "SELECT name, role, created_at FROM users WHERE name = ?", (name,)
+        "SELECT name, role, created_at, modified_at FROM users WHERE name = ?",
+        (name,),
     ).fetchone()
     return _to_user(row) if row is not None else None
 
@@ -83,7 +90,7 @@ def get_user(conn: sqlite3.Connection, name: str) -> User | None:
 def list_users(conn: sqlite3.Connection) -> tuple[User, ...]:
     """Return every user, ordered by name."""
     rows = conn.execute(
-        "SELECT name, role, created_at FROM users ORDER BY name"
+        "SELECT name, role, created_at, modified_at FROM users ORDER BY name"
     ).fetchall()
     return tuple(_to_user(row) for row in rows)
 
@@ -98,11 +105,12 @@ def delete_user(conn: sqlite3.Connection, name: str) -> bool:
 def authenticate(conn: sqlite3.Connection, token: str) -> User | None:
     """Return the user owning ``token``, or None for an unknown token."""
     row = conn.execute(
-        "SELECT name, role, created_at FROM users WHERE token_hash = ?",
+        "SELECT name, role, created_at, modified_at FROM users "
+        "WHERE token_hash = ?",
         (hash_token(token),),
     ).fetchone()
     return _to_user(row) if row is not None else None
 
 
 def _to_user(row: sqlite3.Row) -> User:
-    return User(row["name"], row["role"], row["created_at"])
+    return User(row["name"], row["role"], row["created_at"], row["modified_at"])

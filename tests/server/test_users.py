@@ -98,7 +98,12 @@ def test_list_users_never_exposes_token_or_hash(harness: Harness) -> None:
     for token in harness.tokens.values():
         assert token not in body
     for user in response.json():
-        assert set(user) == {"name", "role", "created_at"}
+        assert set(user) == {
+            "name",
+            "role",
+            "created_at",
+            "modified_at",
+        }
 
 
 def test_reader_cannot_create_or_delete(harness: Harness) -> None:

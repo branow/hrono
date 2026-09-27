@@ -61,9 +61,15 @@ def test_only_the_target_row_changes(seeded: dict[str, str]) -> None:
     conn = open_database(DEFAULT_PATH)
     # the other user's token still authenticates
     assert authenticate(conn, seeded["reader"]) is not None
-    # target user's non-secret columns are untouched
+    # the target's identity is untouched; only the rotation stamp moves (#042)
     after = get_user(conn, "admin")
-    assert after == before
+    assert after is not None and before is not None
+    assert (after.name, after.role, after.created_at) == (
+        before.name,
+        before.role,
+        before.created_at,
+    )
+    assert after.modified_at > before.modified_at
     conn.close()
 
 

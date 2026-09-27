@@ -28,7 +28,12 @@ class UserCreate(BaseModel):
 
 
 def _public(user: User) -> dict[str, str]:
-    return {"name": user.name, "role": user.role, "created_at": user.created_at}
+    return {
+        "name": user.name,
+        "role": user.role,
+        "created_at": user.created_at,
+        "modified_at": user.modified_at,
+    }
 
 
 @router.get("/users")
