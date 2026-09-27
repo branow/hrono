@@ -166,3 +166,34 @@ def test_the_shell_reports_what_the_chosen_tree_holds(
     body = browser.page("/ui?tree=default").text  # type: ignore[attr-defined]
 
     assert "1 topic(s)" in body
+
+
+def test_the_write_button_actually_starts_a_sync(browser: Browser) -> None:
+    # a control that renders and 404s is worse than no control (qa, 2026-09-27)
+    browser.sign_in("writer")
+
+    answer = browser.client.post(
+        "/ui/trees/default/sync", follow_redirects=False
+    )
+
+    assert answer.status_code == 303
+    assert answer.headers["location"] == "/ui?tree=default"
+    jobs = browser.client.get(
+        "/jobs", headers={"Authorization": f"Bearer {browser.tokens['admin']}"}
+    ).json()
+    assert [job["op"] for job in jobs] == ["sync-tree"]
+
+
+def test_a_reader_posting_it_anyway_is_refused(browser: Browser) -> None:
+    # hiding the button is courtesy; the route is the permission.
+    browser.sign_in("reader")
+
+    answer = browser.client.post(
+        "/ui/trees/default/sync", follow_redirects=False
+    )
+
+    assert answer.status_code == 403
+    jobs = browser.client.get(
+        "/jobs", headers={"Authorization": f"Bearer {browser.tokens['admin']}"}
+    ).json()
+    assert jobs == []

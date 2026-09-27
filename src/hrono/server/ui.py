@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 
 from hrono.auth.users import User, authenticate
 from hrono.errors import AppError
+from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
 from hrono.server.auth import COOKIE, require_role
 
@@ -76,6 +77,7 @@ def _viewer(minimum: str):
 
 
 Reader = Annotated[User, Depends(_viewer("reader"))]
+Writer = Annotated[User, Depends(_viewer("writer"))]
 
 
 @router.get("/ui/login", response_class=HTMLResponse)
@@ -140,6 +142,20 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+@router.post("/ui/trees/{tree}/sync")
+def sync_from_the_page(tree: str, request: Request, user: Writer) -> Response:
+    """Start a sync from the dashboard and come back to the page.
+
+    A WRITER dependency, not a hidden button: the control is absent from a
+    reader's HTML and refused by this route if they post it anyway. Hiding it
+    is courtesy; this is the permission.
+
+    Redirect-after-POST so a refresh does not start a second run.
+    """
+    enqueue(request.app.state.db, "sync-tree", {}, tree=tree)
+    return RedirectResponse(f"/ui?tree={tree}", status_code=303)
 
 
 def _trees(conn: object) -> list[str]:
