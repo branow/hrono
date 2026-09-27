@@ -31,7 +31,7 @@ from hrono.jobs.cancel import cancel
 from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import graph, triage
+from hrono.server import config_view, graph, triage
 from hrono.server.auth import COOKIE, require_role
 from hrono.summarize import briefs
 
@@ -171,6 +171,31 @@ _LIVE = frozenset({"pending", "running", "partial"})
 # Enough to recognise a chunk, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
+
+
+@router.get("/ui/config", response_class=HTMLResponse)
+def config_page(request: Request, user: Reader, tree: str = "") -> Response:
+    """Every registry collection, with secrets masked.
+
+    Masked through the registry's OWN `mask()`, not a second redaction here: it
+    reads each collection's declared `secret_paths` (#142), so a source type
+    whose credential moves is masked by declaring the new path — and there is
+    no second place that can forget to.
+    """
+    with request.app.state.db.connect() as conn:
+        trees = _trees(conn)
+        collections = config_view.tables(conn)
+    return templates.TemplateResponse(
+        request,
+        "config.html",
+        {
+            "user": user,
+            "trees": trees,
+            "tree": tree if tree in trees else trees[0],
+            "collections": collections,
+            "can_write": user.role in {"writer", "admin"},
+        },
+    )
 
 
 @router.get("/ui/trees/{tree}/activity", response_class=HTMLResponse)

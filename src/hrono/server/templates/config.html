@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}hrono — config{% endblock %}
+{% block main %}
+<h1>config</h1>
+<p class="notes">read-only here — edit with the CLI or the API. Secrets are masked.</p>
+{% for collection in collections %}
+<h2>{{ collection.name }}</h2>
+{% if not collection.rows %}
+<p class="notes">no {{ collection.name }} configured.</p>
+{% else %}
+<table>
+  <thead><tr><th>name</th><th>config</th></tr></thead>
+  <tbody>
+  {% for item in collection.rows %}
+  <tr>
+    <td>{{ item.name }}{% if item.is_default %} <span class="notes">(default)</span>{% endif %}</td>
+    <td><pre class="preview">{{ item.config }}</pre></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+{% endblock %}
