@@ -30,6 +30,23 @@ is the part that outlives one machine.
 - A test that CONSTRUCTS the state it asserts on proves the READER and says nothing about the WRITER. At least one test per feature must arrive at that state the way production does — through the endpoint, the op, the CLI — or the thing that builds it can be dead while every test stays green. Four tickets have paid for this: 585 tests over a corpus that could not build (#094), an orphan sweep whose only caller could have been `range(1)` forever because the collector was tested directly (#163), and `jobs.scope.fan_out`, called from tests only, so an aggregation shipped over a structure no request could produce (#172, #175).
 - A SURVIVING mutation is a finding, not a formality: it says the guard sits somewhere other than where the test looks. Four shapes have appeared — a fixture too SYMMETRIC to show the asymmetry it claims, a population of ONE with no distribution to change, a unit test proving a FUNCTION while nothing proves its caller, and a property held by something else entirely (a daemon thread, a transaction) so deleting the code under test changes nothing (#162, #166, #163, #168). Work out which before changing anything.
 
+## Form, applied as files are touched
+
+Two standing rules rather than tickets, because each is a per-file habit and a
+big-bang sweep of either would be a large diff nobody can review for the one
+thing it claims to change.
+
+- **Order a module top-down**: the high-level entry points first, the helpers
+  they call below them. Python resolves names at call time, so a helper defined
+  lower is callable from a function defined higher; helpers at the top are a
+  define-before-use habit from other languages, and they make a reader meet a
+  module's plumbing before its subject (#049).
+- **Collapse same-shape tests with `@pytest.mark.parametrize`**, giving each row
+  a stable `id` so a failure names the case. pytest already rewrites `assert`
+  and prints a full diff of both operands, so no matcher library earns its
+  dependency; add an explicit `assert cond, "message"` only where the rewritten
+  output is genuinely opaque, such as raw bytes or a large blob (#044).
+
 ## The gate
 
 Before finishing any code change, in order: `uv run ruff format .`, then
