@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }} triage{% endblock %}
+{% block main %}
+<h1>triage</h1>
+{% if clean %}
+<p class="clean">nothing needs attention in {{ tree }}.</p>
+{% endif %}
+<table>
+  <tbody>
+  {% for item in items %}
+  <tr class="{% if item.count %}needs{% else %}ok{% endif %}">
+    <td class="count">{{ item.count }}</td>
+    <td><a href="{{ item.link }}">{{ item.kind }}</a></td>
+    <td class="notes">{{ item.detail }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

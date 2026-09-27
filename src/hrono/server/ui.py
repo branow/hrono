@@ -30,7 +30,7 @@ from hrono.jobs.cancel import cancel
 from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import graph
+from hrono.server import graph, triage
 from hrono.server.auth import COOKIE, require_role
 from hrono.summarize import briefs
 
@@ -170,6 +170,26 @@ _LIVE = frozenset({"pending", "running", "partial"})
 # Enough to recognise a chunk, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
+
+
+@router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)
+def triage_page(tree: str, request: Request, user: Reader) -> Response:
+    """What is wrong with this tree, counted, each linking to where it is."""
+    with request.app.state.db.connect() as conn:
+        trees = _trees(conn)
+        items = triage.survey(conn, tree)
+    return templates.TemplateResponse(
+        request,
+        "triage.html",
+        {
+            "user": user,
+            "trees": trees,
+            "tree": tree,
+            "items": items,
+            "clean": triage.clean(items),
+            "can_write": user.role in {"writer", "admin"},
+        },
+    )
 
 
 @router.get("/ui/trees/{tree}/graph", response_class=HTMLResponse)

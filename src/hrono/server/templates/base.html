@@ -34,6 +34,10 @@
   svg text { font: 11px system-ui, sans-serif; text-anchor: middle; fill: currentColor; }
   svg text.more { fill: #fff; font-weight: 700; }
   .stale-key { color: #e08a3c; }
+  td.count { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.ok td.count { opacity: .45; }
+  tr.needs td.count { font-weight: 700; color: #e08a3c; }
+  .clean { color: #2a8; }
 </style>
 </head>
 <body>
@@ -49,6 +53,7 @@
   </form>
   <nav>
     <a href="/ui?tree={{ tree }}">overview</a>
+    <a href="/ui/trees/{{ tree }}/triage?tree={{ tree }}">triage</a>
     <a href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">map</a>
     <a href="/ui/jobs?tree={{ tree }}">runs</a>
     <span class="role">{{ user.name }} ({{ user.role }})</span>
