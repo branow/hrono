@@ -22,8 +22,8 @@ from hrono.llm.client import (
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from hrono.summarize import store as condensations
-from hrono.summarize.brief import _hash, brief
-from hrono.summarize.resolve import resolve_prompt
+from hrono.summarize.brief import brief
+from hrono.summarize.resolve import resolve_prompt, template_hash
 
 MODEL = "sonnet"
 TEMPLATE = "Brief this group: {content}"
@@ -260,7 +260,9 @@ def test_unchanged_inputs_keep_briefs_fresh_and_counts_readable(
     brief(job(), JobContext(db), client=FakeCompletion())
     with db.connect() as conn:
         _, template = resolve_prompt(conn, "brief")
-        fresh, stale = briefs.counts(conn, TREE, 0, _hash(template), MODEL)
+        fresh, stale = briefs.counts(
+            conn, TREE, 0, template_hash(template), MODEL
+        )
     assert (fresh, stale) == (2, 0)
 
 
@@ -276,7 +278,9 @@ def test_membership_change_shows_in_counts(db: Database) -> None:
         )
     with db.connect() as conn:
         _, template = resolve_prompt(conn, "brief")
-        fresh, stale = briefs.counts(conn, TREE, 0, _hash(template), MODEL)
+        fresh, stale = briefs.counts(
+            conn, TREE, 0, template_hash(template), MODEL
+        )
     assert (fresh, stale) == (1, 1)
 
 

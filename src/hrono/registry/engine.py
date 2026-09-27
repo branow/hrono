@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from hrono.crypto.cipher import Cipher
 from hrono.errors import BadRequest, Conflict, Invalid, NotFound
-from hrono.registry import store
+from hrono.registry import impact, store
 from hrono.registry.descriptor import Descriptor, ValidationContext
 from hrono.registry.write import content_hash, encrypt, mask
 from hrono.server.auth import require_role
@@ -73,12 +73,21 @@ def build_router(descriptor: Descriptor) -> APIRouter:
         return mask(stored, descriptor)
 
     def replace_item(
-        name: str, body: dict, request: Request
+        name: str, body: dict, request: Request, dry_run: bool = False
     ) -> dict[str, object]:
         config = _validated(descriptor, body)
         if config["name"] != name:
             raise BadRequest("name in body does not match name in path")
         _run_hook(descriptor, config, _context(request))
+        if dry_run:
+            # validated and hooked, then NOTHING written: a preview of an edit
+            # that would be rejected is a rejection, not an impact report
+            # (T58). One implementation, in the engine, so every collection
+            # has the safety rather than the ones someone remembered.
+            with request.app.state.db.connect() as conn:
+                return impact.as_json(
+                    impact.preview(conn, collection, name, config)
+                )
         stored, key_id = encrypt(config, descriptor, _cipher(request))
         payload = json.dumps(stored)
         now = _now()

@@ -28,7 +28,6 @@ idempotent re-run fills only the gaps.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 
@@ -47,6 +46,7 @@ from hrono.summarize.resolve import (
     producer_model_name,
     resolve_prompt,
     resolve_text_model,
+    template_hash,
 )
 from hrono.summarize.shape import answer
 
@@ -72,7 +72,7 @@ def brief(
         # and briefs nothing without saying so.
         source_model = producer_model_name(conn, job.scope, "condense")
         prompt_name, template = resolve_prompt(conn, "brief")
-        prompt_hash = _hash(template)
+        prompt_hash = template_hash(template)
         pending = [
             (
                 node_id,
@@ -134,10 +134,6 @@ def _uncondensed(dropped: int) -> str:
     if dropped == 0:
         return ""
     return f"{dropped} member section(s) had no condensation to reduce"
-
-
-def _hash(template: str) -> str:
-    return hashlib.sha256(template.encode("utf-8")).hexdigest()
 
 
 OPS["brief"] = brief

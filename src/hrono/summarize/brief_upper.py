@@ -28,9 +28,12 @@ from hrono.llm.client import (
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs, spend
-from hrono.summarize.brief import _hash
 from hrono.summarize.faithfulness import faithfulness
-from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.resolve import (
+    resolve_prompt,
+    resolve_text_model,
+    template_hash,
+)
 from hrono.summarize.shape import answer
 
 _CONTENT_PLACEHOLDER = "{content}"
@@ -52,7 +55,7 @@ def brief_upper(
         model = resolve_text_model(conn, job.scope, "brief-upper")
         model_name = str(model["name"])
         prompt_name, template = resolve_prompt(conn, "brief-upper")
-        prompt_hash = _hash(template)
+        prompt_hash = template_hash(template)
         pending = [
             (
                 node_id,

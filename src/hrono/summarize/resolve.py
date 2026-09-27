@@ -18,6 +18,7 @@ the reason this module owns role resolution rather than each op doing its own.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 
@@ -63,6 +64,16 @@ def resolve_text_model(
             else "multiple text models — name one in the scope"
         )
     return text[0]
+
+
+def template_hash(template: str) -> str:
+    """The provenance hash of a prompt template.
+
+    Here rather than in one op, because the preview that says what an edit
+    would make stale (#190) has to hash the way the op that will later read
+    the provenance hashes. A second `sha256` call is not the same function.
+    """
+    return hashlib.sha256(template.encode("utf-8")).hexdigest()
 
 
 def resolve_prompt(conn: sqlite3.Connection, role: str) -> tuple[str, str]:
