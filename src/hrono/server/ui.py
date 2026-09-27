@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 
 from hrono import edits, notes, pins
 from hrono.auth.users import User, authenticate
+from hrono.db import update_log
 from hrono.errors import AppError, NotFound
 from hrono.jobs import store as job_store
 from hrono.jobs.aggregate import rollup, total_spend
@@ -170,6 +171,51 @@ _LIVE = frozenset({"pending", "running", "partial"})
 # Enough to recognise a chunk, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
+
+
+@router.get("/ui/trees/{tree}/activity", response_class=HTMLResponse)
+def activity_page(tree: str, request: Request, user: Reader) -> Response:
+    """What the tree DECIDED — the only record of its own judgement.
+
+    A stale brief is a fact; "judged, not materially changed, did not climb" is
+    a decision, and an operator who disagrees with the map needs to read the
+    decision rather than infer it from the shape.
+    """
+    with request.app.state.db.connect() as conn:
+        trees = _trees(conn)
+        rows, total = update_log.recent(conn, tree)
+    return templates.TemplateResponse(
+        request,
+        "activity.html",
+        {
+            "user": user,
+            "trees": trees,
+            "tree": tree,
+            "rows": [_decision(row) for row in rows],
+            "total": total,
+            "can_write": user.role in {"writer", "admin"},
+        },
+    )
+
+
+def _decision(row: object) -> dict[str, object]:
+    """One logged decision, with the abstention called out.
+
+    #105 made abstaining a first-class outcome and #132 made it visible in a
+    job's result, because a topic that CHANGED and was not judged leaves a
+    stale brief in service. On this page that is the row to look at.
+    """
+    action = str(row["action"])  # type: ignore[index]
+    return {
+        "node_id": int(row["node_id"]),  # type: ignore[index]
+        "verdict": str(row["verdict"]),  # type: ignore[index]
+        "action": action,
+        "climbed_to": row["climbed_to"],  # type: ignore[index]
+        "when": str(row["created_at"])[:19].replace("T", " "),  # type: ignore[index]
+        # the ACTION carries it, not the verdict: `_record` writes the verdict
+        # as "unparseable" and the action as "abstained" (propagate.py)
+        "abstained": action == "abstained",
+    }
 
 
 @router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)

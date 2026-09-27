@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }} activity{% endblock %}
+{% block main %}
+<h1>activity</h1>
+{% if not rows %}
+<p>nothing has been decided about {{ tree }} yet.</p>
+{% else %}
+<p class="notes">showing {{ rows|length }} of {{ total }} · newest first</p>
+<table>
+  <thead><tr><th>when</th><th>topic</th><th>verdict</th><th>action</th><th>climbed to</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+  <tr class="{% if row.abstained %}needs{% endif %}">
+    <td class="notes">{{ row.when }}</td>
+    <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">topic {{ row.node_id }}</a></td>
+    <td>{{ row.verdict }}</td>
+    <td>{{ row.action }}</td>
+    <td>{% if row.climbed_to %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.climbed_to }}?tree={{ tree }}">topic {{ row.climbed_to }}</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

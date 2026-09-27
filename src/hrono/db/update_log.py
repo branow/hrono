@@ -35,3 +35,29 @@ def record(
             datetime.now(UTC).isoformat(),
         ),
     )
+
+
+# A log view that renders forty thousand rows is one nobody opens twice.
+PAGE = 100
+
+
+def recent(
+    conn: sqlite3.Connection, tree: str, limit: int = PAGE
+) -> tuple[tuple[sqlite3.Row, ...], int]:
+    """The newest decisions for a tree, and how many older ones there are.
+
+    The count matters as much as the rows: "showing 100 of 100" and "showing
+    100 of 41,000" are different situations, and a page that shows only the
+    first cannot tell them apart.
+    """
+    rows = conn.execute(
+        "SELECT id, node_id, verdict, action, climbed_to, created_at "
+        "FROM update_log WHERE tree = ? ORDER BY id DESC LIMIT ?",
+        (tree, limit),
+    ).fetchall()
+    total = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM update_log WHERE tree = ?", (tree,)
+        ).fetchone()[0]
+    )
+    return tuple(rows), total
