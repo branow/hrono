@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}hrono{% endblock %}</title>
+<style>
+  :root { color-scheme: light dark; --edge: #8883; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; }
+  header { display: flex; gap: 1.5rem; align-items: baseline;
+           padding: .75rem 1rem; border-bottom: 1px solid var(--edge); }
+  header .name { font-weight: 600; }
+  nav { display: flex; gap: 1rem; margin-left: auto; }
+  main { padding: 1rem; }
+  form.inline { display: inline; }
+  select, button, input { font: inherit; padding: .25rem .4rem; }
+  .role { opacity: .7; }
+  .error { color: #c33; }
+</style>
+</head>
+<body>
+{% block chrome %}
+<header>
+  <span class="name">hrono</span>
+  <form class="inline" method="get" action="/ui">
+    <select name="tree" onchange="this.form.submit()" aria-label="tree">
+      {% for name in trees %}
+      <option value="{{ name }}" {% if name == tree %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <nav>
+    <span class="role">{{ user.name }} ({{ user.role }})</span>
+    <form class="inline" method="post" action="/ui/logout">
+      <button type="submit">log out</button>
+    </form>
+  </nav>
+</header>
+{% endblock %}
+<main>{% block main %}{% endblock %}</main>
+</body>
+</html>

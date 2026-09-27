@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }}{% endblock %}
+{% block main %}
+<h1>{{ tree }}</h1>
+<p>{{ topics }} topic(s) across {{ levels }} level(s).</p>
+{% if can_write %}
+<p><form class="inline" method="post" action="/ui/trees/{{ tree }}/sync">
+  <button type="submit">sync this tree</button>
+</form></p>
+{% endif %}
+{% endblock %}

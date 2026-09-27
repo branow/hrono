@@ -18,6 +18,17 @@ from hrono.errors import Forbidden, Unauthorized
 
 _ROLE_RANK = {"reader": 0, "writer": 1, "admin": 2}
 
+# The dashboard is a browser, which cannot set an Authorization header on a
+# plain navigation — so it carries the SAME api token in a cookie (#180). One
+# authentication path, two carriers: a second path is how "roles enforced
+# server-side from day one" quietly stops being true.
+#
+# The cookie is set HttpOnly and SameSite=Strict at the point it is issued, so
+# page scripts cannot read it and no other site can cause it to be sent. That
+# last part is also what makes accepting it on the API safe: a cross-site form
+# post arrives without it.
+COOKIE = "hrono_token"
+
 
 def _unauthenticated() -> Unauthorized:
     return Unauthorized("could not authenticate credentials")
@@ -36,8 +47,10 @@ def require_role(minimum: str) -> Callable[[Request], User]:
 
 
 def _authenticate(request: Request) -> User:
-    token = _bearer_token(request.headers.get("Authorization"))
-    if token is None:
+    token = _bearer_token(
+        request.headers.get("Authorization")
+    ) or request.cookies.get(COOKIE)
+    if not token:
         raise _unauthenticated()
     with request.app.state.db.connect() as conn:
         user = authenticate(conn, token)

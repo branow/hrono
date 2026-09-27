@@ -15,7 +15,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 import hrono.cluster.levels  # noqa: F401 - registers the cluster-briefs op
 import hrono.cluster.monitor  # noqa: F401 - registers the monitor op
@@ -46,6 +46,8 @@ from hrono.server.edits import router as edits_router
 from hrono.server.errors import install as install_errors
 from hrono.server.jobs import router as jobs_router
 from hrono.server.trees import router as trees_router
+from hrono.server.ui import LoginRequired
+from hrono.server.ui import router as ui_router
 from hrono.server.users import router as users_router
 
 _VERSION = version("hrono")
@@ -204,11 +206,18 @@ def create_app(
 
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
     install_errors(app)
+
+    @app.exception_handler(LoginRequired)
+    def _to_login(request: Request, exc: Exception) -> Response:
+        """A browser gets the login page where an API caller gets a 401."""
+        return RedirectResponse("/ui/login", status_code=303)
+
     app.include_router(router)
     app.include_router(users_router)
     app.include_router(jobs_router)
     app.include_router(trees_router)
     app.include_router(edits_router)
+    app.include_router(ui_router)
     for descriptor in COLLECTIONS:
         app.include_router(build_router(descriptor))
     return app
