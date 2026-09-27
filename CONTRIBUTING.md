@@ -47,6 +47,17 @@ thing it claims to change.
   dependency; add an explicit `assert cond, "message"` only where the rewritten
   output is genuinely opaque, such as raw bytes or a large blob (#044).
 
+## The test harness
+
+- A fixture that writes through the ADOPTED connection while a `TestClient` is
+  running must stop the worker first
+  (`client.app.state.worker.stop()` then `join`). The worker polls that same
+  sqlite connection from its own thread, and two threads interleaving
+  transactions on one connection fails intermittently in whichever test happens
+  to be writing when a poll lands — it passed a whole file eight times in a row
+  and failed twice in the full suite (#194). The same shape as #168's warm-up
+  reading the database on a daemon thread.
+
 ## The gate
 
 Before finishing any code change, in order: `uv run ruff format .`, then

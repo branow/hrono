@@ -77,10 +77,13 @@ from __future__ import annotations
 
 import math
 import sqlite3
+from array import array
 from collections.abc import Sequence
 
-from hrono.cluster.blend import combine, combined_vector, unit
-from hrono.embed.store import get_vector
+import numpy
+
+from hrono.cluster.blend import path_body, similarity_weights
+from hrono.ingest.identity import content_hash
 
 Z_FLOOR = 3.2  # with keyword corroboration (#134; was 3.5)
 UNCORROBORATED_FLOOR = 4.5  # without it (#102): derived on the QA corpus
@@ -98,42 +101,105 @@ def scores(
     """Return the vector z-score for every embedded passage IN SCOPE.
 
     The keyword leg (#073) needs a passage's vector z even when it is below the
-    3.5 qualify floor (its support bar is 3.0), and the endpoint (#074) fuses on
+    qualify floor (its support bar is 3.0), and the endpoint (#074) fuses on
     it, so the full z-map is exposed here and ``search`` just filters it.
 
     ``scope`` is the tree's passages, or None for every one of them (#166). It
     is applied before the z, not after: a passage's z is measured against the
-    passages that could have answered the question, which is its tree's. It
-    also skips the blend for a passage out of scope, which is the expensive
-    part of this loop.
+    passages that could have answered the question, which is its tree's.
+
+    THE ARITHMETIC IS THE COST, and it is done in numpy (#194). Measured at 384
+    dims: 0.15 ms per passage per query in interpreted loops, 18x faster as two
+    matrix-vector products — 1.215s to 0.066s over 8000 passages (#193). The
+    math is unchanged: the same two views, over the same population, with the
+    same weights, read from `blend.blend_weights` rather than re-derived. What
+    an ANN index would change instead is WHICH passages are scored, and the z
+    is taken over the query's own full distribution, so that is a question
+    about the recipe and this is not (#077).
     """
-    query = combine(query_vec, query_vec)
-    content_query = unit(query_vec)
-    blended: list[tuple[int, float]] = []
-    content: list[tuple[int, float]] = []
-    for row in conn.execute(
-        "SELECT id, content_hash, path FROM passages ORDER BY id"
-    ).fetchall():
-        if scope is not None and int(row["id"]) not in scope:
-            continue
-        passage = combined_vector(
-            conn, row["content_hash"], row["path"], model_name
-        )
-        body = get_vector(conn, row["content_hash"], model_name)
-        if passage is None or body is None:
-            continue
-        passage_id = int(row["id"])
-        blended.append((passage_id, _dot(query, passage)))
-        content.append((passage_id, _dot(content_query, unit(body))))
-    if not blended:
+    content_weight, path_weight = similarity_weights()
+    bodies, paths, ids = _stack(conn, model_name, scope)
+    if not ids:
         return {}
 
-    by_blend = _z_scores(blended)
-    by_content = _z_scores(content)
+    query = _unit_row(numpy.asarray(query_vec, dtype=numpy.float64))
+    content_sim = bodies @ query
+    # `combined_vector` is concat(cw * unit(content), pw * unit(path)) and the
+    # query enters `combine(q, q)` the same way, so their dot product is this
+    # (#039) — one product per view instead of a 768-wide one per passage.
+    blended = content_weight * content_sim + path_weight * (paths @ query)
+
+    by_blend = _z_scores(list(zip(ids, blended.tolist(), strict=True)))
+    by_content = _z_scores(list(zip(ids, content_sim.tolist(), strict=True)))
     return {
         passage_id: max(z, by_content.get(passage_id, z))
         for passage_id, z in by_blend.items()
     }
+
+
+def _stack(
+    conn: sqlite3.Connection,
+    model_name: str,
+    scope: frozenset[int] | None,
+) -> tuple[numpy.ndarray, numpy.ndarray, list[int]]:
+    """The in-scope passages' unit content and path vectors, as two matrices.
+
+    A passage missing either vector is skipped, exactly as scoring it one at a
+    time did: half a blend is not a smaller score, it is a different question.
+    """
+    vectors = _vectors(conn, model_name)
+    ids: list[int] = []
+    bodies: list[numpy.ndarray] = []
+    paths: list[numpy.ndarray] = []
+    for row in conn.execute(
+        "SELECT id, content_hash, path FROM passages ORDER BY id"
+    ).fetchall():
+        passage_id = int(row["id"])
+        if scope is not None and passage_id not in scope:
+            continue
+        body = vectors.get(str(row["content_hash"]))
+        path = vectors.get(content_hash(path_body(str(row["path"]))))
+        if body is None or path is None:
+            continue
+        ids.append(passage_id)
+        bodies.append(body)
+        paths.append(path)
+    if not ids:
+        empty = numpy.zeros((0, 0))
+        return empty, empty, []
+    return (
+        _unit_rows(numpy.vstack(bodies)),
+        _unit_rows(numpy.vstack(paths)),
+        ids,
+    )
+
+
+def _vectors(
+    conn: sqlite3.Connection, model_name: str
+) -> dict[str, numpy.ndarray]:
+    """Every stored vector for this model, by content hash."""
+    out: dict[str, numpy.ndarray] = {}
+    for row in conn.execute(
+        "SELECT content_hash, vector FROM embeddings WHERE model_name = ?",
+        (model_name,),
+    ).fetchall():
+        values = array("f")
+        values.frombytes(row["vector"])
+        out[str(row["content_hash"])] = numpy.asarray(
+            values, dtype=numpy.float64
+        )
+    return out
+
+
+def _unit_rows(matrix: numpy.ndarray) -> numpy.ndarray:
+    """Row-wise unit length, leaving a zero row as zeros (`blend.unit`)."""
+    norms = numpy.linalg.norm(matrix, axis=1, keepdims=True)
+    return matrix / numpy.where(norms == 0.0, 1.0, norms)
+
+
+def _unit_row(vector: numpy.ndarray) -> numpy.ndarray:
+    norm = float(numpy.linalg.norm(vector))
+    return vector if norm == 0.0 else vector / norm
 
 
 def _z_scores(scored: Sequence[tuple[int, float]]) -> dict[int, float]:

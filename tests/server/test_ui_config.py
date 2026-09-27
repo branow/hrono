@@ -26,8 +26,11 @@ from hrono.registry.write import MASK
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
+# Deliberately not vendor-shaped. What this test needs is a REAL Fernet
+# ciphertext in the row, not a realistic prefix, and a literal that looks like
+# a credential trips secret scanners on every tool that reads this file.
 CONNECTION_KEY = "a-provider-key-that-must-not-reach-a-browser"
-TOKEN = "ghp_a_provider_token_that_must_not_reach_a_browser"
+TOKEN = "a-provider-token-that-must-not-reach-a-browser"
 
 
 class Browser:

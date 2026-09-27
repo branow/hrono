@@ -44,6 +44,12 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     token = create_user(conn, "admin", "admin")[1]
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
+        # The worker polls the SAME adopted connection this fixture writes
+        # through. Two threads on one sqlite connection interleave
+        # transactions, which is an intermittent failure in whichever test
+        # happens to be writing when a poll lands (#194).
+        client.app.state.worker.stop()  # type: ignore[attr-defined]
+        client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         yield Browser(client, token, conn)
     conn.close()
 

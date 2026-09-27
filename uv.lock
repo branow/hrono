@@ -377,6 +377,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "jinja2" },
+    { name = "numpy" },
     { name = "platformdirs" },
     { name = "sqlite-vec" },
     { name = "tomli-w" },
@@ -389,7 +390,6 @@ dependencies = [
 [package.optional-dependencies]
 cluster = [
     { name = "hdbscan" },
-    { name = "numpy" },
     { name = "umap-learn" },
 ]
 embed = [
@@ -414,7 +414,7 @@ requires-dist = [
     { name = "hdbscan", marker = "extra == 'cluster'", specifier = ">=0.8.38,<0.9" },
     { name = "httpx", specifier = ">=0.27,<0.29" },
     { name = "jinja2", specifier = ">=3.1,<4" },
-    { name = "numpy", marker = "extra == 'cluster'", specifier = ">=1.26,<3" },
+    { name = "numpy", specifier = ">=1.26,<3" },
     { name = "platformdirs", specifier = ">=4.2,<5" },
     { name = "sentence-transformers", marker = "extra == 'embed'", specifier = ">=3.0,<6" },
     { name = "sqlite-vec", specifier = ">=0.1.9" },

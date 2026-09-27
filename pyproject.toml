@@ -10,6 +10,12 @@ dependencies = [
     "fastapi>=0.115.0",
     "httpx>=0.27,<0.29",
     "jinja2>=3.1,<4",
+    # Recall's vector leg scores every in-scope passage per query, and that
+    # arithmetic is the whole cost: 0.15 ms per passage in interpreted loops,
+    # 18x faster as two matrix-vector products (#193, #194). The extras below
+    # exist to keep torch and numba/llvmlite out of a lean install; numpy is
+    # neither, and recall runs with no extra installed at all.
+    "numpy>=1.26,<3",
     "platformdirs>=4.2,<5",
     "sqlite-vec>=0.1.9",
     "tomli-w>=1.0,<2.0",
@@ -32,7 +38,6 @@ embed = ["sentence-transformers>=3.0,<6"]
 cluster = [
     "umap-learn>=0.5.6,<0.6",
     "hdbscan>=0.8.38,<0.9",
-    "numpy>=1.26,<3",
 ]
 
 [project.scripts]

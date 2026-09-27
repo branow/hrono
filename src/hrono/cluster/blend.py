@@ -38,12 +38,40 @@ def combine(
     """Blend a content and path vector into one path-aware clustering vector."""
     content_unit = unit(content_vec)
     path_unit = unit(path_vec)
-    content_weight = math.sqrt(1 - alpha)
-    path_weight = math.sqrt(alpha)
+    content_weight, path_weight = blend_weights(alpha)
     return tuple(
         [content_weight * value for value in content_unit]
         + [path_weight * value for value in path_unit]
     )
+
+
+def blend_weights(alpha: float = ALPHA) -> tuple[float, float]:
+    """The (content, path) weights `combine` applies. ONE definition.
+
+    Recall scores thousands of passages per query and does it in numpy (#194);
+    it needs these two numbers rather than the concatenated vector, and it must
+    not re-derive them — `combine` above is what a passage's stored clustering
+    vector means, and two places computing `sqrt(1 - alpha)` is two places to
+    disagree about what alpha is.
+    """
+    return math.sqrt(1 - alpha), math.sqrt(alpha)
+
+
+def similarity_weights(alpha: float = ALPHA) -> tuple[float, float]:
+    """The weights a DOT PRODUCT of two combined vectors applies per view.
+
+    `combine` scales each half by `sqrt(w)`, and both sides of the dot product
+    carry that scaling, so each view arrives weighted by w — the SQUARE of the
+    vector weight. Recall needs this form because it scores the two views
+    separately (#194) instead of dotting one 768-wide vector.
+
+    It cannot be checked against the baked ALPHA of 0.5: the two weights are
+    equal there, and a z-score is invariant under scaling all scores alike, so
+    squaring or not squaring gives identical rankings. The exponent only shows
+    itself at an asymmetric alpha, which is where it is tested.
+    """
+    content_weight, path_weight = blend_weights(alpha)
+    return content_weight**2, path_weight**2
 
 
 def path_body(path: str) -> bytes:
