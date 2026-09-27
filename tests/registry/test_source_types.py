@@ -21,11 +21,14 @@ from pydantic import BaseModel, Field, RootModel
 from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.registry.collections.sources import SOURCES, GitSource
 from hrono.registry.descriptor import Descriptor, ValidationFailed
 from hrono.registry.engine import build_router
-from hrono.registry.git_validation import validate_git
-from hrono.registry.source_validation import VALIDATORS, validate_source
-from hrono.registry.sources import SOURCES, GitSource
+from hrono.registry.validation.git_validation import validate_git
+from hrono.registry.validation.source_validation import (
+    VALIDATORS,
+    validate_source,
+)
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()

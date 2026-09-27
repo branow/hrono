@@ -12,8 +12,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, RootModel
 
-from hrono.registry.connection_validation import validate_connection
 from hrono.registry.descriptor import Descriptor
+from hrono.registry.validation.connection_validation import validate_connection
 
 
 class ApiKeyAuth(BaseModel):

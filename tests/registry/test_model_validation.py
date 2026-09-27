@@ -9,7 +9,7 @@ from hrono.crypto.masterkey import reconcile
 from hrono.db.database import Database, open_database
 from hrono.registry import store
 from hrono.registry.descriptor import ValidationContext, ValidationFailed
-from hrono.registry.model_validation import validate_model
+from hrono.registry.validation.model_validation import validate_model
 
 KEY = Fernet.generate_key()
 # built, not written: a literal here blocks every tool (#153)

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
-from hrono.registry import connection_validation, model_validation
+from hrono.registry.validation import connection_validation, model_validation
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()

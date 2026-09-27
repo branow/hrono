@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from hrono.registry.connection_validation import (
+from hrono.registry.descriptor import ValidationFailed
+from hrono.registry.validation.connection_validation import (
     _cli_version,
     validate_connection,
 )
-from hrono.registry.descriptor import ValidationFailed
 
 CONFIG: dict[str, object] = {
     "name": "cli",

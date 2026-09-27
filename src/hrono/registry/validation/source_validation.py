@@ -17,7 +17,7 @@ from hrono.ingest.bitbucket import validate_bitbucket_workspace
 from hrono.ingest.confluence import validate_confluence
 from hrono.ingest.github import validate_github_user
 from hrono.ingest.notion import validate_notion
-from hrono.registry.git_validation import validate_git
+from hrono.registry.validation.git_validation import validate_git
 
 if TYPE_CHECKING:
     from hrono.registry.descriptor import ValidationContext

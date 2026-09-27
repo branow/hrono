@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from hrono.registry import store
-from hrono.registry.trees import sources_of
+from hrono.registry.collections.trees import sources_of
 from hrono.summarize import briefs
 from hrono.summarize.resolve import model_fingerprint, template_hash
 

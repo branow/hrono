@@ -28,7 +28,7 @@ from hrono.llm.client import CompletionRequest, LLMError
 from hrono.llm.openai import OpenAIClient, credential
 from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
-from hrono.registry.connections import Connection
+from hrono.registry.collections.connections import Connection
 
 KEY = Fernet.generate_key()
 

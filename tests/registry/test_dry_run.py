@@ -25,8 +25,9 @@ from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
-from hrono.registry import connection_validation, impact, model_validation
+from hrono.registry import impact
 from hrono.registry import store as registry_store
+from hrono.registry.validation import connection_validation, model_validation
 from hrono.server.app import create_app
 from hrono.summarize import briefs
 from hrono.summarize.resolve import model_fingerprint, template_hash

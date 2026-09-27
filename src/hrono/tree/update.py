@@ -81,7 +81,7 @@ from hrono.ingest.split_op import _load
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry.trees import scoped_sources
+from hrono.registry.collections.trees import scoped_sources
 from hrono.summarize.condense import condense
 
 _DEFAULT_TREE = "default"

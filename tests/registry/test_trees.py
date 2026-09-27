@@ -19,7 +19,7 @@ from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.registry import store as registry_store
-from hrono.registry.trees import scoped_sources, sources_of
+from hrono.registry.collections.trees import scoped_sources, sources_of
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()

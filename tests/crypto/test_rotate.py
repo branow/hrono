@@ -21,7 +21,7 @@ from hrono.crypto.masterkey import reconcile
 from hrono.crypto.rotate import rotate
 from hrono.db.database import open_database
 from hrono.registry import store
-from hrono.registry.sources import SOURCES
+from hrono.registry.collections.sources import SOURCES
 from hrono.registry.write import decrypt
 from hrono.server.app import create_app
 

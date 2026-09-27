@@ -1,7 +1,7 @@
 import pytest
 
 from hrono.registry.descriptor import ValidationFailed
-from hrono.registry.git_validation import validate_git
+from hrono.registry.validation.git_validation import validate_git
 
 TOKEN = "gh-token-donotleak"
 

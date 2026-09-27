@@ -18,7 +18,7 @@ from hrono.ingest.syncers import SYNCERS
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import store as registry_store
-from hrono.registry.sources import SOURCES
+from hrono.registry.collections.sources import SOURCES
 from hrono.registry.write import decrypt
 
 _TIMEOUT = 120.0

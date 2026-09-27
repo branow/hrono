@@ -17,7 +17,7 @@ import subprocess
 from pathlib import Path
 
 from hrono.ingest import SyncError
-from hrono.registry.git_auth import git_auth
+from hrono.registry.validation.git_auth import git_auth
 
 
 def git_sync(config: dict[str, object], cache: Path, timeout: float) -> str:

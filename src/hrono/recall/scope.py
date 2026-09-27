@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from hrono.registry.trees import sources_of
+from hrono.registry.collections.trees import sources_of
 
 
 def passages_of(conn: sqlite3.Connection, tree: str) -> frozenset[int] | None:

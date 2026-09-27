@@ -28,7 +28,7 @@ from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry.trees import scoped_sources
+from hrono.registry.collections.trees import scoped_sources
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense

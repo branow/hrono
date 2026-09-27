@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from hrono.registry.descriptor import Descriptor
-from hrono.registry.model_validation import validate_model
+from hrono.registry.validation.model_validation import validate_model
 
 SummarisationRole = Literal["condense", "brief", "brief-upper", "judge"]
 

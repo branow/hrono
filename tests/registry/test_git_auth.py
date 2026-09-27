@@ -1,6 +1,6 @@
 import pytest
 
-from hrono.registry.git_auth import git_auth
+from hrono.registry.validation.git_auth import git_auth
 
 
 def test_token_url_stays_clean_and_secret_goes_to_env() -> None:

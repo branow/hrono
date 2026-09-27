@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from hrono.registry.sources import RESERVED_PREFIX, GitSource
+from hrono.registry.collections.sources import RESERVED_PREFIX, GitSource
 
 
 def _source(name: str) -> GitSource:

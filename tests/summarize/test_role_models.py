@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from hrono.db.database import Database
 from hrono.llm.client import LLMError
 from hrono.registry import store as registry_store
-from hrono.registry.models import Model
+from hrono.registry.collections.models import Model
 from hrono.summarize.resolve import producer_model_name, resolve_text_model
 
 

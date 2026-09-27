@@ -138,7 +138,7 @@ def test_judge_template_missing_a_settled_token_is_rejected(
 
 
 def test_seeded_default_templates_satisfy_validation() -> None:
-    from hrono.registry.prompts import PROMPTS
+    from hrono.registry.collections.prompts import PROMPTS
 
     assert PROMPTS.validate is not None
     for default in PROMPTS.defaults:

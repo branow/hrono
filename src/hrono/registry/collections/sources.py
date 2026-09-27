@@ -24,7 +24,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, RootModel, field_validator
 
 from hrono.registry.descriptor import Descriptor
-from hrono.registry.source_validation import validate_source
+from hrono.registry.validation.source_validation import validate_source
 
 RESERVED_PREFIX = "node-"
 

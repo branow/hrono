@@ -33,7 +33,7 @@ from hrono.cluster.build import ClusterResult
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry.trees import sources_of
+from hrono.registry.collections.trees import sources_of
 
 _LEVEL = 0
 

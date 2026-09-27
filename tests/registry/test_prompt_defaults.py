@@ -11,7 +11,7 @@ from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.registry import store
-from hrono.registry.prompts import PROMPTS
+from hrono.registry.collections.prompts import PROMPTS
 from hrono.registry.seeding import seed_defaults
 from hrono.server.app import create_app
 

@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from hrono.registry.descriptor import ValidationFailed
-from hrono.registry.git_auth import git_auth
+from hrono.registry.validation.git_auth import git_auth
 
 if TYPE_CHECKING:
     from hrono.registry.descriptor import ValidationContext
