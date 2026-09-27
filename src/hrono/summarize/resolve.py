@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Mapping
 
 from hrono.llm.client import LLMError
 from hrono.registry import store as registry_store
@@ -74,6 +75,22 @@ def template_hash(template: str) -> str:
     the provenance hashes. A second `sha256` call is not the same function.
     """
     return hashlib.sha256(template.encode("utf-8")).hexdigest()
+
+
+def model_fingerprint(config: Mapping[str, object]) -> str:
+    """Hash the part of a model config that decides the WORDS (#191).
+
+    The upstream `model` string and the `params` it is called with, and
+    nothing else. Not the registry name — that is what recorded provenance
+    already, and repointing it under the same name is the hole this closes.
+    Not the connection either: rotating a credential changes no words (#190).
+    """
+    material = json.dumps(
+        {"model": config.get("model"), "params": config.get("params") or {}},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def resolve_prompt(conn: sqlite3.Connection, role: str) -> tuple[str, str]:

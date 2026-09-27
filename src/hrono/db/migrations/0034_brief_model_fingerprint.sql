@@ -1,0 +1,12 @@
+-- #191: a brief's provenance recorded the model's registry NAME and nothing
+-- about what that name pointed at, so repointing a model at another upstream
+-- model marked nothing stale and one tree quietly held two generations of
+-- words under one name. `model_fingerprint` hashes the part of the model
+-- config that decides the WORDS -- the upstream `model` string and `params` --
+-- and `_is_fresh` compares it beside `prompt_hash`.
+--
+-- NULL is not staleness. Every brief written before this column existed has
+-- one, and invalidating the lot on upgrade would be a re-brief bill nobody
+-- asked for; a NULL reads as fresh and fills itself in when the brief is next
+-- written for a reason of its own.
+ALTER TABLE briefs ADD COLUMN model_fingerprint TEXT;

@@ -30,6 +30,7 @@ from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs, spend
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import (
+    model_fingerprint,
     resolve_prompt,
     resolve_text_model,
     template_hash,
@@ -56,6 +57,7 @@ def brief_upper(
         model_name = str(model["name"])
         prompt_name, template = resolve_prompt(conn, "brief-upper")
         prompt_hash = template_hash(template)
+        fingerprint = model_fingerprint(model)
         pending = [
             (
                 node_id,
@@ -64,7 +66,7 @@ def brief_upper(
                 briefs.member_signature(conn, node_id),
             )
             for node_id in briefs.stale_or_missing(
-                conn, tree, level, prompt_hash, model_name
+                conn, tree, level, prompt_hash, model_name, fingerprint
             )
         ]
     pending = [(n, c, ids, s) for (n, c, ids, s) in pending if c]
@@ -90,6 +92,7 @@ def brief_upper(
                 model_name=model_name,
                 prompt_name=prompt_name,
                 prompt_hash=prompt_hash,
+                model_fingerprint=fingerprint,
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
                 flagged=flagged,

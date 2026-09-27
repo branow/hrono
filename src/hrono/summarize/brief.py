@@ -43,6 +43,7 @@ from hrono.recall.brief_passages import store_brief
 from hrono.summarize import briefs, spend
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import (
+    model_fingerprint,
     producer_model_name,
     resolve_prompt,
     resolve_text_model,
@@ -73,6 +74,7 @@ def brief(
         source_model = producer_model_name(conn, job.scope, "condense")
         prompt_name, template = resolve_prompt(conn, "brief")
         prompt_hash = template_hash(template)
+        fingerprint = model_fingerprint(model)
         pending = [
             (
                 node_id,
@@ -80,7 +82,7 @@ def brief(
                 briefs.member_signature(conn, node_id),
             )
             for node_id in briefs.stale_or_missing(
-                conn, tree, _LEVEL, prompt_hash, model_name
+                conn, tree, _LEVEL, prompt_hash, model_name, fingerprint
             )
         ]
     pending = [(n, i, s) for (n, i, s) in pending if i.texts]
@@ -107,6 +109,7 @@ def brief(
                 model_name=model_name,
                 prompt_name=prompt_name,
                 prompt_hash=prompt_hash,
+                model_fingerprint=fingerprint,
                 member_signature=signature,
                 unfaithful=json.dumps(unfaithful),
                 flagged=flagged,

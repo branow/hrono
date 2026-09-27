@@ -29,7 +29,7 @@ from hrono.registry import connection_validation, impact, model_validation
 from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 from hrono.summarize import briefs
-from hrono.summarize.resolve import template_hash
+from hrono.summarize.resolve import model_fingerprint, template_hash
 
 KEY = Fernet.generate_key()
 MODEL = "sonnet"
@@ -74,7 +74,18 @@ def _section(conn: object, source: str, path: str) -> int:
     )
 
 
-def _brief(conn: object, node: int, prompt_hash: str) -> None:
+MODEL_CONFIG = {
+    "name": MODEL,
+    "kind": "text",
+    "connection": "anthropic",
+    "model": "claude-sonnet",
+    "role": "brief",
+}
+
+
+def _brief(
+    conn: object, node: int, prompt_hash: str, fingerprint: str | None = None
+) -> None:
     briefs.upsert(
         conn,  # type: ignore[arg-type]
         node,
@@ -85,6 +96,7 @@ def _brief(conn: object, node: int, prompt_hash: str) -> None:
         member_signature=briefs.member_signature(conn, node),  # type: ignore[arg-type]
         input_tokens=1,
         output_tokens=1,
+        model_fingerprint=fingerprint,
     )
 
 
@@ -161,15 +173,7 @@ def api(tmp_path: Path) -> Iterator[Api]:
         conn,
         "models",
         MODEL,
-        json.dumps(
-            {
-                "name": MODEL,
-                "kind": "text",
-                "connection": "anthropic",
-                "model": "claude-sonnet",
-                "role": "brief",
-            }
-        ),
+        json.dumps(MODEL_CONFIG),
         None,
         "t",
     )
@@ -207,7 +211,12 @@ def api(tmp_path: Path) -> Iterator[Api]:
                 for i in range(2)
             ]
             for node in made:
-                _brief(conn, node, template_hash(TEMPLATE))
+                _brief(
+                    conn,
+                    node,
+                    template_hash(TEMPLATE),
+                    model_fingerprint(MODEL_CONFIG),
+                )
             nodes[tree] = made
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
@@ -365,29 +374,82 @@ def test_an_unmeasurable_count_is_null_and_says_why(api: Api) -> None:
     assert alpha["stale"]["nodes"] == 2  # the topics holding its chunks
 
 
-def test_repointing_a_model_says_nothing_goes_stale(api: Api) -> None:
-    """The gap an operator must not discover after clicking.
+def test_repointing_a_model_counts_what_it_would_rewrite(api: Api) -> None:
+    """#191: the name did not change and every word would.
 
-    `_is_fresh` compares the model NAME, so swapping the upstream model leaves
-    every brief looking fresh. Saying "0 nodes" without saying why would read
-    as "this is safe".
+    Before #191 this was a disclaimer — freshness compared the registry NAME —
+    and the preview had to warn rather than count. It counts now.
     """
     answer = api.dry_run(
         "models",
         MODEL,
-        {
-            "name": MODEL,
-            "kind": "text",
-            "connection": "anthropic",
-            "model": "claude-opus",
-            "role": "brief",
-        },
+        {**MODEL_CONFIG, "model": "claude-opus"},
     )
 
     impact = _by_tree(answer)
-    assert impact["alpha"]["stale"]["nodes"] == 0
-    assert "records the model NAME" in impact["alpha"]["reason"]
-    assert impact["alpha"]["ops"] == []
+    assert impact["alpha"]["stale"]["nodes"] == 2
+    assert impact["alpha"]["ops"] == ["brief"]
+    assert impact["alpha"]["stale"]["levels"] == [0]
+
+
+def test_changing_a_models_params_counts_too(api: Api) -> None:
+    answer = api.dry_run(
+        "models", MODEL, {**MODEL_CONFIG, "params": {"temperature": 0.9}}
+    )
+
+    assert _by_tree(answer)["alpha"]["stale"]["nodes"] == 2
+
+
+def test_changing_the_connection_changes_no_words(api: Api) -> None:
+    """A credential lives on the connection; the words do not (#190)."""
+    with api.conn:  # type: ignore[union-attr]
+        registry_store.insert(
+            api.conn,  # type: ignore[arg-type]
+            "connections",
+            "other",
+            json.dumps(
+                {
+                    "name": "other",
+                    "provider": "anthropic",
+                    "auth": {
+                        "method": "api-key",
+                        "key": "not-a-key-" + "z" * 8,
+                    },
+                }
+            ),
+            None,
+            "t",
+        )
+
+    answer = api.dry_run(
+        "models", MODEL, {**MODEL_CONFIG, "connection": "other"}
+    )
+
+    assert answer.json()["affected_trees"] == []
+
+
+def test_re_putting_the_same_model_changes_nothing(api: Api) -> None:
+    answer = api.dry_run("models", MODEL, dict(MODEL_CONFIG))
+
+    assert answer.json()["affected_trees"] == []
+
+
+def test_a_brief_with_no_fingerprint_is_not_counted(api: Api) -> None:
+    """NULL is unknown provenance, not staleness.
+
+    Every brief written before `0034` carries one, and invalidating the lot on
+    upgrade would be a re-brief bill nobody asked for.
+    """
+    with api.conn:  # type: ignore[union-attr]
+        api.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET model_fingerprint = NULL"
+        )
+
+    answer = api.dry_run(
+        "models", MODEL, {**MODEL_CONFIG, "model": "claude-opus"}
+    )
+
+    assert answer.json()["affected_trees"] == []
 
 
 def test_a_connection_edit_names_what_rides_on_it(api: Api) -> None:

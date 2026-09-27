@@ -58,12 +58,25 @@ def _is_fresh(
     member_sig: str,
     prompt_hash: str,
     model_name: str,
+    model_fingerprint: str | None = None,
 ) -> bool:
+    """Whether a brief still stands. The ONE place freshness is decided.
+
+    The fingerprint (#191) is what the model NAME could not say: repointing
+    `sonnet` at another upstream model leaves the name identical and every
+    word different. A brief written before the column existed carries NULL,
+    and NULL is not staleness — see `0034_brief_model_fingerprint.sql`.
+    """
     return (
         not row["stale"]
         and row["member_signature"] == member_sig
         and row["prompt_hash"] == prompt_hash
         and row["model_name"] == model_name
+        and (
+            model_fingerprint is None
+            or row["model_fingerprint"] is None
+            or row["model_fingerprint"] == model_fingerprint
+        )
     )
 
 
@@ -73,6 +86,7 @@ def stale_or_missing(
     level: int,
     prompt_hash: str,
     model_name: str,
+    model_fingerprint: str | None = None,
 ) -> tuple[int, ...]:
     """Return ids of nodes at (tree, level) needing a (re)brief.
 
@@ -99,7 +113,11 @@ def stale_or_missing(
             continue
         row = get(conn, node_id)
         if row is None or not _is_fresh(
-            row, member_signature(conn, node_id), prompt_hash, model_name
+            row,
+            member_signature(conn, node_id),
+            prompt_hash,
+            model_name,
+            model_fingerprint,
         ):
             result.append(node_id)
     return tuple(result)
@@ -111,6 +129,7 @@ def counts(
     level: int,
     prompt_hash: str,
     model_name: str,
+    model_fingerprint: str | None = None,
 ) -> tuple[int, int]:
     """Return (fresh, stale) over the existing briefs at (tree, level)."""
     fresh = stale = 0
@@ -124,7 +143,11 @@ def counts(
         brief = get(conn, node_id)
         assert brief is not None
         if _is_fresh(
-            brief, member_signature(conn, node_id), prompt_hash, model_name
+            brief,
+            member_signature(conn, node_id),
+            prompt_hash,
+            model_name,
+            model_fingerprint,
         ):
             fresh += 1
         else:
@@ -228,6 +251,7 @@ def upsert(
     member_signature: str,
     input_tokens: int,
     output_tokens: int,
+    model_fingerprint: str | None = None,
     unfaithful: str = "[]",
     flagged: str = "",
     members: str = "[]",
@@ -244,8 +268,8 @@ def upsert(
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
-        "unfaithful, flagged, members, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "model_fingerprint, unfaithful, flagged, members, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             node_id,
             text,
@@ -255,6 +279,7 @@ def upsert(
             member_signature,
             input_tokens,
             output_tokens,
+            model_fingerprint,
             unfaithful,
             flagged,
             members,
@@ -267,8 +292,9 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     """Return a node's brief row, or None."""
     return conn.execute(
         "SELECT node_id, text, model_name, prompt_name, prompt_hash, "
-        "member_signature, input_tokens, output_tokens, unfaithful, flagged, "
-        "members, stale, judged_signature FROM briefs WHERE node_id = ?",
+        "member_signature, input_tokens, output_tokens, model_fingerprint, "
+        "unfaithful, flagged, members, stale, judged_signature "
+        "FROM briefs WHERE node_id = ?",
         (node_id,),
     ).fetchone()
 

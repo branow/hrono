@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from hrono.registry import store
 from hrono.registry.trees import sources_of
 from hrono.summarize import briefs
-from hrono.summarize.resolve import template_hash
+from hrono.summarize.resolve import model_fingerprint, template_hash
 
 # Which levels a prompt role governs: `brief` writes level 0, `brief-upper`
 # every level above it (`summarize/brief.py`, `summarize/brief_upper.py`).
@@ -251,30 +251,86 @@ def _model_impact(
     current: dict[str, object],
     proposed: dict[str, object],
 ) -> tuple[TreeImpact, ...]:
-    """Repointing a model marks nothing stale, and the preview says so.
+    """What repointing a model would rewrite.
 
-    `_is_fresh` compares the brief's `model_name`, which is this row's registry
-    NAME. Changing which upstream model it points at leaves every brief looking
-    fresh — a real gap, and one an operator has to be told about at the moment
-    they would otherwise assume a rebuild.
+    Until #191 this was a disclaimer: freshness compared the registry NAME, so
+    swapping the upstream model left every brief looking fresh and the preview
+    had to say so. It now compares a fingerprint of what decides the WORDS, so
+    this is a count — and a credential change still counts nothing, because
+    the connection is not part of the fingerprint.
     """
-    if not _writes_briefs(conn, name):
+    after = model_fingerprint(proposed)
+    if after == model_fingerprint(current):
         return ()
-    return tuple(
-        TreeImpact(
-            tree=tree,
-            stale=Stale(sections=0, nodes=0, levels=()),
-            ops=(),
-            reason=(
-                f"nothing is marked stale: a brief records the model NAME "
-                f"({name}), so repointing it at another upstream model leaves "
-                f"every brief looking fresh. Re-brief deliberately if you want "
-                f"the new model's words"
-            ),
+    impacts = []
+    for tree in _trees(conn):
+        nodes: list[int] = []
+        levels: list[int] = []
+        for level, model_name in _model_levels(conn, tree, name):
+            for prompt_hash in _hashes_at(conn, tree, level):
+                already = set(
+                    briefs.stale_or_missing(
+                        conn, tree, level, prompt_hash, model_name
+                    )
+                )
+                would = set(
+                    briefs.stale_or_missing(
+                        conn, tree, level, prompt_hash, model_name, after
+                    )
+                )
+                newly = would - already
+                if newly:
+                    levels.append(level)
+                nodes.extend(newly)
+        if not nodes:
+            continue
+        impacts.append(
+            TreeImpact(
+                tree=tree,
+                stale=Stale(
+                    sections=0,
+                    nodes=len(set(nodes)),
+                    levels=tuple(sorted(set(levels))),
+                ),
+                ops=("brief",),
+                reason=(
+                    "these briefs were written by the model this name used to "
+                    "point at; nothing re-runs on its own"
+                ),
+            )
         )
-        for tree in _trees(conn)
-        if _brief_count(conn, tree, name)
-    )
+    return tuple(impacts)
+
+
+def _model_levels(
+    conn: sqlite3.Connection, tree: str, name: str
+) -> tuple[tuple[int, str], ...]:
+    """The levels where this model's name is what wrote the briefs."""
+    rows = conn.execute(
+        "SELECT DISTINCT n.level AS level FROM nodes n "
+        "JOIN briefs b ON b.node_id = n.id "
+        "WHERE n.tree = ? AND b.model_name = ? ORDER BY n.level",
+        (tree, name),
+    ).fetchall()
+    return tuple((int(row["level"]), name) for row in rows)
+
+
+def _hashes_at(
+    conn: sqlite3.Connection, tree: str, level: int
+) -> tuple[str, ...]:
+    """The prompt hashes in play at a level.
+
+    `stale_or_missing` asks one (prompt, model) pair at a time, so the model
+    question is asked under the prompt those briefs actually carry — otherwise
+    the prompt mismatch alone would make everything look stale under both
+    hashes and the difference would come back empty.
+    """
+    rows = conn.execute(
+        "SELECT DISTINCT b.prompt_hash AS hash FROM briefs b "
+        "JOIN nodes n ON n.id = b.node_id WHERE n.tree = ? AND n.level = ?",
+        (tree, level),
+    ).fetchall()
+    return tuple(str(row["hash"]) for row in rows)
 
 
 def _writes_briefs(conn: sqlite3.Connection, name: str) -> bool:
