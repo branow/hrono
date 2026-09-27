@@ -47,6 +47,27 @@ thing it claims to change.
   dependency; add an explicit `assert cond, "message"` only where the rewritten
   output is genuinely opaque, such as raw bytes or a large blob (#044).
 
+## Jobs and the dependency graph
+
+- **The graph lives in the DATA, not in job edges** (#051). What makes a re-run
+  incremental is not knowing which job ran before, it is knowing whether a
+  piece of CONTENT still matches what produced it: `briefs._is_fresh` compares
+  the member signature, prompt hash and model fingerprint (#064, #191);
+  `member_signature` signs over content hashes so a re-split does not
+  invalidate a brief (#068); `propagate` climbs from a changed leaf and marks
+  exactly the ancestors whose descriptions no longer hold (#087). A job DAG
+  would be a second representation of the same dependency, and the two would
+  eventually disagree with the data right and the graph confidently wrong.
+- **A stage order is CODE, in one composing op** — `tree/sync_chain.py`, not a
+  wiring diagram an operator can get wrong. #122 was a chain that skipped a
+  stage: sections arrived unsummarised, `brief` dropped them, and the briefs
+  cited sources they had never read, with no error anywhere.
+- **Load under the lock, RELEASE, compute, re-acquire, persist** (#035, #040),
+  and reconcile at persist against the same signatures rather than writing
+  blindly. A job that holds the lock through slow work makes worker count
+  worthless; a job that persists without re-checking overwrites whatever moved
+  underneath it.
+
 ## The test harness
 
 - A fixture that writes through the ADOPTED connection while a `TestClient` is
