@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ node.title }}{% endblock %}
+{% block main %}
+<h1>{{ node.title }}</h1>
+<p class="where">
+  level {{ node.level }}
+  {% if node.parent %} · under <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent }}?tree={{ tree }}">topic {{ node.parent }}</a>{% endif %}
+  {% if node.pins %} · pinned: {{ node.pins|join(', ') }}{% endif %}
+</p>
+{% if node.brief %}<blockquote>{{ node.brief }}</blockquote>{% else %}<p><em>no brief yet</em></p>{% endif %}
+{% if node.notes %}<p class="notes">{{ node.notes }}</p>{% endif %}
+
+{% if node.children %}
+<h2>topics beneath</h2>
+<ul>{% for child in node.children %}
+  <li><a href="/ui/trees/{{ tree }}/nodes/{{ child }}?tree={{ tree }}">topic {{ child }}</a></li>
+{% endfor %}</ul>
+{% endif %}
+
+<h2>chunks ({{ node.members|length }})</h2>
+{% if node.members %}
+<p class="notes">worst fit first; a confident placement has no score.</p>
+{% endif %}
+<ul class="members">
+{% for member in node.members %}
+  <li>
+    <details>
+      <summary>
+        {{ member.path }}
+        {% if member.forced %}<span class="flag">forced</span>
+        {% elif member.similarity is not none %}<span class="score">{{ "%.2f"|format(member.similarity) }}</span>
+        {% else %}<span class="score">core</span>{% endif %}
+      </summary>
+      <pre class="preview">{{ member.preview }}</pre>
+    </details>
+  </li>
+{% endfor %}
+</ul>
+{% endblock %}

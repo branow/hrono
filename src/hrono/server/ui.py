@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from hrono import edits, notes, pins
 from hrono.auth.users import User, authenticate
 from hrono.errors import AppError, NotFound
 from hrono.jobs import store as job_store
@@ -30,6 +31,7 @@ from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
 from hrono.server.auth import COOKIE, require_role
+from hrono.summarize import briefs
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -163,6 +165,107 @@ def sync_from_the_page(tree: str, request: Request, user: Writer) -> Response:
 
 
 _LIVE = frozenset({"pending", "running", "partial"})
+
+# Enough to recognise a chunk, not enough to lose the topic off the screen. A
+# section is ~10 KB and a topic can hold thirty of them (#182).
+PREVIEW_CHARS = 600
+
+
+@router.get("/ui/trees/{tree}/nodes/{node_id}", response_class=HTMLResponse)
+def node_page(
+    tree: str, node_id: int, request: Request, user: Reader
+) -> Response:
+    """One topic: what it says, where it sits, and what it is made of."""
+    with request.app.state.db.connect() as conn:
+        if not edits.node_exists(conn, tree, node_id):
+            raise NotFound(f"node not found in tree {tree}: {node_id}")
+        node = _node(conn, tree, node_id)
+        trees = _trees(conn)
+    return templates.TemplateResponse(
+        request,
+        "node.html",
+        {
+            "user": user,
+            "trees": trees,
+            "tree": tree,
+            "node": node,
+            "can_write": user.role in {"writer", "admin"},
+        },
+    )
+
+
+def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT level, title FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()
+    brief = briefs.get(conn, node_id)  # type: ignore[arg-type]
+    parent = conn.execute(  # type: ignore[attr-defined]
+        "SELECT parent_id FROM node_children WHERE child_id = ?", (node_id,)
+    ).fetchone()
+    children = [
+        int(child["child_id"])
+        for child in conn.execute(  # type: ignore[attr-defined]
+            "SELECT child_id FROM node_children WHERE parent_id = ? "
+            "ORDER BY child_id",
+            (node_id,),
+        ).fetchall()
+    ]
+    return {
+        "id": node_id,
+        "level": int(row["level"]),
+        "title": row["title"] or _titled(brief, node_id),
+        "brief": brief["text"] if brief is not None else None,
+        "parent": None if parent is None else int(parent["parent_id"]),
+        "children": children,
+        "pins": sorted(pins.reasons(conn, node_id)),  # type: ignore[arg-type]
+        "notes": notes.rendered(conn).get(node_id),  # type: ignore[arg-type]
+        "members": _members(conn, node_id),
+    }
+
+
+def _titled(brief: object, node_id: int) -> str:
+    """A topic's name: its own, else its brief's first line (0032)."""
+    if brief is None:
+        return f"topic {node_id}"
+    first = str(brief["text"]).strip().splitlines()[0]  # type: ignore[index]
+    return first[:80] or f"topic {node_id}"
+
+
+def _members(conn: object, node_id: int) -> list[dict[str, object]]:
+    """A topic's chunks, WORST FIT FIRST.
+
+    `assignment_similarity` is the score a chunk was attached with, and NULL
+    means a confident density-core placement (0009_nodes.sql) — so nulls sort
+    LAST, not first. The operator opening a topic to see whether it is right
+    wants the chunk least likely to belong at the top.
+    """
+    rows = conn.execute(  # type: ignore[attr-defined]
+        "SELECT s.id AS id, s.path AS path, m.assignment_similarity AS score, "
+        "m.forced AS forced, c.body AS body "
+        "FROM node_members m JOIN sections s ON s.id = m.section_id "
+        "LEFT JOIN contents c ON c.content_hash = s.content_hash "
+        "WHERE m.node_id = ? "
+        "ORDER BY m.assignment_similarity IS NULL, m.assignment_similarity, "
+        "s.id",
+        (node_id,),
+    ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "path": str(row["path"]),
+            "similarity": row["score"],
+            "forced": bool(row["forced"]),
+            "preview": _preview(row["body"]),
+        }
+        for row in rows
+    ]
+
+
+def _preview(body: object) -> str:
+    if body is None:
+        return "(content not stored)"
+    text = bytes(body).decode("utf-8", "replace")
+    return text[:PREVIEW_CHARS] + ("…" if len(text) > PREVIEW_CHARS else "")
 
 
 @router.get("/ui/jobs", response_class=HTMLResponse)
