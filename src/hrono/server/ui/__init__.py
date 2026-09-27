@@ -1,0 +1,131 @@
+"""The dashboard shell: server-rendered, logged in, role-gated (T49, #180).
+
+Jinja and plain HTML, served by the same process that owns the database — so
+the dashboard ships inside the one `hrono` binary with no build step and no
+second release artifact. The stakeholder chose that on 2026-09-27.
+
+Authentication is the API's, not a second system: the browser carries the SAME
+token the CLI uses, in an HttpOnly SameSite=Strict cookie, resolved by the same
+``require_role`` dependency every API route uses. What differs is only the
+FAILURE — an API caller gets a 401, a browser gets the login page, because a
+401 in a tab is a dead end.
+
+One router, one module per subject (#195). Importing the view modules at the
+bottom is what registers their routes on it, so `app.py` still imports one
+name; it is at the bottom because they import this module back for the router
+and the shared dependencies.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+from urllib.parse import parse_qs, urlencode
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse, Response
+from fastapi.templating import Jinja2Templates
+
+from hrono.auth.users import User
+from hrono.errors import AppError
+from hrono.registry import store as registry_store
+from hrono.server.auth import require_role
+
+router = APIRouter()
+templates = Jinja2Templates(
+    directory=str(Path(__file__).parent.parent / "templates")
+)
+
+# A year is wrong and an hour is annoying. A day is the shape of an operator's
+# session with a tool they open to look at something.
+COOKIE_MAX_AGE = 60 * 60 * 24
+
+
+async def _fields(request: Request) -> dict[str, str]:
+    """An HTML form's fields, from the standard library.
+
+    Not `request.form()` and not `Form(...)`: both require `python-multipart`,
+    even for the urlencoded body a plain HTML form actually sends. `parse_qs`
+    is in the standard library and reads exactly that, so the whole dashboard
+    costs no dependency for its forms. The day one needs a FILE upload is the
+    day multipart earns its place.
+    """
+    body = (await request.body()).decode("utf-8", "replace")
+    return {
+        key: values[0]
+        for key, values in parse_qs(body, keep_blank_values=True).items()
+    }
+
+
+class LoginRequired(AppError):
+    """A browser reached a page without a usable cookie (#180).
+
+    Its own type so the shell can answer with the login PAGE while the API
+    keeps answering 401. Same authentication, different dead end.
+    """
+
+    status_code = 307
+    code = "login-required"
+
+
+def _viewer(minimum: str):
+    """Resolve the cookie through the API's own role check, for a page."""
+
+    def dependency(request: Request) -> User:
+        try:
+            return require_role(minimum)(request)
+        except AppError as exc:
+            if exc.status_code == 401:
+                raise LoginRequired("sign in") from exc
+            raise
+
+    return dependency
+
+
+Reader = Annotated[User, Depends(_viewer("reader"))]
+Writer = Annotated[User, Depends(_viewer("writer"))]
+# The API's edit routes are admin-gated (`server/edits.py`). A page that
+# accepted a writer for the same operation would be a second, weaker
+# authorization for it — the thing #180 refused, said as a role.
+Admin = Annotated[User, Depends(_viewer("admin"))]
+
+
+def _back(tree: str, node_id: int, **outcome: str) -> Response:
+    """Redirect-after-POST to the topic, carrying what happened."""
+    query = urlencode({"tree": tree, **{k: v for k, v in outcome.items() if v}})
+    return RedirectResponse(
+        f"/ui/trees/{tree}/nodes/{node_id}?{query}", status_code=303
+    )
+
+
+def _trees(conn: object) -> list[str]:
+    """Every declared tree (#054), or `default` when none are.
+
+    A database nobody has partitioned still has exactly one tree, and the
+    switcher should say so rather than be empty.
+    """
+    declared = [
+        str(row["name"])
+        for row in registry_store.list_all(conn, "trees")  # type: ignore[arg-type]
+    ]
+    return declared or ["default"]
+
+
+def _shape(conn: object, tree: str) -> tuple[int, int]:
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT COUNT(*) AS topics, COALESCE(MAX(level), 0) AS top "
+        "FROM nodes WHERE tree = ?",
+        (tree,),
+    ).fetchone()
+    return int(row["topics"]), int(row["top"]) + 1 if row["topics"] else 0
+
+
+# Registering the routes: each of these imports this module for `router` and
+# the role dependencies, so they are imported last and only for that effect.
+from hrono.server.ui import (  # noqa: E402, F401
+    jobs,
+    nodes,
+    overview,
+    session,
+    views,
+)
