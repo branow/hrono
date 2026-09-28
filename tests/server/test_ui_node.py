@@ -6,6 +6,7 @@ sorting last, which is the opposite of what SQLite does by default.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -221,3 +222,52 @@ def test_section_content_is_escaped_not_executed(browser: Browser) -> None:
 
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
     assert "<script>alert(1)</script>" not in page
+
+
+def test_a_child_topic_is_listed_by_its_name_not_its_number(
+    browser: Browser,
+) -> None:
+    """#197: the topic page listed children as "topic 27", "topic 28".
+
+    Every one of them has a title the map already shows, so navigating the
+    tree from here meant navigating by row id.
+    """
+    browser.sign_in()
+    parent = int(
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT MAX(id) FROM nodes"
+        ).fetchone()[0]
+    )
+
+    page = browser.node(parent).text  # type: ignore[attr-defined]
+
+    assert "Signing and serialization." in page
+
+
+def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
+    """A heading that stops mid-clause reads as a rendering fault."""
+    long_brief = (
+        "This group covers the parts of the system that decide which chunks "
+        "belong together and which do not, at some length."
+    )
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET text = ? WHERE node_id = ?", (long_brief, node)
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    # the HEADING, not the page: the chunk previews carry their own ellipsis,
+    # so asking whether the page contains one proves nothing about the title
+    heading = re.search(r"<h1>(.*?)</h1>", page, re.S)
+    assert heading is not None
+    title = heading.group(1)
+    assert title.endswith("…")  # an ellipsis, not a hard stop
+    # and the cut respects a word: the character AFTER the stem, in the
+    # original, is a space. A hard 80-character cut lands inside "together".
+    stem = title.removesuffix("…")
+    assert long_brief.startswith(stem)
+    assert long_brief[len(stem)] == " "
+    assert len(title) < len(long_brief)

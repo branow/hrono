@@ -22,7 +22,10 @@ Driving it against a real embedding model + LLM key + source repo is manual qa.
 
 from __future__ import annotations
 
+import sqlite3
+
 from hrono.cluster.op import cluster
+from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
 from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
@@ -32,8 +35,32 @@ from hrono.registry.collections.trees import scoped_sources
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense
+from hrono.summarize.resolve import resolve_text_model
 
 _DEFAULT_TREE = "default"
+
+# The roles this chain will ask for, in the order it asks for them.
+_ROLES = ("condense", "brief", "brief-upper")
+
+
+def _require_models(conn: sqlite3.Connection) -> None:
+    """Fail before the expensive stages, not after them.
+
+    `maintain` clones, splits and embeds the whole corpus before the first
+    model call. Reaching `llm-error: no text model available` there costs
+    minutes of work to learn something knowable at second zero — so the roles
+    are resolved up front, through the SAME resolver the stages use, and the
+    op stops with the same error it would have raised later.
+
+    Unconditional, including when a `client` is injected: the STAGES resolve
+    these models whatever completion they are handed — `condense` asks for its
+    text model before it checks whether there is anything to condense — so this
+    adds no requirement the chain did not already have. It only moves the
+    failure to before the work instead of after it.
+    """
+    resolve_embedding_model(conn, {})
+    for role in _ROLES:
+        resolve_text_model(conn, {}, role)
 
 
 def maintain(
@@ -48,6 +75,7 @@ def maintain(
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
         sources = scoped_sources(conn, tree)
+        _require_models(conn)
 
     for name in sources:
         source_scope = {"type": "source", "name": name}

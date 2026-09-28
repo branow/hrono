@@ -6,15 +6,15 @@
 <p>{{ tree }} has no topics yet.</p>
 {% else %}
 <p class="notes">bigger holds more · <span class="stale-key">orange</span> is a stale or missing brief · click a topic to open or close it</p>
-<p class="notes">edges:
-  {% for toggle in overlay.toggles %}
-  <a href="{{ toggle.href }}" class="{% if toggle.on %}edge-on{% endif %}">{{ toggle.kind }}{% if toggle.on %} on{% endif %}</a>
-  {% endfor %}
-  <span class="edge-key pull">pull</span> chunks nearer another topic
-  <span class="edge-key proximity">proximity</span> siblings close enough to merge
-  <span class="edge-key propagation">propagation</span> where a change climbed
-  — pull and proximity are chunk-level, so they are drawn between leaf topics only
+<p class="notes">show:
+  {% for toggle in overlay.toggles %}<a href="{{ toggle.href }}" class="toggle{% if toggle.on %} edge-on{% endif %}">{{ toggle.kind }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
 </p>
+<ul class="legend notes">
+  <li><span class="edge-key pull">pull</span> — chunks that sit nearer another topic</li>
+  <li><span class="edge-key proximity">proximity</span> — siblings close enough to merge</li>
+  <li><span class="edge-key propagation">propagation</span> — where a change climbed</li>
+</ul>
+<p class="notes">pull and proximity are chunk-level, so they are drawn between leaf topics only.</p>
 {% if overlay.unavailable %}
 <p class="needs">pull and proximity need an embedding model: {{ overlay.unavailable }}</p>
 {% endif %}

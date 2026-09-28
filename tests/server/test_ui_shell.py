@@ -197,3 +197,13 @@ def test_a_reader_posting_it_anyway_is_refused(browser: Browser) -> None:
         "/jobs", headers={"Authorization": f"Bearer {browser.tokens['admin']}"}
     ).json()
     assert jobs == []
+
+
+def test_every_page_carries_an_icon(browser: Browser) -> None:
+    """#197: without one the browser asks for /favicon.ico, gets a 404 on
+    every page load, and shows a broken icon in the tab."""
+    browser.sign_in()
+
+    page = browser.client.get("/ui").text
+
+    assert 'rel="icon"' in page

@@ -7,6 +7,7 @@ kinds and silent about the fifth is the failure this view exists to prevent.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -220,3 +221,19 @@ def test_the_top_level_is_not_counted_as_unreachable(
     points at", which is how a triage page teaches people to ignore it.
     """
     assert clean_tree.survey()["topics nothing points at"] == 0
+
+
+def test_no_internal_ticket_numbers_reach_the_page(
+    clean_tree: Browser,
+) -> None:
+    """#197: the most demo-able screen printed "(#124, #163)" and "(#113)".
+
+    Our issue numbers mean nothing to the person looking at the page, and
+    invite a question nobody wants to answer in a demo.
+    """
+    clean_tree.sign_in()
+
+    page = clean_tree.triage()
+
+    assert "#1" not in page
+    assert not re.search(r"\(#\d+", page)

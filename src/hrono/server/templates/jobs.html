@@ -6,14 +6,17 @@
 <p>no runs for {{ tree }} yet.</p>
 {% endif %}
 <table>
-  <thead><tr><th>op</th><th>status</th><th>progress</th><th>tokens</th><th></th></tr></thead>
+  <thead><tr><th>started</th><th>op</th><th>status</th><th>took</th><th>progress</th><th>tokens</th><th>id</th><th></th></tr></thead>
   <tbody>
   {% for job in jobs %}
   <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
+    <td class="when">{{ job.started }}</td>
     <td>{{ job.op }}</td>
     <td class="status">{{ job.status }}</td>
+    <td class="when">{{ job.took }}</td>
     <td class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</td>
     <td>{% if job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% endif %}</td>
+    <td><code title="{{ job.id }}">{{ job.short_id }}</code></td>
     <td>
       {% if job.live and can_write %}
       <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel">
@@ -23,11 +26,11 @@
     </td>
   </tr>
   {% if job.error %}
-  <tr class="error"><td colspan="5">{{ job.error.code }}: {{ job.error.message }}</td></tr>
+  <tr class="error"><td colspan="8">{{ job.error.code }}: {{ job.error.message }}</td></tr>
   {% endif %}
   {% for child in job.children %}
-  <tr class="child"><td>&nbsp;&nbsp;{{ child.op }}{% if child.scope.name %} · {{ child.scope.name }}{% endif %}</td>
-      <td>{{ child.status }}</td><td colspan="3"></td></tr>
+  <tr class="child"><td></td><td>{{ child.op }}{% if child.scope.name %} · {{ child.scope.name }}{% endif %}</td>
+      <td>{{ child.status }}</td><td colspan="5"></td></tr>
   {% endfor %}
   {% endfor %}
   </tbody>

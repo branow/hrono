@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from cryptography.fernet import Fernet
 
 from hrono.auth.users import reset_token as reissue
 from hrono.db.database import open_database
@@ -26,6 +27,42 @@ app = typer.Typer(
         "boundary is filesystem access, so they need no token and no key."
     ),
 )
+
+
+@app.command("new-key")
+def new_key(
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Write the key here instead of stdout."),
+    ] = None,
+) -> None:
+    """Generate a master key: the key every stored secret is encrypted under.
+
+    A new install needs one before `hrono serve` will start, and nothing else
+    can make one — which is why this exists. Written with owner-only
+    permissions when `--out` is given, because a key file the group can read is
+    not a key file.
+    """
+    key = Fernet.generate_key()
+    if out is None:
+        typer.echo(key.decode())
+        return
+    if out.exists():
+        typer.echo(
+            f"{out} already exists. Refusing to overwrite a master key: "
+            "if the database was encrypted under it, replacing it makes every "
+            "stored secret unreadable.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    out.write_bytes(key)
+    out.chmod(0o600)
+    typer.echo(
+        f"Wrote a new master key to {out} (permissions 0600).\n"
+        f"Start the server with it:\n"
+        f"  hrono serve --key-file {out}\n"
+        "Back it up. Lose it and every stored secret is unreadable."
+    )
 
 
 @app.command("reset-token")

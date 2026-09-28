@@ -31,8 +31,17 @@ class KeyNotProvided(MasterKeyError):
 
     def __init__(self) -> None:
         super().__init__(
-            "No master key provided. Supply it with --key-file <path> or "
-            "the HRONO_MASTER_KEY environment variable."
+            "No master key provided.\n"
+            "\n"
+            "Every provider secret is encrypted under this key, so hrono will "
+            "not start without it.\n"
+            "Make one, then start the server with it:\n"
+            "\n"
+            "    hrono admin new-key --out hrono.key\n"
+            "    hrono serve --key-file hrono.key\n"
+            "\n"
+            "Or put the key itself in HRONO_MASTER_KEY. Keep it safe: lose it "
+            "and every stored secret is unreadable."
         )
 
 

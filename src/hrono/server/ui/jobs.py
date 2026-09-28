@@ -6,6 +6,7 @@ A parent's status and progress are DERIVED from its children at read time
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 from fastapi import Request
@@ -65,6 +66,9 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
     status = rolled.status if rolled is not None else job.status
     return {
         "id": job.id,
+        "short_id": job.id.removeprefix("job_")[:8],
+        "started": _clock(job.created_at),
+        "took": _elapsed(job.created_at, job.updated_at, live=status in _LIVE),
         "op": job.op,
         "status": status,
         "live": status in _LIVE,
@@ -88,6 +92,35 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
             for child in children
         ],
     }
+
+
+def _clock(stamp: str) -> str:
+    """The time of day a run started. Three `maintain` rows with no clock on
+    them are three indistinguishable rows."""
+    moment = _parsed(stamp)
+    return "" if moment is None else moment.strftime("%d %b %H:%M")
+
+
+def _elapsed(start: str, end: str, *, live: bool) -> str:
+    """How long it took, or how long it has been going."""
+    began, ended = _parsed(start), _parsed(end)
+    if began is None or ended is None:
+        return ""
+    seconds = int(
+        ((datetime.now(UTC) if live else ended) - began).total_seconds()
+    )
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m {seconds % 60:02d}s"
+    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
+
+
+def _parsed(stamp: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
 
 
 @router.post("/ui/jobs/{job_id}/cancel")

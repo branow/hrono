@@ -59,7 +59,7 @@ def _unreachable(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
         kind="topics nothing points at",
         count=len(orphans),
-        detail="a subtree that is not in the export (#124, #163)",
+        detail="a subtree that is not in the export",
         link=f"/ui/trees/{tree}/nodes/{orphans[0]}?tree={tree}"
         if orphans
         else f"/ui/trees/{tree}/graph?tree={tree}",
@@ -100,7 +100,7 @@ def _forced(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
         kind="chunks placed without a score",
         count=int(row["n"]),
-        detail="forced in rather than matched (#113)",
+        detail="forced in rather than matched",
         link=f"/ui/trees/{tree}/graph?tree={tree}",
     )
 

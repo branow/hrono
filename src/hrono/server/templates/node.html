@@ -74,7 +74,7 @@
 {% if node.children %}
 <h2>topics beneath</h2>
 <ul>{% for child in node.children %}
-  <li><a href="/ui/trees/{{ tree }}/nodes/{{ child }}?tree={{ tree }}">topic {{ child }}</a></li>
+  <li><a href="/ui/trees/{{ tree }}/nodes/{{ child.id }}?tree={{ tree }}">{{ child.title }}</a></li>
 {% endfor %}</ul>
 {% endif %}
 

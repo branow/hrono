@@ -158,7 +158,17 @@ def _report_removed(removed: tuple[Path, ...]) -> None:
 def serve(
     host: str = "127.0.0.1",
     port: int = 8080,
-    key_file: Annotated[Path | None, typer.Option("--key-file")] = None,
+    key_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--key-file",
+            help=(
+                "Master key file — every stored secret is encrypted under it. "
+                "Make one with 'hrono admin new-key --out <path>', or set "
+                "$HRONO_MASTER_KEY instead."
+            ),
+        ),
+    ] = None,
     db: Annotated[
         Path | None,
         typer.Option("--db", help=f"Database path (or ${ENV_DB})."),
@@ -168,7 +178,7 @@ def serve(
 
     The database path anchors everything else: the synced source clones live in
     <db parent>/cache/sources, so two servers started from different directories
-    against the same --db share one cache instead of re-cloning (#098).
+    against the same --db share one cache instead of re-cloning.
     """
     db_path = database_path(db)
     key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
@@ -216,4 +226,6 @@ def _bootstrap_message(token: str, host: str, port: int) -> str:
         "--token <token>\n"
         "or call the API directly with a Bearer token:\n"
         "  Authorization: Bearer <token>\n"
+        "\nThe dashboard is the same token in a browser:\n"
+        f"  http://{host}:{port}/ui\n"
     )

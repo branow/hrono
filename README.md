@@ -11,6 +11,21 @@ The project ships as one binary, `hrono`. `hrono serve` is a long-running
 HTTP server that owns the SQLite database, all compute, and all LLM calls;
 every other subcommand is a thin HTTP client of that server.
 
+## Getting started
+
+```
+hrono admin new-key --out hrono.key     # the key every secret is encrypted under
+hrono serve --key-file hrono.key        # prints a bootstrap admin token, once
+hrono profile add local --server http://127.0.0.1:8080 --token <token>
+```
+
+Back the key up. Lose it and every stored secret is unreadable — hrono will
+start, and nothing it has encrypted will open.
+
+Then register a source and a model (`hrono sources set`, `hrono models set` —
+each takes a JSON config on stdin or `-f`), and build the tree with
+`hrono tree maintain default`.
+
 ## The dashboard
 
 `hrono serve` also serves a web dashboard at `/ui`, from the same process and

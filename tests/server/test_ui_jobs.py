@@ -233,3 +233,31 @@ def test_no_token_reaches_the_page(browser: Browser) -> None:
     browser.fan_out()
 
     assert browser.tokens["admin"] not in browser.page()
+
+
+def test_a_run_says_when_it_started_and_which_one_it_is(
+    browser: Browser,
+) -> None:
+    """#197: three `maintain` rows with no clock and no id on them are three
+    indistinguishable rows, and nothing to take to `hrono jobs get`."""
+    browser.sign_in()
+
+    browser.fan_out()
+    page = browser.page()
+
+    assert "<th>started</th>" in page
+    assert "<th>took</th>" in page
+    assert "<th>id</th>" in page
+
+
+def test_the_id_shown_is_the_prefix_of_the_real_one(
+    browser: Browser,
+) -> None:
+    # short enough to read, long enough to paste into `hrono jobs get`
+    browser.sign_in()
+    job = browser.fan_out()
+
+    page = browser.page()
+
+    assert str(job).removeprefix("job_")[:8] in page
+    assert f'title="{job}"' in page  # the whole id is there on hover

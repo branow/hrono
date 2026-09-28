@@ -19,7 +19,14 @@ from dataclasses import dataclass
 # level; the page scrolls sideways rather than shrinking the nodes to dots.
 COLUMN = 150
 ROW = 110
-MARGIN = 40
+# Wide enough for a LABEL, not just a circle. Labels are centre-anchored under
+# their node and truncated to 28 characters, so roughly 75px each side; at the
+# old margin of 40 the first column's label ran off the left edge of the SVG
+# and the last column's off the right.
+MARGIN = 90
+# A label has to fit INSIDE its column or it collides with its neighbour's.
+# COLUMN is 150px and the label font is 11px, so ~20 characters is the budget.
+LABEL_CHARS = 20
 MIN_RADIUS = 10
 MAX_RADIUS = 26
 
@@ -177,7 +184,14 @@ def _holds(row: sqlite3.Row) -> int:
 
 def _title(row: sqlite3.Row, node: int) -> str:
     if row["title"]:
-        return str(row["title"])
+        return _fitted(str(row["title"]))
     if row["brief"]:
-        return str(row["brief"]).strip().splitlines()[0][:28]
+        return _fitted(str(row["brief"]).strip().splitlines()[0])
     return f"topic {node}"
+
+
+def _fitted(text: str) -> str:
+    """Cut a label to its column, with an ellipsis so the cut is visible."""
+    if len(text) <= LABEL_CHARS:
+        return text
+    return text[: LABEL_CHARS - 1].rstrip(" ,;:.") + "…"

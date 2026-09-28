@@ -285,10 +285,18 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
         "SELECT parent_id FROM node_children WHERE child_id = ?", (node_id,)
     ).fetchone()
     children = [
-        int(child["child_id"])
+        {
+            "id": int(child["child_id"]),
+            # its own name, else the first line of its brief, else its number —
+            # the same ladder `_titled` walks, so the list reads like the map
+            # rather than like a set of row ids
+            "title": _titled_row(child),
+        }
         for child in conn.execute(  # type: ignore[attr-defined]
-            "SELECT child_id FROM node_children WHERE parent_id = ? "
-            "ORDER BY child_id",
+            "SELECT c.child_id AS child_id, n.title AS title, b.text AS brief "
+            "FROM node_children c JOIN nodes n ON n.id = c.child_id "
+            "LEFT JOIN briefs b ON b.node_id = c.child_id "
+            "WHERE c.parent_id = ? ORDER BY c.child_id",
             (node_id,),
         ).fetchall()
     ]
@@ -305,12 +313,39 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
     }
 
 
+TITLE_CHARS = 80
+
+
 def _titled(brief: object, node_id: int) -> str:
     """A topic's name: its own, else its brief's first line (0032)."""
     if brief is None:
         return f"topic {node_id}"
     first = str(brief["text"]).strip().splitlines()[0]  # type: ignore[index]
-    return first[:80] or f"topic {node_id}"
+    return _clipped(first) or f"topic {node_id}"
+
+
+def _titled_row(row: object) -> str:
+    """The same ladder, for a row that already carries its title and brief."""
+    own = row["title"]  # type: ignore[index]
+    if own:
+        return str(own)
+    brief = row["brief"]  # type: ignore[index]
+    if brief:
+        return _clipped(str(brief).strip().splitlines()[0])
+    return f"topic {int(row['child_id'])}"  # type: ignore[index]
+
+
+def _clipped(text: str) -> str:
+    """Cut a long title at a word, and SAY it was cut.
+
+    A heading that stops mid-clause reads as a rendering fault rather than as
+    a summary someone abbreviated.
+    """
+    if len(text) <= TITLE_CHARS:
+        return text
+    cut = text[: TITLE_CHARS - 1]
+    spaced = cut.rsplit(" ", 1)[0] if " " in cut[-20:] else cut
+    return spaced.rstrip(" ,;:.") + "\u2026"
 
 
 def _members(conn: object, node_id: int) -> list[dict[str, object]]:

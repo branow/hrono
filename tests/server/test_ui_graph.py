@@ -29,10 +29,13 @@ TREE = "default"
 
 
 class Browser:
-    def __init__(self, client: TestClient, token: str, ids: dict) -> None:
+    def __init__(
+        self, client: TestClient, token: str, ids: dict, conn: object
+    ) -> None:
         self.client = client
         self.token = token
         self.ids = ids
+        self.conn = conn
 
     def sign_in(self) -> None:
         self.client.post("/ui/login", data={"token": self.token})
@@ -98,7 +101,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         ids.update(big=big, small=small, root=root)
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
-        yield Browser(client, token, ids)
+        yield Browser(client, token, ids, conn)
     conn.close()
 
 
@@ -227,3 +230,57 @@ def test_more_than_one_root_is_drawn(browser: Browser) -> None:
     browser.sign_in()
 
     assert browser.map().count("<circle") == 2
+
+
+def test_a_label_fits_inside_its_column(browser: Browser) -> None:
+    """#197: labels ran the full width of a column and collided with the
+    next one, so three adjacent topics read as one run of text."""
+    from hrono.server.graph import LABEL_CHARS, build
+
+    long_title = "This group covers the whole of the ingest pipeline"
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE nodes SET title = ? WHERE id = ?",
+            (long_title, _root(browser)),
+        )
+
+    drawn = build(browser.conn, TREE, [])  # type: ignore[arg-type]
+
+    label = drawn.nodes[0].title
+    assert len(label) <= LABEL_CHARS
+    assert label.endswith("…")
+    assert long_title.startswith(label.removesuffix("…"))
+
+
+def test_a_short_label_is_left_alone(browser: Browser) -> None:
+    from hrono.server.graph import build
+
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE nodes SET title = ? WHERE id = ?",
+            ("ingest", _root(browser)),
+        )
+
+    drawn = build(browser.conn, TREE, [])  # type: ignore[arg-type]
+
+    assert drawn.nodes[0].title == "ingest"
+
+
+def test_the_canvas_leaves_room_for_a_label(browser: Browser) -> None:
+    """A centre-anchored label under the first column used to run off the
+    left edge of the SVG and be clipped."""
+    from hrono.server.graph import LABEL_CHARS, MARGIN, build
+
+    drawn = build(browser.conn, TREE, [])  # type: ignore[arg-type]
+
+    # roughly 7px per character at the 11px label font, half each side
+    assert MARGIN >= LABEL_CHARS * 7 / 2
+    assert drawn.nodes[0].x >= MARGIN
+
+
+def _root(browser: Browser) -> int:
+    return int(
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT MAX(id) FROM nodes"
+        ).fetchone()[0]
+    )

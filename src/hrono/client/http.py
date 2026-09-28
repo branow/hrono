@@ -179,10 +179,36 @@ def _detail(response: httpx.Response) -> str:
     except ValueError:
         return f"request failed ({response.status_code})"
     error = payload.get("error") if isinstance(payload, dict) else None
-    message = error.get("message") if isinstance(error, dict) else None
-    if isinstance(message, str):
-        return message
-    return f"request failed ({response.status_code})"
+    if not isinstance(error, dict):
+        return f"request failed ({response.status_code})"
+    message = error.get("message")
+    if not isinstance(message, str):
+        return f"request failed ({response.status_code})"
+    fields = _fields(error.get("details"))
+    return message if not fields else message + "\n" + "\n".join(fields)
+
+
+def _fields(details: object) -> list[str]:
+    """The per-field reasons a validation failure carries, one line each.
+
+    The server has always sent these and the CLI has always dropped them, so a
+    config with a missing field printed exactly "invalid body" and nothing a
+    person could act on. The shape is pydantic's: `loc` is the path to the
+    field, `msg` is what is wrong with it.
+    """
+    if not isinstance(details, dict):
+        return []
+    errors = details.get("errors")
+    if not isinstance(errors, list):
+        return []
+    lines = []
+    for item in errors:
+        if not isinstance(item, dict):
+            continue
+        where = ".".join(str(part) for part in item.get("loc", ())) or "body"
+        why = str(item.get("msg", "is not valid"))
+        lines.append(f"  {where}: {why}")
+    return lines
 
 
 def message(error: ClientError) -> str:
