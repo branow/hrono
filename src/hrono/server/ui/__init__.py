@@ -98,6 +98,27 @@ def _back(tree: str, node_id: int, **outcome: str) -> Response:
     )
 
 
+def switch(here: str, tree: str, to: str) -> str:
+    """The same page, in another tree.
+
+    Switching trees used to bounce you to the overview whatever you were
+    looking at. Every view except one is the same question asked of a
+    different tree, so it should stay put — the exception is a page about ONE
+    topic, because a topic id does not exist in another tree, and that falls
+    back to the new tree's map rather than to a 404.
+    """
+    if "/nodes/" in here:
+        return f"/ui/trees/{to}/graph?tree={to}"
+    rebased = here.replace(f"/trees/{tree}/", f"/trees/{to}/", 1)
+    return f"{rebased}?tree={to}"
+
+
+# The tree switcher rewrites the current path per tree, which is routing, not
+# markup — so it is a function the template calls rather than a chain of Jinja
+# string operations.
+templates.env.globals["switch"] = switch
+
+
 def _trees(conn: object) -> list[str]:
     """Every declared tree (#054), or `default` when none are.
 

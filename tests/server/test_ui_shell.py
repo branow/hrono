@@ -146,8 +146,12 @@ def test_the_switcher_lists_declared_trees(browser: Browser) -> None:
 
     body = browser.page("/ui").text  # type: ignore[attr-defined]
 
-    assert 'value="alpha"' in body
-    assert 'value="beta"' in body
+    # each tree is offered as a link that LEADS there — the switcher used to
+    # be a <select> whose options were values on a form, so asserting the
+    # name appeared said nothing about whether you could reach it
+    for name in ("alpha", "beta"):
+        assert f'href="/ui?tree={name}"' in body
+    assert browser.page("/ui?tree=alpha").status_code == 200  # type: ignore[attr-defined]
 
 
 def test_an_undeclared_database_still_offers_default(
@@ -156,7 +160,7 @@ def test_an_undeclared_database_still_offers_default(
     # a database nobody has partitioned still has exactly one tree (#054)
     browser.sign_in()
 
-    assert 'value="default"' in browser.page("/ui").text  # type: ignore[attr-defined]
+    assert 'href="/ui?tree=default"' in browser.page("/ui").text  # type: ignore[attr-defined]
 
 
 def test_the_shell_reports_what_the_chosen_tree_holds(
@@ -213,3 +217,55 @@ def test_every_page_carries_an_icon(browser: Browser) -> None:
     page = browser.client.get("/ui").text
 
     assert 'rel="icon"' in page
+
+
+def test_switching_tree_keeps_you_on_the_page_you_are_on(
+    browser: Browser,
+) -> None:
+    """It used to bounce you to the overview whatever you were looking at.
+
+    Every view but one is the same question asked of a different tree, so it
+    should stay put.
+    """
+    from hrono.server.ui import switch
+
+    assert switch("/ui/jobs", "default", "beta") == "/ui/jobs?tree=beta"
+    assert (
+        switch("/ui/trees/default/triage", "default", "beta")
+        == "/ui/trees/beta/triage?tree=beta"
+    )
+
+
+def test_switching_from_one_topic_lands_on_the_new_trees_map(
+    browser: Browser,
+) -> None:
+    """A topic id does not exist in another tree, so carrying it over is a
+    404 waiting to happen."""
+    from hrono.server.ui import switch
+
+    assert (
+        switch("/ui/trees/default/nodes/7", "default", "beta")
+        == "/ui/trees/beta/graph?tree=beta"
+    )
+
+
+def test_the_switcher_marks_the_tree_you_are_in(browser: Browser) -> None:
+    browser.sign_in()
+
+    # the <style> block carries the SELECTOR for this, so searching the whole
+    # page finds the rule whether or not any element ever matches it
+    markup = _without_style(browser.page("/ui").text)  # type: ignore[attr-defined]
+
+    assert 'aria-selected="true"' in markup
+
+
+def test_one_tree_is_not_offered_as_a_choice(browser: Browser) -> None:
+    # a menu with one item in it is furniture, not a control
+    browser.sign_in()
+
+    assert 'data-only="1"' in browser.page("/ui").text  # type: ignore[attr-defined]
+
+
+def _without_style(page: str) -> str:
+    """The page as a person reads it, minus the sheet that styles it."""
+    return re.sub(r"<style>.*?</style>", "", page, flags=re.S)

@@ -160,29 +160,55 @@ details.reveal .hint { margin-top: var(--s2); }
 
 /* The label used to float beside the select and overlap it. It is now part of
    one control: a bordered group whose first cell names it. */
-.treepick {
-  display: inline-flex; align-items: stretch; margin: 0;
+/* A real menu rather than a platform select: the options are LINKS, so the
+   whole thing works with no JavaScript at all, and each one keeps you on the
+   page you are already looking at. */
+.treepick { position: relative; }
+.treepick > summary {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .25rem .5rem;
   border: 1px solid var(--rule-firm);
   border-radius: var(--r2);
   background: var(--surface);
-  overflow: hidden;
+  cursor: pointer;
+  list-style: none;
 }
+.treepick > summary::-webkit-details-marker { display: none; }
+.treepick > summary:hover { background: var(--sunken); }
+.treepick[open] > summary { border-color: var(--accent); }
 .treepick .key {
-  display: flex; align-items: center;
-  padding: 0 .45rem;
-  background: var(--sunken);
-  border-right: 1px solid var(--rule-firm);
   font: 600 .625rem/1 var(--mono);
   letter-spacing: .08em; text-transform: uppercase;
   color: var(--ink-faint);
 }
-.treepick select {
-  border: 0; border-radius: 0; background-color: transparent;
-  font-family: var(--mono); font-size: .8125rem;
-  padding: .3rem 1.5rem .3rem .5rem;
+.treepick .now { font: 560 .8125rem/1.4 var(--mono); }
+.treepick .caret { color: var(--ink-faint); transition: transform .12s; }
+.treepick[open] .caret { transform: rotate(180deg); }
+/* one tree is not a choice; show it, do not offer to change it */
+.treepick[data-only] > summary { cursor: default; border-color: var(--rule); }
+.treepick[data-only] .caret { display: none; }
+
+.treepick .menu {
+  position: absolute; z-index: 20; top: calc(100% + .3rem); left: 0;
+  min-width: 100%; width: max-content; max-width: 16rem;
+  margin: 0; padding: var(--s1); list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--rule-firm);
+  border-radius: var(--r2);
+  box-shadow: var(--shadow-lift);
 }
-.treepick select:hover { background-color: var(--sunken); }
-.treepick .btn { border: 0; border-left: 1px solid var(--rule-firm); border-radius: 0; }
+.treepick[data-only] .menu { display: none; }
+.treepick .menu a {
+  display: flex; align-items: center; gap: .4rem;
+  padding: .3rem .45rem;
+  border-radius: var(--r1);
+  color: var(--ink);
+  font: 500 .8125rem/1.5 var(--mono);
+  white-space: nowrap;
+}
+.treepick .menu a:hover { background: var(--sunken); text-decoration: none; }
+.treepick .menu a[aria-selected="true"] { color: var(--accent); font-weight: 640; }
+.treepick .menu .tick { width: .75rem; flex: none; }
 
 .tabs { display: flex; gap: var(--s1); flex-wrap: wrap; margin-left: auto; }
 .tab {
@@ -680,15 +706,27 @@ tr.needs td.count { font-weight: 700; color: var(--warn); }
     </svg>
     <span>hrono</span>
   </a>
-  <form class="treepick" method="get" action="/ui">
-    <span class="key" id="tree-key">tree</span>
-    <select name="tree" onchange="this.form.submit()" aria-labelledby="tree-key">
+  <details class="treepick"{% if trees|length < 2 %} data-only="1"{% endif %}>
+    <summary title="Switch tree" aria-haspopup="listbox">
+      <span class="key">tree</span>
+      <span class="now">{{ tree }}</span>
+      <svg class="caret" width="9" height="6" viewBox="0 0 9 6" aria-hidden="true">
+        <path d="M1 1.2 4.5 4.8 8 1.2" fill="none" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </summary>
+    <ul class="menu" role="listbox">
       {% for name in trees %}
-      <option value="{{ name }}" {% if name == tree %}selected{% endif %}>{{ name }}</option>
+      <li>
+        <a href="{{ switch(here, tree, name) }}" role="option"
+           {% if name == tree %}aria-selected="true"{% endif %}>
+          <span class="tick" aria-hidden="true">{% if name == tree %}✓{% endif %}</span>
+          {{ name }}
+        </a>
+      </li>
       {% endfor %}
-    </select>
-    <noscript><button class="btn small" type="submit">go</button></noscript>
-  </form>
+    </ul>
+  </details>
   <nav class="tabs" aria-label="sections">
     {{ tab("/ui?tree=" ~ tree, "Overview", here == "/ui") }}
     {{ tab("/ui/trees/" ~ tree ~ "/triage?tree=" ~ tree, "Needs attention", here.endswith("/triage")) }}
