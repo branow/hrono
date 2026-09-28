@@ -1,16 +1,18 @@
-"""Laying a tree out for the page (T50.1/.2, #183, #198).
+"""Laying a tree out for the page (T50.1/.2, #183, #198, #199).
 
 Arithmetic, not a library. A hierarchy drawn level by level is positions and
 line segments, and SVG is markup — so the graph is rendered by the same Jinja
 that renders everything else, with no JS dependency to vendor, review and pin.
 
-The layout is a TOP-DOWN TREE of BLOCKS: the root sits at the top, its
-children hang below it, and a topic with more children than fit across the
-page wraps them onto further rows rather than running off the edge. It was a
+The layout is a TOP-DOWN TREE of BLOCKS: the root sits at the top and its
+children hang below it, SIDE BY SIDE, however many there are. It was a
 left-to-right dendrogram until #198 — the shape a file explorer has, which
-nobody reads as a tree — and then one row per level, which put twenty-six
-siblings across four thousand pixels and three screenfuls. A block fits the
-page, so the whole map is one screen and the root is the first thing on it.
+nobody reads as a tree — and then a shape that WRAPPED a wide family onto
+further rows to keep the whole map inside one window. Wrapping buys that width
+by putting a topic's right-hand subtree underneath its left-hand one, and two
+subtrees stacked read as one over the other rather than as siblings (#199). So
+siblings stay on one level and the canvas gets as wide as the tree needs; the
+page makes it a board the reader moves around instead.
 
 Each topic is labelled by WHERE its sections live (`server/where.py`) rather
 than by its brief's first line: on a tree summarised by a weak model every
@@ -34,23 +36,13 @@ from hrono.server import where as where_module
 # A topic's own footprint: one cell wide, with its circle at the top and its
 # two lines of text centred under it.
 SLOT = 150
-# The widest a row of children may be before it WRAPS onto another row. The
-# canvas is a width the server picks, so it is chosen for the narrowest window
-# this dashboard is drawn for — 1100px, less main's padding and the gutter a
-# wrapped block keeps down its left side.
-ROW_WIDTH = 1000
 # Vertical room a topic's own furniture needs below the top of its cell: the
 # circle, its name, its count. A topic that can be opened carries a chevron
 # under those.
 NODE_HEIGHT = 68
 CHEVRON = 18
-# Between a parent's furniture and its children, and between two wrapped rows
-# of them.
+# Between a parent's furniture and its children.
 DROP = 30
-ROW_GAP = 16
-# Down the left of a block that wrapped: the spine joining its rows runs here,
-# clear of every label.
-GUTTER = 24
 # Half a label either side of the drawing, so no name is cut by the canvas.
 PAD = 20
 TOP = 10
@@ -78,6 +70,7 @@ class Node:
     level: int
     where: str  # the directory its sections live in — its primary identity
     label: str  # `where`, cut to fit its slot
+    spread: str  # the shares behind a label that had to name two places
     title: str  # what its brief calls it, for the tooltip and the topic page
     holds: int  # members for a leaf, children for an upper topic
     holds_what: str  # "sections" or "topics" — the unit `holds` counts
@@ -90,59 +83,43 @@ class Node:
 
 
 @dataclass(frozen=True)
-class Connector:
-    """One drawn connection, and whether it had to travel past other topics.
-
-    A connector to a WRAPPED row cannot go straight down — the rows above it
-    are in the way — so it steps out, drops, and comes back. Three long runs
-    with rounded corners draw what looks like a box around whatever they pass,
-    and a box asserts a grouping the tree does not have. Marking the detour
-    lets it be drawn as subordinate: the eye reads it as a line going by,
-    not as a container (#197).
-    """
-
-    d: str
-    past: bool
-
-
-@dataclass(frozen=True)
 class Graph:
     """A drawn tree: placed nodes, connector paths, and the canvas they need.
 
     ``edges`` is SVG path data rather than endpoints because a connector is a
-    run of right angles, not a segment: out of the parent, along the row its
+    run of right angles, not a segment: out of the parent, along the rail its
     children sit on, and down into each of them.
+
+    ``home`` is where the reader should be looking when the page opens. The
+    canvas is now as wide as the tree, so its left edge is an arbitrary place
+    to start and the root is the only non-arbitrary one.
     """
 
     nodes: tuple[Node, ...]
-    edges: tuple[Connector, ...]
+    edges: tuple[str, ...]
     width: float
     height: float
+    home: float
 
 
 @dataclass(frozen=True)
 class _Box:
-    """What one topic and everything drawn beneath it occupies.
-
-    ``rows`` is how its children were WRAPPED — measuring and placing have to
-    agree about that, so it is decided once, here, and carried.
-    """
+    """What one topic and everything drawn beneath it occupies."""
 
     width: float
     height: float
-    rows: tuple[tuple[int, ...], ...]
 
 
 def build(conn: sqlite3.Connection, tree: str, opened: Sequence[int]) -> Graph:
     """Draw the root, and the children of every OPEN topic below it."""
     rows = _rows(conn, tree)
     if not rows:
-        return Graph(nodes=(), edges=(), width=0, height=0)
+        return Graph(nodes=(), edges=(), width=0, height=0, home=0)
     children = _children(conn, tree)
     roots = _roots(rows, children)
     visible = _visible(roots, children, set(opened))
     return _lay_out(
-        rows, children, visible, set(opened), where_module.by_node(conn, tree)
+        rows, children, visible, set(opened), where_module.describe(conn, tree)
     )
 
 
@@ -209,15 +186,13 @@ def _lay_out(
     children: dict[int, list[int]],
     visible: Sequence[int],
     opened: set[int],
-    wheres: dict[int, str],
+    wheres: dict[int, where_module.Where],
 ) -> Graph:
-    """A block per topic: its own row, then its children WRAPPED beneath it.
+    """A block per topic: its own cell, then its children in ONE row beneath.
 
-    One row per level would be a level of twenty-six topics four thousand
-    pixels wide — a map read in three screenfuls (#198). Children are packed
-    into as many rows as ROW_WIDTH allows instead, so a topic and everything
-    under it is a block that fits the page, and the tree still hangs
-    downwards.
+    A wide family makes a wide canvas, which is the trade #199 chose: a reader
+    can pan a wide tree, and cannot read a subtree that was folded underneath
+    its sibling.
     """
     shown = set(visible)
     drawn_kids = {
@@ -229,15 +204,17 @@ def _lay_out(
     radii = {node: _radius(holds[node], biggest) for node in visible}
     tall = {node: _own_height(bool(children.get(node))) for node in visible}
     boxes = _boxes(visible, drawn_kids, tall)
-    placed, edges, width, height = _place(
-        _drawn_roots(visible, drawn_kids), boxes, drawn_kids, radii, tall
-    )
+    tops = _drawn_roots(visible, drawn_kids)
+    placed, edges, width, height = _place(tops, boxes, drawn_kids, radii, tall)
+    blank = where_module.Where("", "")
     drawn = tuple(
         Node(
             id=node,
             level=int(rows[node]["level"]),
-            where=wheres.get(node, ""),
-            label=_fitted_where(wheres.get(node, "")) or f"topic {node}",
+            where=wheres.get(node, blank).label,
+            label=_fitted_where(wheres.get(node, blank).label)
+            or f"topic {node}",
+            spread=wheres.get(node, blank).spread,
             title=_title(rows[node], node),
             holds=holds[node],
             holds_what=_holds_what(rows[node]),
@@ -250,7 +227,26 @@ def _lay_out(
         )
         for node in visible
     )
-    return Graph(nodes=drawn, edges=edges, width=width, height=height)
+    return Graph(
+        nodes=drawn,
+        edges=edges,
+        width=width,
+        height=height,
+        home=_home(tops, placed),
+    )
+
+
+def _home(tops: Sequence[int], placed: dict[int, tuple[float, float]]) -> float:
+    """The x the canvas opens on: the middle of the topmost row.
+
+    With one root that is the root itself. With several — a tree mid-repair —
+    it is the middle of them, because arriving centred on whichever happens to
+    be first would hide that there are others.
+    """
+    if not tops:
+        return 0
+    across = [placed[node][0] for node in tops]
+    return (min(across) + max(across)) / 2
 
 
 def _drawn_roots(
@@ -278,49 +274,17 @@ def _boxes(
     for node in reversed(visible):
         kids = drawn_kids[node]
         if not kids:
-            boxes[node] = _Box(SLOT, tall[node], ())
+            boxes[node] = _Box(SLOT, tall[node])
             continue
-        rows = _wrapped(kids, boxes)
-        inside = max(_row_width(row, boxes) for row in rows)
-        gutter = GUTTER if len(rows) > 1 else 0.0
         boxes[node] = _Box(
-            width=max(SLOT, inside + gutter),
-            height=tall[node] + DROP + _rows_height(rows, boxes),
-            rows=rows,
+            width=max(SLOT, _spanned(kids, boxes)),
+            height=tall[node] + DROP + max(boxes[kid].height for kid in kids),
         )
     return boxes
 
 
-def _wrapped(
-    kids: Sequence[int], boxes: dict[int, _Box]
-) -> tuple[tuple[int, ...], ...]:
-    """Pack children into rows no wider than ROW_WIDTH, in order.
-
-    A child wider than the budget still gets a row — wrapping it away would
-    lose it, and a block that big is already the widest thing on the page.
-    """
-    rows: list[tuple[int, ...]] = []
-    row: list[int] = []
-    used = 0.0
-    for kid in kids:
-        if row and used + boxes[kid].width > ROW_WIDTH:
-            rows.append(tuple(row))
-            row, used = [], 0.0
-        row.append(kid)
-        used += boxes[kid].width
-    rows.append(tuple(row))
-    return tuple(rows)
-
-
-def _row_width(row: Sequence[int], boxes: dict[int, _Box]) -> float:
-    return sum(boxes[node].width for node in row)
-
-
-def _rows_height(
-    rows: Sequence[Sequence[int]], boxes: dict[int, _Box]
-) -> float:
-    tallest = [max(boxes[node].height for node in row) for row in rows]
-    return sum(tallest) + ROW_GAP * (len(rows) - 1)
+def _spanned(nodes: Sequence[int], boxes: dict[int, _Box]) -> float:
+    return sum(boxes[node].width for node in nodes)
 
 
 def _place(
@@ -331,127 +295,76 @@ def _place(
     tall: dict[int, float],
 ) -> tuple[dict[int, tuple[float, float]], tuple[str, ...], float, float]:
     """Walk the blocks top-down, placing each and drawing what joins them."""
-    rows = _wrapped(roots, boxes)
-    spread = max(_row_width(row, boxes) for row in rows)
+    spread = _spanned(roots, boxes)
     placed: dict[int, tuple[float, float]] = {}
-    edges: list[Connector] = []
-    stack = list(_laid(rows, boxes, PAD, spread, TOP))
+    edges: list[str] = []
+    stack = _laid(roots, boxes, PAD, spread, TOP)
     while stack:
         node, left, top = stack.pop()
         box = boxes[node]
         placed[node] = (left + box.width / 2, top + MAX_RADIUS)
-        if not box.rows:
+        kids = drawn_kids[node]
+        if not kids:
             continue
-        gutter = GUTTER if len(box.rows) > 1 else 0.0
         foot = top + tall[node]
-        kids = list(
-            _laid(
-                box.rows, boxes, left + gutter, box.width - gutter, foot + DROP
-            )
-        )
-        edges.extend(
-            _connectors(
-                parent=placed[node],
-                foot=foot,
-                rows=box.rows,
-                kids={
-                    kid: (kid_left, kid_top) for kid, kid_left, kid_top in kids
-                },
-                boxes=boxes,
-                radii=radii,
-            )
-        )
-        stack.extend(kids)
+        laid = _laid(kids, boxes, left, box.width, foot + DROP)
+        edges.extend(_connectors(placed[node], foot, laid, boxes, radii))
+        stack.extend(laid)
     return (
         placed,
         tuple(edges),
         spread + PAD * 2,
-        TOP + _rows_height(rows, boxes) + BOTTOM,
+        TOP + max(boxes[node].height for node in roots) + BOTTOM,
     )
 
 
 def _laid(
-    rows: Sequence[Sequence[int]],
+    nodes: Sequence[int],
     boxes: dict[int, _Box],
     left: float,
     width: float,
     top: float,
 ) -> list[tuple[int, float, float]]:
-    """Give every topic in a wrapped block its own corner, row by row.
+    """Give every topic in a family its own corner, all on the same level.
 
-    Each row is CENTRED in the block, so a last row of two under a full row of
-    six reads as part of the same family rather than as a stray.
+    The row is CENTRED in the space its parent occupies, so a parent sits over
+    the middle of what it owns whichever way the widths fall.
     """
     out: list[tuple[int, float, float]] = []
-    for row in rows:
-        x = left + (width - _row_width(row, boxes)) / 2
-        for node in row:
-            out.append((node, x, top))
-            x += boxes[node].width
-        top += max(boxes[node].height for node in row) + ROW_GAP
+    x = left + (width - _spanned(nodes, boxes)) / 2
+    for node in nodes:
+        out.append((node, x, top))
+        x += boxes[node].width
     return out
 
 
 def _connectors(
     parent: tuple[float, float],
     foot: float,
-    rows: Sequence[Sequence[int]],
-    kids: dict[int, tuple[float, float]],
+    kids: Sequence[tuple[int, float, float]],
     boxes: dict[int, _Box],
     radii: dict[int, float],
-) -> list[Connector]:
+) -> list[str]:
     """One path per child, so a connector is never a line to nowhere.
 
-    The first row hangs straight off the parent. A row below it is reached by
-    a line that goes DOWN PAST the rows above it — never between them, where
-    it would be read through their names.
+    Down from the parent to a rail half a drop below it, along the rail, and
+    down into each child — the shape a family tree has.
     """
-    out: list[Connector] = []
-    bus = foot + DROP / 2
-    for index, row in enumerate(rows):
-        left, top = kids[row[0]]
-        rail = top - ROW_GAP / 2 if index else bus
-        past = _past(rows[:index], kids) if index else 0.0
-        for kid in row:
-            left, top = kids[kid]
-            x = left + boxes[kid].width / 2
-            turn = (
-                [(parent[0], bus)]
-                if index == 0
-                else [
-                    (parent[0], bus),
-                    (past, bus),
-                    (past, rail),
+    rail = foot + DROP / 2
+    out: list[str] = []
+    for node, left, top in kids:
+        x = left + boxes[node].width / 2
+        out.append(
+            _path(
+                [
+                    (parent[0], foot),
+                    (parent[0], rail),
+                    (x, rail),
+                    (x, top + MAX_RADIUS - radii[node]),
                 ]
             )
-            out.append(
-                Connector(
-                    d=_path(
-                        [
-                            (parent[0], foot),
-                            *turn,
-                            (x, rail),
-                            (x, top + MAX_RADIUS - radii[kid]),
-                        ]
-                    ),
-                    past=index > 0,
-                )
-            )
+        )
     return out
-
-
-def _past(
-    above: Sequence[Sequence[int]], kids: dict[int, tuple[float, float]]
-) -> float:
-    """Where the line down to a wrapped row passes the rows over it.
-
-    Immediately left of the COLUMN it is travelling past, not out at the edge
-    of the block: a long run out, a long drop and a long run back draw a
-    closed rectangle around a narrow row, and a box around four topics
-    asserts a grouping the tree does not have (#197). Hugging the column
-    leaves two short stubs and a bracket.
-    """
-    return min(kids[kid][0] for row in above for kid in row) - GUTTER / 2
 
 
 def _path(points: Sequence[tuple[float, float]]) -> str:
@@ -531,22 +444,44 @@ def _title(row: sqlite3.Row, node: int) -> str:
     return f"topic {node}"
 
 
-def _fitted_where(path: str) -> str:
-    """Cut a path to its slot from the FRONT, keeping the telling end.
+def _fitted_where(place: str) -> str:
+    """Cut a place to its slot, keeping the telling end of each path in it.
+
+    A straddling topic is named by TWO paths (`server/where.py`), and cutting
+    that as one string drops the whole of the second. Neither side fits with
+    its parent directories either, so each is reduced to the directory it
+    actually names: ``src/hrono/db + tests/cluster`` reads ``db + cluster``,
+    and the pair in full, with its shares, is on the tooltip and the panel.
+    """
+    if len(place) <= LABEL_CHARS:
+        return place
+    if where_module.STRADDLE in place:
+        share = (LABEL_CHARS - len(where_module.STRADDLE)) // 2
+        return where_module.STRADDLE.join(
+            _fitted(part.rsplit("/", 1)[-1], share)
+            for part in place.split(where_module.STRADDLE, 1)
+        )
+    return _tail(place, LABEL_CHARS)
+
+
+def _tail(path: str, budget: int) -> str:
+    """Cut a path to its budget from the FRONT, keeping the telling end.
 
     ``src/hrono/server/templates`` cut at the tail reads as ``src/hrono/se…``,
     which is the half every topic shares. Dropping leading segments instead
     leaves ``…/server/templates``.
     """
-    if len(path) <= LABEL_CHARS:
+    if len(path) <= budget:
         return path
+    if "/" not in path:
+        return _fitted(path, budget)
     parts = path.split("/")
     kept = parts[-1]
     for part in reversed(parts[:-1]):
-        if len(part) + len(kept) + 3 > LABEL_CHARS:
+        if len(part) + len(kept) + 3 > budget:
             break
         kept = f"{part}/{kept}"
-    return "…/" + _fitted(kept, LABEL_CHARS - 2)
+    return "…/" + _fitted(kept, budget - 2)
 
 
 def _fitted(text: str, budget: int) -> str:

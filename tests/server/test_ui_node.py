@@ -64,7 +64,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         core = _section(
             conn, "docs/sign/core.md", b"<script>alert(1)</script> core\n"
         )
-        edge = _section(conn, "docs/sign/edge.md", b"E" * 2000)
+        edge = _section(conn, "docs/sign/edge.md", b"E" * 12000)
         worse = _section(
             conn, "docs/sign/worse.md", b"the worst fitting chunk\n"
         )
@@ -85,12 +85,12 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
             conn,
             node,
             "Signing and serialization.\nThe modules that sign payloads.",
-            model_name="m",
+            model_name="scribe-9",
             prompt_name="brief",
-            prompt_hash="h",
-            member_signature="sig",
-            input_tokens=1,
-            output_tokens=1,
+            prompt_hash="pr00mpth4sh",
+            member_signature="sig-written",
+            input_tokens=1234,
+            output_tokens=56,
         )
         conn.execute(
             "INSERT INTO nodes(tree, level, label, created_at) "
@@ -105,6 +105,12 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         notes.add(conn, notes.NODE, node, "watch this one")
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
+        # The worker polls the SAME adopted connection this fixture and its
+        # tests write through. Two threads on one sqlite connection interleave
+        # transactions, which is an intermittent failure in whichever test
+        # happens to be writing when a poll lands (#194).
+        client.app.state.worker.stop()  # type: ignore[attr-defined]
+        client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         yield Browser(client, token, conn)
     conn.close()
 
@@ -174,25 +180,76 @@ def test_a_score_is_shown_for_an_attached_member(browser: Browser) -> None:
     assert "0.72" in browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
 
-def test_a_section_preview_is_inline_and_bounded(browser: Browser) -> None:
-    # a section is ~10 KB and a topic can hold thirty; the preview keeps the
-    # topic on screen.
+def test_a_section_is_readable_and_says_what_it_holds_back(
+    browser: Browser,
+) -> None:
+    """A section that stops after a heading is one nobody can judge (#199).
+
+    A topic can hold thirty ~10 KB sections, so the page cannot print them
+    whole — but a preview that trails off into an ellipsis and says nothing
+    about how much is missing reads as the content itself ending.
+    """
     browser.sign_in()
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
-    assert "E" * 600 in page  # the preview
-    assert "E" * 700 not in page  # and not the whole 2000-byte section
-    assert "…" in page
+    assert "E" * 4000 in page  # enough of it to actually read
+    assert "E" * 4001 not in page  # and not the whole 12,000-byte section
+    assert "Showing the first 4,000 of 12,000 characters." in page
+    # and a section that fits says so, rather than leaving the reader to
+    # wonder whether it too was cut
+    assert "All 31 characters." in page
 
 
-def test_pins_and_notes_are_visible(browser: Browser) -> None:
+def test_pins_say_what_they_hold_and_why(browser: Browser) -> None:
+    """A pin with no reason is a mystery someone resolves by deleting it."""
     browser.sign_in()
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
-    assert "brief" in page  # the pin kind
-    assert "watch this one" in page
+    assert "pinned: brief" in page  # what is held
+    assert "renamed by hand" in page  # and the why the pin recorded
+    assert "watch this one" in page  # the note, in full
+
+
+def test_the_page_shows_who_wrote_the_brief(browser: Browser) -> None:
+    """#199: "I am admin, I want to see everything there."
+
+    The provenance columns are the whole incremental mechanism — an operator
+    looking at a brief they distrust wants the model that wrote it, what it
+    cost, and whether the members it was written over are still its members.
+    """
+    browser.sign_in()
+
+    page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
+
+    assert "scribe-9" in page  # the model that wrote it
+    assert "pr00mpth4sh" in page  # the prompt template it was written from
+    assert "1,234 in · 56 out" in page  # what it cost
+    assert "sig-written" in page  # the member set it was written over
+    # which is NOT the member set this topic now holds
+    assert "changed since" in page
+
+
+def test_a_brief_still_over_its_own_members_says_so(browser: Browser) -> None:
+    """The other half: the comparison is real, not a constant.
+
+    The signature is re-derived from the topic's CONTENT, so writing the
+    brief's stored signature to what the topic actually holds is the only way
+    to reach this state — and the page has to change its answer.
+    """
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET member_signature = ? WHERE node_id = ?",
+            (briefs.member_signature(browser.conn, node), node),  # type: ignore[arg-type]
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    assert "changed since" not in page
+    assert "unchanged" in page
 
 
 def test_a_node_from_another_tree_is_a_404(browser: Browser) -> None:

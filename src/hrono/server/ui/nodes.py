@@ -8,6 +8,8 @@ would be a second, weaker authorization for the same operation.
 
 from __future__ import annotations
 
+import json
+
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, ValidationError
@@ -28,9 +30,11 @@ from hrono.server.ui import (
 )
 from hrono.summarize import briefs
 
-# Enough to recognise a section, not enough to lose the topic off the screen. A
-# section is ~10 KB and a topic can hold thirty of them (#182).
-PREVIEW_CHARS = 600
+# A section is ~10 KB, and the page's job is to let someone READ one — 600
+# characters showed a heading and stopped. The whole of a typical section fits
+# here; the pane it lands in scrolls, and anything longer says how much it is
+# not showing (#182).
+PREVIEW_CHARS = 4000
 
 
 @router.get("/ui/trees/{tree}/nodes/{node_id}", response_class=HTMLResponse)
@@ -51,8 +55,13 @@ def node_page(
     with request.app.state.db.connect() as conn:
         if not edits.node_exists(conn, tree, node_id):
             raise NotFound(f"node not found in tree {tree}: {node_id}")
-        node = _node(conn, tree, node_id)
-        candidates = _candidates(conn, tree, node_id, int(node["level"]))  # type: ignore[arg-type]
+        # where every topic's sections live, read once: the page labels this
+        # topic, its children AND every topic it offers to move into by it
+        wheres = where.by_node(conn, tree)
+        node = _node(conn, tree, node_id, wheres)
+        candidates = _candidates(
+            conn, tree, node_id, int(node["level"]), wheres
+        )
         trees = _trees(conn)
     return templates.TemplateResponse(
         request,
@@ -133,31 +142,56 @@ async def note_from_the_page(
     return _back(tree, node_id, done="note added")
 
 
-def _candidates(conn: object, tree: str, node_id: int, level: int) -> dict:
+def _candidates(
+    conn: object,
+    tree: str,
+    node_id: int,
+    level: int,
+    wheres: dict[int, str],
+) -> dict:
     """The topics an operator may pick, so nobody has to type an id.
 
     A parent sits exactly one level up and a merge partner at the same level
     (`edits.reparent`, `edits.require_one_level`). Offering anything else
     teaches the rule through a refusal, which is the worse way to learn it.
+
+    Each one arrives the way the map names it — where its sections live, what
+    it holds, what it says — because "topic 2, topic 3, topic 4" is a list of
+    row ids, and nobody merges into a row id (#199).
     """
 
     def at(wanted: int) -> list[dict[str, object]]:
-        # the NAME only, blank when a topic has none: the page prints the id
+        # the NAME only, blank when a topic has none: the row prints the id
         # itself, and a fallback title of "topic 28" beside it read as
         # "topic 28 - topic 28"
         return [
             {
                 "id": int(row["id"]),
-                "title": str(row["title"] or ""),
+                "title": str(row["title"] or _first_line(row["brief"])),
+                "where": wheres.get(int(row["id"]), ""),
+                "holds": int(row["members"]) or int(row["kids"]),
+                "holds_what": _holds_what(row["members"], row["kids"]),
             }
             for row in conn.execute(  # type: ignore[attr-defined]
-                "SELECT id, title FROM nodes WHERE tree = ? AND level = ? "
-                "AND id != ? ORDER BY id",
+                "SELECT n.id AS id, n.title AS title, b.text AS brief, "
+                "(SELECT COUNT(*) FROM node_members m WHERE m.node_id = n.id)"
+                " AS members, "
+                "(SELECT COUNT(*) FROM node_children k "
+                "WHERE k.parent_id = n.id) AS kids "
+                "FROM nodes n LEFT JOIN briefs b ON b.node_id = n.id "
+                "WHERE n.tree = ? AND n.level = ? AND n.id != ? ORDER BY n.id",
                 (tree, wanted, node_id),
             ).fetchall()
         ]
 
     return {"parents": at(level + 1), "siblings": at(level)}
+
+
+def _holds_what(members: object, kids: object) -> str:
+    """What a topic is made of: sections at the bottom, topics above."""
+    held = int(members) or int(kids)  # type: ignore[call-overload]
+    noun = "section" if int(members) else "topic"  # type: ignore[call-overload]
+    return noun if held == 1 else f"{noun}s"
 
 
 def _confirmed(fields: dict[str, str]) -> bool:
@@ -280,17 +314,17 @@ def release_from_the_page(
     return _back(tree, node_id, done=f"handed back, {released} pins released")
 
 
-def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
+def _node(
+    conn: object, tree: str, node_id: int, wheres: dict[int, str]
+) -> dict[str, object]:
     row = conn.execute(  # type: ignore[attr-defined]
-        "SELECT level, title FROM nodes WHERE id = ?", (node_id,)
+        "SELECT level, title, label, created_at FROM nodes WHERE id = ?",
+        (node_id,),
     ).fetchone()
     brief = briefs.get(conn, node_id)  # type: ignore[arg-type]
     parent = conn.execute(  # type: ignore[attr-defined]
         "SELECT parent_id FROM node_children WHERE child_id = ?", (node_id,)
     ).fetchone()
-    # where its sections live, which is what the map labels a topic by: a brief
-    # written by a weak model names every topic the same (#198)
-    wheres = where.by_node(conn, tree)  # type: ignore[arg-type]
     children = [
         {
             "id": int(child["child_id"]),
@@ -298,9 +332,9 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
             # its own name, else the first line of its brief, else its number —
             # the same ladder `_titled` walks, so the list reads like the map
             # rather than like a set of row ids
-            "title": _titled_row(child),
+            "title": _titled_row(child, int(child["child_id"])),
             "holds": int(child["members"]) or int(child["kids"]),
-            "holds_what": "sections" if int(child["members"]) else "topics",
+            "holds_what": _holds_what(child["members"], child["kids"]),
         }
         for child in conn.execute(  # type: ignore[attr-defined]
             "SELECT c.child_id AS child_id, n.title AS title, b.text AS brief, "
@@ -314,21 +348,108 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
             (node_id,),
         ).fetchall()
     ]
+    held = pins.reasons(conn, node_id)  # type: ignore[arg-type]
     return {
         "id": node_id,
         "level": int(row["level"]),
         "where": wheres.get(node_id, ""),
         "title": row["title"] or _titled(brief, node_id),
+        "named": bool(row["title"]),
+        "label": int(row["label"]),
+        "born": _when(row["created_at"]),
         "brief": brief["text"] if brief is not None else None,
         # the same rule the map colours by: no brief counts as a stale one,
         # because both mean recall cannot answer from this topic
         "stale": brief is None or bool(brief["stale"]),
-        "parent": None if parent is None else int(parent["parent_id"]),
+        "parent": _parent(conn, parent, wheres),
         "children": children,
-        "pins": sorted(pins.reasons(conn, node_id)),  # type: ignore[arg-type]
-        "notes": notes.rendered(conn).get(node_id),  # type: ignore[arg-type]
+        "pin_kinds": sorted(held),
+        "pins": [
+            {"kind": kind, "why": held[kind] or ""} for kind in sorted(held)
+        ],
+        "notes": [
+            {"text": text, "when": _when(when)}
+            for _, text, when in notes.get(conn, notes.NODE, node_id)  # type: ignore[arg-type]
+        ],
+        "wrote": _provenance(conn, node_id, brief),
         "members": _members(conn, node_id, wheres.get(node_id, "")),
     }
+
+
+def _parent(
+    conn: object, row: object, wheres: dict[int, str]
+) -> dict[str, object] | None:
+    """The topic above, named the way the map names it rather than by id."""
+    if row is None:
+        return None
+    parent_id = int(row["parent_id"])  # type: ignore[index]
+    named = conn.execute(  # type: ignore[attr-defined]
+        "SELECT n.id AS id, n.title AS title, b.text AS brief FROM nodes n "
+        "LEFT JOIN briefs b ON b.node_id = n.id WHERE n.id = ?",
+        (parent_id,),
+    ).fetchone()
+    return {
+        "id": parent_id,
+        "where": wheres.get(parent_id, ""),
+        "title": _titled_row(named, parent_id),
+    }
+
+
+def _provenance(
+    conn: object, node_id: int, brief: object
+) -> dict[str, object] | None:
+    """Who wrote this brief, from what, at what cost, and whether it holds.
+
+    The freshness columns are the whole incremental mechanism (#064, #191), and
+    an operator looking at a brief they distrust wants exactly them: the model
+    and the prompt that wrote it, and whether the members it was written over
+    are still the members it has.
+    """
+    if brief is None:
+        return None
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT created_at FROM briefs WHERE node_id = ?", (node_id,)
+    ).fetchone()
+    signed = str(brief["member_signature"] or "")  # type: ignore[index]
+    now = briefs.member_signature(conn, node_id)  # type: ignore[arg-type]
+    return {
+        "model": str(brief["model_name"]),  # type: ignore[index]
+        "fingerprint": _short(brief["model_fingerprint"]),  # type: ignore[index]
+        "prompt": str(brief["prompt_name"]),  # type: ignore[index]
+        "prompt_hash": _short(brief["prompt_hash"]),  # type: ignore[index]
+        "tokens_in": int(brief["input_tokens"]),  # type: ignore[index]
+        "tokens_out": int(brief["output_tokens"]),  # type: ignore[index]
+        "written": _when(row["created_at"]) if row is not None else "",
+        "signature": _short(signed),
+        "moved": bool(signed) and signed != now,
+        "marked": bool(brief["stale"]),  # type: ignore[index]
+        "flagged": str(brief["flagged"] or ""),  # type: ignore[index]
+        "unsupported": _listed(brief["unfaithful"]),  # type: ignore[index]
+        "cites": len(_listed(brief["members"])),  # type: ignore[index]
+    }
+
+
+def _listed(column: object) -> list[str]:
+    """A JSON-array column, as a list — an empty one when it is not readable."""
+    try:
+        loaded = json.loads(str(column or "[]"))
+    except ValueError:
+        return []
+    return [str(item) for item in loaded] if isinstance(loaded, list) else []
+
+
+def _short(digest: object) -> str:
+    """A hash an operator can compare by eye, not one that fills a column."""
+    return str(digest)[:12] if digest else ""
+
+
+def _when(stamp: object) -> str:
+    """An ISO timestamp as a minute, which is the resolution anyone reads."""
+    text = str(stamp or "")
+    if "T" not in text:
+        return text
+    day, clock = text.split("T", 1)
+    return f"{day} {clock[:5]}"
 
 
 TITLE_CHARS = 80
@@ -342,15 +463,19 @@ def _titled(brief: object, node_id: int) -> str:
     return _clipped(first) or f"topic {node_id}"
 
 
-def _titled_row(row: object) -> str:
+def _titled_row(row: object, node_id: int) -> str:
     """The same ladder, for a row that already carries its title and brief."""
     own = row["title"]  # type: ignore[index]
     if own:
         return str(own)
-    brief = row["brief"]  # type: ignore[index]
-    if brief:
-        return _clipped(str(brief).strip().splitlines()[0])
-    return f"topic {int(row['child_id'])}"  # type: ignore[index]
+    return _first_line(row["brief"]) or f"topic {node_id}"  # type: ignore[index]
+
+
+def _first_line(brief: object) -> str:
+    """A brief's opening line, clipped: the name a topic with none gets."""
+    if not brief:
+        return ""
+    return _clipped(str(brief).strip().splitlines()[0])
 
 
 def _clipped(text: str) -> str:
@@ -375,7 +500,8 @@ def _members(conn: object, node_id: int, stem: str) -> list[dict[str, object]]:
     wants the section least likely to belong at the top.
     """
     rows = conn.execute(  # type: ignore[attr-defined]
-        "SELECT s.id AS id, s.path AS path, m.assignment_similarity AS score, "
+        "SELECT s.id AS id, s.path AS path, s.uri AS uri, "
+        "m.assignment_similarity AS score, "
         "m.forced AS forced, c.body AS body "
         "FROM node_members m JOIN sections s ON s.id = m.section_id "
         "LEFT JOIN contents c ON c.content_hash = s.content_hash "
@@ -398,16 +524,29 @@ def _member(row: object, where: str) -> dict[str, object]:
     shared = f"{where}/" if where and path.startswith(f"{where}/") else ""
     return {
         "id": int(row["id"]),  # type: ignore[index]
+        "path": path,
+        "uri": str(row["uri"]),  # type: ignore[index]
         "stem": shared,
         "tail": path.removeprefix(shared),
         "similarity": row["score"],  # type: ignore[index]
         "forced": bool(row["forced"]),  # type: ignore[index]
-        "preview": _preview(row["body"]),  # type: ignore[index]
+        "content": _content(row["body"]),  # type: ignore[index]
     }
 
 
-def _preview(body: object) -> str:
+def _content(body: object) -> dict[str, object]:
+    """What a section actually says, and how much of it is being shown.
+
+    A preview that silently stops is a preview nobody trusts: the page cannot
+    show ten kilobytes without losing the topic, so it says how many characters
+    it is holding back rather than trailing off into an ellipsis (#199).
+    """
     if body is None:
-        return "(content not stored)"
+        return {"text": "", "shown": 0, "total": 0, "missing": True}
     text = bytes(body).decode("utf-8", "replace")
-    return text[:PREVIEW_CHARS] + ("…" if len(text) > PREVIEW_CHARS else "")
+    return {
+        "text": text[:PREVIEW_CHARS],
+        "shown": min(len(text), PREVIEW_CHARS),
+        "total": len(text),
+        "missing": False,
+    }

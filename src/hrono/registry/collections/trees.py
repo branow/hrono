@@ -24,13 +24,14 @@ from pydantic import BaseModel, Field
 from hrono.registry import store
 from hrono.registry.descriptor import (
     Descriptor,
+    RegistryName,
     ValidationContext,
     ValidationFailed,
 )
 
 
 class Tree(BaseModel):
-    name: str
+    name: RegistryName
     sources: list[str] = Field(min_length=1)
 
 

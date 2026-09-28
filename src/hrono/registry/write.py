@@ -74,6 +74,38 @@ def mask(
     return masked
 
 
+def unmask(
+    config: dict[str, object],
+    previous: dict[str, object],
+    descriptor: Descriptor,
+) -> dict[str, object]:
+    """Return ``config`` with every still-masked secret taken from ``previous``.
+
+    The inverse of the trap an edit FORM sets: the page can only ever show a
+    secret as ``***``, so a form that posts back what it displayed writes the
+    mask over the credential and the source stops authenticating — with the
+    config looking exactly right. A field left at the mask means UNTOUCHED, and
+    untouched is the value already stored.
+
+    Reading the same ``secret_paths`` as ``mask`` and ``encrypt``, so a
+    collection whose credential moves is covered by declaring the new path
+    (#142), not by remembering this function exists.
+    """
+    merged = deepcopy(config)
+    for path in descriptor.secret_paths:
+        holder = _holder(merged, path)
+        if holder is None:
+            continue
+        parent, key = holder
+        if parent[key] != MASK:
+            continue
+        before = _holder(previous, path)
+        if before is None:
+            continue
+        parent[key] = before[0][before[1]]
+    return merged
+
+
 def content_hash(body: str) -> str:
     """Return the SHA-256 hex digest of a stored config body."""
     return hashlib.sha256(body.encode()).hexdigest()

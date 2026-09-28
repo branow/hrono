@@ -38,138 +38,177 @@ def build_router(descriptor: Descriptor) -> APIRouter:
     reader = Depends(require_role("reader"))
     writer = Depends(require_role(descriptor.write_role))
 
-    def list_items(request: Request) -> list[dict[str, object]]:
-        with request.app.state.db.connect() as conn:
-            rows = store.list_all(conn, collection)
-        return [_masked(descriptor, row) for row in rows]
+    def list_route(request: Request) -> list[dict[str, object]]:
+        return list_items(descriptor, request)
 
-    def get_item(name: str, request: Request) -> dict[str, object]:
-        with request.app.state.db.connect() as conn:
-            row = store.get(conn, collection, name)
-        if row is None:
-            raise _not_found(collection, name)
-        return _masked(descriptor, row)
+    def get_route(name: str, request: Request) -> dict[str, object]:
+        return get_item(descriptor, name, request)
 
-    def create_item(body: dict, request: Request) -> dict[str, object]:
-        config = _validated(descriptor, body)
-        _run_hook(descriptor, config, _context(request))
-        stored, key_id = encrypt(config, descriptor, _cipher(request))
-        payload = json.dumps(stored)
-        try:
-            with request.app.state.db.write() as conn:
-                store.insert(
-                    conn,
-                    collection,
-                    config["name"],
-                    payload,
-                    key_id,
-                    _now(),
-                    content_hash=content_hash(payload),
-                )
-        except sqlite3.IntegrityError as exc:
-            raise Conflict(
-                f"{collection} already exists: {config['name']}"
-            ) from exc
-        return mask(stored, descriptor)
+    def create_route(body: dict, request: Request) -> dict[str, object]:
+        return create_item(descriptor, body, request)
 
-    def replace_item(
+    def replace_route(
         name: str, body: dict, request: Request, dry_run: bool = False
     ) -> dict[str, object]:
-        config = _validated(descriptor, body)
-        if config["name"] != name:
-            raise BadRequest("name in body does not match name in path")
-        _run_hook(descriptor, config, _context(request))
-        if dry_run:
-            # validated and hooked, then NOTHING written: a preview of an edit
-            # that would be rejected is a rejection, not an impact report
-            # (T58). One implementation, in the engine, so every collection
-            # has the safety rather than the ones someone remembered.
-            with request.app.state.db.connect() as conn:
-                return impact.as_json(
-                    impact.preview(conn, collection, name, config)
-                )
-        stored, key_id = encrypt(config, descriptor, _cipher(request))
-        payload = json.dumps(stored)
-        now = _now()
+        return replace_item(descriptor, name, body, request, dry_run=dry_run)
+
+    def delete_route(name: str, request: Request) -> dict[str, str]:
+        return delete_item(descriptor, name, request)
+
+    base = f"/{collection}"
+    named = f"/{collection}/{{name}}"
+    router.add_api_route(
+        base, list_route, methods=["GET"], dependencies=[reader]
+    )
+    router.add_api_route(
+        named, get_route, methods=["GET"], dependencies=[reader]
+    )
+    router.add_api_route(
+        base,
+        create_route,
+        methods=["POST"],
+        status_code=status.HTTP_201_CREATED,
+        dependencies=[writer],
+    )
+    router.add_api_route(
+        named, replace_route, methods=["PUT"], dependencies=[writer]
+    )
+    router.add_api_route(
+        named, delete_route, methods=["DELETE"], dependencies=[writer]
+    )
+    return router
+
+
+# The four operations are module-level rather than closures over the router so
+# the dashboard can reach the SAME write path the API takes (#199). A settings
+# page that re-validated a config in its own handler would be a second rule for
+# what a valid config is, and the two would drift — the defect this codebase
+# keeps writing tickets about. The routes above are now thin adapters.
+
+
+def list_items(
+    descriptor: Descriptor, request: Request
+) -> list[dict[str, object]]:
+    with request.app.state.db.connect() as conn:
+        rows = store.list_all(conn, descriptor.collection)
+    return [_masked(descriptor, row) for row in rows]
+
+
+def get_item(
+    descriptor: Descriptor, name: str, request: Request
+) -> dict[str, object]:
+    with request.app.state.db.connect() as conn:
+        row = store.get(conn, descriptor.collection, name)
+    if row is None:
+        raise _not_found(descriptor.collection, name)
+    return _masked(descriptor, row)
+
+
+def create_item(
+    descriptor: Descriptor, body: dict, request: Request
+) -> dict[str, object]:
+    collection = descriptor.collection
+    config = _validated(descriptor, body)
+    _run_hook(descriptor, config, context(request))
+    stored, key_id = encrypt(config, descriptor, _cipher(request))
+    payload = json.dumps(stored)
+    try:
         with request.app.state.db.write() as conn:
-            existed = store.replace(
+            store.insert(
+                conn,
+                collection,
+                config["name"],
+                payload,
+                key_id,
+                _now(),
+                content_hash=content_hash(payload),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise Conflict(
+            f"{collection} already exists: {config['name']}"
+        ) from exc
+    return mask(stored, descriptor)
+
+
+def replace_item(
+    descriptor: Descriptor,
+    name: str,
+    body: dict,
+    request: Request,
+    dry_run: bool = False,
+) -> dict[str, object]:
+    collection = descriptor.collection
+    config = _validated(descriptor, body)
+    if config["name"] != name:
+        raise BadRequest("name in body does not match name in path")
+    _run_hook(descriptor, config, context(request))
+    if dry_run:
+        # validated and hooked, then NOTHING written: a preview of an edit
+        # that would be rejected is a rejection, not an impact report
+        # (T58). One implementation, in the engine, so every collection
+        # has the safety rather than the ones someone remembered.
+        with request.app.state.db.connect() as conn:
+            return impact.as_json(
+                impact.preview(conn, collection, name, config)
+            )
+    stored, key_id = encrypt(config, descriptor, _cipher(request))
+    payload = json.dumps(stored)
+    now = _now()
+    with request.app.state.db.write() as conn:
+        existed = store.replace(
+            conn,
+            collection,
+            name,
+            payload,
+            key_id,
+            now,
+            content_hash(payload),
+        )
+        if not existed:  # PUT CREATES (#138 F2): config is data you PUT
+            store.insert(
                 conn,
                 collection,
                 name,
                 payload,
                 key_id,
                 now,
+                content_hash=content_hash(payload),
+            )
+    return mask(stored, descriptor)
+
+
+def delete_item(
+    descriptor: Descriptor, name: str, request: Request
+) -> dict[str, str]:
+    collection = descriptor.collection
+    with request.app.state.db.connect() as conn:
+        row = store.get(conn, collection, name)
+    if row is None:
+        raise _not_found(collection, name)
+    default = _default_config(descriptor, name)
+    if row["is_default"] and default is not None:
+        stored, key_id = encrypt(default, descriptor, _cipher(request))
+        payload = json.dumps(stored)
+        with request.app.state.db.write() as conn:
+            store.replace(
+                conn,
+                collection,
+                name,
+                payload,
+                key_id,
+                _now(),
                 content_hash(payload),
             )
-            if not existed:  # PUT CREATES (#138 F2): config is data you PUT
-                store.insert(
-                    conn,
-                    collection,
-                    name,
-                    payload,
-                    key_id,
-                    now,
-                    content_hash=content_hash(payload),
-                )
-        return mask(stored, descriptor)
-
-    def delete_item(name: str, request: Request) -> dict[str, str]:
-        with request.app.state.db.connect() as conn:
-            row = store.get(conn, collection, name)
-        if row is None:
-            raise _not_found(collection, name)
-        default = _default_config(descriptor, name)
-        if row["is_default"] and default is not None:
-            stored, key_id = encrypt(default, descriptor, _cipher(request))
-            payload = json.dumps(stored)
-            with request.app.state.db.write() as conn:
-                store.replace(
-                    conn,
-                    collection,
-                    name,
-                    payload,
-                    key_id,
-                    _now(),
-                    content_hash(payload),
-                )
-            return {"reset": name}
-        note = None
-        if descriptor.before_delete is not None:
-            note = descriptor.before_delete(
-                name,
-                ValidationContext(
-                    database=request.app.state.db, cipher=_cipher(request)
-                ),
-            )
-        with request.app.state.db.write() as conn:
-            store.delete(conn, collection, name)
-        deleted: dict[str, str] = {"deleted": name}
-        if note is not None:
-            deleted["note"] = note
-        return deleted
-
-    base = f"/{collection}"
-    named = f"/{collection}/{{name}}"
-    router.add_api_route(
-        base, list_items, methods=["GET"], dependencies=[reader]
-    )
-    router.add_api_route(
-        named, get_item, methods=["GET"], dependencies=[reader]
-    )
-    router.add_api_route(
-        base,
-        create_item,
-        methods=["POST"],
-        status_code=status.HTTP_201_CREATED,
-        dependencies=[writer],
-    )
-    router.add_api_route(
-        named, replace_item, methods=["PUT"], dependencies=[writer]
-    )
-    router.add_api_route(
-        named, delete_item, methods=["DELETE"], dependencies=[writer]
-    )
-    return router
+        return {"reset": name}
+    note = None
+    if descriptor.before_delete is not None:
+        note = descriptor.before_delete(name, context(request))
+    with request.app.state.db.write() as conn:
+        store.delete(conn, collection, name)
+    deleted: dict[str, str] = {"deleted": name}
+    if note is not None:
+        deleted["note"] = note
+    return deleted
 
 
 def _cipher(request: Request) -> Cipher:
@@ -178,7 +217,7 @@ def _cipher(request: Request) -> Cipher:
     )
 
 
-def _context(request: Request) -> ValidationContext:
+def context(request: Request) -> ValidationContext:
     return ValidationContext(
         database=request.app.state.db, cipher=_cipher(request)
     )

@@ -39,11 +39,22 @@ def require_role(minimum: str) -> Callable[[Request], User]:
 
     def dependency(request: Request) -> User:
         user = _authenticate(request)
-        if _ROLE_RANK[user.role] < _ROLE_RANK[minimum]:
+        if not allows(user.role, minimum):
             raise Forbidden("insufficient role")
         return user
 
     return dependency
+
+
+def allows(role: str, minimum: str) -> bool:
+    """Whether ``role`` reaches ``minimum``.
+
+    The same comparison the dependency refuses on, exported so a page can
+    decide whether to DRAW a control from the rule that would refuse the
+    post — rather than from a second, hand-kept opinion about which role may
+    write what.
+    """
+    return _ROLE_RANK[role] >= _ROLE_RANK[minimum]
 
 
 def _authenticate(request: Request) -> User:

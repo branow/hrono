@@ -52,11 +52,13 @@
 </div>
 {% endif %}
 
-<div class="canvas">
+<div class="board{% if panel %} reading{% endif %}">
+<div class="canvas" id="board" tabindex="0" role="region" data-home="{{ graph.home }}"
+     aria-label="topic map: {{ graph.shown }} topics — drag, scroll or use the arrow keys to move">
 <svg width="{{ graph.width }}" height="{{ graph.height }}" role="img"
      aria-label="topic map: {{ graph.shown }} topics">
   {% for line in graph.edges %}
-  <path d="{{ line.d }}" class="edge{% if line.past %} past{% endif %}"/>
+  <path d="{{ line }}" class="edge"/>
   {% endfor %}
   {% for link in overlay.links %}
   <line x1="{{ link.x1 }}" y1="{{ link.y1 }}" x2="{{ link.x2 }}" y2="{{ link.y2 }}" class="link {{ link.kind }}">
@@ -64,12 +66,12 @@
   </line>
   {% endfor %}
   {% for node in graph.nodes %}
-  <g class="node{% if node.stale %} stale{% endif %}">
-    <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">
+  <g class="node{% if node.stale %} stale{% endif %}{% if node.focused %} reading{% endif %}">
+    <a href="{{ node.read }}"{% if node.focused %} aria-current="true"{% endif %}>
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 27 }}">{{ node.holds }} {{ node.holds_what }} · topic {{ node.id }}</text>
-      <title>{{ node.where }} · {{ node.holds }} {{ node.holds_what }} · topic {{ node.id }} — {{ node.title }}{% if node.stale %} · brief needs rewriting{% endif %}</title>
+      <title>{{ node.where }} · {{ node.holds }} {{ node.holds_what }} · topic {{ node.id }} — {{ node.title }}{% if node.spread %} · spread over {{ node.spread }}{% endif %}{% if node.stale %} · brief needs rewriting{% endif %}</title>
     </a>
     {% if node.has_children %}
     <a href="{{ node.toggle }}">
@@ -85,6 +87,60 @@
   </g>
   {% endfor %}
 </svg>
+</div>
+
+{% if panel %}
+<aside class="panel" id="panel" aria-label="topic {{ panel.id }}">
+  <div class="panel-head">
+    <div class="min">
+      <div class="eyebrow">topic {{ panel.id }} · level {{ panel.level }}</div>
+      <h2>{{ panel.where }}</h2>
+    </div>
+    <a class="btn small quiet shut" href="{{ unfocus }}" aria-label="Close the panel">
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    </a>
+  </div>
+
+  {% if panel.title %}<p class="said">{{ panel.title }}</p>{% endif %}
+
+  <p class="panel-facts">
+    <span class="chip">{{ panel.holds }} {{ panel.holds_what }}</span>
+    {% if panel.stale %}<span class="chip warn">needs a brief</span>{% endif %}
+  </p>
+  {% if panel.spread %}
+  <p class="hint">Spread over {{ panel.spread }} — no one directory holds it.</p>
+  {% endif %}
+
+  <p class="panel-out">
+    <a class="btn small" href="/ui/trees/{{ tree }}/nodes/{{ panel.id }}?tree={{ tree }}">Open the topic page</a>
+    <span class="hint">to rename it, write its brief, or move what it holds</span>
+  </p>
+
+  <h3>Brief</h3>
+  {% if panel.brief %}
+  <blockquote>{{ panel.brief }}</blockquote>
+  {% else %}
+  <p class="hint">No brief yet. Recall cannot answer from this topic until one is written.</p>
+  {% endif %}
+
+  <h3>{{ panel.holds }} {{ panel.holds_what }}</h3>
+  <ul class="parts">
+    {% for part in panel.parts %}
+    <li>
+      {% if panel.holds_what == "topics" %}
+      <a class="name" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}&amp;focus={{ part.id }}">{{ part.name }}</a>
+      <span class="hint">{{ part.detail }} · topic {{ part.id }}</span>
+      {% else %}
+      <span class="name">{{ part.name }}</span>
+      <p class="hint">{{ part.detail }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</aside>
+{% endif %}
 </div>
 
 <ul class="keys mt-3">
@@ -109,6 +165,68 @@
       <path d="M2 6h26M2 10h16" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round"/>
     </svg>where it lives
   </li>
+  <li title="Siblings stay on one level, so the board is usually wider than the window. Scroll it, drag it with the mouse, or click it and use the arrow keys">
+    <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+      <path d="M4 7h12M4 7l3-3M4 7l3 3M16 7l-3-3M16 7l-3 3" fill="none" stroke="var(--ink-faint)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>scroll or drag to move
+  </li>
 </ul>
+
+<script>
+/* The one place on this dashboard a script earns its place: a board as wide
+   as the tree has to open somewhere sensible and be draggable. Everything it
+   does is an ENHANCEMENT — with it off the canvas is still a scrolling box
+   with the whole tree in it, and every link on the page still works. */
+(function () {
+  var board = document.getElementById("board");
+  if (!board) return;
+
+  /* Open on the root (or on the topic being read), not on the left edge. */
+  board.scrollLeft = parseFloat(board.dataset.home || "0") - board.clientWidth / 2;
+
+  var grab = null;
+  var dragged = false;
+  board.addEventListener("pointerdown", function (event) {
+    /* A drag that ended over nothing fires no click to clear the flag, and a
+       flag left set would swallow the next real one. */
+    dragged = false;
+    /* Touch and trackpad already pan this box; only the mouse needs help. */
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    grab = {
+      x: event.clientX, y: event.clientY,
+      left: board.scrollLeft, top: board.scrollTop,
+      moved: false
+    };
+  });
+  board.addEventListener("pointermove", function (event) {
+    if (!grab) return;
+    var dx = event.clientX - grab.x, dy = event.clientY - grab.y;
+    /* A few pixels of slop, so a click on a topic is still a click. */
+    if (!grab.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+    if (!grab.moved) {
+      grab.moved = true;
+      board.classList.add("panning");
+      board.setPointerCapture(event.pointerId);
+    }
+    board.scrollLeft = grab.left - dx;
+    board.scrollTop = grab.top - dy;
+    event.preventDefault();
+  });
+  function release() {
+    dragged = !!(grab && grab.moved);
+    grab = null;
+    board.classList.remove("panning");
+  }
+  board.addEventListener("pointerup", release);
+  board.addEventListener("pointercancel", release);
+  /* Ending a drag over a topic must not also open it. */
+  board.addEventListener("click", function (event) {
+    if (!dragged) return;
+    dragged = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+})();
+</script>
 {% endif %}
 {% endblock %}

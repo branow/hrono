@@ -17,14 +17,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from hrono.registry.descriptor import Descriptor
+from hrono.registry.descriptor import Descriptor, RegistryName
 from hrono.registry.validation.model_validation import validate_model
 
 SummarisationRole = Literal["condense", "brief", "brief-upper", "judge"]
 
 
 class Model(BaseModel):
-    name: str
+    name: RegistryName
     kind: Literal["text", "embedding"]
     connection: str | None = None
     model: str

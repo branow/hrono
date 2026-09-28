@@ -23,7 +23,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
-from hrono.registry.descriptor import Descriptor
+from hrono.registry.descriptor import Descriptor, RegistryName
 from hrono.registry.validation.source_validation import validate_source
 
 RESERVED_PREFIX = "node-"
@@ -54,7 +54,7 @@ def _reject_reserved(value: str) -> str:
 
 
 class GitSource(BaseModel):
-    name: str
+    name: RegistryName
     type: Literal["git"]
     url: str
     auth: GitAuth
@@ -71,7 +71,7 @@ class GithubUserSource(BaseModel):
     to every discovered clone unchanged.
     """
 
-    name: str
+    name: RegistryName
     type: Literal["github-user"]
     owner: str
     auth: GitAuth
@@ -91,7 +91,7 @@ class BitbucketWorkspaceSource(BaseModel):
     lets the tables dispatch without a second branch inside them.
     """
 
-    name: str
+    name: RegistryName
     type: Literal["bitbucket-workspace"]
     owner: str
     auth: GitAuth
@@ -121,7 +121,7 @@ class Selector(BaseModel):
 class ConfluenceSource(BaseModel):
     """Pages from a confluence site, narrowed by a union of selectors (T42)."""
 
-    name: str
+    name: RegistryName
     type: Literal["confluence"]
     base_url: str
     auth: BasicAuth
@@ -145,7 +145,7 @@ class NotionSource(BaseModel):
     bound and the selectors only narrow it.
     """
 
-    name: str
+    name: RegistryName
     type: Literal["notion"]
     auth: TokenAuth
     scope: list[Selector] | None = None

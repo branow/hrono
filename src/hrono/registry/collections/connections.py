@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, RootModel
 
-from hrono.registry.descriptor import Descriptor
+from hrono.registry.descriptor import Descriptor, RegistryName
 from hrono.registry.validation.connection_validation import validate_connection
 
 
@@ -31,28 +31,28 @@ class OptionalKeyAuth(BaseModel):
 
 
 class AnthropicConnection(BaseModel):
-    name: str
+    name: RegistryName
     provider: Literal["anthropic"]
     auth: ApiKeyAuth
     endpoint: str | None = None
 
 
 class OpenAIConnection(BaseModel):
-    name: str
+    name: RegistryName
     provider: Literal["openai"]
     auth: ApiKeyAuth
     endpoint: str | None = None
 
 
 class OpenAICompatibleConnection(BaseModel):
-    name: str
+    name: RegistryName
     provider: Literal["openai-compatible"]
     endpoint: str
     auth: OptionalKeyAuth
 
 
 class ClaudeCodeConnection(BaseModel):
-    name: str
+    name: RegistryName
     provider: Literal["claude-code"]
     auth: NoneAuth
 

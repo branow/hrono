@@ -14,13 +14,14 @@ from pydantic import BaseModel
 
 from hrono.registry.descriptor import (
     Descriptor,
+    RegistryName,
     ValidationContext,
     ValidationFailed,
 )
 
 
 class Prompt(BaseModel):
-    name: str
+    name: RegistryName
     role: Literal["condense", "brief", "brief-upper", "judge"]
     template: str
 

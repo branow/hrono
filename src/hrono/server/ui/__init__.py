@@ -174,5 +174,6 @@ from hrono.server.ui import (  # noqa: E402, F401
     nodes,
     overview,
     session,
+    settings,
     views,
 )

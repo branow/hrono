@@ -1,6 +1,6 @@
-"""The read-only views: config, activity, triage and the map.
+"""The read-only views: activity, triage and the map.
 
-Four pages that answer "what is in here" and "what needs attention", sharing
+Three pages that answer "what is in here" and "what needs attention", sharing
 one shape — read under one connection, render, write nothing. The map's expand
 state and edge overlays ride in the URL rather than in the page, which is what
 makes every view of it shareable (#183, #184).
@@ -15,7 +15,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
 from hrono.db import update_log
-from hrono.server import config_view, graph, overlays, triage
+from hrono.server import graph, overlays, panel, triage
 from hrono.server.ui import Reader, _trees, router, templates
 
 _LIVE = frozenset({"pending", "running", "partial"})
@@ -23,31 +23,6 @@ _LIVE = frozenset({"pending", "running", "partial"})
 # Enough to recognise a section, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
-
-
-@router.get("/ui/config", response_class=HTMLResponse)
-def config_page(request: Request, user: Reader, tree: str = "") -> Response:
-    """Every registry collection, with secrets masked.
-
-    Masked through the registry's OWN `mask()`, not a second redaction here: it
-    reads each collection's declared `secret_paths` (#142), so a source type
-    whose credential moves is masked by declaring the new path — and there is
-    no second place that can forget to.
-    """
-    with request.app.state.db.connect() as conn:
-        trees = _trees(conn)
-        collections = config_view.tables(conn)
-    return templates.TemplateResponse(
-        request,
-        "config.html",
-        {
-            "user": user,
-            "trees": trees,
-            "tree": tree if tree in trees else trees[0],
-            "collections": collections,
-            "can_write": user.role in {"writer", "admin"},
-        },
-    )
 
 
 @router.get("/ui/trees/{tree}/activity", response_class=HTMLResponse)
@@ -123,15 +98,18 @@ def graph_page(
     open: str = "",
     edges: str = "",
     done: str = "",
+    focus: str = "",
 ) -> Response:
     """The tree, drawn — and every view of it is a URL.
 
     The expand state rides in `open` rather than in the page, so a graph
     someone is looking at can be pasted to someone else. It is also why this
-    needs no JavaScript: toggling is a link.
+    needs no JavaScript: toggling is a link, and so is reading a topic —
+    `focus` opens the panel beside the map on the server (#199).
     """
     opened = _opened(open)
     kinds = overlays.parse(edges)
+    wanted = int(focus) if focus.strip().isdigit() else 0
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         drawn = graph.build(conn, tree, sorted(opened))
@@ -139,6 +117,7 @@ def graph_page(
             conn, tree, [node.id for node in drawn.nodes], kinds
         )
         branches = _branches(conn, tree)
+        focused = panel.build(conn, tree, wanted) if wanted else None
     return templates.TemplateResponse(
         request,
         "graph.html",
@@ -148,26 +127,47 @@ def graph_page(
             "tree": tree,
             "graph": {
                 "nodes": [
-                    _with_toggle(node, tree, opened) for node in drawn.nodes
+                    _with_toggle(node, tree, opened, open, edges, wanted)
+                    for node in drawn.nodes
                 ],
                 "edges": drawn.edges,
                 "width": drawn.width,
                 "height": drawn.height,
+                "home": _home(drawn, wanted),
                 "shown": len(drawn.nodes),
-                "expand_all": _graph_url(tree, _every(branches), edges),
-                "collapse_all": _graph_url(tree, "", edges),
+                "expand_all": _graph_url(
+                    tree, _every(branches), edges, focus=focus
+                ),
+                "collapse_all": _graph_url(tree, "", edges, focus=focus),
             },
             "overlay": {
                 "links": _drawn_links(overlay, drawn),
                 "unavailable": overlay.unavailable,
-                "toggles": _edge_toggles(tree, open, kinds),
+                "toggles": _edge_toggles(tree, open, kinds, focus),
             },
+            "panel": focused,
+            # closing the panel is the same map without it, which keeps the
+            # expand state and the overlays the reader had set up
+            "unfocus": _graph_url(tree, open, edges),
             # a dissolve lands here rather than on the topic it just retired,
             # so this page is where its outcome has to be said
             "done": done,
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+def _home(drawn: graph.Graph, focused: int) -> float:
+    """Where the board should be looking when the page arrives.
+
+    The canvas is as wide as the tree, so its left edge is an arbitrary place
+    to land. The root is the non-arbitrary one — except when a topic is being
+    read, where the one the reader just clicked is.
+    """
+    for node in drawn.nodes:
+        if node.id == focused:
+            return node.x
+    return drawn.home
 
 
 def _branches(conn: object, tree: str) -> set[int]:
@@ -191,7 +191,7 @@ def _every(branches: set[int]) -> str:
     return ",".join(str(node) for node in sorted(branches))
 
 
-def _graph_url(tree: str, opened: str, edges: str) -> str:
+def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
     query = urlencode(
         {
             key: value
@@ -199,6 +199,7 @@ def _graph_url(tree: str, opened: str, edges: str) -> str:
                 ("tree", tree),
                 ("open", opened),
                 ("edges", edges),
+                ("focus", focus),
             )
             if value
         },
@@ -232,7 +233,7 @@ def _drawn_links(
 
 
 def _edge_toggles(
-    tree: str, open: str, kinds: Sequence[str]
+    tree: str, open: str, kinds: Sequence[str], focus: str = ""
 ) -> list[dict[str, object]]:
     """One on/off link per overlay, keeping the expand state.
 
@@ -256,6 +257,7 @@ def _edge_toggles(
                     ("tree", tree),
                     ("open", open),
                     ("edges", ",".join(rest)),
+                    ("focus", focus),
                 )
                 if v
             },
@@ -286,16 +288,29 @@ def _opened(raw: str) -> set[int]:
 
 
 def _with_toggle(
-    node: object, tree: str, opened: set[int]
+    node: object,
+    tree: str,
+    opened: set[int],
+    open: str,
+    edges: str,
+    focused: int,
 ) -> dict[str, object]:
-    """Each node carries the URL that opens or closes it."""
+    """Each node carries the URL that opens it, and the one that reads it.
+
+    Reading a topic is `?focus=` on the map rather than a link to the topic
+    page: the question a click asks is about a topic IN its tree, and
+    answering it somewhere the tree is not visible throws the question away
+    (#199). The topic page is one link further on, in the panel.
+    """
     node_id = node.id  # type: ignore[attr-defined]
     after = opened - {node_id} if node_id in opened else opened | {node_id}
     query = ",".join(str(value) for value in sorted(after))
+    focus = "" if node_id == focused else str(node_id)
     return {
         "id": node_id,
         "where": node.where,  # type: ignore[attr-defined]
         "label": node.label,  # type: ignore[attr-defined]
+        "spread": node.spread,  # type: ignore[attr-defined]
         "title": node.title,  # type: ignore[attr-defined]
         "holds": node.holds,  # type: ignore[attr-defined]
         "holds_what": node.holds_what,  # type: ignore[attr-defined]
@@ -303,8 +318,13 @@ def _with_toggle(
         "stale": node.stale,  # type: ignore[attr-defined]
         "has_children": node.has_children,  # type: ignore[attr-defined]
         "has_hidden_children": node.has_hidden_children,  # type: ignore[attr-defined]
+        "focused": node_id == focused,
         "x": node.x,  # type: ignore[attr-defined]
         "y": node.y,  # type: ignore[attr-defined]
         "radius": round(node.radius, 1),  # type: ignore[attr-defined]
-        "toggle": f"/ui/trees/{tree}/graph?tree={tree}&open={query}",
+        "toggle": f"/ui/trees/{tree}/graph?tree={tree}&open={query}"
+        + (f"&focus={focused}" if focused else ""),
+        # clicking the focused topic again closes its panel, so the disc is a
+        # toggle like everything else on this page
+        "read": _graph_url(tree, open, edges, focus=focus),
     }

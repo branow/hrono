@@ -136,8 +136,8 @@ def test_opening_the_root_draws_its_children(browser: Browser) -> None:
     page = browser.map(open=str(browser.ids["root"]))
 
     assert page.count('class="disc"') == 3
-    assert f"/nodes/{browser.ids['big']}" in page
-    assert f"/nodes/{browser.ids['small']}" in page
+    assert f"focus={browser.ids['big']}" in page
+    assert f"focus={browser.ids['small']}" in page
     assert page.count('class="edge"') == 2  # root to each child
 
 
@@ -192,13 +192,16 @@ def test_toggling_is_a_link_so_a_view_can_be_shared(
     # opened: the same link now REMOVES it, so the toggle really toggles
     assert f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open="' in opened
     # and a LEAF carries no toggle at all — there is nothing under it to
-    # open — only the link to its own page
+    # open — only the link that reads it
     assert (
         f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;'
         f"open={min(root, browser.ids['big'])},"
         f'{max(root, browser.ids["big"])}"' not in opened
     )
-    assert f"/nodes/{browser.ids['big']}" in opened
+    assert (
+        f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open={root}'
+        f'&amp;focus={browser.ids["big"]}"' in opened
+    )
 
 
 def test_an_empty_tree_says_so_rather_than_drawing_nothing(
@@ -209,7 +212,10 @@ def test_an_empty_tree_says_so_rather_than_drawing_nothing(
     page = browser.client.get("/ui/trees/empty/graph").text
 
     assert "has no topics yet" in page
-    assert '<div class="canvas">' not in page  # no empty canvas is drawn
+    # no empty canvas is drawn — and the map that HAS one proves the marker
+    # this looks for is the one the board really carries
+    assert '<div class="canvas"' not in page
+    assert '<div class="canvas"' in browser.map()
 
 
 def test_a_hand_edited_open_parameter_cannot_break_the_page(
@@ -241,7 +247,7 @@ def test_more_than_one_root_is_drawn(browser: Browser) -> None:
     assert browser.map().count('class="disc"') == 2
 
 
-def test_a_topic_is_labelled_by_where_its_chunks_live(
+def test_a_topic_is_labelled_by_where_its_sections_live(
     browser: Browser,
 ) -> None:
     """#198: a weak model gives every topic the same brief, so the brief
@@ -253,7 +259,7 @@ def test_a_topic_is_labelled_by_where_its_chunks_live(
     by_id = {node.id: node for node in drawn.nodes}
     assert by_id[browser.ids["big"]].where == "src/hrono/db"
     assert by_id[browser.ids["small"]].where == "tests/cluster"
-    # an upper topic has no chunks of its own, so it takes its descendants':
+    # an upper topic has no sections of its own, so it takes its descendants':
     # six of the seven below this root are the database
     assert by_id[browser.ids["root"]].where == "src/hrono/db"
 
@@ -278,9 +284,39 @@ def test_one_directory_holding_most_of_a_topic_names_it(
     assert by_id[browser.ids["big"]].where == "src/hrono/db"
 
 
-def test_a_topic_no_directory_holds_is_named_by_what_it_straddles(
+def test_a_straddling_topic_names_the_two_directories_and_their_shares(
     browser: Browser,
 ) -> None:
+    """#199: it named the two ROOTS, which is `src + tests` — the least
+    telling segment of either path, and it landed on the two biggest topics
+    on the map. Each side is descended as far as IT is dominated instead."""
+    from hrono.server.graph import build
+
+    with browser.conn:  # type: ignore[union-attr]
+        for index in range(3):
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "UPDATE sections SET path = ? WHERE path = ?",
+                (f"tests/cluster/b{index}.py", f"src/hrono/db/b{index}.py"),
+            )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
+    # three and three: no directory holds it, so the label says both — at the
+    # depth each of them IS held, not at their roots
+    assert big.where == "src/hrono/db + tests/cluster"
+    # and the proportions that make it a straddle are disclosed rather than
+    # implied, because a 50/50 topic and a 59/41 one read the same otherwise
+    assert big.spread == "src/hrono/db 50% · tests/cluster 50%"
+
+
+def test_two_directories_of_the_SAME_NAME_are_said_once(
+    browser: Browser,
+) -> None:
+    """`src/hrono/db + tests/db` is thirty-one characters in an eighteen
+    character slot, and halved it becomes two stubs naming nothing. When both
+    sides end in the same directory, that directory is the subject and the
+    roots are what differ."""
     from hrono.server.graph import build
 
     with browser.conn:  # type: ignore[union-attr]
@@ -292,9 +328,67 @@ def test_a_topic_no_directory_holds_is_named_by_what_it_straddles(
 
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
-    by_id = {node.id: node for node in drawn.nodes}
-    # three and three: no directory holds it, so the label says both
-    assert by_id[browser.ids["big"]].where in ("src + tests", "tests + src")
+    big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
+    assert big.where == "db: src+tests"
+    assert big.label == big.where  # short enough to reach the slot whole
+
+
+def test_the_one_root_of_a_tree_says_that_is_what_it_is(
+    browser: Browser,
+) -> None:
+    """#199: the root straddles by construction, so it wore `src + tests` —
+    the first label anyone reads, saying nothing. It is not straddling two
+    things, it is everything."""
+    from hrono.server.graph import build
+
+    with browser.conn:  # type: ignore[union-attr]
+        for index in range(3):
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "UPDATE sections SET path = ? WHERE path = ?",
+                (f"tests/db/b{index}.py", f"src/hrono/db/b{index}.py"),
+            )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    root = next(node for node in drawn.nodes if node.id == browser.ids["root"])
+    assert root.where == "whole tree"
+    # and what it spans is still said, in the tooltip and the panel
+    assert "%" in root.spread and "src/hrono/db" in root.spread
+
+
+def test_a_topic_one_directory_holds_discloses_no_spread(
+    browser: Browser,
+) -> None:
+    """A share is only worth printing where the label had to name two places;
+    on `src/hrono/db` it would be `100%`, which is noise."""
+    from hrono.server.graph import build
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
+    assert big.where == "src/hrono/db"
+    assert big.spread == ""
+
+
+def test_a_straddle_too_wide_for_the_slot_keeps_BOTH_sides(
+    browser: Browser,
+) -> None:
+    """Cutting it as one string drops the whole of the second side."""
+    from hrono.server.graph import LABEL_CHARS, build
+
+    with browser.conn:  # type: ignore[union-attr]
+        for index in range(3):
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "UPDATE sections SET path = ? WHERE path = ?",
+                (f"tests/cluster/b{index}.py", f"src/hrono/db/b{index}.py"),
+            )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
+    assert len(big.where) > LABEL_CHARS  # the pair does not fit
+    assert len(big.label) <= LABEL_CHARS
+    assert big.label == "db + cluster"
 
 
 def test_a_long_label_is_cut_from_the_front_to_fit_its_slot(
@@ -380,12 +474,14 @@ def test_the_canvas_starts_where_the_drawing_starts(
     assert blank <= MAX_RADIUS
 
 
-def test_children_WRAP_instead_of_running_off_the_page(
+def test_siblings_STAY_ON_ONE_LEVEL_however_many_there_are(
     browser: Browser,
 ) -> None:
-    """#198: twenty-six siblings on one row was 4,000px of canvas and three
-    screenfuls. They are packed into rows the page can hold instead."""
-    from hrono.server.graph import GUTTER, PAD, ROW_WIDTH, SLOT, build
+    """#199: a wide family used to WRAP onto further rows so the map fitted
+    one window. That puts a topic's right-hand subtree UNDER its left-hand
+    one, and two subtrees stacked read as one beneath the other rather than
+    as siblings. The canvas gets as wide as the tree instead."""
+    from hrono.server.graph import SLOT, build
 
     with browser.conn:  # type: ignore[union-attr]
         for index in range(14):
@@ -411,16 +507,12 @@ def test_children_WRAP_instead_of_running_off_the_page(
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
     assert len(drawn.nodes) == 17  # the root and sixteen leaves
-    rows: dict[float, int] = {}
-    for node in drawn.nodes:
-        rows[node.y] = rows.get(node.y, 0) + 1
-    assert len(rows) >= 4  # the root, and its children over three rows
-    assert max(rows.values()) <= ROW_WIDTH / SLOT  # wrapped BY WIDTH
-    assert drawn.width <= ROW_WIDTH + 2 * PAD  # and the page still holds it
-    # a block that wrapped keeps a lane down its left: the connector into the
-    # second row runs there, and a line drawn between the rows instead would
-    # be read through their names
-    assert min(node.x for node in drawn.nodes) >= PAD + GUTTER + SLOT / 2
+    kids = [node for node in drawn.nodes if node.id != browser.ids["root"]]
+    assert len({node.y for node in kids}) == 1  # all on the same level
+    assert len({node.x for node in kids}) == len(kids)  # each its own column
+    # and the canvas grew to hold them rather than folding them under one
+    # another: sixteen slots is wider than any window this is drawn in
+    assert drawn.width >= SLOT * len(kids)
 
 
 def test_the_canvas_is_only_as_deep_as_what_is_DRAWN(
@@ -465,48 +557,139 @@ def _child_of(browser: Browser, parent: int) -> int:
 _child_of.n = 0  # type: ignore[attr-defined]
 
 
-def test_a_connector_that_travels_past_other_topics_is_marked(
+def test_every_child_is_joined_to_its_parent_by_ONE_connector(
     browser: Browser,
 ) -> None:
-    """#197: it looked like a box drawn around the topics it passed.
-
-    A connector to a wrapped row steps out, drops and comes back. At the same
-    weight as an ordinary connector those three runs read as a container
-    around whatever sits inside them — a grouping the tree does not have.
-    """
-    from hrono.server.graph import ROW_WIDTH, SLOT, build
-
+    """A connector per child, never a line to nowhere — the wide layout has
+    to keep that as the row it draws grows."""
     root = _root(browser)
     with browser.conn:  # type: ignore[union-attr]
-        for _ in range(int(ROW_WIDTH // SLOT) + 2):
+        for _ in range(9):
             _child_of(browser, root)
 
-    drawn = build(browser.conn, TREE, [root])  # type: ignore[arg-type]
+    drawn = graph.build(browser.conn, TREE, [root])  # type: ignore[arg-type]
 
-    assert any(line.past for line in drawn.edges)  # the wrapped row
-    assert any(not line.past for line in drawn.edges)  # the first row
-
-
-def test_a_tree_that_does_not_wrap_marks_nothing(browser: Browser) -> None:
-    # nothing to travel past, so nothing is drawn subordinate
-    drawn = graph.build(browser.conn, TREE, [_root(browser)])  # type: ignore[arg-type]
-
-    assert not any(line.past for line in drawn.edges)
+    assert len(drawn.edges) == len(drawn.nodes) - 1
+    assert all(line.startswith("M") for line in drawn.edges)
 
 
-def test_the_marked_connectors_are_the_ones_drawn_faint(
+def test_the_board_opens_on_the_ROOT_not_on_its_left_edge(
     browser: Browser,
 ) -> None:
-    """The mark has to reach the page, or it decorates nothing."""
-    from hrono.server.graph import ROW_WIDTH, SLOT
-
+    """#199: a canvas as wide as the tree has no meaningful left edge, and
+    landing there puts the reader in a corner of a map whose subject is in
+    the middle."""
     root = _root(browser)
     with browser.conn:  # type: ignore[union-attr]
-        for _ in range(int(ROW_WIDTH // SLOT) + 2):
+        for _ in range(9):
+            _child_of(browser, root)
+
+    drawn = graph.build(browser.conn, TREE, [root])  # type: ignore[arg-type]
+
+    placed = next(node for node in drawn.nodes if node.id == root)
+    assert drawn.home == placed.x
+    # and that is not where a scroll box starts on its own
+    assert drawn.home > drawn.width / 4
+
+
+def test_where_the_board_opens_REACHES_the_page(browser: Browser) -> None:
+    """A number the page does not carry cannot move anything."""
+    root = _root(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        for _ in range(9):
             _child_of(browser, root)
     browser.sign_in()
 
     page = browser.map(str(root))
+    drawn = graph.build(browser.conn, TREE, [root])  # type: ignore[arg-type]
 
-    assert 'class="edge past"' in page
-    assert "svg .edge.past" in page  # and the rule that makes it subordinate
+    assert f'data-home="{drawn.home}"' in page
+
+
+def test_reading_a_topic_opens_a_PANEL_and_leaves_the_map_drawn(
+    browser: Browser,
+) -> None:
+    """#199: clicking a topic navigated away from the tree, which throws
+    away the thing the click was asking about."""
+    browser.sign_in()
+    big, root = browser.ids["big"], browser.ids["root"]
+
+    page = browser.client.get(
+        f"/ui/trees/{TREE}/graph?open={root}&focus={big}"
+    ).text
+
+    assert '<aside class="panel"' in page
+    assert "Signing modules." in page  # its brief, read beside the map
+    assert "src/hrono/db/b0.py" in page  # and what it is made of
+    assert page.count('class="disc"') == 3  # the map is still all there
+
+
+def test_the_panel_keeps_the_way_to_the_controls_that_CHANGE_a_topic(
+    browser: Browser,
+) -> None:
+    """The edits are admin-gated on the topic page; copying the forms here
+    would be a second, weaker place for the same permission rule."""
+    browser.sign_in()
+    big = browser.ids["big"]
+
+    page = browser.client.get(f"/ui/trees/{TREE}/graph?focus={big}").text
+
+    assert f'href="/ui/trees/{TREE}/nodes/{big}?tree={TREE}"' in page
+    assert "/rename" not in page  # no edit form was duplicated into the map
+    assert "/dissolve" not in page
+
+
+def test_the_panel_closes_back_to_the_map_it_was_opened_from(
+    browser: Browser,
+) -> None:
+    """Closing must not also throw away the expand state and the overlays
+    the reader had set up to ask the question."""
+    browser.sign_in()
+    big, root = browser.ids["big"], browser.ids["root"]
+
+    page = browser.client.get(
+        f"/ui/trees/{TREE}/graph?open={root}&edges=pull&focus={big}"
+    ).text
+
+    # anchored to the CLOSE control. The focused topic's own disc links to
+    # the same place — clicking it again closes the panel too — so a bare
+    # search for the URL passes with no close button on the page at all
+    assert (
+        f'href="/ui/trees/{TREE}/graph?tree={TREE}'
+        f'&amp;open={root}&amp;edges=pull" aria-label="Close the panel"'
+    ) in page
+
+
+def test_a_focus_on_a_topic_that_is_not_there_draws_no_panel(
+    browser: Browser,
+) -> None:
+    """A focus is a VIEW of the map, and a view cannot be invalid: a stale
+    link draws the map, never an error page over it."""
+    browser.sign_in()
+
+    answer = browser.client.get(f"/ui/trees/{TREE}/graph?focus=99999")
+
+    assert answer.status_code == 200
+    # the MARKUP, not the word: the stylesheet names `.panel` on every page
+    assert '<aside class="panel"' not in answer.text
+    assert (
+        '<aside class="panel"'
+        in browser.client.get(
+            f"/ui/trees/{TREE}/graph?focus={browser.ids['big']}"
+        ).text
+    )
+
+
+def test_an_upper_topic_in_the_panel_lists_the_topics_under_it(
+    browser: Browser,
+) -> None:
+    """A topic that holds topics has no sections to show, and listing none
+    would say it was empty."""
+    browser.sign_in()
+    root = browser.ids["root"]
+
+    page = browser.client.get(f"/ui/trees/{TREE}/graph?focus={root}").text
+
+    assert "2 topics" in page
+    assert f"focus={browser.ids['big']}" in page
+    assert f"focus={browser.ids['small']}" in page

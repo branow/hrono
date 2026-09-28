@@ -7,6 +7,7 @@ it happened is a question for `node_members`, `node_children` and `pins`.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -151,41 +152,73 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     conn.close()
 
 
+def _form(page: str, action: str) -> str:
+    """The one form that posts to `action`, markup and all."""
+    assert f'{action}"' in page, f"no form posts to {action}"
+    return page.split(f'{action}"', 1)[1].split("</form>", 1)[0]
+
+
+def _offered(page: str, action: str, field: str) -> set[int]:
+    """Every topic that form offers to pick, by id."""
+    return {
+        int(value)
+        for value in re.findall(
+            rf'name="{field}" value="(\d+)"', _form(page, action)
+        )
+    }
+
+
 def test_the_parent_choices_are_exactly_one_level_up(
     browser: Browser,
 ) -> None:
     """Offer the right options and the rule never has to be explained.
 
     `reparent` refuses a parent that is not exactly one level up. An operator
-    typing an id learns that from a refusal; a select cannot offer it.
+    typing an id learns that from a refusal; a picker cannot offer it.
     """
-    a, b, _ = browser.leaves
+    a, _, _ = browser.leaves
     left, right = browser.uppers
     browser.sign_in()
 
-    page = browser.page(a)
-
-    assert f'<option value="{left}"' in page
-    assert f'<option value="{right}"' in page
-    assert 'name="to">' in page
-    # never a leaf, and never the topic itself
-    assert (
-        f'<option value="{b}"'
-        not in page.split('name="to"')[1].split("</select>")[0]
-    )
+    # exactly the level above: never a leaf, never the topic itself
+    assert _offered(browser.page(a), f"/nodes/{a}/reparent", "to") == {
+        left,
+        right,
+    }
 
 
 def test_the_merge_choices_are_exactly_the_same_level(
     browser: Browser,
 ) -> None:
     a, b, c = browser.leaves
+    left, _ = browser.uppers
     browser.sign_in()
 
-    offered = browser.page(a).split('name="with"')[1].split("</select>")[0]
+    offered = _offered(browser.page(a), f"/nodes/{a}/merge", "with")
 
-    assert f'value="{b}"' in offered
-    assert f'value="{c}"' in offered
-    assert f'value="{a}"' not in offered  # not itself
+    assert offered == {b, c}  # its own level, and not itself
+    assert left not in offered
+
+
+def test_a_candidate_topic_says_what_it_holds_and_links_to_it(
+    browser: Browser,
+) -> None:
+    """#199: "topic 2, topic 3" is a list of row ids; nobody merges into one.
+
+    A picker has to answer "what IS that topic" where it is asked, and let
+    an operator go and look before they fold two topics together.
+    """
+    a, b, c = browser.leaves
+    browser.sign_in()
+
+    offered = _form(browser.page(a), f"/nodes/{a}/merge")
+
+    for candidate in (b, c):
+        # a way to go and see it, and what it holds, beside its number
+        assert f'href="/ui/trees/{TREE}/nodes/{candidate}?tree={TREE}"' in (
+            offered
+        )
+    assert ">1 section</span>" in offered
 
 
 def test_a_reparent_moves_the_topic_and_pins_it(browser: Browser) -> None:
@@ -342,13 +375,27 @@ def test_a_move_that_empties_a_topic_says_so(browser: Browser) -> None:
 
 
 def test_a_writer_sees_no_surgery(browser: Browser) -> None:
-    a, _, _ = browser.leaves
+    """A form ACTION is what a control is; a label is what it is called.
+
+    This asked about two labels that had already been reworded, so it passed
+    on a page that offered every one of these forms.
+    """
+    a, b, _ = browser.leaves
+    chunk = min(browser.members_of(a))
     browser.sign_in("writer")
 
     page = browser.page(a)
 
-    assert "merge with" not in page
-    assert "move to" not in page
+    for action in (
+        f"/nodes/{a}/merge",
+        f"/nodes/{a}/reparent",
+        f"/nodes/{a}/dissolve",
+        f"/nodes/{a}/split",
+        f"/sections/{chunk}/move",
+    ):
+        assert action not in page
+    # nor the ids it would have posted, in a picker or a menu
+    assert f'value="{b}"' not in page
 
 
 def test_every_surgery_route_refuses_a_writer(browser: Browser) -> None:
