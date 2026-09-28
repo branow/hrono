@@ -61,10 +61,14 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     reconcile(conn, KEY)
     token = create_user(conn, "admin", "admin")[1]
     with conn:
-        core = _section(conn, "core.md", b"<script>alert(1)</script> core\n")
-        edge = _section(conn, "edge.md", b"E" * 2000)
-        worse = _section(conn, "worse.md", b"the worst fitting chunk\n")
-        pushed = _section(conn, "pushed.md", b"a forced member\n")
+        core = _section(
+            conn, "docs/sign/core.md", b"<script>alert(1)</script> core\n"
+        )
+        edge = _section(conn, "docs/sign/edge.md", b"E" * 2000)
+        worse = _section(
+            conn, "docs/sign/worse.md", b"the worst fitting chunk\n"
+        )
+        pushed = _section(conn, "docs/sign/pushed.md", b"a forced member\n")
         node = cluster_store.add_leaf_node(
             conn,
             TREE,
@@ -136,14 +140,21 @@ def test_members_are_worst_fit_first_with_core_last(
     browser.sign_in()
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
-    order = re.findall(r'class="path">([^<]+)</span>', page)
+    # the path is drawn in two parts — the directory it shares with its topic,
+    # then what tells it apart — so the row is rebuilt from both
+    order = [
+        stem + tail
+        for stem, tail in re.findall(
+            r'class="path"><span class="dim">([^<]*)</span>([^<]+)</span>', page
+        )
+    ]
 
     assert order == [
-        "worse.md",  # 0.72, the least likely to belong
-        "edge.md",  # 0.80
+        "docs/sign/worse.md",  # 0.72, the least likely to belong
+        "docs/sign/edge.md",  # 0.80
         # then the unscored, by id: a confident core and a forced placement
-        "core.md",
-        "pushed.md",
+        "docs/sign/core.md",
+        "docs/sign/pushed.md",
     ]
 
 
@@ -255,11 +266,13 @@ def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
 
     page = browser.node(node).text  # type: ignore[attr-defined]
 
-    # the HEADING, not the page: the chunk previews carry their own ellipsis,
-    # so asking whether the page contains one proves nothing about the title
-    heading = re.search(r"<h1>(.*?)</h1>", page, re.S)
-    assert heading is not None
-    title = heading.group(1)
+    # the NAME, not the page: the chunk previews carry their own ellipsis, so
+    # asking whether the page contains one proves nothing about the title.
+    # The h1 is the path the topic's chunks live under (#198); the brief's
+    # first line is the secondary identity under it.
+    said = re.search(r'<p class="said">(.*?)</p>', page, re.S)
+    assert said is not None
+    title = said.group(1).strip()
     assert title.endswith("…")  # an ellipsis, not a hard stop
     # and the cut respects a word: the character AFTER the stem, in the
     # original, is a space. A hard 80-character cut lands inside "together".

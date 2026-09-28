@@ -107,7 +107,7 @@ def test_every_collection_is_listed(browser: Browser) -> None:
     page = browser.config()
 
     for collection in ("sources", "connections", "models", "prompts", "trees"):
-        assert f">{collection}</h2>" in page
+        assert f"<h2>{collection}<" in page
 
 
 def test_a_configured_item_is_shown(browser: Browser) -> None:

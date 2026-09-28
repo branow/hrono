@@ -70,10 +70,13 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         big = cluster_store.add_leaf_node(
             conn,
             TREE,
-            [(_section(conn, f"b{i}.md"), False, None) for i in range(6)],
+            [
+                (_section(conn, f"src/hrono/db/b{i}.py"), False, None)
+                for i in range(6)
+            ],
         )
         small = cluster_store.add_leaf_node(
-            conn, TREE, [(_section(conn, "s0.md"), False, None)]
+            conn, TREE, [(_section(conn, "tests/cluster/s0.py"), False, None)]
         )
         briefs.upsert(
             conn,
@@ -238,51 +241,199 @@ def test_more_than_one_root_is_drawn(browser: Browser) -> None:
     assert browser.map().count('class="disc"') == 2
 
 
-def test_a_label_fits_inside_its_column(browser: Browser) -> None:
-    """#197: labels ran the full width of a column and collided with the
-    next one, so three adjacent topics read as one run of text."""
-    from hrono.server.graph import LABEL_CHARS, build
+def test_a_topic_is_labelled_by_where_its_chunks_live(
+    browser: Browser,
+) -> None:
+    """#198: a weak model gives every topic the same brief, so the brief
+    cannot be the label. The files underneath do not lie."""
+    from hrono.server.graph import build
 
-    long_title = "This group covers the whole of the ingest pipeline"
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    by_id = {node.id: node for node in drawn.nodes}
+    assert by_id[browser.ids["big"]].where == "src/hrono/db"
+    assert by_id[browser.ids["small"]].where == "tests/cluster"
+    # an upper topic has no chunks of its own, so it takes its descendants':
+    # six of the seven below this root are the database
+    assert by_id[browser.ids["root"]].where == "src/hrono/db"
+
+
+def test_one_directory_holding_most_of_a_topic_names_it(
+    browser: Browser,
+) -> None:
+    """The STRICT common prefix collapses to `src` for a topic that is
+    obviously the database, so the label is the dominant directory."""
+    from hrono.server.graph import build
+
     with browser.conn:  # type: ignore[union-attr]
         browser.conn.execute(  # type: ignore[attr-defined]
-            "UPDATE nodes SET title = ? WHERE id = ?",
-            (long_title, _root(browser)),
+            "UPDATE sections SET path = ? WHERE path = ?",
+            ("src/hrono/embed/stray.py", "src/hrono/db/b0.py"),
         )
 
-    drawn = build(browser.conn, TREE, [])  # type: ignore[arg-type]
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
-    label = drawn.nodes[0].title
-    assert len(label) <= LABEL_CHARS
-    assert label.endswith("…")
-    assert long_title.startswith(label.removesuffix("…"))
+    by_id = {node.id: node for node in drawn.nodes}
+    # five of six are still under src/hrono/db, which is over the share
+    assert by_id[browser.ids["big"]].where == "src/hrono/db"
+
+
+def test_a_topic_no_directory_holds_is_named_by_what_it_straddles(
+    browser: Browser,
+) -> None:
+    from hrono.server.graph import build
+
+    with browser.conn:  # type: ignore[union-attr]
+        for index in range(3):
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "UPDATE sections SET path = ? WHERE path = ?",
+                (f"tests/db/b{index}.py", f"src/hrono/db/b{index}.py"),
+            )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    by_id = {node.id: node for node in drawn.nodes}
+    # three and three: no directory holds it, so the label says both
+    assert by_id[browser.ids["big"]].where in ("src + tests", "tests + src")
+
+
+def test_a_long_label_is_cut_from_the_front_to_fit_its_slot(
+    browser: Browser,
+) -> None:
+    """#197/#198: a label wider than its slot collides with its neighbour's,
+    and cutting a PATH at the tail leaves the half every topic shares."""
+    from hrono.server.graph import LABEL_CHARS, build
+
+    deep = "src/hrono/server/templates/partials"
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE sections SET path = ? WHERE path = ?",
+            (f"{deep}/s0.py", "tests/cluster/s0.py"),
+        )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    small = next(
+        node for node in drawn.nodes if node.id == browser.ids["small"]
+    )
+    assert small.where == deep  # the whole path is still there to hover
+    assert len(small.label) <= LABEL_CHARS
+    assert small.label.startswith("…/")
+    assert deep.endswith(small.label.removeprefix("…/"))
 
 
 def test_a_short_label_is_left_alone(browser: Browser) -> None:
     from hrono.server.graph import build
 
-    with browser.conn:  # type: ignore[union-attr]
-        browser.conn.execute(  # type: ignore[attr-defined]
-            "UPDATE nodes SET title = ? WHERE id = ?",
-            ("ingest", _root(browser)),
-        )
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
-    drawn = build(browser.conn, TREE, [])  # type: ignore[arg-type]
-
-    assert drawn.nodes[0].title == "ingest"
+    small = next(
+        node for node in drawn.nodes if node.id == browser.ids["small"]
+    )
+    assert small.label == "tests/cluster"
 
 
-def test_the_canvas_leaves_room_for_a_label(browser: Browser) -> None:
-    """Labels sit to the RIGHT of their topic, so the canvas has to be wider
-    than its last column or the deepest labels are clipped."""
-    from hrono.server.graph import LABEL_CHARS, LABEL_WIDTH, LEFT, build
+def test_the_tree_hangs_DOWNWARDS_from_its_root(browser: Browser) -> None:
+    """#198: it was a left-to-right dendrogram, which is the shape a file
+    explorer has. A tree has its root at the top and its children below."""
+    from hrono.server.graph import build
 
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
-    # roughly 6.6px per character at the 12px label font, all on one side
-    assert LABEL_WIDTH >= LABEL_CHARS * 6.6
-    assert drawn.nodes[0].x >= LEFT
-    assert drawn.width >= max(node.x for node in drawn.nodes) + LABEL_WIDTH
+    by_id = {node.id: node for node in drawn.nodes}
+    root, big, small = (
+        by_id[browser.ids[key]] for key in ("root", "big", "small")
+    )
+    assert big.y > root.y and small.y > root.y  # below, not beside
+    assert big.x != small.x  # siblings spread sideways
+    # and the parent sits over the middle of the block it owns
+    assert root.x == (big.x + small.x) / 2
+
+
+def test_no_label_is_cut_by_either_edge_of_the_canvas(
+    browser: Browser,
+) -> None:
+    """Labels sit UNDER their circle and centred on it, so the canvas has to
+    keep half a label either side or the outermost names are sliced."""
+    from hrono.server.graph import BOTTOM, LABEL_WIDTH, build
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    # half a label either side: a name is centred on its circle, so this is
+    # what the outermost topic in a row needs not to be sliced
+    assert min(node.x for node in drawn.nodes) >= LABEL_WIDTH / 2
+    assert drawn.width - max(node.x for node in drawn.nodes) >= LABEL_WIDTH / 2
+    assert drawn.height >= max(node.y for node in drawn.nodes) + BOTTOM
+
+
+def test_the_canvas_starts_where_the_drawing_starts(
+    browser: Browser,
+) -> None:
+    """#198: the map opened on a blank band with the first node below it."""
+    from hrono.server.graph import MAX_RADIUS, build
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    # measured against a CIRCLE, not against TOP: asserting the margin is
+    # whatever the module says the margin is would pass at any value
+    blank = min(node.y for node in drawn.nodes) - MAX_RADIUS
+    assert blank <= MAX_RADIUS
+
+
+def test_children_WRAP_instead_of_running_off_the_page(
+    browser: Browser,
+) -> None:
+    """#198: twenty-six siblings on one row was 4,000px of canvas and three
+    screenfuls. They are packed into rows the page can hold instead."""
+    from hrono.server.graph import GUTTER, PAD, ROW_WIDTH, SLOT, build
+
+    with browser.conn:  # type: ignore[union-attr]
+        for index in range(14):
+            leaf = cluster_store.add_leaf_node(
+                browser.conn,  # type: ignore[arg-type]
+                TREE,
+                [
+                    (
+                        _section(browser.conn, f"src/w{index}/x.py"),
+                        False,
+                        None,
+                    )
+                ],
+            )
+            cluster_store.add_child(
+                browser.conn,  # type: ignore[arg-type]
+                browser.ids["root"],
+                leaf,
+                attached=False,
+                similarity=None,
+            )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    assert len(drawn.nodes) == 17  # the root and sixteen leaves
+    rows: dict[float, int] = {}
+    for node in drawn.nodes:
+        rows[node.y] = rows.get(node.y, 0) + 1
+    assert len(rows) >= 4  # the root, and its children over three rows
+    assert max(rows.values()) <= ROW_WIDTH / SLOT  # wrapped BY WIDTH
+    assert drawn.width <= ROW_WIDTH + 2 * PAD  # and the page still holds it
+    # a block that wrapped keeps a lane down its left: the connector into the
+    # second row runs there, and a line drawn between the rows instead would
+    # be read through their names
+    assert min(node.x for node in drawn.nodes) >= PAD + GUTTER + SLOT / 2
+
+
+def test_the_canvas_is_only_as_deep_as_what_is_DRAWN(
+    browser: Browser,
+) -> None:
+    """A collapsed map that reserved a row per level of the whole tree would
+    be mostly blank paper."""
+    from hrono.server.graph import build
+
+    closed = build(browser.conn, TREE, [])  # type: ignore[arg-type]
+    opened = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    assert closed.height < opened.height
 
 
 def _root(browser: Browser) -> int:
@@ -291,3 +442,71 @@ def _root(browser: Browser) -> int:
             "SELECT MAX(id) FROM nodes"
         ).fetchone()[0]
     )
+
+
+def _child_of(browser: Browser, parent: int) -> int:
+    """A leaf under `parent`, made the way the fixture makes them."""
+    node = cluster_store.add_leaf_node(
+        browser.conn,  # type: ignore[arg-type]
+        TREE,
+        [(_section(browser.conn, f"pkg/mod/f{_child_of.n}.md"), False, None)],
+    )
+    _child_of.n += 1  # type: ignore[attr-defined]
+    cluster_store.add_child(
+        browser.conn,  # type: ignore[arg-type]
+        parent,
+        node,
+        attached=False,
+        similarity=None,
+    )
+    return node
+
+
+_child_of.n = 0  # type: ignore[attr-defined]
+
+
+def test_a_connector_that_travels_past_other_topics_is_marked(
+    browser: Browser,
+) -> None:
+    """#197: it looked like a box drawn around the topics it passed.
+
+    A connector to a wrapped row steps out, drops and comes back. At the same
+    weight as an ordinary connector those three runs read as a container
+    around whatever sits inside them — a grouping the tree does not have.
+    """
+    from hrono.server.graph import ROW_WIDTH, SLOT, build
+
+    root = _root(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        for _ in range(int(ROW_WIDTH // SLOT) + 2):
+            _child_of(browser, root)
+
+    drawn = build(browser.conn, TREE, [root])  # type: ignore[arg-type]
+
+    assert any(line.past for line in drawn.edges)  # the wrapped row
+    assert any(not line.past for line in drawn.edges)  # the first row
+
+
+def test_a_tree_that_does_not_wrap_marks_nothing(browser: Browser) -> None:
+    # nothing to travel past, so nothing is drawn subordinate
+    drawn = graph.build(browser.conn, TREE, [_root(browser)])  # type: ignore[arg-type]
+
+    assert not any(line.past for line in drawn.edges)
+
+
+def test_the_marked_connectors_are_the_ones_drawn_faint(
+    browser: Browser,
+) -> None:
+    """The mark has to reach the page, or it decorates nothing."""
+    from hrono.server.graph import ROW_WIDTH, SLOT
+
+    root = _root(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        for _ in range(int(ROW_WIDTH // SLOT) + 2):
+            _child_of(browser, root)
+    browser.sign_in()
+
+    page = browser.map(str(root))
+
+    assert 'class="edge past"' in page
+    assert "svg .edge.past" in page  # and the rule that makes it subordinate

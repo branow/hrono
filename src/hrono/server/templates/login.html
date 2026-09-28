@@ -14,16 +14,11 @@
         </svg>
         hrono
       </div>
-      <p class="hint">
-        hrono reads your repositories, cuts them into chunks and groups those
-        chunks into a browsable tree of topics that an AI agent can search.
-        This dashboard is where you watch that tree and correct it by hand.
-      </p>
+      <p class="hint">A browsable map of what hrono has read.</p>
       {% if error %}
       <div class="callout bad">
         <div class="body">
           <div class="title">That token was not accepted</div>
-          <p class="hint">Check it against the one your CLI uses, then try again.</p>
         </div>
       </div>
       {% endif %}
@@ -32,7 +27,7 @@
           <label for="token">API token</label>
           <input type="password" id="token" name="token" aria-label="api token"
                  autofocus autocomplete="off" placeholder="paste your token">
-          <span class="hint">The same token the <code>hrono</code> CLI uses. It is kept in a cookie this page cannot read.</span>
+          <span class="hint">The same token the <code>hrono</code> CLI uses.</span>
         </div>
         <div><button class="btn primary" type="submit">Sign in</button></div>
       </form>

@@ -169,7 +169,7 @@ def test_the_shell_reports_what_the_chosen_tree_holds(
     # the shape, as the front page states it: how many topics, over how
     # many levels
     assert re.search(
-        r'class="figure num">1</div>\s*<div class="label">topics</div>', body
+        r'class="figure num">1</div>\s*<div class="label">topics', body
     )
     assert "across 1 level" in body
 

@@ -3,23 +3,13 @@
 {% block main %}
 <div class="page-head">
   <div class="eyebrow">{{ tree }}</div>
-  <h1>Activity</h1>
-  <p class="lede">
-    Every judgement hrono made about a changed topic: whether the change was
-    big enough to matter, what it did about it, and how far up the tree the
-    consequences travelled. Read this when the map is not the shape you
-    expected.
-  </p>
+  <h1>Activity<span class="tip" tabindex="0" title="Every judgement hrono made about a changed topic. Read it when the map is not the shape you expected">?</span></h1>
 </div>
 
 <section class="card">
   {% if not rows %}
   <div class="card-body empty">
-    <div class="title">Nothing has been decided about {{ tree }} yet</div>
-    <p class="hint">
-      Entries appear when a sync finds that a source changed and hrono has to
-      decide what that means for the topics above it.
-    </p>
+    <div class="title">Nothing decided about {{ tree }} yet</div>
   </div>
   {% else %}
   <div class="card-head">
@@ -54,13 +44,16 @@
     </table>
   </div>
   <div class="card-foot">
-    <p class="hint">
-      <strong>verdict</strong> is how much the change altered what a reader
-      must know — <em>none</em>, <em>minor</em> or <em>major</em>.
-      <strong>climbed to</strong> is the topic above whose summary had to be
-      rewritten as a result. A row highlighted in amber is one where no
-      judgement could be reached, which leaves a summary possibly out of date.
-    </p>
+    <details class="reveal">
+      <summary>How to read this</summary>
+      <p class="hint">
+        <strong>verdict</strong> is how much the change altered what a reader
+        must know — <em>none</em>, <em>minor</em> or <em>major</em>.
+        <strong>climbed to</strong> is the topic above whose summary had to be
+        rewritten. An amber row is one where no judgement could be reached,
+        which leaves a summary possibly out of date.
+      </p>
+    </details>
   </div>
   {% endif %}
 </section>

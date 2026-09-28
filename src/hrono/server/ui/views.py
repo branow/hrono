@@ -294,6 +294,8 @@ def _with_toggle(
     query = ",".join(str(value) for value in sorted(after))
     return {
         "id": node_id,
+        "where": node.where,  # type: ignore[attr-defined]
+        "label": node.label,  # type: ignore[attr-defined]
         "title": node.title,  # type: ignore[attr-defined]
         "holds": node.holds,  # type: ignore[attr-defined]
         "holds_what": node.holds_what,  # type: ignore[attr-defined]

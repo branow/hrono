@@ -15,6 +15,7 @@ from pydantic import BaseModel, ValidationError
 from hrono import edits, notes, pins
 from hrono.embed.model import resolve_embedding_model
 from hrono.errors import AppError, DomainError, NotFound
+from hrono.server import where
 from hrono.server.edits import BriefText, NoteText, Rename
 from hrono.server.ui import (
     Admin,
@@ -287,9 +288,13 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
     parent = conn.execute(  # type: ignore[attr-defined]
         "SELECT parent_id FROM node_children WHERE child_id = ?", (node_id,)
     ).fetchone()
+    # where its chunks live, which is what the map labels a topic by: a brief
+    # written by a weak model names every topic the same (#198)
+    wheres = where.by_node(conn, tree)  # type: ignore[arg-type]
     children = [
         {
             "id": int(child["child_id"]),
+            "where": wheres.get(int(child["child_id"]), ""),
             # its own name, else the first line of its brief, else its number —
             # the same ladder `_titled` walks, so the list reads like the map
             # rather than like a set of row ids
@@ -312,6 +317,7 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
     return {
         "id": node_id,
         "level": int(row["level"]),
+        "where": wheres.get(node_id, ""),
         "title": row["title"] or _titled(brief, node_id),
         "brief": brief["text"] if brief is not None else None,
         # the same rule the map colours by: no brief counts as a stale one,
@@ -321,7 +327,7 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
         "children": children,
         "pins": sorted(pins.reasons(conn, node_id)),  # type: ignore[arg-type]
         "notes": notes.rendered(conn).get(node_id),  # type: ignore[arg-type]
-        "members": _members(conn, node_id),
+        "members": _members(conn, node_id, wheres.get(node_id, "")),
     }
 
 
@@ -360,7 +366,7 @@ def _clipped(text: str) -> str:
     return spaced.rstrip(" ,;:.") + "\u2026"
 
 
-def _members(conn: object, node_id: int) -> list[dict[str, object]]:
+def _members(conn: object, node_id: int, stem: str) -> list[dict[str, object]]:
     """A topic's chunks, WORST FIT FIRST.
 
     `assignment_similarity` is the score a chunk was attached with, and NULL
@@ -378,16 +384,26 @@ def _members(conn: object, node_id: int) -> list[dict[str, object]]:
         "s.id",
         (node_id,),
     ).fetchall()
-    return [
-        {
-            "id": int(row["id"]),
-            "path": str(row["path"]),
-            "similarity": row["score"],
-            "forced": bool(row["forced"]),
-            "preview": _preview(row["body"]),
-        }
-        for row in rows
-    ]
+    return [_member(row, stem) for row in rows]
+
+
+def _member(row: object, where: str) -> dict[str, object]:
+    """One chunk, its path split where it stops saying what its topic said.
+
+    Thirty-five rows opening with the same twenty characters are thirty-five
+    rows nobody scans, so the shared directory is set apart from the part that
+    tells them apart (#198).
+    """
+    path = str(row["path"])  # type: ignore[index]
+    shared = f"{where}/" if where and path.startswith(f"{where}/") else ""
+    return {
+        "id": int(row["id"]),  # type: ignore[index]
+        "stem": shared,
+        "tail": path.removeprefix(shared),
+        "similarity": row["score"],  # type: ignore[index]
+        "forced": bool(row["forced"]),  # type: ignore[index]
+        "preview": _preview(row["body"]),  # type: ignore[index]
+    }
 
 
 def _preview(body: object) -> str:
