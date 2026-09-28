@@ -66,7 +66,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
 
 
 def _leaves(conn: sqlite3.Connection, tree: str) -> int:
-    """Level-0 topics — the ones that hold chunks rather than other topics."""
+    """Level-0 topics — the ones that hold sections rather than other topics."""
     return int(
         conn.execute(
             "SELECT COUNT(*) FROM nodes WHERE tree = ? AND level = 0",

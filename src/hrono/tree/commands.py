@@ -9,7 +9,7 @@ and are deliberately separate commands.
 current profile's client and prints the job id to track. (The spec writes it
 kubectl-style as ``tree <name> maintain``; Typer groups put the subcommand
 first, and the HTTP endpoint is the canonical interface.)
-``hrono tree pending <name>`` reads the incubator pool so a chunk waiting
+``hrono tree pending <name>`` reads the incubator pool so a section waiting
 outside the tree is visible from the CLI instead of silently absent.
 ``hrono tree export <name> -o <dir>`` materialises the rendered map under
 ``<dir>``: every payload path is forced relative before the traversal guard
@@ -77,14 +77,14 @@ def export(
 
 @app.command("pending")
 def pending(name: str) -> None:
-    """List the tree's incubator pool — chunks parked in no node yet."""
+    """List the tree's incubator pool — sections parked in no topic yet."""
 
     result = from_profile().get(f"/trees/{name}/pending")
     pool = result.get("pending", []) if isinstance(result, dict) else []
     for entry in pool:
         typer.echo(f"{entry['path']} (batch {entry['batch']})")
-    chunks = "chunk" if len(pool) == 1 else "chunks"
-    typer.echo(f"{len(pool)} pending {chunks} in tree '{name}'.")
+    word = "section" if len(pool) == 1 else "sections"
+    typer.echo(f"{len(pool)} pending {word} in tree '{name}'.")
 
 
 @dataclass(frozen=True)

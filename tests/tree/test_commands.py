@@ -56,7 +56,7 @@ def test_pending_lists_the_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0
     assert fake.calls == ["/trees/acme/pending"]
     assert "docs/stranded.md" in result.output
-    assert "1 pending chunk in tree 'acme'." in result.output
+    assert "1 pending section in tree 'acme'." in result.output
 
 
 def test_pending_pluralises_a_bigger_pool(
@@ -71,4 +71,4 @@ def test_pending_pluralises_a_bigger_pool(
     monkeypatch.setattr("hrono.tree.commands.from_profile", lambda: fake)
     result = runner.invoke(cli.app, ["tree", "pending", "acme"])
     assert result.exit_code == 0
-    assert "2 pending chunks in tree 'acme'." in result.output
+    assert "2 pending sections in tree 'acme'." in result.output

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block title %}hrono — config{% endblock %}
 {% set about = {
-  "sources": "The repositories hrono reads. Each one is fetched, split into chunks and fed into the tree.",
+  "sources": "The repositories hrono reads. Each one is fetched, split into sections and fed into the tree.",
   "connections": "Where the language models live — an endpoint and how to authenticate to it.",
-  "models": "The models themselves: one for embedding chunks, and one per writing job (brief, condense, judge).",
+  "models": "The models themselves: one for embedding sections, and one per writing job (brief, condense, judge).",
   "prompts": "The instructions sent with each writing job. Changing one makes every brief it wrote stale.",
   "trees": "Named trees. A database with none still has exactly one, called default."
 } %}
 {% block main %}
 <div class="page-head">
-  <h1>Settings<span class="tip" tabindex="0" title="Read-only. Change it with the CLI or the API; secrets are masked before they reach this page">?</span></h1>
+  <h1>Settings<span class="tip" tabindex="0" role="note" data-tip="Read-only. Change it with the CLI or the API; secrets are masked before they reach this page">?</span></h1>
 </div>
 
 <div class="stack">
@@ -17,7 +17,7 @@
 <section class="card">
   <div class="card-head">
     <div>
-      <h2>{{ collection.name }}<span class="tip" tabindex="0" title="{{ about.get(collection.name, "") }}">?</span></h2>
+      <h2>{{ collection.name }}<span class="tip" tabindex="0" role="note" data-tip="{{ about.get(collection.name, '') }}">?</span></h2>
     </div>
     <span class="chip num">{{ collection.rows|length }}</span>
   </div>

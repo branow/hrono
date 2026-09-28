@@ -27,12 +27,12 @@ _LIVE = frozenset({"pending", "running", "partial"})
 MEANS = {
     "sync-tree": "read every source and bring the whole tree up to date",
     "sync": "fetch a source's files",
-    "split": "cut the files into chunks",
-    "embed": "turn chunks into vectors",
-    "condense": "shorten each chunk so it can be summarised",
-    "cluster": "group chunks into topics",
+    "split": "cut the files into sections",
+    "embed": "turn sections into vectors",
+    "condense": "shorten each section so it can be summarised",
+    "cluster": "group sections into topics",
     "cluster-briefs": "group topics into higher-level topics",
-    "brief": "write a summary for each topic that holds chunks",
+    "brief": "write a summary for each topic that holds sections",
     "brief-upper": "write a summary for each topic that groups topics",
     "build-tree": "build the whole tree from the ground up",
     "update": "re-file only what changed",
@@ -40,7 +40,7 @@ MEANS = {
     "maintain": "routine upkeep: check the tree and fix what drifted",
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
-    "settle": "place the chunks that were still waiting",
+    "settle": "place the sections that were still waiting",
     "noop": "do nothing — a health check of the worker",
 }
 

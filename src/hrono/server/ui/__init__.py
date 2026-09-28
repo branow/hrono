@@ -98,6 +98,28 @@ def _back(tree: str, node_id: int, **outcome: str) -> Response:
     )
 
 
+THEMES = ("system", "light", "dark")
+THEME_COOKIE = "hrono_theme"
+
+
+def chosen_theme(request: Request) -> str:
+    """The theme this browser asked for, or "" for whatever the OS says.
+
+    A cookie rather than localStorage: the page is rendered on the server, so
+    the server has to know before it writes the `<html>` tag — and doing it
+    here means the choice survives with JavaScript switched off, which is the
+    rule the rest of this dashboard is built to.
+    """
+    picked = request.cookies.get(THEME_COOKIE, "")
+    return picked if picked in ("light", "dark") else ""
+
+
+def next_theme(current: str) -> str:
+    """system -> light -> dark -> system, so every state is reachable."""
+    order = {"": "light", "light": "dark", "dark": ""}
+    return order.get(current, "light")
+
+
 def switch(here: str, tree: str, to: str) -> str:
     """The same page, in another tree.
 
@@ -117,6 +139,10 @@ def switch(here: str, tree: str, to: str) -> str:
 # markup — so it is a function the template calls rather than a chain of Jinja
 # string operations.
 templates.env.globals["switch"] = switch
+# Read from the request in the template rather than threaded through a dozen
+# route context dicts: the theme is chrome, and every page has the same answer.
+templates.env.globals["chosen_theme"] = chosen_theme
+templates.env.globals["next_theme"] = next_theme
 
 
 def _trees(conn: object) -> list[str]:

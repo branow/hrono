@@ -2,7 +2,7 @@
 
 Every item here is a state some earlier ticket learned to DETECT and nothing
 ever learned to SHOW. A stale brief is a topic recall cannot answer from; a
-parked chunk is content the map does not contain; an unparented topic is a
+parked section is content the map does not contain; an unparented topic is a
 subtree missing from the export — the defect that shipped twice (#124, #163).
 
 A zero is reported, never hidden. "Nothing needs attention" is the answer an
@@ -83,7 +83,7 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
 
 def _parked(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
-        kind="chunks in no topic",
+        kind="sections in no topic",
         count=incubator.count(conn, tree),
         detail="ingested, embedded, and not on the map",
         link=f"/ui/trees/{tree}/graph?tree={tree}",
@@ -98,7 +98,7 @@ def _forced(conn: sqlite3.Connection, tree: str) -> Item:
         (tree,),
     ).fetchone()
     return Item(
-        kind="chunks placed without a score",
+        kind="sections placed without a score",
         count=int(row["n"]),
         detail="forced in rather than matched",
         link=f"/ui/trees/{tree}/graph?tree={tree}",

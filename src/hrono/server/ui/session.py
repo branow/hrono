@@ -13,7 +13,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth.users import authenticate
 from hrono.server.auth import COOKIE
-from hrono.server.ui import COOKIE_MAX_AGE, _fields, router, templates
+from hrono.server.ui import (
+    COOKIE_MAX_AGE,
+    THEME_COOKIE,
+    _fields,
+    router,
+    templates,
+)
 
 
 @router.get("/ui/login", response_class=HTMLResponse)
@@ -54,4 +60,31 @@ async def sign_in(request: Request) -> Response:
 def sign_out() -> Response:
     answer = RedirectResponse("/ui/login", status_code=303)
     answer.delete_cookie(COOKIE)
+    return answer
+
+
+@router.post("/ui/theme")
+async def set_theme(request: Request) -> Response:
+    """Remember a light/dark choice, and come back to the page it was made on.
+
+    A form rather than a script: the server writes the `<html>` tag, so the
+    server is what has to know, and a toggle that needs JavaScript would be
+    the one control on this dashboard that does.
+    """
+    fields = await _fields(request)
+    picked = fields.get("theme", "")
+    back = fields.get("back", "/ui")
+    answer = RedirectResponse(
+        back if back.startswith("/ui") else "/ui", status_code=303
+    )
+    if picked in ("light", "dark"):
+        answer.set_cookie(
+            THEME_COOKIE,
+            picked,
+            max_age=60 * 60 * 24 * 365,
+            httponly=False,  # it decides a colour, not an identity
+            samesite="lax",
+        )
+    else:
+        answer.delete_cookie(THEME_COOKIE)
     return answer

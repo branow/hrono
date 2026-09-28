@@ -28,7 +28,7 @@ from hrono.server.ui import (
 )
 from hrono.summarize import briefs
 
-# Enough to recognise a chunk, not enough to lose the topic off the screen. A
+# Enough to recognise a section, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
 
@@ -253,7 +253,7 @@ async def split_from_the_page(
 async def move_section_from_the_page(
     tree: str, section_id: int, request: Request, user: Admin
 ) -> Response:
-    """File a chunk under the topic an operator can see it belongs to."""
+    """File a section under the topic an operator can see it belongs to."""
     fields = await _fields(request)
     target, origin = fields.get("to_node", ""), fields.get("from_node", "")
     back = int(origin) if origin.isdigit() else 0
@@ -266,7 +266,7 @@ async def move_section_from_the_page(
         return _back(tree, back, error=str(exc))
     emptied = " — that topic is now empty" if move.emptied else ""
     return _back(
-        tree, int(target), done=f"chunk {section_id} moved here{emptied}"
+        tree, int(target), done=f"section {section_id} moved here{emptied}"
     )
 
 
@@ -288,7 +288,7 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
     parent = conn.execute(  # type: ignore[attr-defined]
         "SELECT parent_id FROM node_children WHERE child_id = ?", (node_id,)
     ).fetchone()
-    # where its chunks live, which is what the map labels a topic by: a brief
+    # where its sections live, which is what the map labels a topic by: a brief
     # written by a weak model names every topic the same (#198)
     wheres = where.by_node(conn, tree)  # type: ignore[arg-type]
     children = [
@@ -300,7 +300,7 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
             # rather than like a set of row ids
             "title": _titled_row(child),
             "holds": int(child["members"]) or int(child["kids"]),
-            "holds_what": "chunks" if int(child["members"]) else "topics",
+            "holds_what": "sections" if int(child["members"]) else "topics",
         }
         for child in conn.execute(  # type: ignore[attr-defined]
             "SELECT c.child_id AS child_id, n.title AS title, b.text AS brief, "
@@ -367,12 +367,12 @@ def _clipped(text: str) -> str:
 
 
 def _members(conn: object, node_id: int, stem: str) -> list[dict[str, object]]:
-    """A topic's chunks, WORST FIT FIRST.
+    """A topic's sections, WORST FIT FIRST.
 
-    `assignment_similarity` is the score a chunk was attached with, and NULL
+    `assignment_similarity` is the score a section was attached with, and NULL
     means a confident density-core placement (0009_nodes.sql) — so nulls sort
     LAST, not first. The operator opening a topic to see whether it is right
-    wants the chunk least likely to belong at the top.
+    wants the section least likely to belong at the top.
     """
     rows = conn.execute(  # type: ignore[attr-defined]
         "SELECT s.id AS id, s.path AS path, m.assignment_similarity AS score, "
@@ -388,7 +388,7 @@ def _members(conn: object, node_id: int, stem: str) -> list[dict[str, object]]:
 
 
 def _member(row: object, where: str) -> dict[str, object]:
-    """One chunk, its path split where it stops saying what its topic said.
+    """One section, its path split where it stops saying what its topic said.
 
     Thirty-five rows opening with the same twenty characters are thirty-five
     rows nobody scans, so the shared directory is set apart from the part that

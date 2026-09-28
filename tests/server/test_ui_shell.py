@@ -269,3 +269,165 @@ def test_one_tree_is_not_offered_as_a_choice(browser: Browser) -> None:
 def _without_style(page: str) -> str:
     """The page as a person reads it, minus the sheet that styles it."""
     return re.sub(r"<style>.*?</style>", "", page, flags=re.S)
+
+
+def test_a_hint_is_drawn_by_the_page_not_by_the_browser(
+    browser: Browser,
+) -> None:
+    """#197: the marks were `title=` attributes.
+
+    A native tooltip waits about a second and then renders as an operating
+    system tooltip — long enough that a person decides the mark does nothing,
+    which is exactly what happened. The page draws its own now.
+    """
+    browser.sign_in()
+
+    markup = _without_style(browser.page("/ui").text)  # type: ignore[attr-defined]
+
+    assert 'class="tip"' in markup
+    assert "data-tip=" in markup
+    assert 'class="tip" tabindex="0" title=' not in markup
+
+
+def test_every_hint_mark_carries_a_hint(browser: Browser) -> None:
+    """A `?` with nothing behind it is worse than no `?` at all."""
+    browser.sign_in()
+
+    seen = 0
+    for path in ("/ui", "/ui/trees/default/triage", "/ui/jobs"):
+        markup = _without_style(browser.page(path).text)  # type: ignore[attr-defined]
+        for mark in re.findall(r"<span class=\"tip\"[^>]*>", markup):
+            seen += 1
+            assert "data-tip=" in mark, f"{path}: {mark}"
+            body = re.search(r'data-tip="([^"]*)"', mark)
+            assert body is not None and body.group(1).strip(), f"{path}: empty"
+    # a loop over marks that do not exist asserts nothing at all
+    assert seen >= 3, f"only {seen} hint marks found — is the loop vacuous?"
+
+
+def test_a_hint_is_reachable_from_the_keyboard(browser: Browser) -> None:
+    # hover is not an input method everybody has
+    browser.sign_in()
+
+    marks = re.findall(
+        r"<span class=\"tip\"[^>]*>",
+        _without_style(browser.page("/ui").text),  # type: ignore[attr-defined]
+    )
+
+    assert marks
+    for mark in marks:
+        assert 'tabindex="0"' in mark
+
+
+def test_the_page_carries_the_rule_that_draws_a_hint(
+    browser: Browser,
+) -> None:
+    """The mark and its text are useless if nothing renders them.
+
+    `content: attr(data-tip)` is what turns the attribute into something a
+    person sees; without it every hint is in the markup and on screen nowhere.
+    """
+    browser.sign_in()
+
+    page = browser.page("/ui").text  # type: ignore[attr-defined]
+
+    assert "content: attr(data-tip)" in page
+
+
+def test_the_theme_choice_survives_without_javascript(
+    browser: Browser,
+) -> None:
+    """#197: a light/dark toggle, and it is a form.
+
+    The server writes the `<html>` tag, so the server is what has to know —
+    a toggle that needed a script would be the one control on this dashboard
+    that does.
+    """
+    browser.sign_in()
+
+    browser.client.post(  # type: ignore[attr-defined]
+        "/ui/theme", data={"theme": "dark", "back": "/ui"}
+    )
+
+    assert _html_theme(browser.page("/ui").text) == "dark"  # type: ignore[attr-defined]
+
+
+def test_choosing_light_beats_a_dark_system(browser: Browser) -> None:
+    # the whole point of an explicit choice is that it wins
+    browser.sign_in()
+
+    browser.client.post(  # type: ignore[attr-defined]
+        "/ui/theme", data={"theme": "light", "back": "/ui"}
+    )
+    page = browser.page("/ui").text  # type: ignore[attr-defined]
+
+    assert _html_theme(page) == "light"
+    # and the dark rule is written so an explicit light is exempt from it
+    assert ':root:not([data-theme="light"])' in page
+
+
+def test_going_back_to_system_forgets_the_choice(browser: Browser) -> None:
+    browser.sign_in()
+    browser.client.post(  # type: ignore[attr-defined]
+        "/ui/theme", data={"theme": "dark", "back": "/ui"}
+    )
+
+    browser.client.post(  # type: ignore[attr-defined]
+        "/ui/theme", data={"theme": "system", "back": "/ui"}
+    )
+
+    assert not _html_theme(browser.page("/ui").text)  # type: ignore[attr-defined]
+
+
+def test_the_toggle_cycles_through_every_state(browser: Browser) -> None:
+    from hrono.server.ui import next_theme
+
+    assert next_theme("") == "light"
+    assert next_theme("light") == "dark"
+    assert next_theme("dark") == ""  # back to following the system
+
+
+def test_the_theme_form_cannot_be_used_as_an_open_redirect(
+    browser: Browser,
+) -> None:
+    """`back` comes from the page, so it is attacker-reachable."""
+    browser.sign_in()
+
+    answer = browser.client.post(  # type: ignore[attr-defined]
+        "/ui/theme",
+        data={"theme": "dark", "back": "https://example.com/phish"},
+        follow_redirects=False,
+    )
+
+    assert answer.headers["location"] == "/ui"
+
+
+def test_an_unknown_theme_is_ignored(browser: Browser) -> None:
+    browser.sign_in()
+
+    browser.client.post(  # type: ignore[attr-defined]
+        "/ui/theme", data={"theme": "neon", "back": "/ui"}
+    )
+
+    assert not _html_theme(browser.page("/ui").text)  # type: ignore[attr-defined]
+
+
+def _html_theme(page: str) -> str:
+    """What the <html> tag says, not what the stylesheet mentions."""
+    tag = re.search(r"<html[^>]*>", page)
+    assert tag is not None
+    found = re.search(r'data-theme="([^"]*)"', tag.group(0))
+    return "" if found is None else found.group(1)
+
+
+def test_a_forged_theme_cookie_is_ignored(browser: Browser) -> None:
+    """The route rejects an unknown theme, but the cookie is not HttpOnly —
+    it decides a colour, not an identity — so anything can set it, and what
+    lands in the `<html>` tag has to be checked where it is READ."""
+    browser.sign_in()
+    browser.client.cookies.set("hrono_theme", '"><script>alert(1)</script>')  # type: ignore[attr-defined]
+
+    page = browser.page("/ui").text  # type: ignore[attr-defined]
+
+    assert not _html_theme(page)
+    assert "<script>alert(1)</script>" not in page

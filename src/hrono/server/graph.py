@@ -12,7 +12,7 @@ nobody reads as a tree — and then one row per level, which put twenty-six
 siblings across four thousand pixels and three screenfuls. A block fits the
 page, so the whole map is one screen and the root is the first thing on it.
 
-Each topic is labelled by WHERE its chunks live (`server/where.py`) rather
+Each topic is labelled by WHERE its sections live (`server/where.py`) rather
 than by its brief's first line: on a tree summarised by a weak model every
 brief opens with the same clause, and twenty-six identical labels are not a
 map. The brief-derived name stays as the secondary identity, on hover and on
@@ -76,11 +76,11 @@ class Node:
 
     id: int
     level: int
-    where: str  # the directory its chunks live in — its primary identity
+    where: str  # the directory its sections live in — its primary identity
     label: str  # `where`, cut to fit its slot
     title: str  # what its brief calls it, for the tooltip and the topic page
     holds: int  # members for a leaf, children for an upper topic
-    holds_what: str  # "chunks" or "topics" — the unit `holds` counts
+    holds_what: str  # "sections" or "topics" — the unit `holds` counts
     stale: bool
     has_children: bool
     has_hidden_children: bool
@@ -503,14 +503,14 @@ def _radius(holds: int, biggest: int) -> float:
     """Area, not radius, follows what a topic holds.
 
     A circle is read by its area, so scaling the radius linearly makes a topic
-    of thirty chunks look nine times the one of ten rather than three.
+    of thirty sections look nine times the one of ten rather than three.
     """
     share = (holds / biggest) ** 0.5 if biggest else 0.0
     return round(MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * share, 1)
 
 
 def _holds(row: sqlite3.Row) -> int:
-    """What a topic contains: chunks at the leaves, topics above them.
+    """What a topic contains: sections at the leaves, topics above them.
 
     One number for two kinds, because the question the size answers is "how
     much is under here", and an upper node's members are always zero (#163).
@@ -520,7 +520,7 @@ def _holds(row: sqlite3.Row) -> int:
 
 def _holds_what(row: sqlite3.Row) -> str:
     """The unit `_holds` counted, so the page says it rather than implies it."""
-    return "chunks" if int(row["members"]) else "topics"
+    return "sections" if int(row["members"]) else "topics"
 
 
 def _title(row: sqlite3.Row, node: int) -> str:

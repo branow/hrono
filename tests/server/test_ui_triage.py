@@ -163,8 +163,8 @@ def test_every_kind_is_counted(messy: Browser) -> None:
 
     assert counts["topics nothing points at"] == 1
     assert counts["topics with no brief, or a stale one"] == 1  # the orphan
-    assert counts["chunks in no topic"] == 1
-    assert counts["chunks placed without a score"] == 1
+    assert counts["sections in no topic"] == 1
+    assert counts["sections placed without a score"] == 1
     assert counts["runs that failed"] == 1
 
 
@@ -206,8 +206,8 @@ def test_counts_are_per_tree(messy: Browser) -> None:
     assert messy.survey("other") == {
         "topics nothing points at": 0,
         "topics with no brief, or a stale one": 0,
-        "chunks in no topic": 0,
-        "chunks placed without a score": 0,
+        "sections in no topic": 0,
+        "sections placed without a score": 0,
         "runs that failed": 0,
     }
 

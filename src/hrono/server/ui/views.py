@@ -20,7 +20,7 @@ from hrono.server.ui import Reader, _trees, router, templates
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
-# Enough to recognise a chunk, not enough to lose the topic off the screen. A
+# Enough to recognise a section, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
 
