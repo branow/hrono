@@ -4,6 +4,14 @@ Arithmetic, not a library. A hierarchy drawn level by level is positions and
 line segments, and SVG is markup — so the graph is rendered by the same Jinja
 that renders everything else, with no JS dependency to vendor, review and pin.
 
+The layout is a DENDROGRAM: levels run left to right, siblings stack downwards,
+a parent sits centred on its visible children, and every label is left-anchored
+beside its own topic. The earlier layout gave each visible topic a COLUMN, so a
+tree of 26 leaves was 4,000px of horizontal scroll and every label was clipped
+to 20 characters — twenty-six topics that all began "This group covers…" read as
+one repeated word. Stacking downwards costs a page scroll, which browsers are
+built for, and buys a label the width of the canvas.
+
 The expand state is a QUERY PARAMETER rather than client state, which is what
 makes every view of the graph a URL: bookmarkable, shareable, and testable as
 HTML rather than as a screenshot.
@@ -15,20 +23,25 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-# Room for a label under each node without the columns colliding on a wide
-# level; the page scrolls sideways rather than shrinking the nodes to dots.
-COLUMN = 150
-ROW = 110
-# Wide enough for a LABEL, not just a circle. Labels are centre-anchored under
-# their node and truncated to 28 characters, so roughly 75px each side; at the
-# old margin of 40 the first column's label ran off the left edge of the SVG
-# and the last column's off the right.
-MARGIN = 90
-# A label has to fit INSIDE its column or it collides with its neighbour's.
-# COLUMN is 150px and the label font is 11px, so ~20 characters is the budget.
-LABEL_CHARS = 20
-MIN_RADIUS = 10
-MAX_RADIUS = 26
+# One level per column, one topic per row. ROW carries two lines of text (the
+# name and what the topic holds), so it cannot go below ~36.
+COLUMN = 260
+ROW = 40
+# Room on the left for the disclosure triangle, which sits outside the circle.
+LEFT = 40
+TOP = 30
+# Room on the right of the LAST column for that column's labels.
+LABEL_WIDTH = 240
+# A label must fit inside its column or it collides with the next column's
+# circles. COLUMN is 260px, the label font is 12px (~6.6px a character) and the
+# circle eats ~30px, so ~32 characters is the budget.
+LABEL_CHARS = 32
+MIN_RADIUS = 5
+MAX_RADIUS = 15
+# Where a parent's children hang. It sits in the gutter between the parent's
+# circle and the start of its label: a trunk drawn half-way to the child column
+# instead would cross the parent's own name on its way there.
+TRUNK_GAP = 20
 
 
 @dataclass(frozen=True)
@@ -39,7 +52,9 @@ class Node:
     level: int
     title: str
     holds: int  # members for a leaf, children for an upper topic
+    holds_what: str  # "chunks" or "topics" — the unit `holds` counts
     stale: bool
+    has_children: bool
     has_hidden_children: bool
     x: float
     y: float
@@ -48,8 +63,15 @@ class Node:
 
 @dataclass(frozen=True)
 class Graph:
+    """A drawn tree: placed nodes, connector paths, and the canvas they need.
+
+    ``edges`` is SVG path data rather than endpoints because the connector is
+    an elbow, not a segment: a parent drops one trunk and each child branches
+    off it, which is what makes a column of circles read as one family.
+    """
+
     nodes: tuple[Node, ...]
-    edges: tuple[tuple[float, float, float, float], ...]
+    edges: tuple[str, ...]
     width: float
     height: float
 
@@ -129,48 +151,90 @@ def _lay_out(
     visible: Sequence[int],
     opened: set[int],
 ) -> Graph:
-    """One column per visible topic, one row per level.
+    """One column per LEVEL, one row per drawn topic.
 
-    Column order follows the depth-first walk, so a topic's descendants sit to
-    its right and a branch reads as a block.
+    A topic with no drawn children takes the next free row; a topic with them
+    sits at their average, so a parent is always beside the block it owns.
     """
     top = max(int(rows[node]["level"]) for node in visible)
+    shown = set(visible)
+    drawn_kids = {
+        node: [kid for kid in children.get(node, []) if kid in shown]
+        for node in visible
+    }
+    slots = _slots(visible, drawn_kids)
     holds = {node: _holds(rows[node]) for node in visible}
     biggest = max(holds.values(), default=1) or 1
-    placed: dict[int, tuple[float, float]] = {}
-    drawn: list[Node] = []
-    for column, node in enumerate(visible):
-        row = rows[node]
-        x = MARGIN + column * COLUMN
-        y = MARGIN + (top - int(row["level"])) * ROW
-        placed[node] = (x, y)
-        kids = children.get(node, [])
-        drawn.append(
-            Node(
-                id=node,
-                level=int(row["level"]),
-                title=_title(row, node),
-                holds=holds[node],
-                stale=bool(row["stale"]) or row["brief"] is None,
-                has_hidden_children=bool(kids) and node not in opened,
-                x=x,
-                y=y,
-                radius=MIN_RADIUS
-                + (MAX_RADIUS - MIN_RADIUS) * (holds[node] / biggest),
-            )
+    placed = {
+        node: (
+            LEFT + (top - int(rows[node]["level"])) * COLUMN,
+            TOP + slots[node] * ROW,
         )
+        for node in visible
+    }
+    drawn = tuple(
+        Node(
+            id=node,
+            level=int(rows[node]["level"]),
+            title=_title(rows[node], node),
+            holds=holds[node],
+            holds_what=_holds_what(rows[node]),
+            stale=bool(rows[node]["stale"]) or rows[node]["brief"] is None,
+            has_children=bool(children.get(node)),
+            has_hidden_children=bool(children.get(node)) and node not in opened,
+            x=placed[node][0],
+            y=placed[node][1],
+            radius=_radius(holds[node], biggest),
+        )
+        for node in visible
+    )
     edges = tuple(
-        (*placed[parent], *placed[child])
+        _elbow(*placed[parent], *placed[child])
         for parent in visible
-        for child in children.get(parent, [])
-        if child in placed
+        for child in drawn_kids[parent]
     )
     return Graph(
-        nodes=tuple(drawn),
+        nodes=drawn,
         edges=edges,
-        width=MARGIN * 2 + max(len(visible) - 1, 0) * COLUMN,
-        height=MARGIN * 2 + top * ROW,
+        width=LEFT + top * COLUMN + LABEL_WIDTH,
+        height=TOP * 2 + max(slots.values(), default=0) * ROW,
     )
+
+
+def _slots(
+    visible: Sequence[int], drawn_kids: dict[int, list[int]]
+) -> dict[int, float]:
+    """Give every drawn topic a row: leaves in order, parents on their block.
+
+    ``visible`` is depth-first pre-order, so walking it BACKWARDS meets every
+    child before its parent and one pass suffices.
+    """
+    rank = {
+        node: float(index)
+        for index, node in enumerate(
+            node for node in visible if not drawn_kids[node]
+        )
+    }
+    for node in reversed(visible):
+        kids = drawn_kids[node]
+        if kids:
+            rank[node] = sum(rank[kid] for kid in kids) / len(kids)
+    return rank
+
+
+def _elbow(x1: float, y1: float, x2: float, y2: float) -> str:
+    """A parent-to-child connector: out to the trunk, along it, then in."""
+    return f"M{x1},{y1} H{x1 + TRUNK_GAP} V{y2} H{x2}"
+
+
+def _radius(holds: int, biggest: int) -> float:
+    """Area, not radius, follows what a topic holds.
+
+    A circle is read by its area, so scaling the radius linearly makes a topic
+    of thirty chunks look nine times the one of ten rather than three.
+    """
+    share = (holds / biggest) ** 0.5 if biggest else 0.0
+    return round(MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * share, 1)
 
 
 def _holds(row: sqlite3.Row) -> int:
@@ -180,6 +244,11 @@ def _holds(row: sqlite3.Row) -> int:
     much is under here", and an upper node's members are always zero (#163).
     """
     return int(row["members"]) or int(row["kids"])
+
+
+def _holds_what(row: sqlite3.Row) -> str:
+    """The unit `_holds` counted, so the page says it rather than implies it."""
+    return "chunks" if int(row["members"]) else "topics"
 
 
 def _title(row: sqlite3.Row, node: int) -> str:

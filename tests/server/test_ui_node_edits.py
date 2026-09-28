@@ -183,14 +183,24 @@ def test_a_blank_title_is_refused_and_said_so(browser: Browser) -> None:
 def test_a_reader_sees_no_forms(browser: Browser) -> None:
     browser.sign_in("reader")
 
-    assert "edit this topic" not in browser.page()
+    page = browser.page()
+
+    # the drawer AND the thing it holds: a label can be renamed, a form action
+    # is what the control actually is
+    assert "Correct this topic by hand" not in page
+    assert f"/nodes/{browser.node}/rename" not in page
+    assert f"/nodes/{browser.node}/dissolve" not in page
 
 
 def test_a_writer_sees_no_forms_either(browser: Browser) -> None:
     # the API's floor for these is ADMIN; the page may not be a softer door
     browser.sign_in("writer")
 
-    assert "edit this topic" not in browser.page()
+    page = browser.page()
+
+    assert "Correct this topic by hand" not in page
+    assert f"/nodes/{browser.node}/rename" not in page
+    assert f"/nodes/{browser.node}/dissolve" not in page
 
 
 def test_a_writers_post_is_refused(browser: Browser) -> None:

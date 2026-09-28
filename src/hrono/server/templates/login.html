@@ -2,12 +2,41 @@
 {% block title %}hrono — sign in{% endblock %}
 {% block chrome %}{% endblock %}
 {% block main %}
-<h1>hrono</h1>
-<p>Sign in with the same API token the CLI uses.</p>
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="post" action="/ui/login">
-  <input type="password" name="token" aria-label="api token" autofocus
-         autocomplete="off" placeholder="api token" size="48">
-  <button type="submit">sign in</button>
-</form>
+<div class="gate">
+  <div class="card">
+    <div class="card-body stack">
+      <div class="mark">
+        <svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 5v2.2M8 8L4.2 10M8 8l3.8 2" stroke="currentColor" stroke-width="1.1" fill="none" opacity=".45"/>
+          <circle cx="8" cy="3" r="2.2" fill="currentColor"/>
+          <circle cx="3.6" cy="12" r="2.2" fill="currentColor" opacity=".7"/>
+          <circle cx="12.4" cy="12" r="2.2" fill="currentColor" opacity=".7"/>
+        </svg>
+        hrono
+      </div>
+      <p class="hint">
+        hrono reads your repositories, cuts them into chunks and groups those
+        chunks into a browsable tree of topics that an AI agent can search.
+        This dashboard is where you watch that tree and correct it by hand.
+      </p>
+      {% if error %}
+      <div class="callout bad">
+        <div class="body">
+          <div class="title">That token was not accepted</div>
+          <p class="hint">Check it against the one your CLI uses, then try again.</p>
+        </div>
+      </div>
+      {% endif %}
+      <form method="post" action="/ui/login" class="stack">
+        <div class="field">
+          <label for="token">API token</label>
+          <input type="password" id="token" name="token" aria-label="api token"
+                 autofocus autocomplete="off" placeholder="paste your token">
+          <span class="hint">The same token the <code>hrono</code> CLI uses. It is kept in a cookie this page cannot read.</span>
+        </div>
+        <div><button class="btn primary" type="submit">Sign in</button></div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}

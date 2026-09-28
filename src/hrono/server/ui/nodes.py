@@ -141,10 +141,13 @@ def _candidates(conn: object, tree: str, node_id: int, level: int) -> dict:
     """
 
     def at(wanted: int) -> list[dict[str, object]]:
+        # the NAME only, blank when a topic has none: the page prints the id
+        # itself, and a fallback title of "topic 28" beside it read as
+        # "topic 28 - topic 28"
         return [
             {
                 "id": int(row["id"]),
-                "title": row["title"] or f"topic {row['id']}",
+                "title": str(row["title"] or ""),
             }
             for row in conn.execute(  # type: ignore[attr-defined]
                 "SELECT id, title FROM nodes WHERE tree = ? AND level = ? "
@@ -291,9 +294,15 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
             # the same ladder `_titled` walks, so the list reads like the map
             # rather than like a set of row ids
             "title": _titled_row(child),
+            "holds": int(child["members"]) or int(child["kids"]),
+            "holds_what": "chunks" if int(child["members"]) else "topics",
         }
         for child in conn.execute(  # type: ignore[attr-defined]
-            "SELECT c.child_id AS child_id, n.title AS title, b.text AS brief "
+            "SELECT c.child_id AS child_id, n.title AS title, b.text AS brief, "
+            "(SELECT COUNT(*) FROM node_members m WHERE m.node_id = c.child_id)"
+            " AS members, "
+            "(SELECT COUNT(*) FROM node_children k "
+            "WHERE k.parent_id = c.child_id) AS kids "
             "FROM node_children c JOIN nodes n ON n.id = c.child_id "
             "LEFT JOIN briefs b ON b.node_id = c.child_id "
             "WHERE c.parent_id = ? ORDER BY c.child_id",
@@ -305,6 +314,9 @@ def _node(conn: object, tree: str, node_id: int) -> dict[str, object]:
         "level": int(row["level"]),
         "title": row["title"] or _titled(brief, node_id),
         "brief": brief["text"] if brief is not None else None,
+        # the same rule the map colours by: no brief counts as a stale one,
+        # because both mean recall cannot answer from this topic
+        "stale": brief is None or bool(brief["stale"]),
         "parent": None if parent is None else int(parent["parent_id"]),
         "children": children,
         "pins": sorted(pins.reasons(conn, node_id)),  # type: ignore[arg-type]

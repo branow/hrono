@@ -1,19 +1,40 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }} triage{% endblock %}
 {% block main %}
-<h1>triage</h1>
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Needs attention</h1>
+  <p class="lede">
+    Five checks hrono runs over this tree. Each one counts something that,
+    left alone, quietly makes the tree answer worse. A zero is reported too,
+    so you can tell "nothing wrong" from "not checked".
+  </p>
+</div>
+
 {% if clean %}
-<p class="clean">nothing needs attention in {{ tree }}.</p>
+<div class="callout ok mb-4">
+  <div class="body">
+    <div class="title">All clear</div>
+    <p class="hint">Every check passes — nothing needs attention in {{ tree }}.</p>
+  </div>
+</div>
 {% endif %}
-<table>
-  <tbody>
-  {% for item in items %}
-  <tr class="{% if item.count %}needs{% else %}ok{% endif %}">
-    <td class="count">{{ item.count }}</td>
-    <td><a href="{{ item.link }}">{{ item.kind }}</a></td>
-    <td class="notes">{{ item.detail }}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+
+<section class="card">
+  <div class="card-body">
+    <ul class="checks">
+      {% for item in items %}
+      <li class="{% if item.count %}needs{% else %}ok{% endif %}">
+        <span class="tally num" aria-hidden="true">{% if item.count %}{{ item.count }}{% else %}
+          <svg width="14" height="14" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {% endif %}</span>
+        <span class="body">
+          <a href="{{ item.link }}">{{ item.count }} {{ item.kind }}</a>
+          <span class="hint">{{ item.detail }}</span>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
 {% endblock %}

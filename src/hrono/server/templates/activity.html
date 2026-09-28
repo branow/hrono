@@ -1,24 +1,67 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }} activity{% endblock %}
 {% block main %}
-<h1>activity</h1>
-{% if not rows %}
-<p>nothing has been decided about {{ tree }} yet.</p>
-{% else %}
-<p class="notes">showing {{ rows|length }} of {{ total }} · newest first</p>
-<table>
-  <thead><tr><th>when</th><th>topic</th><th>verdict</th><th>action</th><th>climbed to</th></tr></thead>
-  <tbody>
-  {% for row in rows %}
-  <tr class="{% if row.abstained %}needs{% endif %}">
-    <td class="notes">{{ row.when }}</td>
-    <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">topic {{ row.node_id }}</a></td>
-    <td>{{ row.verdict }}</td>
-    <td>{{ row.action }}</td>
-    <td>{% if row.climbed_to %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.climbed_to }}?tree={{ tree }}">topic {{ row.climbed_to }}</a>{% endif %}</td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% endif %}
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Activity</h1>
+  <p class="lede">
+    Every judgement hrono made about a changed topic: whether the change was
+    big enough to matter, what it did about it, and how far up the tree the
+    consequences travelled. Read this when the map is not the shape you
+    expected.
+  </p>
+</div>
+
+<section class="card">
+  {% if not rows %}
+  <div class="card-body empty">
+    <div class="title">Nothing has been decided about {{ tree }} yet</div>
+    <p class="hint">
+      Entries appear when a sync finds that a source changed and hrono has to
+      decide what that means for the topics above it.
+    </p>
+  </div>
+  {% else %}
+  <div class="card-head">
+    <p class="notes small">showing {{ rows|length }} of {{ total }} · newest first</p>
+  </div>
+  <div class="card-body table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="when">when</th>
+          <th>topic</th>
+          <th>verdict</th>
+          <th>what it did</th>
+          <th>climbed to</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+      <tr class="{% if row.abstained %}needs{% endif %}">
+        <td class="when">{{ row.when }}</td>
+        <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">topic {{ row.node_id }}</a></td>
+        <td><span class="chip">{{ row.verdict }}</span></td>
+        <td>
+          {% if row.abstained %}
+          <span class="chip warn" title="The model could not be read, so no decision was recorded and the summary above may still be out of date">{{ row.action }}</span>
+          {% else %}{{ row.action }}{% endif %}
+        </td>
+        <td>{% if row.climbed_to %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.climbed_to }}?tree={{ tree }}">topic {{ row.climbed_to }}</a>{% else %}<span class="faint">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-foot">
+    <p class="hint">
+      <strong>verdict</strong> is how much the change altered what a reader
+      must know — <em>none</em>, <em>minor</em> or <em>major</em>.
+      <strong>climbed to</strong> is the topic above whose summary had to be
+      rewritten as a result. A row highlighted in amber is one where no
+      judgement could be reached, which leaves a summary possibly out of date.
+    </p>
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

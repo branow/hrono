@@ -136,13 +136,9 @@ def test_members_are_worst_fit_first_with_core_last(
     browser.sign_in()
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
-    order = [
-        line
-        for line in page.splitlines()
-        if ".md" in line and "summary" not in line
-    ]
+    order = re.findall(r'class="path">([^<]+)</span>', page)
 
-    assert [path.strip().split()[0] for path in order] == [
+    assert order == [
         "worse.md",  # 0.72, the least likely to belong
         "edge.md",  # 0.80
         # then the unscored, by id: a confident core and a forced placement

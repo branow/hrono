@@ -89,7 +89,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
 def test_an_empty_tree_says_so(browser: Browser) -> None:
     browser.sign_in()
 
-    assert "no runs for default yet" in browser.page()
+    assert "No runs for default yet" in browser.page()
 
 
 def test_a_run_shows_its_status_progress_and_children(
@@ -149,7 +149,8 @@ def test_a_failed_run_shows_its_code_and_message(browser: Browser) -> None:
 
     page = browser.page()
 
-    assert "embed-error: no embedding model available" in page
+    assert "embed-error" in page
+    assert "no embedding model available" in page
 
 
 def test_a_live_run_is_marked_for_the_event_stream(browser: Browser) -> None:
@@ -208,7 +209,7 @@ def test_a_reader_sees_no_cancel_and_is_refused_at_the_route(
         ).json()["job_id"]
     )
 
-    assert ">cancel<" not in browser.page()
+    assert ">Stop this run<" not in browser.page()
     assert (
         browser.client.post(
             f"/ui/jobs/{parent}/cancel", follow_redirects=False
@@ -245,9 +246,9 @@ def test_a_run_says_when_it_started_and_which_one_it_is(
     browser.fan_out()
     page = browser.page()
 
-    assert "<th>started</th>" in page
-    assert "<th>took</th>" in page
-    assert "<th>id</th>" in page
+    assert '<th class="when">started</th>' in page
+    assert '<th class="when">took</th>' in page
+    assert '<th class="when">id</th>' in page
 
 
 def test_the_id_shown_is_the_prefix_of_the_real_one(

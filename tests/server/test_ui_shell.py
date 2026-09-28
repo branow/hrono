@@ -8,6 +8,7 @@ one, and the point of the ticket is that they are the SAME check underneath.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -109,14 +110,14 @@ def test_a_reader_gets_no_write_control(browser: Browser) -> None:
 
     body = browser.page("/ui").text  # type: ignore[attr-defined]
 
-    assert "sync this tree" not in body
+    assert "Sync now" not in body
 
 
 def test_a_writer_does(browser: Browser) -> None:
     # the other half: a control that is absent for everyone is not role-gating
     browser.sign_in("writer")
 
-    assert "sync this tree" in browser.page("/ui").text  # type: ignore[attr-defined]
+    assert "Sync now" in browser.page("/ui").text  # type: ignore[attr-defined]
 
 
 def test_logging_out_clears_the_cookie(browser: Browser) -> None:
@@ -165,7 +166,12 @@ def test_the_shell_reports_what_the_chosen_tree_holds(
 
     body = browser.page("/ui?tree=default").text  # type: ignore[attr-defined]
 
-    assert "1 topic(s)" in body
+    # the shape, as the front page states it: how many topics, over how
+    # many levels
+    assert re.search(
+        r'class="figure num">1</div>\s*<div class="label">topics</div>', body
+    )
+    assert "across 1 level" in body
 
 
 def test_the_write_button_actually_starts_a_sync(browser: Browser) -> None:

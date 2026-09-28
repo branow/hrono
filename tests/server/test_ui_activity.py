@@ -57,7 +57,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
 def test_an_empty_log_says_so(browser: Browser) -> None:
     browser.sign_in()
 
-    assert "nothing has been decided about default yet" in browser.activity()
+    assert "Nothing has been decided about default yet" in browser.activity()
 
 
 def test_decisions_are_listed_newest_first(browser: Browser) -> None:
@@ -121,7 +121,7 @@ def test_rows_are_per_tree(browser: Browser) -> None:
     with browser.conn:  # type: ignore[union-attr]
         record(browser.conn, TREE, 1, "major", "propagated")  # type: ignore[arg-type]
 
-    assert "nothing has been decided" in browser.activity("other")
+    assert "Nothing has been decided" in browser.activity("other")
 
 
 def test_the_incubators_rows_appear_too(browser: Browser) -> None:

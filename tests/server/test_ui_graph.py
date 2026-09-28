@@ -110,7 +110,9 @@ def test_a_closed_root_draws_only_itself(browser: Browser) -> None:
 
     page = browser.map()
 
-    assert page.count("<circle") == 1
+    # the map's own discs, not every circle on the page: the legend draws
+    # example circles of its own
+    assert page.count('class="disc"') == 1
     assert f"/nodes/{browser.ids['big']}" not in page
 
 
@@ -120,8 +122,9 @@ def test_a_closed_topic_with_children_is_marked(browser: Browser) -> None:
 
     page = browser.map()
 
-    assert 'class="closed"' in page
-    assert 'class="more">+</text>' in page
+    # a right-pointing disclosure triangle, and the link it carries
+    assert 'class="twist closed"' in page
+    assert "Open — show the" in page
 
 
 def test_opening_the_root_draws_its_children(browser: Browser) -> None:
@@ -129,10 +132,10 @@ def test_opening_the_root_draws_its_children(browser: Browser) -> None:
 
     page = browser.map(open=str(browser.ids["root"]))
 
-    assert page.count("<circle") == 3
+    assert page.count('class="disc"') == 3
     assert f"/nodes/{browser.ids['big']}" in page
     assert f"/nodes/{browser.ids['small']}" in page
-    assert page.count("<line") == 2  # root to each child
+    assert page.count('class="edge"') == 2  # root to each child
 
 
 def test_a_leaf_is_not_marked_as_closed(browser: Browser) -> None:
@@ -140,8 +143,9 @@ def test_a_leaf_is_not_marked_as_closed(browser: Browser) -> None:
 
     page = browser.map(open=str(browser.ids["root"]))
 
-    # one closed marker at most — the root is open, the leaves have no children
-    assert page.count('class="more">+</text>') == 0
+    # the root is open and the leaves have no children, so nothing on the page
+    # claims to hide anything
+    assert page.count('class="twist closed"') == 0
 
 
 def test_size_follows_what_a_topic_holds(browser: Browser) -> None:
@@ -184,12 +188,14 @@ def test_toggling_is_a_link_so_a_view_can_be_shared(
     )
     # opened: the same link now REMOVES it, so the toggle really toggles
     assert f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open="' in opened
-    # and a child carries a link that opens the child, not the root
+    # and a LEAF carries no toggle at all — there is nothing under it to
+    # open — only the link to its own page
     assert (
         f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;'
         f"open={min(root, browser.ids['big'])},"
-        f'{max(root, browser.ids["big"])}"' in opened
+        f'{max(root, browser.ids["big"])}"' not in opened
     )
+    assert f"/nodes/{browser.ids['big']}" in opened
 
 
 def test_an_empty_tree_says_so_rather_than_drawing_nothing(
@@ -200,7 +206,7 @@ def test_an_empty_tree_says_so_rather_than_drawing_nothing(
     page = browser.client.get("/ui/trees/empty/graph").text
 
     assert "has no topics yet" in page
-    assert "<svg" not in page
+    assert '<div class="canvas">' not in page  # no empty canvas is drawn
 
 
 def test_a_hand_edited_open_parameter_cannot_break_the_page(
@@ -229,7 +235,7 @@ def test_more_than_one_root_is_drawn(browser: Browser) -> None:
         )
     browser.sign_in()
 
-    assert browser.map().count("<circle") == 2
+    assert browser.map().count('class="disc"') == 2
 
 
 def test_a_label_fits_inside_its_column(browser: Browser) -> None:
@@ -267,15 +273,16 @@ def test_a_short_label_is_left_alone(browser: Browser) -> None:
 
 
 def test_the_canvas_leaves_room_for_a_label(browser: Browser) -> None:
-    """A centre-anchored label under the first column used to run off the
-    left edge of the SVG and be clipped."""
-    from hrono.server.graph import LABEL_CHARS, MARGIN, build
+    """Labels sit to the RIGHT of their topic, so the canvas has to be wider
+    than its last column or the deepest labels are clipped."""
+    from hrono.server.graph import LABEL_CHARS, LABEL_WIDTH, LEFT, build
 
-    drawn = build(browser.conn, TREE, [])  # type: ignore[arg-type]
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
-    # roughly 7px per character at the 11px label font, half each side
-    assert MARGIN >= LABEL_CHARS * 7 / 2
-    assert drawn.nodes[0].x >= MARGIN
+    # roughly 6.6px per character at the 12px label font, all on one side
+    assert LABEL_WIDTH >= LABEL_CHARS * 6.6
+    assert drawn.nodes[0].x >= LEFT
+    assert drawn.width >= max(node.x for node in drawn.nodes) + LABEL_WIDTH
 
 
 def _root(browser: Browser) -> int:

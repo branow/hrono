@@ -1,113 +1,305 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ node.title }}{% endblock %}
+{% set pin_says = {
+  "brief": "its brief was written by hand and will not be regenerated",
+  "membership": "a chunk was filed here by hand and will not be moved",
+  "parenting": "it was hung under this parent by hand and will not be re-attached"
+} %}
 {% block main %}
-<h1>{{ node.title }}</h1>
-<p class="where">
-  level {{ node.level }}
-  {% if node.parent %} · under <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent }}?tree={{ tree }}">topic {{ node.parent }}</a>{% endif %}
-  {% if node.pins %} · pinned: {{ node.pins|join(', ') }}{% endif %}
-</p>
-{% if error %}<p class="needs">{{ error }}</p>{% endif %}
-{% if done %}<p class="clean">{{ done }}</p>{% endif %}
-{% if node.brief %}<blockquote>{{ node.brief }}</blockquote>{% else %}<p><em>no brief yet</em></p>{% endif %}
-{% if node.notes %}<p class="notes">{{ node.notes }}</p>{% endif %}
+<div class="page-head">
+  <div class="crumbs">
+    <a href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Map</a>
+    {% if node.parent %}
+    <span class="sep">/</span>
+    <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent }}?tree={{ tree }}">topic {{ node.parent }}</a>
+    {% endif %}
+    <span class="sep">/</span>
+    <span>topic {{ node.id }}</span>
+  </div>
+  <h1>{{ node.title }}</h1>
+  <p class="where row mt-2">
+    <span class="chip">level {{ node.level }}</span>
+    <span class="chip">{% if node.children %}groups {{ node.children|length }} topic{{ "" if node.children|length == 1 else "s" }}{% else %}holds {{ node.members|length }} chunk{{ "" if node.members|length == 1 else "s" }}{% endif %}</span>
+    {% if node.parent %}<span class="chip plain">under <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent }}?tree={{ tree }}">topic {{ node.parent }}</a></span>{% endif %}
+    {% for kind in node.pins %}
+    <span class="chip accent" title="Held by hand: {{ pin_says.get(kind, kind) }}">pinned: {{ kind }}</span>
+    {% endfor %}
+  </p>
+</div>
 
-{% if can_edit %}
-<details class="surgery">
-  <summary>edit this topic</summary>
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/rename">
-    <label>name <input name="title" value="{{ node.title }}" maxlength="200"></label>
-    <button type="submit">rename</button>
-  </form>
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/brief">
-    <label for="brief-text">brief</label>
-    <textarea id="brief-text" name="text" rows="4">{{ node.brief or "" }}</textarea>
-    <button type="submit">write the brief by hand</button>
-  </form>
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/note">
-    <label for="note-text">note</label>
-    <textarea id="note-text" name="text" rows="2" maxlength="4000"></textarea>
-    <button type="submit">add a note</button>
-  </form>
-  {% if candidates.parents %}
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/reparent">
-    <label>under
-      <select name="to">
-        {% for parent in candidates.parents %}
-        <option value="{{ parent.id }}"{% if parent.id == node.parent %} selected{% endif %}>{{ parent.title }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button type="submit">move it there</button>
-  </form>
-  {% endif %}
-  {% if candidates.siblings %}
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/merge">
-    <label>merge with
-      <select name="with">
-        {% for sibling in candidates.siblings %}
-        <option value="{{ sibling.id }}">{{ sibling.title }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label><input type="checkbox" name="confirm" value="yes"> I mean it</label>
-    <button type="submit">merge</button>
-  </form>
-  {% endif %}
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
-    <label><input type="checkbox" name="confirm" value="yes"> I mean it</label>
-    <button type="submit">dissolve — its contents are re-placed</button>
-  </form>
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
-    <label><input type="checkbox" name="confirm" value="yes"> I mean it</label>
-    <button type="submit">split — this topic retires, its parts take over</button>
-  </form>
-  {% if node.pins %}
-  <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
-    <button type="submit">hand back to automation</button>
-    <span class="notes">releases {{ node.pins|length }} pin{{ "s" if node.pins|length != 1 }}</span>
-  </form>
-  {% endif %}
-</details>
+{% if error %}
+<div class="callout bad mb-4">
+  <div class="body"><div class="title">That did not go through</div><p class="hint">{{ error }}</p></div>
+</div>
+{% endif %}
+{% if done %}
+<div class="callout ok mb-4">
+  <div class="body"><div class="title">Done</div><p class="hint">{{ done }}</p></div>
+</div>
 {% endif %}
 
-{% if node.children %}
-<h2>topics beneath</h2>
-<ul>{% for child in node.children %}
-  <li><a href="/ui/trees/{{ tree }}/nodes/{{ child.id }}?tree={{ tree }}">{{ child.title }}</a></li>
-{% endfor %}</ul>
-{% endif %}
-
-<h2>chunks ({{ node.members|length }})</h2>
-{% if node.members %}
-<p class="notes">worst fit first; a confident placement has no score.</p>
-{% endif %}
-<ul class="members">
-{% for member in node.members %}
-  <li>
-    <details>
-      <summary>
-        {{ member.path }}
-        {% if member.forced %}<span class="flag">forced</span>
-        {% elif member.similarity is not none %}<span class="score">{{ "%.2f"|format(member.similarity) }}</span>
-        {% else %}<span class="score">core</span>{% endif %}
-      </summary>
-      <pre class="preview">{{ member.preview }}</pre>
-      {% if can_edit and candidates.siblings %}
-      <form method="post" action="/ui/trees/{{ tree }}/sections/{{ member.id }}/move" class="move">
-        <input type="hidden" name="from_node" value="{{ node.id }}">
-        <label>move to
-          <select name="to_node">
-            {% for sibling in candidates.siblings %}
-            <option value="{{ sibling.id }}">{{ sibling.title }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <button type="submit">move</button>
-      </form>
+<div class="stack">
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Brief</h2>
+        <p class="hint">The summary an agent reads to decide whether to come in here.</p>
+      </div>
+      {% if node.stale %}<span class="chip warn">needs rewriting</span>
+      {% elif "brief" in node.pins %}<span class="chip accent">written by hand</span>{% endif %}
+    </div>
+    <div class="card-body stack">
+      {% if node.brief %}
+      <blockquote>{{ node.brief }}</blockquote>
+      {% else %}
+      <div class="empty">
+        <div class="title">No brief yet</div>
+        <p class="hint">Until one is written, recall cannot answer from this topic. The next run will write it — or an admin can write one below.</p>
+      </div>
       {% endif %}
+      {% if node.stale and node.brief %}
+      <div class="callout warn">
+        <div class="body">
+          <div class="title">This brief no longer matches what the topic holds</div>
+          <p class="hint">Its contents changed after it was written. The next run rewrites it.</p>
+        </div>
+      </div>
+      {% endif %}
+      {% if node.notes %}
+      <div class="callout">
+        <div class="body">
+          <div class="title">Note</div>
+          <p class="hint">{{ node.notes }}</p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if can_edit %}
+    <details class="surgery">
+      <summary class="twisty">Correct this topic by hand <span class="chip">admin only</span></summary>
+      <div class="tools">
+        <p class="hint">
+          Every change here is <strong>pinned</strong>: the next run is told to
+          leave it alone rather than overwrite it. Hand it back to automation at
+          the bottom when you want that to stop.
+        </p>
+
+        <div class="tool">
+          <div class="what">Rename this topic</div>
+          <p class="hint">Replaces the name shown on the map and in the export.</p>
+          <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/rename">
+            <span class="grow">
+              <label for="topic-name">Name</label>
+              <input type="text" id="topic-name" name="title" value="{{ node.title }}" maxlength="200">
+            </span>
+            <button class="btn" type="submit">Save name</button>
+          </form>
+        </div>
+
+        <div class="tool">
+          <div class="what">Rewrite the brief</div>
+          <p class="hint">Replaces the generated summary with your words. Regeneration will skip this topic from now on.</p>
+          <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/brief">
+            <span class="grow">
+              <label for="brief-text">Brief</label>
+              <textarea id="brief-text" name="text" rows="5">{{ node.brief or "" }}</textarea>
+            </span>
+            <button class="btn" type="submit">Save brief</button>
+          </form>
+        </div>
+
+        <div class="tool">
+          <div class="what">Add a note</div>
+          <p class="hint">A remark for whoever reads this topic next. It is shown alongside the brief, not instead of it, and it never gets overwritten.</p>
+          <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/note">
+            <span class="grow">
+              <label for="note-text">Note</label>
+              <textarea id="note-text" name="text" rows="2" maxlength="4000"></textarea>
+            </span>
+            <button class="btn" type="submit">Add note</button>
+          </form>
+        </div>
+
+        {% if candidates.parents %}
+        <div class="tool">
+          <div class="what">Move it under a different topic</div>
+          <p class="hint">Changes which topic this one sits beneath. Nothing inside it changes.</p>
+          <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/reparent">
+            <span class="grow">
+              <label for="new-parent">New parent</label>
+              <select id="new-parent" name="to">
+                {% for parent in candidates.parents %}
+                <option value="{{ parent.id }}"{% if parent.id == node.parent %} selected{% endif %}>topic {{ parent.id }}{% if parent.title %} — {{ parent.title }}{% endif %}</option>
+                {% endfor %}
+              </select>
+            </span>
+            <button class="btn" type="submit">Move topic</button>
+          </form>
+        </div>
+        {% endif %}
+
+        <div class="danger-zone">
+          <div class="zone-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 1.5 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              <path d="M8 6v4M8 11.6v.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            These reshape the tree and cannot be undone from this page
+          </div>
+          <p class="hint">Your source files are never touched. What changes is how hrono has grouped them.</p>
+
+          {% if candidates.siblings %}
+          <div class="tool">
+            <div class="what">Merge with another topic</div>
+            <p class="hint">
+              The two become one topic holding everything both held. The
+              lower-numbered one survives; the other stops existing.
+            </p>
+            <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/merge">
+              <span class="grow">
+                <label for="merge-with">Merge with</label>
+                <select id="merge-with" name="with">
+                  {% for sibling in candidates.siblings %}
+                  <option value="{{ sibling.id }}">topic {{ sibling.id }}{% if sibling.title %} — {{ sibling.title }}{% endif %}</option>
+                  {% endfor %}
+                </select>
+              </span>
+              <label class="confirm"><input type="checkbox" name="confirm" value="yes"> Yes, merge them</label>
+              <button class="btn danger" type="submit">Merge topics</button>
+            </form>
+          </div>
+          {% endif %}
+
+          <div class="tool">
+            <div class="what">Remove this topic</div>
+            <p class="hint">
+              This topic disappears from the map. Each of the
+              {{ node.members|length or node.children|length }} thing{{ "" if (node.members|length or node.children|length) == 1 else "s" }}
+              inside it is re-filed under whichever remaining topic it is
+              closest to — nothing is thrown away. The CLI calls this a
+              <em>dissolve</em>.
+            </p>
+            <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
+              <label class="confirm"><input type="checkbox" name="confirm" value="yes"> Yes, remove it and re-file its contents</label>
+              <button class="btn danger" type="submit">Remove topic</button>
+            </form>
+          </div>
+
+          <div class="tool">
+            <div class="what">Split into smaller topics</div>
+            <p class="hint">
+              Re-clusters what this topic holds into several narrower topics
+              that take its place under the same parent. This topic stops
+              existing and you land on the first of its replacements.
+            </p>
+            <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
+              <label class="confirm"><input type="checkbox" name="confirm" value="yes"> Yes, replace it with its parts</label>
+              <button class="btn danger" type="submit">Split topic</button>
+            </form>
+          </div>
+        </div>
+
+        {% if node.pins %}
+        <div class="tool">
+          <div class="what">Hand it back to automation</div>
+          <p class="hint">
+            Drops the {{ node.pins|length }} pin{{ "" if node.pins|length == 1 else "s" }}
+            on this topic ({{ node.pins|join(", ") }}), so the next run is free to
+            rename it, rewrite its brief and move it again. Your text stays until
+            something replaces it.
+          </p>
+          <form method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
+            <button class="btn" type="submit">Release {{ node.pins|length }} pin{{ "" if node.pins|length == 1 else "s" }}</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
     </details>
-  </li>
-{% endfor %}
-</ul>
+    {% endif %}
+  </section>
+
+  {% if node.children %}
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Topics beneath</h2>
+        <p class="hint">This topic does not hold chunks of its own; it groups these.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <ul class="kids">
+        {% for child in node.children %}
+        <li>
+          <a href="/ui/trees/{{ tree }}/nodes/{{ child.id }}?tree={{ tree }}">
+            <span><span class="faint small">topic {{ child.id }}</span><br>{{ child.title }}</span>
+            <span class="chip num nowrap">{{ child.holds }} {{ child.holds_what }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Chunks in this topic <span class="faint num">{{ node.members|length }}</span></h2>
+        {% if node.members %}
+        <p class="hint">
+          A chunk is about 10 KB of one file. Worst fit first: the number is how
+          close the chunk sits to this topic's centre, so a low one is the first
+          place to look if the topic feels wrong. <strong>core</strong> means it
+          sat at the centre and was never scored; <strong>forced</strong> means a
+          rule put it here rather than a measurement.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card-body">
+      {% if not node.members %}
+      <div class="empty">
+        <div class="title">No chunks here</div>
+        <p class="hint">
+          {% if node.children %}This topic groups other topics; the chunks are further down.{% else %}Nothing is filed under this topic.{% endif %}
+        </p>
+      </div>
+      {% else %}
+      <ul class="members">
+      {% for member in node.members %}
+        <li>
+          <details>
+            <summary class="twisty">
+              <span class="path">{{ member.path }}</span>
+              {% if member.forced %}<span class="chip warn" title="Placed by rule rather than by similarity">forced</span>
+              {% elif member.similarity is not none %}<span class="chip num" title="How close this chunk sits to the topic's centre">fit {{ "%.2f"|format(member.similarity) }}</span>
+              {% else %}<span class="chip" title="A confident placement at the centre of the cluster">core</span>{% endif %}
+            </summary>
+            <div class="detail">
+              <pre class="preview">{{ member.preview }}</pre>
+              {% if can_edit and candidates.siblings %}
+              <form method="post" action="/ui/trees/{{ tree }}/sections/{{ member.id }}/move" class="move">
+                <input type="hidden" name="from_node" value="{{ node.id }}">
+                <span class="field">
+                  <label for="move-{{ member.id }}">File this chunk under</label>
+                  <select id="move-{{ member.id }}" name="to_node">
+                    {% for sibling in candidates.siblings %}
+                    <option value="{{ sibling.id }}">topic {{ sibling.id }}{% if sibling.title %} — {{ sibling.title }}{% endif %}</option>
+                    {% endfor %}
+                  </select>
+                </span>
+                <button class="btn small" type="submit">Move chunk</button>
+                <span class="hint">Pinned there, so no run moves it back.</span>
+              </form>
+              {% endif %}
+            </div>
+          </details>
+        </li>
+      {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </section>
+</div>
 {% endblock %}

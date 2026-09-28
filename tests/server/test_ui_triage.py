@@ -233,7 +233,9 @@ def test_no_internal_ticket_numbers_reach_the_page(
     """
     clean_tree.sign_in()
 
-    page = clean_tree.triage()
+    # the stylesheet is not copy, and its colour tokens are full of `#1...`
+    # — strip it so this asks about what a person actually reads
+    page = re.sub(r"<style>.*?</style>", "", clean_tree.triage(), flags=re.S)
 
     assert "#1" not in page
     assert not re.search(r"\(#\d+", page)

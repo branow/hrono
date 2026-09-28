@@ -21,6 +21,29 @@ from hrono.server.ui import Reader, Writer, _trees, router, templates
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
+# An op name is the API's word and the CLI's word, so the page keeps it — but
+# an operator reading a run log should not have to already know what
+# `cluster-briefs` does. The name stays, and this says it in a sentence.
+MEANS = {
+    "sync-tree": "read every source and bring the whole tree up to date",
+    "sync": "fetch a source's files",
+    "split": "cut the files into chunks",
+    "embed": "turn chunks into vectors",
+    "condense": "shorten each chunk so it can be summarised",
+    "cluster": "group chunks into topics",
+    "cluster-briefs": "group topics into higher-level topics",
+    "brief": "write a summary for each topic that holds chunks",
+    "brief-upper": "write a summary for each topic that groups topics",
+    "build-tree": "build the whole tree from the ground up",
+    "update": "re-file only what changed",
+    "propagate": "mark the summaries a change has invalidated",
+    "maintain": "routine upkeep: check the tree and fix what drifted",
+    "monitor": "look for topics that have drifted out of shape",
+    "repair": "split, merge or retire the topics that drifted",
+    "settle": "place the chunks that were still waiting",
+    "noop": "do nothing — a health check of the worker",
+}
+
 
 @router.get("/ui/jobs", response_class=HTMLResponse)
 def jobs_view(request: Request, user: Reader, tree: str = "") -> Response:
@@ -67,9 +90,10 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
     return {
         "id": job.id,
         "short_id": job.id.removeprefix("job_")[:8],
-        "started": _clock(job.created_at),
+        "started": clock(job.created_at),
         "took": _elapsed(job.created_at, job.updated_at, live=status in _LIVE),
         "op": job.op,
+        "means": MEANS.get(job.op, ""),
         "status": status,
         "live": status in _LIVE,
         "progress": (
@@ -86,6 +110,7 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
         "children": [
             {
                 "op": str(child["op"]),
+                "means": MEANS.get(str(child["op"]), ""),
                 "status": str(child["status"]),
                 "scope": to_job(child).scope,
             }
@@ -94,7 +119,7 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
     }
 
 
-def _clock(stamp: str) -> str:
+def clock(stamp: str) -> str:
     """The time of day a run started. Three `maintain` rows with no clock on
     them are three indistinguishable rows."""
     moment = _parsed(stamp)

@@ -1,11 +1,157 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }}{% endblock %}
 {% block main %}
-<h1>{{ tree }}</h1>
-<p>{{ topics }} topic(s) across {{ levels }} level(s).</p>
-{% if can_write %}
-<form class="inline" method="post" action="/ui/trees/{{ tree }}/sync">
-  <button type="submit">sync this tree</button>
-</form>
+<div class="page-head">
+  <div class="spread">
+    <div>
+      <div class="eyebrow">tree</div>
+      <h1>{{ tree }}</h1>
+      <p class="lede">
+        Everything hrono has read, grouped into a tree of topics an agent can
+        walk or search. This page is the state of that tree right now.
+      </p>
+    </div>
+    {% if can_write %}
+    <form method="post" action="/ui/trees/{{ tree }}/sync">
+      <button class="btn primary" type="submit">Sync now</button>
+      <p class="hint mt-1 narrow">
+        Re-reads every source, re-files what changed and rewrites only the
+        briefs that no longer hold. Runs in the background.
+      </p>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if topics == 0 %}
+<div class="card">
+  <div class="card-body stack">
+    <div>
+      <h2>Nothing is in this tree yet</h2>
+      <p class="hint">
+        hrono builds the tree from sources you register. Three steps and this
+        page fills up.
+      </p>
+    </div>
+    <ol class="steps">
+      <li>
+        <div class="what">Register a source</div>
+        <p class="hint">A git repository to read. {% if sources %}You have {{ sources }} registered already.{% endif %}</p>
+        <code>hrono sources add my-repo --type git --url &lt;url&gt;</code>
+      </li>
+      <li>
+        <div class="what">Sync it</div>
+        <p class="hint">Reads the files, cuts them into chunks, embeds them, clusters them into topics and writes a brief for each.</p>
+        <code>hrono sync --tree {{ tree }}</code>
+      </li>
+      <li>
+        <div class="what">Look at what it built</div>
+        <p class="hint">The map is the picture of the tree; every topic on it opens.</p>
+        <a class="btn small" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>
+      </li>
+    </ol>
+  </div>
+</div>
+{% else %}
+
+<div class="stack">
+  <section class="stats">
+    <div class="stat">
+      <div class="figure num">{{ shape.topics }}</div>
+      <div class="label">topics</div>
+      <div class="note">across {{ shape.levels }} level{{ "" if shape.levels == 1 else "s" }}</div>
+    </div>
+    <div class="stat">
+      <div class="figure num">{{ shape.leaves }}</div>
+      <div class="label">of them hold chunks</div>
+      <div class="note">the rest group other topics</div>
+    </div>
+    <div class="stat">
+      <div class="figure num">{{ shape.filed }}</div>
+      <div class="label">chunks on the map</div>
+      <div class="note">a chunk is roughly 10 KB of one file</div>
+    </div>
+    <div class="stat">
+      <div class="figure num">{{ shape.parked }}</div>
+      <div class="label">chunks waiting</div>
+      <div class="note">read, but not yet in any topic</div>
+    </div>
+  </section>
+
+  <div class="grid two">
+    <section class="card">
+      <div class="card-head">
+        <h2>Needs attention</h2>
+        <a class="small" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}">See all checks</a>
+      </div>
+      <div class="card-body">
+        {% if clean %}
+        <div class="callout ok">
+          <div class="body">
+            <div class="title">All clear</div>
+            <p class="hint">Every check on this tree passes. Nothing is waiting on a human.</p>
+          </div>
+        </div>
+        {% else %}
+        <ul class="kids">
+          {% for item in attention %}
+          <li>
+            <a href="{{ item.link }}">
+              <span>
+                <span class="what">{{ item.kind }}</span><br>
+                <span class="hint">{{ item.detail }}</span>
+              </span>
+              <span class="chip warn num">{{ item.count }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent runs</h2>
+        <a class="small" href="/ui/jobs?tree={{ tree }}">All runs</a>
+      </div>
+      <div class="card-body">
+        {% if not runs %}
+        <div class="empty">
+          <div class="title">Nothing has run yet</div>
+          <p class="hint">Background work — syncing, clustering, writing briefs — shows up here.</p>
+        </div>
+        {% else %}
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              {% for run in runs %}
+              <tr>
+                <td class="when">{{ run.when }}</td>
+                <td><code>{{ run.op }}</code></td>
+                <td><span class="state" data-state="{{ run.status }}">{{ run.status }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-body spread">
+      <div>
+        <h2>The map</h2>
+        <p class="hint">
+          The tree drawn out: one circle per topic, sized by how much it holds.
+          Open a topic to see the topics or chunks beneath it.
+        </p>
+      </div>
+      <a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>
+    </div>
+  </section>
+</div>
 {% endif %}
 {% endblock %}

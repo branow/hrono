@@ -1,24 +1,54 @@
 {% extends "base.html" %}
 {% block title %}hrono — config{% endblock %}
+{% set about = {
+  "sources": "The repositories hrono reads. Each one is fetched, split into chunks and fed into the tree.",
+  "connections": "Where the language models live — an endpoint and how to authenticate to it.",
+  "models": "The models themselves: one for embedding chunks, and one per writing job (brief, condense, judge).",
+  "prompts": "The instructions sent with each writing job. Changing one makes every brief it wrote stale.",
+  "trees": "Named trees. A database with none still has exactly one, called default."
+} %}
 {% block main %}
-<h1>config</h1>
-<p class="notes">read-only here — edit with the CLI or the API. Secrets are masked.</p>
+<div class="page-head">
+  <h1>Settings</h1>
+  <p class="lede">
+    Everything hrono is configured with. This page is read-only — change it
+    with the CLI (<code>hrono sources add</code>, <code>hrono models set</code>,
+    …) or the API. Tokens and keys are replaced with a mask before they reach
+    this page.
+  </p>
+</div>
+
+<div class="stack">
 {% for collection in collections %}
-<h2>{{ collection.name }}</h2>
-{% if not collection.rows %}
-<p class="notes">no {{ collection.name }} configured.</p>
-{% else %}
-<table>
-  <thead><tr><th>name</th><th>config</th></tr></thead>
-  <tbody>
-  {% for item in collection.rows %}
-  <tr>
-    <td>{{ item.name }}{% if item.is_default %} <span class="notes">(default)</span>{% endif %}</td>
-    <td><pre class="preview">{{ item.config }}</pre></td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% endif %}
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2>{{ collection.name }}</h2>
+      <p class="hint">{{ about.get(collection.name, "") }}</p>
+    </div>
+    <span class="chip num">{{ collection.rows|length }}</span>
+  </div>
+  <div class="card-body">
+    {% if not collection.rows %}
+    <div class="empty">
+      <div class="title">no {{ collection.name }} configured.</div>
+      <p class="hint">Nothing of this kind has been registered yet.</p>
+    </div>
+    {% else %}
+    <div class="stack">
+      {% for item in collection.rows %}
+      <div class="field">
+        <div class="row">
+          <strong>{{ item.name }}</strong>
+          {% if item.is_default %}<span class="chip accent">(default)</span>{% endif %}
+        </div>
+        <pre class="preview">{{ item.config }}</pre>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
 {% endfor %}
+</div>
 {% endblock %}

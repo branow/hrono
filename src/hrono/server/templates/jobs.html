@@ -1,54 +1,127 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }} jobs{% endblock %}
 {% block main %}
-<h1>runs</h1>
-{% if not jobs %}
-<p>no runs for {{ tree }} yet.</p>
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Runs</h1>
+  <p class="lede">
+    Work hrono does in the background: reading sources, re-filing chunks,
+    writing briefs. Each run is one instruction; the indented lines under it
+    are the pieces it was broken into. This page updates itself while a run
+    is going.
+  </p>
+</div>
+
+{% if notice %}
+<div class="callout mb-4">
+  <div class="body"><div class="title">Cancellation</div><p class="hint notice">{{ notice }}</p></div>
+</div>
 {% endif %}
-<table>
-  <thead><tr><th>started</th><th>op</th><th>status</th><th>took</th><th>progress</th><th>tokens</th><th>id</th><th></th></tr></thead>
-  <tbody>
-  {% for job in jobs %}
-  <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
-    <td class="when">{{ job.started }}</td>
-    <td>{{ job.op }}</td>
-    <td class="status">{{ job.status }}</td>
-    <td class="when">{{ job.took }}</td>
-    <td class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</td>
-    <td>{% if job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% endif %}</td>
-    <td><code title="{{ job.id }}">{{ job.short_id }}</code></td>
-    <td>
-      {% if job.live and can_write %}
-      <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel">
-        <button type="submit">cancel</button>
-      </form>
+
+<section class="card">
+  {% if not jobs %}
+  <div class="card-body empty">
+    <div class="title">No runs for {{ tree }} yet</div>
+    <p class="hint">
+      Start one with <strong>Sync now</strong> on the overview, or with
+      <code>hrono sync</code>. Anything that runs appears here with what it
+      cost and how far it got.
+    </p>
+    <p class="mt-3"><a class="btn" href="/ui?tree={{ tree }}">Back to the overview</a></p>
+  </div>
+  {% else %}
+  <div class="card-body table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="when">started</th>
+          <th>what ran</th>
+          <th>status</th>
+          <th class="when">took</th>
+          <th>progress</th>
+          <th>tokens</th>
+          <th class="when">id</th>
+          <th><span class="visually-hidden">actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for job in jobs %}
+      <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
+        <td class="when">{{ job.started }}</td>
+        <td>
+          <code>{{ job.op }}</code>
+          {% if job.means %}<div class="hint small">{{ job.means }}</div>{% endif %}
+        </td>
+        <td><span class="state status" data-state="{{ job.status }}">{{ job.status }}</span></td>
+        <td class="when">{{ job.took }}</td>
+        <td class="num">
+          <span class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</span>
+          {% if job.progress and job.progress.total %}
+          <span class="bar"><span style="width:{{ (100 * job.progress.done / job.progress.total)|round|int }}%"></span></span>
+          {% endif %}
+        </td>
+        <td class="num nowrap">{% if job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td><code class="faint" title="{{ job.id }}">{{ job.short_id }}</code></td>
+        <td>
+          {% if job.live and can_write %}
+          <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel">
+            <button class="btn small" type="submit">Stop this run</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% if job.error %}
+      <tr class="error">
+        <td></td>
+        <td colspan="7">
+          <div class="callout bad">
+            <div class="body">
+              <div class="title">{{ job.error.code }}</div>
+              <p class="hint">{{ job.error.message }}</p>
+            </div>
+          </div>
+        </td>
+      </tr>
       {% endif %}
-    </td>
-  </tr>
-  {% if job.error %}
-  <tr class="error"><td colspan="8">{{ job.error.code }}: {{ job.error.message }}</td></tr>
+      {% for child in job.children %}
+      <tr class="child">
+        <td></td>
+        <td>
+          <span class="kidline"><code>{{ child.op }}</code>{% if child.scope.name %} <span class="faint">{{ child.scope.name }}</span>{% endif %}</span>
+          {% if child.means %}<div class="hint small indent">{{ child.means }}</div>{% endif %}
+        </td>
+        <td><span class="state" data-state="{{ child.status }}">{{ child.status }}</span></td>
+        <td colspan="5"></td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
-  {% for child in job.children %}
-  <tr class="child"><td></td><td>{{ child.op }}{% if child.scope.name %} · {{ child.scope.name }}{% endif %}</td>
-      <td>{{ child.status }}</td><td colspan="5"></td></tr>
-  {% endfor %}
-  {% endfor %}
-  </tbody>
-</table>
-{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+</section>
 <script>
 // EventSource is a browser built-in and /jobs/<id>/events already speaks it
-// (#174) — so this view is live with no library and nothing vendored. The
-// cookie rides along and no script can read it (#180).
+// — so this view is live with no library and nothing vendored. The cookie
+// rides along and no script can read it.
 for (const row of document.querySelectorAll('tr[data-live]')) {
   const source = new EventSource('/jobs/' + row.dataset.job + '/events');
   source.addEventListener('state', (event) => {
     const state = JSON.parse(event.data);
-    row.querySelector('.status').textContent = state.status;
+    const badge = row.querySelector('.status');
+    badge.textContent = state.status;
+    // the badge takes its colour from data-state, so a live update that moved
+    // only the text would leave a finished run painted as a running one
+    badge.dataset.state = state.status;
     row.querySelector('.progress').textContent =
       state.progress ? state.progress.done + '/' + state.progress.total : '';
+    const bar = row.querySelector('.bar > span');
+    if (bar && state.progress && state.progress.total) {
+      bar.style.width =
+        (100 * state.progress.done / state.progress.total) + '%';
+    }
   });
-  // the stream ends when the job does (#174), and so does the connection
+  // the stream ends when the job does, and so does the connection
   source.onerror = () => source.close();
 }
 </script>

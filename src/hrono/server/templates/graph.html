@@ -1,49 +1,193 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }} map{% endblock %}
 {% block main %}
-<h1>map</h1>
-{% if not graph.nodes %}
-<p>{{ tree }} has no topics yet.</p>
-{% else %}
-<p class="notes">bigger holds more · <span class="stale-key">orange</span> is a stale or missing brief · click a topic to open or close it</p>
-<p class="notes">show:
-  {% for toggle in overlay.toggles %}<a href="{{ toggle.href }}" class="toggle{% if toggle.on %} edge-on{% endif %}">{{ toggle.kind }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
-</p>
-<ul class="legend notes">
-  <li><span class="edge-key pull">pull</span> — chunks that sit nearer another topic</li>
-  <li><span class="edge-key proximity">proximity</span> — siblings close enough to merge</li>
-  <li><span class="edge-key propagation">propagation</span> — where a change climbed</li>
-</ul>
-<p class="notes">pull and proximity are chunk-level, so they are drawn between leaf topics only.</p>
-{% if overlay.unavailable %}
-<p class="needs">pull and proximity need an embedding model: {{ overlay.unavailable }}</p>
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Map</h1>
+  <p class="lede">
+    The tree hrono built. Each circle is a topic; topics on the left group the
+    topics on their right, and the rightmost ones hold the chunks of your
+    files. Open a topic to see what is beneath it.
+  </p>
+</div>
+
+{% if done %}
+<div class="callout ok mb-4">
+  <div class="body"><div class="title">Done</div><p class="hint">{{ done }}</p></div>
+</div>
 {% endif %}
-<div class="canvas">
-<svg width="{{ graph.width }}" height="{{ graph.height }}" role="img" aria-label="topic map">
-  {% for x1, y1, x2, y2 in graph.edges %}
-  <line x1="{{ x1 }}" y1="{{ y1 }}" x2="{{ x2 }}" y2="{{ y2 }}" class="edge"/>
-  {% endfor %}
-  {% for link in overlay.links %}
-  <line x1="{{ link.x1 }}" y1="{{ link.y1 }}" x2="{{ link.x2 }}" y2="{{ link.y2 }}" class="link {{ link.kind }}">
-    <title>{{ link.kind }}: {{ link.label }}</title>
-  </line>
-  {% endfor %}
-  {% for node in graph.nodes %}
-  <g class="node{% if node.stale %} stale{% endif %}">
-    <a href="{{ node.toggle }}">
-      <circle cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"
-              {% if node.has_hidden_children %}class="closed"{% endif %}/>
-    </a>
-    {% if node.has_hidden_children %}
-    <text x="{{ node.x }}" y="{{ node.y + 4 }}" class="more">+</text>
-    {% endif %}
-    <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">
-      <text x="{{ node.x }}" y="{{ node.y + node.radius + 14 }}" class="label">{{ node.title }}</text>
-    </a>
-    <title>{{ node.title }} — holds {{ node.holds }}{% if node.stale %}, brief stale{% endif %}</title>
-  </g>
-  {% endfor %}
-</svg>
+
+{% if not graph.nodes %}
+<div class="card">
+  <div class="card-body empty">
+    <div class="mark">
+      <svg width="56" height="56" viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M20 13v6M20 19l-9 7M20 19l9 7" stroke="currentColor" stroke-width="1.2" fill="none" opacity=".5"/>
+        <circle cx="20" cy="9" r="5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 3"/>
+        <circle cx="9" cy="30" r="5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 3"/>
+        <circle cx="31" cy="30" r="5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 3"/>
+      </svg>
+    </div>
+    <div class="title">{{ tree }} has no topics yet</div>
+    <p class="hint">
+      Topics appear once a sync has read a source, cut it into chunks and
+      clustered them. Start one from the overview.
+    </p>
+    <p class="mt-3"><a class="btn" href="/ui?tree={{ tree }}">Back to the overview</a></p>
+  </div>
+</div>
+{% else %}
+
+<div class="stack">
+  <section class="card">
+    <div class="card-body">
+      <h2 class="visually-hidden">How to read this map</h2>
+      <ul class="legend">
+        <li>
+          <span class="art">
+            <svg width="34" height="18" viewBox="0 0 34 18" aria-hidden="true">
+              <circle cx="8" cy="9" r="4" fill="var(--accent)"/>
+              <circle cx="24" cy="9" r="8" fill="var(--accent)"/>
+            </svg>
+          </span>
+          <span>
+            <span class="what">Size is how much it holds</span>
+            <span class="why">A bigger circle means more chunks (or more topics) underneath it.</span>
+          </span>
+        </li>
+        <li>
+          <span class="art">
+            <svg width="34" height="18" viewBox="0 0 34 18" aria-hidden="true">
+              <circle cx="17" cy="9" r="7" fill="#d68315"/>
+            </svg>
+          </span>
+          <span>
+            <span class="what"><span class="stale-key">Amber</span> needs a new brief</span>
+            <span class="why">Its summary is missing or no longer matches its contents, so recall cannot answer from it.</span>
+          </span>
+        </li>
+        <li>
+          <span class="art">
+            <svg width="34" height="18" viewBox="0 0 34 18" aria-hidden="true">
+              <path d="M10 4l6 5-6 5z" fill="var(--ink-faint)"/>
+              <path d="M22 6h8M22 9h8M22 12h5" stroke="var(--rule-firm)" stroke-width="1.5"/>
+            </svg>
+          </span>
+          <span>
+            <span class="what">The triangle opens a topic</span>
+            <span class="why">Topics with something beneath them carry one. It points right when closed, down when open.</span>
+          </span>
+        </li>
+        <li>
+          <span class="art">
+            <svg width="34" height="18" viewBox="0 0 34 18" aria-hidden="true">
+              <circle cx="8" cy="9" r="4" fill="var(--accent)"/>
+              <path d="M16 6h14M16 11h9" stroke="var(--accent)" stroke-width="1.5" opacity=".5"/>
+            </svg>
+          </span>
+          <span>
+            <span class="what">The name opens the topic page</span>
+            <span class="why">Its brief, the chunks it holds, and — if you are an admin — the controls to correct it.</span>
+          </span>
+        </li>
+      </ul>
+    </div>
+    <div class="card-foot row">
+      <span class="chip plain">{{ graph.shown }} topic{{ "" if graph.shown == 1 else "s" }} drawn</span>
+      <a class="btn small" href="{{ graph.expand_all }}">Open every topic</a>
+      <a class="btn small" href="{{ graph.collapse_all }}">Collapse to the root</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Show relationships</h2>
+        <p class="hint">Extra lines drawn over the tree. All off by default, because each one is a different question.</p>
+      </div>
+      <span class="row">
+        {% for toggle in overlay.toggles %}
+        <a href="{{ toggle.href }}" class="toggle {{ toggle.kind }}{% if toggle.on %} edge-on{% endif %}">
+          <span class="swatch"></span>{{ toggle.kind }}
+        </a>
+        {% endfor %}
+      </span>
+    </div>
+    <details class="card-body reveal"{% if overlay.kinds or overlay.unavailable %} open{% endif %}>
+      <summary>What these three lines mean</summary>
+      <ul class="legend">
+        <li>
+          <span class="art"><span class="edge-key pull">— —</span></span>
+          <span>
+            <span class="what"><span class="edge-key pull">pull</span> — a chunk in the wrong home</span>
+            <span class="why">Drawn from the topic a chunk sits in to the topic it is actually closer to.</span>
+          </span>
+        </li>
+        <li>
+          <span class="art"><span class="edge-key proximity">· · ·</span></span>
+          <span>
+            <span class="what"><span class="edge-key proximity">proximity</span> — two topics that overlap</span>
+            <span class="why">Siblings similar enough that merging them into one would be defensible.</span>
+          </span>
+        </li>
+        <li>
+          <span class="art"><span class="edge-key propagation">———</span></span>
+          <span>
+            <span class="what"><span class="edge-key propagation">propagation</span> — where a change travelled</span>
+            <span class="why">A chunk changed here, and the brief above it had to be rewritten too.</span>
+          </span>
+        </li>
+      </ul>
+      <p class="hint mt-3">
+        pull and proximity compare chunks, so they are only ever drawn between
+        topics that hold chunks — open the tree down to those before turning
+        them on.
+      </p>
+      {% if overlay.unavailable %}
+      <div class="callout warn mt-3">
+        <div class="body">
+          <div class="title">pull and proximity are unavailable</div>
+          <p class="hint">They need an embedding model: {{ overlay.unavailable }}</p>
+        </div>
+      </div>
+      {% endif %}
+    </details>
+  </section>
+
+  <div class="canvas">
+  <svg width="{{ graph.width }}" height="{{ graph.height }}" role="img"
+       aria-label="topic map: {{ graph.shown }} topics">
+    {% for d in graph.edges %}
+    <path d="{{ d }}" class="edge"/>
+    {% endfor %}
+    {% for link in overlay.links %}
+    <line x1="{{ link.x1 }}" y1="{{ link.y1 }}" x2="{{ link.x2 }}" y2="{{ link.y2 }}" class="link {{ link.kind }}">
+      <title>{{ link.kind }}: {{ link.label }}</title>
+    </line>
+    {% endfor %}
+    {% for node in graph.nodes %}
+    <g class="row node{% if node.stale %} stale{% endif %}">
+      {% if node.has_children %}
+      <a href="{{ node.toggle }}">
+        <rect class="twist-hit" x="{{ node.x - 36 }}" y="{{ node.y - 11 }}" width="22" height="22"/>
+        {% if node.has_hidden_children %}
+        <path class="twist closed" d="M{{ node.x - 30 }},{{ node.y - 5 }} l6,5 -6,5 z"/>
+        {% else %}
+        <path class="twist" d="M{{ node.x - 31 }},{{ node.y - 3 }} l10,0 -5,6 z"/>
+        {% endif %}
+        <title>{% if node.has_hidden_children %}Open — show the {{ node.holds }} {{ node.holds_what }} beneath “{{ node.title }}”{% else %}Close “{{ node.title }}”{% endif %}</title>
+      </a>
+      {% endif %}
+      <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">
+        <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
+        <text class="label" x="{{ node.x + 26 }}" y="{{ node.y - 1 }}">{{ node.title }}</text>
+        <text class="meta" x="{{ node.x + 26 }}" y="{{ node.y + 12 }}">topic {{ node.id }} · {{ node.holds }} {{ node.holds_what }}{% if node.stale %} · brief needs rewriting{% endif %}</text>
+        <title>{{ node.title }} — level {{ node.level }}, holds {{ node.holds }} {{ node.holds_what }}{% if node.stale %}; its brief is missing or stale{% endif %}. Opens the topic page.</title>
+      </a>
+    </g>
+    {% endfor %}
+  </svg>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

@@ -122,6 +122,7 @@ def graph_page(
     user: Reader,
     open: str = "",
     edges: str = "",
+    done: str = "",
 ) -> Response:
     """The tree, drawn — and every view of it is a URL.
 
@@ -137,6 +138,7 @@ def graph_page(
         overlay = overlays.build(
             conn, tree, [node.id for node in drawn.nodes], kinds
         )
+        branches = _branches(conn, tree)
     return templates.TemplateResponse(
         request,
         "graph.html",
@@ -151,15 +153,59 @@ def graph_page(
                 "edges": drawn.edges,
                 "width": drawn.width,
                 "height": drawn.height,
+                "shown": len(drawn.nodes),
+                "expand_all": _graph_url(tree, _every(branches), edges),
+                "collapse_all": _graph_url(tree, "", edges),
             },
             "overlay": {
                 "links": _drawn_links(overlay, drawn),
                 "unavailable": overlay.unavailable,
                 "toggles": _edge_toggles(tree, open, kinds),
             },
+            # a dissolve lands here rather than on the topic it just retired,
+            # so this page is where its outcome has to be said
+            "done": done,
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+def _branches(conn: object, tree: str) -> set[int]:
+    """Every topic in the tree that has something beneath it.
+
+    Opening a LEAF is a no-op, so "open everything" only needs these — which
+    keeps the URL short on a tree whose leaves outnumber its branches many
+    times over.
+    """
+    return {
+        int(row["parent_id"])
+        for row in conn.execute(  # type: ignore[attr-defined]
+            "SELECT DISTINCT c.parent_id AS parent_id FROM node_children c "
+            "JOIN nodes n ON n.id = c.parent_id WHERE n.tree = ?",
+            (tree,),
+        ).fetchall()
+    }
+
+
+def _every(branches: set[int]) -> str:
+    return ",".join(str(node) for node in sorted(branches))
+
+
+def _graph_url(tree: str, opened: str, edges: str) -> str:
+    query = urlencode(
+        {
+            key: value
+            for key, value in (
+                ("tree", tree),
+                ("open", opened),
+                ("edges", edges),
+            )
+            if value
+        },
+        quote_via=quote,
+        safe=",",
+    )
+    return f"/ui/trees/{tree}/graph?{query}"
 
 
 def _drawn_links(
@@ -250,7 +296,10 @@ def _with_toggle(
         "id": node_id,
         "title": node.title,  # type: ignore[attr-defined]
         "holds": node.holds,  # type: ignore[attr-defined]
+        "holds_what": node.holds_what,  # type: ignore[attr-defined]
+        "level": node.level,  # type: ignore[attr-defined]
         "stale": node.stale,  # type: ignore[attr-defined]
+        "has_children": node.has_children,  # type: ignore[attr-defined]
         "has_hidden_children": node.has_hidden_children,  # type: ignore[attr-defined]
         "x": node.x,  # type: ignore[attr-defined]
         "y": node.y,  # type: ignore[attr-defined]
