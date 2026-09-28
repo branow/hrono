@@ -16,6 +16,11 @@
 !/src/**
 !/tests/**
 
+# CI. Deny-by-default means the workflow needs saying out loud or git never
+# sees it, and a workflow git cannot see never runs (#171 hit this with
+# CONTRIBUTING.md).
+!/.github/**
+
 # Re-ignore junk that the broad src/tests rules would otherwise pull back in.
 __pycache__/
 *.py[oc]

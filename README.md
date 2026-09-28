@@ -45,6 +45,13 @@ dry-run). It has not been run against a large corpus in anger; recall costs
 about 0.011 ms per passage per query, so a corpus of a few hundred thousand
 passages is the first size where that is worth re-measuring.
 
+## CI
+
+Every push to `main` and every pull request runs the same gate
+`CONTRIBUTING.md` defines — `ruff format`, `ruff check`, `pytest` — on Python
+3.13 against the locked environment. It reports rather than rewrites: CI never
+fixes formatting, because a green build has to mean the author ran the gate.
+
 ## Contributing
 
 How this codebase is built — its settled design decisions, code-quality
