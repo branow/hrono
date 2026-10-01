@@ -619,8 +619,44 @@ svg .link.pull { stroke: var(--accent); stroke-dasharray: 6 4; }
 svg .link.proximity { stroke: var(--ok); stroke-dasharray: 1 4; stroke-linecap: round; }
 svg .link.propagation { stroke: var(--ink-faint); }
 
-svg circle.disc { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
-svg .stale circle.disc { fill: var(--warn); }
+/* One tint per top-level subtree, so a glance says which branch a topic is in
+   without tracing its connector back up. Shades of the SAME copper, not six
+   unrelated hues: the colour means "these are siblings", it is not a sixth
+   thing to learn.
+
+   Through a CUSTOM PROPERTY rather than by overriding `fill` per branch. A
+   themed tint selector would out-specify `svg .stale circle.disc` and a topic
+   needing a brief would quietly keep its branch colour in dark mode — the one
+   state on this map that must never be out-shouted. */
+svg circle.disc {
+  --tint: var(--accent);
+  fill: var(--tint);
+  stroke: var(--surface);
+  stroke-width: 2.5;
+}
+svg .b1 { --tint: #B4552D; }
+svg .b2 { --tint: #C87941; }
+svg .b3 { --tint: #96603C; }
+svg .b4 { --tint: #D29061; }
+svg .b5 { --tint: #8C4A2F; }
+svg .b6 { --tint: #A96A4B; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) svg .b1 { --tint: #E2884F; }
+  :root:not([data-theme="light"]) svg .b2 { --tint: #C9A07A; }
+  :root:not([data-theme="light"]) svg .b3 { --tint: #D9A06B; }
+  :root:not([data-theme="light"]) svg .b4 { --tint: #B78A63; }
+  :root:not([data-theme="light"]) svg .b5 { --tint: #EDA36A; }
+  :root:not([data-theme="light"]) svg .b6 { --tint: #BE8558; }
+}
+:root[data-theme="dark"] svg .b1 { --tint: #E2884F; }
+:root[data-theme="dark"] svg .b2 { --tint: #C9A07A; }
+:root[data-theme="dark"] svg .b3 { --tint: #D9A06B; }
+:root[data-theme="dark"] svg .b4 { --tint: #B78A63; }
+:root[data-theme="dark"] svg .b5 { --tint: #EDA36A; }
+:root[data-theme="dark"] svg .b6 { --tint: #BE8558; }
+/* Last, and at the same specificity as the branch rules, so it wins in every
+   theme: a brief that needs rewriting outranks which subtree it is in. */
+svg .stale { --tint: var(--warn); }
 /* Stroking the label in the canvas colour BEFORE filling it knocks any line
    out from behind the glyphs, so no label is ever read through a rule. */
 svg text {

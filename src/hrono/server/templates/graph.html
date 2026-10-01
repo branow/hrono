@@ -99,7 +99,7 @@
   </line>
   {% endfor %}
   {% for node in graph.nodes %}
-  <g class="node{% if node.stale %} stale{% endif %}{% if node.focused %} reading{% endif %}">
+  <g class="node b{{ node.branch }}{% if node.stale %} stale{% endif %}{% if node.focused %} reading{% endif %}">
     <a href="{{ node.read }}"{% if node.focused %} aria-current="true"{% endif %}>
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
@@ -186,6 +186,59 @@
 (function () {
   var board = document.getElementById("board");
   if (!board) return;
+
+  /* Opening a topic rebuilds the whole page, which for a board is absurd:
+     the tree is the only thing that changed. So a toggle is fetched and the
+     drawing swapped, keeping the scroll exactly where it was, and the URL is
+     pushed so the view is still something you can paste. Every one of these
+     links still WORKS on its own — with this off, or if a fetch fails, the
+     browser just follows it and the page rebuilds as before (#197). */
+  function swap(url, push) {
+    return fetch(url, { headers: { "X-Requested-With": "fetch" } })
+      .then(function (answer) {
+        if (!answer.ok) throw new Error(answer.status);
+        return answer.text();
+      })
+      .then(function (markup) {
+        var fresh = new DOMParser().parseFromString(markup, "text/html");
+        var drawing = fresh.getElementById("board");
+        var panel = fresh.getElementById("panel");
+        if (!drawing) throw new Error("no board");
+        var left = board.scrollLeft, top = board.scrollTop;
+        board.innerHTML = drawing.innerHTML;
+        board.dataset.home = drawing.dataset.home || board.dataset.home;
+        var here = document.getElementById("panel");
+        if (panel && here) here.replaceWith(panel);
+        else if (panel) board.parentNode.appendChild(panel);
+        else if (here) here.remove();
+        board.parentNode.classList.toggle("reading", !!panel);
+        /* The drawing is a different size now, but the thing the eye was
+           looking at has not moved: keep the scroll rather than re-centring. */
+        board.scrollLeft = left;
+        board.scrollTop = top;
+        if (push) history.pushState({}, "", url);
+        wire();
+      });
+  }
+
+  function wire() {
+    board.querySelectorAll("a[href]").forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button) return;
+        if (dragged) return;
+        event.preventDefault();
+        swap(link.getAttribute("href"), true).catch(function () {
+          window.location.href = link.getAttribute("href");
+        });
+      });
+    });
+  }
+  wire();
+  window.addEventListener("popstate", function () {
+    swap(window.location.href, false).catch(function () {
+      window.location.reload();
+    });
+  });
 
   /* Open on the root (or on the topic being read), not on the left edge. */
   board.scrollLeft = parseFloat(board.dataset.home || "0") - board.clientWidth / 2;

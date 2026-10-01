@@ -21,8 +21,9 @@ from hrono.server.ui import Reader, _trees, router, templates
 _LIVE = frozenset({"pending", "running", "partial"})
 
 # A first visit should show a useful amount of tree rather than one circle
-# nobody knows to click. Three is what fits a screen and what most trees are.
-OPEN_DEPTH = 3
+# nobody knows to click. Two: the root and what is directly under it, which
+# is the shape of the tree rather than the whole of it.
+OPEN_DEPTH = 2
 # The sentinel for "no `open` parameter at all", distinct from one that is
 # present and empty — which is exactly what the Collapse link sends.
 NO_OPEN = "\x00"
@@ -223,6 +224,13 @@ def _every(branches: set[int]) -> str:
 
 
 def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
+    """A link to one view of the map.
+
+    `open` is emitted even when EMPTY, and that is the whole of the Collapse
+    link: an absent `open` means a first visit, which opens several levels, so
+    dropping an empty one turned Collapse into Expand (#197). Every other
+    parameter is omitted when it has nothing to say.
+    """
     query = urlencode(
         {
             key: value
@@ -232,7 +240,7 @@ def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
                 ("edges", edges),
                 ("focus", focus),
             )
-            if value
+            if value or key == "open"
         },
         quote_via=quote,
         safe=",",

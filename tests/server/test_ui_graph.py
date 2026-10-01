@@ -7,6 +7,8 @@ rather than something a script holds.
 
 from __future__ import annotations
 
+import html
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -699,21 +701,6 @@ def test_an_upper_topic_in_the_panel_lists_the_topics_under_it(
     assert f"focus={browser.ids['small']}" in page
 
 
-def test_a_first_visit_opens_three_levels_not_one_circle(
-    browser: Browser,
-) -> None:
-    """#197: the board opened collapsed, so a first visit was one circle and
-    no indication that anything was under it."""
-    from hrono.server.ui.views import OPEN_DEPTH
-
-    browser.sign_in()
-
-    page = browser.map_at("")  # no ?open= at all
-
-    assert page.count('class="disc"') > 1
-    assert OPEN_DEPTH == 3
-
-
 def test_collapse_still_means_collapsed(browser: Browser) -> None:
     """`open=` present and EMPTY is what the Collapse link sends.
 
@@ -725,3 +712,141 @@ def test_collapse_still_means_collapsed(browser: Browser) -> None:
     both = (browser.map_at(""), browser.map_at("?open="))
 
     assert both[0].count('class="disc"') > both[1].count('class="disc"')
+
+
+def test_collapse_actually_collapses(browser: Browser) -> None:
+    """#197: it did the opposite.
+
+    `_graph_url` dropped empty parameters, so the Collapse link carried no
+    `open` at all — and once an absent `open` came to mean "a first visit,
+    open some levels", Collapse became Expand. The link has to say `open=`
+    out loud.
+    """
+    browser.sign_in()
+
+    page = browser.map_at("")
+    collapse = re.search(r'href="([^"]*)"[^>]*>Collapse<', page)
+
+    assert collapse is not None
+    assert "open=" in collapse.group(1)
+    after = browser.client.get(_href(collapse)).text
+    assert after.count('class="disc"') < page.count('class="disc"')
+
+
+def test_expand_all_opens_every_topic_that_has_one(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    page = browser.map_at("?open=")
+    expand = re.search(r'href="([^"]*)"[^>]*>Expand all<', page)
+
+    assert expand is not None
+    after = browser.client.get(_href(expand)).text
+    assert after.count('class="disc"') > page.count('class="disc"')
+
+
+def test_a_first_visit_shows_the_shape_not_the_whole_tree(
+    browser: Browser,
+) -> None:
+    """Two levels: the root and what is directly under it."""
+    from hrono.server.ui.views import OPEN_DEPTH
+
+    assert OPEN_DEPTH == 2
+    # the shared fixture is two levels deep, where "two open" and "all open"
+    # are the same picture — a third level is what makes the rule observable
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, 2, 0, 't')",
+            (TREE,),
+        )
+        crown = int(
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "SELECT MAX(id) FROM nodes"
+            ).fetchone()[0]
+        )
+        cluster_store.add_child(
+            browser.conn,  # type: ignore[arg-type]
+            crown,
+            _root(browser),
+            attached=False,
+            similarity=None,
+        )
+    browser.sign_in()
+
+    first = browser.map_at("")
+    everything = browser.client.get(
+        _href(re.search(r'href="([^"]*)"[^>]*>Expand all<', first))
+    ).text
+
+    assert first.count('class="disc"') < everything.count('class="disc"')
+
+
+def _href(found: object) -> str:
+    """The URL a browser would follow, not the escaped one in the markup.
+
+    Jinja escapes `&` in an attribute, so requesting the raw capture asks for
+    a parameter called `amp;open` and the real one goes missing — which looks
+    exactly like the bug under test.
+    """
+    assert found is not None
+    return html.unescape(found.group(1))  # type: ignore[attr-defined]
+
+
+def test_each_top_level_subtree_gets_its_own_tint(browser: Browser) -> None:
+    """#197: a glance should say which branch a topic is in.
+
+    Taken from the root's CHILDREN, not from the roots: with one root every
+    topic would share a tint and the whole thing would be pointless.
+    """
+    from hrono.server.graph import build
+
+    drawn = build(browser.conn, TREE, [_root(browser)])  # type: ignore[arg-type]
+    by_id = {node.id: node.branch for node in drawn.nodes}
+
+    assert by_id[_root(browser)] == 0  # the trunk belongs to all of them
+    kids = [b for node, b in by_id.items() if node != _root(browser)]
+    assert len(set(kids)) == len(kids)  # two siblings, two tints
+    assert 0 not in kids
+
+
+def test_a_brief_that_needs_rewriting_outranks_its_branch_tint(
+    browser: Browser,
+) -> None:
+    """The one state on the map that must never be out-shouted.
+
+    A themed tint selector would out-specify the stale rule and a topic needing
+    a brief would keep its branch colour in dark mode, so the tint is a custom
+    property and `stale` is last at the same specificity.
+    """
+    browser.sign_in()
+
+    page = browser.map_at("")
+
+    sheet = page[page.index("<style>") : page.index("</style>")]
+    assert "svg .stale { --tint: var(--warn); }" in sheet
+    assert sheet.index("svg .b1 { --tint") < sheet.index("svg .stale { --tint")
+    # and no rule sets fill per branch, which is what would break it
+    assert "svg .b1 circle.disc { fill:" not in sheet
+
+
+def test_a_tint_is_reused_rather_than_a_branch_going_unmarked(
+    browser: Browser,
+) -> None:
+    """More subtrees than tints is a repeated colour, never a bare one.
+
+    A repeated tint is a smaller lie than an unmarked branch: the colour says
+    "these are siblings", it never says "this is branch four".
+    """
+    from hrono.server.graph import TINTS, build
+
+    root = _root(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        for _ in range(TINTS + 2):
+            _child_of(browser, root)
+
+    drawn = build(browser.conn, TREE, [root])  # type: ignore[arg-type]
+
+    tints = {node.branch for node in drawn.nodes if node.id != root}
+    assert tints and tints <= set(range(1, TINTS + 1))

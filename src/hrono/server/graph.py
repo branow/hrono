@@ -75,6 +75,7 @@ class Node:
     holds: int  # members for a leaf, children for an upper topic
     holds_what: str  # "sections" or "topics" — the unit `holds` counts
     stale: bool
+    branch: int  # which top-level subtree it belongs to, for its tint
     has_children: bool
     has_hidden_children: bool
     x: float
@@ -181,6 +182,36 @@ def _visible(
     return order
 
 
+# How many tints the sheet defines. A subtree past the last one wraps round
+# rather than going uncoloured — a repeated tint is a smaller lie than an
+# unmarked branch, because the tints say "these are siblings", never "this is
+# branch four".
+TINTS = 6
+
+
+def _branches(
+    roots: Sequence[int], children: dict[int, list[int]]
+) -> dict[int, int]:
+    """Which top-level subtree each drawn topic sits in.
+
+    Taken from the root's CHILDREN rather than from the roots themselves: with
+    one root every topic would share a tint and the whole thing would be
+    pointless, and the division a reader cares about is the first fork, not the
+    trunk. The root itself is 0 — it belongs to all of them.
+    """
+    tops = [kid for root in roots for kid in children.get(root, ())] or list(
+        roots
+    )
+    out: dict[int, int] = {root: 0 for root in roots}
+    for index, top in enumerate(tops):
+        stack = [top]
+        while stack:
+            node = stack.pop()
+            out.setdefault(node, index % TINTS + 1)
+            stack.extend(children.get(node, ()))
+    return out
+
+
 def _lay_out(
     rows: dict[int, sqlite3.Row],
     children: dict[int, list[int]],
@@ -207,6 +238,7 @@ def _lay_out(
     tops = _drawn_roots(visible, drawn_kids)
     placed, edges, width, height = _place(tops, boxes, drawn_kids, radii, tall)
     blank = where_module.Where("", "")
+    tint = _branches(tops, drawn_kids)
     drawn = tuple(
         Node(
             id=node,
@@ -219,6 +251,7 @@ def _lay_out(
             holds=holds[node],
             holds_what=_holds_what(rows[node]),
             stale=bool(rows[node]["stale"]) or rows[node]["brief"] is None,
+            branch=tint.get(node, 0),
             has_children=bool(children.get(node)),
             has_hidden_children=bool(children.get(node)) and node not in opened,
             x=placed[node][0],
