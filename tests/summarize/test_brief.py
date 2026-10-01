@@ -24,6 +24,7 @@ from hrono.summarize import briefs
 from hrono.summarize import store as condensations
 from hrono.summarize.brief import brief
 from hrono.summarize.resolve import resolve_prompt, template_hash
+from tests.summarize.concurrent_client import Paired
 
 MODEL = "sonnet"
 TEMPLATE = "Brief this group: {content}"
@@ -486,3 +487,18 @@ def test_a_run_with_nothing_to_brief_reports_no_tokens(db: Database) -> None:
 
     assert again["briefed"] == 0
     assert "tokens" not in again
+
+
+def test_the_nodes_are_briefed_concurrently(db: Database) -> None:
+    # one node's reduce tells another's nothing, so a brief pass must not be
+    # serial either. `Paired` answers only in twos and times out if it is alone.
+    client = Paired()
+
+    outcome = brief(job(), JobContext(db), client=client)
+
+    assert client.peak >= 2
+    assert outcome["briefed"] == 2
+    with db.connect() as conn:
+        assert all(
+            briefs.get(conn, node_id) is not None for node_id in _node_ids(db)
+        )

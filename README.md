@@ -26,6 +26,45 @@ Then register a source and a model (`hrono sources set`, `hrono models set` —
 each takes a JSON config on stdin or `-f`), and build the tree with
 `hrono tree maintain default`.
 
+### Choose the backend before the first build
+
+A model points at a connection, and the connection's provider decides what a
+build costs:
+
+- `claude-code` needs no API key and bills through your existing Claude
+  subscription. Use it to try hrono out, and for the incremental syncs after a
+  first build, where a handful of changed sections costs a handful of calls.
+- `anthropic` (an API key) is what a **first full build over a large corpus**
+  should use. The CLI pays a fixed overhead per call — 18871 cached input
+  tokens, about $0.038, 4–30 s — that no prompt can remove. Measured: the
+  `condense` pass over 421 sections took about 70 minutes and about $16 through
+  `claude-code`. The same work through `anthropic` pays for the content rather
+  than the harness.
+
+Both can be registered at once; the connection is named per model, so the
+`condense` model can use `anthropic` for the build while everything else stays
+on `claude-code`.
+
+### Scope a source to part of a repository
+
+`filter.only` is a whitelist of globs applied before anything else, so a
+monorepo can be ingested one package at a time:
+
+```json
+{"filter": {"only": ["src/hrono/crypto/**", "src/hrono/auth/**"]}}
+```
+
+Without it every file of the clone is a candidate. `filter.exclude` removes
+paths, `filter.include` re-admits files the baked ignore list caught — neither
+is a whitelist.
+
+### How many calls at once
+
+`hrono serve` runs one op's LLM calls in a bounded pool, 4 at a time by
+default. Set `HRONO_LLM_CONCURRENCY` in the server's environment to raise it
+(an API key with headroom) or lower it to 1 (a rate limit, or a small box).
+Writes stay serial whatever it is set to.
+
 ## The dashboard
 
 `hrono serve` also serves a web dashboard at `/ui`, from the same process and
@@ -66,6 +105,14 @@ Every push to `main` and every pull request runs the same gate
 `CONTRIBUTING.md` defines — `ruff format`, `ruff check`, `pytest` — on Python
 3.13 against the locked environment. It reports rather than rewrites: CI never
 fixes formatting, because a green build has to mean the author ran the gate.
+
+## The words hrono uses
+
+A topic is a group of sections; a section is ~10 KB of one file; a brief is a
+topic's summary, written from the sections' condensations rather than their raw
+text. The full list, including the names that were superseded during
+development, is in [GLOSSARY.md](GLOSSARY.md) — and the dashboard carries the
+same thing at `/ui/guide`, with this install's own numbers in it.
 
 ## Contributing
 

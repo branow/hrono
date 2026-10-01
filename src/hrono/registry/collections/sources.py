@@ -36,6 +36,23 @@ class GitAuth(BaseModel):
 
 
 class GitFilter(BaseModel):
+    """The glob layers one source's files are chosen by (``ingest.filter``).
+
+    ``only`` is the WHITELIST and is deliberately not called ``include``.
+    ``include`` already exists and means something else — it RE-ADMITS what the
+    baked ignore groups caught, one file at a time — so renaming it would
+    silently change the meaning of every config already written, and giving the
+    whitelist that name would make the two indistinguishable in a review. The
+    cost of the missing layer was real: with no way to say "only this package",
+    pointing hrono at a monorepo ingested all of it.
+
+    Globs, not regex, because globs are what every tool a user already knows
+    uses for paths, this module already matches ``**`` through
+    ``PurePosixPath.full_match``, and a regex mistyped over a path fails open —
+    in the direction that costs money.
+    """
+
+    only: list[str] | None = None
     exclude: list[str] | None = None
     include: list[str] | None = None
     replace_defaults: bool = False

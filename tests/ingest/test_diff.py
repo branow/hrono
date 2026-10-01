@@ -118,3 +118,17 @@ def test_diff_end_to_end(db: Database, tmp_path: Path) -> None:
     assert Change("new.py", "moved", old_path="old.py") in changes
     assert Change("added.py", "new") in changes
     assert not any(c.path == "a.py" for c in changes)  # unchanged, silent
+
+
+def test_current_files_honours_a_whitelist(cache: Path) -> None:
+    # `only` through the REAL caller: reader dispatch -> git units -> filter.
+    # A source scoped to one package of a monorepo sees only that package.
+    (cache / "pkg").mkdir()
+    (cache / "pkg" / "c.py").write_text("gamma bytes\n")
+
+    files = current_files(
+        READERS["git"], {"filter": {"only": ["pkg/**"]}}, cache
+    )
+
+    assert set(files) == {"pkg/c.py"}
+    assert files["pkg/c.py"] == content_hash(b"gamma bytes\n")

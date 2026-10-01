@@ -930,6 +930,26 @@ tr.needs td.count { font-weight: 700; color: var(--warn); }
 .notes, .where-note { color: var(--ink-soft); }
 .notice { color: var(--ink-soft); }
 
+/* ----------------------------------------------------------------- guide */
+ol.pipeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px;
+  background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
+ol.pipeline li { display: grid; grid-template-columns: 9rem 1fr auto; gap: var(--s3);
+  align-items: baseline; padding: var(--s2) var(--s3); background: var(--surface); }
+ol.pipeline .step-mark { font: 600 .8125rem/1.5 var(--mono); color: var(--accent); }
+ol.pipeline .step-what { color: var(--ink-soft); font-size: .875rem; }
+ol.pipeline .step-count { font: 600 .9375rem/1.5 var(--mono);
+  font-variant-numeric: tabular-nums; }
+
+dl.terms { margin: 0; display: grid; grid-template-columns: 9rem 1fr; gap: var(--s2) var(--s3); }
+dl.terms dt { font: 600 .8125rem/1.6 var(--mono); color: var(--accent); }
+dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height: 1.55; }
+@media (max-width: 40rem) {
+  ol.pipeline li { grid-template-columns: 1fr auto; }
+  ol.pipeline .step-what { grid-column: 1 / -1; }
+  dl.terms { grid-template-columns: 1fr; gap: .1rem var(--s3); }
+  dl.terms dd { margin-bottom: var(--s2); }
+}
+
 /* ----------------------------------------------------------------- login */
 .gate { min-height: 100vh; display: grid; place-items: center; padding: var(--s5); }
 .gate .card { width: min(26rem, 100%); }
@@ -1014,6 +1034,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     {{ tab("/ui/trees/" ~ tree ~ "/activity?tree=" ~ tree, "Activity", here.endswith("/activity")) }}
     {{ tab("/ui/jobs?tree=" ~ tree, "Runs", here == "/ui/jobs") }}
     {{ tab("/ui/config?tree=" ~ tree, "Settings", here == "/ui/config") }}
+    {{ tab("/ui/guide?tree=" ~ tree, "Guide", here == "/ui/guide") }}
   </nav>
   <div class="who">
     <span class="name">{{ user.name }}</span>

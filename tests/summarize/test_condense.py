@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from collections.abc import Iterator
 
@@ -18,8 +19,9 @@ from hrono.llm.client import (
     Usage,
 )
 from hrono.registry import store as registry_store
-from hrono.summarize import store
+from hrono.summarize import pool, store
 from hrono.summarize.condense import condense
+from tests.summarize.concurrent_client import Overlap, Paired
 
 MODEL = "sonnet"
 TEMPLATE = "Condense this: {content}"
@@ -44,6 +46,30 @@ class FakeCompletion:
         if self._fail_on == self.calls:
             raise LLMError("call failed")
         return CompletionResult(self._text, Usage(*self._usage))
+
+
+class Reclaiming:
+    """Takes its own job out of ``running`` the way a lost worker's does.
+
+    ``store.reclaim`` is what the worker's heartbeat sweep calls on a job whose
+    holder stopped stamping it (#111) — a production writer, so this test does
+    not construct the state it then asserts on. It is also the shape a stop
+    takes: the op's guard is "my row no longer says running", whoever wrote it.
+    """
+
+    def __init__(self, database: Database) -> None:
+        self._database = database
+        self.calls = 0
+        self._guard = threading.Lock()
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        with self._guard:
+            self.calls += 1
+            first = self.calls == 1
+        if first:
+            with self._database.connect() as conn:
+                jobs_store.reclaim(conn, None, "t")
+        return CompletionResult("a condensation.", Usage(1, 1))
 
 
 def register_text_model(conn: object, name: str = MODEL) -> None:
@@ -240,3 +266,55 @@ def test_the_run_reports_what_it_condensed_and_spent(db: Database) -> None:
     assert outcome["condensed"] > 0
     assert isinstance(outcome["tokens"], dict)
     assert outcome["tokens"]["input"] > 0  # type: ignore[index]
+
+
+def test_calls_overlap_so_a_first_build_is_not_serial(db: Database) -> None:
+    # 421 sections at 4-30 s each was 70 minutes of an idle process. A results
+    # assertion passes against the serial loop, so this one asserts the
+    # OVERLAP: `Paired` answers only in twos and times out if it is alone.
+    with db.connect() as conn, conn:
+        add_section(conn, "c.py", b"def c(): return 3\n", 2)
+        add_section(conn, "d.py", b"def d(): return 4\n", 3)
+    client = Paired()
+
+    outcome = condense(job(), JobContext(db), client=client)
+
+    assert client.peak >= 2
+    assert outcome["condensed"] == 4
+    with db.connect() as conn:
+        assert store.count(conn, MODEL) == 4
+
+
+def test_the_env_var_holds_the_pool_to_one_call_at_a_time(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # the knob an operator reaches for on a rate limit or a small box. `peak`
+    # cannot read 1 unless the calls really were serialised.
+    monkeypatch.setenv(pool.ENV_WIDTH, "1")
+    client = Overlap()
+
+    condense(job(), JobContext(db), client=client)
+
+    assert client.calls == 2
+    assert client.peak == 1
+
+
+def test_a_job_that_leaves_running_stops_launching_calls(db: Database) -> None:
+    """A stop must not have to wait out every remaining section."""
+    with db.connect() as conn, conn:
+        for i, name in enumerate("efghijkl"):
+            add_section(
+                conn, f"{name}.py", f"def {name}(): pass\n".encode(), i + 2
+            )
+        jobs_store.insert(
+            conn, "c1", None, None, "condense", serialize_scope({}), "t"
+        )
+        assert jobs_store.claim_next(conn, "t") is not None  # -> running
+
+    client = Reclaiming(db)
+    outcome = condense(job(), JobContext(db), client=client)
+
+    assert 0 < client.calls < 10  # ten pending sections; the pool stopped
+    with db.connect() as conn:
+        assert store.count(conn, MODEL) == client.calls  # all of it kept
+    assert outcome["condensed"] == client.calls

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from hrono.ingest.filter import ingestable
+from hrono.registry.collections.sources import GitFilter
 
 
 def tree(root: Path) -> None:
@@ -218,3 +219,80 @@ def test_an_explicit_include_re_admits_a_lockfile(tmp_path: Path) -> None:
     kept = ingestable(tmp_path, {"include": ["package-lock.json"]})
 
     assert "package-lock.json" in kept
+
+
+def test_only_is_a_whitelist_applied_before_every_other_layer(
+    tmp_path: Path,
+) -> None:
+    # the layer that was missing: pointing hrono at a monorepo ingested all of
+    # it, because `include` RE-ADMITS what the baked groups caught and is no
+    # whitelist. Each of the three later layers would have kept a file here.
+    tree(tmp_path)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "wanted.py").write_text("keep me\n")
+
+    kept = ingestable(tmp_path, {"only": ["pkg/**"]})
+
+    assert kept == ("pkg/wanted.py",)
+    assert "src/app.py" not in kept  # nothing excluded it; `only` did
+    assert "README.md" not in kept
+
+
+def test_without_only_nothing_about_the_other_layers_changes(
+    tmp_path: Path,
+) -> None:
+    # absent must be a no-op, not an empty whitelist that admits nothing.
+    tree(tmp_path)
+    assert ingestable(tmp_path, {"only": []}) == ingestable(tmp_path, None)
+    assert ingestable(tmp_path, None) == ("README.md", "src/app.py")
+
+
+def test_exclude_still_wins_inside_what_only_admitted(tmp_path: Path) -> None:
+    tree(tmp_path)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "wanted.py").write_text("keep me\n")
+    (tmp_path / "pkg" / "generated.py").write_text("skip me\n")
+
+    kept = ingestable(
+        tmp_path, {"only": ["pkg/**"], "exclude": ["**/generated.py"]}
+    )
+
+    assert kept == ("pkg/wanted.py",)
+
+
+def test_only_never_re_admits_what_the_baked_list_catches(
+    tmp_path: Path,
+) -> None:
+    # `only` narrows; it is not `replace_defaults`. A whitelist over
+    # node_modules must still lose node_modules.
+    tree(tmp_path)
+    (tmp_path / "node_modules" / "dep" / "keep.js").write_text("x")
+
+    assert ingestable(tmp_path, {"only": ["node_modules/**"]}) == ()
+
+
+def test_only_matches_the_callers_globs_literally(tmp_path: Path) -> None:
+    # #118's case rule: the baked list is lowercased, the caller's globs are
+    # not — and `only` is the caller's.
+    (tmp_path / "Pkg").mkdir()
+    (tmp_path / "Pkg" / "a.py").write_text("x\n")
+
+    assert ingestable(tmp_path, {"only": ["pkg/**"]}) == ()
+    assert ingestable(tmp_path, {"only": ["Pkg/**"]}) == ("Pkg/a.py",)
+
+
+def test_the_config_model_and_the_matcher_agree_on_the_field_name(
+    tmp_path: Path,
+) -> None:
+    # the ticket IS the name. `include` already means "re-admit what the baked
+    # groups caught", so the whitelist had to be a NEW field — and a model that
+    # spells it differently from the matcher validates a config the matcher
+    # then silently ignores, which is the failure that cost the money.
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "a.py").write_text("x\n")
+    (tmp_path / "other.py").write_text("y\n")
+
+    config = GitFilter(only=["pkg/**"]).model_dump()
+
+    assert ingestable(tmp_path, config) == ("pkg/a.py",)
+    assert "include" in GitFilter.model_fields  # extended, never renamed

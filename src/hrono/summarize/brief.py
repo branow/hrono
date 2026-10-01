@@ -23,13 +23,15 @@ makes zero LLM calls (membership-change invalidation is #064, out of scope).
 Lock discipline mirrors #058/#035: gather the nodes and their condensations
 UNDER the #008 lock, release it, make each LLM call OUTSIDE the lock, re-acquire
 only to persist that node — so a failing node fails its leaf cleanly and an
-idempotent re-run fills only the gaps.
+idempotent re-run fills only the gaps. One node's call tells another's nothing,
+so they run in ``pool.mapped``'s bounded pool; only the persist is serial.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from typing import NamedTuple
 
 from hrono import pins
 from hrono.jobs.model import Job
@@ -37,10 +39,11 @@ from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
     Completion,
     CompletionRequest,
+    CompletionResult,
 )
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
-from hrono.summarize import briefs, spend
+from hrono.summarize import briefs, pool, spend
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import (
     model_fingerprint,
@@ -54,6 +57,16 @@ from hrono.summarize.shape import answer
 _CONTENT_PLACEHOLDER = "{content}"
 _LEVEL = 0
 _DEFAULT_TREE = "default"
+
+Pending = tuple[int, briefs.ReduceInput, str]  # node, inputs, signature
+
+
+class Written(NamedTuple):
+    """One node's completed brief, computed off the lock and not yet stored."""
+
+    result: CompletionResult
+    flagged: str
+    unfaithful: str
 
 
 def brief(
@@ -90,17 +103,24 @@ def brief(
         return {"briefed": 0, "skipped_pinned": held}
 
     completion = client if client is not None else client_for(context, model)
-    spent: list[tuple[int, int]] = []
-    for node_id, inputs, signature in pending:
+
+    def call(entry: Pending) -> Written:
+        _, inputs, _ = entry
         source = "\n\n".join(inputs.texts)
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
         result, flagged = answer(
             completion,
             CompletionRequest(model=model, system="", content=rendered),
         )
-        unfaithful = faithfulness(result.text, source)
-        text = result.text
-        flagged = flagged or _uncondensed(inputs.dropped)
+        return Written(
+            result,
+            flagged or _uncondensed(inputs.dropped),
+            json.dumps(faithfulness(result.text, source)),
+        )
+
+    def keep(entry: Pending, written: Written) -> None:
+        node_id, inputs, signature = entry
+        text = written.result.text
         with context.database.write() as conn:
             briefs.upsert(
                 conn,
@@ -111,22 +131,34 @@ def brief(
                 prompt_hash=prompt_hash,
                 model_fingerprint=fingerprint,
                 member_signature=signature,
-                unfaithful=json.dumps(unfaithful),
-                flagged=flagged,
+                unfaithful=written.unfaithful,
+                flagged=written.flagged,
                 members=json.dumps(list(inputs.uris)),
-                input_tokens=result.usage.input_tokens,
-                output_tokens=result.usage.output_tokens,
+                input_tokens=written.result.usage.input_tokens,
+                output_tokens=written.result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
-        spent.append((result.usage.input_tokens, result.usage.output_tokens))
+
+    briefed = pool.mapped(
+        pending,
+        call,
+        keep,
+        workers=pool.width(),
+        proceed=pool.running(context.database, job.id),
+    )
     # what a pin HELD is as much the run's outcome as what it wrote: an
     # operator who sees "briefed 0" needs to know whether there was nothing to
     # do or whether they froze it themselves (#154).
     outcome: dict[str, object] = {
-        "briefed": len(pending),
+        "briefed": len(briefed),
         "skipped_pinned": held,
     }
-    tokens = spend.counts(spent)
+    tokens = spend.counts(
+        [
+            (w.result.usage.input_tokens, w.result.usage.output_tokens)
+            for w in briefed
+        ]
+    )
     if tokens is not None:
         outcome["tokens"] = tokens
     return outcome

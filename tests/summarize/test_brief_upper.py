@@ -16,6 +16,7 @@ from hrono.llm.client import (
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from hrono.summarize.brief_upper import brief_upper
+from tests.summarize.concurrent_client import Paired
 
 MODEL = "sonnet"
 TEMPLATE = "Abstract across children: {content}"
@@ -218,3 +219,19 @@ def test_the_run_reports_the_tokens_it_spent(db: Database) -> None:
 
     assert isinstance(outcome["tokens"], dict)
     assert outcome["tokens"]["input"] > 0  # type: ignore[index]
+
+
+def test_the_upper_nodes_are_briefed_concurrently(
+    db: tuple[Database, list[int]],
+) -> None:
+    # the same pool as #059's leaf pass: upper briefs are independent too.
+    database, _ = db
+    client = Paired()
+
+    outcome = brief_upper(job(), JobContext(database), client=client)
+
+    assert client.peak >= 2
+    assert outcome["briefed"] == 2
+    with database.connect() as conn:
+        for node_id in _parents(database):
+            assert briefs.get(conn, node_id) is not None

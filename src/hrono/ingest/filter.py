@@ -5,11 +5,18 @@ then a null-byte sniff for anything no glob caught — plus skipping ``.git``,
 symlinks (which could escape the cache), and non-regular files. No file content
 is read beyond the size stat and the sniff.
 
-The glob rules are three layers, because ingesting a file is not free — each one
-costs an embedding and a condense call immediately, while its value to an agent
-reading the map is occasional (#104, F4/F5):
+The glob rules are four layers, applied in this order, because ingesting a file
+is not free — each one costs an embedding and a condense call immediately, while
+its value to an agent reading the map is occasional (#104, F4/F5):
 
-- the caller's ``exclude`` always wins and is always applied;
+- the caller's ``only`` is a true WHITELIST and is applied FIRST. Absent (the
+  normal case) it decides nothing and the other three layers behave exactly as
+  they always have; present, a path matching none of its patterns is gone
+  before ``exclude``, the baked list or ``include`` is even consulted. This is
+  how a source is scoped to PART of a repository — a monorepo where only one
+  package is wanted — which nothing else here can express, and whose absence
+  cost a real run real money;
+- the caller's ``exclude`` always wins over what survived ``only``;
 - the baked ``DEFAULT_IGNORE`` groups EXTEND it rather than being replaced by
   it, so a source that excludes one directory of its own does not silently lose
   ``node_modules`` and lockfile protection;
@@ -24,7 +31,8 @@ first half): it carries no content by definition, so admitting it only makes
 every ``diff`` report it as new for ever.
 
 CASE: the baked ignore list matches a LOWERCASED path; the caller's own
-``exclude`` and ``include`` match literally. That asymmetry is deliberate and
+``only``, ``exclude`` and ``include`` match literally. That asymmetry is
+deliberate and
 stays (#118). The baked list is a safety net and must be case-insensitive, or
 ``LOGO.SVG`` walks straight past the asset rule and F5 reopens. The caller's
 globs are their instructions, and every ordinary glob tool treats those
@@ -49,12 +57,15 @@ _SNIFF_BYTES = 8192
 class _Rules:
     """The resolved glob layers for one source's filter config."""
 
+    only: tuple[str, ...]
     exclude: tuple[str, ...]
     ignore: tuple[str, ...]
     include: tuple[str, ...]
 
     def skips(self, rel: PurePosixPath) -> bool:
         """True when ``rel`` is not worth a section under these rules."""
+        if self.only and not _matches(rel, self.only):
+            return True
         if _matches(rel, self.exclude):
             return True
         lowered = PurePosixPath(rel.as_posix().lower())
@@ -88,6 +99,7 @@ def ingestable(
 
 def _rules(config: dict[str, object] | None) -> _Rules:
     return _Rules(
+        only=_patterns(config, "only"),
         exclude=_patterns(config, "exclude"),
         ignore=_ignored(config),
         include=_patterns(config, "include"),

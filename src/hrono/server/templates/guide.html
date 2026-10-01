@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}hrono — how it works{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>How hrono works</h1>
+</div>
+
+<section class="card mb-4">
+  <div class="card-body">
+    <ol class="pipeline">
+      <li>
+        <span class="step-mark">source</span>
+        <span class="step-what">a repository hrono reads</span>
+        <span class="step-count">{{ stage.sources }}</span>
+      </li>
+      <li>
+        <span class="step-mark">section</span>
+        <span class="step-what">~10 KB of one file — the unit that gets grouped</span>
+        <span class="step-count">{{ stage.sections }}</span>
+      </li>
+      <li>
+        <span class="step-mark">condensation</span>
+        <span class="step-what">what a model wrote about one section, with its hazards</span>
+        <span class="step-count">{{ stage.condensations }}</span>
+      </li>
+      <li>
+        <span class="step-mark">topic</span>
+        <span class="step-what">sections that belong together, across {{ stage.levels }} level{{ "" if stage.levels == 1 else "s" }}</span>
+        <span class="step-count">{{ stage.topics }}</span>
+      </li>
+      <li>
+        <span class="step-mark">brief</span>
+        <span class="step-what">a topic's summary, written from the condensations</span>
+        <span class="step-count">{{ stage.briefs }}</span>
+      </li>
+      <li>
+        <span class="step-mark">passage</span>
+        <span class="step-what">~800 B — what <em>recall</em> injects into a prompt</span>
+        <span class="step-count">{{ stage.passages }}</span>
+      </li>
+    </ol>
+    {% if stage.parked %}
+    <p class="hint mt-3">{{ stage.parked }} section{{ "" if stage.parked == 1 else "s" }} in no topic yet.</p>
+    {% endif %}
+  </div>
+  <div class="card-foot row">
+    <a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>
+    <span class="hint">Two doors: an agent walks the tree, or asks <code>hrono recall</code> a question.</span>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>Words</h2></div>
+  <div class="card-body">
+    <dl class="terms">
+      <dt>topic</dt>
+      <dd>A group of related sections, or of other topics, plus a brief. The node of the tree.</dd>
+      <dt>section</dt>
+      <dd>About 10 KB of one file. What gets grouped, and what an agent reads when it explores.</dd>
+      <dt>condensation</dt>
+      <dd>What the first pass wrote about one section — identifiers verbatim, plus <code>GOTCHA:</code> lines. Cached by content, so an unchanged file is never condensed twice.</dd>
+      <dt>brief</dt>
+      <dd>A topic's summary, written from its condensations rather than from raw text. Reference lists are appended by code, never by the model.</dd>
+      <dt>passage</dt>
+      <dd>About 800 B. What recall injects. A section reassembles exactly from its passages.</dd>
+      <dt>tree</dt>
+      <dd>Topics all the way up to one root, over a named set of sources. A database can hold several.</dd>
+      <dt>stale</dt>
+      <dd>A brief that no longer matches what its topic holds — the members changed, or the prompt, or the model.</dd>
+      <dt>pin</dt>
+      <dd>A hand edit the pipeline must not undo. Pinning is what makes a correction survive the next run.</dd>
+      <dt>parked</dt>
+      <dd>A section ingested and embedded but in no topic yet. On the waiting list, not lost.</dd>
+      <dt>misfit</dt>
+      <dd>A section whose own topic's centre is not the nearest one.</dd>
+    </dl>
+    <p class="hint mt-3">
+      Not used here: <strong>cluster</strong> is the algorithm's verb — what it makes is a topic.
+      <strong>Chunk</strong> was an earlier name for a section.
+    </p>
+  </div>
+</section>
+{% endblock %}

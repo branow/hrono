@@ -13,6 +13,11 @@ re-acquire only to persist that one result — so a section that fails its call
 fails the leaf cleanly while every section condensed before it is kept, and an
 idempotent re-run fills only the gaps. No token cap and no truncation: the
 recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
+
+Because the calls are keyed by CONTENT HASH they are independent of each other,
+so they run in ``pool.mapped``'s bounded worker pool rather than one at a time:
+421 sections at 4-30 s each was 70 minutes of a process that was idle for all
+of it. The persist stays on this thread, one at a time.
 """
 
 from __future__ import annotations
@@ -24,12 +29,15 @@ from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
     Completion,
     CompletionRequest,
+    CompletionResult,
 )
 from hrono.llm.providers import client_for
-from hrono.summarize import spend, store
+from hrono.summarize import pool, spend, store
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _CONTENT_PLACEHOLDER = "{content}"
+
+Section = tuple[str, bytes]  # (content hash, section body)
 
 
 def condense(
@@ -48,29 +56,40 @@ def condense(
         return {"condensed": 0}
 
     completion = client if client is not None else client_for(context, model)
-    spent: list[tuple[int, int]] = []
-    for content_hash, body in sections:
+
+    def call(section: Section) -> CompletionResult:
         rendered = template.replace(
-            _CONTENT_PLACEHOLDER, body.decode("utf-8", "replace")
+            _CONTENT_PLACEHOLDER, section[1].decode("utf-8", "replace")
         )
-        result = completion.complete(
+        return completion.complete(
             CompletionRequest(model=model, system="", content=rendered)
         )
+
+    def keep(section: Section, result: CompletionResult) -> None:
         with context.database.write() as conn:
             store.upsert(
                 conn,
-                content_hash,
+                section[0],
                 model_name,
                 result.text,
                 result.usage.input_tokens,
                 result.usage.output_tokens,
             )
-        spent.append((result.usage.input_tokens, result.usage.output_tokens))
+
+    condensed = pool.mapped(
+        sections,
+        call,
+        keep,
+        workers=pool.width(),
+        proceed=pool.running(context.database, job.id),
+    )
     # an op that calls a model says what it spent (#179); until now condense
     # reported nothing at all, which made the most expensive stage of a first
     # build the one nobody could account for.
-    outcome: dict[str, object] = {"condensed": len(sections)}
-    tokens = spend.counts(spent)
+    outcome: dict[str, object] = {"condensed": len(condensed)}
+    tokens = spend.counts(
+        [(r.usage.input_tokens, r.usage.output_tokens) for r in condensed]
+    )
     if tokens is not None:
         outcome["tokens"] = tokens
     return outcome

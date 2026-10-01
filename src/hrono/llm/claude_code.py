@@ -14,9 +14,11 @@ trivial call reported ``cache_creation_input_tokens: 18871`` and
 ``total_cost_usd: 0.038``. At one call per section a 92-section corpus spends
 roughly $3.50 on overhead alone, before any real content. Latency is 4-30 s per
 call (measured: 4.2 s trivial, 8-24 s for real condensations, 32 s for an 18 KB
-judge prompt). For bulk work — a full ``condense`` pass over a large corpus —
-the ``anthropic`` provider is cheaper and faster; this one is for convenience,
-not throughput.
+judge prompt). A measured full ``condense`` over 421 sections took about 70
+minutes and about $16 this way. For bulk work — a first build over a large
+corpus — the ``anthropic`` provider is cheaper and faster; this one is for
+convenience, not throughput, and the ``connections`` collection says so where a
+user picks between them.
 
 Two failure modes are worth knowing. The CLI reads the PROJECT MEMORY of its
 working directory, so it must run from a directory hrono owns
