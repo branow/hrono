@@ -262,8 +262,10 @@ def test_an_edge_to_a_topic_that_is_not_drawn_is_dropped(
         record(browser.conn, TREE, a, "major", "propagated", browser.root)  # type: ignore[arg-type]
     browser.sign_in()
 
+    # `open=` PRESENT and empty is what Collapse sends; absent now means a
+    # first visit, which opens three levels (#197)
     collapsed = browser.client.get(
-        f"/ui/trees/{TREE}/graph?edges=propagation"
+        f"/ui/trees/{TREE}/graph?open=&edges=propagation"
     ).text
 
     assert 'class="link' not in collapsed

@@ -252,7 +252,32 @@
               {% if member.content.missing %}
               <p class="hint">Its content is not stored here — only the section's address and where it sits.</p>
               {% else %}
+      {% if member.condensed %}
+      <div class="layer">
+        <div class="layer-head">
+          <span class="layer-what">condensation<span class="tip" tabindex="0" role="note"
+            data-tip="What a model wrote about this section. The topic's brief is reduced from these, not from the raw files."
+            aria-label="What a model wrote about this section. The topic's brief is reduced from these, not from the raw files.">?</span></span>
+          <span class="chip plain">{{ member.condensed.by }}</span>
+        </div>
+        {% for gotcha in member.condensed.gotchas %}
+        <div class="callout warn mb-3">
+          <div class="body"><p class="hint">{{ gotcha }}</p></div>
+        </div>
+        {% endfor %}
+        <pre class="preview">{{ member.condensed.text }}</pre>
+      </div>
+      {% else %}
+      <p class="hint">Not condensed yet — the brief above was written without it.</p>
+      {% endif %}
+      <div class="layer">
+        <div class="layer-head">
+          <span class="layer-what">the file<span class="tip" tabindex="0" role="note"
+            data-tip="The section as it is on disk."
+            aria-label="The section as it is on disk.">?</span></span>
+        </div>
               <pre class="preview body">{{ member.content.text }}</pre>
+      </div>
               <p class="cut">
                 {% if member.content.total > member.content.shown %}
                 Showing the first {{ "{:,}".format(member.content.shown) }} of {{ "{:,}".format(member.content.total) }} characters.

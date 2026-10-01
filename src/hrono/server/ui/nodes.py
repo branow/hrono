@@ -502,9 +502,14 @@ def _members(conn: object, node_id: int, stem: str) -> list[dict[str, object]]:
     rows = conn.execute(  # type: ignore[attr-defined]
         "SELECT s.id AS id, s.path AS path, s.uri AS uri, "
         "m.assignment_similarity AS score, "
-        "m.forced AS forced, c.body AS body "
+        "m.forced AS forced, c.body AS body, "
+        # the MIDDLE of the pipeline: what a model wrote about this section,
+        # and what the topic's brief was actually reduced from. Stored once per
+        # (content hash, model) and never shown anywhere until now (#197).
+        "d.text AS condensed, d.model_name AS condensed_by "
         "FROM node_members m JOIN sections s ON s.id = m.section_id "
         "LEFT JOIN contents c ON c.content_hash = s.content_hash "
+        "LEFT JOIN condensations d ON d.content_hash = s.content_hash "
         "WHERE m.node_id = ? "
         "ORDER BY m.assignment_similarity IS NULL, m.assignment_similarity, "
         "s.id",
@@ -531,6 +536,32 @@ def _member(row: object, where: str) -> dict[str, object]:
         "similarity": row["score"],  # type: ignore[index]
         "forced": bool(row["forced"]),  # type: ignore[index]
         "content": _content(row["body"]),  # type: ignore[index]
+        "condensed": _condensation(row),
+    }
+
+
+def _condensation(row: object) -> dict[str, object] | None:
+    """What a model wrote about this section, and which model wrote it.
+
+    None when the condense stage has not reached it — the common case on a
+    part-built tree, and a case the page must say out loud rather than render
+    as an empty panel.
+    """
+    text = row["condensed"]  # type: ignore[index]
+    if not text:
+        return None
+    body = str(text)
+    return {
+        "text": body,
+        "by": str(row["condensed_by"]),  # type: ignore[index]
+        # A GOTCHA line is a hazard lifted out of the source so an agent is
+        # warned without reading it — the most valuable line in a condensation
+        # and the one worth pulling out of the wall of markdown.
+        "gotchas": [
+            line.strip().lstrip("*").strip()
+            for line in body.splitlines()
+            if "GOTCHA" in line
+        ],
     }
 
 

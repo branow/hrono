@@ -5,12 +5,8 @@
   "proximity": "Turn on to find topics worth merging. A line joins two that are so alike that one topic would do.",
   "propagation": "Turn on to see what a change touched. A line runs from a section that changed to each brief above it that had to be rewritten."
 } %}
+{% set full_bleed = graph.nodes %}
 {% block main %}
-<div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
-  <h1>Map</h1>
-</div>
-
 {% if done %}
 <div class="callout ok mb-3">
   <div class="body"><div class="title">Done</div><p class="hint">{{ done }}</p></div>
@@ -34,11 +30,23 @@
 </div>
 {% else %}
 
-<div class="toolbar">
+
+
+{% if overlay.unavailable %}
+<div class="callout warn mb-3">
+  <div class="body"><p class="hint">{{ overlay.unavailable }}</p></div>
+</div>
+{% endif %}
+
+
+<div class="afloat tl">
+  <strong class="map-title">{{ tree }}</strong>
   <span class="chip plain num">{{ graph.shown }} drawn</span>
   <a class="btn small" href="{{ graph.expand_all }}">Expand all</a>
   <a class="btn small" href="{{ graph.collapse_all }}">Collapse</a>
-  <span class="sep"></span>
+</div>
+
+<div class="afloat tr">
   {% for toggle in overlay.toggles %}
   <a href="{{ toggle.href }}" class="toggle {{ toggle.kind }}{% if toggle.on %} edge-on{% endif %}"
      data-tip="{{ draws.get(toggle.kind, toggle.kind) }}">
@@ -46,11 +54,36 @@
   {% endfor %}
 </div>
 
-{% if overlay.unavailable %}
-<div class="callout warn mb-3">
-  <div class="body"><p class="hint">{{ overlay.unavailable }}</p></div>
+<div class="afloat bl">
+<ul class="keys">
+  <li title="Circle area follows the sections or topics beneath a topic">
+    <svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true">
+      <circle cx="5" cy="7" r="3" fill="var(--accent)"/>
+      <circle cx="20" cy="7" r="6" fill="var(--accent)"/>
+    </svg>size
+  </li>
+  <li title="Its brief is missing or no longer matches what it holds, so recall cannot answer from it">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="6" fill="var(--warn)"/>
+    </svg><span class="stale-key">needs a brief</span>
+  </li>
+  <li title="The chevron opens a topic and shows what sits beneath it">
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <path d="M3 5l4 4 4-4" fill="none" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>opens
+  </li>
+  <li title="The directory these sections live in. Its brief, its sections and the controls to correct it are on the topic page">
+    <svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true">
+      <path d="M2 6h26M2 10h16" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>where it lives
+  </li>
+  <li title="Siblings stay on one level, so the board is usually wider than the window. Scroll it, drag it with the mouse, or click it and use the arrow keys">
+    <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
+      <path d="M4 7h12M4 7l3-3M4 7l3 3M16 7l-3-3M16 7l-3 3" fill="none" stroke="var(--ink-faint)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>scroll or drag to move
+  </li>
+</ul>
 </div>
-{% endif %}
 
 <div class="board{% if panel %} reading{% endif %}">
 <div class="canvas" id="board" tabindex="0" role="region" data-home="{{ graph.home }}"
@@ -143,34 +176,7 @@
 {% endif %}
 </div>
 
-<ul class="keys mt-3">
-  <li title="Circle area follows the sections or topics beneath a topic">
-    <svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true">
-      <circle cx="5" cy="7" r="3" fill="var(--accent)"/>
-      <circle cx="20" cy="7" r="6" fill="var(--accent)"/>
-    </svg>size
-  </li>
-  <li title="Its brief is missing or no longer matches what it holds, so recall cannot answer from it">
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <circle cx="7" cy="7" r="6" fill="var(--warn)"/>
-    </svg><span class="stale-key">needs a brief</span>
-  </li>
-  <li title="The chevron opens a topic and shows what sits beneath it">
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <path d="M3 5l4 4 4-4" fill="none" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>opens
-  </li>
-  <li title="The directory these sections live in. Its brief, its sections and the controls to correct it are on the topic page">
-    <svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true">
-      <path d="M2 6h26M2 10h16" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round"/>
-    </svg>where it lives
-  </li>
-  <li title="Siblings stay on one level, so the board is usually wider than the window. Scroll it, drag it with the mouse, or click it and use the arrow keys">
-    <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
-      <path d="M4 7h12M4 7l3-3M4 7l3 3M16 7l-3-3M16 7l-3 3" fill="none" stroke="var(--ink-faint)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>scroll or drag to move
-  </li>
-</ul>
+
 
 <script>
 /* The one place on this dashboard a script earns its place: a board as wide

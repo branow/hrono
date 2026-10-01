@@ -9,6 +9,7 @@
 <style>
 /* ---------------------------------------------------------------- tokens */
 :root {
+  --topbar: 3.3rem;
   color-scheme: light dark;
 
   --bg: #F5F2EC;
@@ -930,6 +931,72 @@ tr.needs td.count { font-weight: 700; color: var(--warn); }
 .notes, .where-note { color: var(--ink-soft); }
 .notice { color: var(--ink-soft); }
 
+/* The two layers a section has: what a model wrote about it, and the file. */
+.layer { margin-bottom: var(--s3); }
+.layer-head { display: flex; align-items: center; gap: var(--s2);
+  margin-bottom: .3rem; }
+.layer-what { font: 600 .6875rem/1.5 var(--mono); text-transform: uppercase;
+  letter-spacing: .08em; color: var(--ink-faint); }
+
+/* ------------------------------------------------------------ full bleed */
+/* The map is not a picture on a page, it is the page — the way a drawing
+   application works. Its controls stop being a row above the chart and become
+   panels ON it, so the pixels go to the tree rather than to chrome. */
+.topbar { min-height: var(--topbar); }
+main.bleed {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  height: calc(100dvh - var(--topbar));
+  position: relative;
+  overflow: hidden;
+}
+main.bleed .board { height: 100%; gap: 0; }
+main.bleed .canvas {
+  height: 100%;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--bg);
+  /* A tree shorter than the viewport sits in the MIDDLE of the board rather
+     than against the top with a screen of blank paper under it. `safe` is
+     load-bearing: centred overflow would scroll the top of a tall tree out of
+     reach, and `safe` falls back to start exactly then. */
+  display: grid;
+  place-content: safe center;
+}
+/* The panel docks to the edge of the viewport rather than ending in a gutter. */
+main.bleed .panel {
+  max-height: none;
+  height: 100%;
+  border-radius: 0;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  box-shadow: var(--shadow-lift);
+}
+
+/* Floating over the board, not stacked above it. */
+.afloat {
+  position: absolute; z-index: 6;
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s2) var(--s3);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  box-shadow: var(--shadow);
+}
+.afloat.tl { top: var(--s3); left: var(--s3); }
+.afloat.tr { top: var(--s3); right: var(--s3); max-width: min(30rem, 46vw); }
+.afloat.bl { bottom: var(--s3); left: var(--s3); }
+.reading .afloat.tr { right: calc(22rem + var(--s3)); }
+.afloat .keys { margin: 0; }
+.map-title { font: 620 .8125rem/1.5 var(--mono); color: var(--ink-soft); }
+@media (max-width: 54rem) {
+  .afloat.tr, .afloat.bl { display: none; }
+}
+
 /* ----------------------------------------------------------------- guide */
 ol.pipeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px;
   background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
@@ -1060,6 +1127,6 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
   </div>
 </header>
 {% endblock %}
-<main>{% block main %}{% endblock %}</main>
+<main{% if full_bleed %} class="bleed"{% endif %}>{% block main %}{% endblock %}</main>
 </body>
 </html>

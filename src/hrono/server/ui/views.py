@@ -20,6 +20,31 @@ from hrono.server.ui import Reader, _trees, router, templates
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
+# A first visit should show a useful amount of tree rather than one circle
+# nobody knows to click. Three is what fits a screen and what most trees are.
+OPEN_DEPTH = 3
+# The sentinel for "no `open` parameter at all", distinct from one that is
+# present and empty — which is exactly what the Collapse link sends.
+NO_OPEN = "\x00"
+
+
+def _down_to(conn: object, tree: str, depth: int) -> set[int]:
+    """Every topic shallow enough that opening it is still worth the room.
+
+    A DEPTH from the top rather than a list of ids, so it means the same thing
+    on a tree of three levels and one of nine.
+    """
+    rows = conn.execute(  # type: ignore[attr-defined]
+        "SELECT id, level FROM nodes WHERE tree = ?", (tree,)
+    ).fetchall()
+    if not rows:
+        return set()
+    top = max(int(row["level"]) for row in rows)
+    return {
+        int(row["id"]) for row in rows if top - int(row["level"]) < depth - 1
+    }
+
+
 # Enough to recognise a section, not enough to lose the topic off the screen. A
 # section is ~10 KB and a topic can hold thirty of them (#182).
 PREVIEW_CHARS = 600
@@ -95,7 +120,7 @@ def graph_page(
     tree: str,
     request: Request,
     user: Reader,
-    open: str = "",
+    open: str = NO_OPEN,
     edges: str = "",
     done: str = "",
     focus: str = "",
@@ -107,10 +132,16 @@ def graph_page(
     needs no JavaScript: toggling is a link, and so is reading a topic —
     `focus` opens the panel beside the map on the server (#199).
     """
-    opened = _opened(open)
+    # `?open=` present means the view was chosen — even when empty, which is
+    # what Collapse posts. Absent means a first visit, which opens enough
+    # tree to be worth looking at.
+    chosen = _opened(open) if open is not None and open != NO_OPEN else None
     kinds = overlays.parse(edges)
     wanted = int(focus) if focus.strip().isdigit() else 0
     with request.app.state.db.connect() as conn:
+        opened = (
+            chosen if chosen is not None else _down_to(conn, tree, OPEN_DEPTH)
+        )
         trees = _trees(conn)
         drawn = graph.build(conn, tree, sorted(opened))
         overlay = overlays.build(

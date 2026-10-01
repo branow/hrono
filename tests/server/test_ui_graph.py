@@ -40,6 +40,10 @@ class Browser:
     def sign_in(self) -> None:
         self.client.post("/ui/login", data={"token": self.token})
 
+    def map_at(self, query: str) -> str:
+        """The map at a RAW query string, so a test can send no open at all."""
+        return self.client.get(f"/ui/trees/{TREE}/graph{query}").text
+
     def map(self, open: str = "") -> str:
         return self.client.get(f"/ui/trees/{TREE}/graph?open={open}").text
 
@@ -693,3 +697,31 @@ def test_an_upper_topic_in_the_panel_lists_the_topics_under_it(
     assert "2 topics" in page
     assert f"focus={browser.ids['big']}" in page
     assert f"focus={browser.ids['small']}" in page
+
+
+def test_a_first_visit_opens_three_levels_not_one_circle(
+    browser: Browser,
+) -> None:
+    """#197: the board opened collapsed, so a first visit was one circle and
+    no indication that anything was under it."""
+    from hrono.server.ui.views import OPEN_DEPTH
+
+    browser.sign_in()
+
+    page = browser.map_at("")  # no ?open= at all
+
+    assert page.count('class="disc"') > 1
+    assert OPEN_DEPTH == 3
+
+
+def test_collapse_still_means_collapsed(browser: Browser) -> None:
+    """`open=` present and EMPTY is what the Collapse link sends.
+
+    Treating that the same as absent would make Collapse a no-op — the trap
+    in giving an absent parameter a non-empty default.
+    """
+    browser.sign_in()
+
+    both = (browser.map_at(""), browser.map_at("?open="))
+
+    assert both[0].count('class="disc"') > both[1].count('class="disc"')

@@ -23,6 +23,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.server.app import create_app
 from hrono.summarize import briefs
+from hrono.summarize import store as condensations
 
 KEY = Fernet.generate_key()
 TREE = "default"
@@ -337,3 +338,76 @@ def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
     assert long_brief.startswith(stem)
     assert long_brief[len(stem)] == " "
     assert len(title) < len(long_brief)
+
+
+def test_a_section_shows_the_condensation_it_was_summarised_through(
+    browser: Browser,
+) -> None:
+    """#197: the middle of the pipeline was invisible.
+
+    hrono condenses each section, then writes the topic's brief FROM those
+    condensations. The page showed the brief and the raw file and nothing of
+    the layer between, which is the layer the brief was actually made of.
+    """
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        digest = browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT s.content_hash FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
+            "ORDER BY s.id LIMIT 1",
+            (node,),
+        ).fetchone()[0]
+        condensations.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            digest,
+            "scribe-9",
+            "**Signing**\n\nGOTCHA: the signer trusts its own clock.\n",
+            10,
+            20,
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    assert "condensation" in page
+    assert "scribe-9" in page  # which model wrote it
+    assert "the signer trusts its own clock" in page
+
+
+def test_a_gotcha_is_lifted_out_of_the_condensation(
+    browser: Browser,
+) -> None:
+    """A GOTCHA is a hazard moved up the tree so an agent is warned without
+    reading the source. Buried in markdown it warns nobody."""
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        digest = browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT s.content_hash FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
+            "ORDER BY s.id LIMIT 1",
+            (node,),
+        ).fetchone()[0]
+        condensations.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            digest,
+            "scribe-9",
+            "Body.\n\n**GOTCHA: deletes silently.**\n\nMore body.\n",
+            10,
+            20,
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    assert page.count("deletes silently") == 2  # called out AND in the text
+    assert 'class="callout warn' in page
+
+
+def test_a_section_not_condensed_yet_says_so(browser: Browser) -> None:
+    """On a part-built tree this is the common case, and a blank panel reads
+    as a bug rather than as a stage that has not run."""
+    browser.sign_in()
+
+    page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
+
+    assert "Not condensed yet" in page
