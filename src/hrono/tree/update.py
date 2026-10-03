@@ -120,9 +120,12 @@ def update(
         batch = _update_source(
             context, tree, name, model_name, encoder_for, batch
         )
+    condensed = None
     if batch is not None or _talked_back(context):
-        condense(_stage(tree, "condense", {}), context, client=client)
-    return _outcome(context, tree, batch)
+        condensed = condense(
+            _stage(tree, "condense", {}), context, client=client
+        )
+    return _outcome(context, tree, batch, condensed)
 
 
 def _talked_back(context: JobContext) -> bool:
@@ -142,17 +145,24 @@ def _talked_back(context: JobContext) -> bool:
 
 
 def _outcome(
-    context: JobContext, tree: str, batch: int | None
+    context: JobContext,
+    tree: str,
+    batch: int | None,
+    condensed: Mapping[str, object] | None,
 ) -> Mapping[str, object]:
     """What this run changed, for the operator rather than the log (#133).
 
     ``forced`` is the count that matters: a force-assign is the system deciding
     that an alien member is better than an unreachable one (#086 T35.3) — a real
     judgement call, and until now a silent one. ``parked`` is its counterpart,
-    chunks still waiting outside the tree.
+    chunks still waiting outside the tree. ``condense`` is what the condense
+    step did and spent, present when it ran: a sync over an unchanged tree
+    that redid talked-back condensations said ``changed: false`` and nothing
+    else, and its calls showed only in the run's usage (#179, E015).
     """
+    spent = {} if condensed is None else {"condense": dict(condensed)}
     if batch is None:
-        return {"changed": False, "batch": None}
+        return {"changed": False, "batch": None, **spent}
     with context.database.connect() as conn:
         forced = int(
             conn.execute(
@@ -172,6 +182,7 @@ def _outcome(
         "batch": batch,
         "forced": forced,
         "parked": parked,
+        **spent,
     }
 
 

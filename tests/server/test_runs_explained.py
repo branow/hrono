@@ -29,9 +29,12 @@ from hrono.llm.client import (
     Usage,
 )
 from hrono.paths import cache_root
+from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 from hrono.server.failures import SAID
+from hrono.summarize import store as condensations
 from hrono.tree.maintain import maintain
+from hrono.tree.sync_chain import sync
 from tests.tree.test_maintain import (
     fake_build,
     fake_encoder,
@@ -61,13 +64,16 @@ def _broken(vectors: object, *, init: object = None) -> ClusterResult:
     raise ClusterError("the reduction failed on these vectors")
 
 
-def _run(tmp_path: Path, **seams: object) -> tuple[Database, str]:
-    """A maintain through the REAL worker: its own result and failure paths."""
+def _run(
+    tmp_path: Path, op: str = "maintain", **seams: object
+) -> tuple[Database, str]:
+    """A run through the REAL worker: its own result and failure paths."""
     database = Database.at(tmp_path / "hrono.db")
-    job_id = enqueue(database, "maintain", {}, tree="default", started_by="ana")
+    job_id = enqueue(database, op, {}, tree="default", started_by="ana")
+    made = {"maintain": maintain, "sync-tree": sync}[op]
     worker = Worker(
         database,
-        ops={"maintain": partial(maintain, encoder_for=fake_encoder, **seams)},
+        ops={op: partial(made, encoder_for=fake_encoder, **seams)},
         cache_root=cache_root(tmp_path / "hrono.db"),
     )
     worker.start()
@@ -209,6 +215,96 @@ def test_an_unchanged_rerun_reads_nothing_to_do(
     timeline = page.split('id="stages"')[1].split("</section>")[0]
     assert timeline.count("nothing to do") >= 3
     assert "files read" not in timeline and "embedded" not in timeline
+
+
+TALKED_BACK = "Could you paste the file you would like me to condense?"
+
+
+class Refusing(Writing):
+    """Talks back for one file's section, writes every other summary."""
+
+    def __init__(self, about: str) -> None:
+        super().__init__()
+        self.about = about
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        if self.about in request.content:
+            return CompletionResult(TALKED_BACK, Usage(4, 4))
+        return super().complete(request)
+
+
+def _store_talk_back(database: Database, *paths: str) -> None:
+    """What a run before #221 cached for these sections: the model talking."""
+    with database.write() as conn:
+        for path in paths:
+            digest = conn.execute(
+                "SELECT content_hash FROM sections WHERE path = ?", (path,)
+            ).fetchone()[0]
+            conn.execute(
+                "DELETE FROM condensations WHERE content_hash = ?", (digest,)
+            )
+            condensations.upsert(conn, digest, "sonnet", TALKED_BACK, 1, 1)
+        registry_store.insert(  # the sync's propagate stage asks a judge
+            conn,
+            "prompts",
+            "judge",
+            json.dumps(
+                {"name": "judge", "role": "judge", "template": "{source}"}
+            ),
+            None,
+            "t",
+        )
+
+
+def _update_stage(database: Database, job_id: str) -> dict[str, object]:
+    with database.connect() as conn:
+        job = to_job(job_store.get(conn, job_id))
+    assert job.status == "succeeded"
+    stages = job.result["stages"]  # type: ignore[index]
+    return next(s for s in stages if s["op"] == "update")["result"]
+
+
+def test_an_unchanged_sync_shows_what_its_condense_step_did(
+    repo: Path, panel: Panel
+) -> None:
+    # E015: the update stage said only `changed: false` while it spent model
+    # calls redoing talked-back condensations; the spend was invisible
+    database, _ = _run(repo, client=Writing(), build=fake_build)
+    _store_talk_back(database, "f4.txt", "f5.txt")
+    database.close()
+
+    database, job_id = _run(
+        repo, "sync-tree", client=Refusing("module 5"), core_labeler=None
+    )
+    panel.as_("writer")
+    page = panel.client.get(f"/ui/jobs/{job_id}?tree=default").text
+    stage = _update_stage(database, job_id)
+    database.close()
+    timeline = page.split('id="stages"')[1].split("</section>")[0]
+
+    assert stage["changed"] is False
+    assert stage["condense"] == {
+        "condensed": 1,
+        "refused": 1,
+        "tokens": {"input": 12, "output": 12},
+    }
+    assert "1 section condensed" in timeline
+    assert "1 reply that was not a summary, not kept" in timeline
+
+
+def test_a_sync_after_a_refusal_runs_no_condense_step(repo: Path) -> None:
+    database, _ = _run(repo, client=Writing(), build=fake_build)
+    _store_talk_back(database, "f4.txt")
+    database.close()
+    _run(repo, "sync-tree", client=Refusing("module 4"), core_labeler=None)
+
+    database, job_id = _run(
+        repo, "sync-tree", client=Refusing("module 4"), core_labeler=None
+    )
+    stage = _update_stage(database, job_id)
+    database.close()
+
+    assert stage == {"changed": False, "batch": None}
 
 
 def test_a_rerun_after_an_edit_reports_only_the_edit(repo: Path) -> None:
