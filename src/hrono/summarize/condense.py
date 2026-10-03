@@ -88,6 +88,7 @@ def condense(
         keep,
         workers=pool.width(),
         proceed=pool.running(context.database, job.id),
+        named=lambda section: _named(context, section[0]),
     )
     # an op that calls a model says what it spent (#179); until now condense
     # reported nothing at all, which made the most expensive stage of a first
@@ -102,6 +103,16 @@ def condense(
     if tokens is not None:
         outcome["tokens"] = tokens
     return outcome
+
+
+def _named(context: JobContext, digest: str) -> str:
+    """A section by the file it is in, for a failure's message (#213)."""
+    with context.database.connect() as conn:
+        row = conn.execute(
+            "SELECT path FROM sections WHERE content_hash = ? LIMIT 1",
+            (digest,),
+        ).fetchone()
+    return f"section {row['path'] if row else digest[:12]}"
 
 
 OPS["condense"] = condense

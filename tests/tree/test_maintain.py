@@ -14,6 +14,7 @@ from hrono.export.collapse import collapse
 from hrono.export.render import render
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
+from hrono.jobs.stages import StageFailed
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
@@ -337,7 +338,7 @@ def test_a_broken_backend_fails_the_job_it_does_not_collect(
     def broken(vectors: object, *, init: object = None) -> ClusterResult:
         raise ClusterError("the reduction failed on these vectors")
 
-    with pytest.raises(ClusterError):
+    with pytest.raises(StageFailed) as failed:
         maintain(
             job(),
             job_context(db, tmp_path),
@@ -345,6 +346,8 @@ def test_a_broken_backend_fails_the_job_it_does_not_collect(
             client=FakeCompletion(),
             build=broken,
         )
+    assert isinstance(failed.value.cause, ClusterError)
+    assert failed.value.stage == "cluster"  # the stage is named (#213)
     assert _count(db, "nodes") == 0  # nothing invented on the way out
 
 

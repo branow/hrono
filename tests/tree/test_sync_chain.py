@@ -10,6 +10,7 @@ from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
+from hrono.jobs.stages import StageFailed
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
@@ -183,7 +184,20 @@ def test_the_result_says_what_the_run_did(
         "adopted",
         "settle_due",
         "incomplete",
+        # what the run did to the map, and each stage with its time (#213)
+        "tree",
+        "stages",
     }
+    assert [stage["op"] for stage in outcome["stages"]] == [
+        "update",
+        "propagate",
+        "brief",
+        "brief-upper",
+        "monitor",
+        "repair",
+        "after-repair",
+    ]
+    assert all(stage["seconds"] >= 0 for stage in outcome["stages"])
     assert outcome["incomplete"] is False
     assert outcome["changed"] is True  # a file really did change
     assert set(outcome["repaired"]) == {
@@ -268,8 +282,12 @@ def test_a_failing_stage_names_itself_and_leaves_the_rest_committed(
                 raise RuntimeError("the judge exploded")
             return CompletionResult("a brief body here", Usage(1, 1))
 
-    with pytest.raises(RuntimeError, match="the judge exploded"):
+    with pytest.raises(StageFailed, match="the judge exploded") as failed:
         _run(db, tmp_path, Exploding())
+
+    # the failure names its stage and carries the stages that finished
+    assert failed.value.stage == "propagate"
+    assert [s["op"] for s in failed.value.outcome["stages"]] == ["update"]
 
     # update and condense ran before propagate and their work survives
     assert _uncondensed(db) == 0

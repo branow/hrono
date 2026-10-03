@@ -6,13 +6,14 @@ A parent's status and progress are DERIVED from its children at read time
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from hrono.errors import NotFound
+from hrono.errors import Forbidden, NotFound
 from hrono.jobs import store as job_store
 from hrono.jobs.aggregate import rollup, total_spend
 from hrono.jobs.cancel import cancel
@@ -21,7 +22,7 @@ from hrono.jobs.ops import OPS
 from hrono.jobs.scope import SOURCE_SCOPED, fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import outcome
+from hrono.server import failures, outcome
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -33,15 +34,20 @@ from hrono.server.ui import (
 from hrono.server.ui import (
     _fields as _form_fields,
 )
+from hrono.usage.rollup import for_jobs
 
 _LIVE = frozenset({"pending", "running", "partial"})
+_RETRYABLE = frozenset({"failed", "canceled"})
+# The ops a writer may start from the tree's own buttons; every other op is the
+# admin's `POST /jobs` door (`server/trees.py`), and so is its retry.
+_WRITER_OPS = frozenset({"sync-tree", "maintain"})
 
 # An op name is the API's word and the CLI's word, so the page keeps it — but
 # an operator reading a run log should not have to already know what
 # `cluster-briefs` does. The name stays, and this says it in a sentence.
 MEANS = {
-    "sync-tree": "the NORMAL one: re-read the sources and change only what the "
-    "changes touched",
+    "sync-tree": "re-read the sources and change only what the changes "
+    "touched — the everyday run",
     "sync": "fetch a source's files",
     "split": "cut the files into sections",
     "embed": "turn sections into vectors",
@@ -55,8 +61,8 @@ MEANS = {
     "for twice",
     "update": "re-file only what changed",
     "propagate": "mark the summaries a change has invalidated",
-    "maintain": "the FIRST one: ingest the sources and build a tree that does "
-    "not exist yet. On a tree that does, it fills in what is missing",
+    "maintain": "ingest the sources and build a tree that does not exist yet "
+    "— the first run. On a tree that does, it fills in what is missing",
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
     "settle": "place the sections that were still waiting",
@@ -92,18 +98,37 @@ ORDER = (
 WHOLE = ("sync-tree", "maintain", "build-tree")
 
 
+PAGE = 25
+
+
 @router.get("/ui/jobs", response_class=HTMLResponse)
-def jobs_view(request: Request, user: Reader, tree: str = "") -> Response:
-    """The tree's runs: what each is doing, spending, and made of."""
+def jobs_view(
+    request: Request,
+    user: Reader,
+    tree: str = "",
+    status: str = "",
+    op: str = "",
+    page: int = 1,
+) -> Response:
+    """The tree's runs, one line each, newest first: filtered and paged."""
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         chosen = tree if tree in trees else trees[0]
         rows = [
             row
-            for row in job_store.list_jobs(conn)
+            for row in reversed(job_store.list_jobs(conn))
             if (row["tree"] or "default") == chosen and row["parent_id"] is None
         ]
-        jobs = [_render_job(conn, row) for row in reversed(rows)]
+        ran = sorted({str(row["op"]) for row in rows})
+        rendered = [
+            _render_job(conn, row) for row in rows if not op or row["op"] == op
+        ]
+        matching = [
+            job for job in rendered if not status or job["status"] == status
+        ]
+        pages = max(1, -(-len(matching) // PAGE))
+        page = min(max(1, page), pages)
+        jobs = matching[(page - 1) * PAGE : page * PAGE]
         sources = [
             str(row["name"]) for row in registry_store.list_all(conn, "sources")
         ]
@@ -115,6 +140,27 @@ def jobs_view(request: Request, user: Reader, tree: str = "") -> Response:
             "trees": trees,
             "tree": chosen,
             "jobs": jobs,
+            "filters": {"status": status, "op": op},
+            "statuses": (
+                "running",
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled",
+                "partial",
+            ),
+            "ops": ran,
+            "paging": {
+                "page": page,
+                "pages": pages,
+                "total": len(matching),
+                "newer": _page_url(chosen, status, op, page - 1)
+                if page > 1
+                else None,
+                "older": _page_url(chosen, status, op, page + 1)
+                if page < pages
+                else None,
+            },
             "runnable": _runnable(),
             "sources": sources,
             "can_write": user.role in {"writer", "admin"},
@@ -122,6 +168,11 @@ def jobs_view(request: Request, user: Reader, tree: str = "") -> Response:
             "notice": request.query_params.get("notice"),
         },
     )
+
+
+def _page_url(tree: str, status: str, op: str, page: int) -> str:
+    query = {"tree": tree, "status": status, "op": op, "page": str(page)}
+    return "/ui/jobs?" + urlencode({k: v for k, v in query.items() if v})
 
 
 def _runnable() -> list[dict[str, object]]:
@@ -178,11 +229,19 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
             else None
         ),
         "cost": spent,
+        "usage": for_jobs(conn, job.id),  # type: ignore[arg-type]
         "error": (
             {"code": job.error_code or "internal-error", "message": job.error}
             if job.error
             else None
         ),
+        "failure": failures.explain(
+            job.error_code, job.error, job.error_details
+        )
+        if status == "failed"
+        else None,
+        "stages": _stages(job.result),
+        "retry": status in _RETRYABLE,
         "children": [
             {
                 "op": str(child["op"]),
@@ -195,6 +254,29 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
             for child in children
         ],
     }
+
+
+def _stages(result: Mapping[str, object] | None) -> list[dict[str, object]]:
+    """A composite run's stages as a timeline: what, over what, how long."""
+    stages = (result or {}).get("stages")
+    if not isinstance(stages, list):
+        return []
+    return [
+        {
+            "op": str(stage.get("op")),
+            "over": stage.get("over"),
+            "took": _seconds(float(stage.get("seconds") or 0)),
+            "did": outcome.read(stage.get("result")).did,
+        }
+        for stage in stages
+        if isinstance(stage, dict)
+    ]
+
+
+def _seconds(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    return f"{int(seconds) // 60}m {int(seconds) % 60:02d}s"
 
 
 def clock(stamp: str) -> str:
@@ -302,5 +384,37 @@ def cancel_from_the_page(
         notice += f"; {outcome.running} already running and will finish"
     return RedirectResponse(
         f"/ui/jobs?tree={tree or 'default'}&notice={quote(notice)}",
+        status_code=303,
+    )
+
+
+@router.post("/ui/jobs/{job_id}/retry")
+def retry_from_the_page(
+    job_id: str, request: Request, user: Writer, tree: str = ""
+) -> Response:
+    """Run a failed or stopped run again, with exactly what it was given.
+
+    Nothing already paid for is paid for twice: condensations and vectors are
+    cached by content, so the retry spends only on what failed or was never
+    reached (#213). The role is the one that could have started it.
+    """
+    database = request.app.state.db
+    with database.connect() as conn:
+        row = job_store.get(conn, job_id)
+        if row is None:
+            raise NotFound(f"job not found: {job_id}")
+        job = to_job(row)
+    if job.op not in _WRITER_OPS and user.role != "admin":
+        raise Forbidden("only an admin can re-run this stage")
+    if fans_out(job.op, job.scope):
+        again = fan_out(
+            database, job.op, job.scope, tree=job.tree, started_by=user.name
+        )
+    else:
+        again = enqueue(
+            database, job.op, job.scope, tree=job.tree, started_by=user.name
+        )
+    return RedirectResponse(
+        f"/ui/jobs/{again}?tree={tree or job.tree or 'default'}",
         status_code=303,
     )

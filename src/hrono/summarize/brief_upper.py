@@ -128,6 +128,7 @@ def brief_upper(
         keep,
         workers=pool.width(),
         proceed=pool.running(context.database, job.id),
+        named=lambda entry: f"topic {entry[0]}",
     )
     outcome: dict[str, object] = {
         "briefed": len(briefed),

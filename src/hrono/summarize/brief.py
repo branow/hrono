@@ -145,6 +145,7 @@ def brief(
         keep,
         workers=pool.width(),
         proceed=pool.running(context.database, job.id),
+        named=lambda entry: f"topic {entry[0]}",
     )
     # what a pin HELD is as much the run's outcome as what it wrote: an
     # operator who sees "briefed 0" needs to know whether there was nothing to

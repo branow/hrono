@@ -67,6 +67,20 @@ COUNTED: dict[str, tuple[str, str]] = {
     "freed": ("pin released", "pins released"),
     "pinned": ("hand edit left alone", "hand edits left alone"),
     "removed": ("item removed", "items removed"),
+    "topics_added": ("topic added to the map", "topics added to the map"),
+    "topics_removed": (
+        "topic taken off the map",
+        "topics taken off the map",
+    ),
+    "sections_refiled": (
+        "section re-filed under another topic",
+        "sections re-filed under another topic",
+    ),
+    "briefs_rewritten": ("brief written", "briefs written"),
+    "refused": (
+        "reply that was not a summary, not kept",
+        "replies that were not summaries, not kept",
+    ),
     "adopted": (
         "new topic hung back under the tree",
         "new topics hung back under the tree",

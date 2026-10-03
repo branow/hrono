@@ -23,6 +23,7 @@ Driving it against a real embedding model + LLM key + source repo is manual qa.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 
 from hrono.cluster.op import cluster
 from hrono.embed.model import resolve_embedding_model
@@ -31,11 +32,13 @@ from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.stages import Stages
 from hrono.registry.collections.trees import scoped_sources
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense
 from hrono.summarize.resolve import resolve_text_model
+from hrono.tree import changes
 
 _DEFAULT_TREE = "default"
 
@@ -70,32 +73,72 @@ def maintain(
     encoder_for: object | None = None,
     client: object | None = None,
     build: object | None = None,
-) -> None:
-    """Build a tree end to end: ingest, embed, condense, cluster, brief."""
+) -> Mapping[str, object]:
+    """Build a tree end to end: ingest, embed, condense, cluster, brief.
+
+    Every stage is timed and its counts kept (#213), and a failing one is
+    reported by name with the item it was on and the stages before it.
+    """
     tree = job.tree or _DEFAULT_TREE
     with context.database.connect() as conn:
         sources = scoped_sources(conn, tree)
         _require_models(conn)
+        before = changes.snapshot(conn, tree)
 
+    run = Stages()
     for name in sources:
         source_scope = {"type": "source", "name": name}
-        sync(_stage(tree, "sync", source_scope), context)
-        split_source(_stage(tree, "split", source_scope), context)
-
-    embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
-    condense(_stage(tree, "condense", {}), context, client=client)
-    cluster(_stage(tree, "cluster", {}), context, build=build)
-    brief(_stage(tree, "brief", {}), context, client=client)
-    build_tree(
-        _stage(tree, "build-tree", {}),
-        context,
-        client=client,
-        encoder_for=encoder_for,
-        build=build,
+        run.run(
+            "sync",
+            lambda s=source_scope: sync(_stage(tree, "sync", s), context),
+            over=name,
+        )
+        run.run(
+            "split",
+            lambda s=source_scope: split_source(
+                _stage(tree, "split", s), context
+            ),
+            over=name,
+        )
+    run.run(
+        "embed",
+        lambda: embed(
+            _stage(tree, "embed", {}), context, encoder_for=encoder_for
+        ),
+    )
+    run.run(
+        "condense",
+        lambda: condense(_stage(tree, "condense", {}), context, client=client),
+    )
+    run.run(
+        "cluster",
+        lambda: cluster(_stage(tree, "cluster", {}), context, build=build),
+    )
+    run.run(
+        "brief",
+        lambda: brief(_stage(tree, "brief", {}), context, client=client),
+    )
+    run.run(
+        "build-tree",
+        lambda: build_tree(
+            _stage(tree, "build-tree", {}),
+            context,
+            client=client,
+            encoder_for=encoder_for,
+            build=build,
+        ),
     )
     # brief + build-tree wrote node:// brief passages (#071) after the first
     # embed; vectorise them so recall's vector leg covers briefs too.
-    embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
+    run.run(
+        "embed",
+        lambda: embed(
+            _stage(tree, "embed", {}), context, encoder_for=encoder_for
+        ),
+    )
+    with context.database.connect() as conn:
+        changed = changes.since(conn, tree, before)
+    return run.outcome({"tree": changed})
 
 
 def _stage(tree: str, op: str, scope: dict[str, object]) -> Job:

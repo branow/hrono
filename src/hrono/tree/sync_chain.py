@@ -43,9 +43,11 @@ from hrono.cluster.monitor import monitor
 from hrono.cluster.repair import repair
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.stages import Stages
 from hrono.summarize.brief import brief
 from hrono.summarize.brief_upper import brief_upper
 from hrono.summarize.propagate import propagate
+from hrono.tree import changes
 from hrono.tree.settle import should_settle
 from hrono.tree.update import update
 
@@ -60,33 +62,66 @@ def sync(
     client: object | None = None,
     core_labeler: object | None = None,
 ) -> Mapping[str, object]:
-    """Run the incremental chain over ``tree``; report what each stage did."""
+    """Run the incremental chain over ``tree``; report what each stage did.
+
+    Each stage is timed and kept, and a failure names its stage (#213).
+    """
     tree = job.tree or _DEFAULT_TREE
-    ingested = update(
-        _stage(tree, "update"),
-        context,
-        encoder_for=encoder_for,
-        client=client,
+    with context.database.connect() as conn:
+        before = changes.snapshot(conn, tree)
+    run = Stages()
+    ingested = run.run(
+        "update",
+        lambda: update(
+            _stage(tree, "update"),
+            context,
+            encoder_for=encoder_for,
+            client=client,
+        ),
     )
-    judged = propagate(_stage(tree, "propagate"), context, client=client)
-    brief(_stage(tree, "brief"), context, client=client)
-    brief_upper(_stage(tree, "brief-upper"), context, client=client)
-    measured = monitor(_stage(tree, "monitor"), context)
-    repaired = repair(
-        _stage(tree, "repair"), context, core_labeler=core_labeler
+    judged = run.run(
+        "propagate",
+        lambda: propagate(_stage(tree, "propagate"), context, client=client),
     )
-    adopted = _after_repair(
-        tree, context, repaired, encoder_for=encoder_for, client=client
+    run.run(
+        "brief", lambda: brief(_stage(tree, "brief"), context, client=client)
+    )
+    run.run(
+        "brief-upper",
+        lambda: brief_upper(
+            _stage(tree, "brief-upper"), context, client=client
+        ),
+    )
+    measured = run.run(
+        "monitor", lambda: monitor(_stage(tree, "monitor"), context)
+    )
+    repaired = run.run(
+        "repair",
+        lambda: repair(
+            _stage(tree, "repair"), context, core_labeler=core_labeler
+        ),
+    )
+    adopted = run.run(
+        "after-repair",
+        lambda: _after_repair(
+            tree, context, repaired, encoder_for=encoder_for, client=client
+        ),
     )
     with context.database.connect() as conn:
         settle_due = should_settle(conn, tree)
-    return _outcome(
-        ingested,
-        judged,
-        measured,
-        repaired,
-        adopted=adopted,
-        settle_due=settle_due,
+        changed = changes.since(conn, tree, before)
+    return run.outcome(
+        {
+            **_outcome(
+                ingested,
+                judged,
+                measured,
+                repaired,
+                adopted=adopted,
+                settle_due=settle_due,
+            ),
+            "tree": changed,
+        }
     )
 
 

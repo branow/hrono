@@ -147,10 +147,14 @@ def test_a_failed_run_shows_its_code_and_message(browser: Browser) -> None:
         code="embed-error",
     )
 
-    page = browser.page()
+    listed = browser.page()
+    page = browser.client.get(f"/ui/jobs/{job_id}?tree=default").text
 
-    assert "embed-error" in page
-    assert "no embedding model available" in page
+    # the list stays one line a run; the run page explains it (#213)
+    assert 'data-state="failed"' in listed
+    assert "The embedding model could not turn text into vectors." in page
+    assert "Check the embedding model in Settings." in page
+    assert "embed-error: no embedding model available" in page  # raw, kept
 
 
 def test_a_live_run_is_marked_for_the_event_stream(browser: Browser) -> None:
@@ -246,9 +250,10 @@ def test_a_run_says_when_it_started_and_which_one_it_is(
     browser.fan_out()
     page = browser.page()
 
-    assert '<th class="when">started</th>' in page
-    assert '<th class="when">took</th>' in page
-    assert '<th class="when">id</th>' in page
+    # every header looks the same now; the colour was a class collision
+    assert "<th>Started</th>" in page
+    assert "<th>Took</th>" in page
+    assert "<th>Run</th>" in page
 
 
 def test_the_id_shown_is_the_prefix_of_the_real_one(

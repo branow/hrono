@@ -5,7 +5,7 @@
   <div class="crumbs">
     <a href="/ui/jobs?tree={{ tree }}">Runs</a>
   </div>
-  <h1 class="where">{{ job.op }}</h1>
+  <h1>{{ job.op }}</h1>
   <p class="said">{{ job.means }}</p>
   <p class="where-note row mt-2">
     <span class="state status" data-state="{{ job.status }}">{{ job.status }}</span>
@@ -37,13 +37,68 @@
   </section>
   {% endif %}
 
-  {% if job.error %}
+  {% if job.failure %}
+  <div class="callout bad" id="failure">
+    <div class="body">
+      <div class="title">Failed{% if job.failure.stage %} at {{ job.failure.stage }}{% endif %}{% if job.failure.item %}, on {{ job.failure.item }}{% endif %}</div>
+      <p>{{ job.failure.says }}</p>
+      <p class="hint">{{ job.failure.next }}</p>
+      <details class="reveal mt-2">
+        <summary class="twisty">The error as reported</summary>
+        <pre class="preview">{{ job.failure.code }}: {{ job.failure.raw }}</pre>
+      </details>
+    </div>
+  </div>
+  {% elif job.error %}
   <div class="callout bad">
     <div class="body">
       <div class="title">{{ job.error.code }}</div>
       <p class="hint">{{ job.error.message }}</p>
     </div>
   </div>
+  {% endif %}
+
+  {% if job.retry and can_write %}
+  <section class="card" id="retry">
+    <div class="card-body row">
+      <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/retry?tree={{ tree }}">
+        <button class="btn primary small" type="submit">Run it again</button>
+      </form>
+      <span class="hint">Same {{ job.op }}{% if job.scope.name %} over {{ job.scope.name }}{% endif %}. Sections already condensed and embedded are reused, so only what failed or was never reached costs anything.</span>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if job.stages %}
+  <section class="card" id="stages">
+    <div class="card-head"><h2>Stages <span class="faint num">{{ job.stages|length }}</span></h2></div>
+    <div class="card-body">
+      <ol class="timeline">
+        {% for stage in job.stages %}
+        <li>
+          <div class="piece-head">
+            <code>{{ stage.op }}</code>
+            {% if stage.over %}<span class="chip plain">{{ stage.over }}</span>{% endif %}
+            <span class="grow"></span>
+            <span class="state" data-state="succeeded">done</span>
+            <span class="num faint">{{ stage.took }}</span>
+          </div>
+          {% if stage.did %}<p class="hint">{{ stage.did|join(", ") }}</p>{% else %}<p class="hint faint">nothing to do</p>{% endif %}
+        </li>
+        {% endfor %}
+        {% if job.failure and job.failure.stage %}
+        <li>
+          <div class="piece-head">
+            <code>{{ job.failure.stage }}</code>
+            {% if job.failure.item %}<span class="chip plain">{{ job.failure.item }}</span>{% endif %}
+            <span class="grow"></span>
+            <span class="state" data-state="failed">failed</span>
+          </div>
+        </li>
+        {% endif %}
+      </ol>
+    </div>
+  </section>
   {% endif %}
 
   <section class="card">
@@ -54,6 +109,7 @@
         {% for line in job.outcome.did %}<li>{{ line }}</li>{% endfor %}
         {% for line in job.outcome.found %}<li class="measured">{{ line }}</li>{% endfor %}
       </ul>
+      <p class="mt-2"><a href="/ui/trees/{{ tree }}/activity?tree={{ tree }}">What changed, decision by decision, in the activity log</a></p>
       {% elif job.live %}
       <p class="hint">Still going. What it did appears here as it finishes.</p>
       {% elif job.outcome.quiet %}

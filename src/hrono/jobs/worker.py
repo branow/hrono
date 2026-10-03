@@ -26,7 +26,7 @@ from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
-from hrono.errors import BadRequest, as_app_error
+from hrono.errors import AppError, BadRequest, Internal, as_app_error
 from hrono.jobs import store
 from hrono.jobs.model import (
     Job,
@@ -35,6 +35,7 @@ from hrono.jobs.model import (
     to_job,
 )
 from hrono.jobs.ops import OPS, Handler, JobContext
+from hrono.jobs.stages import StageFailed
 
 HEARTBEAT_INTERVAL = 5.0
 _BEAT_GRACE = 4  # missed beats before the reclaimer counts as gone (#111)
@@ -240,7 +241,8 @@ class Worker(threading.Thread):
             # the record keeps the CODE; the driver's own wording lives here,
             # where an operator can read it and a client cannot (#109).
             _logger.exception("job %s (%s) failed", job.id, job.op)
-            self._finish(job, "failed", exc)
+            # a composite op's failure carries the stages it DID finish (#213)
+            self._finish(job, "failed", exc, getattr(exc, "outcome", None))
         else:
             self._finish(job, "succeeded", None, outcome)
         finally:
@@ -266,7 +268,7 @@ class Worker(threading.Thread):
         result = (
             serialize_result(outcome) if isinstance(outcome, Mapping) else None
         )
-        mapped = as_app_error(error) if error is not None else None
+        mapped = _mapped(error) if error is not None else None
         with self._database.write() as conn:
             store.set_status(
                 conn,
@@ -278,6 +280,26 @@ class Worker(threading.Thread):
                 code=mapped.code if mapped else None,
                 details=serialize_result(mapped.details if mapped else None),
             )
+
+
+def _mapped(error: BaseException) -> AppError:
+    """The failure as hrono's envelope; a stage's failure names the stage.
+
+    The code is the CAUSE's — ``llm-error``, not "a stage failed" — and the
+    stage and the item it was on go into the details beside it (#213).
+    """
+    if not isinstance(error, StageFailed):
+        return as_app_error(error)
+    cause = as_app_error(error.cause)
+    return Internal(
+        cause.message,
+        code=cause.code,
+        details={
+            **(cause.details or {}),
+            "stage": error.stage,
+            "item": error.item,
+        },
+    )
 
 
 def _backoff(failures: int) -> float:

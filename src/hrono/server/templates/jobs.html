@@ -25,13 +25,13 @@
     </ul>
 
     <details class="reveal">
-      <summary class="twisty">One stage at a time<span class="tip" tabindex="0" role="note" data-tip="Redo part of a tree: re-condense after changing a prompt, re-brief one source, re-cluster. Running a stage before the one it depends on leaves a tree that looks finished and is not — the three above exist to get the order right for you">?</span></summary>
+      <summary class="twisty">One stage at a time, in pipeline order<span class="tip" tabindex="0" role="note" data-tip="Redo part of a tree: re-condense after changing a prompt, re-brief one source, re-cluster. Running a stage before the one it depends on leaves a tree that looks finished and is not — the three above exist to get the order right for you">?</span></summary>
       <ul class="stages">
         {% for item in runnable if not item.whole %}
         <li>
           <form method="post" action="/ui/jobs/run?tree={{ tree }}">
             <input type="hidden" name="op" value="{{ item.op }}">
-            <code class="stage-op">{{ item.op }}</code>
+            <code class="stage-op">{{ loop.index }}. {{ item.op }}</code>
             <span class="stage-does">{{ item.means }}</span>
             {% if item.per_source and sources %}
             <select name="source" aria-label="which source {{ item.op }} runs over">
@@ -55,24 +55,49 @@
 </div>
 {% endif %}
 
+<form class="toolbar mb-3" method="get" action="/ui/jobs" aria-label="filter runs">
+  <input type="hidden" name="tree" value="{{ tree }}">
+  <label class="field">
+    <span>Status</span>
+    <select name="status">
+      <option value="">any</option>
+      {% for state in statuses %}<option value="{{ state }}"{% if filters.status == state %} selected{% endif %}>{{ state }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="field">
+    <span>What ran</span>
+    <select name="op">
+      <option value="">anything</option>
+      {% for name in ops %}<option value="{{ name }}"{% if filters.op == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn small" type="submit">Show</button>
+  <span class="hint">{{ paging.total }} run{{ '' if paging.total == 1 else 's' }}</span>
+</form>
+
 <section class="card">
   {% if not jobs %}
   <div class="card-body empty">
+    {% if filters.status or filters.op %}
+    <div class="title">No runs match</div>
+    <p class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">Show every run</a></p>
+    {% else %}
     <div class="title">No runs for {{ tree }} yet</div>
     <p class="mt-3"><a class="btn primary" href="/ui?tree={{ tree }}">Start a sync</a></p>
+    {% endif %}
   </div>
   {% else %}
   <div class="card-body table-wrap">
-    <table>
+    <table class="runs">
       <thead>
         <tr>
-          <th class="when">started</th>
-          <th>what ran</th>
-          <th>status</th>
-          <th class="when">took</th>
-          <th>progress</th>
-          <th>tokens</th>
-          <th class="when">id</th>
+          <th>Started</th>
+          <th>What ran</th>
+          <th>Status</th>
+          <th>Took</th>
+          <th>Progress</th>
+          <th>Tokens</th>
+          <th>Run</th>
           <th><span class="visually-hidden">actions</span></th>
         </tr>
       </thead>
@@ -80,92 +105,36 @@
       {% for job in jobs %}
       <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
         <td class="when">{{ job.started }}</td>
-        <td>
-          <a class="runlink" href="/ui/jobs/{{ job.id }}?tree={{ tree }}"><code>{{ job.op }}</code></a>
-          {% if job.means %}<div class="hint small">{{ job.means }}</div>{% endif %}
-          {% if job.outcome.did or job.outcome.found %}
-          <ul class="didwhat">
-            {% for line in job.outcome.did %}<li>{{ line }}</li>{% endfor %}
-            {% for line in job.outcome.found %}<li class="measured">{{ line }}</li>{% endfor %}
-          </ul>
-          {% elif job.outcome.quiet and not job.live %}
-          <div class="hint small faint">nothing to change — everything was already up to date</div>
-          {% endif %}
-        </td>
+        <td class="nowrap"><a class="runlink" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.means }}"><code>{{ job.op }}</code></a>{% if job.failure and job.failure.stage %} <span class="hint">at {{ job.failure.stage }}</span>{% endif %}</td>
         <td><span class="state status" data-state="{{ job.status }}">{{ job.status }}</span></td>
         <td class="when">{{ job.took }}</td>
-        <td class="num">
-          <span class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</span>
+        <td class="num nowrap">
+          <span class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% elif not job.live %}done{% endif %}</span>
           {% if job.progress and job.progress.total %}
           <span class="bar"><span style="width:{{ (100 * job.progress.done / job.progress.total)|round|int }}%"></span></span>
           {% endif %}
         </td>
-        <td class="num nowrap">{% if job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td class="num nowrap">{% if job.usage %}{{ "{:,}".format(job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation) }} in / {{ "{:,}".format(job.usage.tokens.output) }} out{% elif job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% else %}<span class="faint">—</span>{% endif %}</td>
         <td><a class="faint" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.id }}"><code>{{ job.short_id }}</code></a></td>
-        <td>
+        <td class="nowrap">
           {% if job.live and can_write %}
           <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel">
-            <button class="btn small" type="submit">Stop this run</button>
+            <button class="btn small" type="submit">Stop</button>
           </form>
           {% endif %}
         </td>
       </tr>
-      {% for todo in job.outcome.next %}
-      <tr class="after">
-        <td></td>
-        <td colspan="7">
-          <div class="callout warn">
-            <div class="body">
-              <div class="title">Still to do</div>
-              <p class="hint">{{ todo.says }}</p>
-              {% if todo.op and can_run %}
-              <form class="inline mt-2" method="post" action="/ui/jobs/run?tree={{ tree }}">
-                <input type="hidden" name="op" value="{{ todo.op }}">
-                <button class="btn small" type="submit">Run {{ todo.op }}</button>
-              </form>
-              {% elif todo.op %}
-              <p class="hint">Run <code>{{ todo.op }}</code>.</p>
-              {% endif %}
-            </div>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-      {% if job.error %}
-      <tr class="error">
-        <td></td>
-        <td colspan="7">
-          <div class="callout bad">
-            <div class="body">
-              <div class="title">{{ job.error.code }}</div>
-              <p class="hint">{{ job.error.message }}</p>
-            </div>
-          </div>
-        </td>
-      </tr>
-      {% endif %}
-      {% for child in job.children %}
-      <tr class="child">
-        <td></td>
-        <td>
-          <span class="kidline"><code>{{ child.op }}</code>{% if child.scope.name %} <span class="faint">{{ child.scope.name }}</span>{% endif %}</span>
-          {% if child.means %}<div class="hint small indent">{{ child.means }}</div>{% endif %}
-          {% if child.outcome.did or child.outcome.found %}
-          <ul class="didwhat indent">
-            {% for line in child.outcome.did %}<li>{{ line }}</li>{% endfor %}
-            {% for line in child.outcome.found %}<li class="measured">{{ line }}</li>{% endfor %}
-          </ul>
-          {% endif %}
-          {% if child.error %}<div class="hint small indent bad-text">{{ child.error }}</div>{% endif %}
-        </td>
-        <td><span class="state" data-state="{{ child.status }}">{{ child.status }}</span></td>
-        <td colspan="5"></td>
-      </tr>
-      {% endfor %}
       {% endfor %}
       </tbody>
     </table>
   </div>
+  {% if paging.pages > 1 %}
+  <div class="card-body row">
+    {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">Newer</a>{% endif %}
+    <span class="hint">page {{ paging.page }} of {{ paging.pages }}</span>
+    {% if paging.older %}<a class="btn small" href="{{ paging.older }}">Older</a>{% endif %}
+  </div>
+  {% endif %}
   {% endif %}
 </section>
 <script>

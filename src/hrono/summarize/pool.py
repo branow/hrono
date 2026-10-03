@@ -51,6 +51,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 
 from hrono.db.database import Database
 from hrono.jobs import store
+from hrono.jobs.stages import note_item
 
 DEFAULT_WIDTH = 4
 ENV_WIDTH = "HRONO_LLM_CONCURRENCY"
@@ -63,6 +64,7 @@ def mapped[Item, Made](
     *,
     workers: int,
     proceed: Callable[[], bool],
+    named: Callable[[Item], str] | None = None,
 ) -> list[Made]:
     """Compute each item in the pool; persist the results one at a time.
 
@@ -70,6 +72,8 @@ def mapped[Item, Made](
     item; ``persist`` runs on this thread, in submission order, and is the only
     place a transaction is opened. Returns what was persisted, in that same
     order, so a caller's counts and sums are independent of completion order.
+    ``named`` says what an item is, and a failure is noted with it (#213), so
+    the run that died can say which section or topic it was on.
     """
     queued = list(items)
     cursor = 0
@@ -94,6 +98,8 @@ def mapped[Item, Made](
             try:
                 result = future.result()
             except Exception as exc:  # noqa: BLE001 - re-raised once drained
+                if failure is None and named is not None:
+                    note_item(exc, named(item))
                 failure = failure if failure is not None else exc
                 stop = True
                 continue
