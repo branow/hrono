@@ -1,0 +1,11 @@
+{# The one way an empty state offers its next step: a button, never a command
+   to type elsewhere (#215). #}
+{% macro start_sync(tree, user, label="Sync now", primary=true) -%}
+{%- if user.role in ("writer", "admin") -%}
+<form class="inline" method="post" action="/ui/trees/{{ tree }}/sync">
+  <button class="btn{{ ' primary' if primary }}" type="submit">{{ label }}</button>
+</form>
+{%- else -%}
+<a class="btn" href="/ui/guide?tree={{ tree }}">How a tree gets built</a>
+{%- endif -%}
+{%- endmacro %}

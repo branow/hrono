@@ -10,6 +10,7 @@ numbers to disagree with the pages they link to.
 from __future__ import annotations
 
 import sqlite3
+from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -118,7 +119,12 @@ def sync_from_the_page(tree: str, request: Request, user: Writer) -> Response:
 
     Redirect-after-POST so a refresh does not start a second run.
     """
-    enqueue(
+    started = enqueue(
         request.app.state.db, "sync-tree", {}, tree=tree, started_by=user.name
     )
-    return RedirectResponse(f"/ui?tree={tree}", status_code=303)
+    said = quote(
+        "Started a sync. It reads every source and files what changed."
+    )
+    return RedirectResponse(
+        f"/ui?tree={tree}&done={said}&run={started}", status_code=303
+    )

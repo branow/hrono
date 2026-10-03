@@ -193,7 +193,7 @@ def test_a_writer_can_cancel_from_the_page(browser: Browser) -> None:
     )
 
     assert answer.status_code == 303
-    assert "stopped%202" in answer.headers["location"]
+    assert "Stopped%202" in answer.headers["location"]
     assert [
         str(child["status"])
         for child in job_store.children(browser.conn, parent)  # type: ignore[arg-type]

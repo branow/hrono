@@ -1415,7 +1415,21 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
   </div>
 </header>
 {% endblock %}
-<main{% if full_bleed %} class="bleed"{% endif %}>{% block main %}{% endblock %}</main>
+<main{% if full_bleed %} class="bleed"{% endif %}>
+{% set wrong = error or request.query_params.get("error") %}
+{% set said = done or request.query_params.get("done") %}
+{% set started = request.query_params.get("run") %}
+{% if wrong %}
+<div class="callout bad mb-3" id="error" role="alert">
+  <div class="body"><p class="hint">{{ wrong }}</p></div>
+</div>
+{% endif %}
+{% if said %}
+<div class="callout ok mb-3" id="done" role="status">
+  <div class="body"><p class="hint">{{ said }}{% if started %} <a href="/ui/jobs/{{ started }}?tree={{ tree }}">Watch it run</a>{% endif %}</p></div>
+</div>
+{% endif %}
+{% block main %}{% endblock %}</main>
 <div id="tipbox" role="tooltip" hidden></div>
 <script>
 (() => {

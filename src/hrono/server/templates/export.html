@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_parts.html" import start_sync with context %}
 {% block title %}hrono — {{ tree }} export{% endblock %}
 {% block main %}
 <div class="page-head">
@@ -8,10 +9,10 @@
 
 {% if not built %}
 <div class="card">
-  <div class="card-body stack">
+  <div class="card-body stack" data-empty>
     <h2>Nothing to export yet</h2>
     <p class="hint">{{ tree }} has not been built, so there are no topics to write out. Build it first, then come back here.</p>
-    <div><a class="btn small" href="/ui?tree={{ tree }}">Go to the overview</a></div>
+    <div>{{ start_sync(tree, user, "Build it now") }}</div>
   </div>
 </div>
 {% else %}

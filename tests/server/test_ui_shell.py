@@ -187,7 +187,7 @@ def test_the_write_button_actually_starts_a_sync(browser: Browser) -> None:
     )
 
     assert answer.status_code == 303
-    assert answer.headers["location"] == "/ui?tree=default"
+    assert answer.headers["location"].startswith("/ui?tree=default&done=")
     jobs = browser.client.get(
         "/jobs", headers={"Authorization": f"Bearer {browser.tokens['admin']}"}
     ).json()

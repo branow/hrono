@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }}{% endblock %}
+{% from "_parts.html" import start_sync with context %}
 {% block main %}
 <div class="page-head">
   <div class="spread">
@@ -18,20 +19,16 @@
 
 {% if topics == 0 %}
 <div class="card">
-  <div class="card-body stack">
+  <div class="card-body stack" data-empty>
     <h2>Nothing in this tree yet</h2>
     <ol class="steps">
       <li>
         <div class="what">Register a source<span class="tip" tabindex="0" role="note" data-tip="A git repository to read{% if sources %}. You have {{ sources }} registered already{% endif %}">?</span></div>
-        <code>hrono sources add my-repo --type git --url &lt;url&gt;</code>
+        <a class="btn small{{ '' if sources else ' primary' }}" href="/ui/config?tree={{ tree }}&amp;add=sources">{{ "Add another source" if sources else "Add a source" }}</a>
       </li>
       <li>
         <div class="what">Sync it<span class="tip" tabindex="0" role="note" data-tip="Reads the files, cuts them into sections, embeds, clusters and writes a brief for each">?</span></div>
-        <code>hrono sync --tree {{ tree }}</code>
-      </li>
-      <li>
-        <div class="what">Read the map</div>
-        <a class="btn small" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>
+        {{ start_sync(tree, user, "Sync now", sources > 0) }}
       </li>
     </ol>
   </div>
@@ -93,6 +90,8 @@
         {% if not runs %}
         <div class="empty">
           <div class="title">Nothing has run yet</div>
+          <p class="hint">A sync reads every source and files what changed.</p>
+          <div class="mt-3">{{ start_sync(tree, user) }}</div>
         </div>
         {% else %}
         <div class="table-wrap">

@@ -143,7 +143,13 @@ def _seed(conn: sqlite3.Connection, repo: Path, commit: str) -> None:
         "t",
     )
     job_store.insert(
-        conn, "done-1", None, TREE, "sync-tree", "{}", "2026-10-03T10:00:00"
+        conn,
+        "done-1",
+        None,
+        TREE,
+        "sync-tree",
+        "{}",
+        "2026-10-03T10:00:00+00:00",
     )
     with conn:
         conn.execute(

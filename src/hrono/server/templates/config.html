@@ -175,16 +175,6 @@
   {% endfor %}
 </nav>
 
-{% if error %}
-<div class="callout bad mb-3">
-  <div class="body"><p class="hint">{{ error }}</p></div>
-</div>
-{% endif %}
-{% if done %}
-<div class="callout ok mb-3">
-  <div class="body"><p class="hint">{{ done }}</p></div>
-</div>
-{% endif %}
 
 <section class="card" id="{{ c.name }}">
 {% if c.mode == "form" or c.mode == "choosing" or c.mode == "frozen" or c.mode == "delete" %}
@@ -283,6 +273,9 @@
       <div class="title">no {{ c.name }} yet</div>
       {% if c.name == "trees" %}
       <p class="hint">A tree is a name plus the sources it maps — register a source first, then make one here.</p>
+      {% endif %}
+      {% if c.can_write %}
+      <div class="mt-3"><a class="btn primary" href="/ui/config?tree={{ tree }}&amp;add={{ c.name }}">Add a {{ singular[c.name] }}</a></div>
       {% endif %}
     </div>
   </div>

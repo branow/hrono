@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_parts.html" import start_sync with context %}
 {% block title %}hrono — {{ tree }} activity{% endblock %}
 {% block main %}
 <div class="page-head">
@@ -10,6 +11,8 @@
   {% if not rows %}
   <div class="card-body empty">
     <div class="title">Nothing decided about {{ tree }} yet</div>
+    <p class="hint">A decision is recorded when a sync finds a source changed. Until one has, there is nothing to list.</p>
+    <div class="mt-3">{{ start_sync(tree, user, "Sync now", false) }}</div>
   </div>
   {% else %}
   <div class="card-head">

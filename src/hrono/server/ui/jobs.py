@@ -163,7 +163,6 @@ def jobs_view(
             "sources": sources,
             "can_write": user.role in {"writer", "admin"},
             "can_run": user.role == "admin",
-            "notice": request.query_params.get("notice"),
         },
     )
 
@@ -359,11 +358,12 @@ async def run_from_the_page(
     )
     database = request.app.state.db
     if fans_out(op, scope):
-        fan_out(database, op, scope, tree=tree, started_by=user.name)
+        started = fan_out(database, op, scope, tree=tree, started_by=user.name)
     else:
-        enqueue(database, op, scope, tree=tree, started_by=user.name)
+        started = enqueue(database, op, scope, tree=tree, started_by=user.name)
     return RedirectResponse(
-        f"/ui/jobs?tree={tree or 'default'}&notice={quote(f'started {op}')}",
+        f"/ui/jobs?tree={tree or 'default'}"
+        f"&done={quote(f'Started {op}.')}&run={started}",
         status_code=303,
     )
 
@@ -377,11 +377,11 @@ def cancel_from_the_page(
         if job_store.get(conn, job_id) is None:
             raise NotFound(f"job not found: {job_id}")
         outcome = cancel(conn, job_id)
-    notice = f"stopped {outcome.stopped}"
+    notice = f"Stopped {outcome.stopped}."
     if outcome.running:
-        notice += f"; {outcome.running} already running and will finish"
+        notice += f" {outcome.running} already running and will finish."
     return RedirectResponse(
-        f"/ui/jobs?tree={tree or 'default'}&notice={quote(notice)}",
+        f"/ui/jobs?tree={tree or 'default'}&done={quote(notice)}",
         status_code=303,
     )
 
@@ -413,6 +413,7 @@ def retry_from_the_page(
             database, job.op, job.scope, tree=job.tree, started_by=user.name
         )
     return RedirectResponse(
-        f"/ui/jobs/{again}?tree={tree or job.tree or 'default'}",
+        f"/ui/jobs/{again}?tree={tree or job.tree or 'default'}"
+        f"&done={quote(f'Started again from {job_id[:8]}.')}",
         status_code=303,
     )
