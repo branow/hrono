@@ -832,13 +832,13 @@ summary::-webkit-details-marker { display: none; }
 details[open] > .twisty::before { transform: rotate(45deg); }
 
 ul.members summary {
-  display: flex; align-items: center; gap: var(--s2);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
   padding: .4rem var(--s2);
   cursor: pointer;
   border-radius: var(--r1);
 }
 ul.members summary:hover { background: var(--sunken); }
-ul.members summary .path { font-family: var(--mono); font-size: .8125rem; word-break: break-all; }
+ul.members summary .path { font-family: var(--mono); font-size: .8125rem; overflow-wrap: anywhere; flex: 0 0 auto; max-width: 100%; }
 ul.members summary .dim { color: var(--ink-faint); }
 ul.members .detail { padding: 0 var(--s2) var(--s3) var(--s2); }
 
