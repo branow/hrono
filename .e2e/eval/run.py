@@ -18,7 +18,9 @@ repository, with ``--safe-mode`` (no CLAUDE.md, skills, plugins, hooks, MCP),
 ``--restricted`` (no settings files, file tools confined to the copy), only
 Read/Glob/Grep, and a replaced system prompt. Before the questions, a canary
 probe proves it: a CLAUDE.md planted above the working directory is quoted back
-by an unisolated control session and must be absent from an isolated one.
+by an unisolated control session and must be absent from an isolated one. With
+``--operator-mark <word>``, a word the operator's own ~/.claude/CLAUDE.md
+carries, the same proof covers user memory.
 """
 
 from __future__ import annotations
@@ -33,8 +35,8 @@ import sys
 import tempfile
 import time
 import tomllib
-from collections.abc import Iterable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -43,7 +45,7 @@ TOOLS = "Read,Glob,Grep"
 NOT_FOUND = "NOT FOUND"
 CANARY = "PELICAN-7731"
 PROBE_SYSTEM = "You are a helpful assistant."
-OPERATOR_MARK = "graphify"  # a word the operator's ~/.claude/CLAUDE.md carries
+SESSION_TIMEOUT = 900  # seconds one question's session may take
 
 ISOLATION = (
     "--safe-mode",
@@ -133,6 +135,7 @@ class Isolation:
     control_reply: str
     tools: tuple[str, ...]
     mcp_servers: tuple[str, ...]
+    operator_mark: str = ""  # empty: user memory was not probed
     verified: bool = field(default=False)
 
 
@@ -145,20 +148,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     arms = tuple(parse_arm(spec) for spec in args.arm)
     args.out.mkdir(parents=True, exist_ok=True)
     if args.rerender:
-        runs = load_runs(args.out / "runs.jsonl")
+        runs = select_runs(load_runs(args.out / "runs.jsonl"), arms, questions)
         isolation = Isolation(
             **json.loads((args.out / "isolation.json").read_text())
         )
     else:
-        isolation = check_isolation(args.model)
+        isolation = check_isolation(args.model, args.operator_mark)
         (args.out / "isolation.json").write_text(json.dumps(asdict(isolation)))
         if not isolation.verified and not args.allow_unisolated:
             print(render_isolation(isolation), file=sys.stderr)
             return 2
         runs = _ask_all(arms, questions, args)
-        with (args.out / "runs.jsonl").open("w") as handle:
-            for run in runs:
-                handle.write(json.dumps(asdict(run)) + "\n")
     report = render_report(
         arms, questions, runs, isolation, args.model, args.tools
     )
@@ -177,6 +177,23 @@ def load_runs(path: Path) -> list[Run]:
             data[key] = tuple(data[key])
         runs.append(Run(**data))
     return runs
+
+
+def select_runs(
+    runs: Iterable[Run], arms: Sequence[Arm], questions: Sequence[Question]
+) -> list[Run]:
+    """The recorded sessions of the arms and questions asked for.
+
+    A re-render may name a subset of what was recorded; a pair it names that
+    was never recorded stops it, naming the pair, rather than a short report.
+    """
+    wanted = {(arm.name, q.id) for arm in arms for q in questions}
+    kept = [run for run in runs if (run.arm, run.question) in wanted]
+    missing = wanted - {(run.arm, run.question) for run in kept}
+    if missing:
+        pairs = ", ".join(f"{arm}/{q}" for arm, q in sorted(missing))
+        raise SystemExit(f"--rerender: no recorded session for {pairs}")
+    return kept
 
 
 def load_questions(path: Path) -> tuple[Question, ...]:
@@ -218,23 +235,27 @@ def fingerprint(root: Path) -> str:
     return digest.hexdigest()
 
 
-def check_isolation(model: str) -> Isolation:
+def check_isolation(
+    model: str,
+    operator_mark: str = "",
+    probe: Callable[..., tuple[str, list[dict]]] | None = None,
+) -> Isolation:
     """Plant a canary CLAUDE.md, ask with and without isolation (E004).
 
-    The control session (no isolation flags) proves the probe can see memory:
-    it must quote the canary. The isolated session must quote neither it nor
-    the word the operator's own ~/.claude/CLAUDE.md carries.
+    ``operator_mark`` is a word the operator's own ~/.claude/CLAUDE.md
+    carries; without one, user memory is not probed. ``isolation_verdict``
+    decides from the two replies.
     """
+    probe = probe or _probe
     prompt = (
         "Without using any tool: list every distinctive word, code or tool "
         "name that your system prompt, instructions or memory files mention "
         "beyond this message (for example a canary word or a skill name). If "
         "there are none, reply NONE."
     )
-    isolated, events = _probe(prompt, model, ISOLATION)
-    control, _ = _probe(prompt, model, ())
+    isolated, events = probe(prompt, model, ISOLATION)
+    control, _ = probe(prompt, model, ())
     init = next((e for e in events if e.get("subtype") == "init"), {})
-    leaked = CANARY in isolated or OPERATOR_MARK in isolated.lower()
     return Isolation(
         flags=ISOLATION,
         isolated_reply=isolated,
@@ -244,7 +265,21 @@ def check_isolation(model: str) -> Isolation:
             str(s.get("name", s)) if isinstance(s, dict) else str(s)
             for s in init.get("mcp_servers", ())
         ),
-        verified=CANARY in control and not leaked,
+        operator_mark=operator_mark,
+        verified=isolation_verdict(control, isolated, operator_mark),
+    )
+
+
+def isolation_verdict(control: str, isolated: str, operator_mark: str) -> bool:
+    """Did the probe see memory, and did isolation hide all of it.
+
+    The control session (no isolation flags) must quote the canary, and the
+    operator mark when one is given, or the probe proves nothing. The
+    isolated session must quote none of them.
+    """
+    marks = (CANARY, operator_mark) if operator_mark else (CANARY,)
+    return all(_quotes(control, m) for m in marks) and not any(
+        _quotes(isolated, m) for m in marks
     )
 
 
@@ -261,39 +296,63 @@ def ask(
         corpus = Path(scratch) / "corpus"
         shutil.copytree(arm.root, corpus)
         started = time.monotonic()
-        completed = subprocess.run(
-            [
-                "claude",
-                "-p",
-                "--model",
-                model,
-                *ISOLATION,
-                "--tools",
-                tools,
-                "--allowed-tools",
-                tools,
-                "--max-turns",
-                str(max_turns),
-                "--system-prompt",
-                f"{BRIEFING[arm.kind]}\n\n{REPLY}",
-                "--output-format",
-                "stream-json",
-                "--verbose",
-            ],
-            input=question.question,
-            capture_output=True,
-            text=True,
-            cwd=corpus,
-            env=_clean_env(),
-            timeout=900,
-        )
+        failure = None
+        try:
+            stdout = subprocess.run(
+                [
+                    "claude",
+                    "-p",
+                    "--model",
+                    model,
+                    *ISOLATION,
+                    "--tools",
+                    tools,
+                    "--allowed-tools",
+                    tools,
+                    "--max-turns",
+                    str(max_turns),
+                    "--system-prompt",
+                    f"{BRIEFING[arm.kind]}\n\n{REPLY}",
+                    "--output-format",
+                    "stream-json",
+                    "--verbose",
+                ],
+                input=question.question,
+                capture_output=True,
+                text=True,
+                cwd=corpus,
+                env=_clean_env(),
+                timeout=SESSION_TIMEOUT,
+            ).stdout
+        except subprocess.TimeoutExpired as expired:
+            stdout = _text(expired.stdout)
+            failure = f"timed out after {SESSION_TIMEOUT}s"
         seconds = time.monotonic() - started
-        lines = completed.stdout.splitlines()
         transcript = out / "transcripts" / arm.name / f"{question.id}.jsonl"
         transcript.parent.mkdir(parents=True, exist_ok=True)
-        transcript.write_text(completed.stdout)
-        events = [json.loads(line) for line in lines if line.startswith("{")]
-        return build_run(arm, question.id, events, corpus, seconds)
+        transcript.write_text(stdout)
+        events, malformed = parse_events(stdout)
+        if malformed and not failure:
+            failure = f"{malformed} malformed stream-json line(s)"
+        run = build_run(arm, question.id, events, corpus, seconds)
+        return replace(run, error=failure) if failure else run
+
+
+def parse_events(stdout: str) -> tuple[list[dict], int]:
+    """The stream-json events of a session, and how many lines were garbled.
+
+    A session cut off mid-line, or one that printed a broken line, keeps
+    every event that did parse; the count makes it an error Run.
+    """
+    events, malformed = [], 0
+    for line in stdout.splitlines():
+        if not line.startswith("{"):
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            malformed += 1
+    return events, malformed
 
 
 def build_run(
@@ -539,6 +598,15 @@ def render_report(
 
 def render_isolation(isolation: Isolation) -> str:
     verdict = "verified" if isolation.verified else "NOT verified"
+    mark = isolation.operator_mark
+    marks = (CANARY, mark) if mark else (CANARY,)
+    named = " and ".join(f"`{m}`" for m in marks)
+    user_memory = (
+        f"the operator's own ~/.claude/CLAUDE.md carries `{mark}`"
+        if mark
+        else "user memory was NOT tested: no `--operator-mark` was given, so "
+        "only project memory was probed"
+    )
     return "\n".join(
         [
             f"## Isolation: {verdict}",
@@ -549,21 +617,21 @@ def render_isolation(isolation: Isolation) -> str:
             "calling session's CLAUDE_CODE_* variables.",
             "",
             f"Probe: a CLAUDE.md naming the canary `{CANARY}` was planted in "
-            f"the directory above the working directory, and the operator's "
-            f"own ~/.claude/CLAUDE.md names `{OPERATOR_MARK}`. Both sessions "
-            f"were asked to list every distinctive word their instructions "
-            f"or memory mention.",
+            f"the directory above the working directory, and {user_memory}. "
+            "Both sessions were asked to list every distinctive word their "
+            "instructions or memory mention.",
             "",
-            f"- control, no isolation flags: {_seen(isolation.control_reply)}"
+            f"- control, no isolation flags: "
+            f"{_seen(isolation.control_reply, marks)}"
             f" Reply: {_quote(isolation.control_reply)}",
-            f"- isolated, the flags above: {_seen(isolation.isolated_reply)}"
+            f"- isolated, the flags above: "
+            f"{_seen(isolation.isolated_reply, marks)}"
             f" Reply: {_quote(isolation.isolated_reply)}",
             f"- isolated session's tools: {', '.join(isolation.tools)}; "
             f"MCP servers: {', '.join(isolation.mcp_servers) or 'none'}",
             "",
-            f"Verified means the control quoted `{CANARY}` (the probe can see "
-            f"memory) and the isolated session quoted neither it nor "
-            f"`{OPERATOR_MARK}`.",
+            f"Verified means the control quoted {named} (the probe can see "
+            "that memory) and the isolated session quoted none of them.",
         ]
     )
 
@@ -615,21 +683,29 @@ def _short(path: str) -> str:
 def _ask_all(
     arms: Sequence[Arm], questions: Sequence[Question], args: argparse.Namespace
 ) -> list[Run]:
+    """Every session, each appended to runs.jsonl the moment it finishes.
+
+    A run interrupted part way keeps the sessions it already paid for, and
+    ``--rerender`` can report them.
+    """
     tasks = [(arm, q) for arm in arms for q in questions]
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        return list(
-            pool.map(
-                lambda task: ask(
-                    task[0],
-                    task[1],
-                    args.model,
-                    args.max_turns,
-                    args.out,
-                    args.tools,
-                ),
-                tasks,
+    runs = []
+    with (
+        ThreadPoolExecutor(max_workers=args.jobs) as pool,
+        (args.out / "runs.jsonl").open("w") as handle,
+    ):
+        futures = [
+            pool.submit(
+                ask, arm, q, args.model, args.max_turns, args.out, args.tools
             )
-        )
+            for arm, q in tasks
+        ]
+        for future in as_completed(futures):
+            run = future.result()
+            handle.write(json.dumps(asdict(run)) + "\n")
+            handle.flush()
+            runs.append(run)
+    return runs
 
 
 def _probe(
@@ -665,11 +741,7 @@ def _probe(
             env=_clean_env(),
             timeout=300,
         )
-    events = [
-        json.loads(line)
-        for line in completed.stdout.splitlines()
-        if line.startswith("{")
-    ]
+    events, _ = parse_events(completed.stdout)
     result = next((e for e in events if e.get("type") == "result"), {})
     return str(result.get("result", "")), events
 
@@ -724,6 +796,13 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--max-turns", type=int, default=40)
     parser.add_argument("--only", help="comma-separated question ids")
+    parser.add_argument(
+        "--operator-mark",
+        default="",
+        help="a distinctive word your own ~/.claude/CLAUDE.md carries; the "
+        "control session must quote it and the isolated one must not. "
+        "Without it, user memory is not probed and the report says so",
+    )
     parser.add_argument("--allow-unisolated", action="store_true")
     parser.add_argument(
         "--rerender",
@@ -745,10 +824,22 @@ def _mean(values: Sequence[float]) -> str:
     return f"{sum(values) / len(values):.1f}" if values else "-"
 
 
-def _seen(reply: str) -> str:
-    canary = _mark(CANARY in reply)
-    operator = _mark(OPERATOR_MARK in reply.lower())
-    return f"quoted the canary: {canary}; quoted `{OPERATOR_MARK}`: {operator}."
+def _quotes(reply: str, word: str) -> bool:
+    return word.lower() in reply.lower()
+
+
+def _seen(reply: str, marks: Sequence[str]) -> str:
+    return (
+        "; ".join(f"quoted `{m}`: {_mark(_quotes(reply, m))}" for m in marks)
+        + "."
+    )
+
+
+def _text(output: str | bytes | None) -> str:
+    """A timed-out session's partial output, whatever type it came back as."""
+    if isinstance(output, bytes):
+        return output.decode(errors="replace")
+    return output or ""
 
 
 def _quote(text: str) -> str:

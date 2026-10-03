@@ -22,6 +22,7 @@ mkdir -p $OUT/raw && git archive <commit the tree was built from> \
   src README.md CONTRIBUTING.md GLOSSARY.md pyproject.toml | tar -x -C $OUT/raw
 
 uv run python .e2e/eval/run.py --out $OUT \
+  --operator-mark <a word your ~/.claude/CLAUDE.md carries> \
   --arm levels-2=$OUT/levels-2 --arm levels-3=$OUT/levels-3 \
   --arm levels-4=$OUT/levels-4 --arm raw=$OUT/raw
 ```
@@ -36,11 +37,16 @@ searchability. `--only q01,q05` runs a subset, `--model` picks the agent
 (default `sonnet`),
 `--jobs` how many sessions run at once (default 4). `--rerender` grades and
 reports the sessions already recorded under `--out` again without running any,
-so a corrected question or grading rule costs nothing to apply.
+so a corrected question or grading rule costs nothing to apply; with `--only`
+or fewer `--arm`s it reports just that subset, and it stops, naming the pair,
+if one asked for was never recorded. `--operator-mark` is described under
+Isolation.
 
 ## What it writes
 
-Under `--out`: `report.md`, `runs.jsonl` (one record per session),
+Under `--out`: `report.md`, `runs.jsonl` (one record per session, appended
+as each finishes, so a run interrupted part way keeps what it paid for and
+`--rerender` reports it),
 `isolation.json` (the probe's replies) and
 `transcripts/<arm>/<question>.jsonl`, the raw stream of every session.
 
@@ -63,6 +69,10 @@ agent's own run-to-run variance. Per session it counts:
 - **tokens** — input, cache creation, cache read and output, as the CLI
   reports them; **cost** is the CLI's own `total_cost_usd`.
 
+A session that times out (15 minutes) or prints a line that is not valid JSON
+is recorded as a failed question with the reason under "session ended", and
+keeps whatever it read before; the other sessions are unaffected.
+
 ## Isolation
 
 The review found the operator's `~/.claude/CLAUDE.md` reaching model calls
@@ -74,9 +84,13 @@ none of the calling session's `CLAUDE_CODE_*` variables.
 Before any question runs, a probe plants a CLAUDE.md naming a canary above the
 working directory and asks two sessions to list what their instructions
 mention: one without the flags (it must quote the canary, or the probe proves
-nothing) and one with them (it must quote neither the canary nor `graphify`,
-a word the operator's own CLAUDE.md carries). If that fails the run stops
-before spending anything else; the report prints both replies.
+nothing) and one with them (it must not quote it). That proves project memory
+is kept out. To prove the same for user memory, pass
+`--operator-mark <word>`, a distinctive word your own `~/.claude/CLAUDE.md`
+carries (a skill name, say): the control must quote it too and the isolated
+session must not. Without the flag the report says user memory was not tested.
+If the probe fails the run stops before spending anything else; the report
+prints both replies.
 
 ## The question set
 

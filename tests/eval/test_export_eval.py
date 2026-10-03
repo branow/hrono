@@ -5,9 +5,11 @@ concludes from a transcript is plain code and is pinned here. The agent
 sessions themselves are run by hand.
 """
 
+import argparse
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -430,3 +432,178 @@ def test_an_export_page_cited_counts_as_the_file_it_carries(
     report = run.render_report([arm], [_question()], [session], isolation, "m")
 
     assert ("| levels-2 | 1/1 |" in report) is correct
+
+
+@pytest.mark.parametrize(
+    ("control", "isolated", "mark", "verified"),
+    [
+        (f"{run.CANARY}, graphify", "NONE", "graphify", True),
+        (f"{run.CANARY}", "NONE", "", True),
+        ("NONE", "NONE", "", False),
+        (f"{run.CANARY}", "NONE", "graphify", False),
+        (f"{run.CANARY}, graphify", f"I see {run.CANARY}", "graphify", False),
+        (f"{run.CANARY}, graphify", "the GraphiFy skill", "graphify", False),
+    ],
+    ids=[
+        "both-seen-none-leaked",
+        "no-mark-canary-only",
+        "control-misses-canary",
+        "control-misses-mark",
+        "isolated-quotes-canary",
+        "isolated-quotes-mark",
+    ],
+)
+def test_isolation_is_verified_only_when_the_control_sees_and_nothing_leaks(
+    control: str, isolated: str, mark: str, verified: bool
+) -> None:
+    assert run.isolation_verdict(control, isolated, mark) is verified
+
+
+def test_the_isolation_check_asks_both_sessions_and_reports_the_mark() -> None:
+    asked: list[tuple[str, ...]] = []
+
+    def probe(prompt: str, model: str, flags: tuple[str, ...]) -> tuple:
+        asked.append(tuple(flags))
+        if flags:
+            return "NONE", [
+                {"subtype": "init", "tools": ["Read"], "mcp_servers": []}
+            ]
+        return f"{run.CANARY} and zebra", []
+
+    isolation = run.check_isolation("haiku", "zebra", probe=probe)
+
+    assert asked == [run.ISOLATION, ()]
+    assert isolation.verified
+    assert isolation.tools == ("Read",)
+    report = run.render_isolation(isolation)
+    assert "~/.claude/CLAUDE.md carries `zebra`" in report
+    assert "NOT tested" not in report
+
+
+def test_a_report_without_an_operator_mark_says_user_memory_was_untested() -> (
+    None
+):
+    isolation = run.Isolation(
+        ("--safe-mode",), "NONE", run.CANARY, (), (), verified=True
+    )
+
+    report = run.render_isolation(isolation)
+
+    assert "## Isolation: verified" in report
+    assert "user memory was NOT tested" in report
+
+
+def _fake_claude(sessions: dict[str, object]):
+    """subprocess.run as the CLI behaves, keyed by the question asked."""
+
+    def fake(argv: list[str], *, input: str, **kwargs: object) -> object:
+        outcome = sessions[input]
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return subprocess.CompletedProcess(argv, 0, outcome, "")
+
+    return fake
+
+
+def _stream(events: list[dict]) -> str:
+    return "".join(json.dumps(e) + "\n" for e in events)
+
+
+def test_a_timed_out_or_garbled_session_is_an_error_and_the_rest_are_kept(
+    export: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    good = _stream(_session(export, ["root.md"], "ANSWER: 40\nSOURCE: a"))
+    garbled = good.replace('{"type": "result"', '{"type": "resu', 1)
+    partial = _stream(_session(export, ["root.md"], "x")[:2])
+    monkeypatch.setattr(
+        run.subprocess,
+        "run",
+        _fake_claude(
+            {
+                "ok?": good,
+                "garbled?": garbled,
+                "slow?": subprocess.TimeoutExpired("claude", 900, partial),
+            }
+        ),
+    )
+    questions = [
+        run.Question(q, "deep", f"{q}?", ("40",), ("src/a.py",))
+        for q in ("ok", "garbled", "slow")
+    ]
+    args = argparse.Namespace(
+        jobs=2, model="haiku", max_turns=5, out=tmp_path, tools=run.TOOLS
+    )
+
+    run._ask_all([run.Arm("a", export, "export")], questions, args)
+
+    recorded = {r.question: r for r in run.load_runs(tmp_path / "runs.jsonl")}
+    assert recorded["ok"].error is None
+    assert recorded["ok"].answer == "40"
+    assert recorded["garbled"].error == "1 malformed stream-json line(s)"
+    assert recorded["slow"].error == "timed out after 900s"
+    assert recorded["slow"].tools == ("Glob",)
+    assert (tmp_path / "transcripts" / "a" / "slow.jsonl").read_text()
+
+
+def test_sessions_finished_before_a_crash_are_already_on_disk(
+    export: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    good = _stream(_session(export, ["root.md"], "ANSWER: 40\nSOURCE: a"))
+    monkeypatch.setattr(
+        run.subprocess,
+        "run",
+        _fake_claude({"first?": good, "second?": RuntimeError("boom")}),
+    )
+    questions = [
+        run.Question(q, "deep", f"{q}?", ("40",), ("src/a.py",))
+        for q in ("first", "second")
+    ]
+    args = argparse.Namespace(
+        jobs=1, model="haiku", max_turns=5, out=tmp_path, tools=run.TOOLS
+    )
+
+    with pytest.raises(RuntimeError):
+        run._ask_all([run.Arm("a", export, "export")], questions, args)
+
+    recorded = run.load_runs(tmp_path / "runs.jsonl")
+    assert [r.question for r in recorded] == ["first"]
+
+
+def test_a_rerender_of_a_subset_reports_only_the_arms_and_questions_named(
+    export: Path, tmp_path: Path
+) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    reply = "ANSWER: 40\nSOURCE: src/a.py"
+    events = _session(export, ["root.md"], reply)
+    sessions = [
+        run.build_run(run.Arm(arm, export, "export"), q, events, export, 1.0)
+        for arm in ("a", "b")
+        for q in ("q01", "q02")
+    ]
+    (out / "runs.jsonl").write_text(
+        "".join(json.dumps(asdict(s)) + "\n" for s in sessions)
+    )
+    isolation = run.Isolation(
+        ("--safe-mode",), "NONE", run.CANARY, (), (), verified=True
+    )
+    (out / "isolation.json").write_text(json.dumps(asdict(isolation)))
+    questions = tmp_path / "questions.toml"
+    questions.write_text(
+        "".join(
+            f'[[question]]\nid = "{q}"\nkind = "deep"\nquestion = "W?"\n'
+            'expect = ["40"]\nsources = ["src/a.py"]\n'
+            for q in ("q01", "q02")
+        )
+    )
+    argv = ["--out", str(out), "--questions", str(questions), "--rerender"]
+
+    code = run.main([*argv, "--arm", f"a={export}", "--only", "q01"])
+
+    report = (out / "report.md").read_text()
+    assert code == 0
+    assert "| a | 1/1 |" in report
+    assert "### b " not in report
+    assert "q02" not in report
+    with pytest.raises(SystemExit, match="no recorded session for c/q01"):
+        run.main([*argv, "--arm", f"c={export}", "--only", "q01"])
