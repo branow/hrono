@@ -139,7 +139,10 @@ def _exported(request: Request, name: str, levels: int) -> Export:
 def unusable_briefs(
     name: str, request: Request, _: Reader
 ) -> dict[str, object]:
-    """Stored briefs that are not briefs — the model talking back (#217).
+    """Stored briefs that are not briefs (#217, E015).
+
+    The model talking back, or a reply made of its prompt's own words
+    (``echoes-the-prompt``); ``why`` names which.
 
     Each is already stale to the pipeline, so ``POST /trees/{name}/sync``
     rewrites exactly these and nothing else; this is the list to check first.

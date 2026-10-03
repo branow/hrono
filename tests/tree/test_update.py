@@ -889,6 +889,24 @@ def test_a_second_update_over_unchanged_content_condenses_nothing(
     assert second.calls == 0
 
 
+def test_a_sync_that_changed_sources_reports_what_condense_spent(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # `_outcome` promises the `condense` key "when it ran", changed or not.
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+
+    outcome = update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    assert outcome["changed"] is True
+    assert outcome["condense"]["condensed"] >= 1  # type: ignore[index]
+
+
 _TALKED_BACK = "Could you paste the file you would like me to condense?"
 
 

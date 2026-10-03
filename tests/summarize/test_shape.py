@@ -347,3 +347,64 @@ def test_a_short_brief_that_obeys_the_prompt_is_not_an_echo(text: str) -> None:
 
 def test_an_echo_of_a_prompt_that_no_longer_exists_cannot_be_told() -> None:
     assert echoes(ECHOED["brief"], None) == ""
+
+
+@pytest.mark.parametrize("prompt", ["brief", "brief-upper"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param(
+            "This group holds the parser and writer modules. Caution: the "
+            "YAML parser drops comments when writing, so there is no round "
+            "trip with identical structure.",
+            id="parser",
+        ),
+        pytest.param(
+            "This group is the retry logic for the HTTP client: backoff "
+            "with jitter, then a hard stop after five attempts. Caution: "
+            "the timeout is per attempt, not for the whole call.",
+            id="retry",
+        ),
+        pytest.param(
+            "This parent covers node routing: only the single child that "
+            "matters is kept, and the rest are dropped within the level.",
+            id="routing",
+        ),
+    ],
+)
+def test_a_short_real_brief_is_not_an_echo_on_function_words(
+    text: str, prompt: str
+) -> None:
+    # function words of four letters or more ("this", "with", "when") sit in
+    # both prompts and in every English brief; they are not the prompt's
+    # vocabulary
+    assert brief_gate(_default(prompt))(text) == ""
+
+
+def _words(count: int, start: int = 0) -> list[str]:
+    """``count`` distinct four-letter words, none a function word."""
+    return [
+        f"q{chr(97 + i // 26)}{chr(97 + i % 26)}x"
+        for i in range(start, start + count)
+    ]
+
+
+def _echo_of(prompt_words: int, other_words: int) -> str:
+    template = " ".join(_words(prompt_words))
+    text = " ".join(_words(prompt_words) + _words(other_words, 100))
+    return echoes(text, template)
+
+
+@pytest.mark.parametrize(
+    ("shared", "other", "verdict"),
+    [
+        (8, 0, "echoes-the-prompt"),  # exactly the floor, all shared
+        (7, 0, ""),  # one under the floor, though every word is shared
+        (8, 18, "echoes-the-prompt"),  # 8 of 26: just over the share
+        (8, 19, ""),  # 8 of 27: just under the share
+    ],
+)
+def test_the_echo_thresholds_flip_the_verdict_at_their_boundary(
+    shared: int, other: int, verdict: str
+) -> None:
+    assert _echo_of(shared, other) == verdict

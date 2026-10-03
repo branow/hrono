@@ -72,7 +72,7 @@ from hrono.llm.client import (
 
 MIN_CHARS = 40
 ECHO_SHARE = 0.3
-ECHO_WORDS = 6
+ECHO_WORDS = 8
 
 _SENTENCE = re.compile(r"[^.!?]*[.!?]|[^.!?]+$")
 _ADDRESSES = re.compile(
@@ -106,6 +106,20 @@ _QUOTED = re.compile(
     r"|\u2018[^\u2019]*\u2019(?!\w)|`[^`]*`"
 )
 _WORD = re.compile(r"[a-z]{4,}")
+# Four-letter-plus words every English text shares: they say nothing about
+# which prompt a reply was written from, and a short real brief clears the
+# floor on them alone ("This group holds ... when writing ... there is no").
+_FUNCTION = frozenset(
+    (  # noqa: SIM905 (a list of quoted words is harder to read)
+        "this that these those with when then there what which where "
+        "while into only whole never near none also from have been "
+        "will would their they them than about after before other "
+        "some such each both more most much over same very just like "
+        "make made does done were your here because without within "
+        "under between during through upon onto even still should "
+        "could must"
+    ).split()
+)
 _PLACEHOLDER = re.compile(r"\{\w+\}")
 _LEADING = re.compile(r"^[^A-Za-z]*")
 _TAIL = re.compile(r"^(?:$|[-*+]\s|references:|sources:|\w+://)", re.IGNORECASE)
@@ -151,21 +165,27 @@ def brief_gate(template: str) -> Callable[[str], str]:
 def echoes(text: str, template: object) -> str:
     """ "echoes-the-prompt" when ``text`` restates its instruction, else "".
 
-    The words compared are lowercased runs of four letters or more, so the
-    articles and "is"/"of" glue that every English text shares carry no
-    weight; the placeholders are not the instruction's words. Both a share
+    The words compared are lowercased runs of four letters or more, less a
+    list of English function words ("this", "with", "when", "there"): short
+    articles and glue fall to the length rule, those to the list, so only
+    words that could tell one prompt from another carry weight; the
+    placeholders are not the instruction's words. Both a share
     and a floor have to hold: a two-line brief can share three words with
     anything. ``template`` is untyped because a stored brief whose prompt no
     longer exists reads back NULL, and no instruction echoes nothing.
     """
     if not isinstance(template, str):
         return ""
-    instruction = set(_WORD.findall(_PLACEHOLDER.sub("", template).lower()))
-    said = set(_WORD.findall(text.lower()))
+    instruction = _vocabulary(_PLACEHOLDER.sub("", template))
+    said = _vocabulary(text)
     shared = len(said & instruction)
     if shared >= ECHO_WORDS and shared >= ECHO_SHARE * len(said):
         return "echoes-the-prompt"
     return ""
+
+
+def _vocabulary(text: str) -> set[str]:
+    return set(_WORD.findall(text.lower())) - _FUNCTION
 
 
 def _answers_the_caller(text: str) -> str:
