@@ -170,7 +170,9 @@ def slug(text: str) -> str:
 
 _TITLE_CHARS = 80
 _MIN_SUBJECT_CHARS = 3
-_WHAT_IT_IS = re.compile(r"^what this is\W+", re.I)
+_WHAT_IT_IS = re.compile(
+    r"^(?:what this is\W+|(?:overview|summary|scope|about)\s*:\s*)", re.I
+)
 _ANNOUNCES = re.compile(
     r"^(?:this|these|the following)\b(?:\W+\w+){0,5}?\W+"
     r"(?:is|are|describes?|covers?|contains?|documents?|holds?|spans?"
@@ -181,7 +183,8 @@ _FILLER_THEN_PREPOSITION = re.compile(
     r"^(?:(?:a|an|the|full|whole|complete|condensed|(?:set|collection|batch"
     r"|series|group|body)\s+of|walkthrough|notes|documentation|docs|material"
     r"|sections|condensations|changelog)\s+)*"
-    r"(?:of|on|for|about|covering|describing)\s+",
+    r"(?:(?:\w+\s+){1,2}?(?:notes|summaries|condensations|docs))?\s*"
+    r"(?:of|on|for|about|from|covering|describing)\s+",
     re.I,
 )
 _ARTICLES = re.compile(

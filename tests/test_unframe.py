@@ -32,6 +32,18 @@ from hrono.naming import unframe
             "This is the full Click changelog, condensed",
             "Click changelog, condensed",
         ),
+        (
+            "**Overview:** These condensations are the SQLite schema of hrono",
+            "SQLite schema of hrono",
+        ),
+        (
+            "**What this is:** A set of condensed module notes for hrono, CLI",
+            "Hrono, CLI",
+        ),
+        (
+            "**What this is:** A set of condensed module summaries from hrono",
+            "Hrono",
+        ),
     ],
     ids=[
         "describe",
@@ -40,6 +52,9 @@ from hrono.naming import unframe
         "walkthrough",
         "whole-batch",
         "is-the-full",
+        "overview-label",
+        "set-of-condensed-module-notes",
+        "set-of-condensed-module-summaries",
     ],
 )
 def test_the_announcement_is_dropped_and_the_subject_kept(
