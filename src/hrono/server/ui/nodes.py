@@ -39,8 +39,14 @@ def node_page(
     user: Reader,
     error: str = "",
     done: str = "",
+    q: str = "",
+    page: int = 1,
+    section: int = 0,
 ) -> Response:
     """One topic: what it says, where it sits, and what it is made of.
+
+    `q` filters its sections by path and `page` pages them; `section` opens the
+    page that holds one, so a link to a section survives the paging.
 
     `error` and `done` carry the result of a write back through the redirect,
     so the page a write lands on is a URL like any other and a refresh repeats
@@ -52,7 +58,7 @@ def node_page(
         # where every topic's sections live, read once: the page labels this
         # topic, its children AND every topic it offers to move into by it
         wheres = where.by_node(conn, tree)
-        node = _node(conn, tree, node_id, wheres)
+        node = _node(conn, tree, node_id, wheres, q.strip(), page, section)
         candidates = _candidates(
             conn, tree, node_id, int(node["level"]), wheres
         )
@@ -316,7 +322,13 @@ def release_from_the_page(
 
 
 def _node(
-    conn: object, tree: str, node_id: int, wheres: dict[int, str]
+    conn: object,
+    tree: str,
+    node_id: int,
+    wheres: dict[int, str],
+    q: str = "",
+    page: int = 1,
+    section: int = 0,
 ) -> dict[str, object]:
     row = conn.execute(  # type: ignore[attr-defined]
         "SELECT level, title, label, created_at FROM nodes WHERE id = ?",
@@ -375,6 +387,9 @@ def _node(
         # because both mean recall cannot answer from this topic
         "stale": brief is None or bool(brief["stale"]),
         "parent": _parent(conn, parent, wheres),
+        "trail": _trail(conn, tree, node_id, wheres),
+        "root": _is_root(conn, tree, node_id, parent),
+        "orphan": parent is None and not _is_root(conn, tree, node_id, parent),
         "children": children,
         "pin_kinds": sorted(held),
         "pins": [
@@ -385,8 +400,50 @@ def _node(
             for _, text, when in notes.get(conn, notes.NODE, node_id)  # type: ignore[arg-type]
         ],
         "wrote": _provenance(conn, node_id, brief),
-        "members": _members(conn, node_id, wheres.get(node_id, "")),
+        "members": _members(
+            conn, node_id, wheres.get(node_id, ""), brief, q, page, section
+        ),
     }
+
+
+def _is_root(conn: object, tree: str, node_id: int, parent: object) -> bool:
+    """The tree's top: no parent, and nothing in the tree sits above it.
+
+    A parentless topic BELOW the top is an orphan — nothing points at it — and
+    keeps its warning; the root has no parent by definition.
+    """
+    if parent is not None:
+        return False
+    above = conn.execute(  # type: ignore[attr-defined]
+        "SELECT 1 FROM nodes WHERE tree = ? AND level > "
+        "(SELECT level FROM nodes WHERE id = ?) LIMIT 1",
+        (tree, node_id),
+    ).fetchone()
+    return above is None
+
+
+def _trail(
+    conn: object, tree: str, node_id: int, wheres: dict[int, str]
+) -> list[dict[str, object]]:
+    """Every topic above this one, root first, named as the map names it."""
+    ids: list[int] = []
+    at = node_id
+    while True:
+        up = conn.execute(  # type: ignore[attr-defined]
+            "SELECT parent_id FROM node_children WHERE child_id = ?", (at,)
+        ).fetchone()
+        if up is None or int(up["parent_id"]) in ids:
+            break
+        at = int(up["parent_id"])
+        ids.append(at)
+    return [
+        {
+            "id": above,
+            "name": naming.name(conn, above),  # type: ignore[arg-type]
+            "where": wheres.get(above, ""),
+        }
+        for above in reversed(ids)
+    ]
 
 
 def _parent(
@@ -505,51 +562,157 @@ def _clipped(text: str) -> str:
     return spaced.rstrip(" ,;:.") + "\u2026"
 
 
-def _members(conn: object, node_id: int, stem: str) -> list[dict[str, object]]:
-    """A topic's sections, WORST FIT FIRST.
+SECTION_PAGE = 25
+HEADING_CHARS = 60
+
+
+def _members(
+    conn: object,
+    node_id: int,
+    stem: str,
+    brief: object,
+    q: str,
+    page: int,
+    focus: int,
+) -> dict[str, object]:
+    """A topic's sections, WORST FIT FIRST, one page of them.
 
     `assignment_similarity` is the score a section was attached with, and NULL
     means a confident density-core placement (0009_nodes.sql) — so nulls sort
     LAST, not first. The operator opening a topic to see whether it is right
     wants the section least likely to belong at the top.
+
+    `q` keeps the sections whose path contains it. `focus` is a section a link
+    points at: the page that holds it is the one shown.
     """
-    rows = conn.execute(  # type: ignore[attr-defined]
-        "SELECT s.id AS id, s.path AS path, s.uri AS uri, "
-        "m.assignment_similarity AS score, "
-        "m.forced AS forced, c.body AS body, "
-        # the MIDDLE of the pipeline: what a model wrote about this section,
-        # and what the topic's brief was actually reduced from. Stored once per
-        # (content hash, model) and never shown anywhere until now (#197).
-        "d.text AS condensed, d.model_name AS condensed_by "
-        "FROM node_members m JOIN sections s ON s.id = m.section_id "
-        "LEFT JOIN contents c ON c.content_hash = s.content_hash "
-        "LEFT JOIN condensations d ON d.content_hash = s.content_hash "
-        "WHERE m.node_id = ? "
-        "ORDER BY m.assignment_similarity IS NULL, m.assignment_similarity, "
-        "s.id",
-        (node_id,),
-    ).fetchall()
-    return [_member(row, stem) for row in rows]
+    held = conn.execute(  # type: ignore[attr-defined]
+        "SELECT COUNT(*) FROM node_members WHERE node_id = ?", (node_id,)
+    ).fetchone()[0]
+    ordered = [
+        int(row["id"])
+        for row in conn.execute(  # type: ignore[attr-defined]
+            "SELECT s.id AS id FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id "
+            "WHERE m.node_id = ? AND instr(lower(s.path), ?) > 0 "
+            "ORDER BY m.assignment_similarity IS NULL, "
+            "m.assignment_similarity, s.id",
+            (node_id, q.lower()),
+        ).fetchall()
+    ]
+    pages = max(1, -(-len(ordered) // SECTION_PAGE))
+    if focus in ordered:
+        page = ordered.index(focus) // SECTION_PAGE + 1
+    page = min(max(page, 1), pages)
+    wanted = ordered[(page - 1) * SECTION_PAGE : page * SECTION_PAGE]
+    model = briefs.condense_model(conn, node_id)  # type: ignore[arg-type]
+    rows = {
+        int(row["id"]): row
+        for row in conn.execute(  # type: ignore[attr-defined]
+            "SELECT s.id AS id, s.source AS source, s.path AS path, "
+            "s.version AS version, s.uri AS uri, "
+            "s.byte_start AS start, s.byte_end AS stop, "
+            "m.assignment_similarity AS score, "
+            "m.forced AS forced, c.body AS body, "
+            # the MIDDLE of the pipeline: what the topic's brief was actually
+            # reduced from — the condensation by the model the brief RECORDED,
+            # so a section condensed by two models is still one row (#197)
+            "d.text AS condensed, d.model_name AS condensed_by "
+            "FROM node_members m JOIN sections s ON s.id = m.section_id "
+            "LEFT JOIN contents c ON c.content_hash = s.content_hash "
+            "LEFT JOIN condensations d ON d.content_hash = s.content_hash "
+            "AND d.model_name = COALESCE(NULLIF(?, ''), "
+            "(SELECT MIN(x.model_name) FROM condensations x "
+            "WHERE x.content_hash = s.content_hash)) "
+            f"WHERE m.node_id = ? AND s.id IN ({','.join('?' * len(wanted))})",  # noqa: S608
+            (model, node_id, *wanted),
+        ).fetchall()
+    }
+    starts = _line_starts(conn, [rows[i] for i in wanted])
+    return {
+        "rows": [_member(rows[i], stem, starts[i]) for i in wanted],
+        "total": int(held),
+        "matched": len(ordered),
+        "page": page,
+        "pages": pages,
+        "q": q,
+    }
 
 
-def _member(row: object, where: str) -> dict[str, object]:
+def _line_starts(conn: object, rows: list[object]) -> dict[int, int]:
+    """The line each section begins on, counted from the file's own start.
+
+    A file is the sections laid end to end, so the lines before one are the
+    newlines in the sections before it.
+    """
+    files = {
+        (str(r["source"]), str(r["path"]), str(r["version"]))  # type: ignore[index]
+        for r in rows
+    }
+    before: dict[tuple[str, str, str], list[tuple[int, int]]] = {}
+    for source, path, version in files:
+        before[(source, path, version)] = [
+            (int(r["start"]), bytes(r["body"] or b"").count(b"\n"))
+            for r in conn.execute(  # type: ignore[attr-defined]
+                "SELECT s.byte_start AS start, c.body AS body "
+                "FROM sections s LEFT JOIN contents c "
+                "ON c.content_hash = s.content_hash "
+                "WHERE s.source = ? AND s.path = ? AND s.version = ?",
+                (source, path, version),
+            ).fetchall()
+        ]
+    return {
+        int(r["id"]): 1  # type: ignore[index]
+        + sum(
+            lines
+            for start, lines in before[
+                (str(r["source"]), str(r["path"]), str(r["version"]))  # type: ignore[index]
+            ]
+            if start < int(r["start"])  # type: ignore[index]
+        )
+        for r in rows
+    }
+
+
+def _heading(body: object) -> str:
+    """Where a section starts, in the file's own words: its first real line."""
+    if body is None:
+        return ""
+    for line in bytes(body).decode("utf-8", "replace").splitlines():
+        words = line.strip().lstrip("#").strip()
+        if words:
+            return (
+                words
+                if len(words) <= HEADING_CHARS
+                else (words[: HEADING_CHARS - 1].rstrip() + "\u2026")
+            )
+    return ""
+
+
+def _member(row: object, where: str, first: int) -> dict[str, object]:
     """One section, its path split where it stops saying what its topic said.
 
     Thirty-five rows opening with the same twenty characters are thirty-five
     rows nobody scans, so the shared directory is set apart from the part that
-    tells them apart (#198).
+    tells them apart (#198), and what tells two sections of one file apart —
+    where each starts and how far it runs — is beside it (#214).
     """
     path = str(row["path"])  # type: ignore[index]
     shared = f"{where}/" if where and path.startswith(f"{where}/") else ""
+    body = row["body"]  # type: ignore[index]
+    raw = bytes(body or b"")
+    last = first + max(raw.count(b"\n") + (not raw.endswith(b"\n")) - 1, 0)
     return {
         "id": int(row["id"]),  # type: ignore[index]
         "path": path,
         "uri": str(row["uri"]),  # type: ignore[index]
         "stem": shared,
         "tail": path.removeprefix(shared),
+        "heading": _heading(body),
+        "lines": f"{first}-{last}" if last > first else str(first),
+        "bytes": int(row["stop"]) - int(row["start"]),  # type: ignore[index]
         "similarity": row["score"],  # type: ignore[index]
         "forced": bool(row["forced"]),  # type: ignore[index]
-        "content": _content(row["body"]),  # type: ignore[index]
+        "content": _content(body),
         "condensed": _condensation(row),
     }
 

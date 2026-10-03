@@ -854,6 +854,19 @@ ul.kids a:hover { border-color: var(--accent); background: var(--accent-wash); t
 ul.kids .who-holds { font-family: var(--mono); font-size: .8125rem; }
 
 /* ---------------------------------------------------------- edit drawer */
+.actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); align-items: flex-start; }
+.actions .menu { flex: 1 1 100%; border-top: 0; }
+.actions .menu > summary { padding: 0 .75rem; }
+.actions .menu > summary { display: inline-flex; align-items: center; gap: var(--s2); list-style: none; cursor: pointer; }
+.actions .menu > summary::-webkit-details-marker { display: none; }
+.actions .menu[open] { border: 1px solid var(--rule); border-radius: var(--r2, 8px); background: var(--surface, transparent); }
+.actions .menu[open] > summary { margin: var(--s2); }
+.actions .menu:not([open]) { flex: none; }
+.section-filter { gap: var(--s2); margin-bottom: var(--s3); align-items: center; }
+.members .where-in { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: baseline; flex: 1 1 8rem; min-width: 0; font-size: .8125rem; }
+.members .where-in .heading { color: var(--ink-soft, inherit); overflow-wrap: anywhere; }
+.pager { gap: var(--s2); align-items: center; margin-top: var(--s3); }
+details.hashes { margin-top: var(--s3); }
 .surgery { border-top: 1px solid var(--rule); }
 .surgery > summary {
   display: flex; align-items: center; gap: var(--s2);

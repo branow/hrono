@@ -167,14 +167,14 @@ def material(conn: sqlite3.Connection, node_id: int) -> str:
     previous condense model left in the cache is not part of it, or a settled
     echo would read as a different one and be re-paid.
     """
-    source = _source_model(conn, node_id)
+    source = condense_model(conn, node_id)
     texts = member_condensations(conn, node_id, source) or child_briefs(
         conn, node_id
     )
     return "\n\n".join(texts)
 
 
-def _source_model(conn: sqlite3.Connection, node_id: int) -> str:
+def condense_model(conn: sqlite3.Connection, node_id: int) -> str:
     """The condense model a brief was written from: the one it recorded, else
     the install's own (a scoped job's choice is not visible at read time)."""
     row = conn.execute(

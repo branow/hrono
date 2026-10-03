@@ -42,7 +42,7 @@
           <li><div class="leaf">
             <span class="mono small faint">section {{ s.ordinal + 1 }}, bytes {{ s.start }}–{{ s.end }} @{{ s.version }}</span>
             {% if s.topic is not none %}
-            in <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}#section-{{ s.id }}">{{ s.topic_name }}</a>
+            in <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}&section={{ s.id }}#section-{{ s.id }}">{{ s.topic_name }}</a>
             {% elif s.parked %}<span class="chip warn" title="Ingested and embedded, but waiting to be filed into a topic">parked</span> not in any topic yet
             {% else %}<span class="chip">not filed</span> not in a topic of this tree
             {% endif %}

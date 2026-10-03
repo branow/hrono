@@ -54,7 +54,7 @@ def test_a_word_only_in_a_sections_text_finds_the_section_and_its_topic(
     assert "f7.txt" in sections
     assert "f3.txt" not in sections
     home = topic_of(panel, "f7.txt")
-    assert f"/nodes/{home}?tree={TREE}#section-" in sections
+    assert f"/nodes/{home}?tree={TREE}&section=" in sections
     assert "<mark>module</mark>" in sections
 
 
@@ -155,7 +155,7 @@ def test_a_file_lists_its_sections_with_their_topics(panel: Panel) -> None:
 
     home = topic_of(panel, "f5.txt")
     assert "section 1, bytes 0–" in html
-    assert f"/nodes/{home}?tree={TREE}#section-" in html
+    assert f"/nodes/{home}?tree={TREE}&section=" in html
     assert "f6.txt" not in html
 
 
@@ -417,7 +417,7 @@ def test_a_section_still_filed_here_outlives_its_source_leaving_the_tree(
     html = page(panel, "files", path="f5.txt")
 
     assert "Not ingested" not in html
-    assert f"/nodes/{topic_of(panel, 'f5.txt')}?tree={TREE}#section-" in html
+    assert f"/nodes/{topic_of(panel, 'f5.txt')}?tree={TREE}&section=" in html
 
 
 def test_a_section_still_parked_here_outlives_its_source_leaving_the_tree(

@@ -19,8 +19,10 @@ from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.ingest import Unit
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
+from hrono.ingest.split_op import store_unit
 from hrono.server.app import create_app
 from hrono.summarize import briefs
 from hrono.summarize import store as condensations
@@ -452,3 +454,223 @@ def test_a_reply_that_is_not_a_brief_does_not_stand(browser: Browser) -> None:
     assert "not a brief — the next run rewrites it" in page
     assert "talks-to-the-caller" in page
     assert '<span class="chip ok">stands</span>' not in page
+
+
+def _topic_over(browser: Browser, section_ids: list[int]) -> int:
+    with browser.conn:  # type: ignore[union-attr]
+        return cluster_store.add_leaf_node(
+            browser.conn,  # type: ignore[arg-type]
+            TREE,
+            [(sid, False, 0.5 + i / 1000) for i, sid in enumerate(section_ids)],
+        )
+
+
+def _ingest_file(browser: Browser, path: str, raw: bytes) -> list[int]:
+    """Split a file the way ingest does, so byte ranges are production's."""
+    with browser.conn:  # type: ignore[union-attr]
+        stored = store_unit(
+            browser.conn,  # type: ignore[arg-type]
+            Unit(path=path, body=raw, version="v1"),
+            "docs",
+            "git",
+            "ex/docs",
+            "v1",
+        )
+    return [sid for sid, _, _ in stored]
+
+
+def _guide_text() -> bytes:
+    return b"".join(
+        f"## Part {n}\n".encode() + b"line of prose here\n" * 300
+        for n in range(1, 6)
+    )
+
+
+def test_the_root_is_not_flagged_and_an_orphan_is(browser: Browser) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, 0, 0, 't')",
+            (TREE,),
+        )
+        orphan = int(
+            browser.conn.execute("SELECT MAX(id) FROM nodes").fetchone()[0]  # type: ignore[attr-defined]
+        )
+    root = int(
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT MAX(id) FROM nodes WHERE level = 1"
+        ).fetchone()[0]
+    )
+
+    top = browser.node(root).text  # type: ignore[attr-defined]
+    lost = browser.node(orphan).text  # type: ignore[attr-defined]
+
+    assert "nothing points at this topic" not in top
+    assert "this is the root" in top
+    assert "nothing points at this topic" in lost
+    assert "this is the root" not in lost
+
+
+def test_the_breadcrumb_runs_from_the_root_down(browser: Browser) -> None:
+    with browser.conn:  # type: ignore[union-attr]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, 2, 0, 't')",
+            (TREE,),
+        )
+        top = int(
+            browser.conn.execute("SELECT MAX(id) FROM nodes").fetchone()[0]  # type: ignore[attr-defined]
+        )
+        middle = int(
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "SELECT MAX(id) FROM nodes WHERE level = 1"
+            ).fetchone()[0]
+        )
+        cluster_store.add_child(
+            browser.conn,  # type: ignore[arg-type]
+            top,
+            middle,
+            attached=False,
+            similarity=None,
+        )
+    browser.sign_in()
+
+    page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
+    start = page.index('class="crumbs"')
+    crumbs = page[start : page.index("</nav>", start)]
+
+    links = re.findall(r"/nodes/(\d+)\?", crumbs)
+    assert links == [str(top), str(middle)]
+
+
+def test_the_facts_come_before_the_hashes(browser: Browser) -> None:
+    browser.sign_in()
+
+    page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
+    hashes = page.index('<details class="hashes">')
+
+    for fact in ("scribe-9", "1,234 in, 56 out"):
+        assert page.index(fact) < hashes
+    for digest in ("pr00mpth4sh", "sig-written"):
+        assert page.index(digest) > hashes
+
+
+def test_sections_of_one_file_are_told_apart_by_heading_and_lines(
+    browser: Browser,
+) -> None:
+    raw = _guide_text()
+    ids = _ingest_file(browser, "docs/guide.md", raw)
+    assert len(ids) > 1
+    topic = _topic_over(browser, ids)
+    browser.sign_in()
+
+    page = browser.node(topic).text  # type: ignore[attr-defined]
+
+    rows = re.findall(
+        r'<span class="heading">([^<]*)</span>'
+        r'<span class="faint num nowrap">lines (\d+)(?:-(\d+))?</span>',
+        page,
+    )
+    assert len(rows) == len(ids)
+    assert len({heading for heading, *_ in rows}) == len(rows)
+    lines = raw.decode().splitlines()
+    for heading, first, last in rows:
+        # the range really is where that text is in the file
+        assert lines[int(first) - 1].lstrip("# ").startswith(heading[:5])
+        assert int(last or first) <= len(lines)
+    ends = sorted((int(f), int(last or f)) for _, f, last in rows)
+    assert ends[0][0] == 1
+    assert ends[-1][1] == len(lines)
+    for (_, before), (after, _) in zip(ends, ends[1:], strict=False):
+        assert after == before + 1
+
+
+def test_the_section_list_filters_by_path(browser: Browser) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+
+    page = browser.client.get(  # type: ignore[attr-defined]
+        f"/ui/trees/{TREE}/nodes/{node}", params={"q": "WORSE"}
+    ).text
+
+    assert "worse.md" in page
+    assert "edge.md" not in page
+    assert "1 of 4" in page
+
+
+def test_a_long_section_list_is_paged_and_a_link_finds_its_page(
+    browser: Browser,
+) -> None:
+    ids = []
+    with browser.conn:  # type: ignore[union-attr]
+        for n in range(60):
+            ids.append(_section(browser.conn, f"docs/many/f{n:02}.md", b"x\n"))
+    topic = _topic_over(browser, ids)
+    browser.sign_in()
+
+    first = browser.node(topic).text  # type: ignore[attr-defined]
+    last = browser.client.get(  # type: ignore[attr-defined]
+        f"/ui/trees/{TREE}/nodes/{topic}", params={"section": ids[-1]}
+    ).text
+
+    assert len(re.findall(r'id="section-\d+"', first)) == 25
+    assert "page 1 of 3" in first
+    assert f'id="section-{ids[-1]}"' not in first
+    assert f'id="section-{ids[-1]}"' in last
+    assert "page 3 of 3" in last
+
+
+def test_a_section_condensed_by_two_models_is_one_row(
+    browser: Browser,
+) -> None:
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        digests = [
+            r[0]
+            for r in browser.conn.execute(  # type: ignore[attr-defined]
+                "SELECT s.content_hash FROM node_members m "
+                "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ?",
+                (node,),
+            )
+        ]
+        for digest in digests:
+            for model in ("old-model", "scribe-9"):
+                condensations.upsert(
+                    browser.conn,  # type: ignore[arg-type]
+                    digest,
+                    model,
+                    f"by {model}",
+                    1,
+                    1,
+                )
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE briefs SET source_model = 'scribe-9' WHERE node_id = ?",
+            (node,),
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+    ids = re.findall(r'id="section-(\d+)"', page)
+
+    assert len(ids) == 4
+    assert len(set(ids)) == 4
+    assert "by scribe-9" in page
+    assert "by old-model" not in page
+
+
+def test_the_edit_actions_sit_in_the_page_head_for_an_admin(
+    browser: Browser,
+) -> None:
+    _topic_over(browser, [_section(browser.conn, "docs/other.md", b"o\n")])
+    browser.sign_in()
+
+    page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
+    head = page[: page.index('class="topic-layout"')]
+
+    for action in ("rename", "brief", "note", "reparent", "merge", "split"):
+        assert f"/{action}" in head
+    # each destructive one says what it will change before it runs
+    assert "Folds this topic" in head
+    assert "re-filed under the nearest remaining topic" in head
+    assert "replaced by narrower ones" in head

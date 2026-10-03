@@ -56,7 +56,7 @@
           <a class="mono small" href="/ui/trees/{{ tree }}/files?tree={{ tree }}&amp;path={{ s.path|urlencode }}">{{ s.path }}</a>
           <span class="faint small">@{{ s.version }}</span>
           {% if s.topic is not none %}
-          <span class="hint">in <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}#section-{{ s.id }}">{{ s.topic_name }}</a></span>
+          <span class="hint">in <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}&section={{ s.id }}#section-{{ s.id }}">{{ s.topic_name }}</a></span>
           {% elif s.parked %}<span class="chip warn" title="Ingested, and not in any topic yet">parked</span>
           {% endif %}
           <p class="hint">{{ s.snippet }}</p>

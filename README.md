@@ -100,9 +100,13 @@ returns to the page it came from saying what it did. Spend is on Home and on
 every run's page (split by stage), and the Usage page, open to every role, adds
 it up by day, model, run and person; a subscription's figure is marked as an
 estimate and never added to metered spend, and a run from before spend was
-recorded reads unknown rather than free. Manual tree
-surgery — rename, brief, notes, reparent, merge, dissolve, split, move a chunk
-— is there for admins.
+recorded reads unknown rather than free. A topic's page opens with a
+breadcrumb from the root, then who wrote its brief, when and with how many
+tokens; hashes are behind Details. Its sections show where each starts (the
+heading, the lines, the size), worst fit first, filterable by path and paged.
+For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
+split) sit in the page head, each saying what it will change before it runs;
+moving a section is on the section.
 
 Find is the other way in, for when you know a word or a file rather than
 where it sits on the map. The search box in the top bar looks for every word
