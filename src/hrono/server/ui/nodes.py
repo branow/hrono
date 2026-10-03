@@ -389,7 +389,6 @@ def _node(
         "parent": _parent(conn, parent, wheres),
         "trail": _trail(conn, tree, node_id, wheres),
         "root": _is_root(conn, tree, node_id, parent),
-        "orphan": parent is None and not _is_root(conn, tree, node_id, parent),
         "children": children,
         "pin_kinds": sorted(held),
         "pins": [
