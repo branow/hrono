@@ -219,7 +219,8 @@
     <p class="hint">This puts back the configuration hrono shipped with, discarding any change.</p>
     {{ removal_of(c.doomed.impact, "reset") }}
     {% else %}
-    {{ removal_of(c.doomed.impact, "deleted") }}
+    {# a note is the delete's own account of what it arms; "nothing goes stale" beside it would contradict it #}
+    {% if c.doomed.impact or not c.doomed.note %}{{ removal_of(c.doomed.impact, "deleted") }}{% endif %}
     {% endif %}
     {% if c.doomed.note %}
     <div class="callout warn">

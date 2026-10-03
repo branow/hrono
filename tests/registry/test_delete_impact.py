@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import pytest
@@ -97,7 +97,7 @@ def built(conn: sqlite3.Connection) -> sqlite3.Connection:
     return conn
 
 
-def _by_tree(found: tuple[impact.TreeImpact, ...]) -> dict[str, object]:
+def _by_tree(found: Iterable[impact.TreeImpact]) -> dict[str, object]:
     return {hit.tree: hit for hit in found}
 
 
@@ -132,7 +132,9 @@ def test_deleting_a_model_counts_what_is_stored_under_its_name(
 def test_deleting_a_brief_prompt_counts_what_its_template_wrote(
     built: sqlite3.Connection,
 ) -> None:
-    found = _by_tree(impact.of_delete(built, "prompts", "mine"))
+    found = _by_tree(
+        h for h in impact.of_delete(built, "prompts", "mine") if h.tree != "*"
+    )
 
     assert set(found) == {"alpha"}  # beta's brief carries another template
     assert found["alpha"].stale.nodes == 2  # type: ignore[attr-defined]
@@ -180,3 +182,20 @@ def test_deleting_something_nothing_uses_strands_nothing(
 
     assert impact.of_delete(built, "connections", "spare") == ()
     assert impact.of_delete(built, "trees", "alpha") == ()
+
+
+def test_deleting_the_only_model_of_a_role_says_the_build_is_refused(
+    conn: sqlite3.Connection,
+) -> None:
+    """One model with no role serves every writing role; take it away and the
+    next build is refused, which is the resolvers' own answer."""
+    _register(conn, "models", name="only", kind="text", model="m")
+
+    (hit,) = [
+        h
+        for h in impact.of_delete(conn, "models", "only")
+        if "role brief:" in h.reason
+    ]
+
+    assert hit.tree == "*" and "a build is refused" in hit.reason
+    assert registry_store.get(conn, "models", "only") is not None  # rolled back

@@ -435,7 +435,7 @@ def test_a_default_is_reset_rather_than_removed(browser: Browser) -> None:
     assert browser.stored("prompts", "brief") == shipped
 
 
-def test_a_delete_needs_the_box_ticked(browser: Browser) -> None:
+def test_a_delete_posted_without_confirm_is_refused(browser: Browser) -> None:
     browser.sign_in()
 
     answer = browser.remove("sources", "gh")
@@ -790,6 +790,7 @@ def test_the_delete_warning_is_shown_before_the_deletion(
 
     assert "delete=trees:beta" in listing  # a row action, not a disclosure
     assert "tree beta now maps EVERY source" in page
+    assert "Nothing in any tree goes stale" not in page  # it would contradict
     assert browser.stored("trees", "beta") is not None
 
 

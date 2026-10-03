@@ -24,7 +24,7 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from hrono.registry import store
+from hrono.registry import completeness, store
 from hrono.registry.collections.trees import sources_of
 from hrono.summarize import briefs
 from hrono.summarize.resolve import model_fingerprint, template_hash
@@ -141,9 +141,9 @@ def of_delete(
     if collection == "sources":
         return _source_removal(conn, name)
     if collection == "models":
-        return _model_removal(conn, name)
+        return _model_removal(conn, name) + _unserved(conn, collection, name)
     if collection == "prompts":
-        return _prompt_removal(conn, name)
+        return _prompt_removal(conn, name) + _unserved(conn, collection, name)
     if collection == "connections":
         return _connection_removal(conn, name)
     return ()
@@ -237,6 +237,39 @@ def _model_removal(
                 )
             )
     return tuple(impacts)
+
+
+def _unserved(
+    conn: sqlite3.Connection, collection: str, name: str
+) -> tuple[TreeImpact, ...]:
+    """What the registry would newly lack for a build once this row is gone.
+
+    Asks `completeness.gaps` before and after, with the row removed inside a
+    savepoint that is rolled back, so the answer is the resolvers' own — "no
+    model serves this role" and "two models claim it" included.
+    """
+    before = {(g.section, g.says) for g in completeness.gaps(conn)}
+    conn.execute("SAVEPOINT unserved")
+    try:
+        # not `store.delete`: it commits, and this must not outlive the call
+        conn.execute(
+            "DELETE FROM registry WHERE collection = ? AND name = ?",
+            (collection, name),
+        )
+        after = completeness.gaps(conn)
+    finally:
+        conn.execute("ROLLBACK TO unserved")
+        conn.execute("RELEASE unserved")
+    return tuple(
+        TreeImpact(
+            tree="*",
+            stale=Stale(sections=0, nodes=0, levels=()),
+            ops=(),
+            reason=f"after this, a build is refused: {gap.says}",
+        )
+        for gap in after
+        if (gap.section, gap.says) not in before
+    )
 
 
 def _made_by(conn: sqlite3.Connection, table: str, name: str) -> int:
