@@ -19,9 +19,9 @@ from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
-from hrono.export.render import heading
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
+from hrono.naming import heading
 from hrono.server.app import create_app
 from hrono.summarize import briefs
 

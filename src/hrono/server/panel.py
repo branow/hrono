@@ -17,6 +17,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+from hrono import naming
 from hrono.server import where as where_module
 from hrono.summarize import briefs
 
@@ -40,9 +41,9 @@ class Panel:
 
     id: int
     level: int
+    name: str  # `hrono.naming`: what every page calls it
     where: str
     spread: str
-    title: str
     brief: str
     stale: bool
     holds: int
@@ -72,16 +73,15 @@ def build(conn: sqlite3.Connection, tree: str, node_id: int) -> Panel | None:
     return Panel(
         id=node_id,
         level=int(row["level"]),
+        name=naming.name(conn, node_id),
         where=place.label,
         spread=place.spread,
-        # only a name someone GAVE it. The map falls back to the brief's first
-        # line, which here would print the brief's opening twice in a column
-        # two inches wide — the brief itself is three lines further down
-        title=str(row["title"] or ""),
         brief="" if brief is None else str(brief["text"]),
         # the same rule the map colours by: no brief counts as a stale one,
         # because both mean recall cannot answer from this topic
-        stale=brief is None or bool(brief["stale"]),
+        stale=brief is None
+        or bool(brief["stale"])
+        or bool(briefs.unusable(brief)),
         holds=len(sections) or len(children),
         holds_what="sections" if sections else "topics",
         parts=sections or children,
@@ -121,23 +121,31 @@ def _children(
 ) -> tuple[Part, ...]:
     """The topics under this one, named the way the map names them."""
     wheres = where_module.by_node(conn, tree)
+    rows = conn.execute(
+        "SELECT c.child_id AS child_id, "
+        "(SELECT COUNT(*) FROM node_members m WHERE m.node_id = c.child_id)"
+        " AS members, "
+        "(SELECT COUNT(*) FROM node_children k "
+        "WHERE k.parent_id = c.child_id) AS kids "
+        "FROM node_children c WHERE c.parent_id = ? ORDER BY c.child_id",
+        (node_id,),
+    ).fetchall()
+    called = naming.names(conn, [int(row["child_id"]) for row in rows])
     return tuple(
         Part(
             id=int(row["child_id"]),
-            name=wheres.get(int(row["child_id"]), "") or "unplaced",
-            detail=f"{int(row['members']) or int(row['kids'])} "
-            f"{'sections' if int(row['members']) else 'topics'}",
+            name=called[int(row["child_id"])],
+            detail=_detail(row, wheres.get(int(row["child_id"]), "")),
         )
-        for row in conn.execute(
-            "SELECT c.child_id AS child_id, "
-            "(SELECT COUNT(*) FROM node_members m WHERE m.node_id = c.child_id)"
-            " AS members, "
-            "(SELECT COUNT(*) FROM node_children k "
-            "WHERE k.parent_id = c.child_id) AS kids "
-            "FROM node_children c WHERE c.parent_id = ? ORDER BY c.child_id",
-            (node_id,),
-        ).fetchall()
+        for row in rows
     )
+
+
+def _detail(row: sqlite3.Row, place: str) -> str:
+    """What a child holds, and where — the line under its name."""
+    held = int(row["members"]) or int(row["kids"])
+    counted = f"{held} {'sections' if int(row['members']) else 'topics'}"
+    return f"{counted} · in {place}" if place else counted
 
 
 def _relative(path: str, stem: str) -> str:

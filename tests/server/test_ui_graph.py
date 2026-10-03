@@ -336,7 +336,7 @@ def test_two_directories_of_the_SAME_NAME_are_said_once(
 
     big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
     assert big.where == "db: src+tests"
-    assert big.label == big.where  # short enough to reach the slot whole
+    assert big.place == big.where  # short enough to reach the slot whole
 
 
 def test_the_one_root_of_a_tree_is_named_by_what_it_was_built_FROM(
@@ -419,8 +419,8 @@ def test_a_straddle_too_wide_for_the_slot_keeps_BOTH_sides(
 
     big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
     assert len(big.where) > LABEL_CHARS  # the pair does not fit
-    assert len(big.label) <= LABEL_CHARS
-    assert big.label == "db + cluster"
+    assert len(big.place) <= LABEL_CHARS
+    assert big.place == "db + cluster"
 
 
 def test_a_long_label_is_cut_from_the_front_to_fit_its_slot(
@@ -443,9 +443,9 @@ def test_a_long_label_is_cut_from_the_front_to_fit_its_slot(
         node for node in drawn.nodes if node.id == browser.ids["small"]
     )
     assert small.where == deep  # the whole path is still there to hover
-    assert len(small.label) <= LABEL_CHARS
-    assert small.label.startswith("…/")
-    assert deep.endswith(small.label.removeprefix("…/"))
+    assert len(small.place) <= LABEL_CHARS
+    assert small.place.startswith("…/")
+    assert deep.endswith(small.place.removeprefix("…/"))
 
 
 def test_a_short_label_is_left_alone(browser: Browser) -> None:
@@ -456,7 +456,7 @@ def test_a_short_label_is_left_alone(browser: Browser) -> None:
     small = next(
         node for node in drawn.nodes if node.id == browser.ids["small"]
     )
-    assert small.label == "tests/cluster"
+    assert small.place == "tests/cluster"
 
 
 def test_the_tree_hangs_DOWNWARDS_from_its_root(browser: Browser) -> None:

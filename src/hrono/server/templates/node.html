@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}hrono — {{ node.where or node.title }}{% endblock %}
+{% block title %}hrono — {{ node.name }}{% endblock %}
 {% set pin_says = {
   "brief": "Held by hand: its brief was written by hand and will not be regenerated",
   "membership": "Held by hand: a section was filed here by hand and will not be moved",
@@ -8,7 +8,7 @@
 {% set held = node.members|length or node.children|length %}
 
 {% macro topic_name(item) -%}
-{{ item.where or "topic %s"|format(item.id) }}
+{{ item.name or item.where or "topic %s"|format(item.id) }}
 {%- endmacro %}
 
 {% macro picker(field, options, chosen) %}
@@ -24,7 +24,7 @@
        title="Open topic {{ option.id }} in a new tab">topic {{ option.id }}
       <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.4 1h5.6v5.6M9 1 1 9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
-    {% if option.title %}<span class="about">{{ option.title }}</span>{% endif %}
+    {% if option.where %}<span class="about">in {{ option.where }}</span>{% endif %}
   </label>
   {% endfor %}
 </div>
@@ -44,7 +44,8 @@
     <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a>
     {% endif %}
   </div>
-  <h1 class="where">{{ node.where or "topic %s"|format(node.id) }}</h1>
+  <h1>{{ node.name }}</h1>
+  {% if node.where %}<p class="said mono">in {{ node.where }}</p>{% endif %}
   <p class="where-note row mt-2">
     <span class="chip">{% if node.children %}groups {{ node.children|length }} topic{{ "" if node.children|length == 1 else "s" }}{% else %}holds {{ node.members|length }} section{{ "" if node.members|length == 1 else "s" }}{% endif %}</span>
     <span class="chip plain">level {{ node.level }}</span>

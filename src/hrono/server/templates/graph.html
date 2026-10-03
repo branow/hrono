@@ -52,6 +52,8 @@
   <strong class="map-title">{{ tree }}</strong>
   <span class="chip plain num">{{ graph.shown }} drawn</span>
   <a class="btn small" href="{{ graph.fold.href }}" data-tip="{{ graph.fold.says }}" data-tip-below>{{ graph.fold.label }}</a>
+  <button class="btn small quiet" type="button" id="fit" hidden
+          data-tip="Switch between the whole map in the window and its actual size" data-tip-below>Actual size</button>
 </div>
 
 <div class="afloat tr" id="overlays">
@@ -68,27 +70,27 @@
     <svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true">
       <circle cx="5" cy="7" r="3" fill="var(--accent)"/>
       <circle cx="20" cy="7" r="6" fill="var(--accent)"/>
-    </svg>size
+    </svg>a bigger circle holds more
   </li>
   <li title="Its brief is missing or no longer matches what it holds, so recall cannot answer from it">
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
       <circle cx="7" cy="7" r="6" fill="var(--warn)"/>
-    </svg><span class="stale-key">needs a brief</span>
+    </svg><span class="stale-key">its brief needs writing</span>
   </li>
   <li title="The chevron opens a topic and shows what sits beneath it">
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
       <path d="M3 5l4 4 4-4" fill="none" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>opens
+    </svg>the chevron opens a topic
   </li>
-  <li title="The directory these sections live in. Its brief, its sections and the controls to correct it are on the topic page">
+  <li title="Under each circle: what the topic is called, the folder its sections live in, and how much it holds. Its brief and the controls to correct it are on the topic page">
     <svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true">
       <path d="M2 6h26M2 10h16" stroke="var(--ink-faint)" stroke-width="1.6" stroke-linecap="round"/>
-    </svg>where it lives
+    </svg>each topic: its name, folder and size
   </li>
   <li title="Siblings stay on one level, so the board is usually wider than the window. Scroll it, drag it with the mouse, or click it and use the arrow keys">
     <svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true">
       <path d="M4 7h12M4 7l3-3M4 7l3 3M16 7l-3-3M16 7l-3 3" fill="none" stroke="var(--ink-faint)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>scroll or drag to move
+    </svg>scroll or drag to move around
   </li>
 </ul>
 </div>
@@ -107,25 +109,26 @@
   </path>
   {% endfor %}
   {% for link in overlay.links %}
-  <text class="link-says {{ link.kind }}" x="{{ link.x }}" y="{{ link.y + 4 }}">{{ link.label }}</text>
+  <text class="link-says {{ link.kind }}" x="{{ link.x }}" y="{{ link.y }}">{{ link.label }}</text>
   {% endfor %}
   {% for node in graph.nodes %}
   <g class="node b{{ node.branch }}{% if node.stale %} stale{% endif %}{% if node.focused %} reading{% endif %}">
     <a href="{{ node.read }}"{% if node.focused %} aria-current="true"{% endif %}>
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
-      <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 27 }}">{{ node.holds }} {{ node.holds_what }}</text>
-      <title>{{ node.where }} — {{ node.holds }} {{ node.holds_what }}, topic {{ node.id }}{% if node.spread %}, spread over {{ node.spread }}{% endif %}{% if node.stale %}, brief needs rewriting{% endif %}</title>
+      <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
+      <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 43 }}">{{ node.holds }} {{ node.holds_what }}</text>
+      <title>{{ node.name }} — in {{ node.where or "no one directory" }}, {{ node.holds }} {{ node.holds_what }}, topic {{ node.id }}{% if node.spread %}, spread over {{ node.spread }}{% endif %}{% if node.stale %}, brief needs rewriting{% endif %}</title>
     </a>
     {% if node.has_children %}
     <a href="{{ node.toggle }}">
-      <rect class="twist-hit" x="{{ node.x - 14 }}" y="{{ node.y + node.radius + 30 }}" width="28" height="18"/>
+      <rect class="twist-hit" x="{{ node.x - 14 }}" y="{{ node.y + node.radius + 46 }}" width="28" height="18"/>
       {% if node.has_hidden_children %}
-      <path class="twist closed" d="M{{ node.x - 5 }},{{ node.y + node.radius + 36 }} l5,5 l5,-5"/>
+      <path class="twist closed" d="M{{ node.x - 5 }},{{ node.y + node.radius + 52 }} l5,5 l5,-5"/>
       {% else %}
-      <path class="twist" d="M{{ node.x - 5 }},{{ node.y + node.radius + 41 }} l5,-5 l5,5"/>
+      <path class="twist" d="M{{ node.x - 5 }},{{ node.y + node.radius + 57 }} l5,-5 l5,5"/>
       {% endif %}
-      <title>{% if node.has_hidden_children %}Open — show the {{ node.holds }} {{ node.holds_what }} beneath {{ node.label }}{% else %}Close {{ node.label }}{% endif %}</title>
+      <title>{% if node.has_hidden_children %}Open — show the {{ node.holds }} {{ node.holds_what }} beneath {{ node.name }}{% else %}Close {{ node.name }}{% endif %}</title>
     </a>
     {% endif %}
   </g>
@@ -137,7 +140,8 @@
 <aside class="panel" id="panel" aria-label="topic {{ panel.id }}">
   <div class="panel-head">
     <div class="min">
-      <h2>{{ panel.where }}</h2>
+      <h2>{{ panel.name }}</h2>
+      {% if panel.where %}<p class="said">in {{ panel.where }}</p>{% endif %}
     </div>
     <a class="btn small quiet shut" href="{{ unfocus }}" aria-label="Close the panel">
       <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
@@ -145,8 +149,6 @@
       </svg>
     </a>
   </div>
-
-  {% if panel.title %}<p class="said">{{ panel.title }}</p>{% endif %}
 
   <p class="panel-facts">
     <span class="chip">{{ panel.holds }} {{ panel.holds_what }}</span>
@@ -239,6 +241,9 @@
            looking at has not moved: keep the scroll rather than re-centring. */
         board.scrollLeft = left;
         board.scrollTop = top;
+        /* The panel opening or closing changes the room the map has. */
+        fit = document.getElementById("fit");
+        scale();
         if (push) history.pushState({}, "", url);
       });
   }
@@ -287,8 +292,48 @@
     });
   });
 
-  /* Open on the root (or on the topic being read), not on the left edge. */
-  board.scrollLeft = parseFloat(board.dataset.home || "0") - board.clientWidth / 2;
+  /* The map opens FITTED to the window (#212): a wide tree drawn at full
+     size showed a corner of itself, and with the panel open it shifted and
+     stayed small. Fitting scales the drawing through its viewBox; the button
+     goes back to actual size and again, and the choice holds while the page
+     does. Never below a third, where the names stop being readable. */
+  var FLOOR = 0.35;
+  var fitted = true;
+  var fit = document.getElementById("fit");
+
+  function scale() {
+    var drawing = board.querySelector("svg");
+    if (!drawing) return 1;
+    var wide = parseFloat(drawing.dataset.width || drawing.getAttribute("width"));
+    var tall = parseFloat(drawing.dataset.height || drawing.getAttribute("height"));
+    drawing.dataset.width = wide;
+    drawing.dataset.height = tall;
+    drawing.setAttribute("viewBox", "0 0 " + wide + " " + tall);
+    var room = Math.min(board.clientWidth / wide, board.clientHeight / tall, 1);
+    var zoom = fitted ? Math.max(room, FLOOR) : 1;
+    drawing.setAttribute("width", wide * zoom);
+    drawing.setAttribute("height", tall * zoom);
+    if (fit) {
+      fit.hidden = room >= 1;
+      fit.textContent = fitted ? "Actual size" : "Fit to window";
+    }
+    return zoom;
+  }
+
+  function settle() {
+    var zoom = scale();
+    /* Open on the root (or on the topic being read), not on the left edge. */
+    board.scrollLeft =
+      parseFloat(board.dataset.home || "0") * zoom - board.clientWidth / 2;
+  }
+
+  settle();
+  window.addEventListener("resize", settle);
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest || !event.target.closest("#fit")) return;
+    fitted = !fitted;
+    settle();
+  });
 
   function selecting() {
     var picked = window.getSelection && window.getSelection();

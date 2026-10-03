@@ -342,7 +342,7 @@ def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
     # move and merge pickers, and in the map's tooltip. It is no longer printed
     # under the h1: the whole brief is on this page, so a cut copy of its
     # opening clause above it said the same thing twice (#200).
-    offered = re.findall(r'<span class="about">(.*?)</span>', page, re.S)
+    offered = re.findall(r'<span class="who-holds">(.*?)</span>', page, re.S)
     assert offered, "the name is still offered where a topic is chosen"
     title = next(name.strip() for name in offered if name.strip().endswith("…"))
     # and the cut respects a word: the character AFTER the stem, in the

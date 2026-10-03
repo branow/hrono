@@ -14,11 +14,11 @@ subtrees stacked read as one over the other rather than as siblings (#199). So
 siblings stay on one level and the canvas gets as wide as the tree needs; the
 page makes it a board the reader moves around instead.
 
-Each topic is labelled by WHERE its sections live (`server/where.py`) rather
-than by its brief's first line: on a tree summarised by a weak model every
-brief opens with the same clause, and twenty-six identical labels are not a
-map. The brief-derived name stays as the secondary identity, on hover and on
-the topic page.
+Each topic is labelled by its NAME (`hrono.naming`, the rule the export and
+every other page use), with where its sections live (`server/where.py`) on the
+line beneath (#212). Where-it-lives was the label until then, and the review
+tree had four siblings called ``src/click`` — the one thing siblings share. A
+title two siblings share carries the topic's number, so no two read alike.
 
 The expand state is a QUERY PARAMETER rather than client state, which is what
 makes every view of the graph a URL: bookmarkable, shareable, and testable as
@@ -31,16 +31,17 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from hrono import naming
 from hrono.server import where as where_module
 from hrono.summarize import briefs
 
 # A topic's own footprint: one cell wide, with its circle at the top and its
 # two lines of text centred under it.
-SLOT = 150
+SLOT = 170
 # Vertical room a topic's own furniture needs below the top of its cell: the
-# circle, its name, its count. A topic that can be opened carries a chevron
-# under those.
-NODE_HEIGHT = 68
+# circle, its name, where it lives, its count. A topic that can be opened
+# carries a chevron under those.
+NODE_HEIGHT = 86
 CHEVRON = 18
 # Between a parent's furniture and its children.
 DROP = 30
@@ -50,8 +51,8 @@ TOP = 10
 BOTTOM = 8
 # A label must fit inside its slot or it collides with its neighbour's and is
 # cut by the canvas edge. The label font is 11.5px mono, ~6.9px a character,
-# so 18 of them fit a 150px slot with a gutter to spare.
-LABEL_CHARS = 18
+# so 21 of them fit a 170px slot with a gutter to spare.
+LABEL_CHARS = 21
 LABEL_CHAR = 6.9
 LABEL_WIDTH = LABEL_CHARS * LABEL_CHAR
 # The brief-derived name is only ever read in a tooltip, where a long line
@@ -69,8 +70,10 @@ class Node:
 
     id: int
     level: int
-    where: str  # the directory its sections live in — its primary identity
-    label: str  # `where`, cut to fit its slot
+    name: str  # what it is called: `hrono.naming`, the same everywhere
+    label: str  # `name`, cut to fit its slot
+    where: str  # the directory its sections live in
+    place: str  # `where`, cut to fit its slot
     spread: str  # the shares behind a label that had to name two places
     title: str  # what its brief calls it, for the tooltip and the topic page
     holds: int  # members for a leaf, children for an upper topic
@@ -121,7 +124,12 @@ def build(conn: sqlite3.Connection, tree: str, opened: Sequence[int]) -> Graph:
     roots = _roots(rows, children)
     visible = _visible(roots, children, set(opened))
     return _lay_out(
-        rows, children, visible, set(opened), where_module.describe(conn, tree)
+        rows,
+        children,
+        visible,
+        set(opened),
+        where_module.describe(conn, tree),
+        naming.names(conn, visible),
     )
 
 
@@ -220,6 +228,7 @@ def _lay_out(
     visible: Sequence[int],
     opened: set[int],
     wheres: dict[int, where_module.Where],
+    called: dict[int, str],
 ) -> Graph:
     """A block per topic: its own cell, then its children in ONE row beneath.
 
@@ -233,6 +242,7 @@ def _lay_out(
         for node in visible
     }
     holds = {node: _holds(rows[node]) for node in visible}
+    shown_as = _labels(visible, drawn_kids, called)
     biggest = max(holds.values(), default=1) or 1
     radii = {node: _radius(holds[node], biggest) for node in visible}
     tall = {node: _own_height(bool(children.get(node))) for node in visible}
@@ -245,9 +255,10 @@ def _lay_out(
         Node(
             id=node,
             level=int(rows[node]["level"]),
+            name=called.get(node, f"topic {node}"),
+            label=shown_as[node],
             where=wheres.get(node, blank).label,
-            label=_fitted_where(wheres.get(node, blank).label)
-            or f"topic {node}",
+            place=_fitted_where(wheres.get(node, blank).label),
             spread=wheres.get(node, blank).spread,
             title=_title(rows[node], node),
             holds=holds[node],
@@ -479,6 +490,53 @@ def _title(row: sqlite3.Row, node: int) -> str:
     if row["brief"]:
         return _fitted(str(row["brief"]).strip().splitlines()[0], TITLE_CHARS)
     return f"topic {node}"
+
+
+def _labels(
+    visible: Sequence[int],
+    drawn_kids: dict[int, list[int]],
+    called: dict[int, str],
+) -> dict[int, str]:
+    """Each topic's label, still told apart from its siblings once CUT.
+
+    Two names can differ only past the slot's width ("Handles the parser and
+    its tests" / "...and its errors"); cut, they would read the same, so a cut
+    that collides takes the topic's number as well.
+    """
+    hung = {kid for kids in drawn_kids.values() for kid in kids}
+    families = [kids for kids in drawn_kids.values() if kids]
+    families.append([node for node in visible if node not in hung])
+    labels: dict[int, str] = {}
+    for family in families:
+        cut = {
+            node: fitted_name(called.get(node, f"topic {node}"))
+            for node in family
+        }
+        seen: dict[str, int] = {}
+        for label in cut.values():
+            seen[label] = seen.get(label, 0) + 1
+        for node in family:
+            name = called.get(node, f"topic {node}")
+            clash = seen[cut[node]] > 1 and " (#" not in name
+            labels[node] = (
+                fitted_name(f"{name} (#{node})") if clash else cut[node]
+            )
+    return labels
+
+
+def fitted_name(name: str) -> str:
+    """Cut a name to its slot, never cutting off what tells it apart.
+
+    ``naming`` ends a shared title with the topic's number; a cut that took
+    the number with it would put two identical labels back side by side.
+    """
+    if len(name) <= LABEL_CHARS:
+        return name
+    title, mark, number = name.rpartition(" (#")
+    if not mark:
+        return _fitted(name, LABEL_CHARS)
+    tail = f" (#{number}"
+    return _fitted(title, LABEL_CHARS - len(tail)) + tail
 
 
 def _fitted_where(place: str) -> str:

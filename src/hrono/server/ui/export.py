@@ -26,7 +26,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from hrono.export.collapse import WIDTH
 from hrono.export.produce import Export, produce
-from hrono.export.render import heading
+from hrono.naming import name
 from hrono.server import prose
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.summarize import briefs
@@ -124,7 +124,7 @@ def _flagged(
     ).fetchall()
     return [
         {
-            "title": heading(conn, int(row["id"])),
+            "title": name(conn, int(row["id"])),
             "why": "no brief"
             if row["has"] is None
             else briefs.refusal(row["flagged"], row["text"]),

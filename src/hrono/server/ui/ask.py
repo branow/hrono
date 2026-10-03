@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from hrono.embed.runner import EmbedError
 from hrono.errors import Unavailable
-from hrono.export.render import heading
+from hrono.naming import name, names
 from hrono.recall.ask import ask
 from hrono.recall.engine import Hit
 from hrono.server.ui import Reader, _trees, router, templates
@@ -115,7 +115,7 @@ def _shown(conn: sqlite3.Connection, tree: str, hit: Hit) -> dict[str, object]:
         "topic": None
         if hit.topic is None
         else {
-            "title": heading(conn, hit.topic),
+            "title": name(conn, hit.topic),
             "link": f"/ui/trees/{tree}/nodes/{hit.topic}?tree={tree}",
         },
     }
@@ -130,9 +130,10 @@ def _explore(conn: sqlite3.Connection, tree: str) -> list[dict[str, str]]:
         "(SELECT MAX(level) FROM nodes WHERE tree = ?) ORDER BY c.child_id",
         (tree, tree),
     ).fetchall()
+    called = names(conn, [int(row["id"]) for row in rows])
     return [
         {
-            "title": heading(conn, int(row["id"])),
+            "title": called[int(row["id"])],
             "link": f"/ui/trees/{tree}/nodes/{row['id']}?tree={tree}",
         }
         for row in rows

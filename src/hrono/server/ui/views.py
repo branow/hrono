@@ -15,7 +15,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
 from hrono.db import update_log
-from hrono.server import graph, overlays, panel, triage
+from hrono.server import graph, labels, overlays, panel, triage
 from hrono.server.ui import Reader, _trees, router, templates
 
 _LIVE = frozenset({"pending", "running", "partial"})
@@ -264,7 +264,7 @@ def _tall_enough(height: float, links: list[dict[str, object]]) -> float:
     it was drawn in, and every arc and every label was cut off at the bottom
     edge (#200). The board is a scrolling box; it can simply be taller.
     """
-    lowest = max((float(link["y"]) for link in links), default=0.0)
+    lowest = max((float(link["low"]) for link in links), default=0.0)
     return max(height, lowest + MARGIN)
 
 
@@ -363,31 +363,50 @@ def _drawn_links(
     overlay: overlays.Overlay, drawn: graph.Graph
 ) -> list[dict[str, object]]:
     """Give each link the path that joins the topics it is about, and a place
-    to say what it found.
+    to say what it found where no other words are (#212).
 
     A link whose end is not on the page is dropped rather than drawn to
     nowhere: the overlay describes what is DRAWN, and `?open=` decides that.
+    Each label is placed in turn against every topic's furniture and every
+    label already placed, so none is printed over another.
     """
-    placed = {node.id: (node.x, node.y) for node in drawn.nodes}
+    nodes = {node.id: node for node in drawn.nodes}
     here = [
-        (link, placed[link.source], placed[link.target])
+        (link, nodes[link.source], nodes[link.target])
         for link in overlay.links
-        if link.source in placed and link.target in placed
+        if link.source in nodes and link.target in nodes
     ]
-    lanes = _lanes(here)
+    lanes = _lanes([(link, (a.x, a.y), (b.x, b.y)) for link, a, b in here])
+    taken = list(topic_boxes(drawn))
+    placed: list[dict[str, object]] = []
+    for link, start, end in here:
+        shape = _drawn(link, start, end, lanes.get(id(link), 0), taken)
+        taken.append(shape.pop("box"))  # type: ignore[arg-type]
+        placed.append(shape)
+    return placed
+
+
+def topic_boxes(drawn: graph.Graph) -> list[labels.Box]:
+    """Every box the topics themselves draw: circles, lines, chevrons."""
     return [
-        _drawn(link, start, end, lanes.get(id(link), 0))
-        for link, start, end in here
+        box
+        for node in drawn.nodes
+        for box in labels.topic(
+            node.x,
+            node.y,
+            node.radius,
+            (node.label, node.place, f"{node.holds} {node.holds_what}"),
+            node.has_children,
+        )
     ]
 
 
-# How a same-row link bows away from the row. The floor is what matters: the
-# arc has to clear BOTH lines of text under a topic (the name and the counts,
-# ~45px down), or the overlay's own label lands on top of them. Links that
-# overlap each other step down a lane at a time so no two labels share a spot.
-BOW_FLOOR = 130.0
-LANE = 54.0
-BOW_CAP = 420.0
+# How a same-row link bows away from the row, below the furniture it leaves
+# from. Links that overlap each other step down a lane at a time so their
+# curves do not coincide; `labels.place` keeps their words apart.
+BOW_FLOOR = 40.0
+LANE = 36.0
+BOW_CAP = 360.0
 
 
 def _lanes(
@@ -396,9 +415,9 @@ def _lanes(
     """How deep each same-row arc goes, so overlapping ones do not coincide.
 
     Three arcs over adjacent siblings all span the same distance, so at one
-    depth their apexes — and the labels sitting on them — land on top of each
-    other and read as one run-on string (#200). Greedy interval colouring: an
-    arc takes the shallowest lane no arc it OVERLAPS is already using.
+    depth their apexes land on top of each other (#200). Greedy interval
+    colouring: an arc takes the shallowest lane no arc it OVERLAPS is already
+    using.
     """
     spans = sorted(
         (
@@ -425,44 +444,56 @@ def _lanes(
 
 def _drawn(
     link: overlays.Link,
-    start: tuple[float, float],
-    end: tuple[float, float],
+    start: graph.Node,
+    end: graph.Node,
     lane: int,
+    taken: list[labels.Box],
 ) -> dict[str, object]:
-    """One overlay link: its path, and where its label sits ON that path.
+    """One overlay link: its path, and a clear spot ON that path for its label.
 
-    Siblings sit on one row, so a straight line between two of them runs
-    THROUGH every topic in between: a reader sees a horizontal rule crossing
-    five circles and cannot tell which two it is about (#200). An arc leaves
-    the row, so both ends are visible and the pair is unambiguous — and the
-    label goes at the arc's own apex rather than at a fixed offset, which is
-    what kept putting it over a topic's section count.
+    A same-row link leaves each topic BELOW its furniture — its name, where it
+    lives, its count — and bows further down, so the curve never runs through
+    a topic's words (#212); a link between levels runs from under the upper
+    topic's furniture to the top of the lower one's circle. The label tries
+    points along the path, middle first.
     """
-    (x1, y1), (x2, y2) = start, end
-    middle = (x1 + x2) / 2
-    if abs(y1 - y2) > 1:
-        # already travels between levels: a straight line crosses nothing
-        return _link(link, f"M{x1},{y1} L{x2},{y2}", middle, (y1 + y2) / 2)
-    bow = min(BOW_FLOOR + lane * LANE, BOW_CAP)
-    return _link(
-        link,
-        f"M{x1},{y1} Q{middle},{y1 + bow} {x2},{y2}",
-        middle,
-        # the apex of a quadratic sits HALF way to its control point
-        y1 + bow / 2,
-    )
-
-
-def _link(
-    link: overlays.Link, path: str, x: float, y: float
-) -> dict[str, object]:
+    if abs(start.y - end.y) > 1:
+        upper, lower = (start, end) if start.y < end.y else (end, start)
+        x1 = upper.x
+        y1 = labels.furniture_end(upper.y, upper.radius, upper.has_children)
+        x2, y2 = lower.x, lower.y - lower.radius
+        path = f"M{x1},{y1} L{x2},{y2}"
+        points = [(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t) for t in _ALONG]
+        low = max(y1, y2)
+    else:
+        y1 = labels.furniture_end(start.y, start.radius, start.has_children)
+        y2 = labels.furniture_end(end.y, end.radius, end.has_children)
+        x1, x2 = start.x, end.x
+        bow = min(BOW_FLOOR + lane * LANE, BOW_CAP)
+        cx, cy = (x1 + x2) / 2, max(y1, y2) + bow
+        path = f"M{x1},{y1} Q{cx},{cy} {x2},{y2}"
+        points = [
+            (
+                (1 - t) ** 2 * x1 + 2 * t * (1 - t) * cx + t * t * x2,
+                (1 - t) ** 2 * y1 + 2 * t * (1 - t) * cy + t * t * y2 + 4,
+            )
+            for t in _ALONG
+        ]
+        low = (max(y1, y2) + cy) / 2  # the deepest point of the curve
+    x, y, box = labels.place(points, link.label, taken)
     return {
         "kind": link.kind,
         "label": link.label,
         "d": path,
         "x": round(x, 1),
         "y": round(y, 1),
+        "low": round(max(low, box.bottom), 1),
+        "box": box,
     }
+
+
+# Where on its path a label is tried, middle first.
+_ALONG = (0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8)
 
 
 def _edge_toggles(
@@ -531,8 +562,10 @@ def _with_toggle(
     focus = "" if node_id == focused else str(node_id)
     return {
         "id": node_id,
-        "where": node.where,  # type: ignore[attr-defined]
+        "name": node.name,  # type: ignore[attr-defined]
         "label": node.label,  # type: ignore[attr-defined]
+        "where": node.where,  # type: ignore[attr-defined]
+        "place": node.place,  # type: ignore[attr-defined]
         "spread": node.spread,  # type: ignore[attr-defined]
         "title": node.title,  # type: ignore[attr-defined]
         "holds": node.holds,  # type: ignore[attr-defined]

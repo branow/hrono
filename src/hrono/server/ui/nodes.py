@@ -14,7 +14,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, ValidationError
 
-from hrono import edits, notes, pins
+from hrono import edits, naming, notes, pins
 from hrono.embed.model import resolve_embedding_model
 from hrono.errors import AppError, DomainError, NotFound
 from hrono.server import where
@@ -158,9 +158,16 @@ def _candidates(
         # the NAME only, blank when a topic has none: the row prints the id
         # itself, and a fallback title of "topic 28" beside it read as
         # "topic 28 - topic 28"
+        rows = conn.execute(  # type: ignore[attr-defined]
+            "SELECT n.id AS id FROM nodes n WHERE n.tree = ? AND n.level = ? "
+            "AND n.id != ?",
+            (tree, wanted, node_id),
+        ).fetchall()
+        called = naming.names(conn, [int(row["id"]) for row in rows])  # type: ignore[arg-type]
         return [
             {
                 "id": int(row["id"]),
+                "name": called[int(row["id"])],
                 "title": str(row["title"] or _first_line(row["brief"])),
                 "where": wheres.get(int(row["id"]), ""),
                 "holds": int(row["members"]) or int(row["kids"]),
@@ -319,9 +326,20 @@ def _node(
     parent = conn.execute(  # type: ignore[attr-defined]
         "SELECT parent_id FROM node_children WHERE child_id = ?", (node_id,)
     ).fetchone()
+    kids = naming.names(  # type: ignore[arg-type]
+        conn,
+        [
+            int(r["child_id"])
+            for r in conn.execute(  # type: ignore[attr-defined]
+                "SELECT child_id FROM node_children WHERE parent_id = ?",
+                (node_id,),
+            ).fetchall()
+        ],
+    )
     children = [
         {
             "id": int(child["child_id"]),
+            "name": kids[int(child["child_id"])],
             "where": wheres.get(int(child["child_id"]), ""),
             # its own name, else the first line of its brief, else its number —
             # the same ladder `_titled` walks, so the list reads like the map
@@ -346,6 +364,7 @@ def _node(
     return {
         "id": node_id,
         "level": int(row["level"]),
+        "name": naming.name(conn, node_id),  # type: ignore[arg-type]
         "where": wheres.get(node_id, ""),
         "title": row["title"] or _titled(brief, node_id),
         "named": bool(row["title"]),
@@ -384,6 +403,7 @@ def _parent(
     ).fetchone()
     return {
         "id": parent_id,
+        "name": naming.name(conn, parent_id),  # type: ignore[arg-type]
         "where": wheres.get(parent_id, ""),
         "title": _titled_row(named, parent_id),
     }

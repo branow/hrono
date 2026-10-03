@@ -26,6 +26,7 @@ from collections.abc import Mapping
 
 from hrono.export.collapse import ExportTree
 from hrono.ingest.store import get_content
+from hrono.naming import heading, names, sentence, slug
 from hrono.summarize import briefs
 
 
@@ -71,7 +72,11 @@ def _node_markdown(
     if node.children:
         parts.append("## Children\n")
         parts.append(
-            "\n".join(_child_entry(conn, child) for child in node.children)
+            "\n".join(
+                _child_entry(conn, child, called[child])
+                for called in [names(conn, node.children)]
+                for child in node.children
+            )
         )
     elif node.sections:
         parts.append("## Sections\n")
@@ -91,14 +96,14 @@ def _node_markdown(
     return "\n\n".join(parts) + "\n"
 
 
-def _child_entry(conn: sqlite3.Connection, child: int) -> str:
+def _child_entry(conn: sqlite3.Connection, child: int, title: str) -> str:
     """One line on an index page: title, link, and what the child holds.
 
     The summary is there so an agent can choose a branch WITHOUT opening it
     (#204); a wider page is only affordable if each entry says enough to skip
     the ones that do not matter.
     """
-    link = f"- [{heading(conn, child)}]({_name(conn, child)}/brief.md)"
+    link = f"- [{title}]({_name(conn, child)}/brief.md)"
     summary = _summary(conn, child)
     return f"{link} — {summary}" if summary else link
 
@@ -111,9 +116,9 @@ def _summary(conn: sqlite3.Connection, node_id: int) -> str:
         for line in _brief_text(conn, node_id).splitlines()
         if line.strip() and not line.lstrip().startswith(_NOT_PROSE)
     )
-    for sentence in re.split(r"(?<=[.!?])\s+", prose):
-        if sentence and not sentence.startswith(title):
-            return _sentence(sentence, _SUMMARY_CHARS)
+    for said in re.split(r"(?<=[.!?])\s+", prose):
+        if said and not said.startswith(title.removesuffix("…")):
+            return sentence(said, _SUMMARY_CHARS)
     return ""
 
 
@@ -192,58 +197,11 @@ def _brief_text(conn: sqlite3.Connection, node_id: int) -> str:
     return row["text"] if row is not None else ""
 
 
-def _stored_title(conn: sqlite3.Connection, node_id: int) -> str | None:
-    row = conn.execute(
-        "SELECT title FROM nodes WHERE id = ?", (node_id,)
-    ).fetchone()
-    if row is None:
-        return None
-    title = row["title"]
-    return str(title).strip() or None if title else None
-
-
-def heading(conn: sqlite3.Connection, node_id: int) -> str:
-    """A short title for a node: the operator's if they named it (#156).
-
-    A stored title wins outright. Deriving one from the brief is the default,
-    not the rule, and a human who renamed a topic has said something the model
-    cannot: what the topic is FOR in this organisation.
-
-    The brief's SHAPE used to leak into navigation (#103): a brief opening with
-    a generic ``## Summary`` heading named its export directory ``summary-2``,
-    and one opening with a paragraph made the whole paragraph a link title. The
-    brief is not at fault for either — a heading is a reasonable way to start a
-    summary — so the fix is here rather than a shape rule that would retry and
-    flag a perfectly good brief. A boilerplate heading is skipped, markdown
-    emphasis is dropped, and only the first sentence is kept.
-    """
-    stored = _stored_title(conn, node_id)
-    if stored:
-        return stored
-    for line in _brief_text(conn, node_id).strip().splitlines():
-        title = _title(line)
-        if title and _slug(title) not in _BOILERPLATE:
-            return title
-    return f"node {node_id}"
-
-
-def _title(line: str) -> str:
-    return _sentence(line, _TITLE_CHARS)
-
-
-def _sentence(line: str, limit: int) -> str:
-    text = _EMPHASIS.sub("", line.lstrip("#").strip())
-    sentence = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0].strip()
-    if len(sentence) <= limit:
-        return sentence
-    return sentence[:limit].rsplit(" ", 1)[0].rstrip()  # whole words
-
-
 def _name(conn: sqlite3.Connection, node_id: int) -> str:
     # append the node id so sibling briefs with the same heading (LLM briefs
     # readily repeat "Overview" etc.) never collide onto one directory and drop
     # a subtree — the same collision-safety sections already have.
-    return f"{_slug(heading(conn, node_id)) or 'node'}-{node_id}"
+    return f"{slug(heading(conn, node_id)) or 'node'}-{node_id}"
 
 
 def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
@@ -254,28 +212,9 @@ def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
 
 
 def _section_name(conn: sqlite3.Connection, section_id: int) -> str:
-    return f"{_slug(_section_heading(conn, section_id))}-{section_id}"
+    return f"{slug(_section_heading(conn, section_id))}-{section_id}"
 
 
-_TITLE_CHARS = 80
 _SUMMARY_CHARS = 160
 _NOT_PROSE = ("#", "-", "*", "|", ">", "```")
 _EMPHASIS = re.compile(r"[*_`]+")
-_BOILERPLATE = frozenset(
-    {
-        "summary",
-        "overview",
-        "brief",
-        "introduction",
-        "intro",
-        "description",
-        "topic",
-        "abstract",
-        "contents",
-        "notes",
-    }
-)
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
