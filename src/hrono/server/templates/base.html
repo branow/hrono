@@ -160,12 +160,15 @@ code, pre, .mono { font-family: var(--mono); font-size: .8125rem; }
   cursor: help; vertical-align: .05rem;
 }
 .tip:hover, .tip:focus-visible { color: var(--accent); border-color: var(--accent); }
-[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute; z-index: 40;
-  bottom: calc(100% + .45rem); left: 50%;
-  transform: translateX(-50%);
-  width: max-content; max-width: 18rem;
+/* One floating box, placed by script (see the end of this file) rather than a
+   pseudo-element on the mark. A pseudo-element hangs off whichever side of its
+   mark has the most room for it, which is how a hint covered the figure it
+   explained and how the theme button's hint made every page 4px too wide: a
+   hidden box still counts toward the scrollable area. This one is fixed to the
+   viewport, below the mark unless that has no room, and clamped inside. */
+#tipbox {
+  position: fixed; z-index: 40; top: 0; left: 0;
+  width: max-content; max-width: min(18rem, calc(100vw - 1rem));
   padding: var(--s2) var(--s3);
   background: var(--ink); color: var(--bg);
   border-radius: var(--r2);
@@ -173,38 +176,9 @@ code, pre, .mono { font-family: var(--mono); font-size: .8125rem; }
   font: 400 .78125rem/1.45 var(--sans);
   text-align: left; text-transform: none; letter-spacing: 0;
   white-space: normal;
-  opacity: 0; visibility: hidden;
-  transition: opacity .1s;
+  pointer-events: none;
 }
-/* the nose, so the tooltip points at what it explains */
-[data-tip]::before {
-  content: ""; position: absolute; z-index: 41;
-  bottom: calc(100% + .2rem); left: 50%;
-  margin-left: -.25rem;
-  border: .25rem solid transparent;
-  border-top-color: var(--ink);
-  opacity: 0; visibility: hidden;
-  transition: opacity .1s;
-}
-[data-tip]:hover::after, [data-tip]:focus-visible::after,
-[data-tip]:hover::before, [data-tip]:focus-visible::before { opacity: 1; visibility: visible; }
-/* anything that carries one needs to be the origin its tooltip is placed against */
-[data-tip] { position: relative; }
-/* against the right edge a centred tooltip would hang off the page */
-[data-tip].left::after { left: auto; right: -.4rem; transform: none; }
-[data-tip].left::before { left: auto; right: .1rem; margin-left: 0; }
-/* UNDER the mark instead of over it. The map is `overflow: hidden` so that a
-   board wider than the window scrolls inside itself rather than stretching
-   the page — which also clips anything drawn above the controls floating at
-   its top edge, and the overlay toggles' own explanations were the one thing
-   there to draw. They now open downwards, into the board. */
-[data-tip-below]::after {
-  bottom: auto; top: calc(100% + .45rem);
-}
-[data-tip-below]::before {
-  bottom: auto; top: calc(100% + .2rem);
-  border-top-color: transparent; border-bottom-color: var(--ink);
-}
+#tipbox[hidden] { display: none; }
 
 details.reveal { border-top: 1px solid var(--rule); padding-top: var(--s3); }
 details.reveal > summary {
@@ -803,7 +777,7 @@ dl.facts dt {
   color: var(--ink-faint); white-space: nowrap;
 }
 dl.facts dd { margin: 0; min-width: 0; font-size: .8125rem; overflow-wrap: anywhere; }
-dl.facts dd .chip { margin-left: .25rem; }
+dl.facts dd .chip { margin-left: .25rem; white-space: normal; }
 ul.held { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; }
 
 /* what a section SAYS, which is the reason the row opens at all */
@@ -1362,19 +1336,24 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 .mb-4 { margin-bottom: var(--s4); }
 .indent { padding-left: 1.4rem; }
 
+/* Eight controls do not fit one row below this. The tabs take a row of their
+   own and scroll inside it, so the bar breaks in one place on purpose rather
+   than wherever flex-wrap runs out of room and strands the account block. */
+@media (max-width: 64rem) {
+  .topbar { padding: var(--s2) var(--s4); row-gap: 0; }
+  .who { margin-left: auto; border-left: 0; padding-left: 0; }
+  .tabs {
+    order: 3; flex: 0 0 100%; margin-left: 0; flex-wrap: nowrap;
+    overflow-x: auto; scrollbar-width: thin;
+  }
+}
 @media (max-width: 720px) {
   main { padding: var(--s4) var(--s4) var(--s6); }
-  .topbar { padding: var(--s2) var(--s4); }
-  .tabs { margin-left: 0; order: 3; width: 100%; }
-  .who { margin-left: auto; }
 }
 </style>
 </head>
 <body>
 {% set here = request.url.path %}
-{% macro tab(href, label, current) -%}
-<a class="tab" href="{{ href }}"{% if current %} aria-current="page"{% endif %}>{{ label }}</a>
-{%- endmacro %}
 {% block chrome %}
 <header class="topbar">
   <a class="brand" href="/ui?tree={{ tree }}">
@@ -1408,15 +1387,9 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     </ul>
   </details>
   <nav class="tabs" aria-label="sections">
-    {{ tab("/ui?tree=" ~ tree, "Overview", here == "/ui") }}
-    {{ tab("/ui/trees/" ~ tree ~ "/triage?tree=" ~ tree, "Needs attention", here.endswith("/triage")) }}
-    {{ tab("/ui/trees/" ~ tree ~ "/graph?tree=" ~ tree, "Map", here.endswith("/graph") or "/nodes/" in here) }}
-    {{ tab("/ui/trees/" ~ tree ~ "/ask?tree=" ~ tree, "Ask", here.endswith("/ask")) }}
-    {{ tab("/ui/trees/" ~ tree ~ "/activity?tree=" ~ tree, "Activity", here.endswith("/activity")) }}
-    {{ tab("/ui/jobs?tree=" ~ tree, "Runs", here == "/ui/jobs") }}
-    {{ tab("/ui/trees/" ~ tree ~ "/export?tree=" ~ tree, "Export", here.endswith("/export")) }}
-    {{ tab("/ui/config?tree=" ~ tree, "Settings", here == "/ui/config") }}
-    {{ tab("/ui/guide?tree=" ~ tree, "Guide", here == "/ui/guide") }}
+    {% for item in tabs(here, tree) %}
+    <a class="tab" href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>
+    {% endfor %}
   </nav>
   <div class="who">
     <span class="name">{{ user.name }}</span>
@@ -1443,5 +1416,31 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 </header>
 {% endblock %}
 <main{% if full_bleed %} class="bleed"{% endif %}>{% block main %}{% endblock %}</main>
+<div id="tipbox" role="tooltip" hidden></div>
+<script>
+(() => {
+  const box = document.getElementById("tipbox");
+  const gap = 6, edge = 8;
+  const show = (mark) => {
+    box.textContent = mark.dataset.tip;
+    box.hidden = false;
+    const at = mark.getBoundingClientRect();
+    const size = box.getBoundingClientRect();
+    const wide = document.documentElement.clientWidth;
+    const left = Math.max(edge, Math.min(at.left + at.width / 2 - size.width / 2, wide - size.width - edge));
+    const room = window.innerHeight - at.bottom - gap - edge;
+    const below = room >= size.height || at.top - gap - edge < size.height;
+    box.style.left = left + "px";
+    box.style.top = (below ? at.bottom + gap : at.top - gap - size.height) + "px";
+  };
+  const mark = (event) => event.target.closest && event.target.closest("[data-tip]");
+  document.addEventListener("pointerover", (e) => { const m = mark(e); if (m) show(m); });
+  document.addEventListener("focusin", (e) => { const m = mark(e); if (m) show(m); });
+  const hide = (e) => { if (mark(e)) box.hidden = true; };
+  document.addEventListener("pointerout", hide);
+  document.addEventListener("focusout", hide);
+  document.addEventListener("scroll", () => { box.hidden = true; }, true);
+})();
+</script>
 </body>
 </html>

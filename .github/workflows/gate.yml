@@ -36,6 +36,12 @@ jobs:
       - name: Sync the locked environment
         run: uv sync --locked
 
+      # The layout tests (tests/server/test_ui_browser.py) drive a real
+      # Chromium. Without one they skip locally and FAIL here, where a skip
+      # would let the overflow they guard come back unseen (#215).
+      - name: Install the browser
+        run: uv run playwright install --with-deps chromium
+
       - name: Format
         run: uv run ruff format --check .
 

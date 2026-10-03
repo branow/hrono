@@ -18,6 +18,7 @@ and the shared dependencies.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import parse_qs, urlencode
@@ -139,10 +140,58 @@ def switch(here: str, tree: str, to: str) -> str:
     return f"{rebased}?tree={to}"
 
 
+# One row per page a person can navigate to: its key, its label, where it
+# lives, and the paths that are "inside" it. A run's page belongs to Runs, a
+# topic's page to no tab at all, so it gets a transient one of its own rather
+# than lighting up Map for a page that is not the map. Data, so the nav and the
+# current-page mark cannot disagree about which pages exist (#215).
+TABS: tuple[tuple[str, str, str, str], ...] = (
+    ("home", "Home", "/ui", r"/ui"),
+    ("map", "Map", "/ui/trees/{tree}/graph", r"/ui/trees/[^/]+/graph"),
+    ("ask", "Ask", "/ui/trees/{tree}/ask", r"/ui/trees/[^/]+/ask"),
+    (
+        "runs",
+        "Runs",
+        "/ui/jobs",
+        r"/ui/jobs(/.*)?|/ui/trees/[^/]+/activity",
+    ),
+    (
+        "health",
+        "Health",
+        "/ui/trees/{tree}/triage",
+        r"/ui/trees/[^/]+/triage",
+    ),
+    ("export", "Export", "/ui/trees/{tree}/export", r"/ui/trees/[^/]+/export"),
+    ("settings", "Settings", "/ui/config", r"/ui/config(/.*)?"),
+    ("guide", "Guide", "/ui/guide", r"/ui/guide"),
+)
+TOPIC_PAGE = r"/ui/trees/[^/]+/nodes/\d+"
+
+
+def tabs(here: str, tree: str) -> list[dict[str, object]]:
+    """The navigation: every tab, the current one marked, and a topic's own."""
+    path = here.rstrip("/") or "/ui"
+    rows = [
+        {
+            "label": label,
+            "href": f"{href.format(tree=tree)}?tree={tree}",
+            "current": re.fullmatch(inside, path) is not None,
+        }
+        for _, label, href, inside in TABS
+    ]
+    if re.fullmatch(TOPIC_PAGE, path):
+        rows.insert(
+            2,
+            {"label": "Topic", "href": here + f"?tree={tree}", "current": True},
+        )
+    return rows
+
+
 # The tree switcher rewrites the current path per tree, which is routing, not
 # markup — so it is a function the template calls rather than a chain of Jinja
 # string operations.
 templates.env.globals["switch"] = switch
+templates.env.globals["tabs"] = tabs
 # Read from the request in the template rather than threaded through a dozen
 # route context dicts: the theme is chrome, and every page has the same answer.
 templates.env.globals["chosen_theme"] = chosen_theme

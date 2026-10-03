@@ -324,14 +324,17 @@ def test_the_page_carries_the_rule_that_draws_a_hint(
 ) -> None:
     """The mark and its text are useless if nothing renders them.
 
-    `content: attr(data-tip)` is what turns the attribute into something a
-    person sees; without it every hint is in the markup and on screen nowhere.
+    The box and the script that fills it from `data-tip` are what turn the
+    attribute into something a person sees; without them every hint is in the
+    markup and on screen nowhere. Where it lands is measured in a real browser
+    (`test_ui_browser.py`).
     """
     browser.sign_in()
 
     page = browser.page("/ui").text  # type: ignore[attr-defined]
 
-    assert "content: attr(data-tip)" in page
+    assert 'id="tipbox"' in page
+    assert "dataset.tip" in page
 
 
 def test_the_theme_choice_survives_without_javascript(
