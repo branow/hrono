@@ -19,15 +19,15 @@ of one node IS the root; a level too sparse to cluster raises ``ClusterError``
 near the root and stops (declaring the current top the root); a level that fails
 to REDUCE the node count is discarded and stops; and depth is hard-capped at
 ``D_MAX`` (clustering-lifecycle.md). Deterministic under the fixed clustering
-seed.
+seed, except over tied points (``cluster.build``: a level of identical briefs).
 
 ONLY ``TooFewPoints`` stops the climb (#131). It used to catch ``ClusterError``
 broadly, and ``build_clusters`` raises that when the reduction fails, when the
-clusterer fails, when it produces no clusters and when the backend is not
-installed — so a BROKEN backend at any level was read as "the current top is the
-root" and produced a TRUNCATED tree reported as success. #112 hit the same
-defect one level down and created the type that tells the two apart: a ladder
-that declines to reduce is not a failure, and everything else is.
+clusterer fails and when the backend is not installed — so a BROKEN backend at
+any level was read as "the current top is the root" and produced a TRUNCATED
+tree reported as success. #112 hit the same defect one level down and created
+the type that tells the two apart: a ladder that declines to reduce is not a
+failure, and everything else is.
 """
 
 from __future__ import annotations

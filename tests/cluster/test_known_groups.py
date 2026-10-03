@@ -63,7 +63,7 @@ def test_teeth_recovery_collapses_without_umap() -> None:
 
 def test_teeth_recovery_collapses_with_wrong_min_cluster_size() -> None:
     # A min_cluster_size larger than any planted group leaves every point as
-    # noise -> no clusters -> recovery 0.0, far below threshold.
+    # noise -> one topic -> recovery 0.0, far below threshold.
     vectors, truth = planted_groups()
     broken = build_recovery(vectors, truth, cluster=leaf_clusterer(60))
     assert broken < RECOVERY_THRESHOLD

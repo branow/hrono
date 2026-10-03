@@ -2,11 +2,13 @@ import hashlib
 import json
 from collections.abc import Iterator
 
+import numpy as np
 import pytest
 
 from hrono import pins
 from hrono.cluster import monitor, repair
 from hrono.cluster import store as cluster_store
+from hrono.cluster.build import core_labels
 from hrono.cluster.levels import (
     _sole_ancestor,
     attach_orphans,
@@ -25,15 +27,16 @@ from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 
 DIMS = 16
+STRUCTURELESS_DIMS = 384
 
 
-def register_embedding_model(conn: object) -> None:
+def register_embedding_model(conn: object, dims: int = DIMS) -> None:
     body = {
         "name": "emb",
         "kind": "embedding",
         "connection": None,
         "model": "fake/model",
-        "params": {"dims": DIMS, "batch_size": 8},
+        "params": {"dims": dims, "batch_size": 8},
     }
     registry_store.insert(conn, "models", "emb", json.dumps(body), None, "t")  # type: ignore[arg-type]
 
@@ -813,3 +816,56 @@ def test_an_orphan_above_level_zero_is_collected(
             "SELECT parent_id FROM node_children WHERE child_id = ?", (orphan,)
         ).fetchone()
     assert int(row["parent_id"]) == top
+
+
+def structureless_encoder_for(texts: list[str]):
+    """Each brief text, in level order, gets one row of a bank with no
+    density anywhere (the order matters: UMAP's layout depends on it)."""
+    points = np.random.default_rng(0).normal(
+        size=(len(texts), STRUCTURELESS_DIMS)
+    )
+    bank = dict(zip(texts, points.tolist(), strict=True))
+
+    def build(model_id: str):
+        def encode(batch: list[str]) -> list[list[float]]:
+            return [bank[text] for text in batch]
+
+        return encode
+
+    return build, points
+
+
+def test_a_level_with_no_density_becomes_one_parent(tmp_path: object) -> None:
+    # E003 / #198: the run that failed was this op, over a level the real
+    # clusterer labelled entirely noise. It now forms one parent holding every
+    # node — which build_tree then reads as the root — instead of failing.
+    database = Database.at(tmp_path / "hrono.db")  # type: ignore[operator]
+    with database.connect() as conn, conn:
+        register_embedding_model(conn, dims=STRUCTURELESS_DIMS)
+        nodes = build_level0(conn, per_group=15)
+    encoder_for, points = structureless_encoder_for(list(nodes_texts(nodes)))
+    units = points / np.linalg.norm(points, axis=1, keepdims=True)
+    assert set(core_labels(units)) == {-1}
+
+    cluster_briefs(job(), JobContext(database), encoder_for=encoder_for)
+    with database.connect() as conn:
+        parents = conn.execute(
+            "SELECT id FROM nodes WHERE level = 1"
+        ).fetchall()
+        children = {
+            int(r["child_id"])
+            for r in conn.execute("SELECT child_id FROM node_children")
+        }
+    database.close()
+    assert len(parents) == 1
+    assert children == set(nodes)
+
+
+def nodes_texts(nodes: dict[int, str]) -> tuple[str, ...]:
+    """The brief texts ``build_level0`` writes, one per node."""
+    per_group = len(nodes) // 2
+    return tuple(
+        f"{name} topic number {i}"
+        for name in ("alpha", "beta")
+        for i in range(per_group)
+    )

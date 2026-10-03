@@ -98,14 +98,34 @@ def test_warm_init_coords_reach_the_reducer() -> None:
     assert np.allclose(seen["init"], init)
 
 
-def test_all_noise_fails_cleanly() -> None:
+def test_all_noise_is_one_topic_of_density_members() -> None:
     vectors = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
-    with pytest.raises(ClusterError, match="no clusters"):
-        build_clusters(
-            vectors,
-            reduce=lambda vecs, init: np.zeros((len(vecs), STUB_DIMS)),
-            cluster=_labeler([-1, -1]),
-        )
+    result = build_clusters(
+        vectors,
+        reduce=lambda vecs, init: np.ones((len(vecs), STUB_DIMS)),
+        cluster=_labeler([-1, -1]),
+    )
+    assert result.labels == (0, 0)
+    assert result.attached == (False, False)
+    assert result.assignment_similarity == (None, None)
+    assert result.coords == ((1.0,) * STUB_DIMS,) * 2
+
+
+def structureless(count: int, dim: int = 384) -> np.ndarray:
+    """Unit vectors with no density anywhere: real HDBSCAN finds no cluster."""
+    points = np.random.default_rng(0).normal(size=(count, dim))
+    return points / np.linalg.norm(points, axis=1, keepdims=True)
+
+
+def test_real_recipe_makes_a_structureless_level_one_topic() -> None:
+    # E003 / #198: the real reducer and clusterer label every point of this
+    # level noise (core_labels proves it), and the build answers one topic
+    # rather than failing the run.
+    vectors = structureless(30)
+    assert set(core_labels(vectors)) == {-1}
+    result = build_clusters(vectors)
+    assert result.labels == (0,) * 30
+    assert len(result.coords) == 30
 
 
 def test_empty_input_fails_cleanly() -> None:

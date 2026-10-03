@@ -14,14 +14,15 @@ to reduce" already means "then this IS the node" rather than "then fail". A tree
 of one topic is a correct, walkable map of a small repo, and recall and export
 run over it unchanged. Only ``TooFewPoints`` is answered that way: the builder
 raises a plain ``ClusterError`` when the reduction fails, when the clusterer
-fails, when it produces no clusters and when it is not installed, and collapsing
-a large corpus into one topic because its clustering BROKE would answer with a
-confident, wrong map instead of failing. Every one of those still fails the
-job. A full build homes every embedded section, so the incubator pool (#086) is
-swept in the same transaction — its rows would
-otherwise claim a re-homed chunk is still stranded. Reads only local vectors —
-no secret — so it needs no cipher. Registers into the op registry so the worker
-dispatches ``cluster``.
+fails and when it is not installed, and collapsing a large corpus into one topic
+because its clustering BROKE would answer with a confident, wrong map instead of
+failing. Every one of those still fails the job. A level the clusterer labels
+entirely noise is different — it ran and found no density — and the builder
+itself returns that as one topic (E003). A full build homes every embedded
+section, so the incubator pool (#086) is swept in the same transaction — its
+rows would otherwise claim a re-homed chunk is still stranded. Reads only local
+vectors — no secret — so it needs no cipher. Registers into the op registry so
+the worker dispatches ``cluster``.
 """
 
 from __future__ import annotations

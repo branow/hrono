@@ -310,8 +310,8 @@ def test_a_broken_clusterer_fails_the_build_it_does_not_truncate(
     db: Database,
 ) -> None:
     # #131: the same defect #112 closed one level down. `build_clusters` raises
-    # ClusterError when the reduction fails, when the clusterer fails, when it
-    # produces no clusters and when the backend is missing — none of which mean
+    # ClusterError when the reduction fails, when the clusterer fails and
+    # when the backend is missing — none of which mean
     # "the current top is the root". A tree that stops early and reports success
     # is a map an operator has no reason to distrust.
     with db.connect() as conn, conn:

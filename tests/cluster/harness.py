@@ -72,9 +72,9 @@ def build_recovery(
 ) -> float:
     """Run the build and score recovery; a collapsed build recovers nothing.
 
-    A recipe so broken it produces no clusters (``ClusterError``) is scored 0.0
-    — the worst possible recovery — so the teeth tests treat a collapse and a
-    low ARI the same way: below threshold.
+    A recipe so broken it fails (``ClusterError``) is scored 0.0 — the worst
+    possible recovery — so the teeth tests treat a failure and a low ARI the
+    same way: below threshold. A collapse to one topic scores 0.0 by itself.
     """
     from hrono.cluster import ClusterError
 

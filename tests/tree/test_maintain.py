@@ -332,9 +332,9 @@ def test_a_broken_backend_fails_the_job_it_does_not_collect(
 ) -> None:
     # #112's collect is decided by the point count, never by catching the
     # backend's error: `build_clusters` raises the same `ClusterError` when the
-    # reduction fails, when the clusterer fails, when it produces no clusters
-    # and when it is not installed. Collapsing a corpus into one topic because
-    # its clustering BROKE would answer with a confident, wrong map.
+    # reduction fails, when the clusterer fails and when it is not installed.
+    # Collapsing a corpus into one topic because its clustering BROKE would
+    # answer with a confident, wrong map.
     def broken(vectors: object, *, init: object = None) -> ClusterResult:
         raise ClusterError("the reduction failed on these vectors")
 

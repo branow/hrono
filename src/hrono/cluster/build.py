@@ -18,7 +18,12 @@ lifecycle.md, how-hrono-works.md) is:
    ORIGINAL combined space (nearest density-core member by dot product, which
    for unit-blended vectors is cosine), so every section lands in exactly one
    topic. Attached members carry the attachment similarity; density-core members
-   do not.
+   do not. A level HDBSCAN labels ENTIRELY noise has no core to attach to and is
+   one topic — the answer the ladder gives a level too small to reduce (#112),
+   not a failure (E003). Structureless input does that deterministically, and
+   near-identical input (a level of identical briefs) does it on some runs and
+   not others: UMAP over tied points is not reproducible even seeded, which is
+   what made one ``maintain`` fail and the identical next one succeed (#198).
 
 The parameters that scale with the point count (dims, neighbours, minimum
 cluster size) come from ``recipe`` — the same machinery reduces a level of
@@ -105,13 +110,23 @@ def _attach_noise(
     noise_idx = np.where(labels == -1)[0]
     core_idx = np.where(labels >= 0)[0]
     if len(core_idx) == 0:
-        raise ClusterError("clustering produced no clusters")
+        return _one_topic(len(labels))
     if len(noise_idx):
         scores = vectors[noise_idx] @ vectors[core_idx].T
         nearest = scores.argmax(axis=1)
         labels[noise_idx] = labels[core_idx[nearest]]
         sims[noise_idx] = scores[np.arange(len(noise_idx)), nearest]
     return labels, attached, sims
+
+
+def _one_topic(count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Every point in topic 0, as density members: no core was found to
+    attach them to, so there is no attachment similarity to record."""
+    return (
+        np.zeros(count, dtype=np.int64),
+        np.zeros(count, dtype=bool),
+        np.full(count, np.nan),
+    )
 
 
 def core_labels(combined: Sequence[Sequence[float]]) -> tuple[int, ...]:
