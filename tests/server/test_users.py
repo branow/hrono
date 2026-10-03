@@ -150,6 +150,20 @@ def test_admin_creates_user_and_gets_token_once(harness: Harness) -> None:
     assert body["token"] not in listed.text
 
 
+@pytest.mark.parametrize("name", ["a/b", "a b", "../x", "-x", ".x", ""])
+def test_a_name_the_panel_could_not_manage_is_refused(
+    harness: Harness, name: str
+) -> None:
+    response = harness.client.post(
+        "/users",
+        json={"name": name, "role": "reader"},
+        headers=harness.auth("admin"),
+    )
+    assert response.status_code == 422
+    listed = harness.client.get("/users", headers=harness.auth("admin"))
+    assert name not in {u["name"] for u in listed.json()}
+
+
 def test_admin_can_delete_user(harness: Harness) -> None:
     assert (
         harness.client.delete(

@@ -196,3 +196,36 @@ def test_every_read_path_carries_the_stamp(
     assert list_users(conn) == (stamped,)
     assert authenticate(conn, fresh) == stamped
     assert authenticate(conn, token) is None
+
+
+def test_the_last_admin_cannot_be_deleted_or_demoted(
+    conn: sqlite3.Connection,
+) -> None:
+    from hrono.auth.users import LastAdmin, set_role
+
+    create_user(conn, "root", "admin")
+    with pytest.raises(LastAdmin):
+        delete_user(conn, "root")
+    with pytest.raises(LastAdmin):
+        set_role(conn, "root", "reader")
+    assert get_user(conn, "root").role == "admin"  # type: ignore[union-attr]
+    create_user(conn, "second", "admin")
+    assert set_role(conn, "root", "reader").role == "reader"
+    with pytest.raises(LastAdmin):
+        delete_user(conn, "second")
+
+
+def test_set_role_validates_and_moves_modified_at(
+    conn: sqlite3.Connection,
+) -> None:
+    from hrono.auth.users import set_role
+    from hrono.errors import NotFound
+
+    created, token = create_user(conn, "dave", "reader")
+    with pytest.raises(InvalidRole):
+        set_role(conn, "dave", "root")
+    with pytest.raises(NotFound):
+        set_role(conn, "nobody", "reader")
+    changed = set_role(conn, "dave", "writer")
+    assert changed.modified_at > created.modified_at
+    assert authenticate(conn, token).role == "writer"  # type: ignore[union-attr]

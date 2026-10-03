@@ -6,6 +6,7 @@ returned exactly once at creation and never read back. No HTTP lives here.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -14,6 +15,9 @@ from hrono.crypto.tokens import generate_token, hash_token
 from hrono.errors import Conflict, Invalid, NotFound
 
 ROLES = frozenset({"reader", "writer", "admin"})
+# A name is a path segment in the panel's routes, so it has no slash, space or
+# leading dot: the API and the panel refuse the same names.
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
 class InvalidRole(Invalid):
@@ -22,6 +26,16 @@ class InvalidRole(Invalid):
     def __init__(self, role: str) -> None:
         super().__init__(f"invalid role: {role}")
         self.role = role
+
+
+class LastAdmin(Conflict):
+    """A change that would leave no admin (maps to 409)."""
+
+    def __init__(self, name: str, what: str) -> None:
+        super().__init__(
+            f"{name} is the last admin: {what} would leave nobody who can "
+            "manage users"
+        )
 
 
 @dataclass(frozen=True)
@@ -37,8 +51,14 @@ def create_user(
 ) -> tuple[User, str]:
     """Insert a user with a fresh token; return the ``User`` and raw token once.
 
-    The role is validated before any write; only the token's hash is persisted.
+    The name and role are validated before any write; only the token's hash is
+    persisted.
     """
+    if NAME.fullmatch(name) is None:
+        raise Invalid(
+            "a name is letters, digits, dots, dashes and underscores, "
+            "starting with a letter or digit"
+        )
     if role not in ROLES:
         raise InvalidRole(role)
     token = generate_token()
@@ -95,9 +115,38 @@ def list_users(conn: sqlite3.Connection) -> tuple[User, ...]:
     return tuple(_to_user(row) for row in rows)
 
 
-def delete_user(conn: sqlite3.Connection, name: str) -> bool:
-    """Delete the user with ``name``; return whether a row was removed."""
+def set_role(conn: sqlite3.Connection, name: str, role: str) -> User:
+    """Change ``name``'s role; the token is untouched.
+
+    Refuses to demote the last admin: the server's one writer makes the
+    check and the write a single step, so two demotions cannot each see the
+    other admin still there.
+    """
+    if role not in ROLES:
+        raise InvalidRole(role)
     with conn:
+        user = get_user(conn, name)
+        if user is None:
+            raise NotFound(f"user not found: {name}")
+        if user.role == "admin" and role != "admin":
+            _keep_an_admin(conn, name, "demoting them")
+        modified_at = datetime.now(UTC).isoformat()
+        conn.execute(
+            "UPDATE users SET role = ?, modified_at = ? WHERE name = ?",
+            (role, modified_at, name),
+        )
+    return replace(user, role=role, modified_at=modified_at)
+
+
+def delete_user(conn: sqlite3.Connection, name: str) -> bool:
+    """Delete the user with ``name``; return whether a row was removed.
+
+    Refuses to delete the last admin, for the reason ``set_role`` does.
+    """
+    with conn:
+        user = get_user(conn, name)
+        if user is not None and user.role == "admin":
+            _keep_an_admin(conn, name, "deleting them")
         cursor = conn.execute("DELETE FROM users WHERE name = ?", (name,))
     return cursor.rowcount > 0
 
@@ -110,6 +159,15 @@ def authenticate(conn: sqlite3.Connection, token: str) -> User | None:
         (hash_token(token),),
     ).fetchone()
     return _to_user(row) if row is not None else None
+
+
+def _keep_an_admin(conn: sqlite3.Connection, name: str, what: str) -> None:
+    others = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE role = 'admin' AND name != ?",
+        (name,),
+    ).fetchone()[0]
+    if others == 0:
+        raise LastAdmin(name, what)
 
 
 def _to_user(row: sqlite3.Row) -> User:
