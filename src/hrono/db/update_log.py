@@ -41,22 +41,9 @@ def record(
 PAGE = 100
 
 
-def recent(
-    conn: sqlite3.Connection,
-    tree: str,
-    limit: int = PAGE,
-    offset: int = 0,
-    verdict: str = "",
-    action: str = "",
-    node_id: int = 0,
-) -> tuple[tuple[sqlite3.Row, ...], int]:
-    """One page of a tree's decisions, newest first, and how many match.
-
-    The count matters as much as the rows: "showing 100 of 100" and "showing
-    100 of 41,000" are different situations, and a page that shows only the
-    first cannot tell them apart. Filter and page are SQL, so a log of forty
-    thousand rows costs one page to read, not the log.
-    """
+def _match(
+    tree: str, verdict: str, action: str, node_id: int
+) -> tuple[str, list[object]]:
     where = "tree = ?"
     args: list[object] = [tree]
     for column, value in (
@@ -67,17 +54,53 @@ def recent(
         if value:
             where += f" AND {column} = ?"
             args.append(value)
-    rows = conn.execute(
-        "SELECT id, node_id, verdict, action, climbed_to, created_at "
-        f"FROM update_log WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
-        (*args, limit, offset),
-    ).fetchall()
-    total = int(
+    return where, args
+
+
+def count(
+    conn: sqlite3.Connection,
+    tree: str,
+    verdict: str = "",
+    action: str = "",
+    node_id: int = 0,
+) -> int:
+    """How many decisions match.
+
+    The count matters as much as the rows: "showing 100 of 100" and "showing
+    100 of 41,000" are different situations, and a page that shows only the
+    first cannot tell them apart.
+    """
+    where, args = _match(tree, verdict, action, node_id)
+    return int(
         conn.execute(
             f"SELECT COUNT(*) FROM update_log WHERE {where}", args
         ).fetchone()[0]
     )
-    return tuple(rows), total
+
+
+def recent(
+    conn: sqlite3.Connection,
+    tree: str,
+    limit: int = PAGE,
+    offset: int = 0,
+    verdict: str = "",
+    action: str = "",
+    node_id: int = 0,
+) -> tuple[sqlite3.Row, ...]:
+    """One page of a tree's decisions, newest first.
+
+    Filter and page are SQL, so a log of forty thousand rows costs one page
+    to read, not the log.
+    """
+    where, args = _match(tree, verdict, action, node_id)
+    return tuple(
+        conn.execute(
+            "SELECT id, node_id, verdict, action, climbed_to, created_at "
+            f"FROM update_log WHERE {where} ORDER BY id DESC "
+            "LIMIT ? OFFSET ?",
+            (*args, limit, offset),
+        ).fetchall()
+    )
 
 
 def kinds(

@@ -46,7 +46,7 @@
   <div class="card-body empty">
     <div class="title">No decisions match</div>
   </div>
-  {% endif %}
+  {% else %}
   {% if climbs.links %}
   <div class="card-body">
     <h3 class="sub">What a change touched<span class="tip" tabindex="0" role="note" data-tip="A line per topic whose change forced a summary above it to be rewritten. Several lines meeting on one topic is one edit restaling a whole branch">?</span></h3>
@@ -95,11 +95,12 @@
     </table>
   </div>
   {% if paging.pages > 1 %}
-  <nav class="pager row" aria-label="Decision pages">
+  <nav class="card-body row" aria-label="Decision pages">
     {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">Newer</a>{% endif %}
     <span class="faint small">page {{ paging.page }} of {{ paging.pages }}</span>
     {% if paging.older %}<a class="btn small" href="{{ paging.older }}">Older</a>{% endif %}
   </nav>
+  {% endif %}
   {% endif %}
   <div class="card-foot">
     <details class="reveal">

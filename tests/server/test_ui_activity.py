@@ -220,6 +220,26 @@ def test_filter_and_page_ride_in_the_pager_links(browser: Browser) -> None:
     assert 'value="none" selected' in page
 
 
+def test_a_topic_filter_rides_in_the_pager_and_holds_on_page_two(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[union-attr]
+        for _ in range(PAGE + 3):
+            record(browser.conn, TREE, 7, "none", "skipped")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 8, "none", "skipped")  # type: ignore[arg-type]
+
+    first = browser.client.get(f"/ui/trees/{TREE}/activity?topic=7").text
+    second = browser.client.get(
+        f"/ui/trees/{TREE}/activity?topic=7&page=2"
+    ).text
+
+    assert "topic=7&amp;page=2" in first or "topic=7&page=2" in first
+    assert "page 2 of 2" in second
+    assert "topic 7<" in second
+    assert "topic 8<" not in second
+
+
 def test_a_filter_that_matches_nothing_says_so_and_keeps_the_bar(
     browser: Browser,
 ) -> None:
@@ -231,11 +251,10 @@ def test_a_filter_that_matches_nothing_says_so_and_keeps_the_bar(
     assert "No decisions match" in page
     assert "Nothing decided about" not in page
     assert 'aria-label="filter decisions"' in page
+    assert "<th" not in page
 
 
 def test_the_reader_sees_the_same_page(browser: Browser) -> None:
-    from hrono.auth.users import create_user
-
     _fill(browser, PAGE + 5)
     reader = create_user(browser.conn, "ro", "reader")[1]  # type: ignore[arg-type]
     browser.client.cookies.clear()

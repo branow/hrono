@@ -189,8 +189,7 @@ def _propagation(
     drawn = set(visible)
     seen: set[tuple[int, int]] = set()
     links: list[Link] = []
-    rows, _ = recent(conn, tree)
-    for row in rows:
+    for row in recent(conn, tree):
         climbed_to = row["climbed_to"]
         node_id = int(row["node_id"])
         if climbed_to is None or int(climbed_to) == node_id:

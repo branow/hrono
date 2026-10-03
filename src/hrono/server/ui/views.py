@@ -82,10 +82,10 @@ def activity_page(
         verdicts, actions = update_log.kinds(conn, tree)
         node = int(topic) if topic.strip().isdigit() else 0
         wanted = {"verdict": verdict, "action": action, "node_id": node}
-        _, total = update_log.recent(conn, tree, limit=0, **wanted)
+        total = update_log.count(conn, tree, **wanted)
         pages = max(1, -(-total // update_log.PAGE))
         page = min(max(1, page), pages)
-        rows, _ = update_log.recent(
+        rows = update_log.recent(
             conn,
             tree,
             offset=(page - 1) * update_log.PAGE,
