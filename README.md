@@ -90,10 +90,11 @@ moved on since — asked of the remote with `git ls-remote`, at most once a
 minute), whether anything is running (live, from the same event stream as the
 Runs page, on an empty tree too), what the last run did (the two sit side by
 side), and, below them, whether anything needs a person. Health lists each
-problem and fixes it beside it: an admin files a section placed without a score
-in a topic (held by hand, so a sync leaves it), rewrites one stale brief (not
-one the model echoed twice, which needs a person), and hands back any hand
-edit; a reader sees the same lists with no controls. Every empty state offers
+problem and fixes it beside it: an admin places a waiting section into its
+nearest topic or a chosen one, and moves a section that was placed without a
+score (both placements are held by hand, so a sync leaves them where they
+are), rewrites one stale brief (not one the model echoed twice, which needs a
+person), and hands back any hand edit; a reader sees the same lists with no controls. Every empty state offers
 its next step as a button, and every action returns to the page it came from
 saying what it did. Spend is on Home and on every run's page (split by stage),
 and the Usage page, open to every role, adds it up by day, model, run and

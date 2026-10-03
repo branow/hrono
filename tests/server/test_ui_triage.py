@@ -7,6 +7,7 @@ kinds and silent about the fifth is the failure this view exists to prevent.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -23,9 +24,11 @@ from hrono.db.database import open_database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as job_store
+from hrono.registry import store as registry_store
 from hrono.server import triage
 from hrono.server.app import create_app
 from hrono.summarize import briefs
+from tests.summarize.test_shape import ECHOED, _default
 
 KEY = Fernet.generate_key()
 TREE = "default"
@@ -274,3 +277,59 @@ def test_no_internal_ticket_numbers_reach_the_page(
 
     assert "#1" not in page
     assert not re.search(r"\(#\d+", page)
+
+
+def _echo(browser: Browser) -> None:
+    conn = browser.conn
+    leaf = int(
+        conn.execute(  # type: ignore[attr-defined]
+            "SELECT MIN(id) FROM nodes WHERE tree = ? AND level = 0", (TREE,)
+        ).fetchone()[0]
+    )
+    with conn:  # type: ignore[attr-defined]
+        registry_store.insert(
+            conn,  # type: ignore[arg-type]
+            "prompts",
+            "brief",
+            json.dumps({"name": "brief", "template": _default("brief")}),
+            None,
+            "t",
+        )
+        briefs.upsert(
+            conn,  # type: ignore[arg-type]
+            leaf,
+            ECHOED["brief"],
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature=briefs.member_signature(conn, leaf),  # type: ignore[arg-type]
+            input_tokens=1,
+            output_tokens=1,
+            flagged="echoes-the-prompt",
+        )
+
+
+def _briefless_detail(browser: Browser) -> str:
+    return next(
+        item.detail
+        for item in triage.survey(browser.conn, TREE)  # type: ignore[arg-type]
+        if item.kind.startswith("topics with no usable brief")
+    )
+
+
+def test_a_stale_brief_says_a_sync_rewrites_it(clean_tree: Browser) -> None:
+    with clean_tree.conn:  # type: ignore[attr-defined]
+        clean_tree.conn.execute("UPDATE briefs SET stale = 1")  # type: ignore[attr-defined]
+
+    assert _briefless_detail(clean_tree) == (
+        "Recall cannot answer from them until a sync rewrites them."
+    )
+
+
+def test_a_settled_echo_does_not_promise_a_sync(clean_tree: Browser) -> None:
+    _echo(clean_tree)
+
+    detail = _briefless_detail(clean_tree)
+
+    assert "sync" not in detail
+    assert "1 need a person" in detail
