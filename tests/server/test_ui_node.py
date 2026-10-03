@@ -635,9 +635,9 @@ def test_a_section_condensed_by_two_models_is_one_row(
             )
         ]
         for digest in digests:
-            # the recorded model sorts FIRST and the other is written last,
+            # the other model sorts BEFORE the recorded one and is written last,
             # so only the model filter, not row order, can pick it
-            for model in ("scribe-9", "zeta-old"):
+            for model in ("scribe-9", "alpha-old"):
                 condensations.upsert(
                     browser.conn,  # type: ignore[arg-type]
                     digest,
@@ -658,7 +658,7 @@ def test_a_section_condensed_by_two_models_is_one_row(
     assert len(ids) == 4
     assert len(set(ids)) == 4
     assert "by scribe-9" in page
-    assert "by zeta-old" not in page
+    assert "by alpha-old" not in page
 
 
 def test_a_section_with_no_final_newline_counts_its_last_line(
