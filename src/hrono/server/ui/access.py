@@ -23,8 +23,8 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth import users
-from hrono.crypto.rotate import rotate
 from hrono.errors import AppError, Invalid
+from hrono.server.rotation import rotate_running
 from hrono.server.ui import Admin, _fields, _trees, router, templates
 
 
@@ -114,12 +114,11 @@ async def rotate_key(request: Request, user: Admin) -> Response:
             request, user, form, Invalid("confirm to rotate the master key")
         )
     try:
-        with request.app.state.db.write() as conn:
-            result = rotate(
-                conn,
-                form.get("old_key", "").strip().encode(),
-                form.get("new_key", "").strip().encode(),
-            )
+        result = rotate_running(
+            request.app,
+            form.get("old_key", "").strip().encode(),
+            form.get("new_key", "").strip().encode(),
+        )
     except AppError as exc:
         return _refused(request, user, form, exc)
     return _render(

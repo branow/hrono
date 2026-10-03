@@ -127,8 +127,9 @@ roles, add one (the new token is shown once, in the answer to the form, and is
 stored only as a hash), change a role, reissue a token or delete a person, each
 of the last two after a confirmation naming them. The last admin can be neither
 deleted nor demoted, here or through the API. The master key can be rotated from
-the same page, which says how many secrets it re-encrypted and that the server
-must then be restarted on the new key.
+the same page, which says how many secrets it re-encrypted. The running server
+switches to the new key at once, so credentials saved afterwards survive a
+restart; the key file must be updated before that restart.
 
 ## In-process embedding
 

@@ -32,7 +32,7 @@
   <div class="callout warn" role="status">
     <div class="body">
       <div class="title">Master key rotated: {{ rotated.rows }} secret{{ "" if rotated.rows == 1 else "s" }} re-encrypted</div>
-      <p class="hint">Update the key file and restart this server. Until you do it still holds the old key, so syncing a source or calling a provider will fail, and it will refuse to start on the old key.</p>
+      <p class="hint">This server already runs on the new key. Update the key file and restart it on the new key; it will refuse to start on the old one.</p>
     </div>
   </div>
   {% endif %}

@@ -298,9 +298,8 @@ def _plain(
 
 
 def _cipher(request: Request) -> Cipher:
-    return Cipher.from_key(
-        request.app.state.master_key, request.app.state.key_id
-    )
+    cipher: Cipher = request.app.state.cipher
+    return cipher
 
 
 def context(request: Request) -> ValidationContext:

@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
 
 from hrono.auth.users import User, create_user, delete_user, list_users
-from hrono.crypto.rotate import rotate
 from hrono.errors import NotFound
 from hrono.server.auth import require_role
+from hrono.server.rotation import rotate_running
 
 router = APIRouter()
 
@@ -81,23 +81,21 @@ def rotate_master_key(
     job's ``scope`` is persisted, and the inputs here are two master keys. The
     secret-bearing rows are registry config — tens of them, not millions.
 
-    The cipher this process holds still uses the OLD key, and every secret is
-    now on the new one — so until this server restarts it can read no
-    credential at all (`KeyMismatch`). Masked reads still answer, which is what
-    makes that easy to miss, so the response says it in as many words rather
-    than only mentioning the key file. The next start reconciles against the
-    new fingerprint and refuses the old key, which is the protection working
-    rather than a surprise.
+    The running server switches to the new key as part of the same call
+    (`rotate_running`), so a secret saved before the restart is tagged with the
+    new key_id and survives it. The key FILE is the operator's: the next start
+    reconciles against the new fingerprint and refuses the old key, which is
+    the protection working rather than a surprise.
     """
-    with request.app.state.db.write() as conn:
-        result = rotate(conn, body.old_key.encode(), body.new_key.encode())
+    result = rotate_running(
+        request.app, body.old_key.encode(), body.new_key.encode()
+    )
     return {
         "key_id": result.key_id,
         "rotated": result.rows,
         "next": (
-            "update the key file and RESTART: this server still holds the old "
-            "key, so nothing needing a credential — syncing a source, calling "
-            "a provider — will work until it does, and it will refuse to "
-            "start on the old key"
+            "this server already runs on the new key, so a credential saved "
+            "now is on it; update the key file and RESTART on it, because "
+            "the next start refuses the old key"
         ),
     }

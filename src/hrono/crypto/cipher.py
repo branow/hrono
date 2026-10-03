@@ -46,18 +46,27 @@ class Cipher:
     """
 
     def __init__(self, fernet: Fernet, key_id: int) -> None:
-        self._fernet = fernet
-        self._key_id = key_id
+        self._active = (fernet, key_id)
 
     @classmethod
     def from_key(cls, key: bytes, key_id: int) -> Cipher:
         """Build a cipher from raw Fernet key bytes and the active key_id."""
         return cls(Fernet(key), key_id)
 
+    def rekey(self, key: bytes, key_id: int) -> None:
+        """Switch to ``key`` in place, for every holder of this cipher.
+
+        After a rotation the stored secrets are on the new key, so a cipher
+        left on the old one reads none of them and tags new writes with a
+        key_id the next start refuses. The pair is swapped as one value so a
+        concurrent reader sees the old key or the new one, never a mix.
+        """
+        self._active = (Fernet(key), key_id)
+
     def encrypt(self, plaintext: str) -> Secret:
         """Encrypt ``plaintext``, tagging the result with the active key_id."""
-        token = self._fernet.encrypt(plaintext.encode()).decode()
-        return Secret(self._key_id, token)
+        fernet, key_id = self._active
+        return Secret(key_id, fernet.encrypt(plaintext.encode()).decode())
 
     def decrypt(self, key_id: int, ciphertext: str) -> str:
         """Decrypt ``ciphertext``; raise if the key_id or token is wrong.
@@ -65,9 +74,10 @@ class Cipher:
         Raises ``KeyMismatch`` when ``key_id`` is not the active key, and
         ``InvalidCiphertext`` when the token is malformed or tampered.
         """
-        if key_id != self._key_id:
-            raise KeyMismatch(self._key_id, key_id)
+        fernet, active_id = self._active
+        if key_id != active_id:
+            raise KeyMismatch(active_id, key_id)
         try:
-            return self._fernet.decrypt(ciphertext.encode()).decode()
+            return fernet.decrypt(ciphertext.encode()).decode()
         except InvalidToken as exc:
             raise InvalidCiphertext from exc
