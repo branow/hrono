@@ -370,22 +370,69 @@ def test_a_provider_that_reports_no_cache_leaves_it_unknown() -> None:
     assert (usage.cache_read, usage.cache_creation) == (None, None)
 
 
-def test_a_sync_records_who_started_it(tmp_path: Path) -> None:
+API = "api"
+PAGE = "page"
+
+
+@pytest.mark.parametrize(
+    ("door", "path", "body", "jobs"),
+    [
+        pytest.param(API, "/trees/default/sync", None, 1, id="api-sync"),
+        pytest.param(API, "/trees/default/maintain", None, 1, id="maintain"),
+        pytest.param(API, "/jobs", {"op": "noop"}, 1, id="api-job"),
+        pytest.param(
+            API,
+            "/jobs",
+            {"op": "sync", "scope": {"type": "all"}, "tree": "default"},
+            3,
+            id="api-fan-out",
+        ),
+        pytest.param(PAGE, "/ui/trees/default/sync", None, 1, id="page-sync"),
+        pytest.param(
+            PAGE, "/ui/jobs/run?tree=default", {"op": "noop"}, 1, id="page-job"
+        ),
+        pytest.param(
+            PAGE,
+            "/ui/jobs/run?tree=default",
+            {"op": "sync"},
+            3,
+            id="page-fan-out",
+        ),
+    ],
+)
+def test_every_way_to_start_a_run_records_who_started_it(
+    tmp_path: Path,
+    door: str,
+    path: str,
+    body: dict[str, object] | None,
+    jobs: int,
+) -> None:
+    # #202's by=user and #203's "who started it" read this on every path; a
+    # path that forgets it reads as nobody (qa, 2026-10-03)
     key = Fernet.generate_key()
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, key)
-    token = create_user(conn, "ana", "writer")[1]
+    token = create_user(conn, "ana", "admin")[1]
+    for name in ("alpha", "beta"):
+        registry_store.insert(
+            conn, "sources", name, json.dumps({"name": name}), None, "t"
+        )
     app = create_app(connection=conn, master_key=key, key_id=1)
     with TestClient(app) as http:
         app.state.worker.stop()
         app.state.worker.join(timeout=5)
-        job_id = http.post(
-            "/trees/default/sync",
-            headers={"Authorization": f"Bearer {token}"},
-        ).json()["job_id"]
-        fetched = http.get(
-            f"/jobs/{job_id}", headers={"Authorization": f"Bearer {token}"}
-        ).json()
+        if door == API:
+            answer = http.post(
+                path, json=body, headers={"Authorization": f"Bearer {token}"}
+            )
+        else:
+            http.post("/ui/login", data={"token": token})
+            answer = http.post(path, data=body, follow_redirects=False)
+        starters = [
+            row["started_by"]
+            for row in conn.execute("SELECT started_by FROM jobs").fetchall()
+        ]
     conn.close()
 
-    assert fetched["started_by"] == "ana"
+    assert answer.status_code in (200, 201, 303)
+    assert starters == ["ana"] * jobs
