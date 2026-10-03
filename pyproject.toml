@@ -61,11 +61,8 @@ dev = [
     "umap-learn>=0.5.6,<0.6",
     "hdbscan>=0.8.38,<0.9",
     "numpy>=1.26,<3",
-<<<<<<< HEAD
     "pytest-xdist>=3.8.0",
-=======
     "playwright==1.56.0",
->>>>>>> 4767d14 (fix: no page overflows or has a hint on top of what it explains, the top bar breaks once on purpose, and a browser test over every route keeps it so)
 ]
 
 [build-system]
