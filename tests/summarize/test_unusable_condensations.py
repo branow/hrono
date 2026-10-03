@@ -175,3 +175,25 @@ def test_a_good_condensation_is_never_overwritten(built: Built) -> None:
 
     assert kept == text
     assert not any(built.briefs().values())
+
+
+def test_pending_reads_no_body_it_will_not_condense(built: Built) -> None:
+    # condense runs on every sync: finding the few that changed must not read
+    # every section's content (qa, #221)
+    statements: list[str] = []
+    with built.database.connect() as conn:
+        conn.set_trace_callback(statements.append)
+        found = store.pending(conn, "sonnet")
+        conn.set_trace_callback(None)
+        bodies = [s for s in statements if "body" in s]
+        good = conn.execute(
+            "SELECT content_hash FROM condensations WHERE text = ?", (GOOD,)
+        ).fetchall()
+
+    assert len(found) == 1
+    assert good
+    # one read of content, and only of the hashes that are pending
+    assert len(bodies) == 1
+    assert " IN (" in bodies[0]
+    for row in good:
+        assert row[0] not in bodies[0]

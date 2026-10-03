@@ -24,20 +24,31 @@ def pending(
     condense. A stored condensation that is the model talking back counts as
     MISSING (#221): it was cached by content hash forever, and every brief over
     that section read it as source.
+
+    Bodies are read only for what is pending. Condense runs on every sync, and
+    reading every section body to find the few that changed would make an
+    unchanged tree cost its whole corpus in I/O (qa, #221).
     """
-    rows = conn.execute(
-        "SELECT DISTINCT s.content_hash AS h, c.body AS body, d.text AS text "
-        "FROM sections s JOIN contents c ON c.content_hash = s.content_hash "
-        "LEFT JOIN condensations d ON d.content_hash = s.content_hash "
-        "AND d.model_name = ? WHERE s.source_type != 'node' "
-        "ORDER BY s.content_hash",
+    missing = conn.execute(
+        "SELECT DISTINCT s.content_hash AS h FROM sections s "
+        "WHERE s.source_type != 'node' AND NOT EXISTS (SELECT 1 FROM "
+        "condensations d WHERE d.content_hash = s.content_hash "
+        "AND d.model_name = ?)",
         (model_name,),
     ).fetchall()
-    return tuple(
-        (row["h"], bytes(row["body"]))
-        for row in rows
-        if row["text"] is None or talks_back(row["text"])
-    )
+    redo = {digest for digest, _, _ in unusable(conn, model_name)}
+    wanted = sorted({row["h"] for row in missing} | redo)
+    if not wanted:
+        return ()
+    marks = ",".join("?" * len(wanted))
+    rows = conn.execute(
+        "SELECT DISTINCT s.content_hash AS h, c.body AS body FROM sections s "  # noqa: S608
+        "JOIN contents c ON c.content_hash = s.content_hash "
+        f"WHERE s.source_type != 'node' AND s.content_hash IN ({marks}) "
+        "ORDER BY s.content_hash",
+        wanted,
+    ).fetchall()
+    return tuple((row["h"], bytes(row["body"])) for row in rows)
 
 
 def unusable(
