@@ -40,6 +40,13 @@ from a run that should have been a no-op. The cost is that a corpus carrying OLD
 gaps heals them on the next run WITH changes rather than on any run at all,
 which is a wait, not a hole.
 
+The one exception is a stored condensation that is the model TALKING BACK
+(#221): ``unusable-condensations`` promises the next sync re-condenses exactly
+those, and on an unchanged corpus — the usual state of a tree an operator is
+asking that of — the guard above meant no sync ever did (E001's e2e). So the
+stage also runs when the condense model has one; with no condense model there
+is nothing stored under it to redo, and the no-op run still asks for nothing.
+
 Accepting LLM calls inside ``update`` is the decision this ticket made: the
 promise is that work is proportional to the change, not that the op is free —
 and the alternative left a leaf with no condensation, therefore no brief,
@@ -81,8 +88,11 @@ from hrono.ingest.split_op import _load
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.llm.client import LLMError
 from hrono.registry.collections.trees import scoped_sources
+from hrono.summarize import store as condensations
 from hrono.summarize.condense import condense
+from hrono.summarize.resolve import resolve_text_model
 
 _DEFAULT_TREE = "default"
 
@@ -106,9 +116,19 @@ def update(
         batch = _update_source(
             context, tree, name, model_name, encoder_for, batch
         )
-    if batch is not None:  # nothing changed -> no stage, no credential asked
+    if batch is not None or _talked_back(context):
         condense(_stage(tree, "condense", {}), context, client=client)
     return _outcome(context, tree, batch)
+
+
+def _talked_back(context: JobContext) -> bool:
+    """Does the condense model hold a stored reply that talked back (#221)?"""
+    with context.database.connect() as conn:
+        try:
+            model = resolve_text_model(conn, {}, "condense")
+        except LLMError:
+            return False  # no condense model: nothing stored under it to redo
+        return bool(condensations.unusable(conn, str(model["name"])))
 
 
 def _outcome(

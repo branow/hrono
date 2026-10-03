@@ -18,6 +18,8 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
+from hrono.summarize import store as condensations
+from hrono.summarize.resolve import resolve_text_model
 from hrono.tree.maintain import maintain
 from hrono.tree.settle import settle
 from hrono.tree.update import update
@@ -884,6 +886,37 @@ def test_a_second_update_over_unchanged_content_condenses_nothing(
     second = run_update(db, tmp_path)
 
     assert second.calls == 0
+
+
+_TALKED_BACK = "Could you paste the file you would like me to condense?"
+
+
+def test_an_update_over_unchanged_content_redoes_a_talked_back_condensation(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # E001: `unusable-condensations` promises the next sync redoes these, and
+    # the changed-sources guard meant a sync over an unchanged corpus never
+    # ran condense at all — so on a steady tree the promise was never kept.
+    db, _ = built
+    with db.connect() as conn, conn:
+        model = str(resolve_text_model(conn, {}, "condense")["name"])
+        digest = conn.execute(
+            "SELECT content_hash FROM condensations WHERE model_name = ? "
+            "ORDER BY content_hash LIMIT 1",
+            (model,),
+        ).fetchone()[0]
+        conn.execute(
+            "DELETE FROM condensations WHERE content_hash = ?", (digest,)
+        )
+        condensations.upsert(  # what a run before the gate stored
+            conn, digest, model, _TALKED_BACK, 1, 1
+        )
+
+    client = run_update(db, tmp_path)  # no source changed
+
+    assert client.calls == 1  # exactly the one, nothing else re-condensed
+    with db.connect() as conn:
+        assert condensations.unusable(conn, model) == ()
 
 
 def test_an_update_with_nothing_to_do_needs_no_text_model(
