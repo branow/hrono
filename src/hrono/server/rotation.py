@@ -23,5 +23,4 @@ def rotate_running(app: FastAPI, old_key: bytes, new_key: bytes) -> Rotation:
     with app.state.db.write() as conn:
         result = rotate(conn, old_key, new_key)
         app.state.cipher.rekey(new_key, result.key_id)
-        app.state.key_id = result.key_id
     return result

@@ -181,10 +181,10 @@ def create_app(
                 raise MasterKeyError("master key required to start the server")
             if owned:
                 with database.write() as active:
-                    app.state.key_id = reconcile(active, master_key).key_id
+                    active_id = reconcile(active, master_key).key_id
             else:
-                app.state.key_id = key_id
-            cipher = Cipher.from_key(master_key, app.state.key_id)
+                active_id = key_id
+            cipher = Cipher.from_key(master_key, active_id)
             app.state.cipher = cipher
             reclaim_stranded(database)
             anchored_cache = cache_root(db_path) if owned else None

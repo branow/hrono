@@ -83,10 +83,12 @@ def test_sync_handler_uses_db_through_testclient(tmp_path: Path) -> None:
         assert response.json()["count"] == 1
 
 
-def test_startup_exposes_the_key_id(tmp_path: Path) -> None:
+def test_startup_tags_secrets_with_the_reconciled_key_id(
+    tmp_path: Path,
+) -> None:
     app = create_app(db_path=tmp_path / "hrono.db", master_key=KEY)
     with TestClient(app):
-        assert app.state.key_id == 1
+        assert app.state.cipher.encrypt("x").key_id == 1
 
 
 def test_startup_refuses_a_wrong_master_key(tmp_path: Path) -> None:

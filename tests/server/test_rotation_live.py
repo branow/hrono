@@ -8,9 +8,10 @@ key is a `KeyMismatch` there, which is the half-rotated state.
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from cryptography.fernet import Fernet
@@ -19,12 +20,14 @@ from fastapi.testclient import TestClient
 from hrono.auth.users import create_user
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
-from hrono.db.database import open_database
+from hrono.db.database import Database, open_database
 from hrono.registry import store
 from hrono.registry.collections import CONNECTIONS
+from hrono.registry.engine import create_item, delete_item, replace_item
 from hrono.registry.validation import connection_validation
-from hrono.registry.write import decrypt
+from hrono.registry.write import decrypt, encrypt
 from hrono.server.app import create_app
+from hrono.server.rotation import rotate_running
 
 KEY = Fernet.generate_key()
 FRESH = Fernet.generate_key()
@@ -92,11 +95,9 @@ def restarted_on_new_key(db: Path) -> str:
 def test_a_secret_saved_after_rotation_survives_a_restart_on_the_new_key(
     server: Server,
 ) -> None:
-    rotated = server.rotate()
-    assert rotated.status_code == 200
+    assert server.rotate().status_code == 200
     assert server.save().status_code == 201
     assert restarted_on_new_key(server.db) == "sk-saved-after-rotation"
-    assert server.client.app.state.key_id == rotated.json()["key_id"]  # type: ignore[attr-defined]
 
 
 def test_the_panel_rotation_switches_the_running_key_too(
@@ -122,11 +123,11 @@ def test_the_panel_rotation_switches_the_running_key_too(
 def test_a_refused_rotation_leaves_the_running_key_unchanged(
     server: Server,
 ) -> None:
-    state = server.client.app.state  # type: ignore[attr-defined]
-    before = state.key_id
+    cipher = server.client.app.state.cipher  # type: ignore[attr-defined]
+    before = cipher.encrypt("x").key_id
     assert server.rotate(old=Fernet.generate_key()).status_code == 403
     assert server.rotate(new=b"not-a-key").status_code == 400
-    assert state.key_id == before
+    assert cipher.encrypt("x").key_id == before
     assert server.save().status_code == 201
     conn = open_database(server.db)
     try:
@@ -136,25 +137,67 @@ def test_a_refused_rotation_leaves_the_running_key_unchanged(
         conn.close()
 
 
-def test_a_save_in_flight_across_a_rotation_lands_on_the_new_key(
-    server: Server, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("writer", ["create", "replace", "delete"])
+def test_a_write_in_flight_across_a_rotation_lands_on_the_new_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, writer: str
 ) -> None:
-    """The rotation commits after the save is prepared, before it writes."""
-    from hrono.server.rotation import rotate_running
+    """The rotation commits after the write is prepared, before it writes.
 
-    app = server.client.app
-    db = app.state.db  # type: ignore[attr-defined]
-    real = db.write
-    fired = []
+    One case per engine writer, through the real engine, descriptor and
+    rotation. The rotation fires as the writer asks for the write lock (the
+    database's `write` is the seam), so a writer that sealed its secret
+    before asking lands on the old key: a KeyMismatch after the restart.
+    """
+    path = tmp_path / "hrono.db"
+    with open_database(path) as setup:
+        record = reconcile(setup, KEY)
+    db = Database.at(path)
+    cipher = Cipher.from_key(KEY, record.key_id)
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            db=db, cipher=cipher, key_id=record.key_id, cache_root=None
+        )
+    )
+    request = SimpleNamespace(app=app)
+    fired: list[bool] = []
 
-    def rotate_then_write():  # type: ignore[no-untyped-def]
-        # the auth layer writes too; only the registry's own write counts
-        if not fired and sys._getframe(1).f_code.co_name == "create_item":
+    def rotate_once(*_args: object) -> None:
+        if not fired:
             fired.append(True)
             rotate_running(app, KEY, FRESH)  # type: ignore[arg-type]
-        return real()
+
+    default = {
+        "name": "late",
+        "provider": "anthropic",
+        "auth": {"method": "api-key", "key": "sk-saved-after-rotation"},
+    }
+    descriptor = replace(CONNECTIONS, validate=None, defaults=(default,))
+    if writer != "create":
+        stored, key_id = encrypt(default, descriptor, cipher)
+        with db.write() as conn:
+            store.insert(
+                conn,
+                "connections",
+                "late",
+                json.dumps(stored),
+                key_id,
+                "2026-01-01",
+                is_default=1,
+            )
+    real_write = db.write
+
+    def rotate_then_write():  # type: ignore[no-untyped-def]
+        rotate_once()
+        return real_write()
 
     monkeypatch.setattr(db, "write", rotate_then_write)
-    assert server.save().status_code == 201
+    body = default
+    {
+        "create": lambda: create_item(descriptor, body, request),  # type: ignore[arg-type]
+        "replace": lambda: replace_item(descriptor, "late", body, request),  # type: ignore[arg-type]
+        "delete": lambda: delete_item(descriptor, "late", request),  # type: ignore[arg-type]
+    }[writer]()
+    monkeypatch.undo()
+    db.close()
     assert fired
-    assert restarted_on_new_key(server.db) == "sk-saved-after-rotation"
+    assert restarted_on_new_key(path) == "sk-saved-after-rotation"
