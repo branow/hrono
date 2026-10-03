@@ -11,6 +11,7 @@ Registers into the op registry so the worker dispatches ``sync`` per source.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from hrono.ingest import SyncError
@@ -26,8 +27,12 @@ _TIMEOUT = 120.0
 __all__ = ["SyncError", "sync"]
 
 
-def sync(job: Job, context: JobContext) -> None:
-    """Sync the job's source through its type's syncer and pin the version."""
+def sync(job: Job, context: JobContext) -> Mapping[str, int]:
+    """Sync the job's source through its type's syncer and pin the version.
+
+    Reports whether the version is new, so a first sync says it fetched one
+    and a re-sync of an unchanged source says it had nothing to do (#213).
+    """
     name = str(job.scope["name"])
     config = _load_source(context, name)
     source_type = str(config["type"])
@@ -35,7 +40,9 @@ def sync(job: Job, context: JobContext) -> None:
     if syncer is None:
         raise SyncError(f"no syncer for source type: {source_type}")
     version = syncer(config, context.cache_for(name), _TIMEOUT)
+    previous = _pinned_version(context, name)
     _record_version(context, name, version)
+    return {"fetched": int(version != previous)}
 
 
 def _load_source(context: JobContext, name: str) -> dict[str, object]:
@@ -48,6 +55,14 @@ def _load_source(context: JobContext, name: str) -> dict[str, object]:
     if key_id is None or context.cipher is None:
         return config
     return decrypt(config, SOURCES, context.cipher, int(key_id))
+
+
+def _pinned_version(context: JobContext, name: str) -> str | None:
+    with context.database.connect() as conn:
+        row = conn.execute(
+            "SELECT version FROM source_state WHERE source = ?", (name,)
+        ).fetchone()
+    return None if row is None else str(row["version"])
 
 
 def _record_version(context: JobContext, name: str, version: str) -> None:

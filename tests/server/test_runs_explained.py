@@ -1,6 +1,7 @@
 """#213: a run says what it did, what failed and where, and can be retried."""
 
 import json
+import subprocess
 import time
 from collections.abc import Iterator
 from functools import partial
@@ -156,6 +157,74 @@ def test_a_successful_maintain_reports_each_stage(repo: Path) -> None:
     assert all(s["seconds"] >= 0 for s in stages)
     assert stages[3]["result"]["condensed"] == 9
     assert job.result["tree"]["topics_added"] > 0  # type: ignore[index]
+
+
+def test_a_first_build_reports_what_sync_split_and_embed_did(
+    repo: Path, panel: Panel
+) -> None:
+    database, job_id = _run(repo, client=Writing(), build=fake_build)
+    panel.as_("writer")
+    page = panel.client.get(f"/ui/jobs/{job_id}?tree=default").text
+
+    with database.connect() as conn:
+        job = to_job(job_store.get(conn, job_id))
+    sync, split, embed = job.result["stages"][:3]  # type: ignore[index]
+
+    assert sync["result"] == {"fetched": 1}
+    assert split["result"]["files_changed"] == 9
+    assert split["result"]["sections_cut"] >= 9
+    assert split["result"]["files_gone"] == 0
+    assert embed["result"]["embedded"] > split["result"]["sections_cut"]
+    assert "1 new version fetched" in page
+    assert "9 new or changed files read" in page
+    assert "pieces of text embedded" in page
+
+
+def test_an_unchanged_rerun_reads_nothing_to_do(
+    repo: Path, panel: Panel
+) -> None:
+    _run(repo, client=Writing(), build=fake_build)
+    database, job_id = _run(repo, client=Writing(), build=fake_build)
+    panel.as_("writer")
+
+    with database.connect() as conn:
+        job = to_job(job_store.get(conn, job_id))
+    page = panel.client.get(f"/ui/jobs/{job_id}?tree=default").text
+    sync, split, embed = job.result["stages"][:3]  # type: ignore[index]
+
+    assert sync["result"] == {"fetched": 0}
+    assert split["result"] == {
+        "files_changed": 0,
+        "sections_cut": 0,
+        "files_gone": 0,
+    }
+    assert embed["result"] == {"embedded": 0}
+    timeline = page.split('id="stages"')[1].split("</section>")[0]
+    assert timeline.count("nothing to do") >= 3
+    assert "files read" not in timeline and "embedded" not in timeline
+
+
+def test_a_rerun_after_an_edit_reports_only_the_edit(repo: Path) -> None:
+    _run(repo, client=Writing(), build=fake_build)
+    source = repo / "src-repo"
+    (source / "f1.txt").write_text("module 1 now does something else\n")
+    (source / "f2.txt").unlink()
+    subprocess.run(["git", "-C", str(source), "add", "-A"], check=True)
+    subprocess.run(
+        ["git", "-C", str(source), "commit", "-qm", "edit"], check=True
+    )
+
+    database, job_id = _run(repo, client=Writing(), build=fake_build)
+
+    with database.connect() as conn:
+        job = to_job(job_store.get(conn, job_id))
+    sync, split = job.result["stages"][:2]  # type: ignore[index]
+    assert sync["result"] == {"fetched": 1}
+    assert split["result"] == {
+        "files_changed": 1,
+        "sections_cut": 1,
+        "files_gone": 1,
+    }
 
 
 def test_a_failed_maintain_names_the_stage_and_keeps_what_finished(

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping
 from pathlib import Path
 
 from hrono.cluster.blend import register_path_bodies
@@ -35,20 +36,34 @@ from hrono.recall import fts
 from hrono.registry import store as registry_store
 
 
-def split_source(job: Job, context: JobContext) -> None:
-    """Split the job's synced source into stored sections and passages."""
+def split_source(job: Job, context: JobContext) -> Mapping[str, int]:
+    """Split the job's synced source into stored sections and passages.
+
+    Reports what the split CHANGED — files new or edited, the sections cut
+    from them, files gone — so a re-split of an unchanged source, which
+    rewrites every row to the same bytes, says it had nothing to do (#213).
+    """
     name = str(job.scope["name"])
     config, version = _load(context, name)
     cache = context.cache_for(name)
     reader, addressed, instance = resolve(config, cache)
-    paths: list[str] = []
+    cut: dict[str, tuple[str, ...]] = {}
     with context.database.write() as conn:
+        before = _cut_by_path(conn, name)
         store.clear_source(conn, name)
         fts.clear_source(conn, name)
         for unit in reader.units(config, cache):
-            paths.append(unit.path)
-            store_unit(conn, unit, name, addressed, instance, version)
-        register_path_bodies(conn, paths)
+            stored = store_unit(conn, unit, name, addressed, instance, version)
+            cut[unit.path] = tuple(digest for _id, _ord, digest in stored)
+        register_path_bodies(conn, list(cut))
+    changed = [
+        path for path, hashes in cut.items() if before.get(path) != hashes
+    ]
+    return {
+        "files_changed": len(changed),
+        "sections_cut": sum(len(cut[path]) for path in changed),
+        "files_gone": len(before.keys() - cut.keys()),
+    }
 
 
 def store_unit(
@@ -107,6 +122,21 @@ def store_unit(
                 ),
             )
     return tuple(stored)
+
+
+def _cut_by_path(
+    conn: sqlite3.Connection, source: str
+) -> dict[str, tuple[str, ...]]:
+    """Each stored file's section hashes, in order: what a re-split matches."""
+    rows = conn.execute(
+        "SELECT path, content_hash FROM sections WHERE source = ? "
+        "ORDER BY path, ordinal",
+        (source,),
+    ).fetchall()
+    cut: dict[str, tuple[str, ...]] = {}
+    for row in rows:
+        cut[row["path"]] = (*cut.get(row["path"], ()), row["content_hash"])
+    return cut
 
 
 def _store_body(
