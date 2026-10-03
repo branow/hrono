@@ -1365,6 +1365,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     {{ tab("/ui/trees/" ~ tree ~ "/graph?tree=" ~ tree, "Map", here.endswith("/graph") or "/nodes/" in here) }}
     {{ tab("/ui/trees/" ~ tree ~ "/activity?tree=" ~ tree, "Activity", here.endswith("/activity")) }}
     {{ tab("/ui/jobs?tree=" ~ tree, "Runs", here == "/ui/jobs") }}
+    {{ tab("/ui/trees/" ~ tree ~ "/export?tree=" ~ tree, "Export", here.endswith("/export")) }}
     {{ tab("/ui/config?tree=" ~ tree, "Settings", here == "/ui/config") }}
     {{ tab("/ui/guide?tree=" ~ tree, "Guide", here == "/ui/guide") }}
   </nav>

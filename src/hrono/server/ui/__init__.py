@@ -174,6 +174,7 @@ def _shape(conn: object, tree: str) -> tuple[int, int]:
 # Registering the routes: each of these imports this module for `router` and
 # the role dependencies, so they are imported last and only for that effect.
 from hrono.server.ui import (  # noqa: E402, F401
+    export,
     guide,
     jobs,
     nodes,

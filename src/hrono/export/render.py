@@ -98,21 +98,21 @@ def _child_entry(conn: sqlite3.Connection, child: int) -> str:
     (#204); a wider page is only affordable if each entry says enough to skip
     the ones that do not matter.
     """
-    link = f"- [{_heading(conn, child)}]({_name(conn, child)}/brief.md)"
+    link = f"- [{heading(conn, child)}]({_name(conn, child)}/brief.md)"
     summary = _summary(conn, child)
     return f"{link} — {summary}" if summary else link
 
 
 def _summary(conn: sqlite3.Connection, node_id: int) -> str:
     """The brief's first sentence of prose that is not already its title."""
-    heading = _heading(conn, node_id)
+    title = heading(conn, node_id)
     prose = " ".join(
         _EMPHASIS.sub("", line.strip())
         for line in _brief_text(conn, node_id).splitlines()
         if line.strip() and not line.lstrip().startswith(_NOT_PROSE)
     )
     for sentence in re.split(r"(?<=[.!?])\s+", prose):
-        if sentence and not sentence.startswith(heading):
+        if sentence and not sentence.startswith(title):
             return _sentence(sentence, _SUMMARY_CHARS)
     return ""
 
@@ -202,7 +202,7 @@ def _stored_title(conn: sqlite3.Connection, node_id: int) -> str | None:
     return str(title).strip() or None if title else None
 
 
-def _heading(conn: sqlite3.Connection, node_id: int) -> str:
+def heading(conn: sqlite3.Connection, node_id: int) -> str:
     """A short title for a node: the operator's if they named it (#156).
 
     A stored title wins outright. Deriving one from the brief is the default,
@@ -243,7 +243,7 @@ def _name(conn: sqlite3.Connection, node_id: int) -> str:
     # append the node id so sibling briefs with the same heading (LLM briefs
     # readily repeat "Overview" etc.) never collide onto one directory and drop
     # a subtree — the same collision-safety sections already have.
-    return f"{_slug(_heading(conn, node_id)) or 'node'}-{node_id}"
+    return f"{_slug(heading(conn, node_id)) or 'node'}-{node_id}"
 
 
 def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:

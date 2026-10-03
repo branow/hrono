@@ -19,7 +19,7 @@ from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
-from hrono.export.render import _heading
+from hrono.export.render import heading
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.server.app import create_app
@@ -83,7 +83,7 @@ def test_a_rename_is_what_the_export_shows(
     harness: tuple[Harness, int],
 ) -> None:
     h, node = harness
-    assert _heading(h.conn, node).startswith("The deploy pipeline")
+    assert heading(h.conn, node).startswith("The deploy pipeline")
 
     response = h.client.patch(
         f"/trees/{TREE}/nodes/{node}",
@@ -92,7 +92,7 @@ def test_a_rename_is_what_the_export_shows(
     )
 
     assert response.status_code == 200
-    assert _heading(h.conn, node) == "Deploys (platform-owned)"
+    assert heading(h.conn, node) == "Deploys (platform-owned)"
 
 
 def test_a_rename_pins_the_brief_it_was_derived_from(

@@ -21,7 +21,12 @@ HTML. A brief is prose with lists in it.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+
 from markdown_it import MarkdownIt
+from markdown_it.renderer import RendererHTML
+from markdown_it.token import Token
+from markdown_it.utils import EnvType, OptionsDict
 
 # Built once. The parser is stateless between `render` calls and building one
 # per brief on a page of thirty is thirty times the setup for one answer.
@@ -36,3 +41,31 @@ def markdown(text: str | None) -> str:
     if not text:
         return ""
     return _RENDER.render(text)
+
+
+def linked(text: str, resolve: Callable[[str], str]) -> str:
+    """``markdown``, with every link's target passed through ``resolve``.
+
+    For a page that shows a set of linked files in place (#205): the files link
+    to each other by relative path, and in the panel each of those has to
+    become a link to the panel's own view of that file.
+    """
+    return _LINKED.render(text, {"resolve": resolve})
+
+
+def _relinked(
+    renderer: RendererHTML,
+    tokens: Sequence[Token],
+    idx: int,
+    options: OptionsDict,
+    env: EnvType,
+) -> str:
+    token = tokens[idx]
+    target = token.attrGet("href")
+    if isinstance(target, str):
+        token.attrSet("href", env["resolve"](target))
+    return renderer.renderToken(tokens, idx, options, env)
+
+
+_LINKED = MarkdownIt("commonmark", {"html": False, "linkify": False})
+_LINKED.add_render_rule("link_open", _relinked)

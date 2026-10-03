@@ -16,17 +16,15 @@ from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 
-from hrono import notes
 from hrono.auth.users import User
 from hrono.cluster import incubator
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import Encoder, ready_encoder_for
 from hrono.errors import NotFound, Unavailable
-from hrono.export import store as export_store
-from hrono.export.collapse import collapse, shape
-from hrono.export.render import render
+from hrono.export.produce import Export, archive, produce
 from hrono.jobs.worker import enqueue
 from hrono.recall import engine
 from hrono.server.auth import require_role
@@ -123,19 +121,44 @@ def export_tree(
     non-integer ``levels`` is a clean 422 (FastAPI validation); an unbuilt tree
     is a clean 404.
     """
-    database = request.app.state.db
-    with database.connect() as conn:
-        stored = export_store.load(conn, name)
-        if stored is None:
-            raise NotFound(f"tree not built: {name}")
-        agent_tree = collapse(stored, levels)
-        files = render(conn, agent_tree, notes=notes.rendered(conn, notes.NODE))
+    made = _exported(request, name, levels)
     return {
         "files": [
-            {"path": path, "content": files[path]} for path in sorted(files)
+            {"path": path, "content": made.files[path]}
+            for path in sorted(made.files)
         ],
-        "shape": asdict(shape(agent_tree)),
+        "shape": asdict(made.shape),
     }
+
+
+@router.get("/trees/{name}/export.zip")
+def export_archive(
+    name: str, request: Request, _: Reader, levels: int = _EXPORT_LEVELS
+) -> Response:
+    """The same export as one zip archive (#205).
+
+    For a browser, which has no folder to write a manifest into and no build
+    step to zip one with. The entries are exactly the manifest's files, so the
+    archive unpacks to what ``hrono tree export`` writes with the same options.
+    """
+    made = _exported(request, name, levels)
+    return Response(
+        archive(made.files),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{name}-export-{levels}.zip"'
+            )
+        },
+    )
+
+
+def _exported(request: Request, name: str, levels: int) -> Export:
+    with request.app.state.db.connect() as conn:
+        made = produce(conn, name, levels)
+    if made is None:
+        raise NotFound(f"tree not built: {name}")
+    return made
 
 
 @router.get("/trees/{name}/pending")

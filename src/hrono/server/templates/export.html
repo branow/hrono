@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }} export{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Export<span class="tip" tabindex="0" role="note" data-tip="The tree as a folder of Markdown files an agent reads: root.md first, one link per level down to the source text">?</span></h1>
+</div>
+
+{% if not built %}
+<div class="card">
+  <div class="card-body stack">
+    <h2>Nothing to export yet</h2>
+    <p class="hint">{{ tree }} has not been built, so there are no topics to write out. Build it first, then come back here.</p>
+    <div><a class="btn small" href="/ui?tree={{ tree }}">Go to the overview</a></div>
+  </div>
+</div>
+{% else %}
+<div class="stack">
+  <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/export">
+    <input type="hidden" name="tree" value="{{ tree }}">
+    <label class="field">
+      <span>Hops from root.md to a section<span class="tip" tabindex="0" role="note" data-tip="Fewer hops make each page list more topics. At least 2">?</span></span>
+      <input type="number" name="levels" min="2" max="30" value="{{ levels }}">
+    </label>
+    <button class="btn small" type="submit">Show this shape</button>
+    <a class="btn small primary" href="{{ download }}" download>Download .zip</a>
+  </form>
+
+  {% if flagged %}
+  <div class="callout warn">
+    <div class="body">
+      <div class="title">{{ flagged|length }} topic{{ '' if flagged|length == 1 else 's' }} without a usable brief</div>
+      <p class="hint">An agent reads these pages first. Rewrite or regenerate these briefs before handing the export over.</p>
+      <ul>
+        {% for item in flagged %}
+        <li><a href="{{ item.link }}">{{ item.title }}</a> <span class="hint">{{ item.why }}</span></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="stats" aria-label="export shape">
+    <div class="stat">
+      <div class="figure num">{{ shape.levels }}</div>
+      <div class="label">hops</div>
+    </div>
+    <div class="stat">
+      <div class="figure num">{{ shape.pages_per_level|join(" / ") }}</div>
+      <div class="label">pages per level<span class="tip" tabindex="0" role="note" data-tip="Root first, then each level down; the last is the topics that list source files">?</span></div>
+    </div>
+    <div class="stat">
+      <div class="figure num">{{ shape.widest_page }}</div>
+      <div class="label">entries on the widest page<span class="tip" tabindex="0" role="note" data-tip="A page should list at most {{ budget }}, about as much to read as one section">?</span></div>
+    </div>
+    <div class="stat">
+      <div class="figure num">{{ files }}</div>
+      <div class="label">files, {{ "{:,}".format(size) }} bytes</div>
+    </div>
+  </section>
+
+  {% if not shape.within_budget %}
+  <div class="callout warn">
+    <div class="body">
+      <div class="title">One page lists {{ shape.widest_page }} entries, over the {{ budget }} an agent reads comfortably</div>
+      <p class="hint">The hop limit was kept, so that page is wide. Allow one more hop to narrow it.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-body stack">
+      <h2>Hand it to an agent</h2>
+      <p class="hint">Write the same files to a folder with the CLI, signed in to this server:</p>
+      <pre class="mono"><code>hrono profile add {{ tree }} --server {{ server }} --token &lt;your token&gt;
+hrono tree export {{ tree }} -o ./{{ tree }}-export --levels {{ levels }}</code></pre>
+    </div>
+  </section>
+
+  <section class="card" id="page">
+    <div class="card-body stack">
+      {% if crumbs|length > 1 %}
+      <div class="crumbs">
+        {% for link, label in crumbs %}
+        {% if not loop.first %}<span class="sep">/</span>{% endif %}
+        <a href="{{ link }}">{{ label }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="eyebrow mono">{{ page }}</div>
+      <div class="prose">{{ html|safe }}</div>
+    </div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}
