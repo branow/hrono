@@ -83,10 +83,9 @@ def test_sync_handler_uses_db_through_testclient(tmp_path: Path) -> None:
         assert response.json()["count"] == 1
 
 
-def test_startup_exposes_master_key_and_key_id(tmp_path: Path) -> None:
+def test_startup_exposes_the_key_id(tmp_path: Path) -> None:
     app = create_app(db_path=tmp_path / "hrono.db", master_key=KEY)
     with TestClient(app):
-        assert app.state.master_key == KEY
         assert app.state.key_id == 1
 
 

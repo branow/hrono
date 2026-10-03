@@ -19,7 +19,6 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from hrono.auth.users import create_user
-from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.paths import cli_workdir
@@ -153,7 +152,7 @@ def test_a_hung_cli_ends_in_a_bad_request(served) -> None:
     state = client.app.state
     context = ValidationContext(
         database=state.db,
-        cipher=Cipher.from_key(state.master_key, state.key_id),
+        cipher=state.cipher,
         cache_root=state.cache_root,
     )
     fake_claude(bin_dir, "sleep 5\n")

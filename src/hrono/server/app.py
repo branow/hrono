@@ -179,7 +179,6 @@ def create_app(
         try:
             if master_key is None:
                 raise MasterKeyError("master key required to start the server")
-            app.state.master_key = master_key
             if owned:
                 with database.write() as active:
                     app.state.key_id = reconcile(active, master_key).key_id
