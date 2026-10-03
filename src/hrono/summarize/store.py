@@ -9,6 +9,7 @@ once; a repeat key is a no-op.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
 
@@ -27,26 +28,20 @@ def pending(
 
     Bodies are read only for what is pending. Condense runs on every sync, and
     reading every section body to find the few that changed would make an
-    unchanged tree cost its whole corpus in I/O (qa, #221).
+    unchanged tree cost its whole corpus in I/O (qa, #221). The selection is
+    set-based and binds two parameters whatever the corpus size: one bound
+    parameter per pending hash fails outright past SQLite's 32,766-variable
+    limit, which is every first build of a large corpus (E001).
     """
-    missing = conn.execute(
-        "SELECT DISTINCT s.content_hash AS h FROM sections s "
-        "WHERE s.source_type != 'node' AND NOT EXISTS (SELECT 1 FROM "
-        "condensations d WHERE d.content_hash = s.content_hash "
-        "AND d.model_name = ?)",
-        (model_name,),
-    ).fetchall()
-    redo = {digest for digest, _, _ in unusable(conn, model_name)}
-    wanted = sorted({row["h"] for row in missing} | redo)
-    if not wanted:
-        return ()
-    marks = ",".join("?" * len(wanted))
+    redo = sorted({digest for digest, _, _ in unusable(conn, model_name)})
     rows = conn.execute(
-        "SELECT DISTINCT s.content_hash AS h, c.body AS body FROM sections s "  # noqa: S608
+        "SELECT DISTINCT s.content_hash AS h, c.body AS body FROM sections s "
         "JOIN contents c ON c.content_hash = s.content_hash "
-        f"WHERE s.source_type != 'node' AND s.content_hash IN ({marks}) "
-        "ORDER BY s.content_hash",
-        wanted,
+        "WHERE s.source_type != 'node' AND (NOT EXISTS (SELECT 1 FROM "
+        "condensations d WHERE d.content_hash = s.content_hash "
+        "AND d.model_name = ?) OR s.content_hash IN "
+        "(SELECT value FROM json_each(?))) ORDER BY s.content_hash",
+        (model_name, json.dumps(redo)),
     ).fetchall()
     return tuple((row["h"], bytes(row["body"])) for row in rows)
 

@@ -328,3 +328,19 @@ def test_a_job_that_leaves_running_stops_launching_calls(db: Database) -> None:
     with db.connect() as conn:
         assert store.count(conn, MODEL) == client.calls  # all of it kept
     assert outcome["condensed"] == client.calls
+
+
+def test_pending_finds_every_section_of_a_corpus_past_the_variable_limit(
+    db: Database,
+) -> None:
+    # SQLite refuses a statement binding more than 32,766 parameters; one per
+    # pending hash meant a first build this large could not condense (E001)
+    beyond = 32_800
+    with db.connect() as conn, conn:
+        for i in range(beyond):
+            add_section(conn, f"f{i}.txt", f"body {i}\n".encode(), i + 2)
+
+    with db.connect() as conn:
+        found = store.pending(conn, MODEL)
+
+    assert len(found) == beyond + 2

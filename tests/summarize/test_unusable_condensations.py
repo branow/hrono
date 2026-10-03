@@ -1,5 +1,6 @@
 """#221: a condensation that is the model talking back is never cached."""
 
+import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -159,6 +160,42 @@ def test_the_stored_non_condensations_are_listed(built: Built) -> None:
     assert answer["count"] == 1
     assert answer["condensations"][0]["path"] == "f4.txt"
     assert answer["condensations"][0]["why"] == "talks-to-the-caller"
+
+
+def test_the_listing_binds_no_parameter_per_condensation(
+    built: Built,
+) -> None:
+    # a placeholder per hash fails past SQLite's variable limit; the limit is
+    # lowered here so every section talking back is already past it (E001)
+    with built.database.write() as conn:
+        rows = conn.execute(
+            "SELECT content_hash FROM condensations WHERE model_name = ?",
+            ("sonnet",),
+        ).fetchall()
+        for (digest,) in rows:
+            conn.execute(
+                "DELETE FROM condensations WHERE content_hash = ?", (digest,)
+            )
+            store.upsert(conn, digest, "sonnet", CHATTER, 1, 1)
+    key = Fernet.generate_key()
+    conn = open_database(built.root / "hrono.db")
+    reconcile(conn, key)
+    token = create_user(conn, "rita", "reader")[1]
+    conn.commit()
+    conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 3)
+    app = create_app(connection=conn, master_key=key, key_id=1)
+    with TestClient(app) as http:
+        app.state.worker.stop()
+        app.state.worker.join(timeout=5)
+        answer = http.get(
+            "/trees/default/unusable-condensations",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    conn.close()
+
+    assert len(rows) > 3
+    assert answer.status_code == 200
+    assert answer.json()["count"] >= len(rows)
 
 
 def test_a_good_condensation_is_never_overwritten(built: Built) -> None:

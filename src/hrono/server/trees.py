@@ -12,6 +12,7 @@ outside the tree are visible rather than silently missing from the map.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import asdict
 from typing import Annotated
@@ -178,16 +179,20 @@ def unusable_condensations(
 def _paths_in(
     conn: sqlite3.Connection, tree: str, digests: list[str]
 ) -> dict[str, list[str]]:
-    """The files in ``tree`` whose sections have each content hash."""
+    """The files in ``tree`` whose sections have each content hash.
+
+    The hashes go in as one JSON parameter: a placeholder each fails past
+    SQLite's 32,766-variable limit (E001).
+    """
     if not digests:
         return {}
-    marks = ",".join("?" * len(digests))
     rows = conn.execute(
-        "SELECT DISTINCT s.content_hash AS h, s.path AS path FROM sections s "  # noqa: S608
+        "SELECT DISTINCT s.content_hash AS h, s.path AS path FROM sections s "
         "JOIN node_members m ON m.section_id = s.id "
         "JOIN nodes n ON n.id = m.node_id "
-        f"WHERE n.tree = ? AND s.content_hash IN ({marks}) ORDER BY s.path",
-        (tree, *digests),
+        "WHERE n.tree = ? AND s.content_hash IN "
+        "(SELECT value FROM json_each(?)) ORDER BY s.path",
+        (tree, json.dumps(digests)),
     ).fetchall()
     found: dict[str, list[str]] = {}
     for row in rows:
