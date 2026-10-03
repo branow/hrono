@@ -15,8 +15,13 @@ from hrono.crypto.masterkey import reconcile
 from hrono.db.database import Database, open_database
 from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import enqueue
-from hrono.llm.client import CompletionRequest, CompletionResult, Usage
-from hrono.llm.ledger import Ledgered
+from hrono.llm.client import (
+    CompletionRequest,
+    CompletionResult,
+    LLMError,
+    Usage,
+)
+from hrono.llm.ledger import Ledgered, metered
 from hrono.registry import store as registry_store
 from hrono.registry.collections.models import Model
 from hrono.server.app import create_app
@@ -285,3 +290,47 @@ def test_a_model_config_carries_its_own_price() -> None:
     assert priced.price is not None and priced.price.cache_read == 0.0
     with pytest.raises(ValidationError):
         Model.model_validate({**base, "price": {"input": -1, "output": 0}})
+
+
+def test_a_paid_call_with_no_token_count_is_unknown_not_free(
+    db: Database,
+) -> None:
+    # a remote embedding batch: billed per token, recorded with none (qa)
+    run_id = enqueue(db, "embed", {}, started_by="ana")
+    context = JobContext(db, job_id=run_id)
+    config = {"name": "oai-embed", "model": "text-embedding-3-small"}
+    metered(lambda texts: [[0.0]], context, config, provider="openai")(["a"])
+
+    [group] = _by(db, "run")
+
+    assert group["cost"]["metered"] == {
+        "usd": None,
+        "unpriced": ["text-embedding-3-small"],
+    }
+
+
+def test_a_refused_call_with_no_token_count_costs_nothing(
+    db: Database,
+) -> None:
+    run_id = enqueue(db, "brief", {}, started_by="ana")
+    with pytest.raises(LLMError):
+        Ledgered(
+            Refusing(),
+            JobContext(db, job_id=run_id),
+            role="brief",
+            provider="anthropic",
+        ).complete(
+            CompletionRequest(
+                model={"name": "m", "model": "x"}, system="", content=""
+            )
+        )
+
+    [group] = _by(db, "run")
+
+    assert group["failed"] == 1
+    assert group["cost"]["metered"] == {"usd": 0.0, "unpriced": []}
+
+
+class Refusing:
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        raise LLMError("upstream refused")

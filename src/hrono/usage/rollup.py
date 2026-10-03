@@ -152,6 +152,8 @@ def for_jobs(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
 _SUMS = (
     "c.model AS model, c.upstream_model AS upstream, c.provider AS provider, "
     "COUNT(*) AS calls, SUM(1 - c.ok) AS failed, "
+    "SUM(c.ok = 1 AND c.input_tokens IS NULL AND c.output_tokens IS NULL) "
+    "AS untold, "
     "COALESCE(SUM(c.input_tokens), 0) AS input, "
     "COALESCE(SUM(c.output_tokens), 0) AS output, "
     "COALESCE(SUM(c.cache_read_tokens), 0) AS cache_read, "
@@ -200,28 +202,35 @@ def _charge(group: _Group, row: sqlite3.Row, override: Price | None) -> None:
     if provider in FREE:
         group.billings.add("local")
         return
-    spent = row["input"] + row["output"] + row["cache_read"]
-    spent += row["cache_creation"]
     name = str(row["upstream"] or row["model"])
-    price = price_for(row["upstream"], override)
-    amount = (
-        0.0
-        if spent == 0
-        else None
-        if price is None
-        else price.cost(
-            row["input"],
-            row["output"],
-            row["cache_read"],
-            row["cache_creation"],
-        )
-    )
+    amount = _amount(row, price_for(row["upstream"], override))
     if provider in SUBSCRIPTION:
         group.billings.add("subscription")
         group.estimate.add(amount, name)
         return
     group.billings.add("metered")
     group.metered.add(amount, name)
+
+
+def _amount(row: sqlite3.Row, price: Price | None) -> float | None:
+    """What these calls cost, or None when that cannot be known.
+
+    A call that SUCCEEDED and recorded no tokens was paid for at a price
+    nobody wrote down (a remote embedding batch, today), so its cost is
+    unknown — not zero. A FAILED call with no tokens is counted as nothing:
+    a refused request is not billed, and treating it as unknown would make
+    every run that ever met an error unpriceable for good.
+    """
+    if row["untold"]:
+        return None
+    spent = row["input"] + row["output"] + row["cache_read"]
+    if spent + row["cache_creation"] == 0:
+        return 0.0
+    if price is None:
+        return None
+    return price.cost(
+        row["input"], row["output"], row["cache_read"], row["cache_creation"]
+    )
 
 
 def _overrides(conn: sqlite3.Connection) -> dict[str, Price]:
