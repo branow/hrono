@@ -467,6 +467,7 @@ def _drawn_links(
         ]
     )
     taken = list(topic_boxes(drawn))
+    lines: list[list[tuple[float, float]]] = []
     placed: list[dict[str, object]] = []
     missed = {id(link) for link in here}
     for link in chosen:
@@ -476,6 +477,7 @@ def _drawn_links(
             nodes[link.target],
             lanes.get(id(link), 0),
             taken,
+            lines,
         )
         if shape is None:
             continue
@@ -560,6 +562,7 @@ def _drawn(
     end: graph.Node,
     lane: int,
     taken: list[labels.Box],
+    lines: list[list[tuple[float, float]]],
 ) -> dict[str, object] | None:
     """One overlay link: its path, and a clear spot ON that path for its label.
 
@@ -577,8 +580,9 @@ def _drawn(
         route = _along_the_row(start, end, lane, taken)
     if route is None:
         return None
-    path, points, low = route
-    x, y, box = labels.place(points, link.label, taken)
+    path, points, low, line = route
+    x, y, box = labels.place(points, link.label, taken, lines)
+    lines.append(line)
     return {
         "kind": link.kind,
         "label": link.label,
@@ -590,7 +594,7 @@ def _drawn(
     }
 
 
-Route = tuple[str, list[tuple[float, float]], float]
+Route = tuple[str, list[tuple[float, float]], float, list[tuple[float, float]]]
 
 
 def _between_levels(
@@ -603,7 +607,12 @@ def _between_levels(
     if labels.crosses(taken, [(x1, y1), (x2, y2)]):
         return None
     points = [(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t) for t in _ALONG]
-    return f"M{x1},{y1} L{x2},{y2}", points, max(y1, y2)
+    return (
+        f"M{x1},{y1} L{x2},{y2}",
+        points,
+        max(y1, y2),
+        [(x1, y1), (x2, y2)],
+    )
 
 
 def _along_the_row(
@@ -619,7 +628,8 @@ def _along_the_row(
     ] or [BOW_CAP]
     for bow in bows:
         cx, cy = (x1 + x2) / 2, max(y1, y2) + bow
-        if labels.crosses(taken, _curve(x1, y1, cx, cy, x2, y2, STEPS)):
+        line = _curve(x1, y1, cx, cy, x2, y2, STEPS)
+        if labels.crosses(taken, line):
             continue
         points = [
             (px, py + 4)
@@ -629,6 +639,7 @@ def _along_the_row(
             f"M{x1},{y1} Q{cx},{cy} {x2},{y2}",
             points,
             (max(y1, y2) + cy) / 2,  # the deepest point of the curve
+            line,
         )
     return None
 

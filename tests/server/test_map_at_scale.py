@@ -245,6 +245,38 @@ def test_no_drawn_arc_runs_through_a_topics_words(
                 assert not inside, (arc["d"], box)
 
 
+def test_no_arc_runs_through_another_arcs_label_in_a_fan(
+    scale: Scale,
+) -> None:
+    every = scale.drawn()
+    uppers = [node.id for node in every.nodes if node.level == 1]
+    leaves = [node.id for node in every.nodes if node.level == 0]
+    overlay = overlays.Overlay(
+        kinds=("propagation",),
+        links=tuple(
+            overlays.Link("propagation", scale.root, end, "propagated")
+            for end in [*uppers, *leaves[:: len(leaves) // 8]]
+        ),
+    )
+
+    arcs = _drawn_links(overlay, every)
+
+    assert len(arcs.drawn) >= 8
+    for arc in arcs.drawn:
+        box = labels.text(
+            float(str(arc["x"])),
+            float(str(arc["y"])),
+            str(arc["label"]),
+            labels.META_CHAR,
+        )
+        for other in arcs.drawn:
+            if other is arc:
+                continue
+            for x, y in _points(str(other["d"])):
+                inside = box.left < x < box.right and box.top < y < box.bottom
+                assert not inside, (other["d"], arc["label"], box)
+
+
 def test_the_cap_keeps_the_strongest_of_EACH_kind() -> None:
     pulls = [
         overlays.Link("pull", i, i + 1, "n", weight=float(i)) for i in range(30)
@@ -287,7 +319,7 @@ def test_a_topic_with_arcs_left_out_says_how_many_and_opens_them(
     alone = scale.client.get(href).text
     mine = re.findall(r'<path d="[^"]+" class="link', alone)
     assert 0 < len(mine) <= ARC_CAP
-    assert "Arcs of" in alone  # and the way back to the whole map
+    assert "Only this topic" in alone  # and the way back to the whole map
 
 
 def test_a_chip_sits_clear_of_every_topics_words(scale: Scale) -> None:

@@ -129,21 +129,32 @@ def place(
     candidates: Sequence[tuple[float, float]],
     words: str,
     taken: Iterable[Box],
+    drawn: Iterable[Sequence[tuple[float, float]]] = (),
 ) -> tuple[float, float, Box]:
-    """The first candidate spot where ``words`` overlaps nothing in ``taken``.
+    """The first candidate spot where ``words`` overlaps nothing in ``taken``
+    and no arc already ``drawn`` (each a polyline) runs through it.
 
     When every candidate is occupied the last one is walked downwards until it
     is clear, so a label is always placed and never printed over another.
     """
     held = tuple(taken)
+    lines = tuple(drawn)
+
+    def clear(box: Box) -> bool:
+        return not any(box.hits(other) for other in held) and not any(
+            box.cut_by(start, end)
+            for line in lines
+            for start, end in zip(line, line[1:], strict=False)
+        )
+
     for x, y in candidates:
         box = text(x, y, words, META_CHAR)
-        if not any(box.hits(other) for other in held):
+        if clear(box):
             return x, y, box
     x, y = candidates[-1]
     for step in range(1, TRIES + 1):
         lower = y + step * STEP
         box = text(x, lower, words, META_CHAR)
-        if not any(box.hits(other) for other in held):
+        if clear(box):
             return x, lower, box
     return x, lower, box

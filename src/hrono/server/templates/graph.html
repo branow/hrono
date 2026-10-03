@@ -53,7 +53,7 @@
   <span class="chip plain num">{{ graph.shown }} drawn</span>
   <a class="btn small" href="{{ graph.fold.href }}" data-tip="{{ graph.fold.says }}" data-tip-below>{{ graph.fold.label }}</a>
   {% if overlay.only %}
-  <a class="btn small" href="{{ overlay.only.href }}" data-tip="Draw the strongest arcs of the whole map again" data-tip-below>Arcs of {{ overlay.only.name }} only &times;</a>
+  <a class="btn small" href="{{ overlay.only.href }}" data-tip="Showing only the arcs of {{ overlay.only.name }}. Click to draw the strongest arcs of the whole map again" data-tip-below>Only this topic's arcs &times;</a>
   {% endif %}
   <button class="btn small quiet" type="button" id="fit" hidden
           data-tip="Switch between the whole map in the window and its actual size" data-tip-below>Actual size</button>
