@@ -7,6 +7,7 @@ the server, not the page, is what must refuse.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -16,8 +17,10 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from hrono.auth.users import authenticate, create_user, get_user, list_users
+from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -50,7 +53,23 @@ class Panel:
 @pytest.fixture
 def panel(tmp_path: Path) -> Iterator[Panel]:
     conn = open_database(tmp_path / "hrono.db")
-    reconcile(conn, KEY)
+    record = reconcile(conn, KEY)
+    sealed = Cipher.from_key(KEY, record.key_id).encrypt("s3cret-value")
+    registry_store.insert(
+        conn,
+        "sources",
+        "gh",
+        json.dumps(
+            {
+                "name": "gh",
+                "type": "git",
+                "url": "https://example.test/r.git",
+                "auth": {"method": "token", "token": sealed.ciphertext},
+            }
+        ),
+        sealed.key_id,
+        "t",
+    )
     tokens = {
         role: create_user(conn, role, role)[1]
         for role in ("reader", "writer", "admin")
@@ -86,6 +105,7 @@ def test_below_admin_cannot_see_the_page_the_tab_or_any_route(
         ("/ui/access/reader/role", {"role": "admin"}),
         ("/ui/access/admin/reissue", {"confirm": "1"}),
         ("/ui/access/admin/delete", {"confirm": "1"}),
+        ("/ui/access/rotate-key", {"confirm": "1"}),
     ):
         assert panel.post(path, **form).status_code == 403, path
     assert get_user(panel.conn, "mallory") is None
@@ -208,3 +228,40 @@ def test_a_duplicate_name_is_a_conflict_with_the_name_kept(
 ) -> None:
     refused = panel.post("/ui/access/create", name="reader", role="reader")
     assert refused.status_code == 409
+
+
+def test_rotating_the_key_reports_what_it_did_and_checks_the_old_key(
+    panel: Panel,
+) -> None:
+    fresh = Fernet.generate_key().decode()
+    wrong = panel.post(
+        "/ui/access/rotate-key",
+        old_key=Fernet.generate_key().decode(),
+        new_key=fresh,
+        confirm="1",
+    )
+    assert wrong.status_code == 403
+    assert fresh not in wrong.text
+    unconfirmed = panel.post(
+        "/ui/access/rotate-key", old_key=KEY.decode(), new_key=fresh
+    )
+    assert unconfirmed.status_code == 422
+    done = panel.post(
+        "/ui/access/rotate-key",
+        old_key=KEY.decode(),
+        new_key=fresh,
+        confirm="1",
+    )
+    assert done.status_code == 200
+    assert "Master key rotated" in done.text
+    assert "restart" in done.text
+    assert "1 secret re-encrypted" in done.text
+    assert fresh not in done.text
+    row = registry_store.get(panel.conn, "sources", "gh")  # type: ignore[arg-type]
+    token = json.loads(row["config"])["auth"]["token"]
+    assert (
+        Cipher.from_key(fresh.encode(), row["key_id"]).decrypt(
+            row["key_id"], token
+        )
+        == "s3cret-value"
+    )

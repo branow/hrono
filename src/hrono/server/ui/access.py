@@ -23,6 +23,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth import users
+from hrono.crypto.rotate import rotate
 from hrono.errors import AppError, Invalid
 from hrono.server.ui import Admin, _fields, _trees, router, templates
 
@@ -104,6 +105,31 @@ async def remove(request: Request, user: Admin, name: str) -> Response:
     return _settled(form, done=f"deleted {name}")
 
 
+@router.post("/ui/access/rotate-key")
+async def rotate_key(request: Request, user: Admin) -> Response:
+    """Re-encrypt every stored secret under a new master key (#177)."""
+    form = await _fields(request)
+    if not form.get("confirm"):
+        return _refused(
+            request, user, form, Invalid("confirm to rotate the master key")
+        )
+    try:
+        with request.app.state.db.write() as conn:
+            result = rotate(
+                conn,
+                form.get("old_key", "").strip().encode(),
+                form.get("new_key", "").strip().encode(),
+            )
+    except AppError as exc:
+        return _refused(request, user, form, exc)
+    return _render(
+        request,
+        user,
+        form.get("tree", ""),
+        rotated={"rows": result.rows, "key_id": result.key_id},
+    )
+
+
 def _settled(form: dict[str, str], *, done: str) -> Response:
     """Redirect-after-POST for a change that has no secret to show."""
     query = urlencode({"tree": form.get("tree", ""), "done": done})
@@ -136,6 +162,7 @@ def _render(
     delete: str = "",
     reissue: str = "",
     issued: dict[str, str] | None = None,
+    rotated: dict[str, int] | None = None,
     error: str = "",
     typed: str = "",
     status: int = 200,
@@ -155,6 +182,7 @@ def _render(
             "delete": delete,
             "reissue": reissue,
             "issued": issued,
+            "rotated": rotated,
             "error": error,
             "typed": typed,
         },

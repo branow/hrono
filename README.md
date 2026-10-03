@@ -106,7 +106,9 @@ Access is the admin-only page for who may sign in: list the people with their
 roles, add one (the new token is shown once, in the answer to the form, and is
 stored only as a hash), change a role, reissue a token or delete a person, each
 of the last two after a confirmation naming them. The last admin can be neither
-deleted nor demoted, here or through the API.
+deleted nor demoted, here or through the API. The master key can be rotated from
+the same page, which says how many secrets it re-encrypted and that the server
+must then be restarted on the new key.
 
 ## In-process embedding
 

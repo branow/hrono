@@ -28,6 +28,15 @@
   </script>
   {% endif %}
 
+  {% if rotated %}
+  <div class="callout warn" role="status">
+    <div class="body">
+      <div class="title">Master key rotated: {{ rotated.rows }} secret{{ "" if rotated.rows == 1 else "s" }} re-encrypted</div>
+      <p class="hint">Update the key file and restart this server. Until you do it still holds the old key, so syncing a source or calling a provider will fail, and it will refuse to start on the old key.</p>
+    </div>
+  </div>
+  {% endif %}
+
   {% if delete %}
   <div class="card"><div class="card-body stack">
     <h2>Delete {{ delete }}</h2>
@@ -98,6 +107,20 @@
             {% for role in roles %}<option value="{{ role }}"{% if role == "reader" %} selected{% endif %}>{{ role }}</option>{% endfor %}
           </select></label>
         <button class="btn primary" type="submit">Create and show token</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="rotate-head">
+    <div class="card-head"><h2 id="rotate-head">Rotate the master key</h2></div>
+    <div class="card-body stack">
+      <p class="hint">Re-encrypts every stored provider and source credential under a new key. Give the key the server runs on now, and the one to move to. Neither is stored or logged. The server must be restarted on the new key afterwards.</p>
+      <form class="toolbar" method="post" action="/ui/access/rotate-key" autocomplete="off">
+        <input type="hidden" name="tree" value="{{ tree }}">
+        <label class="field"><span>Current key</span><input type="password" name="old_key" required autocomplete="off"></label>
+        <label class="field"><span>New key</span><input type="password" name="new_key" required autocomplete="off"></label>
+        <label class="confirm mild"><input type="checkbox" name="confirm" value="1"> I will restart the server on the new key</label>
+        <button class="btn danger" type="submit">Rotate key</button>
       </form>
     </div>
   </section>
