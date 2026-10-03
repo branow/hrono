@@ -193,6 +193,18 @@ code, pre, .mono { font-family: var(--mono); font-size: .8125rem; }
 /* against the right edge a centred tooltip would hang off the page */
 [data-tip].left::after { left: auto; right: -.4rem; transform: none; }
 [data-tip].left::before { left: auto; right: .1rem; margin-left: 0; }
+/* UNDER the mark instead of over it. The map is `overflow: hidden` so that a
+   board wider than the window scrolls inside itself rather than stretching
+   the page — which also clips anything drawn above the controls floating at
+   its top edge, and the overlay toggles' own explanations were the one thing
+   there to draw. They now open downwards, into the board. */
+[data-tip-below]::after {
+  bottom: auto; top: calc(100% + .45rem);
+}
+[data-tip-below]::before {
+  bottom: auto; top: calc(100% + .2rem);
+  border-top-color: transparent; border-bottom-color: var(--ink);
+}
 
 details.reveal { border-top: 1px solid var(--rule); padding-top: var(--s3); }
 details.reveal > summary {
@@ -200,9 +212,13 @@ details.reveal > summary {
   font-weight: 560; list-style: none; padding: var(--s1) 0;
 }
 details.reveal > summary::-webkit-details-marker { display: none; }
-details.reveal > summary::before { content: "\25b8"; display: inline-block;
-  width: 1em; transition: transform .12s; }
-details.reveal[open] > summary::before { transform: rotate(90deg); }
+/* A marker, but NOT on a summary that already draws one. `.twisty` draws its
+   chevron out of two borders on this same pseudo-element, and the two rules
+   cascaded together: the glyph arrived wearing `.twisty`'s 6px box, borders
+   and rotation, which rendered as a sheared mark nobody could read (#200). */
+details.reveal > summary:not(.twisty)::before { content: "\25b8";
+  display: inline-block; width: 1em; transition: transform .12s; }
+details.reveal[open] > summary:not(.twisty)::before { transform: rotate(90deg); }
 details.reveal > summary:hover { color: var(--ink); }
 details.reveal .hint { margin-top: var(--s2); }
 
@@ -546,7 +562,9 @@ main:has(.board) { max-width: 1480px; }
 .canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Only while a drag is actually under way, and only then is the text
    selection the drag would otherwise sweep up suppressed. */
-.canvas.panning { cursor: grabbing; user-select: none; }
+/* Mid-pan nothing is being selected, and a half-made selection following the
+   drag is noise. */
+.canvas.panning, .canvas.panning text { cursor: grabbing; user-select: none; }
 .canvas svg { display: block; margin-inline: auto; }
 
 /* The panel the map opens beside itself rather than navigating away to. */
@@ -618,6 +636,17 @@ svg .link { stroke-width: 1.75; fill: none; }
 svg .link.pull { stroke: var(--accent); stroke-dasharray: 6 4; }
 svg .link.proximity { stroke: var(--ok); stroke-dasharray: 1 4; stroke-linecap: round; }
 svg .link.propagation { stroke: var(--ink-faint); }
+/* An overlay line has to SAY what it found, on the board. The number was in a
+   `<title>` only — a tooltip you have to know is there and hover to read —
+   so three different relationships all looked like "a line" (#200). */
+svg text.link-says {
+  font: 600 10.5px var(--mono);
+  stroke-width: 3px;
+  pointer-events: none;
+}
+svg text.link-says.pull { fill: var(--accent); }
+svg text.link-says.proximity { fill: var(--ok); }
+svg text.link-says.propagation { fill: var(--ink-faint); }
 
 /* One tint per top-level subtree, so a glance says which branch a topic is in
    without tracing its connector back up. Shades of the SAME copper, not six
@@ -669,6 +698,16 @@ svg text {
   stroke-linejoin: round;
 }
 svg text.meta { font: 400 10.5px var(--mono); fill: var(--ink-faint); }
+/* A name on the map is a name someone wants to paste into a search box or a
+   ticket. The circles and chevrons are controls and select as nothing — but
+   the two lines of text under each one are text, and the cursor says so. */
+svg text { cursor: text; user-select: text; -webkit-user-select: text; }
+svg circle, svg path, svg rect, svg line {
+  user-select: none; -webkit-user-select: none;
+}
+/* Without this a drag across a label drags the LINK the label sits in, and
+   the selection never starts. */
+svg a { -webkit-user-drag: none; }
 svg a:hover text.label { fill: var(--accent); text-decoration: underline; }
 svg a:hover circle.disc { stroke: var(--accent); }
 /* The topic the panel is showing, ringed so the answer on the right is tied
@@ -771,7 +810,12 @@ summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
 .twisty::before {
   content: "";
+  /* `inline-block`, not the flex item it was: this marker is two borders on a
+     6px box, and in a summary that is NOT a flex row it collapsed to a bare
+     vertical line — a disclosure control drawn as a stray pipe (#200). */
+  display: inline-block;
   flex: none;
+  vertical-align: .08rem;
   width: .4rem; height: .4rem;
   margin-right: .15rem;
   border-right: 1.5px solid var(--ink-faint);
@@ -1026,7 +1070,12 @@ main.bleed .panel {
 .afloat.tl { top: var(--s3); left: var(--s3); }
 .afloat.tr { top: var(--s3); right: var(--s3); max-width: min(30rem, 46vw); }
 .afloat.bl { bottom: var(--s3); left: var(--s3); }
-.reading .afloat.tr { right: calc(22rem + var(--s3)); }
+/* Out from under the panel when one is open. Through `:has`, because the
+   class that says a panel is open is on the board and these bars float over
+   the whole map from OUTSIDE it — so the descendant selector this was written
+   as never matched anything, and the overlay toggles sat on top of the
+   panel's own heading. */
+main:has(.board.reading) .afloat.tr { right: calc(22rem + var(--s3)); }
 .afloat .keys { margin: 0; }
 .map-title { font: 620 .8125rem/1.5 var(--mono); color: var(--ink-soft); }
 @media (max-width: 54rem) {
@@ -1034,6 +1083,152 @@ main.bleed .panel {
 }
 
 /* ----------------------------------------------------------------- guide */
+/* Diagrams, drawn inline so they cost no request and follow the theme. Every
+   colour is a token: a figure with a baked hex is a figure that is unreadable
+   in one of the two themes (#200). */
+.figure { display: block; width: 100%; max-width: 44rem; margin: var(--s3) auto; height: auto; }
+.figure.small { width: 9.5rem; margin: 0; flex: none; }
+.fig-box { fill: var(--surface); stroke: var(--rule-firm); stroke-width: 1.2; }
+.fig-box.accent { stroke: var(--accent); }
+.fig-box.warm { fill: var(--sunken); }
+.fig-disc { fill: var(--accent); }
+.fig-flow { fill: none; stroke: var(--ink-faint); stroke-width: 1.4; }
+.fig-flow.arrow { marker-end: none; stroke-dasharray: 3 3; }
+.fig-label { font: 600 12px var(--mono); fill: var(--ink); text-anchor: middle; }
+.fig-note { font: 400 10px var(--sans); fill: var(--ink-faint); text-anchor: middle; }
+.fig-note.dim { font-size: 9.5px; }
+
+/* The tree's actual width, level by level. A bar rather than a number alone:
+   a tree that collapsed into one flat level is visible at a glance. */
+ul.layers { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+ul.layers li { display: grid; grid-template-columns: 8rem 1fr auto; gap: var(--s3); align-items: center; }
+.layer-name { font: 600 .8125rem/1.5 var(--mono); color: var(--ink-soft); }
+.layer-name.dim { color: var(--ink-faint); font-weight: 400; }
+.layer-bar { background: var(--sunken); border-radius: var(--r1); height: .85rem; overflow: hidden; }
+.layer-bar > span { display: block; height: 100%; background: var(--accent); border-radius: var(--r1); }
+.layer-bar > span.raw { background: var(--rule-firm); }
+.layer-count { font-size: .78125rem; color: var(--ink-faint); white-space: nowrap; }
+
+/* What triggers a repair, and what the repair is. Two columns, because the
+   left one is the thing a reader scans for ("I edited a file") and the right
+   one is the answer. */
+/* What a run DID, under the op that did it. One short line per thing, so a
+   result is read at a glance rather than opened. */
+ul.didwhat { list-style: none; margin: .3rem 0 0; padding: 0;
+  font-size: .78125rem; color: var(--ink-soft); display: grid; gap: .1rem; }
+ul.didwhat > li::before { content: "\2022"; color: var(--accent); margin-right: .4rem; }
+ul.didwhat > li.measured::before { color: var(--ink-faint); }
+ul.didwhat.indent { margin-left: var(--s4); }
+ul.didwhat.big { font-size: .875rem; gap: .25rem; }
+
+/* ----------------------------------------------------------------- prose */
+/* What a model wrote, as the markdown it is. The switch to the stored
+   characters is a checkbox and two rules — no script, because this dashboard
+   works with JavaScript off and "what is actually in the database" is the one
+   question a rendered view cannot answer by itself. */
+.prose-block { display: grid; gap: var(--s2); }
+.prose-switch { position: absolute; opacity: 0; pointer-events: none; }
+.prose-head { display: flex; justify-content: flex-end; }
+.prose-toggle {
+  cursor: pointer; font-size: .75rem; color: var(--ink-faint);
+  border: 1px solid var(--rule); border-radius: var(--r1);
+  padding: .1rem .4rem;
+}
+.prose-toggle:hover { color: var(--accent); border-color: var(--accent); }
+.prose-switch:focus-visible + .prose-head .prose-toggle {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.prose-toggle .when-on { display: none; }
+.prose-switch:checked ~ .prose-head .prose-toggle .when-off { display: none; }
+.prose-switch:checked ~ .prose-head .prose-toggle .when-on { display: inline; }
+.prose-switch:checked ~ .rendered { display: none; }
+.prose-switch:not(:checked) ~ .raw { display: none; }
+
+.prose { color: var(--ink); font-size: .875rem; line-height: 1.6; }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 var(--s3); }
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  font-size: .9375rem; font-weight: 640; margin: var(--s4) 0 var(--s2);
+  line-height: 1.4;
+}
+.prose ul, .prose ol { margin: 0 0 var(--s3); padding-left: 1.2rem; }
+.prose li { margin-bottom: .2rem; }
+.prose li > p { margin-bottom: .2rem; }
+.prose code {
+  font: 500 .8125rem var(--mono); background: var(--sunken);
+  padding: .05rem .25rem; border-radius: var(--r1);
+}
+.prose pre {
+  background: var(--sunken); padding: var(--s3); border-radius: var(--r2);
+  overflow-x: auto; margin: 0 0 var(--s3);
+}
+.prose pre code { background: none; padding: 0; }
+.prose blockquote {
+  margin: 0 0 var(--s3); padding-left: var(--s3);
+  border-left: 2px solid var(--rule-firm); color: var(--ink-soft);
+}
+.prose strong { font-weight: 640; }
+.prose hr { border: 0; border-top: 1px solid var(--rule); margin: var(--s4) 0; }
+/* the stored characters, exactly — including the line breaks the rendered
+   view turns into paragraphs */
+pre.prose.raw {
+  white-space: pre-wrap; word-break: break-word;
+  font: 400 .8125rem/1.6 var(--mono); color: var(--ink-soft);
+  background: var(--sunken); padding: var(--s3); border-radius: var(--r2);
+  margin: 0;
+}
+a.runlink code { color: var(--accent); }
+a.runlink:hover { text-decoration: none; }
+a.runlink:hover code { text-decoration: underline; }
+.bar.wide { display: block; width: 100%; height: .6rem; margin-top: var(--s2); }
+.progress-line { margin: 0; font-size: .875rem; color: var(--ink-soft); }
+ul.pieces { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s3); }
+ul.pieces > li { padding-bottom: var(--s3); border-bottom: 1px solid var(--rule); }
+ul.pieces > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.piece-head { display: flex; align-items: center; gap: var(--s2); }
+.piece-head .grow { flex: 1; }
+.bad-text { color: var(--bad); }
+
+/* Every stage this build can run, listed rather than hidden behind the API. */
+ul.whole-ops { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; gap: var(--s3); }
+ul.whole-ops form { display: grid; grid-template-columns: 8rem 1fr; gap: var(--s3); align-items: baseline; }
+ul.whole-ops .hint { margin: 0; }
+ul.stages { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; gap: 1px;
+  background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
+ul.stages li { background: var(--surface); }
+ul.stages form { display: grid; grid-template-columns: 9rem 1fr auto auto; gap: var(--s3);
+  align-items: center; padding: var(--s2) var(--s3); }
+.stage-op { font: 600 .8125rem/1.6 var(--mono); color: var(--accent); }
+.stage-does { color: var(--ink-soft); font-size: .8125rem; }
+h3.sub { font-size: .9375rem; margin: 0 0 var(--s2); }
+.figure.climb { max-width: 100%; margin-top: var(--s2); }
+
+@media (max-width: 44rem) {
+  ul.stages form { grid-template-columns: 1fr; gap: .3rem; }
+}
+
+ul.rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px;
+  background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
+ul.rules li { display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3);
+  align-items: baseline; padding: var(--s2) var(--s3); background: var(--surface); }
+.when { font: 600 .8125rem/1.6 var(--mono); color: var(--accent); }
+.then { color: var(--ink-soft); font-size: .875rem; line-height: 1.55; }
+
+ul.roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
+ul.roles li { display: grid; grid-template-columns: 7rem 1fr auto; gap: var(--s3); align-items: baseline; padding: var(--s2) var(--s3); background: var(--surface); }
+.role-name { font: 600 .8125rem/1.6 var(--mono); color: var(--accent); }
+.role-does { color: var(--ink-soft); font-size: .875rem; }
+
+ul.overlay-keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s4); }
+ul.overlay-keys li { display: flex; gap: var(--s3); align-items: flex-start; }
+ul.overlay-keys .hint { margin-top: .2rem; }
+
+@media (max-width: 44rem) {
+  ul.layers li, ul.roles li, ul.rules li { grid-template-columns: 1fr; gap: .2rem; }
+  ul.overlay-keys li { flex-direction: column; }
+}
+
 ol.pipeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px;
   background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
 ol.pipeline li { display: grid; grid-template-columns: 9rem 1fr auto; gap: var(--s3);
@@ -1065,6 +1260,40 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 
 .settings-edit > form, .settings-add > form { display: grid; gap: var(--s3); margin-top: var(--s3); }
 .settings-edit .callout, .settings-add .callout { margin-top: var(--s3); }
+
+/* The two buttons under a config box sat ON its bottom edge — one rounded
+   rectangle against another with nothing between them, which read as part of
+   the input rather than as the acts that commit it. */
+.act-row {
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+  margin: var(--s3) 0 0;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+
+/* Which collection you are looking at, and which way you are editing it. */
+.viewpick { display: flex; gap: .35rem; }
+
+/* A collection is a LIST you scan, not five open editors. The row names the
+   item and says what it points at; the form opens in its place. */
+.item-row { gap: var(--s3); }
+.item-row .grow { flex: 1; }
+.item-says { color: var(--ink-faint); font-size: .78125rem; }
+
+/* Fields derived from the model (`server/forms.py`): two to a line where they
+   are single values, full width where they are a box or a set of picks. */
+.item-form { display: grid; gap: var(--s3); }
+.form-head { display: flex; align-items: center; gap: var(--s2); font-size: .9375rem; }
+.fields {
+  display: grid; gap: var(--s3);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+.fields .field.wide { grid-column: 1 / -1; }
+.fields label { font-size: .8125rem; color: var(--ink-soft); font-weight: 560; }
+.fields .dim { color: var(--ink-faint); font-weight: 400; }
+.fields .hint { font-size: .75rem; margin: 0; }
+.needed { color: var(--accent); margin-left: .15rem; }
+.fields input.line, .fields select, .fields textarea { width: 100%; }
 .settings-act { margin: 0; }
 .danger-act { display: grid; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--rule); }
 

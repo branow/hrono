@@ -20,6 +20,14 @@ from hrono.server.ui import Reader, _trees, router, templates
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
+# The overlays the MAP offers. `propagation` is deliberately not among them
+# (#200): it is a record of judge decisions a sync already made, which is a
+# thing you REVIEW, not a repair you perform on the board — and it draws
+# nothing at all on a tree that has never been re-synced, which is how most
+# people met it. It lives on the Activity page, beside the decisions it is
+# made of. The URL still accepts it; only the toggle is gone.
+MAP_EDGES = ("pull", "proximity")
+
 # A first visit should show a useful amount of tree rather than one circle
 # nobody knows to click. Two: the root and what is directly under it, which
 # is the shape of the tree rather than the whole of it.
@@ -62,6 +70,7 @@ def activity_page(tree: str, request: Request, user: Reader) -> Response:
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         rows, total = update_log.recent(conn, tree)
+    decided = [_decision(row) for row in rows]
     return templates.TemplateResponse(
         request,
         "activity.html",
@@ -69,11 +78,55 @@ def activity_page(tree: str, request: Request, user: Reader) -> Response:
             "user": user,
             "trees": trees,
             "tree": tree,
-            "rows": [_decision(row) for row in rows],
+            "rows": decided,
             "total": total,
+            "climbs": _climbs(decided),
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+# How tall the climb figure is, and how far apart its levels sit.
+CLIMB_STEP = 44
+CLIMB_PAD = 22
+
+
+def _climbs(decided: list[dict[str, object]]) -> dict[str, object]:
+    """The climbs in this log, drawn — what a list of rows cannot show.
+
+    Each row says "topic 12 climbed to topic 18". Twelve such rows do not say
+    the thing an operator actually wants to know, which is SHAPE: whether one
+    commit restaled a corner of the map or swept it to the root. This used to
+    be a map overlay (#200); it belongs here, over the decisions it is made
+    of, and on a tree with no decisions there is simply nothing to draw.
+    """
+    climbed = [
+        (int(row["node_id"]), int(row["climbed_to"]))  # type: ignore[arg-type]
+        for row in decided
+        if row["climbed_to"] and int(row["climbed_to"]) != int(row["node_id"])  # type: ignore[arg-type]
+    ]
+    if not climbed:
+        return {"links": [], "width": 0, "height": 0}
+    tops = sorted({top for _, top in climbed})
+    leaves = sorted({leaf for leaf, _ in climbed})
+    place = {node: index for index, node in enumerate(leaves)}
+    high = {node: index for index, node in enumerate(tops)}
+    width = max(len(leaves), len(tops)) * 120 + CLIMB_PAD * 2
+    return {
+        "width": width,
+        "height": CLIMB_STEP * 2 + CLIMB_PAD * 2,
+        "links": [
+            {
+                "from": leaf,
+                "to": top,
+                "x1": CLIMB_PAD + place[leaf] * 120 + 60,
+                "y1": CLIMB_PAD + CLIMB_STEP,
+                "x2": CLIMB_PAD + high[top] * 120 + 60,
+                "y2": CLIMB_PAD,
+            }
+            for leaf, top in sorted(set(climbed))
+        ],
+    }
 
 
 def _decision(row: object) -> dict[str, object]:
@@ -150,6 +203,7 @@ def graph_page(
         )
         branches = _branches(conn, tree)
         focused = panel.build(conn, tree, wanted) if wanted else None
+    links = _drawn_links(overlay, drawn)
     return templates.TemplateResponse(
         request,
         "graph.html",
@@ -164,20 +218,28 @@ def graph_page(
                 ],
                 "edges": drawn.edges,
                 "width": drawn.width,
-                "height": drawn.height,
+                "height": _tall_enough(drawn.height, links),
                 "home": _home(drawn, wanted),
                 "shown": len(drawn.nodes),
-                "expand_all": _graph_url(
-                    tree, _every(branches), edges, focus=focus
-                ),
-                "collapse_all": _graph_url(tree, "", edges, focus=focus),
+                # ONE control, not two: a map is either all open or it is
+                # not, and two mutually exclusive buttons sitting side by side
+                # made the reader work out which one was already true (#200)
+                "fold": _folding(tree, opened, branches, edges, focus),
             },
             "overlay": {
-                "links": _drawn_links(overlay, drawn),
+                "links": links,
                 "unavailable": overlay.unavailable,
                 "toggles": _edge_toggles(tree, open, kinds, focus),
             },
             "panel": focused,
+            # a child in the panel is a link back onto the map, and it has to
+            # be the map the reader is ON — the hard-coded one in the template
+            # dropped the expand state and the overlays, so clicking a child
+            # collapsed the board under the reader (#200)
+            "reads": {
+                part.id: _graph_url(tree, open, edges, focus=str(part.id))
+                for part in (focused.parts if focused else ())
+            },
             # closing the panel is the same map without it, which keeps the
             # expand state and the overlays the reader had set up
             "unfocus": _graph_url(tree, open, edges),
@@ -187,6 +249,23 @@ def graph_page(
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+# Room under the lowest thing an overlay draws, so its label is not against
+# the edge of the canvas.
+MARGIN = 28.0
+
+
+def _tall_enough(height: float, links: list[dict[str, object]]) -> float:
+    """The canvas, grown to fit whatever the overlays put on it.
+
+    An overlay arc leaves the row it joins (`_drawn`), and the SVG is sized
+    from the TREE — so with the arcs added the drawing was taller than the box
+    it was drawn in, and every arc and every label was cut off at the bottom
+    edge (#200). The board is a scrolling box; it can simply be taller.
+    """
+    lowest = max((float(link["y"]) for link in links), default=0.0)
+    return max(height, lowest + MARGIN)
 
 
 def _home(drawn: graph.Graph, focused: int) -> float:
@@ -223,24 +302,56 @@ def _every(branches: set[int]) -> str:
     return ",".join(str(node) for node in sorted(branches))
 
 
+def _folding(
+    tree: str,
+    opened: set[int],
+    branches: set[int],
+    edges: str,
+    focus: str,
+) -> dict[str, str]:
+    """The one fold control: what it would do, and where it goes.
+
+    Expand-all and collapse-all are not two choices, they are one state read
+    two ways. Drawn as two buttons, the reader has to work out which of them
+    is already true before either is safe to press.
+    """
+    wide_open = branches <= opened
+    return {
+        "label": "Collapse" if wide_open else "Expand all",
+        "says": (
+            "Show only the root"
+            if wide_open
+            else "Open every topic that has something under it"
+        ),
+        "href": _graph_url(
+            tree,
+            "" if wide_open else _every(branches),
+            edges,
+            focus=focus,
+        ),
+    }
+
+
 def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
     """A link to one view of the map.
 
     `open` is emitted even when EMPTY, and that is the whole of the Collapse
     link: an absent `open` means a first visit, which opens several levels, so
-    dropping an empty one turned Collapse into Expand (#197). Every other
-    parameter is omitted when it has nothing to say.
+    dropping an empty one turned Collapse into Expand (#197). The one `open`
+    that must NOT be emitted is the sentinel for "there wasn't one" — passing
+    it through put a literal `open=%00` in the links of every first visit.
+    Every other parameter is omitted when it has nothing to say.
     """
     query = urlencode(
         {
             key: value
             for key, value in (
                 ("tree", tree),
-                ("open", opened),
+                ("open", "" if opened == NO_OPEN else opened),
                 ("edges", edges),
                 ("focus", focus),
             )
-            if value or key == "open"
+            if value or (key == "open" and opened != NO_OPEN)
         },
         quote_via=quote,
         safe=",",
@@ -251,24 +362,107 @@ def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
 def _drawn_links(
     overlay: overlays.Overlay, drawn: graph.Graph
 ) -> list[dict[str, object]]:
-    """Give each link the coordinates of the topics it joins.
+    """Give each link the path that joins the topics it is about, and a place
+    to say what it found.
 
     A link whose end is not on the page is dropped rather than drawn to
     nowhere: the overlay describes what is DRAWN, and `?open=` decides that.
     """
     placed = {node.id: (node.x, node.y) for node in drawn.nodes}
-    return [
-        {
-            "kind": link.kind,
-            "label": link.label,
-            "x1": placed[link.source][0],
-            "y1": placed[link.source][1],
-            "x2": placed[link.target][0],
-            "y2": placed[link.target][1],
-        }
+    here = [
+        (link, placed[link.source], placed[link.target])
         for link in overlay.links
         if link.source in placed and link.target in placed
     ]
+    lanes = _lanes(here)
+    return [
+        _drawn(link, start, end, lanes.get(id(link), 0))
+        for link, start, end in here
+    ]
+
+
+# How a same-row link bows away from the row. The floor is what matters: the
+# arc has to clear BOTH lines of text under a topic (the name and the counts,
+# ~45px down), or the overlay's own label lands on top of them. Links that
+# overlap each other step down a lane at a time so no two labels share a spot.
+BOW_FLOOR = 130.0
+LANE = 54.0
+BOW_CAP = 420.0
+
+
+def _lanes(
+    drawn: list[tuple[overlays.Link, tuple[float, float], tuple[float, float]]],
+) -> dict[int, int]:
+    """How deep each same-row arc goes, so overlapping ones do not coincide.
+
+    Three arcs over adjacent siblings all span the same distance, so at one
+    depth their apexes — and the labels sitting on them — land on top of each
+    other and read as one run-on string (#200). Greedy interval colouring: an
+    arc takes the shallowest lane no arc it OVERLAPS is already using.
+    """
+    spans = sorted(
+        (
+            (min(start[0], end[0]), max(start[0], end[0]), id(link))
+            for link, start, end in drawn
+            if abs(start[1] - end[1]) <= 1
+        ),
+        key=lambda span: (span[0], span[1]),
+    )
+    taken: list[float] = []  # the right edge held by each lane so far
+    lanes: dict[int, int] = {}
+    for left, right, key in spans:
+        lane = next(
+            (index for index, edge in enumerate(taken) if edge <= left),
+            len(taken),
+        )
+        if lane == len(taken):
+            taken.append(right)
+        else:
+            taken[lane] = right
+        lanes[key] = lane
+    return lanes
+
+
+def _drawn(
+    link: overlays.Link,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    lane: int,
+) -> dict[str, object]:
+    """One overlay link: its path, and where its label sits ON that path.
+
+    Siblings sit on one row, so a straight line between two of them runs
+    THROUGH every topic in between: a reader sees a horizontal rule crossing
+    five circles and cannot tell which two it is about (#200). An arc leaves
+    the row, so both ends are visible and the pair is unambiguous — and the
+    label goes at the arc's own apex rather than at a fixed offset, which is
+    what kept putting it over a topic's section count.
+    """
+    (x1, y1), (x2, y2) = start, end
+    middle = (x1 + x2) / 2
+    if abs(y1 - y2) > 1:
+        # already travels between levels: a straight line crosses nothing
+        return _link(link, f"M{x1},{y1} L{x2},{y2}", middle, (y1 + y2) / 2)
+    bow = min(BOW_FLOOR + lane * LANE, BOW_CAP)
+    return _link(
+        link,
+        f"M{x1},{y1} Q{middle},{y1 + bow} {x2},{y2}",
+        middle,
+        # the apex of a quadratic sits HALF way to its control point
+        y1 + bow / 2,
+    )
+
+
+def _link(
+    link: overlays.Link, path: str, x: float, y: float
+) -> dict[str, object]:
+    return {
+        "kind": link.kind,
+        "label": link.label,
+        "d": path,
+        "x": round(x, 1),
+        "y": round(y, 1),
+    }
 
 
 def _edge_toggles(
@@ -277,10 +471,14 @@ def _edge_toggles(
     """One on/off link per overlay, keeping the expand state.
 
     The overlay is part of the URL for the same reason the expand state is: a
-    graph someone is looking at can be pasted to someone else.
+    graph someone is looking at can be pasted to someone else — which is why
+    this builds its link through `_graph_url` like every other link on the
+    page rather than assembling a second one of its own. The copy it used to
+    keep dropped an EMPTY `open`, so turning an overlay on from a collapsed
+    map re-opened the map (the #197 bug, in the one place that was not fixed).
     """
     toggles = []
-    for kind in overlays.KINDS:
+    for kind in MAP_EDGES:
         rest = (
             [k for k in kinds if k != kind]
             if kind in kinds
@@ -289,25 +487,11 @@ def _edge_toggles(
                 kind,
             ]
         )
-        query = urlencode(
-            {
-                k: v
-                for k, v in (
-                    ("tree", tree),
-                    ("open", open),
-                    ("edges", ",".join(rest)),
-                    ("focus", focus),
-                )
-                if v
-            },
-            quote_via=quote,
-            safe=",",
-        )
         toggles.append(
             {
                 "kind": kind,
                 "on": kind in kinds,
-                "href": f"/ui/trees/{tree}/graph?{query}",
+                "href": _graph_url(tree, open, ",".join(rest), focus=focus),
             }
         )
     return toggles
@@ -361,8 +545,12 @@ def _with_toggle(
         "x": node.x,  # type: ignore[attr-defined]
         "y": node.y,  # type: ignore[attr-defined]
         "radius": round(node.radius, 1),  # type: ignore[attr-defined]
-        "toggle": f"/ui/trees/{tree}/graph?tree={tree}&open={query}"
-        + (f"&focus={focused}" if focused else ""),
+        # through `_graph_url` so a chevron keeps the overlays too: its own
+        # hand-built URL dropped `edges`, and opening a topic turned off the
+        # overlay the reader had opened it to look at
+        "toggle": _graph_url(
+            tree, query, edges, focus=str(focused) if focused else ""
+        ),
         # clicking the focused topic again closes its panel, so the disc is a
         # toggle like everything else on this page
         "read": _graph_url(tree, open, edges, focus=focus),

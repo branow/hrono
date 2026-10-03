@@ -30,12 +30,6 @@ from hrono.server.ui import (
 )
 from hrono.summarize import briefs
 
-# A section is ~10 KB, and the page's job is to let someone READ one — 600
-# characters showed a heading and stopped. The whole of a typical section fits
-# here; the pane it lands in scrolls, and anything longer says how much it is
-# not showing (#182).
-PREVIEW_CHARS = 4000
-
 
 @router.get("/ui/trees/{tree}/nodes/{node_id}", response_class=HTMLResponse)
 def node_page(
@@ -550,34 +544,28 @@ def _condensation(row: object) -> dict[str, object] | None:
     text = row["condensed"]  # type: ignore[index]
     if not text:
         return None
-    body = str(text)
     return {
-        "text": body,
+        "text": str(text),
         "by": str(row["condensed_by"]),  # type: ignore[index]
-        # A GOTCHA line is a hazard lifted out of the source so an agent is
-        # warned without reading it — the most valuable line in a condensation
-        # and the one worth pulling out of the wall of markdown.
-        "gotchas": [
-            line.strip().lstrip("*").strip()
-            for line in body.splitlines()
-            if "GOTCHA" in line
-        ],
     }
+    # The GOTCHA lines used to be lifted out and printed above the text as
+    # warning callouts. The text that follows is three paragraphs long and
+    # OPENS with the same lines, so the page said each hazard twice and put
+    # the duplicate first — the reader met the ending before the beginning
+    # (#200). A hazard that is already the first thing in the condensation
+    # does not need lifting out of it.
 
 
 def _content(body: object) -> dict[str, object]:
-    """What a section actually says, and how much of it is being shown.
+    """What a section actually says — the WHOLE of it.
 
-    A preview that silently stops is a preview nobody trusts: the page cannot
-    show ten kilobytes without losing the topic, so it says how many characters
-    it is holding back rather than trailing off into an ellipsis (#199).
+    It used to stop at 4,000 characters and say how many it was holding back.
+    But a section is already the unit the splitter chose precisely because it
+    is a readable amount of one file, the pane it lands in is a scrolling box
+    inside a `<details>` nobody opens by accident, and the one thing a reader
+    opens a section FOR is the part the cut removed (#200).
     """
     if body is None:
-        return {"text": "", "shown": 0, "total": 0, "missing": True}
+        return {"text": "", "total": 0, "missing": True}
     text = bytes(body).decode("utf-8", "replace")
-    return {
-        "text": text[:PREVIEW_CHARS],
-        "shown": min(len(text), PREVIEW_CHARS),
-        "total": len(text),
-        "missing": False,
-    }
+    return {"text": text, "total": len(text), "missing": False}

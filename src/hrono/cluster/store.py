@@ -269,6 +269,18 @@ def replace_level(
             )
 
 
+def parent_of(conn: sqlite3.Connection, child_id: int) -> int | None:
+    """The topic this one hangs under, or None when it hangs under nothing.
+
+    A repair that REPLACES a node has to put the replacements where the
+    original was, and the only record of where that is, is this edge.
+    """
+    row = conn.execute(
+        "SELECT parent_id FROM node_children WHERE child_id = ?", (child_id,)
+    ).fetchone()
+    return None if row is None else int(row["parent_id"])
+
+
 def add_child(
     conn: sqlite3.Connection,
     parent_id: int,

@@ -31,9 +31,10 @@
 {% endmacro %}
 
 {% macro topic_option(option) -%}
-{{ topic_name(option) }} · {{ option.holds }} {{ option.holds_what }} · topic {{ option.id }}{% if option.title %} — {{ option.title }}{% endif %}
+{{ topic_name(option) }} ({{ option.holds }} {{ option.holds_what }}, topic {{ option.id }})
 {%- endmacro %}
 
+{% import "prose.html" as prose %}
 {% block main %}
 <div class="page-head">
   <div class="crumbs">
@@ -42,16 +43,12 @@
     <span class="sep">/</span>
     <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a>
     {% endif %}
-    <span class="sep">/</span>
-    <span>{{ node.where or "topic %s"|format(node.id) }}</span>
   </div>
   <h1 class="where">{{ node.where or "topic %s"|format(node.id) }}</h1>
-  <p class="said">{{ node.title }}</p>
   <p class="where-note row mt-2">
-    <span class="chip">level {{ node.level }}</span>
     <span class="chip">{% if node.children %}groups {{ node.children|length }} topic{{ "" if node.children|length == 1 else "s" }}{% else %}holds {{ node.members|length }} section{{ "" if node.members|length == 1 else "s" }}{% endif %}</span>
-    <span class="chip">topic {{ node.id }}</span>
-    {% if node.parent %}<span class="chip plain">under <a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a></span>{% endif %}
+    <span class="chip plain">level {{ node.level }}</span>
+    <span class="chip plain">topic {{ node.id }}</span>
     {% for kind in node.pin_kinds %}
     <span class="chip accent" title="{{ pin_says.get(kind, kind) }}">pinned: {{ kind }}</span>
     {% endfor %}
@@ -79,7 +76,7 @@
     </div>
     <div class="card-body stack">
       {% if node.brief %}
-      <blockquote>{{ node.brief }}</blockquote>
+      {{ prose.text(node.brief, "brief", "text") }}
       {% else %}
       <div class="empty" title="Until one is written, recall cannot answer from this topic">
         <div class="title">No brief</div>
@@ -214,7 +211,7 @@
         <li>
           <a href="/ui/trees/{{ tree }}/nodes/{{ child.id }}?tree={{ tree }}" title="{{ child.title }}">
             <span class="who-holds">{{ topic_name(child) }}</span>
-            <span class="chip num nowrap">{{ child.holds }} {{ child.holds_what }} · topic {{ child.id }}</span>
+            <span class="chip num nowrap">{{ child.holds }} {{ child.holds_what }}</span><span class="chip plain nowrap">topic {{ child.id }}</span>
           </a>
         </li>
         {% endfor %}
@@ -260,12 +257,7 @@
             aria-label="What a model wrote about this section. The topic's brief is reduced from these, not from the raw files.">?</span></span>
           <span class="chip plain">{{ member.condensed.by }}</span>
         </div>
-        {% for gotcha in member.condensed.gotchas %}
-        <div class="callout warn mb-3">
-          <div class="body"><p class="hint">{{ gotcha }}</p></div>
-        </div>
-        {% endfor %}
-        <pre class="preview">{{ member.condensed.text }}</pre>
+        {{ prose.text(member.condensed.text, "cond-%s"|format(member.id), "text") }}
       </div>
       {% else %}
       <p class="hint">Not condensed yet — the brief above was written without it.</p>
@@ -278,13 +270,7 @@
         </div>
               <pre class="preview body">{{ member.content.text }}</pre>
       </div>
-              <p class="cut">
-                {% if member.content.total > member.content.shown %}
-                Showing the first {{ "{:,}".format(member.content.shown) }} of {{ "{:,}".format(member.content.total) }} characters.
-                {% else %}
-                All {{ "{:,}".format(member.content.total) }} characters.
-                {% endif %}
-              </p>
+              <p class="cut">{{ "{:,}".format(member.content.total) }} characters.</p>
               {% endif %}
               {% if can_edit and candidates.siblings %}
               <form method="post" action="/ui/trees/{{ tree }}/sections/{{ member.id }}/move" class="move">
@@ -314,21 +300,14 @@
 <aside class="topic-aside stack">
   <section class="card">
     <div class="card-head">
-      <h2>Particulars<span class="tip left" tabindex="0" role="note" data-tip="What this topic is, as the database holds it">?</span></h2>
+      <h2>Where it sits<span class="tip left" tabindex="0" role="note" data-tip="The facts that change what you would do to this topic. Its id, level and contents are in the line under the title">?</span></h2>
     </div>
     <div class="card-body">
       <dl class="facts">
-        <dt>Topic</dt><dd class="mono">{{ node.id }}</dd>
-        <dt>Level</dt><dd>{{ node.level }}{% if node.children %} — groups topics{% else %} — holds sections{% endif %}</dd>
-        <dt>Holds</dt>
-        <dd>{{ node.members|length }} section{{ "" if node.members|length == 1 else "s" }}{% if node.children %}, {{ node.children|length }} topic{{ "" if node.children|length == 1 else "s" }}{% endif %}</dd>
         <dt>Parent</dt>
-        <dd>{% if node.parent %}<a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a> <span class="faint">topic {{ node.parent.id }}</span>{% else %}none — this is the root{% endif %}</dd>
+        <dd>{% if node.parent %}<a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a>{% else %}<span class="chip warn">none — nothing points at this topic</span>{% endif %}</dd>
         <dt>Name<span class="tip left" tabindex="0" role="note" data-tip="Whether the name came from a person or from the brief's first line">?</span></dt>
         <dd>{{ "given by hand" if node.named else "taken from the brief" }}</dd>
-        <dt>Cluster<span class="tip left" tabindex="0" role="note" data-tip="The label HDBSCAN gave this group in the build that made it">?</span></dt>
-        <dd class="mono">{{ node.label }}</dd>
-        <dt>Built</dt><dd class="mono">{{ node.born }}</dd>
         <dt>Pins<span class="tip left" tabindex="0" role="note" data-tip="What a hand-edit is holding against the pipeline, and why">?</span></dt>
         <dd>
           {% if node.pins %}
@@ -339,8 +318,7 @@
           </ul>
           {% else %}none — automation owns this topic{% endif %}
         </dd>
-        <dt>Notes</dt>
-        <dd>{% if node.notes %}{{ node.notes|length }}, beside the brief{% else %}none{% endif %}</dd>
+        <dt>Built</dt><dd class="mono">{{ node.born }}</dd>
       </dl>
     </div>
   </section>
@@ -361,7 +339,7 @@
         <dd class="mono">{{ node.wrote.fingerprint or "not recorded" }}</dd>
         <dt>Prompt</dt><dd>{{ node.wrote.prompt }} <span class="faint mono">{{ node.wrote.prompt_hash }}</span></dd>
         <dt>Cost</dt>
-        <dd class="num">{{ "{:,}".format(node.wrote.tokens_in) }} in · {{ "{:,}".format(node.wrote.tokens_out) }} out</dd>
+        <dd class="num">{{ "{:,}".format(node.wrote.tokens_in) }} in, {{ "{:,}".format(node.wrote.tokens_out) }} out</dd>
         <dt>Written</dt><dd class="mono">{{ node.wrote.written }}</dd>
         <dt>Cites</dt><dd>{{ node.wrote.cites }} source{{ "" if node.wrote.cites == 1 else "s" }}</dd>
         <dt>Members<span class="tip left" tabindex="0" role="note" data-tip="The signature over the content it was written from. When it no longer matches what this topic holds, the brief describes something else">?</span></dt>

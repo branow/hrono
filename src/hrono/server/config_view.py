@@ -19,18 +19,65 @@ from hrono.registry.collections import COLLECTIONS
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import mask
 
+# How much of one value, and of a whole row, a scannable list may carry.
+VALUE = 40
+LINE = 110
+
+
+def _short(value: object, limit: int = VALUE) -> str:
+    """One value, on one line, cut where it stops being scannable."""
+    text = " ".join(str(value).split())
+    return text if len(text) <= limit else text[: limit - 1] + "\u2026"
+
 
 @dataclass(frozen=True)
 class Row:
     name: str
     is_default: bool
-    config: str
+    data: dict[str, object]
+
+    @property
+    def config(self) -> str:
+        """The item as the JSON an operator reads and edits."""
+        return json.dumps(self.data, indent=2)
+
+    @property
+    def summary(self) -> str:
+        """The row's own identifying fields, for a list that is scannable.
+
+        A list of names alone cannot be read: four models called `cc-*` are
+        told apart by what they POINT AT, not by their names. Taken from the
+        config's own scalar fields rather than from a per-collection template,
+        so a collection added later is listed without a second edit (#200).
+
+        Each value is cut, because one of these fields is a prompt template:
+        printed whole it is a paragraph per row, and a list where every row is
+        a paragraph is the wall this view exists to replace.
+        """
+        said = ", ".join(
+            f"{key} {_short(value)}"
+            for key, value in self.data.items()
+            if key != "name"
+            and isinstance(value, (str, int, float))
+            and str(value)
+        )
+        return _short(said, LINE)
 
 
 @dataclass(frozen=True)
 class Table:
     name: str
     rows: tuple[Row, ...]
+
+    @property
+    def document(self) -> str:
+        """The WHOLE collection as one JSON array.
+
+        What an operator edits when they want to add a model rather than
+        change one: the list is the thing, and `engine.sync_items` writes what
+        differs and removes what is gone (#200).
+        """
+        return json.dumps([row.data for row in self.rows], indent=2)
 
 
 def tables(
@@ -45,9 +92,7 @@ def tables(
                 Row(
                     name=str(row["name"]),
                     is_default=bool(row["is_default"]),
-                    config=json.dumps(
-                        mask(json.loads(row["config"]), descriptor), indent=2
-                    ),
+                    data=mask(json.loads(row["config"]), descriptor),
                 )
                 for row in store.list_all(conn, descriptor.collection)
             ),

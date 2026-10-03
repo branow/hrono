@@ -29,12 +29,16 @@ from fastapi.templating import Jinja2Templates
 from hrono.auth.users import User
 from hrono.errors import AppError
 from hrono.registry import store as registry_store
+from hrono.server import prose
 from hrono.server.auth import require_role
 
 router = APIRouter()
 templates = Jinja2Templates(
     directory=str(Path(__file__).parent.parent / "templates")
 )
+# Model-written text is markdown; `prose.markdown` renders it with HTML
+# escaped, so the filter's output is safe to mark safe (`server/prose.py`).
+templates.env.filters["markdown"] = prose.markdown
 
 # A year is wrong and an hour is annoying. A day is the shape of an operator's
 # session with a tool they open to look at something.

@@ -279,7 +279,15 @@ def test_the_overlay_rides_in_the_url(browser: Browser) -> None:
     assert 'class="link pull"' in page
     # the toggle for one that is off ADDS it rather than replacing what is on
     assert "edges=pull,proximity" in page
-    assert ">proximity<" in page  # and the legend names every kind
+    # the map's own two kinds have a toggle, named by the QUESTION each
+    # answers rather than by the mechanism: "pull / proximity" named the
+    # machinery to someone who already knew it (#200). The URL keeps the kind.
+    assert ">near-duplicates<" in page
+    assert ">misfiled<" in page
+    # `propagation` is NOT offered here: it is a record of decisions a sync
+    # already made, it draws nothing on a tree never re-synced, and it lives
+    # on Activity beside the decisions it is made of (#200)
+    assert "edges=propagation" not in page
 
 
 def test_two_overlays_at_once(browser: Browser) -> None:

@@ -17,7 +17,22 @@ from hrono.jobs import store as job_store
 from hrono.jobs.aggregate import rollup, total_spend
 from hrono.jobs.cancel import cancel
 from hrono.jobs.model import to_job
-from hrono.server.ui import Reader, Writer, _trees, router, templates
+from hrono.jobs.ops import OPS
+from hrono.jobs.scope import SOURCE_SCOPED, fan_out, fans_out
+from hrono.jobs.worker import enqueue
+from hrono.registry import store as registry_store
+from hrono.server import outcome
+from hrono.server.ui import (
+    Admin,
+    Reader,
+    Writer,
+    _trees,
+    router,
+    templates,
+)
+from hrono.server.ui import (
+    _fields as _form_fields,
+)
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
@@ -25,7 +40,8 @@ _LIVE = frozenset({"pending", "running", "partial"})
 # an operator reading a run log should not have to already know what
 # `cluster-briefs` does. The name stays, and this says it in a sentence.
 MEANS = {
-    "sync-tree": "read every source and bring the whole tree up to date",
+    "sync-tree": "the NORMAL one: re-read the sources and change only what the "
+    "changes touched",
     "sync": "fetch a source's files",
     "split": "cut the files into sections",
     "embed": "turn sections into vectors",
@@ -34,15 +50,46 @@ MEANS = {
     "cluster-briefs": "group topics into higher-level topics",
     "brief": "write a summary for each topic that holds sections",
     "brief-upper": "write a summary for each topic that groups topics",
-    "build-tree": "build the whole tree from the ground up",
+    "build-tree": "throw the tree away and build it again from nothing — "
+    "every section re-condensed, every brief rewritten, every model call paid "
+    "for twice",
     "update": "re-file only what changed",
     "propagate": "mark the summaries a change has invalidated",
-    "maintain": "routine upkeep: check the tree and fix what drifted",
+    "maintain": "the FIRST one: ingest the sources and build a tree that does "
+    "not exist yet. On a tree that does, it fills in what is missing",
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
     "settle": "place the sections that were still waiting",
     "noop": "do nothing — a health check of the worker",
 }
+
+# The order an operator meets the stages in, so the list of things they may run
+# reads as the pipeline rather than as `sorted(OPS)`. Anything registered and
+# not named here still appears, after these — a new op is runnable the day it
+# exists, which is the whole point of driving this off `OPS` (#200).
+ORDER = (
+    "sync-tree",
+    "maintain",
+    "sync",
+    "split",
+    "embed",
+    "condense",
+    "cluster",
+    "cluster-briefs",
+    "brief",
+    "brief-upper",
+    "build-tree",
+    "update",
+    "propagate",
+    "monitor",
+    "repair",
+    "settle",
+    "noop",
+)
+# Running a stage out of order can leave a tree that looks right and is wrong
+# (`server/jobs.py`), so the two that compose the others in the correct order
+# are offered first and marked, and the rest are behind a disclosure.
+WHOLE = ("sync-tree", "maintain", "build-tree")
 
 
 @router.get("/ui/jobs", response_class=HTMLResponse)
@@ -57,6 +104,9 @@ def jobs_view(request: Request, user: Reader, tree: str = "") -> Response:
             if (row["tree"] or "default") == chosen and row["parent_id"] is None
         ]
         jobs = [_render_job(conn, row) for row in reversed(rows)]
+        sources = [
+            str(row["name"]) for row in registry_store.list_all(conn, "sources")
+        ]
     return templates.TemplateResponse(
         request,
         "jobs.html",
@@ -65,10 +115,34 @@ def jobs_view(request: Request, user: Reader, tree: str = "") -> Response:
             "trees": trees,
             "tree": chosen,
             "jobs": jobs,
+            "runnable": _runnable(),
+            "sources": sources,
             "can_write": user.role in {"writer", "admin"},
+            "can_run": user.role == "admin",
             "notice": request.query_params.get("notice"),
         },
     )
+
+
+def _runnable() -> list[dict[str, object]]:
+    """Every registered op, in pipeline order, with what it does and takes.
+
+    Read off `OPS` rather than listed by hand: the dashboard offering a subset
+    of what the tool can do was the gap — one `sync` button over sixteen ops,
+    so regenerating just the condensations meant reaching for the API (#200).
+    """
+    known = {name: index for index, name in enumerate(ORDER)}
+    return [
+        {
+            "op": name,
+            "means": MEANS.get(name, ""),
+            "whole": name in WHOLE,
+            "per_source": name in SOURCE_SCOPED,
+        }
+        for name in sorted(
+            OPS, key=lambda name: (known.get(name, len(ORDER)), name)
+        )
+    ]
 
 
 def _render_job(conn: object, row: object) -> dict[str, object]:
@@ -87,7 +161,9 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
         else total_spend([job.result])
     )
     status = rolled.status if rolled is not None else job.status
+    did = outcome.read(job.result)
     return {
+        "outcome": did,
         "id": job.id,
         "short_id": job.id.removeprefix("job_")[:8],
         "started": clock(job.created_at),
@@ -113,6 +189,8 @@ def _render_job(conn: object, row: object) -> dict[str, object]:
                 "means": MEANS.get(str(child["op"]), ""),
                 "status": str(child["status"]),
                 "scope": to_job(child).scope,
+                "outcome": outcome.read(to_job(child).result),
+                "error": to_job(child).error or "",
             }
             for child in children
         ],
@@ -146,6 +224,68 @@ def _parsed(stamp: str) -> datetime | None:
         return datetime.fromisoformat(stamp)
     except ValueError:
         return None
+
+
+@router.get("/ui/jobs/{job_id}", response_class=HTMLResponse)
+def one_run(
+    job_id: str, request: Request, user: Reader, tree: str = ""
+) -> Response:
+    """ONE run, in full — what it did, what it is doing, and every piece of it.
+
+    The list cannot be the whole surface: a row has to fit in a column, so the
+    detail that answers "what is it doing right now" and "what exactly did each
+    piece find" had nowhere to be (#200). This is where a run on the front page
+    and a run in the list both link to.
+    """
+    with request.app.state.db.connect() as conn:
+        trees = _trees(conn)
+        row = job_store.get(conn, job_id)
+        if row is None:
+            raise NotFound(f"job not found: {job_id}")
+        job = _render_job(conn, row)
+        job["scope"] = to_job(row).scope
+        job["raw"] = to_job(row).result
+    return templates.TemplateResponse(
+        request,
+        "run.html",
+        {
+            "user": user,
+            "trees": trees,
+            "tree": tree or str(row["tree"] or "default"),
+            "job": job,
+            "can_write": user.role in {"writer", "admin"},
+            "can_run": user.role == "admin",
+        },
+    )
+
+
+@router.post("/ui/jobs/run")
+async def run_from_the_page(
+    request: Request, user: Admin, tree: str = ""
+) -> Response:
+    """Run any registered op from the page — the API's own door, drawn.
+
+    ADMIN, the role `POST /jobs` itself takes: a stage run out of order can
+    leave a tree that looks right and is wrong, so this is not a softer door
+    than the one it stands for.
+    """
+    fields = await _form_fields(request)
+    op = fields.get("op", "")
+    if op not in OPS:
+        raise NotFound(f"unknown op: {op}")
+    name = fields.get("source", "")
+    scope: dict[str, object] = (
+        {"type": "source", "name": name} if name else {"type": "all"}
+    )
+    database = request.app.state.db
+    if fans_out(op, scope):
+        fan_out(database, op, scope, tree=tree)
+    else:
+        enqueue(database, op, scope, tree=tree)
+    return RedirectResponse(
+        f"/ui/jobs?tree={tree or 'default'}&notice={quote(f'started {op}')}",
+        status_code=303,
+    )
 
 
 @router.post("/ui/jobs/{job_id}/cancel")

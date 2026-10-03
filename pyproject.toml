@@ -10,6 +10,13 @@ dependencies = [
     "fastapi>=0.115.0",
     "httpx>=0.27,<0.29",
     "jinja2>=3.1,<4",
+    # Briefs and condensations are MARKDOWN — the models write headings, lists
+    # and backticks — and the dashboard printed them as one unbroken line
+    # (#200). CommonMark's reference implementation for Python, and the reason
+    # it rather than a hand-rolled renderer: model output is untrusted input,
+    # `html=False` escapes any HTML inside it, and getting that wrong by hand
+    # is how a summary becomes a script tag.
+    "markdown-it-py>=3.0,<4",
     # Recall's vector leg scores every in-scope passage per query, and that
     # arithmetic is the whole cost: 0.15 ms per passage in interpreted loops,
     # 18x faster as two matrix-vector products (#193, #194). The extras below

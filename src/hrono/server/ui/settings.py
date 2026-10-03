@@ -10,10 +10,25 @@ each have exactly one implementation. A settings page that validated a config
 itself would be a second rule, and the two would drift.
 
 What this module adds is only what a browser needs and an API client does not:
-the submitted text kept when a write is refused, the server's per-field errors
-rendered against the field they name, the blast radius shown before the edit is
-applied, and a mask that means UNTOUCHED rather than "write ``***`` over the
-credential".
+the submitted values kept when a write is refused, the server's per-field
+errors rendered against the field they name, the blast radius shown before the
+edit is applied, and a mask that means UNTOUCHED rather than "write ``***``
+over the credential".
+
+**Two views over the same collections (#200).** The page was five textareas of
+JSON, which is the API's surface wearing a browser: adding a model meant
+knowing the schema by heart, and the collection could only be edited one item
+at a time — there was no way to say "these are my models". So:
+
+- `view=form` (the default) renders each item as FIELDS, derived from the
+  collection's own pydantic model by `server/forms.py`, with a list you add to
+  and delete from.
+- `view=json` renders each collection as ONE array, written back through
+  `engine.sync_items`, which writes what differs and removes what is gone.
+
+**Trees come first.** A tree is the thing every other collection is in service
+of, and it was the last card on the page, behind a `<details>` — an operator
+looking for "how do I make a tree" found four screens of model JSON instead.
 """
 
 from __future__ import annotations
@@ -30,122 +45,102 @@ from hrono.registry import engine, store
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import decrypt, unmask
-from hrono.server import config_view
+from hrono.server import config_view, forms
 from hrono.server.auth import allows, require_role
 from hrono.server.ui import Reader, _trees, router, templates
 
 FROZEN = (
     "a shipped default cannot be edited — reset it, or add your own beside it"
 )
+VIEWS = ("form", "json")
+# Trees first: a tree is what every other collection is in service of, and the
+# page's job is to answer "how do I make one" before it answers anything else.
+ORDER = ("trees", "sources", "connections", "models", "prompts")
+# Which fields name a row in ANOTHER collection. The pydantic model types them
+# as plain strings — they are foreign keys the registry resolves by hand — so
+# the page has to be told, once, to offer the registered names rather than a
+# free-text box whose typo is only caught by a refusal after the save.
+REFERS: dict[str, dict[str, str]] = {
+    "trees": {"sources": "sources"},
+    "models": {"connection": "connections"},
+}
 
 
 @router.get("/ui/config", response_class=HTMLResponse)
-def config_page(request: Request, user: Reader, tree: str = "") -> Response:
+def config_page(
+    request: Request,
+    user: Reader,
+    tree: str = "",
+    view: str = "",
+    edit: str = "",
+    add: str = "",
+    variant: str = "",
+    done: str = "",
+    error: str = "",
+) -> Response:
     """Every registry collection, with secrets masked.
 
     Masked through the registry's OWN `mask()`, not a second redaction here: it
     reads each collection's declared `secret_paths` (#142), so a source type
     whose credential moves is masked by declaring the new path — and there is
     no second place that can forget to.
+
+    `edit`, `add` and `variant` ride in the URL rather than in the page, so the
+    form an operator has open is a link like any other and a refused write can
+    redirect back to exactly it.
+
+    `done` and `error` are read back off the redirect every write ends with.
+    They were being SENT and never read — the route took neither, so a save
+    redirected to a page that said nothing about the save (#200).
     """
-    return _render(request, user, tree)
+    return _render(
+        request,
+        user,
+        tree,
+        view=view,
+        edit=edit,
+        add=add,
+        variant=variant,
+        done=done,
+        error=error,
+    )
 
 
-@router.post("/ui/config/trees/new")
-async def new_tree_from_the_page(request: Request, user: Reader) -> Response:
-    """Create a tree: a name, and the sources it is the map over (#054).
-
-    A picker rather than a JSON field, because the sources a tree may name are
-    exactly the ones registered — and the validation hook that refuses an
-    unregistered name teaches that through a refusal, which is the worse way to
-    learn it.
-    """
-    descriptor = _descriptor("trees")
-    _may_write(descriptor, request)
-    form = await _form(request)
-    tree = _one(form, "tree")
-    name = _one(form, "name").strip()
-    sources = [source for source in form.get("sources", []) if source]
-    try:
-        engine.create_item(
-            descriptor, {"name": name, "sources": sources}, request
-        )
-    except AppError as exc:
-        return _render(
-            request,
-            user,
-            tree,
-            new_tree={
-                "name": name,
-                "sources": sources,
-                "errors": _errors(exc),
-            },
-        )
-    return _settled(tree, done=f"tree {name} created")
-
-
-@router.post("/ui/config/{collection}/create")
-async def create_from_the_page(
+@router.post("/ui/config/{collection}/item")
+async def item_from_the_page(
     collection: str, request: Request, user: Reader
 ) -> Response:
-    """Add an item to a collection from the JSON an operator typed."""
-    descriptor = _descriptor(collection)
-    _may_write(descriptor, request)
-    form = await _form(request)
-    tree, text = _one(form, "tree"), _one(form, "config")
-    body, problems = _parsed(text)
-    if body is None:
-        return _render(
-            request, user, tree, adding=_draft(collection, text, problems)
-        )
-    try:
-        engine.create_item(descriptor, body, request)
-    except AppError as exc:
-        return _render(
-            request,
-            user,
-            tree,
-            adding=_draft(collection, text, _errors(exc)),
-        )
-    return _settled(tree, done=f"{collection}: added {body.get('name', '')}")
+    """Save one item from its form — creating it, or replacing what is there.
 
-
-@router.post("/ui/config/{collection}/{name}/save")
-async def save_from_the_page(
-    collection: str, name: str, request: Request, user: Reader
-) -> Response:
-    """Replace one item's config, or preview what replacing it would cost.
-
-    The preview is `?dry_run=true`'s own path (#190): validated, hooked, and
-    then NOTHING written. An edit that would restale a tree's briefs says so
-    here, before it is applied.
+    One route for both, because `engine.replace_item` is already create-or-
+    replace (#138): "config is data you PUT". A page that chose between POST
+    and PUT by first asking whether the name existed would be re-deriving that
+    decision in a second place.
     """
     descriptor = _descriptor(collection)
     _may_write(descriptor, request)
-    row = _row(descriptor, name, request)
     form = await _form(request)
-    tree, text = _one(form, "tree"), _one(form, "config")
+    tree, name = _one(form, "tree"), _one(form, "name").strip()
+    picked = _one(form, "variant")
     preview = bool(_one(form, "preview"))
-    if row["is_default"]:
+    options = _options(request, collection)
+    body = forms.config_from(descriptor, form, options)
+    row = _existing(descriptor, name, request)
+    spot = _spot(collection, name, picked, body)
+    if row is not None and row["is_default"]:
         return _render(
             request,
             user,
             tree,
-            draft=_draft(collection, text, [_problem(FROZEN)], name=name),
+            **spot,
+            draft=_refused(collection, [_problem(FROZEN)]),
         )
-    body, problems = _parsed(text)
-    if body is None:
-        return _render(
-            request,
-            user,
-            tree,
-            draft=_draft(collection, text, problems, name=name),
-        )
+    sent = _kept_secrets(descriptor, row, body, request)
     try:
         result = engine.replace_item(
             descriptor,
-            name,
-            _kept_secrets(descriptor, row, body, request),
+            str(sent.get("name", name)),
+            sent,
             request,
             dry_run=preview,
         )
@@ -154,23 +149,85 @@ async def save_from_the_page(
             request,
             user,
             tree,
-            draft=_draft(collection, text, _errors(exc), name=name),
+            **spot,
+            draft=_refused(collection, _errors(exc)),
         )
     if preview:
         return _render(
             request,
             user,
             tree,
-            draft=_draft(
+            **spot,
+            draft=_refused(
                 collection,
-                text,
-                (),
-                name=name,
                 impact=result.get("affected_trees", []),
                 previewed=True,
             ),
         )
-    return _settled(tree, done=f"{collection}: saved {name}")
+    return _settled(tree, done=f"{collection}: saved {sent.get('name', name)}")
+
+
+def _spot(
+    collection: str, name: str, variant: str, body: dict[str, object]
+) -> dict[str, object]:
+    """Where to re-open the form a write came from, and with what in it.
+
+    A refused save re-renders rather than redirecting, because the operator's
+    typed values are the thing worth keeping — a redirect would hand back the
+    stored config and ask them to type it again.
+    """
+    return {
+        "edit": f"{collection}:{name}" if name else "",
+        "add": "" if name else collection,
+        "variant": variant,
+        "typed": body,
+        "where": collection,
+    }
+
+
+@router.post("/ui/config/{collection}/replace")
+async def replace_the_collection(
+    collection: str, request: Request, user: Reader
+) -> Response:
+    """Make the collection be the list that was typed (the JSON view).
+
+    The whole point of this view: adding a model is a new entry, dropping one
+    is deleting its entry, and both land in one save.
+    """
+    descriptor = _descriptor(collection)
+    _may_write(descriptor, request)
+    form = await _form(request)
+    tree, text = _one(form, "tree"), _one(form, "config")
+    items, problems = _parsed_list(text)
+    if items is None:
+        return _render(
+            request,
+            user,
+            tree,
+            view="json",
+            draft=_draft(collection, text, problems),
+        )
+    held = {row.name: row for row in _table(request, collection).rows}
+    try:
+        kept = [
+            _kept_secrets(
+                descriptor,
+                _existing(descriptor, str(item.get("name", "")), request),
+                item,
+                request,
+            )
+            for item in items
+        ]
+        result = engine.sync_items(descriptor, kept, request)
+    except AppError as exc:
+        return _render(
+            request,
+            user,
+            tree,
+            view="json",
+            draft=_draft(collection, text, _errors(exc)),
+        )
+    return _settled(tree, view="json", done=_said(collection, result, held))
 
 
 @router.post("/ui/config/{collection}/{name}/delete")
@@ -199,22 +256,57 @@ async def delete_from_the_page(
     )
 
 
+def _said(
+    collection: str, result: dict[str, object], held: dict[str, object]
+) -> str:
+    """What a whole-collection save actually did, counted rather than claimed.
+
+    "saved" over a list that changed nothing is a lie an operator acts on.
+    """
+    written = list(result.get("written", []))  # type: ignore[call-overload]
+    removed = list(result.get("removed", []))  # type: ignore[call-overload]
+    if not written and not removed:
+        return f"{collection}: nothing to change"
+    parts = []
+    if written:
+        added = [name for name in written if name not in held]
+        if added:
+            parts.append(f"added {', '.join(added)}")
+        changed = [name for name in written if name in held]
+        if changed:
+            parts.append(f"changed {', '.join(changed)}")
+    if removed:
+        parts.append(f"removed {', '.join(removed)}")
+    return f"{collection}: " + ", ".join(parts)
+
+
 def _render(
     request: Request,
     user: User,
     tree: str,
     *,
+    view: str = "",
+    edit: str = "",
+    add: str = "",
+    variant: str = "",
+    typed: dict[str, object] | None = None,
+    where: str = "",
     done: str = "",
     error: str = "",
     draft: dict[str, object] | None = None,
-    adding: dict[str, object] | None = None,
-    new_tree: dict[str, object] | None = None,
 ) -> Response:
     """The page, in whatever state the write that just ran left it."""
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         tables = {table.name: table for table in config_view.tables(conn)}
-        sources = [str(row["name"]) for row in store.list_all(conn, "sources")]
+        offers = {
+            descriptor.collection: [
+                str(row["name"])
+                for row in store.list_all(conn, descriptor.collection)
+            ]
+            for descriptor in COLLECTIONS
+        }
+    opened, open_name = _split(edit)
     return templates.TemplateResponse(
         request,
         "config.html",
@@ -222,20 +314,38 @@ def _render(
             "user": user,
             "trees": trees,
             "tree": tree if tree in trees else trees[0],
+            "view": view if view in VIEWS else VIEWS[0],
             "collections": [
                 _collection(
-                    descriptor, tables[descriptor.collection], user, request
+                    descriptor,
+                    tables[descriptor.collection],
+                    user,
+                    request,
+                    offers,
+                    editing=open_name
+                    if opened == descriptor.collection
+                    else "",
+                    adding=add == descriptor.collection,
+                    variant=variant,
+                    typed=typed if where == descriptor.collection else None,
+                    draft=draft,
                 )
-                for descriptor in COLLECTIONS
+                for descriptor in _ordered()
             ],
-            "sources": sources,
             "can_write": user.role in {"writer", "admin"},
             "done": done,
             "error": error,
             "draft": draft,
-            "adding": adding,
-            "new_tree": new_tree,
         },
+    )
+
+
+def _ordered() -> list[Descriptor]:
+    """The collections in the order an operator meets them, trees first."""
+    place = {name: index for index, name in enumerate(ORDER)}
+    return sorted(
+        COLLECTIONS,
+        key=lambda d: (place.get(d.collection, len(ORDER)), d.collection),
     )
 
 
@@ -244,6 +354,13 @@ def _collection(
     table: config_view.Table,
     user: User,
     request: Request,
+    offers: dict[str, list[str]],
+    *,
+    editing: str,
+    adding: bool,
+    variant: str,
+    typed: dict[str, object] | None,
+    draft: dict[str, object] | None,
 ) -> dict[str, object]:
     """One collection, with the role its writes actually take.
 
@@ -252,22 +369,99 @@ def _collection(
     what, which is how a control gets drawn for someone the API then refuses.
     """
     writable = allows(user.role, descriptor.write_role)
+    held = {row.name: row for row in table.rows}
+    options = {
+        field: offers.get(target, [])
+        for field, target in REFERS.get(descriptor.collection, {}).items()
+    }
+    refused = (
+        draft
+        if draft and draft.get("collection") == descriptor.collection
+        else None
+    )
+    form = None
+    choosing = False
+    if writable and (editing or adding):
+        # what the operator TYPED beats what is stored: a refused save must
+        # hand back their words, not the config they were trying to replace
+        config = typed if typed is not None else _held_config(held, editing)
+        form = forms.form_for(descriptor, config, variant, options)
+        # a union's add starts by naming the shape: five near-identical forms
+        # stacked on a page, four of them wrong, is not a choice anyone makes
+        choosing = adding and form.picks and not variant
     return {
         "name": descriptor.collection,
         "write_role": descriptor.write_role,
         "can_write": writable,
+        "document": table.document,
         "rows": [
             {
                 "name": row.name,
                 "is_default": row.is_default,
                 "config": row.config,
+                "summary": row.summary,
                 "delete_note": ""
                 if row.is_default or not writable
                 else _delete_note(descriptor, row.name, request),
             }
             for row in table.rows
         ],
+        "form": form,
+        "editing": editing,
+        "adding": adding,
+        "choosing": choosing,
+        "frozen": editing in held and held[editing].is_default,
+        "draft": refused,
     }
+
+
+def _held_config(
+    held: dict[str, config_view.Row], editing: str
+) -> dict[str, object] | None:
+    row = held.get(editing)
+    return row.data if row is not None else None
+
+
+def _refused(
+    collection: str,
+    errors: object = (),
+    *,
+    impact: object = (),
+    previewed: bool = False,
+) -> dict[str, object]:
+    """One item's rejection or dry run, rendered against its own form.
+
+    Carries no text: the form is rebuilt from the posted CONFIG, so there is
+    nothing to keep a second copy of.
+    """
+    return {
+        "collection": collection,
+        "text": "",
+        "errors": list(errors),  # type: ignore[call-overload]
+        "impact": list(impact),  # type: ignore[call-overload]
+        "previewed": previewed,
+        "on_form": True,
+    }
+
+
+def _options(request: Request, collection: str) -> dict[str, list[str]]:
+    """What the referring fields of ``collection`` may name, as registered."""
+    refers = REFERS.get(collection, {})
+    if not refers:
+        return {}
+    with request.app.state.db.connect() as conn:
+        return {
+            field: [str(row["name"]) for row in store.list_all(conn, target)]
+            for field, target in refers.items()
+        }
+
+
+def _table(request: Request, collection: str) -> config_view.Table:
+    with request.app.state.db.connect() as conn:
+        for table in config_view.tables(conn):
+            if table.name == collection:
+                return table
+    raise NotFound(f"no such collection: {collection}")
 
 
 def _delete_note(descriptor: Descriptor, name: str, request: Request) -> str:
@@ -297,7 +491,7 @@ def _kept_secrets(
     displayed would overwrite the credential with the mask and leave a config
     that looks exactly right and no longer authenticates.
     """
-    if not descriptor.secret_paths:
+    if row is None or not descriptor.secret_paths:
         return body
     key_id = row["key_id"]  # type: ignore[index]
     if key_id is None:
@@ -328,12 +522,14 @@ def _may_write(descriptor: Descriptor, request: Request) -> None:
     require_role(descriptor.write_role)(request)
 
 
-def _row(descriptor: Descriptor, name: str, request: Request) -> object:
+def _existing(
+    descriptor: Descriptor, name: str, request: Request
+) -> object | None:
+    """The stored row, or None — an add names something that is not there."""
+    if not name:
+        return None
     with request.app.state.db.connect() as conn:
-        row = store.get(conn, descriptor.collection, name)
-    if row is None:
-        raise NotFound(f"{descriptor.collection} not found: {name}")
-    return row
+        return store.get(conn, descriptor.collection, name)
 
 
 async def _form(request: Request) -> dict[str, list[str]]:
@@ -352,10 +548,16 @@ def _one(form: dict[str, list[str]], key: str) -> str:
     return form.get(key, [""])[0]
 
 
-def _parsed(
+def _split(edit: str) -> tuple[str, str]:
+    """``collection:name`` as its two halves, blank when there is no edit."""
+    collection, _, name = edit.partition(":")
+    return collection, name
+
+
+def _parsed_list(
     text: str,
-) -> tuple[dict[str, object] | None, list[dict[str, str]]]:
-    """The typed JSON as a config object, or why it is not one."""
+) -> tuple[list[dict] | None, list[dict[str, str]]]:
+    """The typed JSON as a list of configs, or why it is not one."""
     try:
         body = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -366,8 +568,13 @@ def _parsed(
                 field="config",
             )
         ]
-    if not isinstance(body, dict):
-        return None, [_problem("a config is a JSON object", field="config")]
+    if not isinstance(body, list):
+        return None, [_problem("a collection is a JSON array", field="config")]
+    bad = [item for item in body if not isinstance(item, dict)]
+    if bad:
+        return None, [
+            _problem("every entry must be a JSON object", field="config")
+        ]
     return body, []
 
 
@@ -402,7 +609,6 @@ def _draft(
     text: str,
     errors: object,
     *,
-    name: str = "",
     impact: object = (),
     previewed: bool = False,
 ) -> dict[str, object]:
@@ -414,7 +620,6 @@ def _draft(
     """
     return {
         "collection": collection,
-        "name": name,
         "text": text,
         "errors": list(errors),  # type: ignore[call-overload]
         "impact": list(impact),  # type: ignore[call-overload]
@@ -422,7 +627,10 @@ def _draft(
     }
 
 
-def _settled(tree: str, **outcome: str) -> Response:
+def _settled(tree: str, view: str = "", **outcome: str) -> Response:
     """Redirect-after-POST, carrying what happened."""
-    query = urlencode({"tree": tree, **{k: v for k, v in outcome.items() if v}})
-    return RedirectResponse(f"/ui/config?{query}", status_code=303)
+    query = {"tree": tree}
+    if view:
+        query["view"] = view
+    query.update({k: v for k, v in outcome.items() if v})
+    return RedirectResponse(f"/ui/config?{urlencode(query)}", status_code=303)

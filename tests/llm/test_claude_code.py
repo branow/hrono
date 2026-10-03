@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from hrono.llm.claude_code import TIMEOUT, ClaudeCodeClient
+from hrono.llm.claude_code import (
+    MAX_TURNS,
+    SYSTEM,
+    TIMEOUT,
+    ClaudeCodeClient,
+)
 from hrono.llm.client import CompletionRequest, LLMError
 
 MODEL: dict[str, object] = {"name": "cc", "model": "haiku", "params": {}}
@@ -86,20 +91,31 @@ def test_the_argv_is_a_one_shot_text_completion(tmp_path: Path) -> None:
     argv = runner.argv
     assert argv[0:2] == ["claude", "-p"]
     assert argv[argv.index("--model") + 1] == "haiku"
-    assert argv[argv.index("--max-turns") + 1] == "1"
+    # the cap is for FINISHING an answer, not for holding a conversation —
+    # one turn made the CLI answer `error_max_turns` on a large section and
+    # killed a build 78 condensations in (#197)
+    assert argv[argv.index("--max-turns") + 1] == str(MAX_TURNS)
+    assert MAX_TURNS > 1
     assert argv[argv.index("--allowed-tools") + 1] == ""  # no tool use
-    assert "--exclude-dynamic-system-prompt-sections" in argv
+    # the operator's CLAUDE.md, skills, hooks, plugins and output style are
+    # not part of a summarization call (#200)
+    assert "--safe-mode" in argv
     assert argv[argv.index("--output-format") + 1] == "json"
     assert argv[argv.index("--system-prompt") + 1] == "be terse"
 
 
-def test_no_system_prompt_flag_when_there_is_no_system_prompt(
+def test_no_system_prompt_from_the_caller_still_replaces_the_CLI_s_own(
     tmp_path: Path,
 ) -> None:
+    """#200: every caller in `summarize` passes `system=""`, meaning "my
+    instructions are all in the content". Passing no flag let the CLI keep the
+    Claude Code agent prompt, and a 6 KB brief prompt came back as "There's no
+    actual question or task in your message. What do you need?"."""
     runner = Recorder()
     ClaudeCodeClient(tmp_path, run=runner).complete(_request())
 
-    assert "--system-prompt" not in runner.argv
+    assert runner.argv[runner.argv.index("--system-prompt") + 1] == SYSTEM
+    assert SYSTEM  # a blank one would be no replacement at all
 
 
 def test_a_payload_error_is_an_llm_error_not_an_exit_code(

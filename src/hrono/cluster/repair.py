@@ -174,11 +174,20 @@ def split(
         positive[best].append((member, vector))
 
     anchored = pins.anchors(conn, pins.MEMBERSHIP)
+    # WHERE THE SPLIT TOPIC HUNG, read before it is deleted. A split made two
+    # new leaves and retired the old one without ever attaching them, so the
+    # halves of a topic that was under the root became unparented nodes beside
+    # the tree — two circles on the map with no line to anything, and a root
+    # whose brief no longer mentions a seventh of the corpus (#200). The
+    # divided topic is still in the same place; it is only narrower.
+    above = store.parent_of(conn, node_id)
     new_ids: list[int] = []
     for group in positive.values():
         child = store.add_leaf_node(
             conn, tree, [(member[0], False, None) for member, _ in group]
         )
+        if above is not None:
+            store.add_child(conn, above, child, attached=False, similarity=None)
         for member, _vector in group:
             if anchored.get(member[0]) == node_id:
                 # the topic was divided, not lost: the child holding this

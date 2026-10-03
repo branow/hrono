@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ job.op }} run{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div class="crumbs">
+    <a href="/ui/jobs?tree={{ tree }}">Runs</a>
+  </div>
+  <h1 class="where">{{ job.op }}</h1>
+  <p class="said">{{ job.means }}</p>
+  <p class="where-note row mt-2">
+    <span class="state status" data-state="{{ job.status }}">{{ job.status }}</span>
+    <span class="chip">started {{ job.started }}</span>
+    <span class="chip">{{ job.took }}</span>
+    {% if job.scope.name %}<span class="chip">over {{ job.scope.name }}</span>{% endif %}
+    {% if job.cost %}<span class="chip plain num">{{ job.cost.input }} tokens in, {{ job.cost.output }} out</span>{% endif %}
+    <span class="chip plain mono">{{ job.short_id }}</span>
+  </p>
+</div>
+
+<div class="topic-layout" id="run" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
+<div class="topic-main stack">
+
+  {% if job.live %}
+  <section class="card">
+    <div class="card-head"><h2>Running now</h2></div>
+    <div class="card-body">
+      <p class="progress-line">
+        <span class="progress">{% if job.progress %}{{ job.progress.done }} of {{ job.progress.total }} done{% else %}working{% endif %}</span>
+      </p>
+      <span class="bar wide"><span style="width:{% if job.progress and job.progress.total %}{{ (100 * job.progress.done / job.progress.total)|round|int }}{% else %}0{% endif %}%"></span></span>
+      {% if can_write %}
+      <form class="inline mt-3" method="post" action="/ui/jobs/{{ job.id }}/cancel?tree={{ tree }}">
+        <button class="btn small" type="submit">Stop this run</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if job.error %}
+  <div class="callout bad">
+    <div class="body">
+      <div class="title">{{ job.error.code }}</div>
+      <p class="hint">{{ job.error.message }}</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-head"><h2>What it did</h2></div>
+    <div class="card-body">
+      {% if job.outcome.did or job.outcome.found %}
+      <ul class="didwhat big">
+        {% for line in job.outcome.did %}<li>{{ line }}</li>{% endfor %}
+        {% for line in job.outcome.found %}<li class="measured">{{ line }}</li>{% endfor %}
+      </ul>
+      {% elif job.live %}
+      <p class="hint">Still going. What it did appears here as it finishes.</p>
+      {% elif job.outcome.quiet %}
+      <div class="empty">
+        <div class="title">Nothing to change</div>
+        <p class="hint mt-2">Everything this run looked at was already up to date. A re-run over unchanged sources makes no model calls at all.</p>
+      </div>
+      {% else %}
+      <div class="empty"><div class="title">It reported nothing</div></div>
+      {% endif %}
+    </div>
+  </section>
+
+  {% for todo in job.outcome.next %}
+  <div class="callout warn">
+    <div class="body">
+      <div class="title">Still to do</div>
+      <p class="hint">{{ todo.says }}</p>
+      {% if todo.op and can_run %}
+      <form class="inline mt-2" method="post" action="/ui/jobs/run?tree={{ tree }}">
+        <input type="hidden" name="op" value="{{ todo.op }}">
+        <button class="btn small" type="submit">Run {{ todo.op }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if job.children %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Pieces <span class="faint num">{{ job.children|length }}</span></h2>
+      {% if job.progress %}<span class="chip">{{ job.progress.done }}/{{ job.progress.total }} done</span>{% endif %}
+    </div>
+    <div class="card-body">
+      <ul class="pieces">
+        {% for child in job.children %}
+        <li>
+          <div class="piece-head">
+            <code>{{ child.op }}</code>
+            {% if child.scope.name %}<span class="chip plain">{{ child.scope.name }}</span>{% endif %}
+            <span class="grow"></span>
+            <span class="state" data-state="{{ child.status }}">{{ child.status }}</span>
+          </div>
+          {% if child.means %}<p class="hint">{{ child.means }}</p>{% endif %}
+          {% if child.outcome.did or child.outcome.found %}
+          <ul class="didwhat">
+            {% for line in child.outcome.did %}<li>{{ line }}</li>{% endfor %}
+            {% for line in child.outcome.found %}<li class="measured">{{ line }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+          {% if child.error %}<p class="hint bad-text">{{ child.error }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<aside class="topic-aside stack">
+  <section class="card">
+    <div class="card-head"><h2>Exactly what it returned</h2></div>
+    <div class="card-body">
+      {% if job.raw %}
+      <pre class="preview">{{ job.raw|tojson(indent=2) }}</pre>
+      {% else %}
+      <div class="empty"><div class="title">No result recorded</div></div>
+      {% endif %}
+    </div>
+  </section>
+</aside>
+</div>
+
+<script>
+// The same SSE stream the list uses, for one run: a progress bar that only
+// moves on reload is a progress bar nobody believes.
+(function () {
+  var run = document.getElementById("run");
+  if (!run || !run.dataset.live) return;
+  var source = new EventSource("/jobs/" + run.dataset.job + "/events");
+  source.addEventListener("state", function (event) {
+    var state = JSON.parse(event.data);
+    var badge = run.ownerDocument.querySelector(".status");
+    if (badge) { badge.textContent = state.status; badge.dataset.state = state.status; }
+    var said = run.querySelector(".progress");
+    if (said && state.progress) {
+      said.textContent = state.progress.done + " of " + state.progress.total + " done";
+    }
+    var bar = run.querySelector(".bar > span");
+    if (bar && state.progress && state.progress.total) {
+      bar.style.width = (100 * state.progress.done / state.progress.total) + "%";
+    }
+    // a run that has finished has an outcome to show, and this page is built
+    // server-side: reload once rather than rebuild it here
+    if (state.status && ["succeeded", "failed", "cancelled"].indexOf(state.status) >= 0) {
+      source.close();
+      window.location.reload();
+    }
+  });
+  source.onerror = function () { source.close(); };
+})();
+</script>
+{% endblock %}

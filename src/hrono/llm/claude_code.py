@@ -4,12 +4,11 @@ A second ``Completion`` beside the anthropic SDK client, driving the Claude Code
 CLI in print mode. It needs no API key and bills through the operator's existing
 subscription, which makes it the wanted default for local and development use.
 
-    claude -p --model <m> --max-turns 1 --allowed-tools ""
-      --exclude-dynamic-system-prompt-sections --system-prompt <s>
-      --output-format json   < content on stdin
+    claude -p --model <m> --max-turns 3 --allowed-tools "" --safe-mode
+      --system-prompt <s> --output-format json   < content on stdin
 
 **Know what it costs before choosing it.** The per-call overhead is fixed and
-large: even with the system prompt replaced and the dynamic sections excluded, a
+large: even with the system prompt replaced and every customization off, a
 trivial call reported ``cache_creation_input_tokens: 18871`` and
 ``total_cost_usd: 0.038``. At one call per section a 92-section corpus spends
 roughly $3.50 on overhead alone, before any real content. Latency is 4-30 s per
@@ -20,12 +19,28 @@ corpus — the ``anthropic`` provider is cheaper and faster; this one is for
 convenience, not throughput, and the ``connections`` collection says so where a
 user picks between them.
 
-Two failure modes are worth knowing. The CLI reads the PROJECT MEMORY of its
-working directory, so it must run from a directory hrono owns
-(``paths.cli_workdir``) or it answers as whatever agent that repo describes. And
-it can exit non-zero with an empty stderr, so the error carries stdout too, and
-success is read from the JSON payload (``is_error``, ``subtype``,
-``api_error_status``) rather than from the exit code alone.
+**This CLI is somebody's configured agent, and a summarizer is not.** Left to
+its defaults it arrives carrying the operator's CLAUDE.md files, their skills,
+hooks, plugins, MCP servers and output style, under the full Claude Code system
+prompt — and then answers a 6 KB brief prompt with "There's no actual question
+or task in your message. What do you need?", because in that context there
+isn't one. Measured on a real node: two of three calls came back as a question
+to the caller, and the one that answered wrote in the operator's chat voice.
+So every call is isolated on two axes — ``--safe-mode`` drops every
+customization (CLAUDE.md, skills, plugins, hooks, MCP, commands, output style)
+while leaving auth, model and tools alone, and ``--system-prompt`` replaces the
+agent identity itself, with `SYSTEM` standing in when a caller passes none.
+Three of three then came back as briefs. (``--exclude-dynamic-system-prompt-
+sections`` is gone with it: the CLI ignores that flag whenever a system prompt
+is given.)
+
+Two further failure modes are worth knowing. The CLI reads the PROJECT MEMORY
+of its working directory, so it must run from a directory hrono owns
+(``paths.cli_workdir``) — ``--safe-mode`` covers this too, and the empty
+directory stays as the second lock on it. And it can exit non-zero with an
+empty stderr, so the error carries stdout too, and success is read from the
+JSON payload (``is_error``, ``subtype``, ``api_error_status``) rather than from
+the exit code alone.
 """
 
 from __future__ import annotations
@@ -43,6 +58,23 @@ from hrono.llm.client import (
 )
 
 TIMEOUT = 300.0  # generous: a large judge prompt measured 32 s
+# One turn was too tight. A large section made the CLI answer
+# `error_max_turns` — the model had not finished when the cap fell — and the
+# op that was 78 condensations into a 126-section build died on it. Nothing
+# here wants a CONVERSATION: tools are off and the system prompt is replaced,
+# so the extra turns buy the model room to finish an answer, not room to go
+# wandering. Measured: the same corpus completed at 3.
+MAX_TURNS = 3
+# What the CLI is, when hrono is driving it. Every caller in `summarize` asks
+# for the empty system prompt — meaning "no instructions of my own, they are
+# all in the content" — and the empty string is exactly what must NOT be
+# passed through, because then the CLI keeps its own.
+SYSTEM = (
+    "You are a text-summarization engine. The message you are given is the "
+    "only input there is: it carries both the instruction and the material. "
+    "Follow the instruction and reply with the finished text and nothing "
+    "else — no preamble, no commentary, and never a question back."
+)
 
 Runner = Callable[[list[str], str, Path, float], tuple[int, str, str]]
 
@@ -76,22 +108,23 @@ class ClaudeCodeClient:
 
 
 def _argv(request: CompletionRequest) -> list[str]:
-    argv = [
+    return [
         "claude",
         "-p",
         "--model",
         str(request.model["model"]),
         "--max-turns",
-        "1",
+        str(MAX_TURNS),
         "--allowed-tools",
         "",
-        "--exclude-dynamic-system-prompt-sections",
+        # the operator's CLAUDE.md, skills, hooks, plugins, MCP servers and
+        # output style are not part of this call (#200)
+        "--safe-mode",
+        "--system-prompt",
+        request.system or SYSTEM,
         "--output-format",
         "json",
     ]
-    if request.system:
-        argv += ["--system-prompt", request.system]
-    return argv
 
 
 def _read(code: int, out: str, err: str) -> CompletionResult:

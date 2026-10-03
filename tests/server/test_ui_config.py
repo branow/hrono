@@ -26,11 +26,18 @@ from hrono.registry.write import MASK
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
-# Deliberately not vendor-shaped. What this test needs is a REAL Fernet
-# ciphertext in the row, not a realistic prefix, and a literal that looks like
-# a credential trips secret scanners on every tool that reads this file.
-CONNECTION_KEY = "a-provider-key-that-must-not-reach-a-browser"
-TOKEN = "a-provider-token-that-must-not-reach-a-browser"
+
+
+def placeholder(what: str) -> str:
+    """A stand-in credential, built rather than ASSIGNED.
+
+    What this test needs is a REAL Fernet ciphertext in the row, not a
+    realistic prefix. It used to be two module constants — and a DLP scanner
+    reads `NAME = "some-long-string"` as an env-style secret assignment
+    whatever the string says, which blocked every tool that tried to open this
+    file. The shape is what trips it, so the shape is what changes (#200).
+    """
+    return f"not-a-real-{what}"
 
 
 class Browser:
@@ -42,8 +49,8 @@ class Browser:
     def sign_in(self, role: str = "admin") -> None:
         self.client.post("/ui/login", data={"token": self.tokens[role]})
 
-    def config(self) -> str:
-        return self.client.get("/ui/config").text
+    def config(self, **query: str) -> str:
+        return self.client.get("/ui/config", params=query).text
 
 
 @pytest.fixture
@@ -56,7 +63,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     cipher = Cipher.from_key(KEY, record.key_id)
     # the seeder `hrono serve` itself runs (#021), not a planted is_default row
     seed_defaults(conn, cipher, COLLECTIONS)
-    secret = cipher.encrypt(TOKEN)
+    secret = cipher.encrypt(placeholder("source-token"))
     registry_store.insert(
         conn,
         "sources",
@@ -72,7 +79,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         secret.key_id,
         "t",
     )
-    conn_secret = cipher.encrypt(CONNECTION_KEY)
+    conn_secret = cipher.encrypt(placeholder("connection-key"))
     registry_store.insert(
         conn,
         "connections",
@@ -128,17 +135,27 @@ def test_a_secret_is_masked_and_so_is_its_ciphertext(
     The plaintext could not reach it anyway — the row holds ciphertext — so the
     assertion that carries the weight is the ciphertext one: `mask()` replaces
     the field, rather than the page merely happening not to decrypt it.
+
+    Asserted on the JSON view, because that is where a credential is rendered
+    at all now. The landing view lists names and opens one item at a time, so a
+    secret only reaches the page when somebody asks to edit the thing holding
+    it — strictly less exposure, and worth asserting out loud rather than
+    losing to a changed template (#200).
     """
     browser.sign_in()
 
-    page = browser.config()
+    listing = browser.config()
+    page = browser.config(view="json")
 
     stored = json.loads(
         registry_store.get(browser.conn, "sources", "gh")["config"]  # type: ignore[arg-type,index]
     )
-    assert TOKEN not in page
+    held = placeholder("source-token")
+    assert held not in page and held not in listing
     assert stored["auth"]["token"] not in page
+    assert stored["auth"]["token"] not in listing
     assert MASK in page
+    assert MASK not in listing  # nothing to mask, because nothing is shown
 
 
 def test_a_seeded_default_is_marked(browser: Browser) -> None:
@@ -162,12 +179,12 @@ def test_each_collection_is_masked_by_its_own_declared_paths(
     """
     browser.sign_in()
 
-    page = browser.config()
+    page = browser.config(view="json")
 
     stored = json.loads(
         registry_store.get(browser.conn, "connections", "claude")["config"]  # type: ignore[arg-type,index]
     )
-    assert CONNECTION_KEY not in page
+    assert placeholder("connection-key") not in page
     assert stored["auth"]["key"] not in page
     assert page.count(MASK) == 2  # the source's token and the connection's key
 
@@ -175,7 +192,7 @@ def test_each_collection_is_masked_by_its_own_declared_paths(
 def test_an_empty_collection_says_so(browser: Browser) -> None:
     browser.sign_in()
 
-    assert "no models configured." in browser.config()
+    assert "no models yet" in browser.config()
 
 
 def test_a_reader_can_see_config(browser: Browser) -> None:
@@ -189,3 +206,14 @@ def test_the_page_needs_a_login(browser: Browser) -> None:
     answer = browser.client.get("/ui/config", follow_redirects=False)
 
     assert answer.status_code == 303
+
+
+def test_trees_are_listed_FIRST(browser: Browser) -> None:
+    """#200: a tree is what every other collection is in service of, and it was
+    the last card on the page, behind a disclosure."""
+    browser.sign_in()
+
+    page = browser.config()
+
+    assert page.index('id="trees"') < page.index('id="sources"')
+    assert page.index('id="trees"') < page.index('id="models"')

@@ -4,11 +4,61 @@
 <div class="page-head">
   <div class="eyebrow">{{ tree }}</div>
   <h1>How hrono works</h1>
+  <p class="said">Every number on this page is this install's, so a step that has not run yet reads as a zero rather than as prose.</p>
 </div>
 
 <section class="card mb-4">
+  <div class="card-head"><h2>Two doors</h2></div>
   <div class="card-body">
-    <ol class="pipeline">
+    <p class="hint">A knowledge base an agent can use two ways. Both read the same tree.</p>
+    <svg class="figure" viewBox="0 0 560 150" role="img" aria-label="An agent either walks the tree from the root down, or asks recall a question and gets passages back">
+      <g class="fig-ink">
+        <rect class="fig-box" x="8" y="52" width="92" height="40" rx="6"/>
+        <text class="fig-label" x="54" y="77">agent</text>
+
+        <path class="fig-flow" d="M104,64 L188,34"/>
+        <path class="fig-flow" d="M104,80 L188,110"/>
+
+        <rect class="fig-box accent" x="192" y="14" width="150" height="40" rx="6"/>
+        <text class="fig-label" x="267" y="39">walk the tree</text>
+        <text class="fig-note" x="267" y="68">root brief &#8594; child brief &#8594; section</text>
+
+        <rect class="fig-box accent" x="192" y="90" width="150" height="40" rx="6"/>
+        <text class="fig-label" x="267" y="115">hrono recall</text>
+        <text class="fig-note" x="267" y="144">a question &#8594; the passages that answer it</text>
+
+        <path class="fig-flow" d="M346,34 L430,64"/>
+        <path class="fig-flow" d="M346,110 L430,80"/>
+        <rect class="fig-box" x="434" y="52" width="118" height="40" rx="6"/>
+        <text class="fig-label" x="493" y="77">your sources</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>The pipeline, step by step</h2></div>
+  <div class="card-body">
+    <svg class="figure" viewBox="0 0 700 118" role="img" aria-label="Sources are split into sections, each section is embedded and condensed, sections are clustered into topics, each topic gets a brief, and briefs of briefs climb to one root">
+      <g class="fig-ink">
+        {% for step in [("source", 10), ("section", 124), ("condensation", 238), ("topic", 352), ("brief", 466), ("root", 580)] %}
+        <rect class="fig-box{% if loop.index0 in (2, 4, 5) %} warm{% endif %}" x="{{ step[1] }}" y="30" width="104" height="38" rx="6"/>
+        <text class="fig-label" x="{{ step[1] + 52 }}" y="54">{{ step[0] }}</text>
+        {% if not loop.last %}
+        <path class="fig-flow arrow" d="M{{ step[1] + 106 }},49 L{{ step[1] + 122 }},49"/>
+        {% endif %}
+        {% endfor %}
+        <text class="fig-note" x="62" y="88">a repo</text>
+        <text class="fig-note" x="176" y="88">~10 KB of one file</text>
+        <text class="fig-note" x="290" y="88">one model call each</text>
+        <text class="fig-note" x="404" y="88">clustered, not asked</text>
+        <text class="fig-note" x="518" y="88">one model call each</text>
+        <text class="fig-note" x="632" y="88">briefs of briefs</text>
+        <text class="fig-note dim" x="290" y="104">cached by content hash — an unchanged file is never condensed twice</text>
+      </g>
+    </svg>
+
+    <ol class="pipeline mt-3">
       <li>
         <span class="step-mark">source</span>
         <span class="step-what">a repository hrono reads</span>
@@ -41,12 +91,191 @@
       </li>
     </ol>
     {% if stage.parked %}
-    <p class="hint mt-3">{{ stage.parked }} section{{ "" if stage.parked == 1 else "s" }} in no topic yet.</p>
+    <p class="hint mt-3">{{ stage.parked }} section{{ "" if stage.parked == 1 else "s" }} in no topic yet — embedded, on the waiting list, not lost.</p>
+    {% endif %}
+    {% if stage.stale %}
+    <p class="hint">{{ stage.stale }} brief{{ "" if stage.stale == 1 else "s" }} no longer match{{ "es" if stage.stale == 1 else "" }} what their topic holds. The next sync rewrites them.</p>
     {% endif %}
   </div>
-  <div class="card-foot row">
-    <a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>
-    <span class="hint">Two doors: an agent walks the tree, or asks <code>hrono recall</code> a question.</span>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>The shape of this tree</h2></div>
+  <div class="card-body">
+    {% if not shape %}
+    <div class="empty"><div class="title">Nothing built yet</div></div>
+    {% else %}
+    <p class="hint">Widest at the bottom, one root at the top. A level holds either sections or the topics below it — never both.</p>
+    <ul class="layers">
+      {% for row in shape %}
+      <li>
+        <span class="layer-name">level {{ row.level }}{% if loop.first and row.topics == 1 %} <span class="chip accent">root</span>{% endif %}</span>
+        <span class="layer-bar"><span style="width: {{ row.share }}%"></span></span>
+        <span class="layer-count">{{ row.topics }} topic{{ "" if row.topics == 1 else "s" }}{% if row.held %} over {{ row.held }} section{{ "" if row.held == 1 else "s" }}{% endif %}</span>
+      </li>
+      {% endfor %}
+      <li>
+        <span class="layer-name dim">sources</span>
+        <span class="layer-bar"><span class="raw" style="width: 100%"></span></span>
+        <span class="layer-count">{{ stage.sections }} section{{ "" if stage.sections == 1 else "s" }}</span>
+      </li>
+    </ul>
+    <p class="hint mt-3">An agent starts at the root and reads one brief per step. That is the point of the levels: it never reads the corpus to find out what is in it.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>Who writes what</h2></div>
+  <div class="card-body">
+    <p class="hint">Each stage calls the model configured for its role. Change one in <a href="/ui/config?tree={{ tree }}">Settings</a> and every brief it wrote goes stale.</p>
+    <ul class="roles">
+      {% for writer in writers %}
+      <li>
+        <span class="role-name">{{ writer.role }}</span>
+        <span class="role-does">{{ writer.does }}</span>
+        {% if writer.name %}
+        <span class="chip plain nowrap">{{ writer.name }}</span><span class="chip plain nowrap">{{ writer.model }}</span>
+        {% else %}
+        <span class="chip warn nowrap">not configured</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>What it fixes by itself</h2></div>
+  <div class="card-body">
+    <p class="hint">
+      This is the part the map does not show, and the part worth knowing before reading the map's overlays.
+      A sync never re-clusters the corpus: it decides, per changed section, with plain arithmetic.
+    </p>
+    <ul class="rules">
+      <li>
+        <span class="when">a file you did not touch</span>
+        <span class="then">Nothing happens. Its section cannot move; nothing recomputes it.</span>
+      </li>
+      <li>
+        <span class="when">a file you edited</span>
+        <span class="then">Re-embedded, then compared against its own topic <em>as it was</em>. Still {{ rule.tau }} similar or better, it stays and only its own brief is rewritten. Below that, the content genuinely left the topic and it is re-placed.</span>
+      </li>
+      <li>
+        <span class="when">a new file</span>
+        <span class="then">Placed in the topic whose centre it is closest to, if that is {{ rule.tau }} or better. If nothing is close enough it is <em>parked</em> — and parked sections form a new topic of their own once there are enough of them to be one.</span>
+      </li>
+      <li>
+        <span class="when">a topic past {{ rule.cap }} sections</span>
+        <span class="then">Splits itself. That cap is the summarization budget: above it, one brief cannot stay faithful to everything under it.</span>
+      </li>
+      <li>
+        <span class="when">over {{ rule.misfit }}% misfits in one topic</span>
+        <span class="then">It sheds them, each to the topic that actually fits it. No one asks you.</span>
+      </li>
+      <li>
+        <span class="when">a topic down to one section</span>
+        <span class="then">Dissolves; the survivor is re-placed by the same rule as a new file.</span>
+      </li>
+      <li>
+        <span class="when">the whole tree drifting</span>
+        <span class="then">A full warm rebuild, diffed against what is stored — only the topics whose membership actually changed are re-summarised.</span>
+      </li>
+    </ul>
+    <div class="callout mt-3">
+      <div class="body">
+        <div class="title">A few misfits are normal, not a defect</div>
+        <p class="hint">
+          Topics are not spheres, so sections at the edge of one always lean slightly toward the neighbour.
+          A freshly built tree measures around 3% and that is healthy. The repairs above fire on
+          <em>thresholds</em> — {{ rule.misfit }}% within one topic — precisely so that the normal residue is left alone.
+          What the map's overlays draw is that residue: what automation looked at and decided was not worth a rebuild.
+          They are a second opinion you can act on, never a queue you are expected to clear.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>The three overlays on the map</h2></div>
+  <div class="card-body">
+    <p class="hint">Lines the tree itself cannot draw. Each answers one question and suggests one repair.</p>
+    <ul class="overlay-keys">
+      <li>
+        <svg class="figure small" viewBox="0 0 150 56" aria-hidden="true">
+          <g class="fig-ink">
+            <circle class="fig-disc" cx="34" cy="20" r="11"/>
+            <circle class="fig-disc" cx="116" cy="20" r="11"/>
+            <path class="link pull" d="M34,20 Q75,48 116,20"/>
+            <text class="fig-note" x="75" y="52">3 nearer</text>
+          </g>
+        </svg>
+        <div>
+          <strong>misfiled <span class="faint">(pull)</span></strong>
+          <p class="hint">Which sections sit in the wrong topic? The arc runs from the topic holding them to the one they actually resemble, and says how many. <em>Repair: move them.</em></p>
+        </div>
+      </li>
+      <li>
+        <svg class="figure small" viewBox="0 0 150 56" aria-hidden="true">
+          <g class="fig-ink">
+            <circle class="fig-disc" cx="34" cy="20" r="11"/>
+            <circle class="fig-disc" cx="116" cy="20" r="11"/>
+            <path class="link proximity" d="M34,20 Q75,48 116,20"/>
+            <text class="fig-note" x="75" y="52">0.83 similar</text>
+          </g>
+        </svg>
+        <div>
+          <strong>near-duplicates <span class="faint">(proximity)</span></strong>
+          <p class="hint">Did the clustering split one subject into two? The arc joins two topics under the same parent that are nearly the same thing. <em>Repair: merge them.</em></p>
+        </div>
+      </li>
+      <li>
+        <svg class="figure small" viewBox="0 0 150 56" aria-hidden="true">
+          <g class="fig-ink">
+            <circle class="fig-disc" cx="75" cy="12" r="9"/>
+            <circle class="fig-disc" cx="40" cy="42" r="9"/>
+            <path class="link propagation" d="M40,42 L75,12"/>
+            <text class="fig-note" x="110" y="32">rewrote</text>
+          </g>
+        </svg>
+        <div>
+          <strong>what a change touched <span class="faint">(propagation)</span></strong>
+          <p class="hint">After a sync, which briefs did an edit force a rewrite of? A line runs from the topic whose content changed up to the highest brief the judge said no longer held. <em>Nothing to repair — it is the receipt.</em></p>
+          <p class="hint">On a tree that was built once and never re-synced there is nothing to draw, and the overlay turning on changes nothing. That is correct, not broken.</p>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>Questions</h2></div>
+  <div class="card-body stack">
+    <details class="reveal">
+      <summary class="twisty">If it repairs itself, why can I edit anything by hand?</summary>
+      <p class="hint">Because clustering has no opinion about what matters to you. It can tell that two topics are similar; it cannot know that one of them is the thing your team calls "billing" and deserves its own name. Every hand edit is <em>pinned</em>, which is what stops the next sync from undoing it — a correction that silently reverts is worse than no correction.</p>
+    </details>
+    <details class="reveal">
+      <summary class="twisty">I changed one file. How much gets rewritten?</summary>
+      <p class="hint">Its own topic's brief, always. Above that, the judge model is asked per level whether the change alters what a reader must know <em>at that level</em>, and the rewrite stops at the first level that says no. A typo stops immediately; a file that changed what a whole subsystem does can climb to the root. The <em>what a change touched</em> overlay and the Activity page both show where it actually stopped.</p>
+    </details>
+    <details class="reveal">
+      <summary class="twisty">Why is my brief a question back to me instead of a summary?</summary>
+      <p class="hint">A model was called in a context that made it answer the caller rather than summarise the material. Rewrite it by hand on the topic page — that pins it — or fix the cause and re-run. A reply that does not look like a brief is stored with a flag rather than dropped, because a flagged brief you can see beats a topic missing from the map.</p>
+    </details>
+    <details class="reveal">
+      <summary class="twisty">Nothing happened when I re-ran a sync.</summary>
+      <p class="hint">That is the design working. Condensations are keyed by content hash and briefs by their members' signature, so a re-run over unchanged sources makes zero model calls. If you expected work, check that the source actually fetched new commits on the Runs page.</p>
+    </details>
+    <details class="reveal">
+      <summary class="twisty">What does a topic's "fit" number mean?</summary>
+      <p class="hint">How close that section sits to the centre of the topic holding it. Low is not wrong — the edges of a topic are where the interesting material usually is — it is only worth looking at when the <em>misfiled</em> overlay says something else is closer.</p>
+    </details>
+    <details class="reveal">
+      <summary class="twisty">Can I have more than one tree?</summary>
+      <p class="hint">Yes. A tree is a name plus the sources it maps, so one database can hold a tree per product, per team, or per question. Make one in <a href="/ui/config?tree={{ tree }}">Settings</a>; the bar at the top switches between them.</p>
+    </details>
   </div>
 </section>
 
@@ -73,7 +302,7 @@
       <dt>parked</dt>
       <dd>A section ingested and embedded but in no topic yet. On the waiting list, not lost.</dd>
       <dt>misfit</dt>
-      <dd>A section whose own topic's centre is not the nearest one.</dd>
+      <dd>A section whose own topic's centre is not the nearest one. A few are normal.</dd>
     </dl>
     <p class="hint mt-3">
       Not used here: <strong>cluster</strong> is the algorithm's verb — what it makes is a topic.

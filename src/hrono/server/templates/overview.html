@@ -101,7 +101,12 @@
               {% for run in runs %}
               <tr>
                 <td class="when">{{ run.when }}</td>
-                <td><code>{{ run.op }}</code></td>
+                <td>
+                  <a class="runlink" href="/ui/jobs/{{ run.id }}?tree={{ tree }}"><code>{{ run.op }}</code></a>
+                  {% if run.outcome.did %}
+                  <div class="hint small">{{ run.outcome.did|join(", ") }}</div>
+                  {% endif %}
+                </td>
                 <td><span class="state" data-state="{{ run.status }}">{{ run.status }}</span></td>
               </tr>
               {% endfor %}

@@ -16,9 +16,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.cluster import incubator
 from hrono.jobs import store as job_store
+from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import triage
+from hrono.server import outcome, triage
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.jobs import clock
 
@@ -95,9 +96,13 @@ def _recent(conn: sqlite3.Connection, tree: str) -> list[dict[str, object]]:
     ]
     return [
         {
+            "id": str(row["id"]),
             "op": str(row["op"]),
             "status": str(row["status"]),
             "when": clock(str(row["created_at"])),
+            # a run named on the front page and not clickable is a dead end:
+            # the thing a reader wants next is always what it DID (#200)
+            "outcome": outcome.read(to_job(row).result),
         }
         for row in reversed(rows[-RECENT_RUNS:])
     ]

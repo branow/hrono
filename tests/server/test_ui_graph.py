@@ -313,7 +313,7 @@ def test_a_straddling_topic_names_the_two_directories_and_their_shares(
     assert big.where == "src/hrono/db + tests/cluster"
     # and the proportions that make it a straddle are disclosed rather than
     # implied, because a 50/50 topic and a 59/41 one read the same otherwise
-    assert big.spread == "src/hrono/db 50% · tests/cluster 50%"
+    assert big.spread == "src/hrono/db 50%, tests/cluster 50%"
 
 
 def test_two_directories_of_the_SAME_NAME_are_said_once(
@@ -339,12 +339,12 @@ def test_two_directories_of_the_SAME_NAME_are_said_once(
     assert big.label == big.where  # short enough to reach the slot whole
 
 
-def test_the_one_root_of_a_tree_says_that_is_what_it_is(
+def test_the_one_root_of_a_tree_is_named_by_what_it_was_built_FROM(
     browser: Browser,
 ) -> None:
-    """#199: the root straddles by construction, so it wore `src + tests` —
-    the first label anyone reads, saying nothing. It is not straddling two
-    things, it is everything."""
+    """#199/#200: the root straddles by construction, so it wore `src + tests`
+    — the first label anyone reads, saying nothing. Then it said "whole tree",
+    which is true and just as empty. What it IS, is its sources."""
     from hrono.server.graph import build
 
     with browser.conn:  # type: ignore[union-attr]
@@ -353,13 +353,39 @@ def test_the_one_root_of_a_tree_says_that_is_what_it_is(
                 "UPDATE sections SET path = ? WHERE path = ?",
                 (f"tests/db/b{index}.py", f"src/hrono/db/b{index}.py"),
             )
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE sections SET source = 'click'"
+        )
 
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
     root = next(node for node in drawn.nodes if node.id == browser.ids["root"])
-    assert root.where == "whole tree"
+    assert root.where == "click"
     # and what it spans is still said, in the tooltip and the panel
     assert "%" in root.spread and "src/hrono/db" in root.spread
+
+
+def test_a_root_over_several_sources_is_counted_rather_than_listed(
+    browser: Browser,
+) -> None:
+    """Three repository names end to end is a paragraph in an 18-character
+    slot, and cut to fit it names none of them."""
+    from hrono.server.graph import build
+
+    with browser.conn:  # type: ignore[union-attr]
+        for index in range(3):
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "UPDATE sections SET path = ? WHERE path = ?",
+                (f"tests/db/b{index}.py", f"src/hrono/db/b{index}.py"),
+            )
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE sections SET source = 'repo-' || (id % 3)"
+        )
+
+    drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
+
+    root = next(node for node in drawn.nodes if node.id == browser.ids["root"])
+    assert root.where == "3 sources"
 
 
 def test_a_topic_one_directory_holds_discloses_no_spread(
@@ -850,3 +876,70 @@ def test_a_tint_is_reused_rather_than_a_branch_going_unmarked(
 
     tints = {node.branch for node in drawn.nodes if node.id != root}
     assert tints and tints <= set(range(1, TINTS + 1))
+
+
+def test_a_first_visit_puts_no_sentinel_in_its_own_links(
+    browser: Browser,
+) -> None:
+    """`NO_OPEN` means "the URL carried no `open`". Handing it back to the URL
+    builder put a literal `open=%00` into every link on a first visit —
+    harmless, because it round-trips to the same sentinel, and unpastable."""
+    browser.sign_in()
+
+    page = browser.map_at("")
+
+    assert "%00" not in page and "\x00" not in page
+
+
+def test_a_child_in_the_panel_links_to_the_map_the_reader_IS_ON(
+    browser: Browser,
+) -> None:
+    """The panel's child links were hard-coded to a bare `?focus=`, so reading
+    down one level threw away the expand state and every overlay the reader
+    had set up — the board collapsed under them (#200)."""
+    browser.sign_in()
+    root = browser.ids["root"]
+
+    page = browser.client.get(
+        f"/ui/trees/{TREE}/graph?open={root}&edges=proximity&focus={root}"
+    ).text
+
+    child = browser.ids["big"]
+    assert (
+        f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open={root}'
+        f'&amp;edges=proximity&amp;focus={child}"' in page
+    )
+
+
+def test_an_overlay_stays_on_when_a_topic_is_opened(
+    browser: Browser,
+) -> None:
+    """A reader turns `proximity` on to find a merge, then opens the topic it
+    pointed at — and the chevron's own URL dropped `edges`, so the drawing
+    they opened it to read came back blank."""
+    browser.sign_in()
+    root = browser.ids["root"]
+
+    page = browser.client.get(
+        f"/ui/trees/{TREE}/graph?open=&edges=proximity"
+    ).text
+
+    assert (
+        f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open={root}'
+        f'&amp;edges=proximity"' in page
+    )
+
+
+def test_an_overlay_toggled_on_a_collapsed_map_leaves_it_collapsed(
+    browser: Browser,
+) -> None:
+    """#197 again, in the one link that kept its own URL builder: the toggle
+    dropped an EMPTY `open`, and an absent `open` means a first visit."""
+    browser.sign_in()
+
+    page = browser.map(open="")
+
+    assert (
+        f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open=&amp;edges=pull"'
+        in page
+    )

@@ -15,9 +15,14 @@ roots it spanned, which put ``src + tests`` on the root and on the largest
 topic — the two a person looks at first, both told nothing (#199). A straddle
 is now named by descending INTO each of those two roots as far as each one is
 itself dominated, so it reads ``src/hrono + tests``; the shares that make it a
-straddle are carried alongside, for the tooltip and the map's panel. The one
-root of the tree spans everything by construction, so when nothing dominates
-it, it says that rather than naming two arbitrary halves of itself.
+straddle are carried alongside, for the tooltip and the map's panel.
+
+The one root of the tree spans everything by construction, so no directory
+dominates it. It used to say so — "whole tree" — which is true and useless: it
+is the first label anyone reads and it named nothing. What the root actually
+is, is the SOURCES it was built from, which are named by the operator and are
+the one label on the map that needs no explaining: a tree ingested from the
+``click`` repository has ``click`` on top.
 """
 
 from __future__ import annotations
@@ -33,9 +38,8 @@ SHARE = 0.6
 # constant because the map has to recognise it to cut such a label in half
 # rather than through one side of it.
 STRADDLE = " + "
-# What the single root of a tree is called when no directory dominates it. It
-# is not straddling two things, it is the whole corpus.
-EVERYTHING = "whole tree"
+# Past this many sources, naming them all is a paragraph, not a label.
+NAMED_SOURCES = 2
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,11 @@ def describe(conn: sqlite3.Connection, tree: str) -> dict[int, Where]:
         for child in children.get(node, ()):
             held.setdefault(node, []).extend(held.get(child, ()))
     crown = _crown(conn, tree, children)
-    return {node: _place(dirs, node == crown) for node, dirs in held.items()}
+    top = _sources(conn, tree) if crown is not None else ""
+    return {
+        node: _place(dirs, top if node == crown else None)
+        for node, dirs in held.items()
+    }
 
 
 def _member_dirs(
@@ -91,6 +99,31 @@ def _member_dirs(
     return held
 
 
+def _sources(conn: sqlite3.Connection, tree: str) -> str:
+    """What the tree was built FROM, as the root's label.
+
+    The operator named these when registering them, so they are the one place
+    on the map whose name needs no derivation. Beyond a couple the names stop
+    fitting a label and the count is the honest thing to say.
+    """
+    names = [
+        str(row["source"])
+        for row in conn.execute(
+            "SELECT DISTINCT s.source AS source "
+            "FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id "
+            "JOIN nodes n ON n.id = m.node_id "
+            "WHERE n.tree = ? ORDER BY s.source",
+            (tree,),
+        ).fetchall()
+    ]
+    if not names:
+        return ""
+    if len(names) > NAMED_SOURCES:
+        return f"{len(names)} sources"
+    return STRADDLE.join(names)
+
+
 def _children(conn: sqlite3.Connection, tree: str) -> dict[int, list[int]]:
     edges: dict[int, list[int]] = {}
     for row in conn.execute(
@@ -108,9 +141,9 @@ def _crown(
 ) -> int | None:
     """The one topic nothing points at, or None when there is not exactly one.
 
-    "Everything" is only honest about a single crown. A tree mid-repair has
-    several tops (#124, #163), and calling each of them the whole tree would
-    describe a broken shape as a whole one.
+    The source label is only honest about a single crown. A tree mid-repair
+    has several tops (#124, #163), and naming each of them after the whole
+    corpus would describe a broken shape as a whole one.
     """
     parented = {child for kids in children.values() for child in kids}
     tops = [node for node in _bottom_up(conn, tree) if node not in parented]
@@ -132,13 +165,21 @@ def _bottom_up(conn: sqlite3.Connection, tree: str) -> list[int]:
     ]
 
 
-def _place(dirs: list[tuple[str, ...]], crown: bool) -> Where:
+def _place(dirs: list[tuple[str, ...]], crown: str | None) -> Where:
+    """Where one topic is. ``crown`` is the root's sources — None if not root.
+
+    The root is only labelled by its sources when no directory dominates it —
+    a tree that is all of ``src/hrono`` is better described by that than by
+    the name of the repository it came out of. What it must never fall back to
+    is the straddle, which on the root is two arbitrary halves of itself and
+    is the #199 regression.
+    """
     deepest = _dominant(dirs)
     if deepest:
         return Where("/".join(deepest), "")
     straddle = _straddled(dirs)
     if crown:
-        return Where(EVERYTHING, straddle.spread)
+        return Where(crown, straddle.spread)
     return straddle
 
 
@@ -179,7 +220,7 @@ def _straddled(dirs: list[tuple[str, ...]]) -> Where:
     total = len(dirs) or 1
     return Where(
         label=_both(tuple(name for name, _ in named)),
-        spread=" · ".join(
+        spread=", ".join(
             f"{name} {round(100 * held / total)}%" for name, held in named
         ),
     )

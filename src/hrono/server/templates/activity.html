@@ -3,7 +3,7 @@
 {% block main %}
 <div class="page-head">
   <div class="eyebrow">{{ tree }}</div>
-  <h1>Activity<span class="tip" tabindex="0" role="note" data-tip="Every judgement hrono made about a changed topic. Read it when the map is not the shape you expected">?</span></h1>
+  <h1>What changed<span class="tip" tabindex="0" role="note" data-tip="When a source file changes, a judge model is asked per level whether the summaries above it still hold. This is every one of those decisions — the only record of why a summary was, or was not, rewritten, and what one edit cost">?</span></h1>
 </div>
 
 <section class="card">
@@ -13,8 +13,27 @@
   </div>
   {% else %}
   <div class="card-head">
-    <p class="notes small">showing {{ rows|length }} of {{ total }} · newest first</p>
+    <p class="notes small">showing {{ rows|length }} of {{ total }}, newest first</p>
   </div>
+  {% if climbs.links %}
+  <div class="card-body">
+    <h3 class="sub">What a change touched<span class="tip" tabindex="0" role="note" data-tip="A line per topic whose change forced a summary above it to be rewritten. Several lines meeting on one topic is one edit restaling a whole branch">?</span></h3>
+    <svg class="figure climb" viewBox="0 0 {{ climbs.width }} {{ climbs.height }}" role="img"
+         aria-label="{{ climbs.links|length }} climb{{ '' if climbs.links|length == 1 else 's' }}: each runs from the topic that changed to the summary above it that had to be rewritten">
+      <g class="fig-ink">
+        {% for link in climbs.links %}
+        <path class="link propagation" d="M{{ link.x1 }},{{ link.y1 }} L{{ link.x2 }},{{ link.y2 }}"/>
+        {% endfor %}
+        {% for link in climbs.links %}
+        <circle class="fig-disc" cx="{{ link.x1 }}" cy="{{ link.y1 }}" r="7"/>
+        <text class="fig-note" x="{{ link.x1 }}" y="{{ link.y1 + 19 }}">topic {{ link.from }}</text>
+        <circle class="fig-disc" cx="{{ link.x2 }}" cy="{{ link.y2 }}" r="7"/>
+        <text class="fig-note" x="{{ link.x2 }}" y="{{ link.y2 - 11 }}">topic {{ link.to }}</text>
+        {% endfor %}
+      </g>
+    </svg>
+  </div>
+  {% endif %}
   <div class="card-body table-wrap">
     <table>
       <thead>

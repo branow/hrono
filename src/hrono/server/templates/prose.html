@@ -1,0 +1,25 @@
+{#
+  One piece of model-written text, rendered as the markdown it is — with a
+  switch to the exact characters that are stored.
+
+  The switch is a checkbox and two CSS rules, not a script: this dashboard
+  works with JavaScript off, and "show me what is actually in the database"
+  is the one question a rendered view cannot answer by itself (#200).
+
+  `id` must be unique on the page — a topic page carries thirty of these.
+#}
+{% macro text(body, id, label="text") %}
+{% if body %}
+<div class="prose-block">
+  <input type="checkbox" class="prose-switch" id="raw-{{ id }}">
+  <div class="prose-head">
+    <label for="raw-{{ id }}" class="prose-toggle">
+      <span class="when-off">Show the plain {{ label }}</span>
+      <span class="when-on">Show it formatted</span>
+    </label>
+  </div>
+  <div class="prose rendered">{{ body|markdown|safe }}</div>
+  <pre class="prose raw">{{ body }}</pre>
+</div>
+{% endif %}
+{% endmacro %}

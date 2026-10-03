@@ -133,7 +133,9 @@ def test_the_page_shows_the_brief_and_where_the_topic_sits(
 
     assert "Signing and serialization." in page
     assert "level 0" in page
-    assert "under <a" in page
+    # the parent is named ONCE, in the panel beside the brief: it used to be
+    # a chip under the title as well, repeating a path the h1 already shows
+    assert "<dt>Parent</dt>" in page
 
 
 def test_members_are_worst_fit_first_with_core_last(
@@ -181,25 +183,20 @@ def test_a_score_is_shown_for_an_attached_member(browser: Browser) -> None:
     assert "0.72" in browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
 
-def test_a_section_is_readable_and_says_what_it_holds_back(
-    browser: Browser,
-) -> None:
-    """A section that stops after a heading is one nobody can judge (#199).
-
-    A topic can hold thirty ~10 KB sections, so the page cannot print them
-    whole — but a preview that trails off into an ellipsis and says nothing
-    about how much is missing reads as the content itself ending.
-    """
+def test_a_section_is_shown_WHOLE(browser: Browser) -> None:
+    """#200: it used to stop at 4,000 characters and say how many it was
+    holding back. The one thing a reader opens a section FOR is the part that
+    cut removed — and a section is already the readable unit the splitter
+    chose, inside a `<details>` nobody opens by accident."""
     browser.sign_in()
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
-    assert "E" * 4000 in page  # enough of it to actually read
-    assert "E" * 4001 not in page  # and not the whole 12,000-byte section
-    assert "Showing the first 4,000 of 12,000 characters." in page
-    # and a section that fits says so, rather than leaving the reader to
-    # wonder whether it too was cut
-    assert "All 31 characters." in page
+    assert "E" * 12000 in page  # the whole 12,000-byte section
+    assert "12,000 characters." in page
+    assert "Showing the first" not in page
+    # and a short one still says how big it is, so the two read the same
+    assert "31 characters." in page
 
 
 def test_pins_say_what_they_hold_and_why(browser: Browser) -> None:
@@ -226,7 +223,7 @@ def test_the_page_shows_who_wrote_the_brief(browser: Browser) -> None:
 
     assert "scribe-9" in page  # the model that wrote it
     assert "pr00mpth4sh" in page  # the prompt template it was written from
-    assert "1,234 in · 56 out" in page  # what it cost
+    assert "1,234 in, 56 out" in page  # what it cost
     assert "sig-written" in page  # the member set it was written over
     # which is NOT the member set this topic now holds
     assert "changed since" in page
@@ -316,22 +313,38 @@ def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
         "belong together and which do not, at some length."
     )
     node = _node_id(browser)
-    with browser.conn:  # type: ignore[union-attr]
+    parent = int(
         browser.conn.execute(  # type: ignore[attr-defined]
-            "UPDATE briefs SET text = ? WHERE node_id = ?", (long_brief, node)
+            "SELECT MAX(id) FROM nodes WHERE level = 1"
+        ).fetchone()[0]
+    )
+    with browser.conn:  # type: ignore[union-attr]
+        # the PARENT's brief: a topic is offered by the first line of its own
+        # brief in the picker that moves this one under it
+        briefs.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            parent,
+            long_brief,
+            model_name="scribe-9",
+            prompt_name="brief-upper",
+            prompt_hash="h",
+            member_signature="s",
+            input_tokens=1,
+            output_tokens=1,
         )
     browser.sign_in()
 
     page = browser.node(node).text  # type: ignore[attr-defined]
 
-    # the NAME, not the page: the chunk previews carry their own ellipsis, so
-    # asking whether the page contains one proves nothing about the title.
-    # The h1 is the path the topic's chunks live under (#198); the brief's
-    # first line is the secondary identity under it.
-    said = re.search(r'<p class="said">(.*?)</p>', page, re.S)
-    assert said is not None
-    title = said.group(1).strip()
-    assert title.endswith("…")  # an ellipsis, not a hard stop
+    # the NAME, not the page: the section previews carry their own ellipsis,
+    # so asking whether the page contains one proves nothing about the title.
+    # The brief's first line is the name a topic is OFFERED under — in the
+    # move and merge pickers, and in the map's tooltip. It is no longer printed
+    # under the h1: the whole brief is on this page, so a cut copy of its
+    # opening clause above it said the same thing twice (#200).
+    offered = re.findall(r'<span class="about">(.*?)</span>', page, re.S)
+    assert offered, "the name is still offered where a topic is chosen"
+    title = next(name.strip() for name in offered if name.strip().endswith("…"))
     # and the cut respects a word: the character AFTER the stem, in the
     # original, is a space. A hard 80-character cut lands inside "together".
     stem = title.removesuffix("…")
@@ -374,11 +387,11 @@ def test_a_section_shows_the_condensation_it_was_summarised_through(
     assert "the signer trusts its own clock" in page
 
 
-def test_a_gotcha_is_lifted_out_of_the_condensation(
-    browser: Browser,
-) -> None:
-    """A GOTCHA is a hazard moved up the tree so an agent is warned without
-    reading the source. Buried in markdown it warns nobody."""
+def test_a_gotcha_is_shown_ONCE(browser: Browser) -> None:
+    """#200: the GOTCHA lines were lifted out and printed as warnings ABOVE
+    the condensation — which opens with those same lines. The page said each
+    hazard twice and put the duplicate first, so the reader met the ending
+    before the beginning."""
     node = _node_id(browser)
     with browser.conn:  # type: ignore[union-attr]
         digest = browser.conn.execute(  # type: ignore[attr-defined]
@@ -399,8 +412,11 @@ def test_a_gotcha_is_lifted_out_of_the_condensation(
 
     page = browser.node(node).text  # type: ignore[attr-defined]
 
-    assert page.count("deletes silently") == 2  # called out AND in the text
-    assert 'class="callout warn' in page
+    # once in the rendered markdown and once in the raw view the toggle
+    # switches to — never a third time as a lifted-out warning above both
+    assert page.count("deletes silently") == 2
+    assert 'class="callout warn' not in page
+    assert "Body." in page and "More body." in page  # and all of it is there
 
 
 def test_a_section_not_condensed_yet_says_so(browser: Browser) -> None:

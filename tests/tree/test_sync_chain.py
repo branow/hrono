@@ -177,6 +177,10 @@ def test_the_result_says_what_the_run_did(
         "misfit_rate",
         "above_baseline",
         "repaired",
+        # what the stages AFTER repair put back: a split retires a topic and
+        # makes two in its place, and until #200 nothing briefed or re-parented
+        # them — the run ended leaving them beside the tree, under no root
+        "adopted",
         "settle_due",
         "incomplete",
     }

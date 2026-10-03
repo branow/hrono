@@ -391,3 +391,41 @@ def test_freed_counts_pioneers_not_migrations(db: Database) -> None:
 
     assert outcome["migrated"] > outcome["freed"]  # they really do disagree
     assert outcome["freed"] == 1  # exactly the one that was forced
+
+
+def test_a_split_leaves_both_halves_WHERE_THE_TOPIC_WAS(db: Database) -> None:
+    """#200: the halves were created and the original retired, and nothing
+    attached them — so a topic under the root became two nodes beside the
+    tree. On the map: two circles with no line to anything, and a root whose
+    brief silently stopped covering a seventh of the corpus."""
+    with db.connect() as conn, conn:
+        sections = [
+            add_section(conn, f"a{i}\n".encode(), unit(0)) for i in range(16)
+        ]
+        sections += [
+            add_section(conn, f"b{i}\n".encode(), unit(1)) for i in range(16)
+        ]
+        big = node_of(conn, sections)
+        above = int(
+            conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES (?, 1, 7, datetime('now')) RETURNING id",
+                (TREE,),
+            ).fetchone()["id"]
+        )
+        cluster_store.add_child(
+            conn, above, big, attached=True, similarity=None
+        )
+
+    def labeler(vectors: list[list[float]]) -> list[int]:
+        return [0 if v[1] > 0.5 else 1 for v in vectors]
+
+    with db.connect() as conn, conn:
+        children = repair.split(conn, TREE, big, MODEL, core_labeler=labeler)
+
+    with db.connect() as conn:
+        assert len(children) == 2
+        for child in children:
+            assert cluster_store.parent_of(conn, child) == above
+        # and the retired topic is not still hanging there beside them
+        assert cluster_store.parent_of(conn, big) is None

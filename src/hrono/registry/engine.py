@@ -27,7 +27,7 @@ from hrono.crypto.cipher import Cipher
 from hrono.errors import BadRequest, Conflict, Invalid, NotFound
 from hrono.registry import impact, store
 from hrono.registry.descriptor import Descriptor, ValidationContext
-from hrono.registry.write import content_hash, encrypt, mask
+from hrono.registry.write import content_hash, decrypt, encrypt, mask
 from hrono.server.auth import require_role
 
 
@@ -177,6 +177,54 @@ def replace_item(
     return mask(stored, descriptor)
 
 
+def sync_items(
+    descriptor: Descriptor, items: list[dict], request: Request
+) -> dict[str, object]:
+    """Make the collection BE ``items`` — writing what differs, dropping what
+    is gone.
+
+    A collection edited as a whole, which is how an operator thinks about one:
+    "these are my models", rather than five separate edits plus a delete.
+    Adding a model is a new entry in the list and dropping one is deleting its
+    entry, in a single save.
+
+    Three things this owes the operator. Every item is validated and hooked
+    BEFORE anything is written, because a list that half-applies leaves a page
+    that is neither what they had nor what they asked for. An item identical to
+    what is stored is NOT rewritten — a save that restaled every brief in the
+    tree because the page was opened and closed would make this view unusable.
+    And the hooks see the state BEFORE the sync, so a batch introducing a
+    source and a tree naming it together is refused; register the source first.
+    That is the same limit the API's own PUTs have.
+    """
+    collection = descriptor.collection
+    wanted: dict[str, dict[str, object]] = {}
+    for body in items:
+        config = _validated(descriptor, body)
+        name = str(config["name"])
+        if name in wanted:
+            raise BadRequest(f"{collection} listed twice: {name}")
+        _run_hook(descriptor, config, context(request))
+        wanted[name] = config
+    cipher = _cipher(request)
+    with request.app.state.db.connect() as conn:
+        held = {
+            str(row["name"]): _plain(row, descriptor, cipher)
+            for row in store.list_all(conn, collection)
+        }
+    written = [
+        name
+        for name, config in wanted.items()
+        if _normal(descriptor, held.get(name)) != config
+    ]
+    for name in written:
+        replace_item(descriptor, name, wanted[name], request)
+    gone = sorted(set(held) - set(wanted))
+    for name in gone:
+        delete_item(descriptor, name, request)
+    return {"written": written, "removed": gone}
+
+
 def delete_item(
     descriptor: Descriptor, name: str, request: Request
 ) -> dict[str, str]:
@@ -209,6 +257,44 @@ def delete_item(
     if note is not None:
         deleted["note"] = note
     return deleted
+
+
+def _normal(
+    descriptor: Descriptor, config: dict[str, object] | None
+) -> dict[str, object] | None:
+    """A stored config on the SAME terms as an incoming one.
+
+    `wanted` holds validated configs — pydantic's dump, with every optional
+    field present at its default. A stored row written before a field existed
+    does not carry it, so comparing the two raw said "changed" about a config
+    nobody had touched, and a save of an unmodified document rewrote the whole
+    collection and restaled its briefs (#200).
+
+    A row that no longer validates compares as different, which is correct: it
+    is exactly a row the next save should replace.
+    """
+    if config is None:
+        return None
+    try:
+        return _validated(descriptor, config)
+    except Invalid:
+        return None
+
+
+def _plain(
+    row: sqlite3.Row, descriptor: Descriptor, cipher: Cipher
+) -> dict[str, object]:
+    """One stored row as the config it holds, secrets decrypted.
+
+    What `sync_items` compares against, so an item identical to what is stored
+    is left alone — the comparison has to be made on the SAME terms as the
+    incoming config, and an encrypted blob never equals a credential.
+    """
+    config = json.loads(row["config"])
+    key_id = row["key_id"]
+    if key_id is None or not descriptor.secret_paths:
+        return config
+    return decrypt(config, descriptor, cipher, int(key_id))
 
 
 def _cipher(request: Request) -> Cipher:

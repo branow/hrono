@@ -7,7 +7,8 @@ stage below was implemented and tested while the only thing an operator could
 trigger was a full cold rebuild.
 
     update -> propagate -> brief (stale leaves) -> brief-upper (stale uppers)
-           -> monitor -> repair
+           -> monitor -> repair -> [brief -> attach -> brief-upper, if repair
+                                    changed anything]
 
 PROPAGATE COMES BEFORE BRIEF, and the note that scoped this op had it the other
 way round. ``propagate`` judges a leaf's NEW content against its STORED brief —
@@ -37,6 +38,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from hrono.cluster.levels import attach_orphans
 from hrono.cluster.monitor import monitor
 from hrono.cluster.repair import repair
 from hrono.jobs.model import Job
@@ -73,9 +75,55 @@ def sync(
     repaired = repair(
         _stage(tree, "repair"), context, core_labeler=core_labeler
     )
+    adopted = _after_repair(
+        tree, context, repaired, encoder_for=encoder_for, client=client
+    )
     with context.database.connect() as conn:
         settle_due = should_settle(conn, tree)
-    return _outcome(ingested, judged, measured, repaired, settle_due=settle_due)
+    return _outcome(
+        ingested,
+        judged,
+        measured,
+        repaired,
+        adopted=adopted,
+        settle_due=settle_due,
+    )
+
+
+def _after_repair(
+    tree: str,
+    context: JobContext,
+    repaired: Mapping[str, object],
+    *,
+    encoder_for: object | None,
+    client: object | None,
+) -> int:
+    """Finish what ``repair`` started, in the same run.
+
+    **This is why a tree could come out of a sync with two roots (#200).**
+    `repair` is the last stage, and a split RETIRES a topic and makes two new
+    leaves in its place. New leaves have no brief, and the routine that parents
+    a briefless node cannot see it — so the halves sat at level 0 under
+    nothing, the map drew them as two more tops beside the real root, and the
+    root's own brief silently stopped covering them. The repair itself was
+    correct; the chain simply ended one stage too early.
+
+    So a repair that CHANGED something is followed by the three stages its
+    change requires, in the order they require: brief the new leaves, attach
+    them to the level above, then rewrite the briefs above that now hold a
+    different set of children. A repair that changed nothing runs none of them
+    and costs nothing — the common case on a steady tree.
+    """
+    if not any(
+        isinstance(count, int) and count > 0 for count in repaired.values()
+    ):
+        return 0
+    brief(_stage(tree, "brief"), context, client=client)
+    attached = attach_orphans(
+        _stage(tree, "cluster-briefs"), context, encoder_for=encoder_for
+    )
+    brief_upper(_stage(tree, "brief-upper"), context, client=client)
+    return len(attached)
 
 
 def _outcome(
@@ -84,6 +132,7 @@ def _outcome(
     measured: Mapping[str, object],
     repaired: Mapping[str, object],
     *,
+    adopted: int,
     settle_due: bool,
 ) -> Mapping[str, object]:
     """What the run did, for the operator (#132).
@@ -106,6 +155,7 @@ def _outcome(
         "misfit_rate": measured.get("rate"),
         "above_baseline": measured.get("above_baseline", False),
         "repaired": dict(repaired),
+        "adopted": adopted,
         "settle_due": settle_due,
         "incomplete": bool(judged.get("incomplete", False)),
     }
