@@ -28,6 +28,7 @@ from markupsafe import Markup, escape
 
 from hrono import naming
 from hrono.cluster import incubator
+from hrono.registry.collections import trees
 from hrono.server import triage
 from hrono.server import where as where_module
 
@@ -338,11 +339,21 @@ def lookup(conn: sqlite3.Connection, tree: str, path: str) -> Located:
     wanted = path.strip().removeprefix("./").lstrip("/")
     if not wanted:
         return Located("", (), 0)
+    mine = trees.scoped_sources(conn, tree)
+    named = {f"s{i}": name for i, name in enumerate(mine)}
+    # A section belongs to this tree by its source, or by being filed or
+    # pending in it; another tree's source sharing a path is not this tree's.
     rows = conn.execute(
-        "SELECT id, source, path, version, ordinal, byte_start, byte_end "
+        "SELECT id, source, path, version, ordinal, byte_start, byte_end "  # noqa: S608
         "FROM sections WHERE source_type != 'node' AND "
-        "(path = ? OR path LIKE ? ESCAPE '\\') ORDER BY path, source, ordinal",
-        (wanted, f"{_like(wanted)}%"),
+        "(path = :path OR path LIKE :prefix ESCAPE '\\') AND ("
+        f"source IN ({', '.join(f':{key}' for key in named) or 'NULL'}) "
+        "OR EXISTS (SELECT 1 FROM node_members m JOIN nodes n "
+        "ON n.id = m.node_id WHERE m.section_id = sections.id "
+        "AND n.tree = :tree) "
+        "OR EXISTS (SELECT 1 FROM pending q WHERE q.section_id = sections.id "
+        "AND q.tree = :tree)) ORDER BY path, source, ordinal",
+        {"path": wanted, "prefix": f"{_like(wanted)}%", "tree": tree, **named},
     ).fetchall()
     keys = list(dict.fromkeys((row["source"], row["path"]) for row in rows))
     shown = set(keys[:FILES_SHOWN])

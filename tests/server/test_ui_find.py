@@ -6,6 +6,7 @@ topic arrive by the writer rather than by a fixture that happens to agree
 with the reader.
 """
 
+import json
 import re
 import sqlite3
 from collections.abc import Iterator
@@ -18,6 +19,9 @@ from hrono.auth.users import create_user
 from hrono.cluster import incubator
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.ingest import store as istore
+from hrono.ingest.identity import Address, content_hash
+from hrono.registry import store as registry_store
 from hrono.server import find
 from hrono.server.app import create_app
 from tests.server import test_map_at_scale as at_scale
@@ -199,6 +203,17 @@ def test_the_search_box_is_on_every_page_and_the_tab_is_marked(
         assert re.search(
             r'class="tab" href="[^"]*/find[^"]*" aria-current', html
         )
+    node = topic_of(panel, "f1.txt")
+    for url in (
+        "/ui",
+        f"/ui/trees/{TREE}/graph",
+        f"/ui/trees/{TREE}/ask",
+        f"/ui/trees/{TREE}/nodes/{node}",
+        "/ui/jobs",
+        "/ui/guide",
+    ):
+        html = panel.client.get(url).text
+        assert 'role="search"' in html.split("<main")[0], url
 
 
 # -- the outline at the size people build ----------------------------------
@@ -306,3 +321,76 @@ def test_a_word_in_many_sections_does_not_crowd_out_a_brief(
 
     assert 'aria-label="topic matches"' in html
     assert 'aria-label="section matches"' in html
+
+
+def file_in_other_tree(p: Panel, path: str) -> int:
+    """Move a section out of this tree's topics into a topic of another."""
+    section = int(
+        p.conn.execute(
+            "SELECT id FROM sections WHERE path = ?", (path,)
+        ).fetchone()[0]
+    )
+    p.conn.execute("DELETE FROM node_members WHERE section_id = ?", (section,))
+    node = p.conn.execute(
+        "INSERT INTO nodes(tree, level, label, created_at) "
+        "VALUES ('elsewhere', 0, -1, 't')"
+    ).lastrowid
+    p.conn.execute(
+        "INSERT INTO node_members(node_id, section_id, attached, created_at) "
+        "VALUES (?, ?, 0, 't')",
+        (node, section),
+    )
+    incubator.park(p.conn, TREE, section, 1)
+    p.conn.commit()
+    return int(node or 0)
+
+
+def test_a_topic_of_another_tree_is_not_linked_from_this_one(
+    panel: Panel,
+) -> None:
+    other = file_in_other_tree(panel, "f9.txt")
+
+    found = page(panel, "find", q="module 9")
+    files = page(panel, "files", path="f9.txt")
+
+    for html in (found, files):
+        assert "f9.txt" in html
+        assert f"/nodes/{other}" not in html
+        assert ">parked</span>" in html
+
+
+def test_another_trees_source_sharing_a_path_is_not_this_trees(
+    panel: Panel,
+) -> None:
+    mine = str(
+        panel.conn.execute(
+            "SELECT source FROM sections WHERE path = 'f1.txt'"
+        ).fetchone()[0]
+    )
+    registry_store.insert(
+        panel.conn,
+        "trees",
+        TREE,
+        json.dumps({"name": TREE, "sources": [mine]}),
+        None,
+        "t",
+    )
+    body = b"another source\n"
+    istore.upsert_content(panel.conn, content_hash(body), body)
+    for path in ("f1.txt", "only/theirs.txt"):
+        istore.insert_section(
+            panel.conn,
+            source="crypto",
+            address=Address("git", "ex/crypto", path, "v1"),
+            start=0,
+            end=len(body),
+            content_hash=content_hash(body),
+            ordinal=0,
+        )
+    panel.conn.commit()
+
+    shared = find.lookup(panel.conn, TREE, "f1.txt")
+    theirs = page(panel, "files", path="only/theirs.txt")
+
+    assert {file.source for file in shared.files} == {mine}
+    assert "Not ingested" in theirs
