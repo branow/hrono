@@ -107,7 +107,7 @@ def _shown(conn: sqlite3.Connection, tree: str, hit: Hit) -> dict[str, object]:
         "kind": "brief" if hit.kind == "summary" else "source",
         "path": path,
         "version": version[:12],
-        "where": hit.header.removeprefix(hit.uri).strip(),
+        "where": unquote(hit.header.removeprefix(hit.uri).strip()),
         "start": hit.start,
         "end": hit.end,
         "score": hit.score,

@@ -19,6 +19,7 @@ from hrono.errors import Unavailable
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.recall import engine
 from hrono.server.app import create_app
+from hrono.server.ui import ask
 from tests.context import job_context
 from tests.tree.test_maintain import (
     fake_build,
@@ -210,3 +211,50 @@ def test_a_brief_passage_names_its_own_topic(panel: Panel) -> None:
 
     assert rows
     assert shown == {int(row["source"].removeprefix("node-")) for row in rows}
+
+
+def test_each_passage_is_labelled_as_what_it_is(panel: Panel) -> None:
+    # a brief shown as source text would mislead whoever reads the page
+    rows = panel.conn.execute(  # type: ignore[attr-defined]
+        "SELECT MIN(id) AS id, source_type FROM passages GROUP BY source_type"
+    ).fetchall()
+
+    kinds = {
+        row["source_type"]: ask._shown(  # noqa: SLF001
+            panel.conn,
+            TREE,
+            engine._render(panel.conn, int(row["id"]), 0.5, TREE),  # noqa: SLF001
+        )["kind"]
+        for row in rows
+    }
+
+    assert kinds == {"node": "brief", "git": "source"}
+    assert '<span class="chip">source</span>' in panel.ask(ANSWERABLE)
+
+
+def test_the_history_keeps_only_the_newest_few(panel: Panel) -> None:
+    questions = [f"question number {n}" for n in range(ask.HISTORY + 2)]
+    for question in questions:
+        html = panel.ask(question)
+
+    kept = json.loads(unquote(panel.client.cookies["hrono_asked"]))
+    listed = html[html.index('aria-label="asked before"') :]
+    listed = listed[: listed.index("</nav>")]
+    newest = list(reversed(questions))[: ask.HISTORY]
+    assert kept == newest
+    assert [q for q in questions if q in listed] == list(reversed(newest))
+
+
+def test_a_long_history_cookie_is_read_only_as_far_as_the_cap(
+    panel: Panel,
+) -> None:
+    # the cookie is the browser's to send: an older or edited one is input
+    many = [f"old question {n}" for n in range(ask.HISTORY + 3)]
+    panel.ask(ANSWERABLE)
+    panel.client.cookies.set("hrono_asked", quote(json.dumps(many)))
+
+    html = panel.client.get(f"/ui/trees/{TREE}/ask?tree={TREE}").text
+
+    listed = html[html.index('aria-label="asked before"') :]
+    listed = listed[: listed.index("</nav>")]
+    assert [q for q in many if f">{q}<" in listed] == many[: ask.HISTORY]

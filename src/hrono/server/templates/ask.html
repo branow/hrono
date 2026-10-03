@@ -69,7 +69,7 @@
             {{ hit.path }}{% if hit.where %} <span class="faint">{{ hit.where }}</span>{% endif %}
             <span class="faint">bytes {{ hit.start }}–{{ hit.end }} @{{ hit.version }}</span>
           </div>
-          <div class="num" title="fused score: higher ranks first">score {{ "%.3f"|format(hit.score) }}</div>
+          <div class="num nowrap" title="fused score: higher ranks first">score {{ "%.3f"|format(hit.score) }}</div>
         </div>
         {% if hit.topic %}
         <div class="hint">in <a href="{{ hit.topic.link }}">{{ hit.topic.title }}</a></div>
