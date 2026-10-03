@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from hrono.export.citations import cite
+from hrono.export.citations import FactIndex, cite, settling
 
 PAGES = {
     "a/fusion.md": "RRF k is 60 and TAU 0.70 for `fuse_ranks`.\n",
@@ -130,3 +130,36 @@ def test_a_big_corpus_is_cited_quickly() -> None:
 
     assert "[§](s5.md)" in out
     assert elapsed < 2.0
+
+
+def test_settling_ranks_the_sections_that_state_the_most_of_the_facts() -> None:
+    pages = FactIndex(
+        {
+            "a.md": "TAU_CAP only",
+            "b.md": "nothing here",
+            "c.md": "TAU_CAP only",
+            "z.md": "TAU_CAP is 7 and `blend` too",
+        }
+    )
+    text = "TAU_CAP and `blend` matter."
+    assert settling(text, pages, {"a.md", "b.md", "c.md", "z.md"}) == [
+        "z.md",
+        "a.md",
+        "c.md",
+    ]
+
+
+def test_settling_skips_the_lines_cite_leaves_alone() -> None:
+    pages = FactIndex({"a.md": "HEAD_ONLY", "b.md": "TAU_CAP"})
+    text = "## HEAD_ONLY\n| HEAD_ONLY |\n```\nHEAD_ONLY\n```\nTAU_CAP"
+    assert settling(text, pages, {"a.md", "b.md"}) == ["b.md"]
+
+
+def test_settling_ignores_what_is_stated_in_most_sections() -> None:
+    pages = FactIndex({f"{n}.md": "TAU_CAP" for n in "abcd"})
+    assert settling("TAU_CAP", pages, {f"{n}.md" for n in "abcd"}) == []
+
+
+def test_settling_offers_only_the_sections_asked_about() -> None:
+    pages = FactIndex({"a.md": "TAU_CAP", "b.md": "TAU_CAP"})
+    assert settling("TAU_CAP", pages, {"b.md"}) == ["b.md"]

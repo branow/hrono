@@ -4,7 +4,8 @@ Per agent node: its stored brief text as-is (#059/#061 — already ends with its
 Caution section; never regenerated), its member references re-attached from the
 metadata #102 keeps them in, then a MECHANICAL child listing rendered
 from the collapsed tree in code (titles + relative links, no LLM, no
-hallucinated links). Leaf nodes list their sections; each section is rendered to
+hallucinated links; each entry also links a few of the section files beneath
+it). Leaf nodes list their sections; each section is rendered to
 its own file, reassembled byte-identically from its stored passages (#032) with
 an address header. Human notes render only when passed (M9 creates them; here
 render-if-present). No file I/O — returns a deterministic path -> content map
@@ -23,10 +24,13 @@ import json
 import posixpath
 import re
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from itertools import chain, zip_longest
+from pathlib import Path
 
-from hrono.export.citations import FactIndex, cite
-from hrono.export.collapse import ExportTree
+from hrono.export.citations import FactIndex, cite, settling
+from hrono.export.collapse import ExportNode, ExportTree
+from hrono.ingest.split.constants import section_budget
 from hrono.ingest.store import get_content
 from hrono.naming import heading, names, sentence, slug, unframe
 from hrono.summarize import briefs
@@ -70,12 +74,22 @@ def render(
         text = _brief_text(conn, node_id)
         if node.children:  # cite only what the index page keeps
             text = _routing(text)
+        start = posixpath.dirname(path) or "."
         files[path] = _node_markdown(
             conn,
             tree,
             node_id,
             notes.get(node_id),
             _cited(text, index, under, path),
+            lambda child, leads, start=start: _leads_to(
+                conn,
+                tree,
+                child,
+                where,
+                start,
+                _settling(conn, tree, child, where, index),
+                leads,
+            ),
         )
         for section_id in node.sections:
             files[where[section_id]] = _section_markdown(
@@ -115,18 +129,35 @@ def _node_markdown(
     node_id: int,
     note: str | None,
     brief: str,
+    leads_to: Callable[[int, int], str],
 ) -> str:
     node = tree.nodes[node_id]
     parts = [brief.rstrip()]
     if node.children:
-        parts.append("## Children\n")
-        parts.append(
-            "\n".join(
-                _child_entry(conn, child, called[child])
-                for called in [names(conn, node.children)]
+        called = names(conn, node.children)
+
+        def listing(leads: int) -> str:
+            return "\n".join(
+                _child_entry(conn, child, called[child], leads_to(child, leads))
                 for child in node.children
             )
+
+        # as many section links per entry as keep the page within one
+        # SECTION: a page at full WIDTH cannot afford any (E022)
+        # (the page is the parts joined by a blank line, the Children list
+        # and the human note among them, and a closing newline)
+        after = [f"## Notes\n\n{note}"] if note else []
+        base = (
+            len("\n\n".join([*parts, "## Children\n", "", *after]).encode()) + 1
         )
+        for leads in range(_LEADS, 0, -1):
+            children = listing(leads)
+            if base + len(children.encode()) <= _PAGE_BYTES:
+                break
+        else:
+            children = listing(0)
+        parts.append("## Children\n")
+        parts.append(children)
     elif node.sections:
         parts.append("## Sections\n")
         parts.append(
@@ -165,16 +196,99 @@ def _routing(brief: str) -> str:
     return "\n".join(kept)
 
 
-def _child_entry(conn: sqlite3.Connection, child: int, title: str) -> str:
-    """One line on an index page: title, link, and what the child holds.
+def _child_entry(
+    conn: sqlite3.Connection,
+    child: int,
+    title: str,
+    leads: str,
+) -> str:
+    """An index page's entry: title, link, what the child holds, where to read.
 
     The summary is there so an agent can choose a branch WITHOUT opening it
     (#204); a wider page is only affordable if each entry says enough to skip
-    the ones that do not matter.
+    the ones that do not matter. ``leads`` names section files beneath the
+    child, so an agent that has chosen can open the answer from the index.
     """
     link = f"- [{title}]({_name(conn, child)}/brief.md)"
     summary = _summary(conn, child)
-    return f"{link} — {summary}" if summary else link
+    entry = f"{link} — {summary}" if summary else link
+    return f"{entry}\n  {leads}" if leads else entry
+
+
+def _leads_to(
+    conn: sqlite3.Connection,
+    tree: ExportTree,
+    child: int,
+    where: Mapping[int, str],
+    start: str,
+    settles: list[int],
+    limit: int,
+) -> str:
+    """Up to ``limit`` section files beneath ``child``, linked from ``start``.
+
+    The sections the child's own brief drew its facts from come first
+    (``settles``); the rest are taken in turn from each node of the subtree
+    that holds sections, so a child with many leaves shows several of them
+    rather than the first one's run, and a file split into several sections is
+    named once. The count of the rest says the list is a sample.
+    """
+    held = [
+        node.sections for node in _descendants(tree, child) if node.sections
+    ]
+    shown = _distinct_files(
+        conn,
+        settles
+        + [sid for sid in chain.from_iterable(zip_longest(*held)) if sid],
+    )[:limit]
+    if not shown:
+        return ""
+    links = ", ".join(
+        f"[{_short(_section_heading(conn, sid))}]"
+        f"({posixpath.relpath(where[sid], start)})"
+        for sid in shown
+    )
+    rest = sum(map(len, held)) - len(shown)
+    return f"Sections: {links}" + (f" and {rest} more" if rest else "")
+
+
+def _settling(
+    conn: sqlite3.Connection,
+    tree: ExportTree,
+    child: int,
+    where: Mapping[int, str],
+    index: FactIndex,
+) -> list[int]:
+    under = {where[sid]: sid for sid in _subtree_sections(tree, child)}
+    return [
+        under[label]
+        for label in settling(_brief_text(conn, child), index, set(under))
+    ]
+
+
+def _distinct_files(
+    conn: sqlite3.Connection, section_ids: list[int]
+) -> list[int]:
+    """The first section of each file: a long file is several sections."""
+    seen: set[str] = set()
+    first: list[int] = []
+    for sid in section_ids:
+        path = _section_heading(conn, sid)
+        if path not in seen:
+            seen.add(path)
+            first.append(sid)
+    return first
+
+
+def _short(path: str) -> str:
+    """The last two parts of a path: the link already carries the rest."""
+    return "/".join(path.split("/")[-2:])
+
+
+def _descendants(tree: ExportTree, node_id: int) -> list[ExportNode]:
+    node = tree.nodes[node_id]
+    return [node] + [
+        below for child in node.children for below in _descendants(tree, child)
+    ]
 
 
 def _summary(conn: sqlite3.Connection, node_id: int) -> str:
@@ -286,5 +400,7 @@ def _section_name(conn: sqlite3.Connection, section_id: int) -> str:
 
 
 _SUMMARY_CHARS = 160
+_LEADS = 3
 _NOT_PROSE = ("#", "-", "*", "|", ">", "```")
 _EMPHASIS = re.compile(r"[*_`]+")
+_PAGE_BYTES = section_budget(Path("index.md"))  # one SECTION

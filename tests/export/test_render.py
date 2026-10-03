@@ -1,17 +1,22 @@
 """T30: render the collapsed tree to markdown files."""
 
 import json
+import posixpath
+import re
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
+from hrono.export import render as render_module
 from hrono.export.collapse import StoredTree, collapse
 from hrono.export.render import render
 from hrono.export.store import load
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
+from hrono.ingest.split.constants import section_budget
 from hrono.summarize import briefs
 
 TREE = "default"
@@ -667,5 +672,367 @@ def test_only_a_page_with_children_is_trimmed_to_its_opening(
         assert leaves_md
         assert all("TAU is 7" not in c for c in indexes)
         assert all("TAU is 7" in c for c in leaves_md)
+    finally:
+        database.close()
+
+
+def _grove(
+    tmp_path: object,
+    shape: list[list[list[str]]],
+    texts: dict[str, str],
+    bodies: dict[str, bytes] | None = None,
+) -> tuple[Database, dict[str, int]]:
+    """A tree from nested names: root -> middles -> leaves -> sections.
+
+    ``shape`` is a list of middle nodes, each a list of leaves, each a list of
+    section paths. ``texts`` maps "root", "m<i>" and "l<i>.<j>" to a brief.
+    """
+    database = Database.at(tmp_path / "grove.db")
+    ids: dict[str, int] = {}
+    with database.connect() as conn, conn:
+        rows = []
+        vectors = []
+        leaf_of: list[tuple[int, int]] = []
+        label = 0
+        for m, leaves in enumerate(shape):
+            for paths in leaves:
+                for path in paths:
+                    sid = add_section(
+                        conn,
+                        path,
+                        (bodies or {}).get(path, b"body one\nbody two\n"),
+                    )
+                    ids[path] = sid
+                    rows.append((label, sid, False, None))
+                    vectors.append((sid, [0.01 * len(rows)]))
+                leaf_of.append((m, label))
+                label += 1
+        cluster_store.replace_tree(conn, TREE, 0, rows, vectors)
+        leaf_ids = {
+            int(r["label"]): int(r["id"])
+            for r in conn.execute(
+                "SELECT id, label FROM nodes WHERE level = 0"
+            ).fetchall()
+        }
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            1,
+            [(m, leaf_ids[lab], False, None) for m, lab in leaf_of],
+        )
+        middles = {
+            int(r["label"]): int(r["id"])
+            for r in conn.execute(
+                "SELECT id, label FROM nodes WHERE level = 1"
+            ).fetchall()
+        }
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            2,
+            [(0, middles[m], False, None) for m in sorted(middles)],
+        )
+        ids["root"] = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 2").fetchone()[
+                "id"
+            ]
+        )
+        flat = iter(leaf_of)
+        for m, leaves in enumerate(shape):
+            ids[f"m{m}"] = middles[m]
+            for j, _ in enumerate(leaves):
+                _, lab = next(flat)
+                ids[f"l{m}.{j}"] = leaf_ids[lab]
+        for key, text in texts.items():
+            brief(conn, ids[key], text)
+    return database, ids
+
+
+def _page_links(files: dict[str, str], page: str, entry: str) -> list[str]:
+    """The files an index entry's Sections line points at, from ``page``."""
+    lines = files[page].splitlines()
+    at = next(n for n, line in enumerate(lines) if entry in line)
+    found = re.findall(r"\]\(([^)]+)\)", lines[at + 1])
+    base = posixpath.dirname(page)
+    return [posixpath.normpath(posixpath.join(base, link)) for link in found]
+
+
+def test_an_index_entry_names_the_section_files_beneath_it(
+    tmp_path: object,
+) -> None:
+    # E022: an agent that has chosen a branch opens the answer from the index
+    database, ids = _grove(
+        tmp_path,
+        [[["src/deep/a/x1.py", "src/deep/a/x2.py"]], [["b/y1.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid A\n\nAlpha things.",
+            "m1": "# Mid B\n\nBeta things.",
+            "l0.0": "# Leaf A\n\nLeaf alpha.",
+            "l1.0": "# Leaf B\n\nLeaf beta.",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    root = files["root.md"]
+    assert "[a/x1.py](" in root  # the link carries the rest of the path
+    assert "[src/deep" not in root
+    assert "[b/y1.py](" in root
+    for entry in ("[Mid A]", "[Mid B]"):
+        for target in _page_links(files, "root.md", entry):
+            assert target in files  # every named file exists in the export
+    mid = f"mid-a-{ids['m0']}/brief.md"
+    assert len(_page_links(files, mid, "[Leaf A]")) == 2
+    assert not [line for line in root.splitlines() if "more" in line]
+
+
+def test_an_entry_over_many_sections_samples_each_leaf_and_counts_the_rest(
+    tmp_path: object,
+) -> None:
+    database, ids = _grove(
+        tmp_path,
+        [[["p/a1.py", "p/a2.py", "p/a3.py"], ["q/b1.py", "q/b2.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid\n\nThings.",
+            "l0.0": "# Leaf A\n\nOne.",
+            "l0.1": "# Leaf B\n\nTwo.",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    root = files["root.md"]
+    sections_line = next(
+        line for line in root.splitlines() if line.startswith("  Sections:")
+    )
+    assert "[p/a1.py]" in sections_line
+    assert "[q/b1.py]" in sections_line  # the second leaf is not crowded out
+    assert "[p/a2.py]" in sections_line
+    assert "a3.py" not in sections_line
+    assert sections_line.endswith(" and 2 more")
+    assert sections_line.count("](") == 3
+
+
+def test_a_file_split_into_sections_is_named_once(tmp_path: object) -> None:
+    database, ids = _grove(
+        tmp_path,
+        [[["big/x.py", "big/x.py", "big/y.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid\n\nThings.",
+            "l0.0": "# Leaf\n\nOne.",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    line = next(
+        line
+        for line in files["root.md"].splitlines()
+        if line.startswith("  Sections:")
+    )
+    assert line.count("[big/x.py]") == 1
+    assert "[big/y.py]" in line
+    assert line.endswith(" and 1 more")
+
+
+def test_an_entry_offers_first_the_sections_its_brief_drew_its_facts_from(
+    tmp_path: object,
+) -> None:
+    database, ids = _grove(
+        tmp_path,
+        [
+            [["p/a1.py", "p/a2.py", "p/a3.py", "p/a4.py", "p/a5.py"]],
+            [["q/b1.py"]],
+        ],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid\n\nThe cap is `MAX_CAP_Q`.",
+            "l0.0": "# Leaf\n\nOne.",
+            "m1": "# Other\n\nElsewhere.",
+            "l1.0": "# Leaf B\n\nTwo.",
+        },
+        {
+            "p/a5.py": b"the knob MAX_CAP_Q is set here\n",
+            "q/b1.py": b"MAX_CAP_Q is read here too\n",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    line = next(
+        line
+        for line in files["root.md"].splitlines()
+        if line.startswith("  Sections:")
+    )
+    assert line.startswith("  Sections: [p/a5.py]")
+    assert line.count("](") == 3
+
+
+def test_a_page_links_from_its_own_directory(tmp_path: object) -> None:
+    # a middle page sits one directory down, so its links drop that prefix
+    database, ids = _grove(
+        tmp_path,
+        [[["a/x1.py"], ["b/y1.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid\n\nThings.",
+            "l0.0": "# Leaf A\n\nOne.",
+            "l0.1": "# Leaf B\n\nTwo.",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    mid_dir = f"mid-{ids['m0']}"
+    leaf_a = f"leaf-a-{ids['l0.0']}"
+    assert _page_links(files, f"{mid_dir}/brief.md", "[Leaf A]") == [
+        f"{mid_dir}/{leaf_a}/a-x1-py-{ids['a/x1.py']}.md"
+    ]
+
+
+def test_an_index_page_at_full_width_stays_within_one_section(
+    tmp_path: object,
+) -> None:
+    # E022: the Sections line is not allowed to push a WIDTH-entry page past
+    # the budget collapse.py sizes it on
+    middles = 40
+    database, _ = _grove(
+        tmp_path,
+        [
+            [[f"src/hrono/package{m}/module_{k}.py" for k in range(6)]]
+            for m in range(middles)
+        ],
+        {
+            "root": "# Root\n\nAll.",
+            **{
+                f"m{m}": f"# Component number {m} owns its own part of the"
+                f" system\n\nIt reads and writes the records of part {m}"
+                " and hands them to the next stage when it is done.\n"
+                for m in range(middles)
+            },
+            **{f"l{m}.0": f"# Leaf {m}\n\nBody." for m in range(middles)},
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    root = files["root.md"]
+    assert root.count("](") >= middles
+    assert len(root.encode()) <= section_budget(Path("index.md"))
+
+
+def test_a_narrow_index_page_keeps_all_its_section_links(
+    tmp_path: object,
+) -> None:
+    database, _ = _grove(
+        tmp_path,
+        [[["a/x.py", "a/y.py", "a/z.py", "a/w.py"]], [["b/q.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid A\n\nAlpha.",
+            "m1": "# Mid B\n\nBeta.",
+            "l0.0": "# Leaf A\n\nOne.",
+            "l1.0": "# Leaf B\n\nTwo.",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    assert len(_page_links(files, "root.md", "[Mid A]")) == 3
+
+
+def _links_at_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    leads: int,
+    budget: int,
+    note: str | None = None,
+) -> tuple[int, int]:
+    """(Mid A's section links, root.md bytes) with the ladder and budget set."""
+    tmp_path.mkdir()
+    database, ids = _grove(
+        tmp_path,
+        [[["a/x.py", "a/y.py", "a/z.py", "a/w.py"]], [["b/q.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid A\n\nAlpha.",
+            "m1": "# Mid B\n\nBeta.",
+            "l0.0": "# Leaf A\n\nOne.",
+            "l1.0": "# Leaf B\n\nTwo.",
+        },
+    )
+    monkeypatch.setattr(render_module, "_LEADS", leads)
+    monkeypatch.setattr(render_module, "_PAGE_BYTES", budget)
+    try:
+        files = _files(database, {ids["root"]: note} if note else None)
+    finally:
+        database.close()
+    return (
+        files["root.md"].split("[Mid A]")[1].split("[Mid B]")[0].count("]("),
+        len(files["root.md"].encode()),
+    )
+
+
+@pytest.mark.parametrize("fitting", [3, 2, 1])
+def test_an_entry_takes_the_most_section_links_the_budget_allows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fitting: int
+) -> None:
+    # E022: the ladder 3, 2, 1, 0 stops at the first step that fits, and the
+    # bound is the page as written, not a page a few bytes shorter
+    _, size = _links_at_budget(
+        tmp_path / "a", monkeypatch, leads=fitting, budget=10**9
+    )
+    links, _ = _links_at_budget(
+        tmp_path / "b", monkeypatch, leads=3, budget=size
+    )
+    assert links == fitting  # a page of exactly this size fits
+    links, written = _links_at_budget(
+        tmp_path / "c", monkeypatch, leads=3, budget=size - 1
+    )
+    assert links == fitting - 1  # one byte less drops a step
+    assert written <= size - 1
+
+
+def test_a_human_note_counts_against_the_link_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # E022: the note is on the page, so the links leave room for it
+    note = "kept by hand " * 20
+    _, size = _links_at_budget(
+        tmp_path / "a", monkeypatch, leads=3, budget=10**9, note=note
+    )
+    links, written = _links_at_budget(
+        tmp_path / "b", monkeypatch, leads=3, budget=size, note=note
+    )
+    assert (links, written) == (3, size)  # exactly fits, note in
+    links, written = _links_at_budget(
+        tmp_path / "c", monkeypatch, leads=3, budget=size - 1, note=note
+    )
+    assert links == 2
+    assert written <= size - 1
+    assert note.strip() in _note_page(tmp_path / "d", monkeypatch, note)
+
+
+def _note_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, note: str
+) -> str:
+    database, ids = _grove(
+        tmp_path,
+        [[["a/x.py"]]],
+        {"root": "# Root\n\nAll.", "m0": "# Mid\n\nA.", "l0.0": "# L\n\nB."},
+    )
+    try:
+        return _files(database, {ids["root"]: note})["root.md"]
     finally:
         database.close()

@@ -108,17 +108,6 @@ For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
 split) sit in the page head, each saying what it will change before it runs;
 moving a section is on the section.
 
-Find is the other way in, for when you know a word or a file rather than
-where it sits on the map. The search box in the top bar looks for every word
-you type in topic names, briefs, file paths and file text, grouped by kind; it
-matches words and their prefixes, and is not semantic (a question in your own
-words belongs to Ask). Outline shows the whole tree as a collapsible list, with
-each topic's size and whether recall can answer from it, and stays readable at
-hundreds of topics. Files takes a path, or the start of one, to the sections
-cut from it and the topic each was filed under; a section waiting to be filed
-says it is parked, and a path outside the tree's sources says it is not
-ingested.
-
 Settings shows one collection at a time — trees, sources, connections, models,
 prompts — as a table, with each field of a form labelled and explained. It says
 at the top whether the registry is complete enough to build (a role with no
@@ -163,7 +152,11 @@ the facts a brief states (constants, environment variables, sizes) carry a `[§]
 link to the section pages they were found in, added when the folder is written;
 the stored brief is never altered. A page that has children shows only its
 opening and its `## Children` list, because every turn of a session carries the
-pages it has read; the detail is one hop down.
+pages it has read; the detail is one hop down. Each child entry also links up to
+three section files beneath it, first those its brief's facts came from, so an
+agent that has picked a branch can open the answer from the index; as many as
+keep the page, human note included, within one section's size (10 KB),
+fewer on a wide page.
 
 ## Evaluating the export
 

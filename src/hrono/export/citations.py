@@ -118,6 +118,28 @@ def cite(
     return "\n".join(out) + ("\n" if text.endswith("\n") else "")
 
 
+def settling(text: str, pages: FactIndex, within: Collection[str]) -> list[str]:
+    """The sections that state the most of ``text``'s facts, most first.
+
+    The same facts, and the same rule for which count, as the links ``cite``
+    adds; here they rank the sections an index entry offers, so the ones shown
+    are those the brief's own claims were drawn from.
+    """
+    found: dict[str, int] = {}
+    fenced = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+        if fenced or line.lstrip().startswith(_NOT_PROSE):
+            continue
+        for fact in _facts(line):
+            homes = pages.homes(fact, within)
+            if homes and len(homes) <= _MOST:
+                for label in homes:
+                    found[label] = found.get(label, 0) + 1
+    return sorted(found, key=lambda label: (-found[label], label))
+
+
 def _cited(
     line: str,
     index: FactIndex,
