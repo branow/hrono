@@ -43,6 +43,7 @@ def validate_model(
     embed: Embed | None = None,
     generate: Generate | None = None,
     timeout: float = _TIMEOUT,
+    cli_timeout: float = _CLI_TIMEOUT,
 ) -> None:
     """Reject the write unless the model loads/reaches and behaves right."""
     validator = _VALIDATORS.get(str(config["kind"]))
@@ -52,7 +53,9 @@ def validate_model(
         config,
         context,
         embed if embed is not None else _default_embed,
-        generate if generate is not None else _generate_in(context),
+        generate
+        if generate is not None
+        else _generate_in(context, cli_timeout),
         timeout,
     )
 
@@ -165,14 +168,14 @@ def _embed_remote(
     return data[0].get("embedding") or []
 
 
-def _generate_in(context: ValidationContext) -> Generate:
+def _generate_in(context: ValidationContext, cli_timeout: float) -> Generate:
     def generate(
         config: dict[str, object],
         connection: dict[str, object],
         timeout: float,
     ) -> str:
         if str(connection.get("provider")) == "claude-code":
-            return _generate_with_cli(config, context, _CLI_TIMEOUT)
+            return _generate_with_cli(config, context, cli_timeout)
         return _default_generate(config, connection, timeout)
 
     return generate

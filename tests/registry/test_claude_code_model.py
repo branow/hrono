@@ -18,10 +18,14 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from hrono.auth.users import create_user
+from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.paths import cli_workdir
+from hrono.registry.commands import WRITE_TIMEOUT
+from hrono.registry.descriptor import ValidationContext, ValidationFailed
 from hrono.registry.validation import model_validation
+from hrono.registry.validation.model_validation import validate_model
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -143,16 +147,22 @@ def test_the_registered_model_reaches_the_cli(served, tmp_path: Path) -> None:
     assert "--model haiku" in argv.read_text()
 
 
-def test_a_hung_cli_ends_in_a_bad_request(
-    served, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    client, headers, bin_dir = served
-    monkeypatch.setattr(model_validation, "_CLI_TIMEOUT", 0.5)
+def test_a_hung_cli_ends_in_a_bad_request(served) -> None:
+    client, _, bin_dir = served
+    state = client.app.state
+    context = ValidationContext(
+        database=state.db,
+        cipher=Cipher.from_key(state.master_key, state.key_id),
+        cache_root=state.cache_root,
+    )
     fake_claude(bin_dir, "sleep 5\n")
 
     started = time.monotonic()
-    response = client.post("/models", json=TEXT, headers=headers)
+    with pytest.raises(ValidationFailed, match="timed out"):
+        validate_model(dict(TEXT), context, cli_timeout=0.5)
 
-    assert response.status_code == 400
-    assert "timed out" in response.text
     assert time.monotonic() - started < 4
+
+
+def test_the_real_probe_limit_ends_before_the_client_stops_waiting() -> None:
+    assert model_validation._CLI_TIMEOUT < WRITE_TIMEOUT
