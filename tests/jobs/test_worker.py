@@ -500,7 +500,8 @@ def test_a_dead_supervisor_makes_the_worker_unhealthy(tmp_path: Path) -> None:
         worker.stop()
         worker.join(timeout=5)
 
-    beating = threading.Thread(target=lambda: time.sleep(2), daemon=True)
+    release = threading.Event()
+    beating = threading.Thread(target=release.wait, daemon=True)
     beating.start()
     worker._beat_thread = beating  # a reclaimer that is still going
     worker._last_beat = time.monotonic()  # ... and beating right now
@@ -508,5 +509,6 @@ def test_a_dead_supervisor_makes_the_worker_unhealthy(tmp_path: Path) -> None:
         assert not worker.is_alive()  # only the supervisor is gone
         assert not worker.healthy()
     finally:
+        release.set()
         beating.join(timeout=3)
     db.close()
