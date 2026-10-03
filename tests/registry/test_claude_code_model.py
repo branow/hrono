@@ -5,6 +5,7 @@ is the only fake, so the dispatch, the working directory and the error path run
 as production runs them (#108). The README's first-run path depends on this.
 """
 
+import inspect
 import json
 import sqlite3
 import stat
@@ -166,3 +167,9 @@ def test_a_hung_cli_ends_in_a_bad_request(served) -> None:
 
 def test_the_real_probe_limit_ends_before_the_client_stops_waiting() -> None:
     assert model_validation._CLI_TIMEOUT < WRITE_TIMEOUT
+
+
+def test_validate_models_own_default_ends_before_the_client_waits() -> None:
+    default = inspect.signature(validate_model).parameters["cli_timeout"]
+
+    assert default.default < WRITE_TIMEOUT
