@@ -144,8 +144,10 @@ def unusable_briefs(
     The model talking back, or a reply made of its prompt's own words
     (``echoes-the-prompt``); ``why`` names which.
 
-    Each is already stale to the pipeline, so ``POST /trees/{name}/sync``
-    rewrites exactly these and nothing else; this is the list to check first.
+    ``POST /trees/{name}/sync`` rewrites a model's reply and nothing else. A
+    settled ``echoes-the-prompt`` stays listed but is not rewritten until its
+    members, the brief prompt or the brief model change (E019); this is the
+    list to check first.
     """
     with request.app.state.db.connect() as conn:
         found = briefs.unusable_in(conn, name)
