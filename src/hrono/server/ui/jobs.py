@@ -34,7 +34,8 @@ from hrono.server.ui import (
 from hrono.server.ui import (
     _fields as _form_fields,
 )
-from hrono.usage.rollup import for_jobs
+from hrono.server.ui.spend import describe
+from hrono.usage.rollup import for_job_by_role, for_jobs, recorded_since
 
 _LIVE = frozenset({"pending", "running", "partial"})
 _RETRYABLE = frozenset({"failed", "canceled"})
@@ -130,7 +131,8 @@ def jobs_view(
             limit=PAGE,
             offset=(page - 1) * PAGE,
         )
-        jobs = [render_job(conn, row) for row in rows]
+        since = recorded_since(conn)
+        jobs = [render_job(conn, row, since) for row in rows]
         sources = [
             str(row["name"]) for row in registry_store.list_all(conn, "sources")
         ]
@@ -196,12 +198,15 @@ def _runnable() -> list[dict[str, object]]:
     ]
 
 
-def render_job(conn: object, row: object) -> dict[str, object]:
+def render_job(
+    conn: object, row: object, since: str | None
+) -> dict[str, object]:
     """One run, as the page needs it: derived status, progress, spend, kids.
 
     The same derivations the API serves (#172, #179) rather than a second set
     for the page — a dashboard that computes its own status is a dashboard that
-    disagrees with `hrono jobs get`.
+    disagrees with `hrono jobs get`. ``since`` is when calls began to be
+    recorded (`recorded_since`), read once by the caller, not once per row.
     """
     children = job_store.children(conn, str(row["id"]))  # type: ignore[arg-type,index]
     rolled = rollup([str(child["status"]) for child in children])
@@ -213,6 +218,7 @@ def render_job(conn: object, row: object) -> dict[str, object]:
     )
     status = rolled.status if rolled is not None else job.status
     did = outcome.read(job.result)
+    ledger = for_jobs(conn, job.id)  # type: ignore[arg-type]
     return {
         "outcome": did,
         "id": job.id,
@@ -229,7 +235,11 @@ def render_job(conn: object, row: object) -> dict[str, object]:
             else None
         ),
         "cost": spent,
-        "usage": for_jobs(conn, job.id),  # type: ignore[arg-type]
+        "usage": ledger,
+        "spend": describe(ledger),
+        "before_ledger": ledger is None
+        and since is not None
+        and job.created_at < since,
         "error": (
             {"code": job.error_code or "internal-error", "message": job.error}
             if job.error
@@ -324,9 +334,13 @@ def one_run(
         row = job_store.get(conn, job_id)
         if row is None:
             raise NotFound(f"job not found: {job_id}")
-        job = render_job(conn, row)
+        job = render_job(conn, row, recorded_since(conn))
         job["scope"] = to_job(row).scope
         job["raw"] = to_job(row).result
+        job["spend_by_stage"] = [
+            {"stage": group["key"], **describe(group)}  # type: ignore[dict-item]
+            for group in for_job_by_role(conn, job_id)
+        ]
     return templates.TemplateResponse(
         request,
         "run.html",

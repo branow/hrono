@@ -23,6 +23,8 @@ from hrono.jobs.worker import enqueue
 from hrono.server import freshness, triage
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.jobs import clock, render_job
+from hrono.server.ui.spend import describe
+from hrono.usage.rollup import Filter, recorded_since, total
 
 # Enough runs to find the one that is going and the last one that finished.
 RECENT_RUNS = 5
@@ -54,6 +56,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "parked": incubator.count(conn, chosen),
         }
         runs = _recent(conn, chosen)
+        spent = describe(total(conn, Filter(tree=chosen)))
     sources = [
         {
             "name": one.name,
@@ -81,6 +84,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "topics": topics,
             "levels": levels,
             "shape": shape,
+            "spent": spent,
             "attention": [item for item in attention if item.count],
             "clean": triage.clean(attention),
             "running": [run for run in runs if run["live"]],
@@ -122,8 +126,9 @@ def _recent(conn: sqlite3.Connection, tree: str) -> list[dict[str, object]]:
     The same derivation the runs page uses (`render_job`), so home and Runs
     cannot give two answers about one run (#172).
     """
+    since = recorded_since(conn)
     return [
-        render_job(conn, row)
+        render_job(conn, row, since)
         for row in job_store.page_roots(conn, tree, limit=RECENT_RUNS, offset=0)
     ]
 

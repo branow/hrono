@@ -31,6 +31,7 @@ LABELS = [
     "Runs",
     "Health",
     "Export",
+    "Usage",
     "Settings",
     "Guide",
 ]

@@ -29,6 +29,7 @@ ROUTES = (
     "/ui/trees/default/activity",
     "/ui/jobs",
     "/ui/jobs/done-1",
+    "/ui/usage",
     "/ui/trees/default/export",
     "/ui/access",
     "/ui/config",

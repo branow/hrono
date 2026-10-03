@@ -182,6 +182,18 @@ def _register(
             "VALUES ('docs', ?, '2026-10-03T10:00:00+00:00')",
             (commit,),
         )
+        for provider in ("anthropic", "claude-code"):
+            conn.execute(
+                "INSERT INTO llm_calls (job_id, run_id, started_by, model, "
+                "role, provider, upstream_model, input_tokens, "
+                "output_tokens, cache_read_tokens, cache_creation_tokens, "
+                "duration_ms, ok, created_at) VALUES ('done-1', 'done-1', "
+                "'a-person-with-a-rather-long-name', "
+                "'a-long-model-name-that-stresses-the-table-layout', "
+                "'brief', ?, 'claude-sonnet-5-20260101', 120000, 3400, 900, "
+                "0, 65000, 1, '2026-10-03T10:01:00+00:00')",
+                (provider,),
+            )
 
 
 def _free_port() -> int:

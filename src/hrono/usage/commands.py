@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 import typer
 
 from hrono.client.http import from_profile
+from hrono.usage.present import duration, usd
 
 _COLUMNS = (
     ("CALLS", 6),
@@ -103,19 +104,10 @@ def _cells(group: dict[str, object]) -> list[str]:
         f"{counts.get('output', 0):,}",
         f"{counts.get('cache_read', 0):,}",
         f"{counts.get('cache_creation', 0):,}",
-        _duration(float(group.get("model_seconds") or 0)),  # type: ignore[arg-type]
-        _usd(money.get("metered"), "metered" in billing),
-        _usd(money.get("subscription_estimate"), "subscription" in billing),
+        duration(float(group.get("model_seconds") or 0)),  # type: ignore[arg-type]
+        usd(money.get("metered"), "metered" in billing),
+        usd(money.get("subscription_estimate"), "subscription" in billing),
     ]
-
-
-def _duration(seconds: float) -> str:
-    """Model time in the unit a person reads it in."""
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    if seconds < 3600:
-        return f"{seconds / 60:.1f}m"
-    return f"{seconds / 3600:.2f}h"
 
 
 def _unpriced(group: dict[str, object]) -> list[str]:
@@ -127,14 +119,3 @@ def _unpriced(group: dict[str, object]) -> list[str]:
         if isinstance(money.get(kind), dict)
         for name in money[kind].get("unpriced") or []
     ]
-
-
-def _usd(amount: object, billed: bool) -> str:
-    if not billed or not isinstance(amount, dict):
-        return "-"
-    usd = amount.get("usd")
-    if usd is None:
-        return "unknown"
-    dollars = float(usd)
-    # a single call is a fraction of a cent; two places would show it as $0.00
-    return f"${dollars:,.2f}" if dollars >= 1 else f"${dollars:.4f}"

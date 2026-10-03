@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }}{% endblock %}
-{% from "_parts.html" import start_sync with context %}
+{% from "_parts.html" import start_sync, money, unrecorded with context %}
 {% block main %}
 <div class="page-head">
   <div class="spread">
@@ -107,6 +107,25 @@
           </tbody>
         </table>
       </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card" id="spent">
+    <div class="card-head">
+      <h2>Spent<span class="tip" tabindex="0" role="note" data-tip="Every model call this tree's runs have made. A model billed through a subscription is an estimate, never spend">?</span></h2>
+      <a class="small" href="/ui/usage?tree={{ tree }}">Usage</a>
+    </div>
+    <div class="card-body">
+      {% if spent %}
+      <p class="row">{{ money(spent) }}
+        <span class="chip plain num">{{ spent.tokens }}</span>
+        <span class="chip plain num">{{ spent.calls|string ~ (" call" if spent.calls == 1 else " calls") }}</span></p>
+      {% else %}
+      <p class="hint">Nothing yet. Model calls are counted here as runs make them.</p>
+      {% endif %}
+      {% if last %}
+      <p class="mt-2 row"><span class="faint">Last run</span> {% if last.spend %}{{ money(last.spend) }} <span class="chip plain num">{{ last.spend.tokens }}</span>{% else %}{{ unrecorded(last.before_ledger) }}{% endif %}</p>
       {% endif %}
     </div>
   </section>

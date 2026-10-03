@@ -215,6 +215,7 @@ TABS: tuple[tuple[str, str, str, str], ...] = (
         r"/ui/trees/[^/]+/triage",
     ),
     ("export", "Export", "/ui/trees/{tree}/export", r"/ui/trees/[^/]+/export"),
+    ("usage", "Usage", "/ui/usage", r"/ui/usage"),
     ("settings", "Settings", "/ui/config", r"/ui/config(/.*)?"),
     ("guide", "Guide", "/ui/guide", r"/ui/guide"),
 )
@@ -294,5 +295,6 @@ from hrono.server.ui import (  # noqa: E402, F401
     overview,
     session,
     settings,
+    usage,
     views,
 )

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% from "_parts.html" import money %}
+{% block title %}hrono — {{ tree }} usage{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Usage<span class="tip" tabindex="0" role="note" data-tip="Every model call is recorded when it is made. Money billed per token is shown as spend; a model billed through a subscription is shown as an estimate and is never added to it">?</span></h1>
+  {% if total %}
+  <p class="where-note row mt-2">
+    {{ money(total) }}
+    <span class="chip plain num">{{ total.tokens }}</span>
+    {% if total.cached %}<span class="chip plain num">{{ total.cached }}</span>{% endif %}
+    <span class="chip plain num">{{ total.calls|string ~ (" call" if total.calls == 1 else " calls") }}, {{ total.time }} of model time</span>
+  </p>
+  {% endif %}
+</div>
+
+{% if not total %}
+<div class="card">
+  <div class="card-body stack" data-empty>
+    <h2>Nothing has been spent yet</h2>
+    <p class="hint">Model calls appear here as runs make them. A sync that finds nothing changed makes none.</p>
+    <div><a class="btn" href="/ui/jobs?tree={{ tree }}">Runs</a></div>
+  </div>
+</div>
+{% else %}
+<div class="stack">
+  <section class="card" id="over-time">
+    <div class="card-head"><h2>Over time<span class="tip" tabindex="0" role="note" data-tip="One bar a day, as long as that day's tokens are to the busiest day's">?</span></h2></div>
+    <div class="card-body">
+      <ul class="daily">
+        {% for day in days %}
+        <li data-day="{{ day.key }}">
+          <span class="num">{{ day.key }}</span>
+          <span class="bar wide"><span style="width:{{ day.share }}%"></span></span>
+          <span class="num faint">{{ day.tokens }}</span>
+          <span>{{ money(day) }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <section class="card" id="by-model">
+    <div class="card-head"><h2>Each model</h2></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Model</th><th>Runs on</th><th>Provider</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
+          <tbody>
+            {% for row in models %}
+            <tr data-model="{{ row.key }}">
+              <td><code>{{ row.key }}</code></td>
+              <td><code>{{ row.upstream }}</code></td>
+              <td>{{ row.providers }}</td>
+              <td class="num">{{ row.calls }}</td>
+              <td class="num">{{ row.tokens }}{% if row.cached %}<br><span class="faint">{{ row.cached }}</span>{% endif %}</td>
+              <td class="num">{{ row.time }}</td>
+              <td>{{ money(row) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="costliest">
+    <div class="card-head"><h2>Costliest runs</h2><a class="small" href="/ui/jobs?tree={{ tree }}">All runs</a></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Run</th><th>Started by</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
+          <tbody>
+            {% for row in runs %}
+            <tr data-run="{{ row.key }}">
+              <td>{% if row.key %}<a href="/ui/jobs/{{ row.key }}?tree={{ tree }}"><code>{{ row.run.op or "run" }}</code></a> <span class="faint">{{ row.run.created_at[:16]|replace("T", " ") if row.run.created_at else "" }}</span>{% else %}<span class="faint">outside a run</span>{% endif %}</td>
+              <td>{{ row.run.started_by or "not recorded" }}</td>
+              <td class="num">{{ row.calls }}</td>
+              <td class="num">{{ row.tokens }}</td>
+              <td class="num">{{ row.time }}</td>
+              <td>{{ money(row) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="by-person">
+    <div class="card-head"><h2>Each person</h2></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Started by</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
+          <tbody>
+            {% for row in people %}
+            <tr data-person="{{ row.key or '' }}">
+              <td>{{ row.key or "not recorded" }}</td>
+              <td class="num">{{ row.calls }}</td>
+              <td class="num">{{ row.tokens }}</td>
+              <td class="num">{{ row.time }}</td>
+              <td>{{ money(row) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endif %}
+<style>
+.daily { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.daily li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, auto) minmax(0, auto); gap: var(--s3); align-items: center; }
+.daily .bar { margin-top: 0; }
+@media (max-width: 900px) { .daily li { grid-template-columns: 6rem minmax(0, 1fr); } .daily li > :nth-child(n+3) { grid-column: 2; } }
+</style>
+{% endblock %}

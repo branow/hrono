@@ -224,8 +224,20 @@ def _world(conn: object) -> list[str]:
             "t",
             result=json.dumps({"dissolved": 1, "split": 2}),
         )
+    with conn:  # type: ignore[attr-defined]
+        for provider in ("anthropic", "claude-code"):
+            conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO llm_calls (job_id, run_id, started_by, model, "
+                "role, provider, upstream_model, input_tokens, "
+                "output_tokens, duration_ms, ok, created_at) VALUES "
+                "('run_done', 'run_done', 'admin', 'm', 'brief', ?, "
+                "'claude-sonnet-5', 1000, 100, 5000, 1, 't')",
+                (provider,),
+            )
     return [
         "/ui?tree=default",
+        "/ui/usage",
+        "/ui/jobs/run_done",
         "/ui/guide",
         "/ui/config",
         "/ui/config?add=sources",

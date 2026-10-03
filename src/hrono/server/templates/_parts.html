@@ -9,3 +9,18 @@
 <a class="btn" href="/ui/guide?tree={{ tree }}">How a tree gets built</a>
 {%- endif -%}
 {%- endmacro %}
+
+{# What a ledger group cost, in words. Money billed per token is spend; a
+   subscription's figure is an estimate and is marked so wherever it appears,
+   and the two are never added. #}
+{% macro money(s) -%}
+{%- if s.billed %}<span class="chip num" data-spend="metered">{{ s.paid }}{% if s.paid == "unknown" and s.unpriced %} <span class="faint">no price for {{ s.unpriced|join(", ") }}</span>{% endif %}</span>{% endif -%}
+{%- if s.subscription %} <span class="chip plain num" data-spend="estimate" title="Billed through a subscription, so nothing was charged per call. This is what the same tokens would cost at the API's prices.">{{ "about " ~ s.estimate if s.estimate != "unknown" else "unknown" }} estimate, not billed</span>{% endif -%}
+{%- if not s.billed and not s.subscription %}<span class="chip plain" data-spend="none">no charge</span>{% endif -%}
+{%- endmacro %}
+
+{# A run with no ledger rows is one of two things the page must not blur: a run
+   made before spend was recorded (unknown) and a run that called no model. #}
+{% macro unrecorded(before) -%}
+{%- if before %}<span class="faint" data-spend="unknown">not recorded: this ran before spend was kept</span>{% else %}<span class="faint" data-spend="none">no model calls</span>{% endif -%}
+{%- endmacro %}

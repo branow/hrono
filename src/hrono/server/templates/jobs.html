@@ -109,7 +109,7 @@
           <span class="bar"><span style="width:{{ (100 * job.progress.done / job.progress.total)|round|int }}%"></span></span>
           {% endif %}
         </td>
-        <td class="num nowrap">{% if job.usage %}{{ "{:,}".format(job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation) }} in / {{ "{:,}".format(job.usage.tokens.output) }} out{% elif job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td class="num nowrap">{% if job.usage %}{{ "{:,}".format(job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation) }} in / {{ "{:,}".format(job.usage.tokens.output) }} out{% elif job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% elif job.before_ledger %}<span class="faint" title="This ran before spend was recorded">unknown</span>{% else %}<span class="faint">—</span>{% endif %}</td>
         <td><a class="faint" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.id }}"><code>{{ job.short_id }}</code></a></td>
         <td class="nowrap">
           {% if job.live and can_write %}

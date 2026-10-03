@@ -91,7 +91,9 @@ minute), whether anything is running (live, from the same event stream as the
 Runs page, on an empty tree too), what the last run did (the two sit side by
 side), and, below them, whether anything needs a person. Every empty state offers its
 next step as a button, and every action returns to the page it came from saying
-what it did. Manual tree
+what it did. Spend is on Home and on every run's page (split by stage), and the Usage page, open to every role,
+adds it up by day, model, run and person; a subscription's figure is marked as an estimate and never added to metered spend, and a run from before
+spend was recorded reads unknown rather than free. Manual tree
 surgery — rename, brief, notes, reparent, merge, dissolve, split, move a chunk
 — is there for admins.
 

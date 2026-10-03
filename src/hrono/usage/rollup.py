@@ -33,9 +33,11 @@ _KEYS: dict[str, str] = {
     "model": "c.model",
     "upstream-model": "c.upstream_model",
     "user": "c.started_by",
+    "role": "c.role",
     "day": "substr(c.created_at, 1, 10)",
 }
 GROUPINGS = tuple(_KEYS)
+LEDGER_MIGRATION = 36
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,8 @@ class _Group:
     metered: _Money = field(default_factory=_Money)
     estimate: _Money = field(default_factory=_Money)
     billings: set[str] = field(default_factory=set)
+    upstreams: set[str] = field(default_factory=set)
+    providers: set[str] = field(default_factory=set)
 
     def spend(self) -> tuple[bool, float]:
         """Known money first, largest first; unknown cost sorts last."""
@@ -100,6 +104,8 @@ class _Group:
                 "cache_creation": self.cache_creation,
             },
             "model_seconds": round(self.milliseconds / 1000, 3),
+            "upstream_models": sorted(self.upstreams),
+            "providers": sorted(self.providers),
             "cost": {
                 "metered": self.metered.view(),
                 "subscription_estimate": self.estimate.view(),
@@ -135,18 +141,57 @@ def usage(
     return [{**group.view(), "run": _run(conn, group.key)} for group in ordered]
 
 
-def for_jobs(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
-    """One job's calls and every descendant's, as one group; None if none."""
+def total(
+    conn: sqlite3.Connection, where: Filter = EVERYTHING
+) -> dict[str, object] | None:
+    """Every row the filter keeps as one group; None when there are none."""
+    clauses, params = _where(where)
     rows = conn.execute(
-        "WITH RECURSIVE down(id) AS (SELECT ? UNION ALL "
-        "SELECT j.id FROM jobs j JOIN down ON j.parent_id = down.id) "
-        f"SELECT ? AS key, {_SUMS} FROM llm_calls c "  # noqa: S608
-        "WHERE c.job_id IN (SELECT id FROM down) "
+        f"SELECT 'total' AS key, {_SUMS} FROM llm_calls c "  # noqa: S608
+        f"LEFT JOIN jobs r ON r.id = c.run_id{clauses} "
         "GROUP BY c.model, c.upstream_model, c.provider",
-        (job_id, job_id),
+        params,
     ).fetchall()
     groups = _fold(conn, rows)
     return groups[0].view() if groups else None
+
+
+def for_jobs(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
+    """One job's calls and every descendant's, as one group; None if none."""
+    groups = _of_job(conn, job_id, "'job'")
+    return groups[0].view() if groups else None
+
+
+def for_job_by_role(
+    conn: sqlite3.Connection, job_id: str
+) -> list[dict[str, object]]:
+    """The same calls as ``for_jobs``, one group per model role (the stage)."""
+    return [group.view() for group in _of_job(conn, job_id, "c.role")]
+
+
+def _of_job(conn: sqlite3.Connection, job_id: str, key: str) -> list[_Group]:
+    rows = conn.execute(
+        "WITH RECURSIVE down(id) AS (SELECT ? UNION ALL "
+        "SELECT j.id FROM jobs j JOIN down ON j.parent_id = down.id) "
+        f"SELECT {key} AS key, {_SUMS} FROM llm_calls c "  # noqa: S608
+        "WHERE c.job_id IN (SELECT id FROM down) "
+        f"GROUP BY {key}, c.model, c.upstream_model, c.provider",
+        (job_id,),
+    ).fetchall()
+    return _fold(conn, rows)
+
+
+def recorded_since(conn: sqlite3.Connection) -> str | None:
+    """When this database began recording calls: its ledger migration's time.
+
+    A job made before it has no rows because nothing was written then, which
+    is not the same as a job that made no calls.
+    """
+    row = conn.execute(
+        "SELECT applied_at FROM schema_migrations WHERE version = ?",
+        (LEDGER_MIGRATION,),
+    ).fetchone()
+    return None if row is None else str(row["applied_at"])
 
 
 _SUMS = (
@@ -193,6 +238,8 @@ def _fold(
         group.cache_read += row["cache_read"]
         group.cache_creation += row["cache_creation"]
         group.milliseconds += row["milliseconds"]
+        group.upstreams.add(str(row["upstream"] or row["model"]))
+        group.providers.add(str(row["provider"]))
         _charge(group, row, overrides.get(row["model"]))
     return list(groups.values())
 

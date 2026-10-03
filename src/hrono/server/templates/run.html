@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_parts.html" import money, unrecorded %}
 {% block title %}hrono — {{ job.op }} run{% endblock %}
 {% block main %}
 <div class="page-head">
@@ -12,7 +13,7 @@
     <span class="chip">started {{ job.started }}</span>
     <span class="chip">{{ job.took }}</span>
     {% if job.scope.name %}<span class="chip">over {{ job.scope.name }}</span>{% endif %}
-    {% if job.cost %}<span class="chip plain num">{{ job.cost.input }} tokens in, {{ job.cost.output }} out</span>{% endif %}
+    {% if job.spend %}{{ money(job.spend) }}{% endif %}
     <span class="chip plain mono">{{ job.short_id }}</span>
   </p>
 </div>
@@ -69,9 +70,44 @@
   </section>
   {% endif %}
 
+  <section class="card" id="spend">
+    <div class="card-head"><h2>What it spent<span class="tip" tabindex="0" role="note" data-tip="Every model call this run made, including those that failed. Embedding with a model run in this process spends no tokens">?</span></h2><a class="small" href="/ui/usage?tree={{ tree }}">Usage</a></div>
+    <div class="card-body">
+      {% if job.spend %}
+      <p class="row">{{ money(job.spend) }}
+        <span class="chip plain num">{{ job.spend.tokens }}</span>
+        {% if job.spend.cached %}<span class="chip plain num">{{ job.spend.cached }}</span>{% endif %}
+        <span class="chip plain num">{{ job.spend.time }} of model time</span></p>
+      {% if job.spend_by_stage|length > 1 %}
+      <div class="table-wrap mt-2">
+        <table>
+          <thead><tr><th>Stage</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
+          <tbody>
+            {% for row in job.spend_by_stage %}
+            <tr data-stage="{{ row.stage }}">
+              <td><code>{{ row.stage }}</code></td>
+              <td class="num">{{ row.calls }}</td>
+              <td class="num">{{ row.tokens }}</td>
+              <td class="num">{{ row.time }}</td>
+              <td>{{ money(row) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% elif job.live %}
+      <p class="hint">Nothing spent yet.</p>
+      {% else %}
+      <p class="hint">{{ unrecorded(job.before_ledger) }}</p>
+      {% endif %}
+    </div>
+  </section>
+
   {% if job.stages %}
   <section class="card" id="stages">
-    <div class="card-head"><h2>Stages <span class="faint num">{{ job.stages|length }}</span></h2></div>
+    {% set failed_here = job.failure and job.failure.stage %}
+    <div class="card-head"><h2>Stages <span class="faint num">{% if failed_here %}{{ job.stages|length }} of {{ job.stages|length + 1 }} done{% else %}{{ job.stages|length }}{% endif %}</span></h2></div>
     <div class="card-body">
       <ol class="timeline">
         {% for stage in job.stages %}

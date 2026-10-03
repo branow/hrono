@@ -375,6 +375,9 @@ def test_the_run_page_explains_a_failure_and_offers_a_retry(
     assert "pip install &#39;hrono[cluster]&#39;" in page
     assert "cluster-error: the reduction failed" in page  # the raw error
     assert 'id="stages"' in page and "<code>condense</code>" in page
+    timeline = page.split('id="stages"')[1].split("</section>")[0]
+    rows = timeline.count("<li>")
+    assert f"{rows - 1} of {rows} done" in timeline  # the header agrees
     assert "Run it again" in page
     assert "only what failed or was never reached costs anything" in page
 

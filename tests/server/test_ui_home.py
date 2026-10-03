@@ -295,3 +295,49 @@ def test_a_reader_sees_the_four_answers_and_no_sync_button(
     assert "<h2>Sources" in page
     assert "<h2>Last run</h2>" in page
     assert "/sync" not in page
+
+
+def test_a_finished_fan_out_run_reads_its_derived_status_not_pending(
+    browser: Browser,
+) -> None:
+    # #203: the parent row is stored `pending` and is never updated; its
+    # status is its children's, derived at read time.
+    browser.run("job_parent", "pending")
+    for index in range(2):
+        job_store.insert(
+            browser.conn,  # type: ignore[arg-type]
+            f"job_kid{index}",
+            "job_parent",
+            TREE,
+            "sync",
+            "{}",
+            STAMP,
+        )
+        job_store.set_status(
+            browser.conn,  # type: ignore[arg-type]
+            f"job_kid{index}",
+            "succeeded",
+            None,
+            STAMP,
+        )
+    browser.sign_in()
+
+    page = browser.home()
+    last = page[page.index("<h2>Last run</h2>") :]
+
+    assert 'data-state="succeeded"' in last
+    assert 'data-state="pending"' not in last
+
+
+def test_home_reads_only_the_runs_it_shows(browser: Browser) -> None:
+    for n in range(400):
+        browser.run(f"job_{n:04d}", "succeeded", stamp=f"2026-10-03T{n:05d}")
+    browser.sign_in()
+    statements: list[str] = []
+    browser.conn.set_trace_callback(statements.append)  # type: ignore[attr-defined]
+
+    browser.home()
+    browser.conn.set_trace_callback(None)  # type: ignore[attr-defined]
+
+    asked = [s for s in statements if "FROM jobs" in s]
+    assert len(asked) < 40, f"{len(asked)} statements read jobs"
