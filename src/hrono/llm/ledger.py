@@ -28,6 +28,26 @@ from hrono.db.database import Database
 from hrono.jobs.ops import JobContext
 from hrono.llm.client import Completion, CompletionRequest, CompletionResult
 
+
+class Tally:
+    """Tokens a remote encoder reports for the batch it just embedded.
+
+    The encoder seam returns vectors only, so the provider's own count travels
+    beside it: the encoder ``add``s, the ledger wrapper ``take``s once the call
+    returns. Local encoders never add, so their rows stay NULL.
+    """
+
+    def __init__(self) -> None:
+        self._tokens: int | None = None
+
+    def add(self, tokens: int) -> None:
+        self._tokens = tokens if self._tokens is None else self._tokens + tokens
+
+    def take(self) -> int | None:
+        tokens, self._tokens = self._tokens, None
+        return tokens
+
+
 Clock = Callable[[], float]
 Encode = Callable[[list[str]], Sequence[Sequence[float]]]
 
@@ -114,12 +134,14 @@ def metered(
     config: dict[str, object],
     *,
     provider: str,
+    tally: Tally | None = None,
     clock: Clock = time.monotonic,
 ) -> Encode:
     """An encoder that records each batch it embeds as one ledger row.
 
-    An embedding pass reports no tokens through this seam, so they stay
-    unknown; the time it took is what is recorded.
+    The tokens are what the provider reported to ``tally`` for that batch; an
+    encoder that reports none (a model loaded in process) leaves them unknown,
+    and the time it took is recorded either way.
     """
     name = str(config.get("name") or config["model"])
     upstream = str(config["model"])
@@ -140,7 +162,7 @@ def metered(
                     role="embedding",
                     provider=provider,
                     upstream_model=upstream,
-                    input_tokens=None,
+                    input_tokens=None if tally is None else tally.take(),
                     output_tokens=None,
                     cache_read_tokens=None,
                     cache_creation_tokens=None,

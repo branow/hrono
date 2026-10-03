@@ -22,10 +22,12 @@ from hrono.db.database import Database
 from hrono.embed.encoders import encoder_for_model
 from hrono.embed.runner import EmbedError
 from hrono.jobs.ops import JobContext
+from hrono.jobs.worker import enqueue
 from hrono.llm.client import CompletionRequest, LLMError
 from hrono.llm.openai import OpenAIClient, embeddings
 from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
+from hrono.usage.rollup import usage
 from tests.stub_server import serving
 
 KEY = Fernet.generate_key()
@@ -293,3 +295,63 @@ def test_a_provider_that_cannot_embed_says_so(
             _model("embedding", "cli"),
             lambda model_id: None,
         )
+
+
+def test_a_remote_embedding_batch_records_the_tokens_the_provider_reports(
+    server: str, db: tuple[Database, Cipher], tmp_path: Path
+) -> None:
+    # #220: through the real encoder, the real HTTP exchange and the real
+    # ledger, then the roll-up that prices it.
+    database, cipher = db
+    _connection(db, "oa", "openai", server)
+    _Handler.responses = {
+        "/v1/embeddings": (
+            200,
+            {
+                "data": [{"index": 0, "embedding": [0.5]}],
+                "usage": {
+                    "prompt_tokens": 1_000_000,
+                    "total_tokens": 1_000_000,
+                },
+            },
+        )
+    }
+    model = {
+        **_model("embedding", "oa"),
+        "model": "text-embedding-3-small",
+        "price": {"input": 0.02, "output": 0.0},
+    }
+    with database.connect() as conn, conn:
+        registry_store.insert(conn, "models", "m", json.dumps(model), None, "t")
+    run = enqueue(database, "embed", {}, started_by="ana")
+    encode = encoder_for_model(
+        JobContext(database, cipher, tmp_path / "cache", job_id=run),
+        model,
+        lambda model_id: None,
+    )
+
+    encode(["a"])
+    encode(["b"])
+
+    with database.connect() as conn:
+        [group] = usage(conn, "run")
+    assert group["tokens"]["input"] == 2_000_000
+    assert group["cost"]["metered"] == {"usd": 0.04, "unpriced": []}
+
+
+def test_a_local_embedding_batch_still_records_no_tokens(
+    db: tuple[Database, Cipher], tmp_path: Path
+) -> None:
+    database, cipher = db
+    run = enqueue(database, "embed", {}, started_by="ana")
+    encode = encoder_for_model(
+        JobContext(database, cipher, tmp_path / "cache", job_id=run),
+        _model("embedding", None),
+        lambda model_id: lambda texts: [[0.0] for _ in texts],
+    )
+
+    encode(["a"])
+
+    with database.connect() as conn:
+        row = conn.execute("SELECT input_tokens FROM llm_calls").fetchone()
+    assert row["input_tokens"] is None

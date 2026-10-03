@@ -34,6 +34,7 @@ from hrono.llm.client import (
     LLMError,
     Usage,
 )
+from hrono.llm.ledger import Tally
 from hrono.llm.urls import api_root
 from hrono.registry import store
 
@@ -86,8 +87,12 @@ def embeddings(
     *,
     send: object = None,
     timeout: float = TIMEOUT,
+    tally: Tally | None = None,
 ) -> object:
-    """Build the remote encoder for an embedding model on a connection."""
+    """Build the remote encoder for an embedding model on a connection.
+
+    ``usage.prompt_tokens`` of each response goes to ``tally`` for the ledger.
+    """
     poster = send if send is not None else _post
     key, base = credential(database, cipher, model.get("connection"))
     name = str(model["model"])
@@ -99,7 +104,12 @@ def embeddings(
             {"model": name, "input": texts},
             timeout,
         )
-        return _vectors(payload, len(texts))
+        vectors = _vectors(payload, len(texts))
+        if tally is not None:
+            tokens = _prompt_tokens(payload)
+            if tokens is not None:
+                tally.add(tokens)
+        return vectors
 
     return encode
 
@@ -209,6 +219,12 @@ def _vectors(
             raise LLMError("the model server returned a vector out of range")
         ordered[index] = [float(value) for value in vector]
     return ordered
+
+
+def _prompt_tokens(payload: dict[str, object]) -> int | None:
+    usage = payload.get("usage")
+    tokens = usage.get("prompt_tokens") if isinstance(usage, dict) else None
+    return tokens if isinstance(tokens, int) else None
 
 
 def _headers(key: str | None) -> dict[str, str]:

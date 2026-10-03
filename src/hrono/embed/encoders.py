@@ -18,17 +18,19 @@ from collections.abc import Callable
 from hrono.embed.runner import EmbedError, Encoder
 from hrono.jobs.ops import JobContext
 from hrono.llm import openai
-from hrono.llm.ledger import metered
+from hrono.llm.ledger import Tally, metered
 from hrono.llm.providers import provider_for
 
 LOCAL = "local"  # the ledger's provider for a model loaded in process
 
-Builder = Callable[[JobContext, dict[str, object]], Encoder]
+Builder = Callable[[JobContext, dict[str, object], Tally], Encoder]
 
 
-def _openai(context: JobContext, model: dict[str, object]) -> Encoder:
+def _openai(
+    context: JobContext, model: dict[str, object], tally: Tally
+) -> Encoder:
     return openai.embeddings(  # type: ignore[return-value]
-        context.database, context.cipher, model
+        context.database, context.cipher, model, tally=tally
     )
 
 
@@ -56,4 +58,11 @@ def encoder_for_model(
         raise EmbedError(
             f"provider cannot serve an embedding model: {provider}"
         )
-    return metered(builder(context, config), context, config, provider=provider)
+    tally = Tally()
+    return metered(
+        builder(context, config, tally),
+        context,
+        config,
+        provider=provider,
+        tally=tally,
+    )
