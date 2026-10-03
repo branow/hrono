@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PASSAGE_BYTES = 800
+SECTION_BYTES = 10240
 MIN_PARA = 64
 
 
@@ -39,7 +40,11 @@ CASCADE: tuple[Delimiter, ...] = (
     Delimiter("word", b" "),
 )
 
-_SECTION_BYTES: dict[str, int] = {"code": 10240, "docs": 10240, "data": 2048}
+_SECTION_BYTES: dict[str, int] = {
+    "code": SECTION_BYTES,
+    "docs": SECTION_BYTES,
+    "data": 2048,
+}
 _DEFAULT_CATEGORY = "docs"
 _CATEGORY_BY_EXT: dict[str, str] = {
     ".py": "code",

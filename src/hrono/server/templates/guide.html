@@ -40,7 +40,7 @@
 <section class="card mb-4">
   <div class="card-head"><h2>The pipeline, step by step</h2></div>
   <div class="card-body">
-    <svg class="figure" viewBox="0 0 700 118" role="img" aria-label="Sources are split into sections, each section is embedded and condensed, sections are clustered into topics, each topic gets a brief, and briefs of briefs climb to one root">
+    <svg class="figure" viewBox="0 0 700 118" role="img" aria-label="Sources are split into sections, each section is embedded and condensed, sections are grouped into topics, each topic gets a brief, and briefs of briefs climb to one root">
       <g class="fig-ink">
         {% for step in [("source", 10), ("section", 124), ("condensation", 238), ("topic", 352), ("brief", 466), ("root", 580)] %}
         <rect class="fig-box{% if loop.index0 in (2, 4, 5) %} warm{% endif %}" x="{{ step[1] }}" y="30" width="104" height="38" rx="6"/>
@@ -50,9 +50,9 @@
         {% endif %}
         {% endfor %}
         <text class="fig-note" x="62" y="88">a repo</text>
-        <text class="fig-note" x="176" y="88">~10 KB of one file</text>
+        <text class="fig-note" x="176" y="88">~{{ limits.section|size }} of one file</text>
         <text class="fig-note" x="290" y="88">one model call each</text>
-        <text class="fig-note" x="404" y="88">clustered, not asked</text>
+        <text class="fig-note" x="404" y="88">grouped, not asked</text>
         <text class="fig-note" x="518" y="88">one model call each</text>
         <text class="fig-note" x="632" y="88">briefs of briefs</text>
         <text class="fig-note dim" x="290" y="104">cached by content hash — an unchanged file is never condensed twice</text>
@@ -67,7 +67,7 @@
       </li>
       <li>
         <span class="step-mark">section</span>
-        <span class="step-what">~10 KB of one file — the unit that gets grouped</span>
+        <span class="step-what">~{{ limits.section|size }} of one file — the unit that gets grouped</span>
         <span class="step-count">{{ stage.sections }}</span>
       </li>
       <li>
@@ -87,15 +87,15 @@
       </li>
       <li>
         <span class="step-mark">passage</span>
-        <span class="step-what">~800 B — what <em>recall</em> injects into a prompt</span>
+        <span class="step-what">~{{ limits.passage|size }} — what <em>recall</em> injects into a prompt</span>
         <span class="step-count">{{ stage.passages }}</span>
       </li>
     </ol>
     {% if stage.parked %}
-    <p class="hint mt-3">{{ stage.parked }} section{{ "" if stage.parked == 1 else "s" }} in no topic yet — embedded, on the waiting list, not lost.</p>
+    <p class="hint mt-3">{{ stage.parked|counted("sections") }} waiting for a topic — embedded, on the waiting list, not lost.</p>
     {% endif %}
     {% if stage.stale %}
-    <p class="hint">{{ stage.stale }} brief{{ "" if stage.stale == 1 else "s" }} no longer match{{ "es" if stage.stale == 1 else "" }} what their topic holds. The next sync rewrites them.</p>
+    <p class="hint">{{ stage.stale|counted("briefs") }} {{ "no longer matches" if stage.stale == 1 else "no longer match" }} what {{ "its topic holds" if stage.stale == 1 else "their topics hold" }}. The next sync rewrites {{ "it" if stage.stale == 1 else "them" }}.</p>
     {% endif %}
   </div>
 </section>
@@ -112,13 +112,13 @@
       <li>
         <span class="layer-name">level {{ row.level }}{% if loop.first and row.topics == 1 %} <span class="chip accent">root</span>{% endif %}</span>
         <span class="layer-bar"><span style="width: {{ row.share }}%"></span></span>
-        <span class="layer-count">{{ row.topics }} topic{{ "" if row.topics == 1 else "s" }}{% if row.held %} over {{ row.held }} section{{ "" if row.held == 1 else "s" }}{% endif %}</span>
+        <span class="layer-count">{{ row.topics|counted("topics") }}{% if row.held %} over {{ row.held|counted("sections") }}{% endif %}</span>
       </li>
       {% endfor %}
       <li>
         <span class="layer-name dim">sources</span>
         <span class="layer-bar"><span class="raw" style="width: 100%"></span></span>
-        <span class="layer-count">{{ stage.sections }} section{{ "" if stage.sections == 1 else "s" }}</span>
+        <span class="layer-count">{{ stage.sections|counted("sections") }}</span>
       </li>
     </ul>
     <p class="hint mt-3">An agent starts at the root and reads one brief per step. That is the point of the levels: it never reads the corpus to find out what is in it.</p>
@@ -129,20 +129,42 @@
 <section class="card mb-4">
   <div class="card-head"><h2>Who writes what</h2></div>
   <div class="card-body">
-    <p class="hint">Each stage calls the model configured for its role. Change one in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a> and every brief it wrote goes stale.</p>
-    <ul class="roles">
-      {% for writer in writers %}
-      <li>
-        <span class="role-name">{{ writer.role }}</span>
-        <span class="role-does">{{ writer.does }}</span>
-        {% if writer.name %}
-        <span class="chip plain nowrap">{{ writer.name }}</span><span class="chip plain nowrap">{{ writer.model }}</span>
-        {% else %}
-        <span class="chip warn nowrap">not configured</span>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
+    <p class="hint">Each stage calls the model configured for its role in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>. Point the brief or brief-upper role at another model, or edit its prompt, and the briefs it wrote are rewritten the next time briefs are written; a new key for the same connection rewrites nothing. Settings says how many topics a change would redo, and roughly what that costs, before you save it.</p>
+    <div class="table-wrap">
+      <table class="roles">
+        <thead><tr><th>Role</th><th>What it does</th><th>Model</th><th>Upstream model</th></tr></thead>
+        <tbody>
+          {% for writer in writers %}
+          <tr>
+            <th scope="row">{{ writer.role }}</th>
+            <td>{{ writer.does }}</td>
+            {% if writer.name %}
+            <td><code>{{ writer.name }}</code></td><td><code>{{ writer.model }}</code></td>
+            {% else %}
+            <td colspan="2"><span class="chip warn nowrap">not configured</span></td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint mt-2">Condensations are kept under the condense model's name: an edit to that model's upstream string keeps them, and a differently named model condenses everything again.</p>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>What recall does</h2></div>
+  <div class="card-body">
+    <p class="hint">Recall answers a question with the passages that answer it, and says where each came from. It embeds the question, scores every passage in the tree against it, and keeps only the passages that stand well clear of the rest for that question. Up to {{ recall.cap }} come back, and no one document takes more than {{ recall.share }}% of them while another document still has a passage that qualified.</p>
+    <p class="hint">When nothing stands clear it says <em>{{ recall.refusal }}</em> and hands over to the map, because a plausible passage that does not answer the question is worse for an agent than none. That is the design working, not a fault. Recall never calls a language model, so it costs nothing per question.</p>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>What export produces</h2></div>
+  <div class="card-body">
+    <p class="hint">A folder of Markdown an agent reads without hrono running: <code>root.md</code> first, then one link per level down to the source text. The stored tree can be deeper than an agent should have to walk, so the export flattens it to a hop limit, {{ export.hops }} by default, choosing the levels that keep the widest page shortest. A page aims to list at most {{ export.width }} topics, about as much to read as one section.</p>
+    <p class="hint">Export is built from what is stored, with no model call. It comes from the <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export page</a> as a zip, or from the command line with <code>hrono tree export</code>. Topics with no usable brief are listed there first, because an agent reads those pages first.</p>
   </div>
 </section>
 
@@ -151,7 +173,7 @@
   <div class="card-body">
     <p class="hint">
       This is the part the map does not show, and the part worth knowing before reading the map's overlays.
-      A sync never re-clusters the corpus: it decides, per changed section, with plain arithmetic.
+      A sync never regroups the whole corpus: it decides, per changed section, with plain arithmetic.
     </p>
     <ul class="rules">
       <li>
@@ -160,11 +182,15 @@
       </li>
       <li>
         <span class="when">a file you edited</span>
-        <span class="then">Re-embedded, then compared against its own topic <em>as it was</em>. Still {{ rule.tau }} similar or better, it stays and only its own brief is rewritten. Below that, the content genuinely left the topic and it is re-placed.</span>
+        <span class="then">Re-embedded, then compared against its own topic <em>as it was</em>. Still {{ rule.tau }} similar or better, it stays and only its own brief is rewritten. Below that, the content genuinely left the topic and it is placed again.</span>
+      </li>
+      <li>
+        <span class="when">a file you renamed or moved</span>
+        <span class="then">Its section keeps its topic: the content is the same, so nothing is compared again.</span>
       </li>
       <li>
         <span class="when">a new file</span>
-        <span class="then">Placed in the topic whose centre it is closest to, if that is {{ rule.tau }} or better. If nothing is close enough it is <em>parked</em> — and parked sections form a new topic of their own once there are enough of them to be one.</span>
+        <span class="then">Placed in the topic whose centre it is closest to, if that is {{ rule.tau }} or better. If nothing is close enough it is <em>parked</em>. Parked sections form a topic of their own once there are enough of them to be one; if too few have gathered, one that waits more than {{ rule.max_age }} syncs is filed in the nearest topic anyway, marked as placed without a score.</span>
       </li>
       <li>
         <span class="when">a topic past {{ rule.cap }} sections</span>
@@ -176,19 +202,18 @@
       </li>
       <li>
         <span class="when">a topic down to one section</span>
-        <span class="then">Dissolves; the survivor is re-placed by the same rule as a new file.</span>
-      </li>
-      <li>
-        <span class="when">the whole tree drifting</span>
-        <span class="then">A full warm rebuild, diffed against what is stored — only the topics whose membership actually changed are re-summarised.</span>
+        <span class="then">Dissolves; the survivor is placed again by the same rule as a new file.</span>
       </li>
     </ul>
+    <p class="hint mt-3">
+      <strong>What a sync does not do.</strong> When the whole tree has drifted, hrono tells you rather than acting. A run reports that a <em>settle</em> is due once the changes since the last one add up to {{ rule.churn }} drift points, or the share of misfits passes {{ rule.factor|round|int }} times what the first build measured. A settle regroups the whole tree and rewrites only the topics whose sections changed. It spends model calls, so you start it yourself from Runs.
+    </p>
     <div class="callout mt-3">
       <div class="body">
         <div class="title">A few misfits are normal, not a defect</div>
         <p class="hint">
           Topics are not spheres, so sections at the edge of one always lean slightly toward the neighbour.
-          A freshly built tree measures around 3% and that is healthy. The repairs above fire on
+          A new tree always starts with some, and hrono keeps that first measurement as its baseline. The repairs above fire on
           <em>thresholds</em> — {{ rule.misfit }}% within one topic — precisely so that the normal residue is left alone.
           What the map's overlays draw is that residue: what automation looked at and decided was not worth a rebuild.
           They are a second opinion you can act on, never a queue you are expected to clear.
@@ -209,7 +234,7 @@
             <circle class="fig-disc" cx="34" cy="20" r="11"/>
             <circle class="fig-disc" cx="116" cy="20" r="11"/>
             <path class="link pull" d="M34,20 Q75,48 116,20"/>
-            <text class="fig-note" x="75" y="52">3 nearer</text>
+            <text class="fig-note" x="75" y="52">3 sections nearer</text>
           </g>
         </svg>
         <div>
@@ -228,7 +253,7 @@
         </svg>
         <div>
           <strong>near-duplicates <span class="faint">(proximity)</span></strong>
-          <p class="hint">Did the clustering split one subject into two? The arc joins two topics under the same parent that are nearly the same thing. <em>Repair: merge them.</em></p>
+          <p class="hint">Did one subject get split across two topics? The arc joins two topics under the same parent that are nearly the same thing. <em>Repair: merge them.</em></p>
         </div>
       </li>
       <li>
@@ -242,7 +267,7 @@
         </svg>
         <div>
           <strong>what a change touched <span class="faint">(propagation)</span></strong>
-          <p class="hint">After a sync, which briefs did an edit force a rewrite of? A line runs from the topic whose content changed up to the highest brief the judge said no longer held. <em>Nothing to repair — it is the receipt.</em></p>
+          <p class="hint">After a sync, which briefs did an edit force a rewrite of? A line runs from the topic whose content changed up to the highest brief marked for a rewrite. <em>Nothing to repair — it is the receipt.</em></p>
           <p class="hint">On a tree that was built once and never re-synced there is nothing to draw, and the overlay turning on changes nothing. That is correct, not broken.</p>
         </div>
       </li>
@@ -252,15 +277,48 @@
 </section>
 
 <section class="card mb-4">
+  <div class="card-head"><h2>What a pin does</h2></div>
+  <div class="card-body">
+    <p class="hint">Edit a topic by hand and the edit is <em>pinned</em>: the pipeline treats it as fixed and works around it. Three things can be held. A <em>brief</em> you rewrote is never regenerated. A <em>section</em> you filed under a topic is never moved by a repair. A <em>topic</em> you hung under a parent is never re-attached elsewhere. A rename and a note stay as you wrote them, too.</p>
+    <p class="hint">A pin lasts until you release it on the topic page. A run reports how many hand edits it left alone, so you can see the pipeline respecting them.</p>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>Who may do what</h2></div>
+  <div class="card-body">
+    <div class="table-wrap">
+      <table class="accounts">
+        <thead><tr><th>Account</th><th>What it can do</th></tr></thead>
+        <tbody>
+          {% for role, can in accounts %}
+          <tr><th scope="row">{{ role }}</th><td>{{ can }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="hint mt-2">The server decides from the account, not the page: a button that is hidden from you is also refused if you send the request yourself.</p>
+  </div>
+</section>
+
+<section class="card mb-4">
+  <div class="card-head"><h2>Where the cost comes from</h2></div>
+  <div class="card-body">
+    <p class="hint">Only model calls cost anything, and only a few stages make them: one call to condense each new section, one to write each brief that needs writing, and a panel of {{ rule.panel }} judge calls for each changed topic. Reading the map, recall, ask, and export call no language model.</p>
+    <p class="hint">That is why a sync is cheap and a first build is not: a sync pays for what changed, a first build or a settle pays for everything it touches. A first build is <em>maintain</em>, and a full rebuild from nothing is <em>build-tree</em>, which pays twice over. Each run's page shows the tokens it spent, and <code>hrono usage</code> adds them up by run, model, person and day. A model billed through a subscription is shown as an estimate, never as spend.</p>
+  </div>
+</section>
+
+<section class="card mb-4">
   <div class="card-head"><h2>Questions</h2></div>
   <div class="card-body stack">
     <details class="reveal">
       <summary class="twisty">If it repairs itself, why can I edit anything by hand?</summary>
-      <p class="hint">Because clustering has no opinion about what matters to you. It can tell that two topics are similar; it cannot know that one of them is the thing your team calls "billing" and deserves its own name. Every hand edit is <em>pinned</em>, which is what stops the next sync from undoing it — a correction that silently reverts is worse than no correction.</p>
+      <p class="hint">Because grouping has no opinion about what matters to you. It can tell that two topics are similar; it cannot know that one of them is the thing your team calls "billing" and deserves its own name. A hand edit is <em>pinned</em>, which is what stops the next sync from undoing it — a correction that silently reverts is worse than no correction.</p>
     </details>
     <details class="reveal">
       <summary class="twisty">I changed one file. How much gets rewritten?</summary>
-      <p class="hint">Its own topic's brief, always. Above that, the judge model is asked per level whether the change alters what a reader must know <em>at that level</em>, and the rewrite stops at the first level that says no. A typo stops immediately; a file that changed what a whole subsystem does can climb to the root. The <em>what a change touched</em> overlay and the Activity page both show where it actually stopped.</p>
+      <p class="hint">Its own topic's brief, always. Then the judge model is asked once about that topic, by a panel of {{ rule.panel }} with the majority deciding, whether the new content changes what its brief says. If the answer is no, nothing above it is touched, which is what happens to a typo. If it is yes, every brief above it is marked for a rewrite, up to {{ rule.climb }} levels, or to the root if that is nearer. The <em>what a change touched</em> overlay and the Activity page both show how far it went.</p>
     </details>
     <details class="reveal">
       <summary class="twisty">Why is my brief a question back to me instead of a summary?</summary>
@@ -268,11 +326,11 @@
     </details>
     <details class="reveal">
       <summary class="twisty">Nothing happened when I re-ran a sync.</summary>
-      <p class="hint">That is the design working. Condensations are keyed by content hash and briefs by their members' signature, so a re-run over unchanged sources makes zero model calls. If you expected work, check that the source actually fetched new commits on the Runs page.</p>
+      <p class="hint">That is the design working. Condensations are keyed by content hash and briefs by their members' signature, so a re-run over unchanged sources makes no model calls. The exception is a stored reply that was not a real condensation or brief: those are tried again. If you expected work, check that the source actually fetched new commits on the Runs page.</p>
     </details>
     <details class="reveal">
       <summary class="twisty">What does a topic's "fit" number mean?</summary>
-      <p class="hint">How close that section sits to the centre of the topic holding it. Low is not wrong — the edges of a topic are where the interesting material usually is — it is only worth looking at when the <em>misfiled</em> overlay says something else is closer.</p>
+      <p class="hint">How close that section sits to the centre of the topic holding it, from 0 to 1; a section marked <em>forced</em> has no number because it was placed without one. Low is not wrong — the edges of a topic are where the interesting material usually is — it is only worth looking at when the <em>misfiled</em> overlay says something else is closer.</p>
     </details>
     <details class="reveal">
       <summary class="twisty">Can I have more than one tree?</summary>
@@ -286,15 +344,15 @@
   <div class="card-body">
     <dl class="terms">
       <dt>topic</dt>
-      <dd>A group of related sections, or of other topics, plus a brief. The node of the tree.</dd>
+      <dd>A group of related sections, or of other topics, plus a brief. The unit the tree is made of.</dd>
       <dt>section</dt>
-      <dd>About 10 KB of one file. What gets grouped, and what an agent reads when it explores.</dd>
+      <dd>About {{ limits.section|size }} of one file. What gets grouped, and what an agent reads when it explores.</dd>
       <dt>condensation</dt>
       <dd>What the first pass wrote about one section — identifiers verbatim, plus <code>GOTCHA:</code> lines. Cached by content, so an unchanged file is never condensed twice.</dd>
       <dt>brief</dt>
       <dd>A topic's summary, written from its condensations rather than from raw text. Reference lists are appended by code, never by the model.</dd>
       <dt>passage</dt>
-      <dd>About 800 B. What recall injects. A section reassembles exactly from its passages.</dd>
+      <dd>About {{ limits.passage|size }}. What recall injects. A section reassembles exactly from its passages.</dd>
       <dt>tree</dt>
       <dd>Topics all the way up to one root, over a named set of sources. A database can hold several.</dd>
       <dt>stale</dt>
@@ -306,9 +364,9 @@
       <dt>misfit</dt>
       <dd>A section whose own topic's centre is not the nearest one. A few are normal.</dd>
     </dl>
-    <p class="hint mt-3">
+    <p class="hint mt-3" data-not-used>
       Not used here: <strong>cluster</strong> is the algorithm's verb — what it makes is a topic.
-      <strong>Chunk</strong> was an earlier name for a section.
+      <strong>Chunk</strong> was an earlier name for a section. <strong>Node</strong> is the database's word for a topic. <strong>Paragraph</strong> is not a unit here: sections are cut by structure and size.
     </p>
   </div>
 </section>

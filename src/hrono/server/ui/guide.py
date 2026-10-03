@@ -29,10 +29,36 @@ import sqlite3
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
+from hrono.cluster.incubator import MAX_AGE
 from hrono.cluster.placement import TAU
 from hrono.cluster.repair import MAX_CAP, MISFIT_THRESHOLD
+from hrono.export.collapse import WIDTH
+from hrono.recall.fusion import CAP, EXPLORE_MESSAGE, MAX_DOCUMENT_SHARE
 from hrono.registry import store
 from hrono.server.ui import Reader, _trees, router, templates
+from hrono.server.ui.export import DEFAULT_LEVELS
+from hrono.summarize.propagate import BEST_OF, D_MAX
+from hrono.tree.settle import CHURN_THRESHOLD, MISFIT_FACTOR
+
+# What each kind of account may do, least first. Each line is a claim about the
+# routes, and `tests/server/test_ui_guide.py` makes a request as each role to
+# hold it to that: a role added or loosened there fails the page's own words.
+ACCOUNTS = (
+    (
+        "reader",
+        "Looks at everything: the map, topics, runs, health, and the Ask and "
+        "Export pages.",
+    ),
+    (
+        "writer",
+        "Also changes settings and starts a sync, a first build, and a "
+        "run's stop or retry.",
+    ),
+    (
+        "admin",
+        "Also edits topics by hand, runs a single stage, and manages accounts.",
+    ),
+)
 
 # What each configured model role is called FOR, in the order the pipeline
 # calls them. The registry stores the role; what the role means is this page's.
@@ -68,7 +94,19 @@ def guide_page(request: Request, user: Reader, tree: str = "") -> Response:
                 "tau": TAU,
                 "cap": MAX_CAP,
                 "misfit": int(MISFIT_THRESHOLD * 100),
+                "max_age": MAX_AGE,
+                "churn": CHURN_THRESHOLD,
+                "factor": MISFIT_FACTOR,
+                "climb": D_MAX,
+                "panel": BEST_OF,
             },
+            "recall": {
+                "cap": CAP,
+                "share": int(MAX_DOCUMENT_SHARE * 100),
+                "refusal": EXPLORE_MESSAGE,
+            },
+            "export": {"hops": DEFAULT_LEVELS, "width": WIDTH},
+            "accounts": ACCOUNTS,
             "can_write": user.role in {"writer", "admin"},
         },
     )
