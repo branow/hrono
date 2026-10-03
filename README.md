@@ -89,7 +89,10 @@ tree says when it was last read, at which commit, and whether its remote has
 moved on since — asked of the remote with `git ls-remote`, at most once a
 minute), whether anything is running (live, from the same event stream as the
 Runs page, on an empty tree too), what the last run did (the two sit side by
-side), and, below them, whether anything needs a person. Every empty state offers its
+side), and, below them, whether anything needs a person. Health lists each
+problem and fixes it beside it: an admin files a waiting or misfit section in a
+topic (held by hand, so a sync leaves it), rewrites one stale brief, and hands
+back any hand edit; a reader sees the same lists with no controls. Every empty state offers its
 next step as a button, and every action returns to the page it came from saying
 what it did. Spend is on Home and on every run's page (split by stage), and the Usage page, open to every role,
 adds it up by day, model, run and person; a subscription's figure is marked as an estimate and never added to metered spend, and a run from before

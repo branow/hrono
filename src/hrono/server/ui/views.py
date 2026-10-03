@@ -1,7 +1,7 @@
-"""The read-only views: activity, triage and the map.
+"""The read-only views: activity and the map.
 
-Three pages that answer "what is in here" and "what needs attention", sharing
-one shape — read under one connection, render, write nothing. The map's expand
+Pages that answer "what is in here", sharing one shape: read under one
+connection, render, write nothing. The map's expand
 state and edge overlays ride in the URL rather than in the page, which is what
 makes every view of it shareable (#183, #184).
 """
@@ -16,7 +16,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
 from hrono.db import update_log
-from hrono.server import graph, labels, overlays, panel, triage
+from hrono.server import graph, labels, overlays, panel
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.server.words import counted
 
@@ -149,26 +149,6 @@ def _decision(row: object) -> dict[str, object]:
         # as "unparseable" and the action as "abstained" (propagate.py)
         "abstained": action == "abstained",
     }
-
-
-@router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)
-def triage_page(tree: str, request: Request, user: Reader) -> Response:
-    """What is wrong with this tree, counted, each linking to where it is."""
-    with request.app.state.db.connect() as conn:
-        trees = _trees(conn)
-        items = triage.survey(conn, tree)
-    return templates.TemplateResponse(
-        request,
-        "triage.html",
-        {
-            "user": user,
-            "trees": trees,
-            "tree": tree,
-            "items": items,
-            "clean": triage.clean(items),
-            "can_write": user.role in {"writer", "admin"},
-        },
-    )
 
 
 @router.get("/ui/trees/{tree}/graph", response_class=HTMLResponse)

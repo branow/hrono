@@ -123,7 +123,7 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
         clear="Every topic has a brief that holds",
         one="1 topic has no usable brief, or a stale one",
         many="{n} topics have no usable brief, or a stale one",
-        link=f"/ui/trees/{tree}/nodes/{missing[0]}?tree={tree}"
+        link=f"/ui/trees/{tree}/triage?tree={tree}#briefs"
         if missing
         else f"/ui/trees/{tree}/graph?tree={tree}",
     )
@@ -137,7 +137,7 @@ def _parked(conn: sqlite3.Connection, tree: str) -> Item:
         clear="No sections are waiting for a topic",
         one="1 section is waiting for a topic",
         many="{n} sections are waiting for a topic",
-        link=f"/ui/trees/{tree}/graph?tree={tree}",
+        link=f"/ui/trees/{tree}/triage?tree={tree}#waiting",
     )
 
 
@@ -155,7 +155,7 @@ def _forced(conn: sqlite3.Connection, tree: str) -> Item:
         clear="Every section was placed by a score",
         one="1 section was placed without a score",
         many="{n} sections were placed without a score",
-        link=f"/ui/trees/{tree}/graph?tree={tree}",
+        link=f"/ui/trees/{tree}/triage?tree={tree}#placed",
     )
 
 

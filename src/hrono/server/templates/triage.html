@@ -1,4 +1,16 @@
 {% extends "base.html" %}
+{% macro picker(section, near, topics) %}
+<select name="to_node" aria-label="topic for {{ section }}">
+  {% for id, name in topics %}<option value="{{ id }}"{% if id == near %} selected{% endif %}>{{ name }}</option>{% endfor %}
+</select>
+{% endmacro %}
+{% macro place(tree, row, topics) %}
+<form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/place">
+  <input type="hidden" name="section" value="{{ row.id }}">
+  {{ picker(row.path, row.nearest, topics) }}
+  <button class="btn primary" type="submit">Place here</button>
+</form>
+{% endmacro %}
 {% block title %}hrono — {{ tree }} triage{% endblock %}
 {% block main %}
 <div class="page-head">
@@ -30,6 +42,102 @@
       </li>
       {% endfor %}
     </ul>
+  </div>
+</section>
+
+<section class="card mt-3" id="waiting">
+  <div class="card-body">
+    <h2>Waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read and embedded, but in no topic yet. A section you place stays where you put it">?</span></h2>
+    {% if parked_total == 0 %}
+    <p class="hint">No sections are waiting for a topic.</p>
+    {% else %}
+    <p class="hint">A sync files these by itself once {{ min_points }} are waiting, or after {{ max_age }} runs. Place one now to skip the wait; a placement is held by hand and a sync leaves it there.</p>
+    <table class="settings-table">
+      <thead><tr><th>Section</th><th>Nearest topic</th>{% if can_write %}<th>Place in</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for row in parked %}
+        <tr>
+          <td class="mono">{{ row.path }}</td>
+          <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">no score yet</span>{% endif %}</td>
+          {% if can_write %}<td>{{ place(tree, row, topics) }}</td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if parked_total > shown %}<p class="hint">The oldest {{ shown }} of {{ parked_total }}.</p>{% endif %}
+    {% endif %}
+  </div>
+</section>
+
+<section class="card mt-3" id="placed">
+  <div class="card-body">
+    <h2>Placed without a score<span class="tip" tabindex="0" role="note" data-tip="Filed in the nearest topic by rule, not matched to it. A few are normal">?</span></h2>
+    {% if misfit_total == 0 %}
+    <p class="hint">Every section was placed by a score.</p>
+    {% else %}
+    <p class="hint">A few of these are normal. The next sync checks them again and moves any that fit better elsewhere, unless you move one by hand: then it stays.</p>
+    <table class="settings-table">
+      <thead><tr><th>Section</th><th>In topic</th><th>Nearer topic</th>{% if can_write %}<th>Move to</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for row in misfits %}
+        <tr>
+          <td class="mono">{{ row.path }}</td>
+          <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.topic }}?tree={{ tree }}">{{ row.topic_name }}</a></td>
+          <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">none</span>{% endif %}</td>
+          {% if can_write %}<td>{{ place(tree, row, topics) }}</td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if misfit_total > shown %}<p class="hint">The first {{ shown }} of {{ misfit_total }}.</p>{% endif %}
+    {% endif %}
+  </div>
+</section>
+
+<section class="card mt-3" id="briefs">
+  <div class="card-body">
+    <h2>Briefs to rewrite</h2>
+    {% if not stale %}
+    <p class="hint">Every topic has a brief that holds.</p>
+    {% else %}
+    <p class="hint">The next sync rewrites each of these. Rewrite one now to fix only that topic.</p>
+    <table class="settings-table">
+      <thead><tr><th>Topic</th><th>Why</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
+      <tbody>
+      {% for row in stale %}
+        <tr>
+          <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">{{ row.name }}</a></td>
+          <td>{{ row.why }}</td>
+          {% if can_write %}<td><form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/regenerate"><input type="hidden" name="node" value="{{ row.node_id }}"><button class="btn" type="submit">Rewrite this brief</button></form></td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card mt-3" id="held">
+  <div class="card-body">
+    <h2>Held by hand<span class="tip" tabindex="0" role="note" data-tip="A hand edit is held so a sync does not undo it. It stays until you hand it back">?</span></h2>
+    {% if not held %}
+    <p class="hint">Nothing is held by hand.</p>
+    {% else %}
+    <p class="hint">A sync never changes these. Each one waits for a person to hand it back.</p>
+    <table class="settings-table">
+      <thead><tr><th>Held</th><th>What</th><th>Since</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
+      <tbody>
+      {% for row in held %}
+        <tr>
+          <td>{{ {"brief": "brief", "membership": "placement", "parenting": "parent"}[row.kind] }}</td>
+          <td>{% if row.kind == "membership" %}<span class="mono">{{ row.label }}</span> in {{ row.where }}{% else %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.target_id }}?tree={{ tree }}">{{ row.label }}</a>{% endif %}{% if row.reason %} <span class="hint">{{ row.reason }}</span>{% endif %}</td>
+          <td class="num">{{ row.since }}</td>
+          {% if can_write %}<td><form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/release"><input type="hidden" name="kind" value="{{ row.kind }}"><input type="hidden" name="target" value="{{ row.target_id }}"><button class="btn" type="submit">Hand back</button></form></td>{% endif %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </div>
 </section>
 {% endblock %}

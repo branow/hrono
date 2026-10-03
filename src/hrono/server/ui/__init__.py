@@ -290,6 +290,7 @@ from hrono.server.ui import (  # noqa: E402, F401
     export,
     find,
     guide,
+    health,
     jobs,
     nodes,
     overview,
