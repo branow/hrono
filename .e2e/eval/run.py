@@ -24,6 +24,7 @@ by an unisolated control session and must be absent from an isolated one.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -34,7 +35,7 @@ import time
 import tomllib
 from collections.abc import Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -91,6 +92,7 @@ class Arm:
     name: str
     root: Path
     kind: str  # export | raw
+    fingerprint: str = ""  # of every file's path and bytes
 
 
 @dataclass(frozen=True)
@@ -142,29 +144,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         questions = tuple(q for q in questions if q.id in wanted)
     arms = tuple(parse_arm(spec) for spec in args.arm)
     args.out.mkdir(parents=True, exist_ok=True)
-
-    isolation = check_isolation(args.model)
-    if not isolation.verified and not args.allow_unisolated:
-        print(render_isolation(isolation), file=sys.stderr)
-        return 2
-
-    tasks = [(arm, q) for arm in arms for q in questions]
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        runs = list(
-            pool.map(
-                lambda task: ask(
-                    task[0], task[1], args.model, args.max_turns, args.out
-                ),
-                tasks,
-            )
+    if args.rerender:
+        runs = load_runs(args.out / "runs.jsonl")
+        isolation = Isolation(
+            **json.loads((args.out / "isolation.json").read_text())
         )
-    with (args.out / "runs.jsonl").open("w") as handle:
-        for run in runs:
-            handle.write(json.dumps(asdict(run)) + "\n")
-    report = render_report(arms, questions, runs, isolation, args.model)
+    else:
+        isolation = check_isolation(args.model)
+        (args.out / "isolation.json").write_text(json.dumps(asdict(isolation)))
+        if not isolation.verified and not args.allow_unisolated:
+            print(render_isolation(isolation), file=sys.stderr)
+            return 2
+        runs = _ask_all(arms, questions, args)
+        with (args.out / "runs.jsonl").open("w") as handle:
+            for run in runs:
+                handle.write(json.dumps(asdict(run)) + "\n")
+    report = render_report(
+        arms, questions, runs, isolation, args.model, args.tools
+    )
     (args.out / "report.md").write_text(report)
     print(f"Wrote {args.out / 'report.md'}")
     return 0
+
+
+def load_runs(path: Path) -> list[Run]:
+    """The sessions a previous run recorded, to grade and report again."""
+    runs = []
+    for line in path.read_text().splitlines():
+        data = json.loads(line)
+        data["pages"] = tuple(Page(**page) for page in data["pages"])
+        for key in ("tools", "cited"):
+            data[key] = tuple(data[key])
+        runs.append(Run(**data))
+    return runs
 
 
 def load_questions(path: Path) -> tuple[Question, ...]:
@@ -189,7 +201,21 @@ def parse_arm(spec: str) -> Arm:
     if not name or not root.is_dir():
         raise SystemExit(f"--arm wants name=<existing dir>, got {spec!r}")
     kind = "export" if (root / "root.md").is_file() else "raw"
-    return Arm(name=name, root=root, kind=kind)
+    return Arm(name, root, kind, fingerprint(root))
+
+
+def fingerprint(root: Path) -> str:
+    """One hash over a folder's relative paths and bytes.
+
+    Two hop limits over a tree already within the smaller one export the
+    same folder (collapse returns it as-is), and the report says so: whatever
+    differs between those arms is the agent's own variance.
+    """
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(root)).encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def check_isolation(model: str) -> Isolation:
@@ -223,7 +249,12 @@ def check_isolation(model: str) -> Isolation:
 
 
 def ask(
-    arm: Arm, question: Question, model: str, max_turns: int, out: Path
+    arm: Arm,
+    question: Question,
+    model: str,
+    max_turns: int,
+    out: Path,
+    tools: str = TOOLS,
 ) -> Run:
     """One isolated agent session over a fresh copy of the arm."""
     with tempfile.TemporaryDirectory(prefix="hrono-eval-") as scratch:
@@ -238,9 +269,9 @@ def ask(
                 model,
                 *ISOLATION,
                 "--tools",
-                TOOLS,
+                tools,
                 "--allowed-tools",
-                TOOLS,
+                tools,
                 "--max-turns",
                 str(max_turns),
                 "--system-prompt",
@@ -368,6 +399,16 @@ def page_source(kind: str, relative: str, text: str) -> str | None:
     return lines[0][2:].strip()
 
 
+def resolve(arm: Arm, run: Run) -> Run:
+    """Cite the repository file, not the export page that carries it.
+
+    An agent in an export rightly cites the section page it read
+    (``<topic>/src-hrono-x-py-12.md``); that page's header names the
+    repository file, which is what the question's settler is.
+    """
+    return replace(run, cited=tuple(_cited_file(arm, c) for c in run.cited))
+
+
 def grade(question: Question, run: Run) -> Grade:
     """Was the answer right, did it cite a settler, and how far was it."""
     if question.kind == "none":
@@ -408,9 +449,13 @@ def render_report(
     runs: Sequence[Run],
     isolation: Isolation,
     model: str,
+    tools: str = TOOLS,
 ) -> str:
     """The whole report as markdown: totals, per question, failed paths."""
-    by_key = {(run.arm, run.question): run for run in runs}
+    roots = {arm.name: arm for arm in arms}
+    by_key = {
+        (run.arm, run.question): resolve(roots[run.arm], run) for run in runs
+    }
     graded = {
         key: grade(next(q for q in questions if q.id == key[1]), run)
         for key, run in by_key.items()
@@ -418,7 +463,7 @@ def render_report(
     out = [
         "# Export evaluation",
         "",
-        f"Agent: Claude Code `{model}`, headless, tools {TOOLS}. "
+        f"Agent: Claude Code `{model}`, headless, tools {tools}. "
         f"{len(questions)} questions x {len(arms)} arms.",
         "",
         "## Totals",
@@ -430,6 +475,7 @@ def render_report(
     ]
     for arm in arms:
         out.append(_totals_row(arm, questions, by_key, graded))
+    out += _twins(arms)
     out += ["", render_isolation(isolation), "", "## Per question", ""]
     for arm in arms:
         out += [
@@ -448,6 +494,17 @@ def render_report(
                 f"| {_num(g.depth)} | {len(run.tools)} | {run.tokens} "
                 f"| {run.seconds} |"
             )
+        out += ["", "Pages opened, in order:", ""]
+        out += [
+            f"- {q.id}: "
+            + (
+                " > ".join(
+                    _short(p.path) for p in by_key[(arm.name, q.id)].pages
+                )
+                or "none"
+            )
+            for q in questions
+        ]
         out.append("")
     out += ["## Failed paths", ""]
     failures = [
@@ -487,9 +544,9 @@ def render_isolation(isolation: Isolation) -> str:
             f"## Isolation: {verdict}",
             "",
             f"Every session ran in a fresh temporary copy of its arm, outside "
-            f"any repository, with `{' '.join(isolation.flags)}`, tools "
-            f"`{TOOLS}`, a replaced system prompt, and no CLAUDE_CODE_* "
-            f"session variables inherited.",
+            f"any repository, with `{' '.join(isolation.flags)}`, only the "
+            "tools named above, a replaced system prompt, and none of the "
+            "calling session's CLAUDE_CODE_* variables.",
             "",
             f"Probe: a CLAUDE.md naming the canary `{CANARY}` was planted in "
             f"the directory above the working directory, and the operator's "
@@ -535,6 +592,46 @@ def _totals_row(
     )
 
 
+def _twins(arms: Sequence[Arm]) -> list[str]:
+    groups: dict[str, list[str]] = {}
+    for arm in arms:
+        groups.setdefault(arm.fingerprint, []).append(arm.name)
+    return [
+        f"\n{' and '.join(names)} are byte-identical folders: what differs "
+        "between them is the agent's own variance."
+        for names in groups.values()
+        if len(names) > 1
+    ]
+
+
+def _short(path: str) -> str:
+    """The page's own name, with its directory cut to its id suffix."""
+    parts = Path(path).parts
+    if len(parts) < 2:
+        return path
+    return f"{parts[-2].rsplit('-', 1)[-1]}/{parts[-1]}"
+
+
+def _ask_all(
+    arms: Sequence[Arm], questions: Sequence[Question], args: argparse.Namespace
+) -> list[Run]:
+    tasks = [(arm, q) for arm in arms for q in questions]
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        return list(
+            pool.map(
+                lambda task: ask(
+                    task[0],
+                    task[1],
+                    args.model,
+                    args.max_turns,
+                    args.out,
+                    args.tools,
+                ),
+                tasks,
+            )
+        )
+
+
 def _probe(
     prompt: str, model: str, flags: Sequence[str]
 ) -> tuple[str, list[dict]]:
@@ -577,6 +674,17 @@ def _probe(
     return str(result.get("result", "")), events
 
 
+def _cited_file(arm: Arm, cited: str) -> str:
+    if arm.kind != "export":
+        return cited
+    relative = cited.split("/corpus/", 1)[-1]
+    path = arm.root / relative
+    if not path.is_file():
+        return cited
+    source = page_source(arm.kind, relative, path.read_text(errors="replace"))
+    return source or cited
+
+
 def _page(corpus: Path, kind: str, file_path: str) -> Page | None:
     path = Path(file_path)
     path = path if path.is_absolute() else corpus / path
@@ -608,10 +716,20 @@ def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
         "--questions", type=Path, default=HERE / "questions.toml"
     )
     parser.add_argument("--model", default="sonnet")
+    parser.add_argument(
+        "--tools",
+        default=TOOLS,
+        help="the agent's tools; Read,Glob leaves it nothing but to walk",
+    )
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--max-turns", type=int, default=40)
     parser.add_argument("--only", help="comma-separated question ids")
     parser.add_argument("--allow-unisolated", action="store_true")
+    parser.add_argument(
+        "--rerender",
+        action="store_true",
+        help="grade and report the sessions already under --out, run none",
+    )
     return parser.parse_args(argv)
 
 

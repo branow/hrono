@@ -30,16 +30,25 @@ The raw folder is the baseline: the same files the tree ingested, at the same
 commit, so both sides of the comparison hold the same facts. A folder with a
 `root.md` is treated as an export, anything else as raw.
 
-`--only q01,q05` runs a subset, `--model` picks the agent (default `sonnet`),
-`--jobs` how many sessions run at once (default 4).
+`--tools Read,Glob` takes Grep away, so the agent has nothing to do but walk
+the folder: that measures the export's navigation rather than its
+searchability. `--only q01,q05` runs a subset, `--model` picks the agent
+(default `sonnet`),
+`--jobs` how many sessions run at once (default 4). `--rerender` grades and
+reports the sessions already recorded under `--out` again without running any,
+so a corrected question or grading rule costs nothing to apply.
 
 ## What it writes
 
-Under `--out`: `report.md`, `runs.jsonl` (one graded record per session) and
+Under `--out`: `report.md`, `runs.jsonl` (one record per session),
+`isolation.json` (the probe's replies) and
 `transcripts/<arm>/<question>.jsonl`, the raw stream of every session.
 
-The report has a totals row per folder, a row per question per folder, and the
-path every failed question took. Per session it counts:
+The report has a totals row per folder, a row per question per folder with
+the pages it opened in order, and the full path every failed question took.
+Two hop limits over a tree already within the smaller one export the same
+folder; the report names such twins, and whatever differs between them is the
+agent's own run-to-run variance. Per session it counts:
 
 - **reads** — `Read` calls on files in the folder, in order. Glob and Grep are
   allowed in every arm and listed under tools, so a folder that is searched

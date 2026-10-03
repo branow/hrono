@@ -77,7 +77,7 @@ sources = ["src/hrono/cluster/repair.py"]
 id = "q10"
 kind = "deep"
 question = "When a changed leaf is propagated upward, how many judge votes are asked for, and how is the verdict decided?"
-expect = ["majority"]
+expect = ["majority", "median"]  # _majority takes the median vote
 sources = ["src/hrono/summarize/propagate.py"]
 
 [[question]]
@@ -92,14 +92,14 @@ id = "q12"
 kind = "shallow"
 question = "What is the target size in bytes of a passage, the unit recall injects?"
 expect = ["800"]
-sources = ["src/hrono/ingest/split/constants.py"]
+sources = ["src/hrono/ingest/split/constants.py", "GLOSSARY.md", "CONTRIBUTING.md"]
 
 [[question]]
 id = "q13"
 kind = "deep"
 question = "What section size budget, in bytes, applies to files in the data category (as opposed to code and docs)?"
 expect = ["2048", "2 kb", "2kb"]
-sources = ["src/hrono/ingest/split/constants.py"]
+sources = ["src/hrono/ingest/split/constants.py", "GLOSSARY.md"]
 
 [[question]]
 id = "q14"

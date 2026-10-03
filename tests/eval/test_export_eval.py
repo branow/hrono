@@ -6,7 +6,10 @@ sessions themselves are run by hand.
 """
 
 import importlib.util
+import json
+import shutil
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -333,3 +336,97 @@ def test_reads_to_the_settler_skip_a_section_that_does_not_settle(
     )
 
     assert graded.reads_to_answer == 3
+
+
+def test_a_rerender_grades_recorded_sessions_without_an_agent(
+    export: Path, tmp_path: Path
+) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    twin = tmp_path / "twin"
+    shutil.copytree(export, twin)
+    other = tmp_path / "other"
+    shutil.copytree(export, other)
+    (other / "root.md").write_text("# Root\n\nShallower.\n")
+    arms = [
+        run.Arm("a", export, "export"),
+        run.Arm("b", twin, "export"),
+        run.Arm("c", other, "export"),
+    ]
+    reply = "ANSWER: 40\nSOURCE: src/a.py"
+    reads = ["root.md", "topic-1/brief.md", "topic-1/src-a-py-3.md"]
+    sessions = [
+        run.build_run(arm, "q01", _session(export, reads, reply), export, 1.0)
+        for arm in arms
+    ]
+    (out / "runs.jsonl").write_text(
+        "".join(json.dumps(asdict(s)) + "\n" for s in sessions)
+    )
+    isolation = run.Isolation(
+        ("--safe-mode",), "NONE", run.CANARY, (), (), verified=True
+    )
+    (out / "isolation.json").write_text(json.dumps(asdict(isolation)))
+    questions = tmp_path / "questions.toml"
+    questions.write_text(
+        '[[question]]\nid = "q01"\nkind = "deep"\nquestion = "Width?"\n'
+        'expect = ["40"]\nsources = ["src/a.py"]\n'
+    )
+
+    code = run.main(
+        [
+            "--out",
+            str(out),
+            "--arm",
+            f"a={export}",
+            "--arm",
+            f"b={twin}",
+            "--arm",
+            f"c={other}",
+            "--questions",
+            str(questions),
+            "--rerender",
+        ]
+    )
+
+    report = (out / "report.md").read_text()
+    assert code == 0
+    assert "| a | 1/1 | 1/1 | 1/1 | 3.0 | 3.0 | 1/1 |" in report
+    assert "a and b are byte-identical folders" in report
+    assert report.count("byte-identical") == 1
+    assert "- q01: root.md > 1/brief.md > 1/src-a-py-3.md" in report
+    assert "## Isolation: verified" in report
+
+
+def test_folders_that_differ_by_one_byte_are_not_twins(export: Path) -> None:
+    before = run.fingerprint(export)
+    (export / "topic-1" / "brief.md").write_text("# Topic\n\nBrief!\n")
+
+    assert run.fingerprint(export) != before
+
+
+@pytest.mark.parametrize(
+    ("cited", "correct"),
+    [
+        ("topic-1/src-a-py-3.md", True),
+        ("/tmp/hrono-eval-x/corpus/topic-1/src-a-py-3.md", True),
+        ("topic-1/src-b-py-4.md", False),
+        ("root.md", False),
+    ],
+    ids=["page", "absolute-page", "other-page", "brief"],
+)
+def test_an_export_page_cited_counts_as_the_file_it_carries(
+    export: Path, cited: str, correct: bool
+) -> None:
+    arm = run.Arm("levels-2", export, "export")
+    session = run.build_run(
+        arm,
+        "q1",
+        _session(export, ["root.md"], f"ANSWER: 40\nSOURCE: {cited}"),
+        export,
+        1.0,
+    )
+    isolation = run.Isolation((), "", "", (), (), verified=True)
+
+    report = run.render_report([arm], [_question()], [session], isolation, "m")
+
+    assert ("| levels-2 | 1/1 |" in report) is correct
