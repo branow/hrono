@@ -169,10 +169,13 @@ def test_an_unscoped_tree_holding_the_source_is_not_told_it_names_it(
 def test_deleting_a_connection_names_the_models_that_stop_working(
     built: sqlite3.Connection,
 ) -> None:
-    (hit,) = impact.of_delete(built, "connections", "cc")
+    found = impact.of_delete(built, "connections", "cc")
 
+    (hit,) = [h for h in found if "nothing goes stale" in h.reason]
     assert hit.stale.nodes == 0
     assert hit.reason.endswith("haiku, sonnet")
+    # and the registry's own verdict: both models now call through nothing
+    assert any("which is not registered" in h.reason for h in found)
 
 
 def test_deleting_something_nothing_uses_strands_nothing(
@@ -197,5 +200,47 @@ def test_deleting_the_only_model_of_a_role_says_the_build_is_refused(
         if "role brief:" in h.reason
     ]
 
-    assert hit.tree == "*" and "a build is refused" in hit.reason
-    assert registry_store.get(conn, "models", "only") is not None  # rolled back
+    assert hit.tree == "*" and "a build or sync is refused" in hit.reason
+    assert registry_store.get(conn, "models", "only") is not None
+
+
+def test_deleting_the_only_prompt_of_a_role_says_the_role_is_refused(
+    conn: sqlite3.Connection,
+) -> None:
+    _register(conn, "prompts", name="mine", role="judge", template=TEMPLATE)
+
+    found = impact.of_delete(conn, "prompts", "mine")
+
+    (hit,) = [h for h in found if h.tree == "*" and "role judge" in h.reason]
+    assert "a build or sync is refused" in hit.reason
+
+
+def test_deleting_the_only_source_says_the_build_is_refused(
+    conn: sqlite3.Connection,
+) -> None:
+    _register(conn, "sources", name="s1", type="git", url="x", auth={})
+
+    found = impact.of_delete(conn, "sources", "s1")
+
+    assert [h.reason for h in found] == [
+        "after this, a build or sync is refused: no source is registered "
+        "to read"
+    ]
+
+
+def test_the_delete_question_never_writes_to_the_database(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """A read page: another connection holding the write lock must not make
+    it wait or fail."""
+    _register(conn, "sources", name="s1", type="git", url="x", auth={})
+    other = sqlite3.connect(tmp_path / "hrono.db", isolation_level=None)
+    other.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("PRAGMA busy_timeout = 0")
+        found = impact.of_delete(conn, "sources", "s1")
+    finally:
+        other.execute("ROLLBACK")
+        other.close()
+
+    assert found

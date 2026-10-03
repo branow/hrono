@@ -138,12 +138,18 @@ def of_delete(
     rewrites nothing and breaks the models that call through it. A tree's
     own delete is `trees._before_delete`'s note, not a count (#167).
     """
+    return _removal(conn, collection, name) + _unserved(conn, collection, name)
+
+
+def _removal(
+    conn: sqlite3.Connection, collection: str, name: str
+) -> tuple[TreeImpact, ...]:
     if collection == "sources":
         return _source_removal(conn, name)
     if collection == "models":
-        return _model_removal(conn, name) + _unserved(conn, collection, name)
+        return _model_removal(conn, name)
     if collection == "prompts":
-        return _prompt_removal(conn, name) + _unserved(conn, collection, name)
+        return _prompt_removal(conn, name)
     if collection == "connections":
         return _connection_removal(conn, name)
     return ()
@@ -244,28 +250,19 @@ def _unserved(
 ) -> tuple[TreeImpact, ...]:
     """What the registry would newly lack for a build once this row is gone.
 
-    Asks `completeness.gaps` before and after, with the row removed inside a
-    savepoint that is rolled back, so the answer is the resolvers' own — "no
-    model serves this role" and "two models claim it" included.
+    Asks `completeness.gaps` with and without the row — the second over a
+    private copy, so this read page never takes the writer's lock — and the
+    answer is the resolvers' own: "no model serves this role" and "two models
+    claim it" included.
     """
     before = {(g.section, g.says) for g in completeness.gaps(conn)}
-    conn.execute("SAVEPOINT unserved")
-    try:
-        # not `store.delete`: it commits, and this must not outlive the call
-        conn.execute(
-            "DELETE FROM registry WHERE collection = ? AND name = ?",
-            (collection, name),
-        )
-        after = completeness.gaps(conn)
-    finally:
-        conn.execute("ROLLBACK TO unserved")
-        conn.execute("RELEASE unserved")
+    after = completeness.gaps(conn, without=(collection, name))
     return tuple(
         TreeImpact(
             tree="*",
             stale=Stale(sections=0, nodes=0, levels=()),
             ops=(),
-            reason=f"after this, a build is refused: {gap.says}",
+            reason=f"after this, a build or sync is refused: {gap.says}",
         )
         for gap in after
         if (gap.section, gap.says) not in before

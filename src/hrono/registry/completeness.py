@@ -34,8 +34,18 @@ class Gap:
     says: str
 
 
-def gaps(conn: sqlite3.Connection) -> tuple[Gap, ...]:
-    """Everything a build or a sync would refuse over, in the order met."""
+def gaps(
+    conn: sqlite3.Connection, without: tuple[str, str] | None = None
+) -> tuple[Gap, ...]:
+    """Everything a build or a sync would refuse over, in the order met.
+
+    ``without`` is a (collection, name) row to pretend is gone. The question
+    is asked of an in-memory copy of the registry, never by deleting and
+    rolling back: the caller is a read page and must not take the writer's
+    lock.
+    """
+    if without is not None:
+        conn = _registry_without(conn, without)
     found: list[Gap] = []
     if not store.list_all(conn, "sources"):
         found.append(Gap("sources", "no source is registered to read"))
@@ -73,3 +83,27 @@ def _unreachable(conn: sqlite3.Connection) -> list[Gap]:
                 )
             )
     return found
+
+
+def _registry_without(
+    conn: sqlite3.Connection, without: tuple[str, str]
+) -> sqlite3.Connection:
+    """A private in-memory registry holding every row but ``without``."""
+    copy = sqlite3.connect(":memory:")
+    copy.row_factory = sqlite3.Row
+    copy.execute(
+        "CREATE TABLE registry (collection TEXT, name TEXT, config TEXT, "
+        "key_id INTEGER, created_at TEXT, updated_at TEXT, "
+        "is_default INTEGER, content_hash TEXT)"
+    )
+    rows = conn.execute(
+        "SELECT collection, name, config, key_id, created_at, updated_at, "
+        "is_default, content_hash FROM registry "
+        "WHERE NOT (collection = ? AND name = ?)",
+        without,
+    ).fetchall()
+    copy.executemany(
+        "INSERT INTO registry VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [tuple(r) for r in rows],
+    )
+    return copy
