@@ -159,7 +159,10 @@ def total(
 def for_jobs(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
     """One job's calls and every descendant's, as one group; None if none."""
     groups = _of_job(conn, job_id, "'job'")
-    return groups[0].view() if groups else None
+    if not groups:
+        return None
+    groups[0].key = job_id
+    return groups[0].view()
 
 
 def for_job_by_role(
@@ -263,10 +266,10 @@ def _amount(row: sqlite3.Row, price: Price | None) -> float | None:
     """What these calls cost, or None when that cannot be known.
 
     A call that SUCCEEDED and recorded no tokens was paid for at a price
-    nobody wrote down (a remote embedding batch, today), so its cost is
-    unknown — not zero. A FAILED call with no tokens is counted as nothing:
-    a refused request is not billed, and treating it as unknown would make
-    every run that ever met an error unpriceable for good.
+    nobody wrote down (an openai-compatible server that returns no usage),
+    so its cost is unknown — not zero. A FAILED call with no tokens is
+    counted as nothing: a refused request is not billed, and treating it as
+    unknown would make every run that ever met an error unpriceable for good.
     """
     if row["untold"]:
         return None

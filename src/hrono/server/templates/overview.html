@@ -125,7 +125,7 @@
       <p class="hint">Nothing yet. Model calls are counted here as runs make them.</p>
       {% endif %}
       {% if last %}
-      <p class="mt-2 row"><span class="faint">Last run</span> {% if last.spend %}{{ money(last.spend) }} <span class="chip plain num">{{ last.spend.tokens }}</span>{% else %}{{ unrecorded(last.before_ledger) }}{% endif %}</p>
+      <p class="mt-2 row"><span class="faint">Last run</span> {% if last.spend %}{{ money(last.spend) }} <span class="chip plain num">{{ last.spend.tokens }}</span>{% else %}{{ unrecorded(last.before_ledger, last.cost) }}{% endif %}</p>
       {% endif %}
     </div>
   </section>

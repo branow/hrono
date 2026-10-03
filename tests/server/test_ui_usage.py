@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from hrono.jobs import store as job_store
 from hrono.jobs.worker import enqueue
 from hrono.llm.ledger import Call, record
 from hrono.server.app import create_app
+from hrono.server.ui.usage import DAYS
 
 KEY = Fernet.generate_key()
 SONNET = "claude-sonnet-5-20260101"
@@ -240,3 +242,85 @@ def test_an_empty_tree_says_nothing_was_spent(panel: Panel) -> None:
     panel.as_("reader")
 
     assert "Nothing has been spent yet" in panel.get("/ui/usage?tree=default")
+
+
+def test_a_run_from_before_the_ledger_keeps_the_tokens_it_knows(
+    panel: Panel,
+) -> None:
+    panel.as_("reader")
+    panel.build()
+    with panel.db.write() as conn:
+        job_store.insert(
+            conn,
+            "old-run",
+            None,
+            "default",
+            "maintain",
+            "{}",
+            "2020-01-01T00:00:00+00:00",
+        )
+        job_store.set_status(
+            conn,
+            "old-run",
+            "succeeded",
+            None,
+            "2020-01-01T00:05:00+00:00",
+            result='{"tokens": {"input": 1234, "output": 56}}',
+        )
+    panel.run("sync-tree")
+
+    run = panel.get("/ui/jobs/old-run?tree=default")
+    head = run.split('id="run"')[0]
+    section = run.split('id="spend"')[1].split("</section>")[0]
+
+    for part in (head, section):
+        assert "1,234 in, 56 out" in part
+        assert 'data-spend="unknown">cost not recorded' in part
+        assert "ran before spend" not in part
+    home = panel.get("/ui?tree=default")
+    spent = home.split('id="spent"')[1].split("</section>")[0]
+    assert "1,234 in, 56 out" in spent and "cost not recorded" in spent
+
+
+def test_over_time_lists_the_newest_days_oldest_first_busiest_at_full(
+    panel: Panel,
+) -> None:
+    panel.as_("reader")
+    days = DAYS + 5
+    run = panel.run()
+    for n in range(days):
+        panel.call(run, tokens=1_000 * (n + 1))
+    start = date(2026, 8, 1)
+    with panel.db.write() as conn:
+        for n, row in enumerate(
+            conn.execute("SELECT id FROM llm_calls ORDER BY id").fetchall()
+        ):
+            day = start + timedelta(days=n)
+            conn.execute(
+                "UPDATE llm_calls SET created_at = ? WHERE id = ?",
+                (f"{day}T10:00:00+00:00", row["id"]),
+            )
+
+    page = panel.get("/ui/usage?tree=default")
+    shown = re.findall(r'data-day="([^"]+)"', page)
+    widths = re.findall(r'<span style="width:(\d+)%">', page)
+
+    assert len(shown) == DAYS
+    assert shown == sorted(shown)
+    last = start + timedelta(days=days - 1)
+    first = last - timedelta(days=DAYS - 1)
+    assert shown[-1] == str(last) and shown[0] == str(first)
+    assert widths[-1] == "100" and int(widths[0]) < int(widths[-1])
+
+
+def test_a_job_api_usage_is_keyed_by_the_job(panel: Panel) -> None:
+    panel.as_("reader")
+    run = panel.run()
+    panel.call(run)
+
+    body = panel.client.get(
+        f"/jobs/{run}",
+        headers={"Authorization": f"Bearer {panel.tokens['reader']}"},
+    ).json()
+
+    assert body["usage"]["key"] == run

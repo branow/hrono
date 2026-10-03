@@ -13,7 +13,7 @@
     <span class="chip">started {{ job.started }}</span>
     <span class="chip">{{ job.took }}</span>
     {% if job.scope.name %}<span class="chip">over {{ job.scope.name }}</span>{% endif %}
-    {% if job.spend %}{{ money(job.spend) }}{% endif %}
+    {% if job.spend %}{{ money(job.spend) }}{% elif job.cost %}{{ unrecorded(job.before_ledger, job.cost) }}{% endif %}
     <span class="chip plain mono">{{ job.short_id }}</span>
   </p>
 </div>
@@ -99,7 +99,7 @@
       {% elif job.live %}
       <p class="hint">Nothing spent yet.</p>
       {% else %}
-      <p class="hint">{{ unrecorded(job.before_ledger) }}</p>
+      <p class="hint">{{ unrecorded(job.before_ledger, job.cost) }}</p>
       {% endif %}
     </div>
   </section>

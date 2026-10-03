@@ -174,7 +174,8 @@ def _register(
     )
     with conn:
         conn.execute(
-            "UPDATE jobs SET status = 'succeeded', result = '{}' "
+            "UPDATE jobs SET status = 'succeeded', result = '{}', "
+            "started_by = 'a-person-with-a-rather-long-name' "
             "WHERE id = 'done-1'"
         )
         conn.execute(

@@ -340,4 +340,9 @@ def test_home_reads_only_the_runs_it_shows(browser: Browser) -> None:
     browser.conn.set_trace_callback(None)  # type: ignore[attr-defined]
 
     asked = [s for s in statements if "FROM jobs" in s]
-    assert len(asked) < 40, f"{len(asked)} statements read jobs"
+    unbounded = [
+        s
+        for s in asked
+        if "LIMIT" not in s and "WHERE" not in s.split("FROM jobs")[1]
+    ]
+    assert asked and not unbounded, f"reads every job: {unbounded[:1]}"
