@@ -173,3 +173,25 @@ def test_a_type_with_no_validator_registers_without_a_reach_check() -> None:
     # config is data you PUT: a reader hrono cannot probe yet is still a
     # legitimate declaration, and its sync fails loudly later if it is wrong.
     validate_source({"name": "wiki", "type": "unprobed"}, None)
+
+
+def test_a_git_url_that_starts_with_a_dash_is_a_422_naming_the_field(
+    client: tuple[TestClient, dict[str, str]],
+) -> None:
+    # E020: `--upload-pack=<cmd>` would reach git as an option. Refused at the
+    # boundary: nothing stored, and the hook (which runs git) never reached.
+    opened, admin = client
+    response = opened.post(
+        "/sources",
+        json={
+            "name": "evil",
+            "type": "git",
+            "url": "--upload-pack=touch /tmp/x",
+            "auth": {"method": "none"},
+        },
+        headers=admin,
+    )
+
+    assert response.status_code == 422
+    assert "url" in str(response.json()["error"]["details"])
+    assert opened.get("/sources/evil", headers=admin).status_code == 404

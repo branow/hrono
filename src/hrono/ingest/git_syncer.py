@@ -44,7 +44,7 @@ def git_sync(config: dict[str, object], cache: Path, timeout: float) -> str:
             cache.parent.mkdir(parents=True, exist_ok=True)
             try:
                 _run(
-                    ["clone", clean_url, str(cache)],
+                    ["clone", "--", clean_url, str(cache)],
                     name,
                     None,
                     env,

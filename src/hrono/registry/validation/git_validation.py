@@ -60,7 +60,7 @@ def _run(
 ) -> tuple[int, str]:
     try:
         completed = subprocess.run(
-            ["git", *config_args, "ls-remote", url],
+            ["git", *config_args, "ls-remote", "--", url],
             capture_output=True,
             text=True,
             timeout=timeout,

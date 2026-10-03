@@ -149,6 +149,16 @@ def _reject_reserved(value: str) -> str:
     return value
 
 
+def _reject_option_url(value: str) -> str:
+    """A leading "-" would reach git as an option, not a location."""
+    if value.lstrip().startswith("-"):
+        raise ValueError(
+            "a repository URL cannot start with '-': git would read it "
+            "as an option"
+        )
+    return value
+
+
 class GitSource(BaseModel):
     name: RegistryName = _name()
     type: Literal["git"] = Field(
@@ -173,6 +183,7 @@ class GitSource(BaseModel):
     )
 
     _not_reserved = field_validator("name")(_reject_reserved)
+    _not_option = field_validator("url")(_reject_option_url)
 
 
 class GithubUserSource(BaseModel):
