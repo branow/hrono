@@ -619,9 +619,9 @@ def _members(
             "FROM node_members m JOIN sections s ON s.id = m.section_id "
             "LEFT JOIN contents c ON c.content_hash = s.content_hash "
             "LEFT JOIN condensations d ON d.content_hash = s.content_hash "
-            "AND d.model_name = COALESCE(NULLIF(?, ''), "
-            "(SELECT MIN(x.model_name) FROM condensations x "
-            "WHERE x.content_hash = s.content_hash)) "
+            "AND d.model_name = (SELECT x.model_name FROM condensations x "
+            "WHERE x.content_hash = s.content_hash "
+            "ORDER BY x.model_name = ? DESC, x.model_name LIMIT 1) "
             f"WHERE m.node_id = ? AND s.id IN ({','.join('?' * len(wanted))})",  # noqa: S608
             (model, node_id, *wanted),
         ).fetchall()
