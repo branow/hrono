@@ -44,8 +44,16 @@ def gaps(
     rolling back: the caller is a read page and must not take the writer's
     lock.
     """
-    if without is not None:
-        conn = _registry_without(conn, without)
+    if without is None:
+        return _gaps(conn)
+    copy = _registry_without(conn, without)
+    try:
+        return _gaps(copy)
+    finally:
+        copy.close()
+
+
+def _gaps(conn: sqlite3.Connection) -> tuple[Gap, ...]:
     found: list[Gap] = []
     if not store.list_all(conn, "sources"):
         found.append(Gap("sources", "no source is registered to read"))
@@ -88,22 +96,28 @@ def _unreachable(conn: sqlite3.Connection) -> list[Gap]:
 def _registry_without(
     conn: sqlite3.Connection, without: tuple[str, str]
 ) -> sqlite3.Connection:
-    """A private in-memory registry holding every row but ``without``."""
+    """A private in-memory registry holding every row but ``without``.
+
+    Its table is created from the DDL the real database holds, so a column a
+    later migration adds is in the copy without anyone remembering to say so.
+    The caller closes it.
+    """
+    ddl = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' "
+        "AND name = 'registry'"
+    ).fetchone()
     copy = sqlite3.connect(":memory:")
     copy.row_factory = sqlite3.Row
-    copy.execute(
-        "CREATE TABLE registry (collection TEXT, name TEXT, config TEXT, "
-        "key_id INTEGER, created_at TEXT, updated_at TEXT, "
-        "is_default INTEGER, content_hash TEXT)"
-    )
+    copy.execute(ddl[0])
     rows = conn.execute(
-        "SELECT collection, name, config, key_id, created_at, updated_at, "
-        "is_default, content_hash FROM registry "
-        "WHERE NOT (collection = ? AND name = ?)",
+        "SELECT * FROM registry WHERE NOT (collection = ? AND name = ?)",
         without,
     ).fetchall()
-    copy.executemany(
-        "INSERT INTO registry VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [tuple(r) for r in rows],
-    )
+    if rows:
+        marks = ", ".join("?" * len(rows[0]))
+        names = ", ".join(rows[0].keys())
+        copy.executemany(
+            f"INSERT INTO registry ({names}) VALUES ({marks})",
+            [tuple(r) for r in rows],
+        )
     return copy

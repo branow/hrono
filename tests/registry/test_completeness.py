@@ -8,6 +8,7 @@ ignored.
 
 from __future__ import annotations
 
+import gc
 import json
 import sqlite3
 from collections.abc import Iterator
@@ -119,3 +120,42 @@ def test_a_role_with_no_prompt_is_reported(conn: sqlite3.Connection) -> None:
     assert _said(conn) == [
         "role judge (needed by sync): no judge prompt configured"
     ]
+
+
+def test_the_delete_copy_has_every_column_the_real_registry_has(
+    conn: sqlite3.Connection,
+) -> None:
+    """A migration that adds a registry column must reach the copy.
+
+    The copy used to restate the table by hand, so a ninth column would have
+    left the delete preview reading a registry the real one no longer was.
+    """
+    _complete(conn)
+    conn.execute("ALTER TABLE registry ADD COLUMN later TEXT")
+    conn.execute("UPDATE registry SET later = 'kept'")
+
+    copy = completeness._registry_without(conn, ("sources", "a"))
+    try:
+        real = [r["name"] for r in conn.execute("PRAGMA table_info(registry)")]
+        theirs = [
+            r["name"] for r in copy.execute("PRAGMA table_info(registry)")
+        ]
+        rows = copy.execute("SELECT collection, later FROM registry").fetchall()
+    finally:
+        copy.close()
+
+    assert theirs == real
+    assert "later" in theirs
+    assert {r["later"] for r in rows} == {"kept"}
+    assert "sources" not in {r["collection"] for r in rows}
+
+
+def test_the_delete_preview_closes_its_copy(
+    conn: sqlite3.Connection, recwarn: pytest.WarningsRecorder
+) -> None:
+    _complete(conn)
+
+    completeness.gaps(conn, without=("connections", "cc"))
+    gc.collect()
+
+    assert not [w for w in recwarn if issubclass(w.category, ResourceWarning)]
