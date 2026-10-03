@@ -460,3 +460,17 @@ def test_a_section_parked_only_in_another_tree_is_not_ingested_here(
 
     assert "Not ingested" in html
     assert ">parked</span>" not in html
+
+
+def test_a_section_filed_only_in_another_tree_is_not_ingested_here(
+    panel: Panel,
+) -> None:
+    file_in_other_tree(panel, "f7.txt")
+    panel.conn.execute("DELETE FROM pending WHERE tree = ?", (TREE,))
+    panel.conn.commit()
+    leave_every_source_out(panel)
+
+    html = page(panel, "files", path="f7.txt")
+
+    assert "Not ingested" in html
+    assert "#section-" not in html
