@@ -239,3 +239,46 @@ def test_write_succeeds_when_provider_accepts_key(
         "/connections", json=anthropic(), headers=harness.headers
     )
     assert response.status_code == 201
+
+
+def test_a_rejection_carries_the_providers_reason() -> None:
+    with pytest.raises(ValidationFailed) as caught:
+        validate_connection(
+            anthropic(), run=lambda url, key, t: (401, "invalid x-api-key")
+        )
+    assert str(caught.value) == "authentication failed: invalid x-api-key"
+
+
+def test_a_reason_that_echoes_the_key_is_masked() -> None:
+    with pytest.raises(ValidationFailed) as caught:
+        validate_connection(
+            anthropic(),
+            run=lambda url, key, t: (401, f"bad key {key} given"),
+        )
+    assert API_KEY not in str(caught.value)
+    assert "bad key *** given" in str(caught.value)
+
+
+def test_the_real_request_reads_the_reason_off_the_providers_answer() -> None:
+    """Through the real `_get`, against a server that answers as one does."""
+    from http.server import BaseHTTPRequestHandler
+
+    from tests.stub_server import serving
+
+    class Rejects(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            body = (
+                b'{"type":"error","error":{"type":"authentication_error",'
+                b'"message":"invalid x-api-key"}}'
+            )
+            self.send_response(401)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            return
+
+    with serving(Rejects) as base, pytest.raises(ValidationFailed) as caught:
+        validate_connection(anthropic(endpoint=base))
+    assert str(caught.value) == "authentication failed: invalid x-api-key"

@@ -29,7 +29,8 @@ _DEFAULT_ENDPOINT = "https://api.anthropic.com"
 _OPENAI_ENDPOINT = "https://api.openai.com"
 _BEARER = ("openai", "openai-compatible")
 
-Runner = Callable[[str, str, float], int]
+Reply = int | tuple[int, str]
+Runner = Callable[[str, str, float], Reply]
 Probe = Callable[[], bool]
 
 
@@ -73,12 +74,7 @@ def _validate_anthropic(
     key = str(config["auth"]["key"])  # type: ignore[index]
     endpoint = config.get("endpoint") or _DEFAULT_ENDPOINT
     url = str(endpoint).rstrip("/") + "/v1/models"
-    status = run(url, key, timeout)
-    if status == 200:
-        return
-    if status in (401, 403):
-        raise ValidationFailed("authentication failed")
-    raise ValidationFailed("cannot reach provider")
+    _judge(run(url, key, timeout), key)
 
 
 def _validate_openai(
@@ -111,11 +107,27 @@ def _check_models(
     auth = config.get("auth")
     key = str(auth.get("key") or "") if isinstance(auth, dict) else ""
     endpoint = config.get("endpoint") or fallback
-    status = run(api_root(str(endpoint)) + "/models", key, timeout)
+    _judge(run(api_root(str(endpoint)) + "/models", key, timeout), key)
+
+
+def _judge(reply: Reply, key: str) -> None:
+    """Accept a 200; otherwise refuse with the provider's own reason, if any.
+
+    The reason is what the provider said about the call, so a person can tell
+    a mistyped key from an expired one. The key itself is masked out of it: a
+    provider that echoes the credential must not put it on a page or in a log.
+    """
+    status, said = (reply, "") if isinstance(reply, int) else reply
     if status == 200:
         return
+    if key:
+        said = said.replace(key, "***")
     if status in (401, 403):
-        raise ValidationFailed("authentication failed")
+        raise ValidationFailed(
+            f"authentication failed: {said}"
+            if said
+            else "authentication failed"
+        )
     raise ValidationFailed("cannot reach provider")
 
 
@@ -146,7 +158,17 @@ def _cli_version() -> bool:
     return done.returncode == 0
 
 
-def _get(url: str, api_key: str, timeout: float) -> int:
+def _reason(response: httpx.Response) -> str:
+    """The message a provider's JSON error carries, or nothing."""
+    try:
+        error = response.json()["error"]
+        said = error["message"] if isinstance(error, dict) else error
+    except (ValueError, KeyError, TypeError):
+        return ""
+    return said.strip()[:200] if isinstance(said, str) else ""
+
+
+def _get(url: str, api_key: str, timeout: float) -> Reply:
     try:
         response = httpx.get(
             url,
@@ -155,17 +177,17 @@ def _get(url: str, api_key: str, timeout: float) -> int:
         )
     except httpx.HTTPError:
         return 0
-    return response.status_code
+    return response.status_code, _reason(response)
 
 
-def _bearer_get(url: str, api_key: str, timeout: float) -> int:
+def _bearer_get(url: str, api_key: str, timeout: float) -> Reply:
     """A plain bearer GET, which is what an openai-shaped server expects."""
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
         response = httpx.get(url, headers=headers, timeout=timeout)
     except httpx.HTTPError:
         return 0
-    return response.status_code
+    return response.status_code, _reason(response)
 
 
 _VALIDATORS: dict[str, Callable[..., None]] = {
