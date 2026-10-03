@@ -305,7 +305,9 @@ def _cipher(request: Request) -> Cipher:
 
 def context(request: Request) -> ValidationContext:
     return ValidationContext(
-        database=request.app.state.db, cipher=_cipher(request)
+        database=request.app.state.db,
+        cipher=_cipher(request),
+        cache_root=request.app.state.cache_root,
     )
 
 

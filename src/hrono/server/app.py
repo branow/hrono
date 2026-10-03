@@ -197,6 +197,7 @@ def create_app(
                 cache_root=cache_root(db_path) if owned else None,
             )
             app.state.worker = worker
+            app.state.cache_root = cache_root(db_path) if owned else None
             worker.start()
             _warm_query_encoder(database)
             yield

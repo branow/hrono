@@ -15,8 +15,13 @@ already name its ``/v1`` root. Appending one regardless probed
 from __future__ import annotations
 
 import json
+import tempfile
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
+from hrono.jobs.ops import JobContext
+from hrono.llm.client import CompletionRequest, LLMError
+from hrono.llm.providers import client_for
 from hrono.llm.urls import api_root
 from hrono.registry import store
 from hrono.registry.descriptor import ValidationContext, ValidationFailed
@@ -43,7 +48,7 @@ def validate_model(
         config,
         context,
         embed if embed is not None else _default_embed,
-        generate if generate is not None else _default_generate,
+        generate if generate is not None else _generate_in(context),
         timeout,
     )
 
@@ -154,6 +159,39 @@ def _embed_remote(
     if not data:
         raise ValidationFailed("embedding endpoint returned no vector")
     return data[0].get("embedding") or []
+
+
+def _generate_in(context: ValidationContext) -> Generate:
+    def generate(
+        config: dict[str, object],
+        connection: dict[str, object],
+        timeout: float,
+    ) -> str:
+        if str(connection.get("provider")) == "claude-code":
+            return _generate_with_cli(config, context)
+        return _default_generate(config, connection, timeout)
+
+    return generate
+
+
+def _generate_with_cli(
+    config: dict[str, object], context: ValidationContext
+) -> str:
+    """One trivial question through the same client a job would use (#107).
+
+    It goes through ``client_for`` so the probe is ledgered like any other
+    call, and runs from the directory hrono owns.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        root = context.cache_root or Path(scratch) / "cache" / "sources"
+        job = JobContext(context.database, context.cipher, cache_root=root)
+        client = client_for(job, config, "validate")
+        try:
+            return client.complete(CompletionRequest(config, "", "hi")).text
+        except LLMError as exc:
+            raise ValidationFailed(
+                f"the claude CLI failed the probe: {exc}"
+            ) from exc
 
 
 def _default_generate(

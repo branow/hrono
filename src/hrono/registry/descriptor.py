@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
@@ -51,10 +52,13 @@ class ValidationContext:
 
     A hook can read a sibling collection (e.g. resolve a referenced connection)
     through ``database`` and decrypt that row's secret with ``cipher``.
+    ``cache_root`` anchors where a subprocess LLM backend may run (#107); None
+    when the server has no database file to anchor one on.
     """
 
     database: Database
     cipher: Cipher
+    cache_root: Path | None = None
 
 
 @dataclass(frozen=True)
