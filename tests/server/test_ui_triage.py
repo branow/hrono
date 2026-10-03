@@ -279,22 +279,26 @@ def test_no_internal_ticket_numbers_reach_the_page(
     assert not re.search(r"\(#\d+", page)
 
 
-def _echo(browser: Browser) -> None:
+def _echo(browser: Browser, nth: int = 0) -> None:
+    """Settle an echo on the tree's `nth` leaf (the prompt is filed once)."""
     conn = browser.conn
     leaf = int(
         conn.execute(  # type: ignore[attr-defined]
-            "SELECT MIN(id) FROM nodes WHERE tree = ? AND level = 0", (TREE,)
+            "SELECT id FROM nodes WHERE tree = ? AND level = 0"
+            " ORDER BY id LIMIT 1 OFFSET ?",
+            (TREE, nth),
         ).fetchone()[0]
     )
     with conn:  # type: ignore[attr-defined]
-        registry_store.insert(
-            conn,  # type: ignore[arg-type]
-            "prompts",
-            "brief",
-            json.dumps({"name": "brief", "template": _default("brief")}),
-            None,
-            "t",
-        )
+        if nth == 0:
+            registry_store.insert(
+                conn,  # type: ignore[arg-type]
+                "prompts",
+                "brief",
+                json.dumps({"name": "brief", "template": _default("brief")}),
+                None,
+                "t",
+            )
         briefs.upsert(
             conn,  # type: ignore[arg-type]
             leaf,
@@ -333,3 +337,16 @@ def test_a_settled_echo_does_not_promise_a_sync(clean_tree: Browser) -> None:
 
     assert "sync" not in detail
     assert "1 needs a person" in detail
+
+
+def test_several_settled_echoes_say_need_a_person(clean_tree: Browser) -> None:
+    with clean_tree.conn:  # type: ignore[attr-defined]
+        cluster_store.add_leaf_node(
+            clean_tree.conn,  # type: ignore[arg-type]
+            TREE,
+            [(_section(clean_tree.conn, "b.md"), False, None)],  # type: ignore[arg-type]
+        )
+    _echo(clean_tree, 0)
+    _echo(clean_tree, 1)
+
+    assert "2 need a person" in _briefless_detail(clean_tree)
