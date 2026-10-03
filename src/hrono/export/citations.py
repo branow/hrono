@@ -64,9 +64,7 @@ def _cited(line: str, pages: Mapping[str, str], link: Mapping[str, str]) -> str:
     if not found:
         return line
     ranked = sorted(found, key=lambda label: (-found[label], label))
-    links = ", ".join(
-        f"[{label}]({link[label]})" for label in ranked[:_PER_LINE]
-    )
+    links = ", ".join(f"[§]({link[label]})" for label in ranked[:_PER_LINE])
     return f"{line.rstrip()} ({links})"
 
 

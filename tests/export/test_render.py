@@ -529,9 +529,9 @@ def test_a_briefs_fact_links_the_section_page_that_states_it(
         files = _files(database)
         section = next(p for p in files if p.endswith(f"-{s0}.md"))
         directory = section.rsplit("/", 1)[0]
-        assert f"[{section}]({section})" in files["root.md"]
+        assert f"[§]({section})" in files["root.md"]
         assert (
-            f"[{section}]({section.rsplit('/', 1)[1]})"
+            f"[§]({section.rsplit('/', 1)[1]})"
             in files[f"{directory}/brief.md"]
         )
     finally:
@@ -553,3 +553,29 @@ def test_an_index_summary_skips_the_sentence_that_became_the_name(
     assert "[Signing library.](signing-library-" in root
     assert "describe" not in root
     assert "— It rotates keys." in root
+
+
+@pytest.mark.parametrize(
+    ("brief_text", "kept", "dropped"),
+    [
+        ("# Root\n\nIntro.\n\n## Facts\n- TAU is 7.", "Intro.", "TAU is 7"),
+        ("## Summary\nIntro.\n\n## Facts\n- TAU is 7.", "Intro.", "TAU is 7"),
+        ("Just prose, no headings.", "Just prose", "\x00"),
+    ],
+    ids=["after-prose", "heading-first", "no-headings"],
+)
+def test_the_root_keeps_its_opening_and_leaves_the_facts_to_its_children(
+    db: tuple[Database, dict[str, int]],
+    brief_text: str,
+    kept: str,
+    dropped: str,
+) -> None:
+    # E018: the root is read first and carried on every later turn; its facts
+    # are on the children's pages.
+    database, ids = db
+    with database.connect() as conn, conn:
+        brief(conn, ids["root"], brief_text)
+    root = _files(database)["root.md"]
+    assert kept in root
+    assert dropped not in root
+    assert "## Children" in root

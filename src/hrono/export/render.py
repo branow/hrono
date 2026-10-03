@@ -116,6 +116,8 @@ def _node_markdown(
     brief: str,
 ) -> str:
     node = tree.nodes[node_id]
+    if node.children:
+        brief = _routing(brief)
     parts = [brief.rstrip()]
     if node.children:
         parts.append("## Children\n")
@@ -142,6 +144,26 @@ def _node_markdown(
         if references:
             parts.append(references)
     return "\n\n".join(parts) + "\n"
+
+
+def _routing(brief: str) -> str:
+    """An index page's opening, which says what its subtree is about.
+
+    The root is read first and the pages under it next, and every later turn
+    carries them, so their length is paid for on each turn (E018: a 24 KB root
+    made the export cost more than the raw repository). What an index page owes
+    the reader is where to go, and ``## Children`` says that; the facts under a
+    brief's own headings live in the children and their sections, so the page
+    keeps only what comes before the first heading that follows prose.
+    """
+    kept: list[str] = []
+    prose = False
+    for line in brief.splitlines():
+        if line.startswith("## ") and prose:
+            break
+        prose = prose or bool(line.strip() and not line.startswith("#"))
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def _child_entry(conn: sqlite3.Connection, child: int, title: str) -> str:

@@ -19,10 +19,10 @@ def run(text: str, pages=PAGES) -> str:
 @pytest.mark.parametrize(
     ("line", "linked"),
     [
-        ("Weights use TAU 0.70 throughout.", "[a/fusion.md](../a/fusion.md)"),
-        ("Set HRONO_HOME first.", "[a/env.md](../a/env.md)"),
-        ("Call `fuse_ranks` here.", "[a/fusion.md](../a/fusion.md)"),
-        ("The constant is 60 today.", "[a/fusion.md](../a/fusion.md)"),
+        ("Weights use TAU 0.70 throughout.", "[§](../a/fusion.md)"),
+        ("Set HRONO_HOME first.", "[§](../a/env.md)"),
+        ("Call `fuse_ranks` here.", "[§](../a/fusion.md)"),
+        ("The constant is 60 today.", "[§](../a/fusion.md)"),
     ],
     ids=["decimal", "env-name", "code-span", "number"],
 )
@@ -49,7 +49,7 @@ def test_at_most_two_sections_are_linked_best_first() -> None:
         "z.md": "HRONO_HOME TAU 0.70",
     }
     out = run("TAU 0.70 and HRONO_HOME", pages)
-    assert out.endswith("([x.md](../x.md), [z.md](../z.md))")
+    assert out.endswith("([§](../x.md), [§](../z.md))")
 
 
 @pytest.mark.parametrize(
