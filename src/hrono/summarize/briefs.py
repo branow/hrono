@@ -18,7 +18,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hrono import pins
+from hrono.llm.client import LLMError
 from hrono.summarize import shape
+from hrono.summarize.resolve import producer_model_name
 
 
 def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
@@ -120,7 +122,8 @@ def unusable(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
     The flag stored when it was written, or the CURRENT gate's verdict on its
     text — so a brief stored before a rule existed is caught by it too, and
     one that is not a brief is never fresh: the next brief pass rewrites it,
-    and only it.
+    and only it. A settled ``echoes-the-prompt`` is the exception: it is listed
+    but stays until its members, prompt or model change (E019).
     """
     return refusal(
         conn, row["node_id"], row["flagged"], row["text"], row["template"]
@@ -156,18 +159,22 @@ def _echo(
 
 
 def material(conn: sqlite3.Connection, node_id: int) -> str:
-    """What a node's brief is written from: its member condensations, or its
-    child briefs. The words a brief may share with its prompt (E019)."""
-    rows = conn.execute(
-        "SELECT d.text AS text FROM node_members m "
-        "JOIN sections s ON s.id = m.section_id "
-        "JOIN condensations d ON d.content_hash = s.content_hash "
-        "WHERE m.node_id = ? "
-        "UNION ALL SELECT b.text FROM node_children c "
-        "JOIN briefs b ON b.node_id = c.child_id WHERE c.parent_id = ?",
-        (node_id, node_id),
-    ).fetchall()
-    return "\n\n".join(row["text"] for row in rows)
+    """What a node's brief was written from: its member condensations by the
+    condense model, or its child briefs. The words a brief may share with its
+    prompt (E019).
+
+    Exactly the reduce input ``brief`` gates against: a condensation a
+    previous condense model left in the cache is not part of it, or a settled
+    echo would read as a different one and be re-paid.
+    """
+    try:
+        source = producer_model_name(conn, {}, "condense")
+    except LLMError:
+        source = ""
+    texts = member_condensations(conn, node_id, source) or child_briefs(
+        conn, node_id
+    )
+    return "\n\n".join(texts)
 
 
 def unusable_in(

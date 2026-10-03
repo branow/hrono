@@ -21,7 +21,7 @@ from hrono.summarize import briefs
 from hrono.summarize.brief import brief
 from hrono.tree.maintain import maintain
 from tests.context import job_context
-from tests.summarize.test_brief import TREE, db, job  # noqa: F401
+from tests.summarize.test_brief import MODEL, TREE, db, job  # noqa: F401
 from tests.summarize.test_shape import ECHOED, _default
 from tests.tree.test_maintain import (
     FakeCompletion,
@@ -293,3 +293,62 @@ def test_a_stubborn_echo_is_not_re_paid_until_something_it_rests_on_moves(
     third = Echoing()
     brief(job(), JobContext(db), client=third)
     assert third.calls == 4  # a moved member is the "until"
+
+
+class Writing:
+    """Answers every brief with one fixed, honest reply."""
+
+    def __init__(self, reply: str) -> None:
+        self.reply = reply
+        self.calls = 0
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.calls += 1
+        return CompletionResult(self.reply, Usage(5, 5))
+
+
+def test_a_stored_brief_in_the_prompts_vocabulary_is_fresh_and_unlisted(
+    db: Database,  # noqa: F811
+) -> None:
+    with db.write() as conn:
+        _default_prompts(conn)
+        # members that use the very words the default prompt is made of
+        conn.execute("UPDATE condensations SET text = ?", (ECHOED["brief"],))
+    first = Writing(ECHOED["brief"])
+    brief(job(), JobContext(db), client=first)
+    second = Writing(ECHOED["brief"])
+
+    brief(job(), JobContext(db), client=second)
+
+    with db.connect() as conn:
+        listed = briefs.unusable_in(conn, TREE)
+        rows = conn.execute("SELECT flagged FROM briefs").fetchall()
+    assert [r["flagged"] for r in rows] == ["", ""]
+    assert first.calls == 2
+    assert listed == ()  # read from the stored text and its material
+    assert _briefless(db) == 0
+    assert second.calls == 0
+
+
+def test_a_cached_condensation_of_another_model_is_not_the_material(
+    db: Database,  # noqa: F811
+) -> None:
+    with db.write() as conn:
+        _default_prompts(conn)
+    first = Echoing()
+    brief(job(), JobContext(db), client=first)
+    with db.write() as conn:
+        # an earlier condense model's cache: same sections, other words
+        conn.execute(
+            "INSERT INTO condensations (content_hash, model_name, text, "
+            "input_tokens, output_tokens, created_at) "
+            "SELECT content_hash, 'old-' || model_name, ?, 1, 1, created_at "
+            "FROM condensations WHERE model_name = ?",
+            (ECHOED["brief"], MODEL),
+        )
+    second = Echoing()
+
+    brief(job(), JobContext(db), client=second)
+
+    assert first.calls == 4
+    assert second.calls == 0  # still settled: the cache is not its material
