@@ -8,7 +8,9 @@ key is a `KeyMismatch` there, which is the half-rotated state.
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -137,9 +139,61 @@ def test_a_refused_rotation_leaves_the_running_key_unchanged(
         conn.close()
 
 
+class SeamDb:
+    """The injected database: a hook before each write and a probe at its end.
+
+    `before` runs as a writer asks for the lock; `at_exit` runs inside the
+    lock, as the block ends and just before it commits.
+    """
+
+    def __init__(self, real: Database) -> None:
+        self.real = real
+        self.before = lambda: None
+        self.at_exit = lambda: None
+
+    @contextmanager
+    def write(self) -> Iterator[sqlite3.Connection]:
+        self.before()
+        with self.real.write() as conn:
+            yield conn
+            self.at_exit()
+
+    def connect(self):  # type: ignore[no-untyped-def]
+        return self.real.connect()
+
+    def close(self) -> None:
+        self.real.close()
+
+
+def _seam(tmp_path: Path) -> tuple[Path, SeamDb, Cipher]:
+    path = tmp_path / "hrono.db"
+    with open_database(path) as setup:
+        record = reconcile(setup, KEY)
+    return (
+        path,
+        SeamDb(Database.at(path)),
+        Cipher.from_key(KEY, record.key_id),
+    )
+
+
+def test_the_swap_is_made_before_the_rotation_commits(tmp_path: Path) -> None:
+    """A writer queued on the lock gets it the instant the rotation commits.
+
+    So the cipher must already be on the new key when the block ends: a rekey
+    placed after it leaves a window where that writer seals on the old key.
+    """
+    _path, seam, cipher = _seam(tmp_path)
+    app = SimpleNamespace(state=SimpleNamespace(db=seam, cipher=cipher))
+    seen: list[int] = []
+    seam.at_exit = lambda: seen.append(cipher.encrypt("x").key_id)
+    result = rotate_running(app, KEY, FRESH)  # type: ignore[arg-type]
+    seam.close()
+    assert seen == [result.key_id]
+
+
 @pytest.mark.parametrize("writer", ["create", "replace", "delete"])
 def test_a_write_in_flight_across_a_rotation_lands_on_the_new_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, writer: str
+    tmp_path: Path, writer: str
 ) -> None:
     """The rotation commits after the write is prepared, before it writes.
 
@@ -148,20 +202,15 @@ def test_a_write_in_flight_across_a_rotation_lands_on_the_new_key(
     database's `write` is the seam), so a writer that sealed its secret
     before asking lands on the old key: a KeyMismatch after the restart.
     """
-    path = tmp_path / "hrono.db"
-    with open_database(path) as setup:
-        record = reconcile(setup, KEY)
-    db = Database.at(path)
-    cipher = Cipher.from_key(KEY, record.key_id)
+    path, seam, cipher = _seam(tmp_path)
+    db = seam.real
     app = SimpleNamespace(
-        state=SimpleNamespace(
-            db=db, cipher=cipher, key_id=record.key_id, cache_root=None
-        )
+        state=SimpleNamespace(db=seam, cipher=cipher, cache_root=None)
     )
     request = SimpleNamespace(app=app)
     fired: list[bool] = []
 
-    def rotate_once(*_args: object) -> None:
+    def rotate_once() -> None:
         if not fired:
             fired.append(True)
             rotate_running(app, KEY, FRESH)  # type: ignore[arg-type]
@@ -184,20 +233,13 @@ def test_a_write_in_flight_across_a_rotation_lands_on_the_new_key(
                 "2026-01-01",
                 is_default=1,
             )
-    real_write = db.write
-
-    def rotate_then_write():  # type: ignore[no-untyped-def]
-        rotate_once()
-        return real_write()
-
-    monkeypatch.setattr(db, "write", rotate_then_write)
+    seam.before = rotate_once
     body = default
     {
         "create": lambda: create_item(descriptor, body, request),  # type: ignore[arg-type]
         "replace": lambda: replace_item(descriptor, "late", body, request),  # type: ignore[arg-type]
         "delete": lambda: delete_item(descriptor, "late", request),  # type: ignore[arg-type]
     }[writer]()
-    monkeypatch.undo()
     db.close()
     assert fired
     assert restarted_on_new_key(path) == "sk-saved-after-rotation"
