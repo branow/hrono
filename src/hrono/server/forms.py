@@ -23,6 +23,15 @@ A union is a two-step add: pick the variant, then fill its fields. There is no
 JavaScript on this dashboard, so the alternative was rendering every variant at
 once and reading back the one the operator meant — five near-identical forms
 stacked on a page, four of them wrong.
+
+**Labels and help come from the model too (#210).** Every field declares a
+`title` (the label a person reads), a `description` (one line of help) and,
+where a value has a shape worth showing, `examples` — on the pydantic field
+itself, so the API's validation and the form cannot drift. The raw config path
+is still shown, secondary, because it is what the CLI and the JSON view use. A
+field's form section (`Location`, `Access`, `Which files` for a source) is
+`json_schema_extra={"group": ...}` on the top-level field, and everything
+nested under it inherits it.
 """
 
 from __future__ import annotations
@@ -35,6 +44,7 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 
 from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import MASK
@@ -44,7 +54,7 @@ from hrono.registry.write import MASK
 # business and not the registry's. A value is also promoted to a box when what
 # is already stored has newlines in it, so a long config is never editable
 # through a one-line input whatever it is called.
-ROOMY = frozenset({"template", "url", "key", "token"})
+ROOMY = frozenset({"template"})
 # The prefix every field posts under, so one hidden input cannot collide with
 # a config field called `tree` or `variant`.
 PREFIX = "f."
@@ -55,14 +65,16 @@ class Field:
     """One input: where it lives in the config, and how to draw it."""
 
     path: str  # dotted, e.g. "auth.key"
-    label: str  # the last segment, e.g. "key"
-    group: str  # the containing object, "" at the top level
+    label: str  # the field's declared title, e.g. "SSH private key"
+    help: str  # the field's declared description, one line
+    group: str  # the form section it sits in, "" for the ungrouped head
     kind: str  # text | roomy | secret | choice | lines | toggle | number | json
     required: bool
     value: str
     checked: bool = False
     choices: tuple[str, ...] = ()
     picked: tuple[str, ...] = ()
+    example: str = ""
 
     @property
     def input_name(self) -> str:
@@ -93,6 +105,18 @@ class Form:
             if variant.name == self.chosen:
                 return variant.fields
         return self.variants[0].fields if self.variants else ()
+
+    @property
+    def sections(self) -> tuple[tuple[str, tuple[Field, ...]], ...]:
+        """The chosen fields in their groups, in order of first appearance."""
+        order: list[str] = []
+        for field in self.fields:
+            if field.group not in order:
+                order.append(field.group)
+        return tuple(
+            (group, tuple(f for f in self.fields if f.group == group))
+            for group in order
+        )
 
     @property
     def picks(self) -> bool:
@@ -213,12 +237,14 @@ def _fields(
     options: Mapping[str, Sequence[str]],
     skip: str = "",
     prefix: str = "",
+    group: str = "",
 ) -> list[Field]:
     """Every input one model needs, nested objects flattened to dotted paths.
 
     ``skip`` drops the discriminator: it is chosen once, for the whole item,
     and an editable copy of it inside the fields would be a second answer to
-    the same question.
+    the same question. ``group`` is the section a nested object's parent
+    field declared, inherited by everything under it.
     """
     out: list[Field] = []
     for name, info in model.model_fields.items():
@@ -227,16 +253,26 @@ def _fields(
         path = f"{prefix}{name}"
         inner, optional = _unwrap(info.annotation)
         held = _at(values, path)
+        section = _group(info) or group
         if _is_model(inner):
             out.extend(
-                _fields(inner, values, secrets, options, prefix=f"{path}.")
+                _fields(
+                    inner,
+                    values,
+                    secrets,
+                    options,
+                    prefix=f"{path}.",
+                    group=section,
+                )
             )
             continue
         out.append(
             _field(
                 path=path,
-                label=name,
-                group=prefix.rstrip("."),
+                label=info.title or "",
+                help=info.description or "",
+                example=str(info.examples[0]) if info.examples else "",
+                group=section,
                 annotation=inner,
                 required=info.is_required() and not optional,
                 held=held,
@@ -247,9 +283,17 @@ def _fields(
     return out
 
 
+def _group(info: FieldInfo) -> str:
+    """The form section a field declares, or "" when it declares none."""
+    extra = info.json_schema_extra
+    return str(extra.get("group", "")) if isinstance(extra, dict) else ""
+
+
 def _field(
     path: str,
     label: str,
+    help: str,
+    example: str,
     group: str,
     annotation: object,
     required: bool,
@@ -262,7 +306,7 @@ def _field(
         if typing.get_origin(annotation) is typing.Literal
         else ()
     )
-    kind = _kind(annotation, label, held, secret, bool(choices))
+    kind = _kind(annotation, path, held, secret, bool(choices))
     # a field that REFERS to another collection is a pick over what is
     # registered, whatever the model's own type says it is
     if offered:
@@ -271,6 +315,8 @@ def _field(
     return Field(
         path=path,
         label=label,
+        help=help,
+        example=example,
         group=group,
         kind=kind,
         required=required,
@@ -289,7 +335,7 @@ def _picked(kind: str, held: object) -> tuple[str, ...]:
 
 
 def _kind(
-    annotation: object, label: str, held: object, secret: bool, choice: bool
+    annotation: object, path: str, held: object, secret: bool, choice: bool
 ) -> str:
     if secret:
         return "secret"
@@ -302,7 +348,7 @@ def _kind(
     if _is_list_of_str(annotation):
         return "lines"
     if annotation is str:
-        if label in ROOMY or (isinstance(held, str) and "\n" in held):
+        if path in ROOMY or (isinstance(held, str) and "\n" in held):
             return "roomy"
         return "text"
     return "json"

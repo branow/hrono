@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from hrono.registry.descriptor import (
     Descriptor,
@@ -21,9 +21,20 @@ from hrono.registry.descriptor import (
 
 
 class Prompt(BaseModel):
-    name: RegistryName
-    role: Literal["condense", "brief", "brief-upper", "judge"]
-    template: str
+    name: RegistryName = Field(
+        title="Name", description="What this prompt is called."
+    )
+    role: Literal["condense", "brief", "brief-upper", "judge"] = Field(
+        title="Role",
+        description="The writing job that sends it. One prompt per role.",
+    )
+    template: str = Field(
+        title="Template",
+        description=(
+            "The instruction sent with each call. Keep the placeholders its "
+            "role fills: {content}, or {source} and {summary} for judge."
+        ),
+    )
 
 
 # The placeholder each role's op injects the body at, so a stored template that

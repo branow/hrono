@@ -1308,7 +1308,15 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 }
 .fields .field.wide { grid-column: 1 / -1; }
 .fields label { font-size: .8125rem; color: var(--ink-soft); font-weight: 560; }
-.fields .dim { color: var(--ink-faint); font-weight: 400; }
+fieldset.fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.fields + fieldset.fields { padding-top: var(--s3); border-top: 1px solid var(--rule); }
+.fields legend {
+  grid-column: 1 / -1; padding: 0; margin-bottom: var(--s2);
+  font: 600 .6875rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-faint);
+}
+.fields code.key { color: var(--ink-faint); font-size: .6875rem; font-weight: 400; margin-left: .3rem; }
+.fields .label-line { line-height: 1; }
 .fields .hint { font-size: .75rem; margin: 0; }
 .needed { color: var(--accent); margin-left: .15rem; }
 .fields input.line, .fields select, .fields textarea { width: 100%; }

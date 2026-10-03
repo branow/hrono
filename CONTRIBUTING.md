@@ -14,6 +14,7 @@ is the part that outlives one machine.
 - API: field keys `snake_case`, enum/type values `kebab-case`. Config is data you PUT; work is a job you POST — writing config never triggers work.
 - URIs are fragment-free resource addresses, canonical `<source-type>://<instance>/<path>@<version>` — no `#chunk-n`: named fragments were considered and rejected (`rad/hrono/context.md`), because `@version` already changes every URI on any edit. Position is data, not identity: it lives in a piece's `ordinal` and `sp_paths`. `hash` (raw byte range, SHA-256) is the dedup/embed-once key (#144).
 - Two leaf granularities: **sections** (~10 KB, cluster/traversal unit) and **passages** (~800 B, recall injection unit); a section reassembles byte-identically from its passages.
+- A registry field declares its own label and help ON the pydantic field — `title`, a one-line `description`, `examples` where a value has a shape worth showing, and `json_schema_extra={"group": ...}` for its form section. The settings form reads them from there, so the API's validation and the page cannot drift, and `tests/registry/test_field_docs.py` fails on a field without them (#210).
 - Operating constants are **baked from the experiments, not config**: TAU 0.70, MAX_CAP 30, D_MAX 5, min_cluster_size 5, alpha 0.5, UMAP 25-dim, misfit thresholds. See `clustering-lifecycle.md`.
 
 ## Code quality

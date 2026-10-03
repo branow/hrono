@@ -819,6 +819,73 @@ def test_the_chosen_kind_decides_which_fields_are_offered(
     assert 'name="f.owner"' not in git  # that is the github-user shape
 
 
+# ------------------------------------------------------- labels and help
+
+
+def test_a_field_reads_by_its_label_and_help_not_its_config_path(
+    browser: Browser,
+) -> None:
+    """#210: labels were raw config paths — `auth.method`, `filter.only` — and
+    no field said what it did. Both now come from the model's own field, with
+    the path kept, secondary, for the CLI and the JSON view."""
+    browser.sign_in()
+
+    page = browser.config(add="sources", variant="git")
+
+    assert "Repository URL" in page
+    assert "What git clone takes" in page  # the url's help line
+    assert "Only these paths" in page and "Sign-in method" in page
+    assert '<code class="key">filter.only</code>' in page
+
+
+def test_source_fields_are_grouped_location_access_which_files(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    page = browser.config(add="sources", variant="git")
+
+    where = [
+        page.index(f"<legend>{group}</legend>")
+        for group in ("Location", "Access", "Which files")
+    ]
+    assert where == sorted(where)
+    assert page.index('name="f.name"') < where[0]  # the name heads the form
+    assert where[0] < page.index('name="f.url"') < where[1]
+    assert where[1] < page.index('name="f.auth.method"') < where[2]
+    assert where[2] < page.index('name="f.filter.only"')
+
+
+def test_inputs_match_their_type(browser: Browser) -> None:
+    """A one-line git url was a five-row textarea; a boolean was a box
+    labelled "yes"; a glob list did not say it was one per line."""
+    browser.sign_in()
+
+    page = browser.config(add="sources", variant="git")
+
+    assert re.search(r'<input class="line" type="text"[^>]*name="f\.url"', page)
+    assert not re.search(r'<textarea[^>]*name="f\.url"', page)
+    assert re.search(
+        r'name="f\.filter\.replace_defaults" value="1"> '
+        r"Drop the built-in ignore list</label>",
+        page,
+    )
+    assert 'placeholder="one per line, e.g. src/payments/**"' in page
+
+
+def test_an_opened_secret_is_still_only_the_mask(browser: Browser) -> None:
+    """The labelled form must not be a new way for a credential out."""
+    browser.sign_in()
+
+    page = browser.config(edit="sources:gh")
+    stored = browser.stored("sources", "gh")
+
+    assert "Access token" in page
+    assert placeholder("source-token") not in page
+    assert stored["auth"]["token"] not in page  # type: ignore[index]
+    assert browser.fields("sources", "gh")["f.auth.token"] == MASK
+
+
 def _a_topic_in(browser: Browser, tree: str) -> int:
     """One built topic, made the way the pipeline makes one."""
     conn = browser.conn

@@ -19,7 +19,7 @@ matches on ``source_type`` as well as name — so this is the remaining one.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator
 
@@ -28,11 +28,48 @@ from hrono.registry.validation.source_validation import validate_source
 
 RESERVED_PREFIX = "node-"
 
+# The three questions a source's form is grouped by (#210). Declared on the
+# field, so the API's model and the dashboard's form are one schema: a field
+# added to a source type lands in its group with no edit to the page.
+LOCATION = {"group": "Location"}
+ACCESS = {"group": "Access"}
+FILES = {"group": "Which files"}
+
+
+def _name() -> Any:
+    return Field(
+        title="Name",
+        description=(
+            "What this source is called in trees, on the map and on the "
+            "command line. Not starting with node-."
+        ),
+    )
+
 
 class GitAuth(BaseModel):
-    method: Literal["none", "token", "ssh"]
-    token: str | None = None
-    key: str | None = None
+    method: Literal["none", "token", "ssh"] = Field(
+        title="Sign-in method",
+        description=(
+            "none for a public repository, token for HTTPS with an access "
+            "token, ssh for a deploy key."
+        ),
+    )
+    token: str | None = Field(
+        default=None,
+        title="Access token",
+        description=(
+            "A token with read access, used when the method is token. Stored "
+            "encrypted."
+        ),
+    )
+    key: str | None = Field(
+        default=None,
+        title="SSH private key",
+        description=(
+            "A read-only deploy key, used when the method is ssh. Stored "
+            "encrypted."
+        ),
+    )
 
 
 class GitFilter(BaseModel):
@@ -52,12 +89,54 @@ class GitFilter(BaseModel):
     in the direction that costs money.
     """
 
-    only: list[str] | None = None
-    exclude: list[str] | None = None
-    include: list[str] | None = None
-    replace_defaults: bool = False
-    include_generated: bool = False
-    max_size_mb: float | None = None
+    only: list[str] | None = Field(
+        default=None,
+        title="Only these paths",
+        description=(
+            "Globs, one per line. When set, nothing outside them is read — "
+            "the way to take one package of a monorepo."
+        ),
+        examples=["src/payments/**"],
+    )
+    exclude: list[str] | None = Field(
+        default=None,
+        title="Leave out",
+        description=(
+            "Globs, one per line, of paths to skip on top of the built-in "
+            "ignore list."
+        ),
+        examples=["**/fixtures/**"],
+    )
+    include: list[str] | None = Field(
+        default=None,
+        title="Read anyway",
+        description=(
+            "Globs, one per line, of files the built-in ignore list would "
+            "skip. Re-admits them; it is not a whitelist."
+        ),
+        examples=["vendor/our-client/**"],
+    )
+    replace_defaults: bool = Field(
+        default=False,
+        title="Drop the built-in ignore list",
+        description=(
+            "Skip only what Leave out names. The size, symlink and binary "
+            "checks still apply."
+        ),
+    )
+    include_generated: bool = Field(
+        default=False,
+        title="Read generated code",
+        description=(
+            "Keep the files the built-in list skips as generated, such as a "
+            "generated API client."
+        ),
+    )
+    max_size_mb: float | None = Field(
+        default=None,
+        title="Largest file, in MB",
+        description="Files bigger than this are skipped. 2 MB when empty.",
+    )
 
 
 def _reject_reserved(value: str) -> str:
@@ -71,11 +150,27 @@ def _reject_reserved(value: str) -> str:
 
 
 class GitSource(BaseModel):
-    name: RegistryName
-    type: Literal["git"]
-    url: str
-    auth: GitAuth
-    filter: GitFilter | None = None
+    name: RegistryName = _name()
+    type: Literal["git"] = Field(
+        title="Type", description="A single git repository."
+    )
+    url: str = Field(
+        title="Repository URL",
+        description="What git clone takes: an HTTPS or SSH URL, or a path.",
+        examples=["https://github.com/acme/payments.git"],
+        json_schema_extra=LOCATION,
+    )
+    auth: GitAuth = Field(
+        title="Sign-in",
+        description="How hrono authenticates to the host.",
+        json_schema_extra=ACCESS,
+    )
+    filter: GitFilter | None = Field(
+        default=None,
+        title="File filter",
+        description="Which files of each repository are read.",
+        json_schema_extra=FILES,
+    )
 
     _not_reserved = field_validator("name")(_reject_reserved)
 
@@ -88,13 +183,42 @@ class GithubUserSource(BaseModel):
     to every discovered clone unchanged.
     """
 
-    name: RegistryName
-    type: Literal["github-user"]
-    owner: str
-    auth: GitAuth
-    include: list[str] | None = None
-    exclude: list[str] | None = None
-    filter: GitFilter | None = None
+    name: RegistryName = _name()
+    type: Literal["github-user"] = Field(
+        title="Type", description="Every repository of a GitHub user or org."
+    )
+    owner: str = Field(
+        title="Owner",
+        description=(
+            "The GitHub user or organisation whose repositories to read."
+        ),
+        json_schema_extra=LOCATION,
+    )
+    auth: GitAuth = Field(
+        title="Sign-in",
+        description="How hrono authenticates to the host.",
+        json_schema_extra=ACCESS,
+    )
+    include: list[str] | None = Field(
+        default=None,
+        title="Only these repositories",
+        description="Globs over repository names, one per line.",
+        examples=["payments-*"],
+        json_schema_extra=FILES,
+    )
+    exclude: list[str] | None = Field(
+        default=None,
+        title="Leave out repositories",
+        description="Globs over repository names, one per line.",
+        examples=["*-archive"],
+        json_schema_extra=FILES,
+    )
+    filter: GitFilter | None = Field(
+        default=None,
+        title="File filter",
+        description="Which files of each repository are read.",
+        json_schema_extra=FILES,
+    )
 
     _not_reserved = field_validator("name")(_reject_reserved)
 
@@ -108,13 +232,40 @@ class BitbucketWorkspaceSource(BaseModel):
     lets the tables dispatch without a second branch inside them.
     """
 
-    name: RegistryName
-    type: Literal["bitbucket-workspace"]
-    owner: str
-    auth: GitAuth
-    include: list[str] | None = None
-    exclude: list[str] | None = None
-    filter: GitFilter | None = None
+    name: RegistryName = _name()
+    type: Literal["bitbucket-workspace"] = Field(
+        title="Type", description="Every repository of a Bitbucket workspace."
+    )
+    owner: str = Field(
+        title="Workspace",
+        description="The Bitbucket workspace slug whose repositories to read.",
+        json_schema_extra=LOCATION,
+    )
+    auth: GitAuth = Field(
+        title="Sign-in",
+        description="How hrono authenticates to the host.",
+        json_schema_extra=ACCESS,
+    )
+    include: list[str] | None = Field(
+        default=None,
+        title="Only these repositories",
+        description="Globs over repository names, one per line.",
+        examples=["payments-*"],
+        json_schema_extra=FILES,
+    )
+    exclude: list[str] | None = Field(
+        default=None,
+        title="Leave out repositories",
+        description="Globs over repository names, one per line.",
+        examples=["*-archive"],
+        json_schema_extra=FILES,
+    )
+    filter: GitFilter | None = Field(
+        default=None,
+        title="File filter",
+        description="Which files of each repository are read.",
+        json_schema_extra=FILES,
+    )
 
     _not_reserved = field_validator("name")(_reject_reserved)
 
@@ -122,27 +273,69 @@ class BitbucketWorkspaceSource(BaseModel):
 class BasicAuth(BaseModel):
     """Atlassian's api-token scheme: the account email plus a token."""
 
-    method: Literal["basic"]
-    email: str
-    token: str
+    method: Literal["basic"] = Field(
+        title="Sign-in method",
+        description="Atlassian's account email plus an API token.",
+    )
+    email: str = Field(
+        title="Account email",
+        description="The Atlassian account the API token belongs to.",
+    )
+    token: str = Field(
+        title="API token",
+        description=(
+            "An Atlassian API token for that account. Stored encrypted."
+        ),
+    )
 
 
 class Selector(BaseModel):
     """One scope selector; the fields it needs depend on its own type."""
 
-    type: str
-    key: str | None = None
-    id: str | None = None
+    type: str = Field(
+        title="Selector",
+        description=(
+            "all; space, by key (Confluence); page or database, by id."
+        ),
+    )
+    key: str | None = Field(
+        default=None, title="Space key", description="For a space selector."
+    )
+    id: str | None = Field(
+        default=None,
+        title="Page or database id",
+        description="For a page or database selector.",
+    )
 
 
 class ConfluenceSource(BaseModel):
     """Pages from a confluence site, narrowed by a union of selectors (T42)."""
 
-    name: RegistryName
-    type: Literal["confluence"]
-    base_url: str
-    auth: BasicAuth
-    scope: list[Selector] | None = None
+    name: RegistryName = _name()
+    type: Literal["confluence"] = Field(
+        title="Type", description="Pages of a Confluence site."
+    )
+    base_url: str = Field(
+        title="Site URL",
+        description="The Confluence site's address.",
+        examples=["https://acme.atlassian.net/wiki"],
+        json_schema_extra=LOCATION,
+    )
+    auth: BasicAuth = Field(
+        title="Sign-in",
+        description="How hrono authenticates to the site.",
+        json_schema_extra=ACCESS,
+    )
+    scope: list[Selector] | None = Field(
+        default=None,
+        title="Scope",
+        description=(
+            "A JSON list of selectors; empty reads everything the account "
+            "can see."
+        ),
+        examples=['[{"type": "space", "key": "ENG"}]'],
+        json_schema_extra=FILES,
+    )
 
     _not_reserved = field_validator("name")(_reject_reserved)
 
@@ -150,8 +343,13 @@ class ConfluenceSource(BaseModel):
 class TokenAuth(BaseModel):
     """A bearer integration token; no user, no endpoint."""
 
-    method: Literal["token"]
-    token: str
+    method: Literal["token"] = Field(
+        title="Sign-in method", description="A Notion integration token."
+    )
+    token: str = Field(
+        title="Integration token",
+        description="The secret of a Notion integration. Stored encrypted.",
+    )
 
 
 class NotionSource(BaseModel):
@@ -162,10 +360,25 @@ class NotionSource(BaseModel):
     bound and the selectors only narrow it.
     """
 
-    name: RegistryName
-    type: Literal["notion"]
-    auth: TokenAuth
-    scope: list[Selector] | None = None
+    name: RegistryName = _name()
+    type: Literal["notion"] = Field(
+        title="Type", description="Pages shared with a Notion integration."
+    )
+    auth: TokenAuth = Field(
+        title="Sign-in",
+        description="How hrono authenticates to Notion.",
+        json_schema_extra=ACCESS,
+    )
+    scope: list[Selector] | None = Field(
+        default=None,
+        title="Scope",
+        description=(
+            "A JSON list of selectors; empty reads everything shared with the "
+            "integration."
+        ),
+        examples=['[{"type": "page", "id": "..."}]'],
+        json_schema_extra=FILES,
+    )
 
     _not_reserved = field_validator("name")(_reject_reserved)
 

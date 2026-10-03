@@ -26,20 +26,67 @@ SummarisationRole = Literal["condense", "brief", "brief-upper", "judge"]
 class ModelPrice(BaseModel):
     """USD per million tokens, overriding the baked table (#202)."""
 
-    input: float = Field(ge=0)
-    output: float = Field(ge=0)
-    cache_read: float = Field(default=0.0, ge=0)
-    cache_write: float = Field(default=0.0, ge=0)
+    input: float = Field(
+        ge=0, title="Input", description="USD per million input tokens."
+    )
+    output: float = Field(
+        ge=0, title="Output", description="USD per million output tokens."
+    )
+    cache_read: float = Field(
+        default=0.0,
+        ge=0,
+        title="Cache read",
+        description="USD per million tokens read from the prompt cache.",
+    )
+    cache_write: float = Field(
+        default=0.0,
+        ge=0,
+        title="Cache write",
+        description="USD per million tokens written to the prompt cache.",
+    )
 
 
 class Model(BaseModel):
-    name: RegistryName
-    kind: Literal["text", "embedding"]
-    connection: str | None = None
-    model: str
-    role: SummarisationRole | None = None
-    params: dict[str, object] = Field(default_factory=dict)
-    price: ModelPrice | None = None
+    name: RegistryName = Field(
+        title="Name",
+        description="What runs and the command line call this model.",
+    )
+    kind: Literal["text", "embedding"] = Field(
+        title="Kind",
+        description=(
+            "text writes condensations and briefs; embedding places sections."
+        ),
+    )
+    connection: str | None = Field(
+        default=None,
+        title="Connection",
+        description=(
+            "The connection it is called through. Empty for a local embedding"
+            " model."
+        ),
+    )
+    model: str = Field(
+        title="Upstream model",
+        description="The provider's own id for the model.",
+        examples=["claude-sonnet-4-5"],
+    )
+    role: SummarisationRole | None = Field(
+        default=None,
+        title="Role",
+        description=(
+            "The writing job that calls it. Leave empty on a one-model install."
+        ),
+    )
+    params: dict[str, object] = Field(
+        default_factory=dict,
+        title="Parameters",
+        description="A JSON object passed with every call, such as max_tokens.",
+    )
+    price: ModelPrice | None = Field(
+        default=None,
+        title="Price",
+        description="What it costs, overriding the built-in price table.",
+    )
 
 
 MODELS = Descriptor(

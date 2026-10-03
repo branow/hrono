@@ -31,8 +31,17 @@ from hrono.registry.descriptor import (
 
 
 class Tree(BaseModel):
-    name: RegistryName
-    sources: list[str] = Field(min_length=1)
+    name: RegistryName = Field(
+        title="Name",
+        description="What the switcher, recall and the command line call it.",
+    )
+    sources: list[str] = Field(
+        min_length=1,
+        title="Sources",
+        description=(
+            "The registered sources it maps. Only these are clustered into it."
+        ),
+    )
 
 
 def _validate(config: dict[str, object], context: ValidationContext) -> None:

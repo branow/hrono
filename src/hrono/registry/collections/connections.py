@@ -36,44 +36,107 @@ from hrono.registry.validation.connection_validation import validate_connection
 
 
 class ApiKeyAuth(BaseModel):
-    method: Literal["api-key"]
-    key: str
+    method: Literal["api-key"] = Field(
+        title="Sign-in method", description="An API key sent with each call."
+    )
+    key: str = Field(
+        title="API key",
+        description="The provider's API key. Stored encrypted.",
+    )
 
 
 class NoneAuth(BaseModel):
-    method: Literal["none"]
+    method: Literal["none"] = Field(
+        title="Sign-in method",
+        description="None: the Claude Code CLI uses its own sign-in.",
+    )
 
 
 class OptionalKeyAuth(BaseModel):
-    method: Literal["none", "api-key"]
-    key: str | None = None
+    method: Literal["none", "api-key"] = Field(
+        title="Sign-in method",
+        description="api-key if the server wants one, none if it does not.",
+    )
+    key: str | None = Field(
+        default=None,
+        title="API key",
+        description="Used when the method is api-key. Stored encrypted.",
+    )
 
 
 class AnthropicConnection(BaseModel):
-    name: RegistryName
-    provider: Literal["anthropic"]
-    auth: ApiKeyAuth
-    endpoint: str | None = None
+    name: RegistryName = Field(
+        title="Name",
+        description="What models name to be called through this connection.",
+    )
+    provider: Literal["anthropic"] = Field(
+        title="Provider", description="The Anthropic API, billed per token."
+    )
+    auth: ApiKeyAuth = Field(
+        title="Sign-in", description="How hrono authenticates to the API."
+    )
+    endpoint: str | None = Field(
+        default=None,
+        title="Endpoint",
+        description=(
+            "A different base URL, such as a proxy. Empty for the provider's "
+            "own."
+        ),
+    )
 
 
 class OpenAIConnection(BaseModel):
-    name: RegistryName
-    provider: Literal["openai"]
-    auth: ApiKeyAuth
-    endpoint: str | None = None
+    name: RegistryName = Field(
+        title="Name",
+        description="What models name to be called through this connection.",
+    )
+    provider: Literal["openai"] = Field(
+        title="Provider", description="The OpenAI API."
+    )
+    auth: ApiKeyAuth = Field(
+        title="Sign-in", description="How hrono authenticates to the API."
+    )
+    endpoint: str | None = Field(
+        default=None,
+        title="Endpoint",
+        description=(
+            "A different base URL, such as a proxy. Empty for the provider's "
+            "own."
+        ),
+    )
 
 
 class OpenAICompatibleConnection(BaseModel):
-    name: RegistryName
-    provider: Literal["openai-compatible"]
-    endpoint: str
-    auth: OptionalKeyAuth
+    name: RegistryName = Field(
+        title="Name",
+        description="What models name to be called through this connection.",
+    )
+    provider: Literal["openai-compatible"] = Field(
+        title="Provider",
+        description="Any server speaking the OpenAI API, such as a local one.",
+    )
+    endpoint: str = Field(
+        title="Endpoint",
+        description="The server's base URL, with or without /v1.",
+        examples=["http://localhost:11434/v1"],
+    )
+    auth: OptionalKeyAuth = Field(
+        title="Sign-in", description="How hrono authenticates to the server."
+    )
 
 
 class ClaudeCodeConnection(BaseModel):
-    name: RegistryName
-    provider: Literal["claude-code"]
-    auth: NoneAuth
+    name: RegistryName = Field(
+        title="Name",
+        description="What models name to be called through this connection.",
+    )
+    provider: Literal["claude-code"] = Field(
+        title="Provider",
+        description="The Claude Code CLI, billed to your Claude subscription.",
+    )
+    auth: NoneAuth = Field(
+        title="Sign-in", description="Nothing to set: the CLI signs itself in."
+    )
 
 
 class Connection(

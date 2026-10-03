@@ -14,14 +14,6 @@
   "prompts": "prompt",
   "trees": "tree"
 } %}
-{% set says = {
-  "name": "What you will call this everywhere — in the switcher, in recall, and on the command line.",
-  "sources": "The registered sources this tree maps. Pick at least one; only these are clustered into it.",
-  "connection": "Which registered connection this model is called through.",
-  "template": "The instruction sent with each call. It must keep the placeholders its role injects at.",
-  "role": "Which writing job calls this. Leave it unset on a one-model install.",
-  "kind": "What the model is for: text writes briefs, embedding places sections."
-} %}
 {% set c = collection %}
 {% set listing = "/ui/config?tree=" ~ tree ~ "&section=" ~ c.name %}
 
@@ -81,11 +73,11 @@
   {% endfor %}
 </ul>
 {% elif field.kind == "toggle" %}
-<label class="confirm mild"><input type="checkbox" id="{{ id }}" name="{{ field.input_name }}" value="1"{% if field.checked %} checked{% endif %}> yes</label>
+<label class="confirm mild"><input type="checkbox" id="{{ id }}" name="{{ field.input_name }}" value="1"{% if field.checked %} checked{% endif %}> {{ field.label or field.path }}</label>
 {% elif field.kind == "lines" %}
-<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="3" spellcheck="false" placeholder="one per line">{{ field.value }}</textarea>
+<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="3" spellcheck="false" placeholder="one per line{% if field.example %}, e.g. {{ field.example }}{% endif %}">{{ field.value }}</textarea>
 {% elif field.kind == "json" %}
-<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="4" spellcheck="false" placeholder="{}">{{ field.value }}</textarea>
+<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="4" spellcheck="false" placeholder="{{ field.example or '{}' }}">{{ field.value }}</textarea>
 {% elif field.kind == "roomy" %}
 <textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="6" spellcheck="false">{{ field.value }}</textarea>
 {% elif field.kind == "number" %}
@@ -93,7 +85,7 @@
 {% elif field.kind == "secret" %}
 <input class="line" type="text" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}" autocomplete="off" spellcheck="false">
 {% else %}
-<input class="line" type="text" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}" autocomplete="off" spellcheck="false">
+<input class="line" type="text" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}" autocomplete="off" spellcheck="false"{% if field.example %} placeholder="{{ field.example }}"{% endif %}>
 {% endif %}
 {% endmacro %}
 
@@ -107,19 +99,24 @@
   {% if c.draft.errors %}{{ problems(c.draft.errors, "Not saved — nothing was changed") }}{% endif %}
   {{ impact_of(c.draft) }}
   {% endif %}
-  <div class="fields">
-    {% for field in form.fields %}
+  {% for group, fields in form.sections %}
+  <fieldset class="fields">
+    {% if group %}<legend>{{ group }}</legend>{% endif %}
+    {% for field in fields %}
     {% set id = "f-" ~ c.name ~ "-" ~ field.path|replace(".", "-") %}
     <div class="field{% if field.kind in ('roomy', 'json', 'lines', 'multi') %} wide{% endif %}">
-      <label for="{{ id }}">
-        {% if field.group %}<span class="dim">{{ field.group }}.</span>{% endif %}{{ field.label }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %}
-        {% if says.get(field.path) %}<span class="tip" tabindex="0" role="note" data-tip="{{ says.get(field.path) }}">?</span>{% endif %}
-      </label>
-      {% if field.kind == "secret" %}<p class="hint">Leave it as <code>***</code> to keep the credential already stored.</p>{% endif %}
+      {% if field.kind != "toggle" %}
+      <label for="{{ id }}">{{ field.label or field.path }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %} <code class="key">{{ field.path }}</code></label>
+      {% else %}
+      <span class="label-line"><code class="key">{{ field.path }}</code></span>
+      {% endif %}
       {{ input_for(field, id) }}
+      {% if field.help %}<p class="hint">{{ field.help }}</p>{% endif %}
+      {% if field.kind == "secret" %}<p class="hint">Leave it as <code>***</code> to keep the credential already stored.</p>{% endif %}
     </div>
     {% endfor %}
-  </div>
+  </fieldset>
+  {% endfor %}
   <div class="act-row">
     <button class="btn primary" type="submit">{{ submit }}</button>
     <button class="btn" type="submit" name="preview" value="1">Preview impact</button>
