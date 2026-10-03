@@ -144,6 +144,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     questions = load_questions(args.questions)
     if args.only:
         wanted = set(args.only.split(","))
+        unknown = sorted(wanted - {q.id for q in questions})
+        if unknown:
+            raise SystemExit(f"--only: no such question {', '.join(unknown)}")
         questions = tuple(q for q in questions if q.id in wanted)
     arms = tuple(parse_arm(spec) for spec in args.arm)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -701,11 +704,33 @@ def _ask_all(
             for arm, q in tasks
         ]
         for future in as_completed(futures):
-            run = future.result()
+            try:
+                run = future.result()
+            except Exception as failure:  # noqa: BLE001 - one session's end
+                arm, q = tasks[futures.index(future)]
+                run = _failed(arm, q.id, failure)
             handle.write(json.dumps(asdict(run)) + "\n")
             handle.flush()
             runs.append(run)
     return runs
+
+
+def _failed(arm: Arm, question_id: str, failure: Exception) -> Run:
+    """A session that raised, as the error Run it is, so the rest still land."""
+    return Run(
+        arm=arm.name,
+        question=question_id,
+        pages=(),
+        tools=(),
+        answer="",
+        cited=(),
+        tokens=0,
+        output_tokens=0,
+        cost_usd=0.0,
+        seconds=0.0,
+        turns=0,
+        error=f"{type(failure).__name__}: {failure}",
+    )
 
 
 def _probe(

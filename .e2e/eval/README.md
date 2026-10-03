@@ -33,7 +33,8 @@ commit, so both sides of the comparison hold the same facts. A folder with a
 
 `--tools Read,Glob` takes Grep away, so the agent has nothing to do but walk
 the folder: that measures the export's navigation rather than its
-searchability. `--only q01,q05` runs a subset, `--model` picks the agent
+searchability. `--only q01,q05` runs a subset (an id the question set does not have stops
+the run, naming it), `--model` picks the agent
 (default `sonnet`),
 `--jobs` how many sessions run at once (default 4). `--rerender` grades and
 reports the sessions already recorded under `--out` again without running any,
@@ -71,7 +72,8 @@ agent's own run-to-run variance. Per session it counts:
 
 A session that times out (15 minutes) or prints a line that is not valid JSON
 is recorded as a failed question with the reason under "session ended", and
-keeps whatever it read before; the other sessions are unaffected.
+keeps whatever it read before; a session that raises is recorded the same way
+with the exception as its reason, and the other sessions are unaffected.
 
 ## Isolation
 

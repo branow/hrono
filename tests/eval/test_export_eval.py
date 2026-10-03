@@ -545,28 +545,39 @@ def test_a_timed_out_or_garbled_session_is_an_error_and_the_rest_are_kept(
     assert (tmp_path / "transcripts" / "a" / "slow.jsonl").read_text()
 
 
-def test_sessions_finished_before_a_crash_are_already_on_disk(
+def test_a_session_that_raises_is_an_error_and_the_rest_are_kept(
     export: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     good = _stream(_session(export, ["root.md"], "ANSWER: 40\nSOURCE: a"))
     monkeypatch.setattr(
         run.subprocess,
         "run",
-        _fake_claude({"first?": good, "second?": RuntimeError("boom")}),
+        _fake_claude(
+            {
+                "first?": good,
+                "second?": RuntimeError("boom"),
+                "third?": good,
+            }
+        ),
     )
     questions = [
         run.Question(q, "deep", f"{q}?", ("40",), ("src/a.py",))
-        for q in ("first", "second")
+        for q in ("first", "second", "third")
     ]
     args = argparse.Namespace(
         jobs=1, model="haiku", max_turns=5, out=tmp_path, tools=run.TOOLS
     )
 
-    with pytest.raises(RuntimeError):
-        run._ask_all([run.Arm("a", export, "export")], questions, args)
+    returned = run._ask_all([run.Arm("a", export, "export")], questions, args)
 
-    recorded = run.load_runs(tmp_path / "runs.jsonl")
-    assert [r.question for r in recorded] == ["first"]
+    recorded = {r.question: r for r in run.load_runs(tmp_path / "runs.jsonl")}
+    assert set(recorded) == {"first", "second", "third"}
+    assert len(returned) == 3
+    assert recorded["second"].error == "RuntimeError: boom"
+    assert recorded["second"].arm == "a"
+    assert recorded["first"].error is None
+    assert recorded["third"].error is None
+    assert recorded["third"].answer == "40"
 
 
 def test_a_rerender_of_a_subset_reports_only_the_arms_and_questions_named(
@@ -607,3 +618,25 @@ def test_a_rerender_of_a_subset_reports_only_the_arms_and_questions_named(
     assert "q02" not in report
     with pytest.raises(SystemExit, match="no recorded session for c/q01"):
         run.main([*argv, "--arm", f"c={export}", "--only", "q01"])
+
+
+def test_only_names_a_question_that_does_not_exist(
+    export: Path, tmp_path: Path
+) -> None:
+    questions = tmp_path / "questions.toml"
+    questions.write_text(
+        '[[question]]\nid = "q01"\nkind = "deep"\nquestion = "W?"\n'
+        'expect = ["40"]\nsources = ["src/a.py"]\n'
+    )
+    argv = [
+        "--out",
+        str(tmp_path / "out"),
+        "--questions",
+        str(questions),
+        "--arm",
+        f"a={export}",
+    ]
+
+    with pytest.raises(SystemExit, match="no such question q09, q10"):
+        run.main([*argv, "--only", "q01,q10,q09"])
+    assert not (tmp_path / "out").exists()
