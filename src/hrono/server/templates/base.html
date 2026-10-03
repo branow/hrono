@@ -1262,11 +1262,32 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 .gate .mark svg { color: var(--accent); }
 
 /* -------------------------------------------------------------- settings */
-.setting { display: grid; gap: var(--s2); }
-.setting + .setting { padding-top: var(--s4); border-top: 1px solid var(--rule); }
+/* One collection at a time (#210): the sub-navigation picks it, and an add,
+   an edit or a delete opens as its own view rather than in the list. */
+.subnav {
+  display: flex; gap: var(--s1); flex-wrap: wrap;
+  margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+.subnav a {
+  padding: .4rem .6rem .35rem;
+  color: var(--ink-soft);
+  font-weight: 540;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.subnav a:hover { color: var(--ink); text-decoration: none; border-bottom-color: var(--rule-firm); }
+.subnav a[aria-current="page"] { color: var(--ink); font-weight: 640; border-bottom-color: var(--accent); }
+.subnav .count { color: var(--ink-faint); font: 500 .75rem/1 var(--mono); margin-left: .2rem; }
+.crumb { margin: 0 0 .1rem; font-size: .8125rem; }
+.card-head .hint { margin: .2rem 0 0; }
 
-.settings-edit > form, .settings-add > form { display: grid; gap: var(--s3); margin-top: var(--s3); }
-.settings-edit .callout, .settings-add .callout { margin-top: var(--s3); }
+.settings-table td { overflow-wrap: anywhere; }
+.settings-table td.name { white-space: nowrap; }
+.settings-table td.name .chip { margin-left: .35rem; }
+.settings-table td.acts { text-align: right; white-space: nowrap; }
+.settings-table .danger-link { color: var(--danger); }
 
 /* The two buttons under a config box sat ON its bottom edge — one rounded
    rectangle against another with nothing between them, which read as part of
@@ -1278,19 +1299,9 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
   border-top: 1px solid var(--rule);
 }
 
-/* Which collection you are looking at, and which way you are editing it. */
-.viewpick { display: flex; gap: .35rem; }
-
-/* A collection is a LIST you scan, not five open editors. The row names the
-   item and says what it points at; the form opens in its place. */
-.item-row { gap: var(--s3); }
-.item-row .grow { flex: 1; }
-.item-says { color: var(--ink-faint); font-size: .78125rem; }
-
 /* Fields derived from the model (`server/forms.py`): two to a line where they
    are single values, full width where they are a box or a set of picks. */
 .item-form { display: grid; gap: var(--s3); }
-.form-head { display: flex; align-items: center; gap: var(--s2); font-size: .9375rem; }
 .fields {
   display: grid; gap: var(--s3);
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
@@ -1301,8 +1312,6 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 .fields .hint { font-size: .75rem; margin: 0; }
 .needed { color: var(--accent); margin-left: .15rem; }
 .fields input.line, .fields select, .fields textarea { width: 100%; }
-.settings-act { margin: 0; }
-.danger-act { display: grid; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--rule); }
 
 textarea.code { width: 100%; font: 400 .8125rem/1.5 var(--mono); }
 

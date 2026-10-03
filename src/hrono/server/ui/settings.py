@@ -20,15 +20,22 @@ JSON, which is the API's surface wearing a browser: adding a model meant
 knowing the schema by heart, and the collection could only be edited one item
 at a time — there was no way to say "these are my models". So:
 
-- `view=form` (the default) renders each item as FIELDS, derived from the
-  collection's own pydantic model by `server/forms.py`, with a list you add to
-  and delete from.
-- `view=json` renders each collection as ONE array, written back through
-  `engine.sync_items`, which writes what differs and removes what is gone.
+- `view=form` (the default) renders the collection as a TABLE of named
+  columns (`config_view.COLUMNS`), and each item's add or edit as FIELDS
+  derived from the collection's own pydantic model by `server/forms.py`.
+- `view=json` renders the collection as ONE array, written back through
+  `engine.sync_items`, which writes what differs and removes what is gone —
+  the advanced alternative.
+
+**One collection at a time (#210).** All five on one page was a 3000px wall
+with an edit form opened in the middle of it. `section` picks the collection
+from a sub-navigation, and an add, an edit or a delete is its own view, so
+none of them reorders or pushes down the list it came from.
 
 **Trees come first.** A tree is the thing every other collection is in service
 of, and it was the last card on the page, behind a `<details>` — an operator
 looking for "how do I make a tree" found four screens of model JSON instead.
+It is the first section and the one the page lands on.
 """
 
 from __future__ import annotations
@@ -71,23 +78,28 @@ def config_page(
     request: Request,
     user: Reader,
     tree: str = "",
+    section: str = "",
     view: str = "",
     edit: str = "",
     add: str = "",
+    delete: str = "",
     variant: str = "",
     done: str = "",
     error: str = "",
 ) -> Response:
-    """Every registry collection, with secrets masked.
+    """One registry collection at a time, with secrets masked.
 
     Masked through the registry's OWN `mask()`, not a second redaction here: it
     reads each collection's declared `secret_paths` (#142), so a source type
     whose credential moves is masked by declaring the new path — and there is
     no second place that can forget to.
 
-    `edit`, `add` and `variant` ride in the URL rather than in the page, so the
-    form an operator has open is a link like any other and a refused write can
-    redirect back to exactly it.
+    `section` picks the collection (#210): five collections on one page was a
+    3000px wall, and an edit form opened in the middle of it. `edit`, `add`,
+    `delete` and `variant` ride in the URL rather than in the page, so the
+    form an operator has open is a link like any other, a refused write can
+    redirect back to exactly it, and the list it came from is untouched — it
+    is one Cancel away rather than pushed down the page.
 
     `done` and `error` are read back off the redirect every write ends with.
     They were being SENT and never read — the route took neither, so a save
@@ -97,9 +109,11 @@ def config_page(
         request,
         user,
         tree,
+        section=section,
         view=view,
         edit=edit,
         add=add,
+        delete=delete,
         variant=variant,
         done=done,
         error=error,
@@ -164,7 +178,9 @@ async def item_from_the_page(
                 previewed=True,
             ),
         )
-    return _settled(tree, done=f"{collection}: saved {sent.get('name', name)}")
+    return _settled(
+        tree, collection, done=f"{collection}: saved {sent.get('name', name)}"
+    )
 
 
 def _spot(
@@ -204,6 +220,7 @@ async def replace_the_collection(
             request,
             user,
             tree,
+            section=collection,
             view="json",
             draft=_draft(collection, text, problems),
         )
@@ -224,10 +241,13 @@ async def replace_the_collection(
             request,
             user,
             tree,
+            section=collection,
             view="json",
             draft=_draft(collection, text, _errors(exc)),
         )
-    return _settled(tree, view="json", done=_said(collection, result, held))
+    return _settled(
+        tree, collection, view="json", done=_said(collection, result, held)
+    )
 
 
 @router.post("/ui/config/{collection}/{name}/delete")
@@ -239,19 +259,27 @@ async def delete_from_the_page(
     _may_write(descriptor, request)
     form = await _form(request)
     tree = _one(form, "tree")
+    doomed = f"{collection}:{name}"
     if not _one(form, "confirm"):
         return _render(
-            request, user, tree, error=f"tick the box to confirm: {name}"
+            request,
+            user,
+            tree,
+            delete=doomed,
+            error=f"confirm to delete: {name}",
         )
     try:
         result = engine.delete_item(descriptor, name, request)
     except AppError as exc:
-        return _render(request, user, tree, error=exc.message)
+        return _render(request, user, tree, delete=doomed, error=exc.message)
     if "reset" in result:
-        return _settled(tree, done=f"{collection}: {name} reset to default")
+        return _settled(
+            tree, collection, done=f"{collection}: {name} reset to default"
+        )
     note = result.get("note", "")
     return _settled(
         tree,
+        collection,
         done=f"{collection}: deleted {name}" + (f" — {note}" if note else ""),
     )
 
@@ -285,9 +313,11 @@ def _render(
     user: User,
     tree: str,
     *,
+    section: str = "",
     view: str = "",
     edit: str = "",
     add: str = "",
+    delete: str = "",
     variant: str = "",
     typed: dict[str, object] | None = None,
     where: str = "",
@@ -306,7 +336,9 @@ def _render(
             ]
             for descriptor in COLLECTIONS
         }
+    showing = _showing(section, edit, add, delete)
     opened, open_name = _split(edit)
+    doomed_in, doomed = _split(delete)
     return templates.TemplateResponse(
         request,
         "config.html",
@@ -315,29 +347,41 @@ def _render(
             "trees": trees,
             "tree": tree if tree in trees else trees[0],
             "view": view if view in VIEWS else VIEWS[0],
-            "collections": [
-                _collection(
-                    descriptor,
-                    tables[descriptor.collection],
-                    user,
-                    request,
-                    offers,
-                    editing=open_name
-                    if opened == descriptor.collection
-                    else "",
-                    adding=add == descriptor.collection,
-                    variant=variant,
-                    typed=typed if where == descriptor.collection else None,
-                    draft=draft,
-                )
+            "sections": [
+                {
+                    "name": descriptor.collection,
+                    "count": len(tables[descriptor.collection].rows),
+                }
                 for descriptor in _ordered()
             ],
+            "collection": _collection(
+                _descriptor(showing),
+                tables[showing],
+                user,
+                request,
+                offers,
+                editing=open_name if opened == showing else "",
+                adding=add == showing,
+                deleting=doomed if doomed_in == showing else "",
+                variant=variant,
+                typed=typed if where == showing else None,
+                draft=draft,
+            ),
             "can_write": user.role in {"writer", "admin"},
             "done": done,
             "error": error,
             "draft": draft,
         },
     )
+
+
+def _showing(section: str, edit: str, add: str, delete: str) -> str:
+    """Which collection the page is on: the one an open form belongs to, else
+    the one asked for, else trees."""
+    for asked in (_split(edit)[0], add, _split(delete)[0], section):
+        if asked in ORDER:
+            return asked
+    return ORDER[0]
 
 
 def _ordered() -> list[Descriptor]:
@@ -358,6 +402,7 @@ def _collection(
     *,
     editing: str,
     adding: bool,
+    deleting: str,
     variant: str,
     typed: dict[str, object] | None,
     draft: dict[str, object] | None,
@@ -367,6 +412,11 @@ def _collection(
     `can_write` is the collection's OWN `write_role` run through the check the
     post would be refused by — not a page-local opinion about who may write
     what, which is how a control gets drawn for someone the API then refuses.
+
+    `mode` is what the page is showing for it: the `list`, a `form` (an add
+    or an edit), the variant `choosing` step of a union's add, a `frozen`
+    shipped default, or the `delete` confirmation. Exactly one, so an open
+    form never shares the page with the list it came from.
     """
     writable = allows(user.role, descriptor.write_role)
     held = {row.name: row for row in table.rows}
@@ -380,37 +430,53 @@ def _collection(
         else None
     )
     form = None
-    choosing = False
+    mode = "list"
     if writable and (editing or adding):
         # what the operator TYPED beats what is stored: a refused save must
         # hand back their words, not the config they were trying to replace
         config = typed if typed is not None else _held_config(held, editing)
         form = forms.form_for(descriptor, config, variant, options)
+        mode = "form"
         # a union's add starts by naming the shape: five near-identical forms
         # stacked on a page, four of them wrong, is not a choice anyone makes
-        choosing = adding and form.picks and not variant
+        if adding and form.picks and not variant:
+            mode = "choosing"
+        if editing in held and held[editing].is_default:
+            mode = "frozen"
+    doomed = held.get(deleting) if writable else None
+    if doomed is not None:
+        mode = "delete"
     return {
         "name": descriptor.collection,
         "write_role": descriptor.write_role,
         "can_write": writable,
         "document": table.document,
+        "headings": [
+            column.heading
+            for column in config_view.COLUMNS.get(descriptor.collection, ())
+        ],
         "rows": [
             {
                 "name": row.name,
                 "is_default": row.is_default,
                 "config": row.config,
-                "summary": row.summary,
-                "delete_note": ""
-                if row.is_default or not writable
-                else _delete_note(descriptor, row.name, request),
+                "cells": row.cells(descriptor.collection),
             }
             for row in table.rows
         ],
+        "mode": mode,
         "form": form,
         "editing": editing,
-        "adding": adding,
-        "choosing": choosing,
-        "frozen": editing in held and held[editing].is_default,
+        "doomed": None
+        if doomed is None
+        else {
+            "name": doomed.name,
+            "is_default": doomed.is_default,
+            "config": doomed.config,
+            "note": ""
+            if doomed.is_default
+            else _delete_note(descriptor, doomed.name, request),
+        },
         "draft": refused,
     }
 
@@ -627,9 +693,11 @@ def _draft(
     }
 
 
-def _settled(tree: str, view: str = "", **outcome: str) -> Response:
-    """Redirect-after-POST, carrying what happened."""
-    query = {"tree": tree}
+def _settled(
+    tree: str, section: str, view: str = "", **outcome: str
+) -> Response:
+    """Redirect-after-POST, back to the collection it changed."""
+    query = {"tree": tree, "section": section}
     if view:
         query["view"] = view
     query.update({k: v for k, v in outcome.items() if v})

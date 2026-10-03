@@ -36,7 +36,7 @@
       {% else %}
       <div class="title">Recall cannot run on this server yet</div>
       <p class="hint">{{ problem }}.</p>
-      <p class="hint">The query has to be embedded with the same model the tree was built with. Install the in-process backend with <code>pip install 'hrono[embed]'</code> (or <code>uv sync --extra embed</code>) and restart the server, or check the embedding model in <a href="/ui/config?tree={{ tree }}">Settings</a>.</p>
+      <p class="hint">The query has to be embedded with the same model the tree was built with. Install the in-process backend with <code>pip install 'hrono[embed]'</code> (or <code>uv sync --extra embed</code>) and restart the server, or check the embedding model in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>.</p>
       {% endif %}
     </div>
   </div>

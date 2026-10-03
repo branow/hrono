@@ -108,23 +108,47 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     conn.close()
 
 
-def test_every_collection_is_listed(browser: Browser) -> None:
+def test_every_collection_is_one_click_away(browser: Browser) -> None:
     browser.sign_in()
 
     page = browser.config()
 
     for collection in ("sources", "connections", "models", "prompts", "trees"):
-        assert f"<h2>{collection}<" in page
+        assert f'id="nav-{collection}"' in page
+        shown = browser.config(section=collection)
+        assert f"<h2>{collection.capitalize()}</h2>" in shown
+
+
+def test_only_the_chosen_collection_is_on_the_page(browser: Browser) -> None:
+    """#210: five collections on one page was a 3000px wall. A view shows the
+    collection it was asked for and none of the others' rows."""
+    browser.sign_in()
+
+    models = browser.config(section="models")
+    sources = browser.config(section="sources")
+
+    assert "https://github.com/x/y.git" in sources
+    assert "https://github.com/x/y.git" not in models
+    assert "<h2>Sources</h2>" not in models
 
 
 def test_a_configured_item_is_shown(browser: Browser) -> None:
     browser.sign_in()
 
-    page = browser.config()
+    assert "https://github.com/x/y.git" in browser.config(section="sources")
+    assert "alpha" in browser.config(section="trees")
 
-    assert "gh" in page
-    assert "https://github.com/x/y.git" in page
-    assert "alpha" in page
+
+def test_a_collection_is_a_table_of_named_columns(browser: Browser) -> None:
+    """Sources read as type, location, access and which files — not as one
+    grey run-on line of every scalar field (#210)."""
+    browser.sign_in()
+
+    page = browser.config(section="sources")
+
+    for heading in ("Type", "Location", "Access", "Which files"):
+        assert f"<th>{heading}</th>" in page
+    assert "<td>git</td>" in page and "<td>every file</td>" in page
 
 
 def test_a_secret_is_masked_and_so_is_its_ciphertext(
@@ -144,8 +168,8 @@ def test_a_secret_is_masked_and_so_is_its_ciphertext(
     """
     browser.sign_in()
 
-    listing = browser.config()
-    page = browser.config(view="json")
+    listing = browser.config(section="sources")
+    page = browser.config(section="sources", view="json")
 
     stored = json.loads(
         registry_store.get(browser.conn, "sources", "gh")["config"]  # type: ignore[arg-type,index]
@@ -163,9 +187,9 @@ def test_a_seeded_default_is_marked(browser: Browser) -> None:
     # knows what they have actually changed
     browser.sign_in()
 
-    page = browser.config()
+    page = browser.config(section="prompts")
 
-    assert "(default)" in page
+    assert "shipped default" in page
 
 
 def test_each_collection_is_masked_by_its_own_declared_paths(
@@ -179,20 +203,21 @@ def test_each_collection_is_masked_by_its_own_declared_paths(
     """
     browser.sign_in()
 
-    page = browser.config(view="json")
+    page = browser.config(section="connections", view="json")
 
     stored = json.loads(
         registry_store.get(browser.conn, "connections", "claude")["config"]  # type: ignore[arg-type,index]
     )
     assert placeholder("connection-key") not in page
     assert stored["auth"]["key"] not in page
-    assert page.count(MASK) == 2  # the source's token and the connection's key
+    assert page.count(MASK) == 1  # the connection's key
+    assert browser.config(section="sources", view="json").count(MASK) == 1
 
 
 def test_an_empty_collection_says_so(browser: Browser) -> None:
     browser.sign_in()
 
-    assert "no models yet" in browser.config()
+    assert "no models yet" in browser.config(section="models")
 
 
 def test_a_reader_can_see_config(browser: Browser) -> None:
@@ -215,5 +240,6 @@ def test_trees_are_listed_FIRST(browser: Browser) -> None:
 
     page = browser.config()
 
-    assert page.index('id="trees"') < page.index('id="sources"')
-    assert page.index('id="trees"') < page.index('id="models"')
+    assert page.index('id="nav-trees"') < page.index('id="nav-sources"')
+    assert page.index('id="nav-trees"') < page.index('id="nav-models"')
+    assert "<h2>Trees</h2>" in page  # and the landing view is trees

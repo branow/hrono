@@ -150,7 +150,7 @@ class Browser:
         found = re.search(
             rf'<textarea class="code" id="doc-{collection}"'
             r"[^>]*>(.*?)</textarea>",
-            self.config(view="json"),
+            self.config(section=collection, view="json"),
             re.S,
         )
         assert found is not None, f"no document box for {collection}"
@@ -239,11 +239,14 @@ def test_the_form_is_the_default_view(browser: Browser) -> None:
     wearing a browser. Adding a model meant knowing the schema by heart."""
     browser.sign_in()
 
-    page = browser.config()
+    page = browser.config(section="models")
 
     assert 'id="doc-models"' not in page  # not the JSON document
-    assert "Add a model" in page and "Add a tree" in page
-    assert "/ui/config?tree=default&amp;view=json" in page  # one click away
+    assert "Add a model" in page
+    assert "Add a tree" in browser.config()
+    # the JSON is one click away, labelled as the advanced alternative
+    assert "/ui/config?tree=default&amp;section=models&amp;view=json" in page
+    assert "Edit as JSON (advanced)" in page
 
 
 def test_the_fields_come_from_the_collection_s_own_model(
@@ -405,10 +408,12 @@ def test_a_seeded_default_cannot_be_edited(browser: Browser) -> None:
 def test_a_seeded_default_offers_no_edit_form(browser: Browser) -> None:
     browser.sign_in()
 
-    page = browser.config()
+    page = browser.config(section="prompts")
+    opened = browser.config(edit="prompts:brief")
 
-    assert "edit=prompts:brief" not in page
-    assert "/ui/config/prompts/brief/delete" in page  # reset is offered
+    assert "delete=prompts:brief" in page  # reset is offered
+    assert 'name="f.template"' not in opened  # and no form, only the config
+    assert "cannot be edited here" in opened
 
 
 def test_a_default_is_reset_rather_than_removed(browser: Browser) -> None:
@@ -434,7 +439,7 @@ def test_a_delete_needs_the_box_ticked(browser: Browser) -> None:
 
     answer = browser.remove("sources", "gh")
 
-    assert "tick the box to confirm" in answer.text
+    assert "confirm to delete: gh" in answer.text
     assert browser.stored("sources", "gh") is not None
 
 
@@ -545,9 +550,37 @@ def test_a_write_redirects_so_a_refresh_repeats_nothing(
     )
 
     assert answer.status_code == 303
+    # back to the collection it changed, not to the landing view
+    assert "section=sources" in answer.headers["location"]
     repeat = browser.client.get(answer.headers["location"])
     assert repeat.status_code == 200
     assert browser.stored("sources", "docs") is not None
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"edit": "sources:gh"},
+        {"add": "sources", "variant": "git"},
+        {"delete": "sources:gh"},
+    ],
+    ids=["edit", "add", "delete"],
+)
+def test_a_form_opens_as_its_own_view_and_leaves_the_list_alone(
+    browser: Browser, query: dict[str, str]
+) -> None:
+    """#210: an edit opened in the middle of a 3000px page and pushed the rest
+    down; an add put a picker ABOVE the items it was adding to. Each now opens
+    on its own, and Cancel is the list exactly as it was."""
+    browser.sign_in()
+
+    page = browser.config(**query)
+    listing = browser.config(section="sources")
+
+    assert 'class="settings-table"' not in page
+    assert 'href="/ui/config?tree=default&amp;section=sources">Cancel' in page
+    assert 'class="settings-table"' in listing
+    assert "<td>git</td>" in listing
 
 
 # --------------------------------------------------------------- JSON view
@@ -683,8 +716,9 @@ def test_trees_are_the_first_thing_on_the_page(browser: Browser) -> None:
 
     page = browser.config()
 
-    assert page.index('id="trees"') < page.index('id="sources"')
-    assert page.index('id="trees"') < page.index('id="models"')
+    assert page.index('id="nav-trees"') < page.index('id="nav-sources"')
+    assert page.index('id="nav-trees"') < page.index('id="nav-models"')
+    assert "<h2>Trees</h2>" in page
 
 
 def test_the_picker_offers_the_sources_that_are_registered(
@@ -750,8 +784,10 @@ def test_the_delete_warning_is_shown_before_the_deletion(
     browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
     _a_topic_in(browser, "beta")
 
-    page = browser.config()
+    listing = browser.config(section="trees")
+    page = browser.config(delete="trees:beta")
 
+    assert "delete=trees:beta" in listing  # a row action, not a disclosure
     assert "tree beta now maps EVERY source" in page
     assert browser.stored("trees", "beta") is not None
 
@@ -894,10 +930,14 @@ def test_each_collection_is_masked_by_its_OWN_declared_path(
     )
     browser.sign_in()
 
-    page = browser.config(view="json")
+    pages = [
+        browser.config(section=collection, view="json")
+        for collection in ("sources", "connections")
+    ]
 
-    assert key not in page and placeholder("source-token") not in page
-    assert secret.ciphertext not in page
+    for page in pages:
+        assert key not in page and placeholder("source-token") not in page
+        assert secret.ciphertext not in page
     assert json.loads(browser.document("sources"))[0]["auth"]["token"] == MASK
     assert json.loads(browser.document("connections"))[0]["auth"]["key"] == MASK
 
@@ -909,7 +949,7 @@ def test_a_credential_is_not_on_the_page_until_it_is_opened(
     thirty sources used to print thirty configs, masked but all of them."""
     browser.sign_in()
 
-    listing = browser.config()
+    listing = browser.config(section="sources")
 
     assert MASK not in listing  # nothing to mask, because nothing is shown
     assert browser.fields("sources", "gh")["f.auth.token"] == MASK
@@ -918,4 +958,4 @@ def test_a_credential_is_not_on_the_page_until_it_is_opened(
 def test_an_empty_collection_says_so(browser: Browser) -> None:
     browser.sign_in()
 
-    assert "no models yet" in browser.config()
+    assert "no models yet" in browser.config(section="models")

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}hrono — settings{% endblock %}
 {% set about = {
-  "trees": "A tree is a name plus the sources it maps. Everything else on this page exists to build one.",
-  "sources": "The repositories hrono reads. Each one is fetched, split into sections and fed into the tree.",
-  "connections": "Where the language models live — an endpoint and how to authenticate to it.",
-  "models": "The models themselves: one for embedding sections, and one per writing job (brief, condense, judge).",
+  "trees": "A tree is a name plus the sources it maps. Everything else in Settings exists to build one.",
+  "sources": "The repositories and spaces hrono reads. Each one is fetched, split into sections and fed into the trees that map it.",
+  "connections": "Where the language models live: a provider, an endpoint, and how to authenticate to it.",
+  "models": "The models themselves: one for embedding sections, and one per writing job (condense, brief, judge).",
   "prompts": "The instructions sent with each writing job. Changing one makes every brief it wrote stale."
 } %}
 {% set singular = {
@@ -22,6 +22,8 @@
   "role": "Which writing job calls this. Leave it unset on a one-model install.",
   "kind": "What the model is for: text writes briefs, embedding places sections."
 } %}
+{% set c = collection %}
+{% set listing = "/ui/config?tree=" ~ tree ~ "&section=" ~ c.name %}
 
 {% macro problems(list, title) %}
 <div class="callout bad">
@@ -95,23 +97,19 @@
 {% endif %}
 {% endmacro %}
 
-{% macro item_form(collection, action, heading, submit) %}
-{% set form = collection.form %}
-<form class="item-form" method="post" action="{{ action }}">
+{% macro item_form(c, submit) %}
+{% set form = c.form %}
+<form class="item-form" method="post" action="/ui/config/{{ c.name }}/item">
   <input type="hidden" name="tree" value="{{ tree }}">
-  <input type="hidden" name="name" value="{{ collection.editing }}">
+  <input type="hidden" name="name" value="{{ c.editing }}">
   {% if form.discriminator %}<input type="hidden" name="variant" value="{{ form.chosen }}">{% endif %}
-  <div class="form-head">
-    <strong>{{ heading }}</strong>
-    {% if form.discriminator %}<span class="chip accent">{{ form.discriminator }} {{ form.chosen }}</span>{% endif %}
-  </div>
-  {% if collection.draft and collection.draft.on_form %}
-  {% if collection.draft.errors %}{{ problems(collection.draft.errors, "Not saved — nothing was changed") }}{% endif %}
-  {{ impact_of(collection.draft) }}
+  {% if c.draft and c.draft.on_form %}
+  {% if c.draft.errors %}{{ problems(c.draft.errors, "Not saved — nothing was changed") }}{% endif %}
+  {{ impact_of(c.draft) }}
   {% endif %}
   <div class="fields">
     {% for field in form.fields %}
-    {% set id = "f-" ~ collection.name ~ "-" ~ field.path|replace(".", "-") %}
+    {% set id = "f-" ~ c.name ~ "-" ~ field.path|replace(".", "-") %}
     <div class="field{% if field.kind in ('roomy', 'json', 'lines', 'multi') %} wide{% endif %}">
       <label for="{{ id }}">
         {% if field.group %}<span class="dim">{{ field.group }}.</span>{% endif %}{{ field.label }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %}
@@ -126,7 +124,7 @@
     <button class="btn primary" type="submit">{{ submit }}</button>
     <button class="btn" type="submit" name="preview" value="1">Preview impact</button>
     <span class="tip" tabindex="0" role="note" data-tip="Checks the config and reports which trees would need rewriting, without saving anything">?</span>
-    <a class="btn quiet" href="/ui/config?tree={{ tree }}">Cancel</a>
+    <a class="btn quiet" href="{{ listing }}">Cancel</a>
   </div>
 </form>
 {% endmacro %}
@@ -134,11 +132,13 @@
 {% block main %}
 <div class="page-head">
   <h1>Settings<span class="tip" tabindex="0" role="note" data-tip="What hrono reads, which models write, and which sources each tree maps. Secrets are masked before they reach this page and stay as they are unless you type over them">?</span></h1>
-  <div class="viewpick" role="group" aria-label="how to edit these settings">
-    <a class="btn small{% if view == 'form' %} primary{% endif %}" href="/ui/config?tree={{ tree }}&amp;view=form">Form</a>
-    <a class="btn small{% if view == 'json' %} primary{% endif %}" href="/ui/config?tree={{ tree }}&amp;view=json">JSON</a>
-  </div>
 </div>
+
+<nav class="subnav" aria-label="settings">
+  {% for s in sections %}
+  <a id="nav-{{ s.name }}" href="/ui/config?tree={{ tree }}&amp;section={{ s.name }}"{% if s.name == c.name %} aria-current="page"{% endif %}>{{ s.name|capitalize }} <span class="count">{{ s.count }}</span></a>
+  {% endfor %}
+</nav>
 
 {% if error %}
 <div class="callout bad mb-3">
@@ -151,130 +151,141 @@
 </div>
 {% endif %}
 
-<div class="stack">
-{% for collection in collections %}
-<section class="card" id="{{ collection.name }}">
+<section class="card" id="{{ c.name }}">
+{% if c.mode == "form" or c.mode == "choosing" or c.mode == "frozen" or c.mode == "delete" %}
   <div class="card-head">
     <div>
-      <h2>{{ collection.name }}<span class="tip" tabindex="0" role="note" data-tip="{{ about.get(collection.name, '') }}{% if collection.name == 'trees' %} Which tree every other page is showing; the bar at the top switches too.{% endif %}">?</span></h2>
-
+      <p class="crumb"><a href="{{ listing }}">{{ c.name|capitalize }}</a></p>
+      <h2>
+        {% if c.mode == "delete" %}{{ "Reset" if c.doomed.is_default else "Delete" }} {{ singular[c.name] }} {{ c.doomed.name }}
+        {% elif c.mode == "frozen" %}{{ singular[c.name]|capitalize }} {{ c.editing }}
+        {% elif c.editing %}Edit {{ singular[c.name] }} {{ c.editing }}
+        {% else %}New {{ singular[c.name] }}{% endif %}
+      </h2>
     </div>
-    <span class="chip num">{{ collection.rows|length }}</span>
+    {% if c.form and c.form.discriminator and c.mode == "form" %}<span class="chip">{{ c.form.discriminator }} {{ c.form.chosen }}</span>{% endif %}
+  </div>
+  <div class="card-body stack">
+  {% if c.mode == "choosing" %}
+    <p class="hint">What kind of {{ singular[c.name] }}?</p>
+    <ul class="pick">
+      {% for shape in c.form.variants %}
+      <li><a class="btn small" href="/ui/config?tree={{ tree }}&amp;add={{ c.name }}&amp;variant={{ shape.name }}">{{ shape.name }}</a></li>
+      {% endfor %}
+    </ul>
+    <p class="act-row"><a class="btn quiet" href="{{ listing }}">Cancel</a></p>
+  {% elif c.mode == "frozen" %}
+    {% if c.draft and c.draft.errors %}{{ problems(c.draft.errors, "Not saved — nothing was changed") }}{% endif %}
+    <p class="hint">Shipped with hrono, so it cannot be edited here. Reset it to what shipped, or add your own beside it.</p>
+    <pre class="preview">{{ c.rows|selectattr("name", "equalto", c.editing)|map(attribute="config")|first }}</pre>
+    <p class="act-row"><a class="btn quiet" href="{{ listing }}">Back to {{ c.name }}</a></p>
+  {% elif c.mode == "delete" %}
+    {% if c.doomed.is_default %}
+    <p class="hint">This puts back the configuration hrono shipped with, discarding any change.</p>
+    <pre class="preview">{{ c.doomed.config }}</pre>
+    {% elif c.doomed.note %}
+    <div class="callout warn">
+      <div class="body"><div class="title">Before you delete {{ c.doomed.name }}</div><p class="hint">{{ c.doomed.note }}</p></div>
+    </div>
+    {% endif %}
+    <form class="act-row" method="post" action="/ui/config/{{ c.name }}/{{ c.doomed.name }}/delete">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      <input type="hidden" name="confirm" value="1">
+      {% if c.doomed.is_default %}
+      <button class="btn primary" type="submit">Reset {{ c.doomed.name }}</button>
+      {% else %}
+      <button class="btn danger" type="submit">Delete {{ c.doomed.name }}</button>
+      {% endif %}
+      <a class="btn quiet" href="{{ listing }}">Cancel</a>
+    </form>
+  {% else %}
+    {{ item_form(c, "Save" if c.editing else "Create") }}
+  {% endif %}
+  </div>
+
+{% else %}
+  <div class="card-head">
+    <div>
+      <h2>{{ c.name|capitalize }}</h2>
+      <p class="hint">{{ about[c.name] }}</p>
+    </div>
+    <div class="row">
+      {% if view == "json" %}
+      <a class="btn small quiet" href="{{ listing }}">Back to the table</a>
+      {% else %}
+      <a class="btn small quiet" href="{{ listing }}&amp;view=json">Edit as JSON (advanced)</a>
+      {% if c.can_write %}<a class="btn small primary" href="/ui/config?tree={{ tree }}&amp;add={{ c.name }}">Add a {{ singular[c.name] }}</a>{% endif %}
+      {% endif %}
+    </div>
   </div>
 
   {% if view == "json" %}
   <div class="card-body stack">
-    {% if collection.can_write %}
-    <form method="post" action="/ui/config/{{ collection.name }}/replace">
+    {% if c.can_write %}
+    <form method="post" action="/ui/config/{{ c.name }}/replace">
       <input type="hidden" name="tree" value="{{ tree }}">
       <div class="field">
-        <label for="doc-{{ collection.name }}">The whole collection<span class="tip" tabindex="0" role="note" data-tip="A JSON array. Add an entry to add an item, delete an entry to remove one; saving writes what changed and removes what is gone. A masked secret left alone keeps the credential already stored">?</span></label>
-        {% if collection.draft and collection.draft.errors %}{{ problems(collection.draft.errors, "Not saved — nothing was changed") }}{% endif %}
-        <textarea class="code" id="doc-{{ collection.name }}" name="config" rows="16" spellcheck="false">{{ collection.draft.text if collection.draft and collection.draft.text else collection.document }}</textarea>
+        <label for="doc-{{ c.name }}">Every {{ singular[c.name] }}, as one JSON array<span class="tip" tabindex="0" role="note" data-tip="Add an entry to add an item, delete an entry to remove one; saving writes what changed and removes what is gone. A masked secret left alone keeps the credential already stored">?</span></label>
+        {% if c.draft and c.draft.errors %}{{ problems(c.draft.errors, "Not saved — nothing was changed") }}{% endif %}
+        <textarea class="code" id="doc-{{ c.name }}" name="config" rows="16" spellcheck="false">{{ c.draft.text if c.draft and c.draft.text else c.document }}</textarea>
       </div>
       <div class="act-row">
-        <button class="btn primary" type="submit">Save {{ collection.name }}</button>
+        <button class="btn primary" type="submit">Save {{ c.name }}</button>
       </div>
     </form>
     {% else %}
-    <pre class="preview">{{ collection.document }}</pre>
+    <pre class="preview">{{ c.document }}</pre>
     {% endif %}
   </div>
 
-  {% else %}
-  <div class="card-body stack">
-    {% if collection.adding %}
-    {% if collection.choosing %}
-    <div class="stack">
-      <p class="hint">What kind of {{ singular.get(collection.name, "item") }}?</p>
-      <ul class="pick">
-        {% for shape in collection.form.variants %}
-        <li><a class="btn small" href="/ui/config?tree={{ tree }}&amp;add={{ collection.name }}&amp;variant={{ shape.name }}">{{ shape.name }}</a></li>
-        {% endfor %}
-      </ul>
-      <p><a class="btn quiet small" href="/ui/config?tree={{ tree }}">Cancel</a></p>
-    </div>
-    {% else %}
-    {{ item_form(collection, "/ui/config/" ~ collection.name ~ "/item", "New " ~ singular.get(collection.name, "item"), "Create") }}
-    {% endif %}
-    {% endif %}
-
-    {% if not collection.rows and not collection.adding %}
+  {% elif not c.rows %}
+  <div class="card-body">
     <div class="empty">
-      <div class="title">no {{ collection.name }} yet</div>
-      {% if collection.name == "trees" %}
+      <div class="title">no {{ c.name }} yet</div>
+      {% if c.name == "trees" %}
       <p class="hint">A tree is a name plus the sources it maps — register a source first, then make one here.</p>
       {% endif %}
     </div>
-    {% endif %}
+  </div>
 
-    {% for item in collection.rows %}
-    <div class="setting">
-      {% if collection.editing == item.name and collection.form %}
-      {% if collection.frozen %}
-      {{ problems([{"field": item.name, "msg": "a shipped default cannot be edited — reset it, or add your own beside it"}], "Frozen") }}
-      <pre class="preview">{{ item.config }}</pre>
-      <p><a class="btn quiet small" href="/ui/config?tree={{ tree }}">Close</a></p>
-      {% else %}
-      {{ item_form(collection, "/ui/config/" ~ collection.name ~ "/item", item.name, "Save") }}
-      {% endif %}
-      {% else %}
-      <div class="row item-row">
-        <strong>{{ item.name }}</strong>
-        {% if item.is_default %}<span class="chip accent">(default)<span class="tip" tabindex="0" role="note" data-tip="Shipped with hrono and frozen: it cannot be edited, but it can be reset to what shipped, and you can add your own beside it">?</span></span>{% endif %}
-        {% if item.summary %}<span class="hint item-says">{{ item.summary }}</span>{% endif %}
-        <span class="grow"></span>
-        {% if collection.name == "trees" %}
-        {% if item.name == tree %}
-        <span class="chip ok">looking at it</span>
-        {% else %}
-        <a class="btn small" href="/ui/config?tree={{ item.name }}">Switch to it</a>
-        {% endif %}
-        <a class="btn small quiet" href="/ui/trees/{{ item.name }}/graph?tree={{ item.name }}">Open the map</a>
-        {% endif %}
-        {% if collection.can_write and not item.is_default %}
-        <a class="btn small" href="/ui/config?tree={{ tree }}&amp;edit={{ collection.name }}:{{ item.name }}">Edit</a>
-        {% endif %}
-      </div>
-      {% endif %}
-
-      {% if collection.can_write and not item.is_default %}
-      <details class="reveal danger-act">
-        <summary class="twisty">Delete this {{ singular.get(collection.name, "item") }}</summary>
-        {% if item.delete_note %}
-        <div class="callout warn">
-          <div class="body"><div class="title">Before you delete {{ item.name }}</div><p class="hint">{{ item.delete_note }}</p></div>
-        </div>
-        {% endif %}
-        <form class="row settings-act" method="post" action="/ui/config/{{ collection.name }}/{{ item.name }}/delete">
-          <input type="hidden" name="tree" value="{{ tree }}">
-          <label class="confirm"><input type="checkbox" name="confirm" value="1"> confirm</label>
-          <button class="btn danger small" type="submit">Delete {{ item.name }}</button>
-        </form>
-      </details>
-      {% elif collection.can_write and item.is_default %}
-      <details class="reveal">
-        <summary class="twisty">What it ships as</summary>
-        <pre class="preview">{{ item.config }}</pre>
-        <form class="row settings-act" method="post" action="/ui/config/{{ collection.name }}/{{ item.name }}/delete">
-          <input type="hidden" name="tree" value="{{ tree }}">
-          <label class="confirm mild"><input type="checkbox" name="confirm" value="1"> confirm</label>
-          <button class="btn small" type="submit">Reset to the shipped default</button>
-          <span class="tip" tabindex="0" role="note" data-tip="Puts back the configuration hrono shipped with, discarding any drift">?</span>
-        </form>
-      </details>
-      {% endif %}
-    </div>
-    {% endfor %}
-
-    {% if collection.can_write and not collection.adding %}
-    <p class="act-row">
-      <a class="btn" href="/ui/config?tree={{ tree }}&amp;add={{ collection.name }}">Add a {{ singular.get(collection.name, "item") }}</a>
-    </p>
-    {% endif %}
+  {% else %}
+  <div class="card-body table-wrap">
+    <table class="settings-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          {% for heading in c.headings %}<th>{{ heading }}</th>{% endfor %}
+          <th><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in c.rows %}
+        <tr>
+          <td class="name">
+            <strong>{{ item.name }}</strong>
+            {% if item.is_default %}<span class="chip">shipped default<span class="tip" tabindex="0" role="note" data-tip="Shipped with hrono and frozen: it cannot be edited, but it can be reset to what shipped, and you can add your own beside it">?</span></span>{% endif %}
+            {% if c.name == "trees" and item.name == tree %}<span class="chip ok">current tree</span>{% endif %}
+          </td>
+          {% for cell in item.cells %}<td>{{ cell }}</td>{% endfor %}
+          <td class="acts">
+            {% if c.name == "trees" %}
+            {% if item.name != tree %}<a class="btn small quiet" href="/ui/config?tree={{ item.name }}&amp;section=trees">Switch to it</a>{% endif %}
+            <a class="btn small quiet" href="/ui/trees/{{ item.name }}/graph?tree={{ item.name }}">Open the map</a>
+            {% endif %}
+            {% if c.can_write and not item.is_default %}
+            <a class="btn small" href="/ui/config?tree={{ tree }}&amp;edit={{ c.name }}:{{ item.name }}">Edit</a>
+            <a class="btn small quiet danger-link" href="/ui/config?tree={{ tree }}&amp;delete={{ c.name }}:{{ item.name }}">Delete</a>
+            {% elif c.can_write %}
+            <a class="btn small" href="/ui/config?tree={{ tree }}&amp;edit={{ c.name }}:{{ item.name }}">View</a>
+            <a class="btn small quiet" href="/ui/config?tree={{ tree }}&amp;delete={{ c.name }}:{{ item.name }}">Reset</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
   {% endif %}
+{% endif %}
 </section>
-{% endfor %}
-</div>
 {% endblock %}
