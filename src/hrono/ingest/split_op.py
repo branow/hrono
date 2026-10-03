@@ -29,7 +29,9 @@ from hrono.ingest.identity import (
 from hrono.ingest.readers import resolve
 from hrono.ingest.split import structure
 from hrono.ingest.split.constants import section_budget
+from hrono.ingest.split.node import Node
 from hrono.ingest.split.pack import sections as pack_sections
+from hrono.ingest.split.section import Section
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.recall import fts
@@ -79,9 +81,7 @@ def store_unit(
     tree = structure(Path(path), raw)
     address = Address(source_type, instance, path, unit.version or version)
     stored: list[tuple[int, int, str]] = []
-    for ordinal, section in enumerate(
-        pack_sections(tree, section_budget(Path(path)), raw)
-    ):
+    for ordinal, section in enumerate(sections_of(tree, path, raw)):
         section_hash = _store_body(conn, raw, section.start, section.end)
         section_id = store.insert_section(
             conn,
@@ -122,6 +122,12 @@ def store_unit(
                 ),
             )
     return tuple(stored)
+
+
+def sections_of(tree: Node, path: str, raw: bytes) -> tuple[Section, ...]:
+    """The sections one file is cut into: the cut a split stores and an
+    estimate counts, so the two cannot disagree on how many there are."""
+    return pack_sections(tree, section_budget(Path(path)), raw)
 
 
 def _cut_by_path(

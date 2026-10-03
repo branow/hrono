@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}hrono — set up{% endblock %}
+{% from "_parts.html" import problems, input_for, form_fields %}
+{% macro refused(title="Not saved — nothing was changed") %}
+{% if refusals %}{{ problems(refusals, title) }}{% endif %}
+{% endmacro %}
+{% block main %}
+<div class="page-head">
+  <div class="eyebrow">set up</div>
+  <h1>From an empty install to a built tree</h1>
+  <p class="hint mt-2">Each step saves what you enter once it has been tested. Leave at any point and come back: the page opens at the first step still open, and nothing is built until the last one.</p>
+</div>
+
+<nav class="row mb-3" aria-label="Steps" id="steps">
+  {% for one in steps %}
+  <a class="chip {{ 'ok' if one.done else ('accent' if one.key == step else 'plain') }}" data-step="{{ one.key }}" href="/ui/setup?tree={{ tree }}&amp;step={{ one.key }}"{% if one.key == step %} aria-current="step"{% endif %}>{{ loop.index }}. {{ one.label }}{% if one.done %} &#10003;{% endif %}</a>
+  {% endfor %}
+</nav>
+
+{% if not can_write %}
+<div class="callout warn mb-3"><div class="body"><p class="hint">Setting up needs an account that can write. You can read what is configured here, but not change it.</p></div></div>
+{% endif %}
+
+{% if step == "connection" %}
+<section class="card" id="step-connection">
+  <div class="card-head"><h2>Connect a model provider</h2></div>
+  <div class="card-body stack">
+    {% if state.connections and not showing_form %}
+    <div class="callout ok"><div class="body">
+      <div class="title">Connected</div>
+      <p class="hint">{% for one in state.connections %}<code>{{ one.name }}</code> ({{ one.provider }}){{ ", " if not loop.last }}{% endfor %}</p>
+    </div></div>
+    <div class="act-row">
+      <a class="btn primary" href="/ui/setup?tree={{ tree }}&amp;step=models">Continue</a>
+      {% if can_write %}<a class="btn" href="/ui/setup?tree={{ tree }}&amp;step=connection&amp;change=1">Add or change a connection</a>{% endif %}
+    </div>
+    {% else %}
+    <p class="hint">hrono needs a language model to write what each topic is about. Pick how it reaches one.</p>
+    <div class="row" role="group" aria-label="Provider">
+      {% for one in providers %}
+      <a class="btn{{ ' primary' if one.name == provider.name }}" data-provider="{{ one.name }}" href="/ui/setup?tree={{ tree }}&amp;step=connection&amp;change=1&amp;provider={{ one.name }}">{{ one.label }}</a>
+      {% endfor %}
+    </div>
+    <p class="hint" id="trade-off">{{ provider.says }}</p>
+    <p class="hint">Another provider can be added in <a href="/ui/config?tree={{ tree }}&amp;section=connections">Settings</a>.</p>
+    {% if can_write %}
+    <form class="item-form" method="post" action="/ui/setup/connection">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      <input type="hidden" name="variant" value="{{ provider.name }}">
+      {{ refused() }}
+      {{ form_fields(form, "connection") }}
+      <div class="act-row">
+        <button class="btn primary" type="submit">{{ "Test and save" if provider.needs_key else "Check it works and save" }}</button>
+        <span class="hint">{{ "One request to the provider; nothing is stored unless it accepts the key." if provider.needs_key else "Checks that the claude command runs; nothing is stored unless it does." }}</span>
+      </div>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+{% elif step == "models" %}
+<section class="card" id="step-models">
+  <div class="card-head"><h2>Choose the models</h2></div>
+  <div class="card-body stack">
+    {% if state.model_gaps and foreign %}
+    <div class="callout warn"><div class="body">
+      <div class="title">The models already registered are not enough to build</div>
+      <ul class="field-errors">{% for gap in state.model_gaps %}<li>{{ gap.says|idents }}</li>{% endfor %}</ul>
+      <p class="hint">Fix them in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>; this page adds models only to an install that has none.</p>
+    </div></div>
+    {% elif not state.model_gaps %}
+    <div class="callout ok"><div class="body">
+      <div class="title">The models are in place</div>
+      <p class="hint">An embedding model and a writing model for every job answered a test call.</p>
+    </div></div>
+    <div class="act-row"><a class="btn primary" href="/ui/setup?tree={{ tree }}&amp;step=source">Continue</a></div>
+    {% else %}
+    <p class="hint">One model embeds sections on this machine, which needs no key. Each writing job gets its own model: a cheaper one condenses every section, a stronger one writes the briefs. Change an id if you want a different one.</p>
+    {% if can_write %}
+    <form class="item-form" method="post" action="/ui/setup/models">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      {{ refused() }}
+      <fieldset class="fields">
+        <div class="field">
+          <label for="m-connection">Connection</label>
+          <select id="m-connection" name="connection">
+            {% for name in connection_names %}<option value="{{ name }}"{{ " selected" if name == chosen_connection }}>{{ name }}</option>{% endfor %}
+          </select>
+          <p class="hint">The models below are called through it.</p>
+        </div>
+        <div class="field">
+          <label for="m-embedding">Embedding model</label>
+          <input class="line" type="text" id="m-embedding" name="embedding" value="{{ embedding }}" autocomplete="off" spellcheck="false">
+          <p class="hint">Loaded once and run here. The first load downloads its weights, which takes a little while.</p>
+        </div>
+        {% for one in roles %}
+        <div class="field">
+          <label for="m-{{ one.role }}">{{ one.role }} model</label>
+          <input class="line" type="text" id="m-{{ one.role }}" name="{{ one.role }}" value="{{ one.model }}" autocomplete="off" spellcheck="false">
+        </div>
+        {% endfor %}
+      </fieldset>
+      <div class="act-row">
+        <button class="btn primary" type="submit">Test and save</button>
+        <span class="hint">Each model is asked one small question before it is stored. This can take a minute.</span>
+      </div>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+{% elif step == "source" %}
+<section class="card" id="step-source">
+  <div class="card-head"><h2>Point it at a repository</h2></div>
+  <div class="card-body stack">
+    {% if source_names and not showing_form %}
+    {{ refused("Could not fetch it") }}
+    <div class="row">
+      {% for name in source_names %}
+      <a class="chip {{ 'accent' if name == source else 'plain' }}" href="/ui/setup?tree={{ tree }}&amp;step=source&amp;source={{ name }}">{{ name }}</a>
+      {% endfor %}
+    </div>
+    {% if preview %}
+    <div id="preview" class="stack">
+      <p><strong class="num">{{ preview.files }}</strong> file{{ "" if preview.files == 1 else "s" }} would be read, <strong class="num">{{ preview.bytes|size }}</strong> in all.
+        <span class="tip" tabindex="0" role="note" data-tip="Worked out from the files fetched, with the same filter a sync reads through. No model is called.">?</span></p>
+      {% if preview.largest %}
+      <p class="hint">The largest files it would read</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>File</th><th>Size</th></tr></thead>
+        <tbody>{% for one in preview.largest %}<tr><td><code>{{ one.path }}</code></td><td class="num">{{ one.size|size }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% endif %}
+      {% if preview.refused %}
+      <p class="hint">What it leaves out, and why</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Reason</th><th>Files</th><th>Size</th></tr></thead>
+        <tbody>{% for one in preview.refused %}<tr><td>{{ one.why }}</td><td class="num">{{ one.files }}</td><td class="num">{{ one.bytes|size }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}
+      <p class="hint">Nothing is left out.</p>
+      {% endif %}
+    </div>
+    {% elif source %}
+    <p class="hint">This source has not been fetched here yet.</p>
+    {% endif %}
+    <div class="act-row">
+      {% if preview %}<a class="btn primary" href="/ui/setup?tree={{ tree }}&amp;step=build">Continue</a>{% endif %}
+      {% if can_write and source %}
+      <form class="inline" method="post" action="/ui/setup/source/fetch">
+        <input type="hidden" name="tree" value="{{ tree }}"><input type="hidden" name="name" value="{{ source }}">
+        <button class="btn" type="submit">{{ "Fetch again" if preview else "Fetch and preview" }}</button>
+      </form>
+      {% endif %}
+      {% if can_write %}<a class="btn" href="/ui/setup?tree={{ tree }}&amp;step=source&amp;source={{ source }}&amp;new=1">Add another source</a>{% endif %}
+    </div>
+    {% else %}
+    <p class="hint">A git repository: a web address, or a path on this machine. Only the files that are worth reading are kept; narrow it with the file filter below and the preview shows the effect once it is saved.</p>
+    {% if can_write %}
+    <form class="item-form" method="post" action="/ui/setup/source">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      <input type="hidden" name="variant" value="git">
+      {{ refused() }}
+      {{ form_fields(form, "source") }}
+      <div class="act-row">
+        <button class="btn primary" type="submit">Save and show what it holds</button>
+        <span class="hint">Checks the repository can be reached, then fetches it. No model is called.</span>
+      </div>
+    </form>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+{% else %}
+<section class="card" id="step-build">
+  <div class="card-head"><h2>Estimate and build</h2></div>
+  <div class="card-body stack">
+    {% if state.built %}
+    <div class="callout ok"><div class="body">
+      <div class="title">This tree is already built</div>
+      <p class="hint">A new source is folded in by a sync, which pays only for what changed.</p>
+    </div></div>
+    <div class="act-row">
+      {% if can_write %}<form class="inline" method="post" action="/ui/trees/{{ tree }}/sync"><button class="btn primary" type="submit">Sync now</button></form>{% endif %}
+      <a class="btn" href="/ui?tree={{ tree }}">Back to Home</a>
+    </div>
+    {% elif state.model_gaps or not state.sources %}
+    <div class="callout warn"><div class="body"><p class="hint">Something above is still open, so there is nothing to build yet.</p></div></div>
+    <div class="act-row"><a class="btn primary" href="/ui/setup?tree={{ tree }}">Go to the open step</a></div>
+    {% else %}
+    {% if unread %}
+    <div class="callout warn"><div class="body"><p class="hint">Not fetched yet, so not counted: {{ unread|join(", ") }}. <a href="/ui/setup?tree={{ tree }}&amp;step=source">Fetch it on the Source step</a>.</p></div></div>
+    {% endif %}
+    {% if elsewhere %}
+    <div class="callout warn"><div class="body"><p class="hint">Not counted, because only git sources can be sized here: {{ elsewhere|join(", ") }}.</p></div></div>
+    {% endif %}
+    {% if estimate %}
+    <div id="estimate" class="stack">
+      <p>Building this tree is about <strong class="num">{{ estimate.calls }}</strong> model calls over <strong class="num">{{ estimate.sections }}</strong> sections, around <strong class="num">{{ "{:,}".format(estimate.input) }}</strong> tokens in and <strong class="num">{{ "{:,}".format(estimate.output) }}</strong> out, taking roughly <strong>{{ estimate.seconds|taken }}</strong>.</p>
+      <p id="money">
+        {% if estimate.billed %}It would be billed about <strong class="num" data-spend="metered">{{ estimate.metered|dollars }}</strong>{% if estimate.metered is none %} <span class="faint">(no price known for {{ estimate.unpriced|join(", ") }})</span>{% endif %}.{% endif %}
+        {% if estimate.subscribed %}Through your subscription nothing is charged per call; the same tokens would cost about <strong class="num" data-spend="estimate">{{ estimate.subscription|dollars }}</strong> at the API's prices, which is an estimate and not spend.{% endif %}
+      </p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Job</th><th>Model</th><th>Calls</th><th>Tokens in</th><th>Tokens out</th></tr></thead>
+        <tbody>{% for one in estimate.stages %}<tr><td>{{ one.role }}</td><td><code>{{ one.upstream }}</code></td><td class="num">{{ one.calls }}</td><td class="num">{{ "{:,}".format(one.input) }}</td><td class="num">{{ "{:,}".format(one.output) }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <p class="hint" id="basis">An estimate: {{ estimate.basis }}. Home and the run page show what it really spent.</p>
+    </div>
+    {% if can_write %}
+    <form method="post" action="/ui/setup/build" class="act-row">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      <button class="btn primary" type="submit">Build the tree</button>
+      <span class="hint">Starts the build and shows it running. You can leave the page; it carries on.</span>
+    </form>
+    {% endif %}
+    {% elif not unread %}
+    <p class="hint">There are no files to count.</p>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

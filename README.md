@@ -24,7 +24,9 @@ start, and nothing it has encrypted will open.
 
 Then register a source and a model (`hrono sources set`, `hrono models set` —
 each takes a JSON config on stdin or `-f`), and build the tree with
-`hrono tree maintain default`.
+`hrono tree maintain default`. Or do all of that in the browser: sign in to the
+dashboard with the bootstrap token and its Set up page walks a new install from
+a connection to a built tree (below).
 
 A `set` is validated before it is stored: a connection against its provider, a
 local embedding model by loading its weights (about 14 s the first time for
@@ -118,6 +120,20 @@ hundreds of topics. Files takes a path, or the start of one, to the sections
 cut from it and the topic each was filed under; a section waiting to be filed
 says it is parked, and a path outside the tree's sources says it is not
 ingested.
+
+Set up is the path for a new install, reached from Home while the tree is empty
+and from Settings when you want to add a git source. Four steps, each a real
+form over the registry Settings edits: a connection (tested against its
+provider before it is saved, so a wrong key is refused in the provider's own
+words and nothing is stored), the models (an embedding model and one text model
+per writing role, each asked one small question before it is stored), a source
+(fetched, then a preview of the files the filter keeps, the largest, and what it
+leaves out and why — read through the same filter ingest uses and with no model
+call) and an estimate (model calls, tokens, time and cost, from the price table,
+with the basis stated and a subscription's figure marked as not spend) ending in
+the build, which lands on its run. A step is done when the registry says so, so
+leaving halfway and coming back resumes where you stopped, and nothing is built
+until the last step.
 
 Settings shows one collection at a time — trees, sources, connections, models,
 prompts — as a table, with each field of a form labelled and explained. It says

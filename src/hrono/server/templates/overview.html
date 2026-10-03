@@ -45,6 +45,13 @@
 <div class="card">
   <div class="card-body stack" data-empty>
     <h2>Nothing in this tree yet</h2>
+    {% if can_write %}
+    <div class="callout mb-2"><div class="body">
+      <div class="title">{{ "Finish setting up" if setup_started else "Set up this install" }}</div>
+      <p class="hint">A guided path from a model connection to a built tree, with what it will read and what it will cost before anything is built.</p>
+      <div class="mt-3"><a class="btn primary" id="setup-link" href="/ui/setup?tree={{ tree }}">{{ "Continue setting up" if setup_started else "Set up and build" }}</a></div>
+    </div></div>
+    {% endif %}
     <ol class="steps">
       <li>
         <div class="what">Register a source<span class="tip" tabindex="0" role="note" data-tip="A git repository to read{% if sources %}. You have {{ sources }} registered already{% endif %}">?</span></div>

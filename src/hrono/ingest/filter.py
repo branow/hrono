@@ -54,47 +54,74 @@ _SNIFF_BYTES = 8192
 
 
 @dataclass(frozen=True)
+class Seen:
+    """One file of the cache, and why it is not ingested (None: it is)."""
+
+    path: str
+    size: int
+    why: str | None
+
+
+@dataclass(frozen=True)
 class _Rules:
     """The resolved glob layers for one source's filter config."""
 
     only: tuple[str, ...]
     exclude: tuple[str, ...]
-    ignore: tuple[str, ...]
+    ignore: tuple[tuple[str, str], ...]
     include: tuple[str, ...]
 
-    def skips(self, rel: PurePosixPath) -> bool:
-        """True when ``rel`` is not worth a section under these rules."""
+    def skips(self, rel: PurePosixPath) -> str | None:
+        """Why ``rel`` is not worth a section under these rules, or None."""
         if self.only and not _matches(rel, self.only):
-            return True
+            return "outside filter.only"
         if _matches(rel, self.exclude):
-            return True
+            return "matched filter.exclude"
         lowered = PurePosixPath(rel.as_posix().lower())
-        return _matches(lowered, self.ignore) and not _matches(
-            rel, self.include
-        )
+        for group, pattern in self.ignore:
+            if _matches(lowered, (pattern,)) and not _matches(
+                rel, self.include
+            ):
+                return f"ignored by default: {group}"
+        return None
 
 
 def ingestable(
     cache: Path, filter_config: dict[str, object] | None
 ) -> tuple[str, ...]:
     """Return the sorted repo-relative paths eligible for splitting."""
+    return tuple(
+        seen.path for seen in survey(cache, filter_config) if seen.why is None
+    )
+
+
+def survey(
+    cache: Path, filter_config: dict[str, object] | None
+) -> tuple[Seen, ...]:
+    """Every regular file of ``cache``, sorted, each with its verdict.
+
+    The ONE place the filter decides (#026): ``ingestable`` is this with the
+    refused ones dropped, so a preview of what a source would ingest cannot
+    drift from what ingest reads.
+    """
     rules = _rules(filter_config)
     max_bytes = int(_max_size_mb(filter_config) * 1024 * 1024)
 
-    kept: list[str] = []
+    seen: list[Seen] = []
     for path in cache.rglob("*"):
         rel = path.relative_to(cache)
         if ".git" in rel.parts or path.is_symlink() or not path.is_file():
             continue
-        if rules.skips(PurePosixPath(rel.as_posix())):
-            continue
         size = path.stat().st_size
-        if size == 0 or size > max_bytes:
-            continue
-        if _has_null_byte(path):
-            continue
-        kept.append(rel.as_posix())
-    return tuple(sorted(kept))
+        why = rules.skips(PurePosixPath(rel.as_posix()))
+        if why is None and size == 0:
+            why = "empty"
+        elif why is None and size > max_bytes:
+            why = "over the size limit"
+        elif why is None and _has_null_byte(path):
+            why = "binary"
+        seen.append(Seen(rel.as_posix(), size, why))
+    return tuple(sorted(seen, key=lambda one: one.path))
 
 
 def _rules(config: dict[str, object] | None) -> _Rules:
@@ -106,12 +133,14 @@ def _rules(config: dict[str, object] | None) -> _Rules:
     )
 
 
-def _ignored(config: dict[str, object] | None) -> tuple[str, ...]:
+def _ignored(
+    config: dict[str, object] | None,
+) -> tuple[tuple[str, str], ...]:
     if _flag(config, "replace_defaults"):
         return ()
     keep = _flag(config, "include_generated")
     return tuple(
-        pattern
+        (group, pattern)
         for group, patterns in DEFAULT_IGNORE.items()
         if not (keep and group == OPTIONAL_IGNORE)
         for pattern in patterns

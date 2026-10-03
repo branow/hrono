@@ -24,7 +24,7 @@ from hrono.registry.write import decrypt
 
 _TIMEOUT = 120.0
 
-__all__ = ["SyncError", "sync"]
+__all__ = ["SyncError", "sync", "sync_source"]
 
 
 def sync(job: Job, context: JobContext) -> Mapping[str, int]:
@@ -33,7 +33,16 @@ def sync(job: Job, context: JobContext) -> Mapping[str, int]:
     Reports whether the version is new, so a first sync says it fetched one
     and a re-sync of an unchanged source says it had nothing to do (#213).
     """
-    name = str(job.scope["name"])
+    return sync_source(context, str(job.scope["name"]))
+
+
+def sync_source(context: JobContext, name: str) -> Mapping[str, int]:
+    """Bring one registered source into the cache and pin its version.
+
+    The op's body, callable without a job: the setup path fetches a source to
+    show what it holds, and must fetch it the way a sync does or the two would
+    disagree about what the cache is.
+    """
     config = _load_source(context, name)
     source_type = str(config["type"])
     syncer = SYNCERS.get(source_type)

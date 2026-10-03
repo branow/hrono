@@ -137,13 +137,13 @@ async def item_from_the_page(
     """
     descriptor = _descriptor(collection)
     _may_write(descriptor, request)
-    form = await _form(request)
-    tree, name = _one(form, "tree"), _one(form, "name").strip()
-    picked = _one(form, "variant")
-    preview = bool(_one(form, "preview"))
+    form = await posted(request)
+    tree, name = first(form, "tree"), first(form, "name").strip()
+    picked = first(form, "variant")
+    preview = bool(first(form, "preview"))
     options = _options(request, collection)
     body = forms.config_from(descriptor, form, options)
-    row = _existing(descriptor, name, request)
+    row = existing(descriptor, name, request)
     spot = _spot(collection, name, picked, body)
     if row is not None and row["is_default"]:
         return _render(
@@ -151,9 +151,9 @@ async def item_from_the_page(
             user,
             tree,
             **spot,
-            draft=_refused(collection, [_problem(FROZEN)]),
+            draft=_refused(collection, [problem(FROZEN)]),
         )
-    sent = _kept_secrets(descriptor, row, body, request)
+    sent = kept_secrets(descriptor, row, body, request)
     try:
         result = engine.replace_item(
             descriptor,
@@ -168,7 +168,7 @@ async def item_from_the_page(
             user,
             tree,
             **spot,
-            draft=_refused(collection, _errors(exc)),
+            draft=_refused(collection, field_errors(exc)),
         )
     if preview:
         return _render(
@@ -216,8 +216,8 @@ async def replace_the_collection(
     """
     descriptor = _descriptor(collection)
     _may_write(descriptor, request)
-    form = await _form(request)
-    tree, text = _one(form, "tree"), _one(form, "config")
+    form = await posted(request)
+    tree, text = first(form, "tree"), first(form, "config")
     items, problems = _parsed_list(text)
     if items is None:
         return _render(
@@ -231,9 +231,9 @@ async def replace_the_collection(
     held = {row.name: row for row in _table(request, collection).rows}
     try:
         kept = [
-            _kept_secrets(
+            kept_secrets(
                 descriptor,
-                _existing(descriptor, str(item.get("name", "")), request),
+                existing(descriptor, str(item.get("name", "")), request),
                 item,
                 request,
             )
@@ -247,7 +247,7 @@ async def replace_the_collection(
             tree,
             section=collection,
             view="json",
-            draft=_draft(collection, text, _errors(exc)),
+            draft=_draft(collection, text, field_errors(exc)),
         )
     return _settled(
         tree, collection, view="json", done=_said(collection, result, held)
@@ -261,10 +261,10 @@ async def delete_from_the_page(
     """Remove an item — or, for a seeded default, reset it to what shipped."""
     descriptor = _descriptor(collection)
     _may_write(descriptor, request)
-    form = await _form(request)
-    tree = _one(form, "tree")
+    form = await posted(request)
+    tree = first(form, "tree")
     doomed = f"{collection}:{name}"
-    if not _one(form, "confirm"):
+    if not first(form, "confirm"):
         return _render(
             request,
             user,
@@ -599,7 +599,7 @@ def _delete_note(descriptor: Descriptor, name: str, request: Request) -> str:
         return exc.message
 
 
-def _kept_secrets(
+def kept_secrets(
     descriptor: Descriptor,
     row: object,
     body: dict[str, object],
@@ -642,7 +642,7 @@ def _may_write(descriptor: Descriptor, request: Request) -> None:
     require_role(descriptor.write_role)(request)
 
 
-def _existing(
+def existing(
     descriptor: Descriptor, name: str, request: Request
 ) -> object | None:
     """The stored row, or None — an add names something that is not there."""
@@ -652,7 +652,7 @@ def _existing(
         return store.get(conn, descriptor.collection, name)
 
 
-async def _form(request: Request) -> dict[str, list[str]]:
+async def posted(request: Request) -> dict[str, list[str]]:
     """An HTML form's fields, keeping EVERY value of a repeated name.
 
     `ui._fields` collapses each name to one value, which is right for a text
@@ -664,7 +664,7 @@ async def _form(request: Request) -> dict[str, list[str]]:
     return parse_qs(body, keep_blank_values=True)
 
 
-def _one(form: dict[str, list[str]], key: str) -> str:
+def first(form: dict[str, list[str]], key: str) -> str:
     return form.get(key, [""])[0]
 
 
@@ -682,18 +682,18 @@ def _parsed_list(
         body = json.loads(text)
     except json.JSONDecodeError as exc:
         return None, [
-            _problem(
+            problem(
                 f"not valid JSON: {exc.msg} "
                 f"(line {exc.lineno}, column {exc.colno})",
                 field="config",
             )
         ]
     if not isinstance(body, list):
-        return None, [_problem("a collection is a JSON array", field="config")]
+        return None, [problem("a collection is a JSON array", field="config")]
     bad = [item for item in body if not isinstance(item, dict)]
     if bad:
         return None, [
-            _problem("every entry must be a JSON object", field="config")
+            problem("every entry must be a JSON object", field="config")
         ]
     return body, []
 
@@ -701,7 +701,7 @@ def _parsed_list(
 VALUE_ERROR = "Value error, "  # pydantic's own prefix on a validator's text
 
 
-def _errors(error: AppError) -> list[dict[str, str]]:
+def field_errors(error: AppError) -> list[dict[str, str]]:
     """The server's rejection, per field.
 
     `Invalid` already carries `details.errors` with a `loc` and a `msg` per
@@ -712,9 +712,9 @@ def _errors(error: AppError) -> list[dict[str, str]]:
     details = error.details or {}
     reported = details.get("errors")
     if not isinstance(reported, list):
-        return [_problem(error.message)]
+        return [problem(error.message)]
     return [
-        _problem(
+        problem(
             str(item.get("msg", "")).removeprefix(VALUE_ERROR),
             field=".".join(str(part) for part in item.get("loc", ())),
         )
@@ -723,7 +723,7 @@ def _errors(error: AppError) -> list[dict[str, str]]:
     ]
 
 
-def _problem(message: str, field: str = "") -> dict[str, str]:
+def problem(message: str, field: str = "") -> dict[str, str]:
     return {"field": field, "msg": message}
 
 

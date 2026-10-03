@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from hrono.ingest.filter import ingestable
+from hrono.ingest.filter import ingestable, survey
 from hrono.registry.collections.sources import GitFilter
 
 
@@ -296,3 +296,54 @@ def test_the_config_model_and_the_matcher_agree_on_the_field_name(
 
     assert ingestable(tmp_path, config) == ("pkg/a.py",)
     assert "include" in GitFilter.model_fields  # extended, never renamed
+
+
+def test_survey_says_why_each_refused_file_is_refused(tmp_path: Path) -> None:
+    tree(tmp_path)
+    (tmp_path / "empty.txt").write_text("")
+    (tmp_path / "big.txt").write_text("x" * 2048)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("a")
+    config = {"exclude": ["docs/**"], "max_size_mb": 0.001}
+
+    why = {one.path: one.why for one in survey(tmp_path, config)}
+
+    assert why == {
+        "README.md": None,
+        "src/app.py": None,
+        "bin.dat": "binary",
+        "big.txt": "over the size limit",
+        "docs/a.md": "matched filter.exclude",
+        "empty.txt": "empty",
+        "node_modules/dep/index.js": "ignored by default: vendored",
+        "poetry.lock": "ignored by default: locks",
+    }
+
+
+def test_survey_reports_the_size_of_a_refused_file(tmp_path: Path) -> None:
+    tree(tmp_path)
+
+    sizes = {one.path: one.size for one in survey(tmp_path, None)}
+
+    assert sizes["poetry.lock"] == len("locked")
+    assert ".git/config" not in sizes
+
+
+def test_only_names_the_whitelist_as_the_reason(tmp_path: Path) -> None:
+    tree(tmp_path)
+
+    why = {one.path: one.why for one in survey(tmp_path, {"only": ["src/**"]})}
+
+    assert why["README.md"] == "outside filter.only"
+    assert why["src/app.py"] is None
+
+
+def test_ingestable_is_the_survey_with_the_refused_dropped(
+    tmp_path: Path,
+) -> None:
+    tree(tmp_path)
+    config = {"exclude": ["README.md"]}
+
+    assert ingestable(tmp_path, config) == tuple(
+        one.path for one in survey(tmp_path, config) if one.why is None
+    )

@@ -25,3 +25,73 @@
 {%- if cost %}<span class="chip plain num" data-spend="tokens-only">{{ "{:,}".format(cost.input) }} in, {{ "{:,}".format(cost.output) }} out</span> <span class="faint" data-spend="unknown">cost not recorded</span>
 {%- elif before %}<span class="faint" data-spend="unknown">not recorded: this ran before spend was kept</span>{% else %}<span class="faint" data-spend="none">no model calls</span>{% endif -%}
 {%- endmacro %}
+
+{# A refusal, field by field, in the words the server gave. #}
+{% macro problems(list, title) %}
+<div class="callout bad">
+  <div class="body">
+    <div class="title">{{ title }}</div>
+    <ul class="field-errors">
+      {% for problem in list %}
+      <li><code>{{ problem.field or "config" }}</code> {{ problem.msg|idents }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endmacro %}
+
+{# One input of a registry form, drawn by what the field is. #}
+{% macro input_for(field, id) %}
+{% if field.kind == "choice" %}
+<select id="{{ id }}" name="{{ field.input_name }}">
+  {% if not field.required %}<option value=""{% if not field.value %} selected{% endif %}>— none —</option>{% endif %}
+  {% for choice in field.choices %}
+  <option value="{{ choice }}"{% if choice == field.value %} selected{% endif %}>{{ choice }}</option>
+  {% endfor %}
+</select>
+{% elif field.kind == "multi" %}
+<ul class="pick" role="group" aria-labelledby="{{ id }}">
+  {% for choice in field.choices %}
+  <li><label class="confirm mild"><input type="checkbox" name="{{ field.input_name }}" value="{{ choice }}"{% if choice in field.picked %} checked{% endif %}> {{ choice }}</label></li>
+  {% else %}
+  <li><span class="hint">none registered yet</span></li>
+  {% endfor %}
+</ul>
+{% elif field.kind == "toggle" %}
+<label class="confirm mild"><input type="checkbox" id="{{ id }}" name="{{ field.input_name }}" value="1"{% if field.checked %} checked{% endif %}> {{ field.label or field.path }}</label>
+{% elif field.kind == "lines" %}
+<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="3" spellcheck="false" placeholder="one per line{% if field.example %}, e.g. {{ field.example }}{% endif %}">{{ field.value }}</textarea>
+{% elif field.kind == "json" %}
+<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="4" spellcheck="false" placeholder="{{ field.example or '{}' }}">{{ field.value }}</textarea>
+{% elif field.kind == "roomy" %}
+<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="6" spellcheck="false">{{ field.value }}</textarea>
+{% elif field.kind == "number" %}
+<input class="line" type="number" step="any" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}">
+{% elif field.kind == "secret" %}
+<input class="line" type="text" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}" autocomplete="off" spellcheck="false">
+{% else %}
+<input class="line" type="text" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}" autocomplete="off" spellcheck="false"{% if field.example %} placeholder="{{ field.example }}"{% endif %}>
+{% endif %}
+{% endmacro %}
+
+{# Every field of a registry form, grouped, each with its label and help. #}
+{% macro form_fields(form, scope) %}
+  {% for group, fields in form.sections %}
+  <fieldset class="fields">
+    {% if group %}<legend>{{ group }}</legend>{% endif %}
+    {% for field in fields %}
+    {% set id = "f-" ~ scope ~ "-" ~ field.path|replace(".", "-") %}
+    <div class="field{% if field.kind in ('roomy', 'json', 'lines', 'multi') %} wide{% endif %}">
+      {% if field.kind != "toggle" %}
+      <label for="{{ id }}">{{ field.label or field.path }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %} <code class="key">{{ field.path }}</code></label>
+      {% else %}
+      <span class="label-line"><code class="key">{{ field.path }}</code></span>
+      {% endif %}
+      {{ input_for(field, id) }}
+      {% if field.help %}<p class="hint">{{ field.help|idents }}</p>{% endif %}
+      {% if field.kind == "secret" and field.value == "***" %}<p class="hint">Leave it as <code>***</code> to keep the credential already stored.</p>{% endif %}
+    </div>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+{% endmacro %}
