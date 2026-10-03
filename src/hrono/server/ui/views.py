@@ -62,7 +62,15 @@ PREVIEW_CHARS = 600
 
 
 @router.get("/ui/trees/{tree}/activity", response_class=HTMLResponse)
-def activity_page(tree: str, request: Request, user: Reader) -> Response:
+def activity_page(
+    tree: str,
+    request: Request,
+    user: Reader,
+    verdict: str = "",
+    action: str = "",
+    topic: str = "",
+    page: int = 1,
+) -> Response:
     """What the tree DECIDED — the only record of its own judgement.
 
     A stale brief is a fact; "judged, not materially changed, did not climb" is
@@ -71,7 +79,18 @@ def activity_page(tree: str, request: Request, user: Reader) -> Response:
     """
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
-        rows, total = update_log.recent(conn, tree)
+        verdicts, actions = update_log.kinds(conn, tree)
+        node = int(topic) if topic.strip().isdigit() else 0
+        wanted = {"verdict": verdict, "action": action, "node_id": node}
+        _, total = update_log.recent(conn, tree, limit=0, **wanted)
+        pages = max(1, -(-total // update_log.PAGE))
+        page = min(max(1, page), pages)
+        rows, _ = update_log.recent(
+            conn,
+            tree,
+            offset=(page - 1) * update_log.PAGE,
+            **wanted,
+        )
     decided = [_decision(row) for row in rows]
     return templates.TemplateResponse(
         request,
@@ -82,9 +101,41 @@ def activity_page(tree: str, request: Request, user: Reader) -> Response:
             "tree": tree,
             "rows": decided,
             "total": total,
+            "first": (page - 1) * update_log.PAGE + 1,
+            "filters": {
+                "verdict": verdict,
+                "action": action,
+                "topic": str(node) if node else "",
+            },
+            "verdicts": verdicts,
+            "actions": actions,
+            "paging": {
+                "page": page,
+                "pages": pages,
+                "newer": _activity_url(tree, verdict, action, node, page - 1)
+                if page > 1
+                else None,
+                "older": _activity_url(tree, verdict, action, node, page + 1)
+                if page < pages
+                else None,
+            },
             "climbs": _climbs(decided),
             "can_write": user.role in {"writer", "admin"},
         },
+    )
+
+
+def _activity_url(
+    tree: str, verdict: str, action: str, node: int, page: int
+) -> str:
+    query = {
+        "verdict": verdict,
+        "action": action,
+        "topic": str(node) if node else "",
+        "page": str(page),
+    }
+    return f"/ui/trees/{quote(tree)}/activity?" + urlencode(
+        {k: v for k, v in query.items() if v}
     )
 
 

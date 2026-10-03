@@ -70,7 +70,7 @@ def test_decisions_are_listed_newest_first(browser: Browser) -> None:
 
     assert page.index("topic 2") < page.index("topic 1")
     assert "propagated" in page
-    assert "showing 2 of 2" in page
+    assert "showing 1–2 of 2" in page
 
 
 def test_a_climb_links_to_where_it_stopped(browser: Browser) -> None:
@@ -112,7 +112,7 @@ def test_the_view_is_bounded_and_says_what_it_is_hiding(
 
     page = browser.activity()
 
-    assert f"showing {PAGE} of {PAGE + 25}" in page
+    assert f"showing 1–{PAGE} of {PAGE + 25}" in page
     assert page.count("<tr") == PAGE + 1  # the rows plus the header
 
 
@@ -135,3 +135,112 @@ def test_the_incubators_rows_appear_too(browser: Browser) -> None:
 
     assert "drain" in page
     assert "forced" in page
+
+
+def _fill(browser: Browser, count: int) -> None:
+    with browser.conn:  # type: ignore[union-attr]
+        for node in range(1, count + 1):
+            record(browser.conn, TREE, node, "none", "skipped")  # type: ignore[arg-type]
+
+
+def test_every_decision_is_reachable_by_paging(browser: Browser) -> None:
+    browser.sign_in()
+    _fill(browser, PAGE + 25)
+
+    first = browser.client.get(f"/ui/trees/{TREE}/activity").text
+    second = browser.client.get(f"/ui/trees/{TREE}/activity?page=2").text
+
+    assert "page 1 of 2" in first
+    assert f"showing {PAGE + 1}\u2013{PAGE + 25} of {PAGE + 25}" in second
+    assert second.count("<tr") == 25 + 1
+    assert ">topic 25</a>" in second and ">topic 1</a>" in second
+    assert ">topic 25</a>" not in first
+    assert "page=2" in first and "page=1" in second
+
+
+def test_a_page_past_the_end_shows_the_last(browser: Browser) -> None:
+    browser.sign_in()
+    _fill(browser, PAGE + 5)
+
+    page = browser.client.get(f"/ui/trees/{TREE}/activity?page=99").text
+
+    assert "page 2 of 2" in page
+
+
+def test_filtering_by_verdict_shows_only_those_and_counts_them(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[union-attr]
+        record(browser.conn, TREE, 1, "none", "skipped")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 2, "unparseable", "abstained")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 3, "major", "propagated", 9)  # type: ignore[arg-type]
+        record(browser.conn, TREE, 4, "unparseable", "abstained")  # type: ignore[arg-type]
+
+    page = browser.client.get(
+        f"/ui/trees/{TREE}/activity?verdict=unparseable"
+    ).text
+
+    assert "showing 1\u20132 of 2" in page
+    assert page.count('class="needs"') == 2
+    assert ">topic 1</a>" not in page and ">topic 3</a>" not in page
+
+
+def test_action_and_topic_filters_narrow_too(browser: Browser) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[union-attr]
+        record(browser.conn, TREE, 1, "none", "skipped")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 2, "none", "skipped")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 2, "major", "propagated", 9)  # type: ignore[arg-type]
+
+    by_action = browser.client.get(
+        f"/ui/trees/{TREE}/activity?action=skipped"
+    ).text
+    by_topic = browser.client.get(f"/ui/trees/{TREE}/activity?topic=2").text
+
+    assert "of 2," in by_action
+    assert "of 2," in by_topic
+    assert ">topic 1</a>" not in by_topic
+
+
+def test_filter_and_page_ride_in_the_pager_links(browser: Browser) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[union-attr]
+        for node in range(PAGE + 3):
+            record(browser.conn, TREE, node + 1, "none", "skipped")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 500, "major", "propagated", 9)  # type: ignore[arg-type]
+
+    page = browser.client.get(
+        f"/ui/trees/{TREE}/activity?verdict=none&action=skipped"
+    ).text
+
+    assert "verdict=none&amp;action=skipped&amp;page=2" in page or (
+        "verdict=none&action=skipped&page=2" in page
+    )
+    assert 'value="none" selected' in page
+
+
+def test_a_filter_that_matches_nothing_says_so_and_keeps_the_bar(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    _fill(browser, 3)
+
+    page = browser.client.get(f"/ui/trees/{TREE}/activity?verdict=major").text
+
+    assert "No decisions match" in page
+    assert "Nothing decided about" not in page
+    assert 'aria-label="filter decisions"' in page
+
+
+def test_the_reader_sees_the_same_page(browser: Browser) -> None:
+    from hrono.auth.users import create_user
+
+    _fill(browser, PAGE + 5)
+    reader = create_user(browser.conn, "ro", "reader")[1]  # type: ignore[arg-type]
+    browser.client.cookies.clear()
+    browser.client.post("/ui/login", data={"token": reader})
+
+    page = browser.client.get(f"/ui/trees/{TREE}/activity?page=2").text
+
+    assert "page 2 of 2" in page

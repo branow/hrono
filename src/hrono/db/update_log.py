@@ -42,22 +42,57 @@ PAGE = 100
 
 
 def recent(
-    conn: sqlite3.Connection, tree: str, limit: int = PAGE
+    conn: sqlite3.Connection,
+    tree: str,
+    limit: int = PAGE,
+    offset: int = 0,
+    verdict: str = "",
+    action: str = "",
+    node_id: int = 0,
 ) -> tuple[tuple[sqlite3.Row, ...], int]:
-    """The newest decisions for a tree, and how many older ones there are.
+    """One page of a tree's decisions, newest first, and how many match.
 
     The count matters as much as the rows: "showing 100 of 100" and "showing
     100 of 41,000" are different situations, and a page that shows only the
-    first cannot tell them apart.
+    first cannot tell them apart. Filter and page are SQL, so a log of forty
+    thousand rows costs one page to read, not the log.
     """
+    where = "tree = ?"
+    args: list[object] = [tree]
+    for column, value in (
+        ("verdict", verdict),
+        ("action", action),
+        ("node_id", node_id),
+    ):
+        if value:
+            where += f" AND {column} = ?"
+            args.append(value)
     rows = conn.execute(
         "SELECT id, node_id, verdict, action, climbed_to, created_at "
-        "FROM update_log WHERE tree = ? ORDER BY id DESC LIMIT ?",
-        (tree, limit),
+        f"FROM update_log WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+        (*args, limit, offset),
     ).fetchall()
     total = int(
         conn.execute(
-            "SELECT COUNT(*) FROM update_log WHERE tree = ?", (tree,)
+            f"SELECT COUNT(*) FROM update_log WHERE {where}", args
         ).fetchone()[0]
     )
     return tuple(rows), total
+
+
+def kinds(
+    conn: sqlite3.Connection, tree: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """The verdicts and actions a tree's log holds, for the filter's choices."""
+    found = [
+        tuple(
+            str(row[0])
+            for row in conn.execute(
+                f"SELECT DISTINCT {column} FROM update_log WHERE tree = ? "
+                f"ORDER BY {column}",
+                (tree,),
+            )
+        )
+        for column in ("verdict", "action")
+    ]
+    return found[0], found[1]

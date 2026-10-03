@@ -8,7 +8,7 @@
 </div>
 
 <section class="card">
-  {% if not rows %}
+  {% if not rows and not (filters.verdict or filters.action or filters.topic) %}
   <div class="card-body empty">
     <div class="title">Nothing decided about {{ tree }} yet</div>
     <p class="hint">A decision is recorded when a sync finds a source changed. Until one has, there is nothing to list.</p>
@@ -16,8 +16,37 @@
   </div>
   {% else %}
   <div class="card-head">
-    <p class="notes small">showing {{ rows|length }} of {{ total }}, newest first</p>
+    <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/activity" aria-label="filter decisions">
+      <label class="field">
+        <span>Verdict</span>
+        <select name="verdict">
+          <option value="">any</option>
+          {% for name in verdicts %}<option value="{{ name }}"{% if filters.verdict == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span>What it did</span>
+        <select name="action">
+          <option value="">anything</option>
+          {% for name in actions %}<option value="{{ name }}"{% if filters.action == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span>Topic</span>
+        <input type="text" name="topic" inputmode="numeric" size="6" value="{{ filters.topic }}">
+      </label>
+      <button class="btn small" type="submit">Show</button>
+      {% if filters.verdict or filters.action or filters.topic %}<a class="btn small" href="/ui/trees/{{ tree }}/activity">Clear</a>{% endif %}
+    </form>
+    {% if rows %}
+    <p class="notes small">showing {{ first }}–{{ first + rows|length - 1 }} of {{ total }}, newest first</p>
+    {% endif %}
   </div>
+  {% if not rows %}
+  <div class="card-body empty">
+    <div class="title">No decisions match</div>
+  </div>
+  {% endif %}
   {% if climbs.links %}
   <div class="card-body">
     <h3 class="sub">What a change touched<span class="tip" tabindex="0" role="note" data-tip="A line per topic whose change forced a summary above it to be rewritten. Several lines meeting on one topic is one edit restaling a whole branch">?</span></h3>
@@ -65,6 +94,13 @@
       </tbody>
     </table>
   </div>
+  {% if paging.pages > 1 %}
+  <nav class="pager row" aria-label="Decision pages">
+    {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">Newer</a>{% endif %}
+    <span class="faint small">page {{ paging.page }} of {{ paging.pages }}</span>
+    {% if paging.older %}<a class="btn small" href="{{ paging.older }}">Older</a>{% endif %}
+  </nav>
+  {% endif %}
   <div class="card-foot">
     <details class="reveal">
       <summary>How to read this</summary>
