@@ -272,3 +272,54 @@ def test_an_echo_of_the_upper_prompt_is_retried_and_stored_flagged(
         flags = [briefs.get(conn, n)["flagged"] for n in _parents(database)]
     assert client.calls == 4  # each parent retried once
     assert flags == ["echoes-the-prompt", "echoes-the-prompt"]
+
+
+def test_a_stored_upper_brief_in_the_prompts_vocabulary_is_fresh_and_unlisted(
+    db: tuple[Database, list[int]],
+) -> None:
+    # E019: an upper brief's material is its child briefs, read back from the
+    # store; a read that only knew member condensations would call it an echo
+    database, _ = db
+    with database.write() as conn:
+        registry_store.replace(
+            conn,
+            "prompts",
+            "brief-upper",
+            json.dumps(
+                {
+                    "name": "brief-upper",
+                    "role": "brief-upper",
+                    "template": _default("brief-upper"),
+                }
+            ),
+            None,
+            "t",
+        )
+        conn.execute("UPDATE briefs SET text = ?", (ECHOED["brief-upper"],))
+
+    class Writing(FakeCompletion):
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            self.calls += 1
+            return CompletionResult(ECHOED["brief-upper"], Usage(5, 5))
+
+    first, second = Writing(), Writing()
+    brief_upper(job(), JobContext(database), client=first)
+    brief_upper(job(), JobContext(database), client=second)
+
+    with database.connect() as conn:
+        flags = [briefs.get(conn, n)["flagged"] for n in _parents(database)]
+        listed = [i for i in briefs.unusable_in(conn, TREE) if i[1] == 1]
+        stale = briefs.stale_or_missing(
+            conn, TREE, 1, *_provenance(conn, _parents(database)[0])
+        )
+    assert first.calls == 2
+    assert flags == ["", ""]
+    assert listed == []
+    assert stale == ()
+    assert second.calls == 0
+
+
+def _provenance(conn: object, node_id: int) -> tuple[str, str, str | None]:
+    row = briefs.get(conn, node_id)  # type: ignore[arg-type]
+    assert row is not None
+    return row["prompt_hash"], row["model_name"], row["model_fingerprint"]

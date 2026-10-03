@@ -135,6 +135,7 @@ def brief(
                 unfaithful=written.unfaithful,
                 flagged=written.flagged,
                 members=json.dumps(list(inputs.uris)),
+                source_model=source_model,
                 input_tokens=written.result.usage.input_tokens,
                 output_tokens=written.result.usage.output_tokens,
             )

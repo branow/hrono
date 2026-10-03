@@ -352,3 +352,40 @@ def test_a_cached_condensation_of_another_model_is_not_the_material(
 
     assert first.calls == 4
     assert second.calls == 0  # still settled: the cache is not its material
+
+
+def test_a_scoped_job_gates_and_reads_the_same_condense_model(
+    db: Database,  # noqa: F811
+) -> None:
+    # two text models and no roles: only the job's scope can pick one, and the
+    # read side has no job. The brief records what it was written from.
+    other = {
+        "name": "other",
+        "kind": "text",
+        "connection": "anthropic",
+        "model": "claude-other",
+        "params": {},
+    }
+    with db.write() as conn:
+        _default_prompts(conn)
+        registry_store.insert(
+            conn, "models", "other", json.dumps(other), None, "t"
+        )
+        conn.execute("UPDATE condensations SET text = ?", (ECHOED["brief"],))
+    scoped = job({"type": "model", "name": MODEL})
+    first = Writing(ECHOED["brief"])
+    brief(scoped, JobContext(db), client=first)
+    second = Writing(ECHOED["brief"])
+
+    brief(scoped, JobContext(db), client=second)
+
+    with db.connect() as conn:
+        listed = briefs.unusable_in(conn, TREE)
+        flags = [
+            r["flagged"] for r in conn.execute("SELECT flagged FROM briefs")
+        ]
+    assert flags == ["", ""]
+    assert first.calls == 2
+    assert listed == ()
+    assert _briefless(db) == 0
+    assert second.calls == 0

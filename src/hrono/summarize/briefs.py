@@ -167,14 +167,25 @@ def material(conn: sqlite3.Connection, node_id: int) -> str:
     previous condense model left in the cache is not part of it, or a settled
     echo would read as a different one and be re-paid.
     """
-    try:
-        source = producer_model_name(conn, {}, "condense")
-    except LLMError:
-        source = ""
+    source = _source_model(conn, node_id)
     texts = member_condensations(conn, node_id, source) or child_briefs(
         conn, node_id
     )
     return "\n\n".join(texts)
+
+
+def _source_model(conn: sqlite3.Connection, node_id: int) -> str:
+    """The condense model a brief was written from: the one it recorded, else
+    the install's own (a scoped job's choice is not visible at read time)."""
+    row = conn.execute(
+        "SELECT source_model FROM briefs WHERE node_id = ?", (node_id,)
+    ).fetchone()
+    if row is not None and row["source_model"]:
+        return str(row["source_model"])
+    try:
+        return producer_model_name(conn, {}, "condense")
+    except LLMError:
+        return ""
 
 
 def unusable_in(
@@ -378,6 +389,7 @@ def upsert(
     unfaithful: str = "[]",
     flagged: str = "",
     members: str = "[]",
+    source_model: str = "",
 ) -> None:
     """Store one node's brief with its provenance and member signature.
 
@@ -387,12 +399,15 @@ def upsert(
     ``members`` is the JSON list of member URIs (or child node ids) the brief
     covers: data ABOUT the brief, kept out of its text so #071's passages carry
     prose only (#102), and re-attached by the export renderer.
+    ``source_model`` is the condense model whose condensations it was written
+    from, so the echo gate reads the same material later (E019).
     """
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
-        "model_fingerprint, unfaithful, flagged, members, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "model_fingerprint, unfaithful, flagged, members, source_model, "
+        "created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             node_id,
             text,
@@ -406,6 +421,7 @@ def upsert(
             unfaithful,
             flagged,
             members,
+            source_model,
             _now(),
         ),
     )
