@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -159,3 +160,50 @@ def test_a_hint_opens_clear_of_what_it_explains_and_inside_the_window(
                 bad.append((route, mark.get_attribute("data-tip")[:30], result))
     assert seen > 10
     assert bad == []
+
+
+@pytest.fixture
+def solo(tmp_path: Path) -> Iterator[Live]:
+    """A server of its own, for a test that changes what the others read."""
+    with live_server(tmp_path) as server:
+        yield server
+
+
+def _home(page: object, live: Live) -> None:
+    page.context.add_cookies(  # type: ignore[attr-defined]
+        [{"name": "hrono_token", "value": live.token, "url": live.base}]
+    )
+    page.goto(f"{live.base}/ui")  # type: ignore[attr-defined]
+    page.wait_for_load_state("load")  # type: ignore[attr-defined]
+
+
+def test_home_follows_a_source_from_up_to_date_to_behind(
+    page: object, solo: Live
+) -> None:
+    _home(page, solo)
+    row = page.locator('[data-source="docs"] [data-state]')  # type: ignore[attr-defined]
+    assert row.get_attribute("data-state") == "current"
+
+    solo.advance()
+    page.reload()  # type: ignore[attr-defined]
+
+    assert row.get_attribute("data-state") == "behind"
+    assert "1 of 1 source behind" in page.content()  # type: ignore[attr-defined]
+
+
+def test_a_running_run_on_home_moves_without_a_reload(
+    page: object, solo: Live
+) -> None:
+    solo.run_fanout(2)
+    _home(page, solo)
+    page.evaluate("window.sameDocument = true")  # type: ignore[attr-defined]
+    shown = page.locator("#running .progress")  # type: ignore[attr-defined]
+    assert shown.inner_text() == "0/2"
+
+    solo.finish_piece(0)
+
+    page.wait_for_function(  # type: ignore[attr-defined]
+        "document.querySelector('#running .progress').textContent === '1/2'",
+        timeout=8000,
+    )
+    assert page.evaluate("window.sameDocument") is True  # type: ignore[attr-defined]

@@ -1,10 +1,12 @@
-"""The dashboard's front page, and the one button on it (#180).
+"""The dashboard's front page, and the one button on it (#180, #215).
 
-The page answers "what state is this tree in" before it offers anything to do
-about it, so everything here is a READ that some other page already owns: the
-attention list is `triage.survey`, the runs are `jobs.store`, the shape is
-`_shape`. A landing page that computed its own numbers would be a second set of
-numbers to disagree with the pages they link to.
+The page answers four questions before it offers anything to do about them —
+is the tree up to date with its sources, is anything running, does anything
+need a person, what did the last run do — so everything here is a READ that
+some other page already owns: the sources are `freshness.survey`, the attention
+list is `triage.survey`, the runs are the runs page's own `render_job`, the
+shape is `_shape`. A landing page that computed its own numbers would be a
+second set of numbers to disagree with the pages they link to.
 """
 
 from __future__ import annotations
@@ -17,22 +19,29 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.cluster import incubator
 from hrono.jobs import store as job_store
-from hrono.jobs.model import to_job
 from hrono.jobs.worker import enqueue
-from hrono.registry import store as registry_store
-from hrono.server import outcome, triage
+from hrono.server import freshness, triage
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
-from hrono.server.ui.jobs import clock
+from hrono.server.ui.jobs import clock, render_job
 
-# Three is enough to see whether the last thing that ran worked, which is the
-# only question this page asks of the run log; the rest is the runs page.
-RECENT_RUNS = 3
+# Enough runs to find the one that is going and the last one that finished.
+RECENT_RUNS = 5
+
+# What each state of a source is called on the page, and how loudly.
+STATES = {
+    "current": ("up to date", "ok"),
+    "behind": ("behind", "warn"),
+    "unread": ("never read", "warn"),
+    "unreachable": ("could not check", "plain"),
+    "not-compared": ("not compared", "plain"),
+}
 
 
 @router.get("/ui", response_class=HTMLResponse)
 def overview(request: Request, user: Reader, tree: str = "") -> Response:
-    """The shell: which tree, who you are, and what this tree holds."""
-    with request.app.state.db.connect() as conn:
+    """Is it up to date, is anything running, what needs me, what did it do."""
+    database = request.app.state.db
+    with database.connect() as conn:
         trees = _trees(conn)
         chosen = tree if tree in trees else trees[0]
         topics, levels = _shape(conn, chosen)
@@ -45,7 +54,22 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "parked": incubator.count(conn, chosen),
         }
         runs = _recent(conn, chosen)
-        sources = len(registry_store.list_all(conn, "sources"))
+    sources = [
+        {
+            "name": one.name,
+            "kind": one.kind,
+            "read": clock(one.read_at or ""),
+            "commit": (one.commit or "")[:8],
+            "state": one.state,
+            "said": STATES[one.state][0],
+            "tone": STATES[one.state][1],
+        }
+        for one in freshness.survey(
+            database,
+            request.app.state.cipher,
+            request.app.state.heads,
+        )
+    ]
     return templates.TemplateResponse(
         request,
         "overview.html",
@@ -58,8 +82,11 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "shape": shape,
             "attention": [item for item in attention if item.count],
             "clean": triage.clean(attention),
-            "runs": runs,
-            "sources": sources,
+            "running": [run for run in runs if run["live"]],
+            "last": next((run for run in runs if not run["live"]), None),
+            "source_states": sources,
+            "behind": sum(1 for one in sources if one["state"] == "behind"),
+            "sources": len(sources),
             # a control a reader cannot use is not shown AND not accepted: a
             # button nobody can see is not a permission (#180)
             "can_write": user.role in {"writer", "admin"},
@@ -89,23 +116,14 @@ def _filed(conn: sqlite3.Connection, tree: str) -> int:
 
 
 def _recent(conn: sqlite3.Connection, tree: str) -> list[dict[str, object]]:
-    """The last few top-level runs, newest first."""
-    rows = [
-        row
-        for row in job_store.list_jobs(conn)
-        if (row["tree"] or "default") == tree and row["parent_id"] is None
-    ]
+    """The last few top-level runs, newest first, as the runs page reads them.
+
+    The same derivation the runs page uses (`render_job`), so home and Runs
+    cannot give two answers about one run (#172).
+    """
     return [
-        {
-            "id": str(row["id"]),
-            "op": str(row["op"]),
-            "status": str(row["status"]),
-            "when": clock(str(row["created_at"])),
-            # a run named on the front page and not clickable is a dead end:
-            # the thing a reader wants next is always what it DID (#200)
-            "outcome": outcome.read(to_job(row).result),
-        }
-        for row in reversed(rows[-RECENT_RUNS:])
+        render_job(conn, row)
+        for row in job_store.page_roots(conn, tree, limit=RECENT_RUNS, offset=0)
     ]
 
 

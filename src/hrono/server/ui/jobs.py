@@ -126,7 +126,7 @@ def jobs_view(
             limit=PAGE,
             offset=(page - 1) * PAGE,
         )
-        jobs = [_render_job(conn, row) for row in rows]
+        jobs = [render_job(conn, row) for row in rows]
         sources = [
             str(row["name"]) for row in registry_store.list_all(conn, "sources")
         ]
@@ -193,7 +193,7 @@ def _runnable() -> list[dict[str, object]]:
     ]
 
 
-def _render_job(conn: object, row: object) -> dict[str, object]:
+def render_job(conn: object, row: object) -> dict[str, object]:
     """One run, as the page needs it: derived status, progress, spend, kids.
 
     The same derivations the API serves (#172, #179) rather than a second set
@@ -321,7 +321,7 @@ def one_run(
         row = job_store.get(conn, job_id)
         if row is None:
             raise NotFound(f"job not found: {job_id}")
-        job = _render_job(conn, row)
+        job = render_job(conn, row)
         job["scope"] = to_job(row).scope
         job["raw"] = to_job(row).result
     return templates.TemplateResponse(

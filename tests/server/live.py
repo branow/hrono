@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import socket
 import sqlite3
-import subprocess
 import threading
 import time
 from collections.abc import Iterator
@@ -30,9 +29,13 @@ from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as job_store
 from hrono.registry import store as registry_store
 from hrono.server.app import create_app
+from hrono.server.freshness import Heads
 from hrono.summarize import briefs
+from tests.server.repo import commit, head_of, make_repo
 
 KEY = Fernet.generate_key()
+# a run the worker's reclaimer will believe is held by a live worker
+FAR_FUTURE = "2999-01-01T00:00:00+00:00"
 TREE = "default"
 
 
@@ -42,6 +45,34 @@ class Live:
     token: str
     repo: Path
     db_path: Path
+
+    def advance(self) -> str:
+        """Move the source's remote on by one commit; return the new one."""
+        return commit(self.repo, "another")
+
+    def run_fanout(self, total: int) -> str:
+        """A run in progress: a parent and `total` pieces, all running."""
+        stamp = "2026-10-03T11:00:00+00:00"
+        self.write(
+            "INSERT INTO jobs (id, tree, op, scope, status, created_at, "
+            "updated_at) VALUES ('going', 'default', 'sync', '{}', "
+            "'pending', ?, ?)",
+            (stamp, stamp),
+        )
+        for index in range(total):
+            self.write(
+                "INSERT INTO jobs (id, parent_id, tree, op, scope, status, "
+                "created_at, updated_at, heartbeat) VALUES (?, 'going', "
+                "'default', 'sync', '{}', 'running', ?, ?, ?)",
+                (f"piece-{index}", stamp, stamp, FAR_FUTURE),
+            )
+        return "going"
+
+    def finish_piece(self, index: int) -> None:
+        self.write(
+            "UPDATE jobs SET status = 'succeeded' WHERE id = ?",
+            (f"piece-{index}",),
+        )
 
     def write(self, sql: str, params: tuple = ()) -> None:
         """A write from outside the server, as another process would make it."""
@@ -53,33 +84,8 @@ class Live:
             conn.close()
 
 
-def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-
-
 def _repo(path: Path) -> tuple[Path, str]:
-    """A real repository with one commit; returns it and that commit."""
-    path.mkdir()
-    _git(path, "init", "-q", "-b", "main")
-    (path / "a.md").write_text("one\n")
-    _git(path, "add", ".")
-    _git(
-        path,
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "commit",
-        "-q",
-        "-m",
-        "one",
-    )
-    return path, _git(path, "rev-parse", "HEAD")
+    return make_repo(path), head_of(path)
 
 
 def _section(conn: sqlite3.Connection, path: str, body: bytes) -> int:
@@ -179,9 +185,12 @@ def live_server(tmp_path: Path) -> Iterator[Live]:
     _seed(conn, repo, commit)
     conn.close()
     port = _free_port()
+    app = create_app(db_path=db_path, master_key=KEY)
+    # the remote is asked every time, so a commit made mid-test is seen
+    app.state.heads = Heads(fresh_for=0.0)
     server = uvicorn.Server(
         uvicorn.Config(
-            create_app(db_path=db_path, master_key=KEY),
+            app,
             host="127.0.0.1",
             port=port,
             log_level="warning",

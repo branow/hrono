@@ -7,17 +7,35 @@
     <div>
       <div class="eyebrow">tree</div>
       <h1>{{ tree }}</h1>
+      {% if topics and sources %}
+      <p class="verdict mt-2">
+        {% if behind %}<span class="chip warn">{{ behind }} of {{ sources }} source{{ '' if sources == 1 else 's' }} behind</span>
+        {% elif source_states|selectattr("state", "equalto", "current")|list|length == sources %}<span class="chip ok">up to date with every source</span>
+        {% else %}<span class="chip plain">not every source could be compared</span>{% endif %}
+      </p>
+      {% endif %}
     </div>
-    {% if can_write %}
-    <form method="post" action="/ui/trees/{{ tree }}/sync">
-      <button class="btn primary" type="submit"
-              title="Re-reads every source, re-files what changed, rewrites only the briefs that no longer hold">Sync now</button>
-    </form>
-    {% endif %}
+    <div class="row">
+      {% if topics %}<a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>{% endif %}
+      {% if can_write %}
+      <form method="post" action="/ui/trees/{{ tree }}/sync">
+        <button class="btn primary" type="submit"
+                title="Re-reads every source, re-files what changed, rewrites only the briefs that no longer hold">Sync now</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 </div>
 
 {% if topics == 0 %}
+{% if running %}
+<div class="callout mb-3" id="running">
+  <div class="body">
+    <div class="title">{{ running[0].op }} is {{ running[0].status }}</div>
+    <p class="hint">The tree fills in as it works. <a href="/ui/jobs/{{ running[0].id }}?tree={{ tree }}">Watch it run</a></p>
+  </div>
+</div>
+{% endif %}
 <div class="card">
   <div class="card-body stack" data-empty>
     <h2>Nothing in this tree yet</h2>
@@ -55,74 +73,145 @@
     </div>
   </section>
 
+  <section class="card">
+    <div class="card-head">
+      <h2>Sources<span class="tip" tabindex="0" role="note" data-tip="Each source this tree is built from: when it was last read, the commit that read pinned, and whether the source has moved since">?</span></h2>
+      <a class="small" href="/ui/config?tree={{ tree }}&amp;section=sources">Settings</a>
+    </div>
+    <div class="card-body">
+      {% if not source_states %}
+      <div class="empty">
+        <div class="title">No sources registered</div>
+        <p class="hint">A tree is built from what its sources contain.</p>
+        <div class="mt-3"><a class="btn primary" href="/ui/config?tree={{ tree }}&amp;add=sources">Add a source</a></div>
+      </div>
+      {% else %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Source</th><th>Last read</th><th>At</th><th>State</th></tr></thead>
+          <tbody>
+            {% for one in source_states %}
+            <tr data-source="{{ one.name }}">
+              <td><code>{{ one.name }}</code></td>
+              <td class="when">{{ one.read or "never" }}</td>
+              <td>{% if one.commit %}<code>{{ one.commit }}</code>{% else %}<span class="faint">&mdash;</span>{% endif %}</td>
+              <td><span class="chip {{ one.tone }}" data-state="{{ one.state }}">{{ one.said }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
   <div class="grid two">
-    <section class="card">
+    <section class="card" id="running">
       <div class="card-head">
-        <h2>Needs attention</h2>
-        <a class="small" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}">All checks</a>
+        <h2>Running now</h2>
+        <a class="small" href="/ui/jobs?tree={{ tree }}">All runs</a>
       </div>
       <div class="card-body">
-        {% if clean %}
-        <div class="callout ok">
-          <div class="body"><div class="title">All clear</div></div>
-        </div>
+        {% if not running %}
+        <p class="hint">Nothing is running.</p>
         {% else %}
-        <ul class="kids">
-          {% for item in attention %}
-          <li>
-            <a href="{{ item.link }}" title="{{ item.detail }}">
-              <span>{{ item.kind }}</span>
-              <span class="chip warn num">{{ item.count }}</span>
-            </a>
-          </li>
+        <div class="stack">
+          {% for run in running %}
+          <div data-job="{{ run.id }}" data-live="1">
+            <div class="row">
+              <a class="runlink" href="/ui/jobs/{{ run.id }}?tree={{ tree }}"><code>{{ run.op }}</code></a>
+              <span class="state status" data-state="{{ run.status }}">{{ run.status }}</span>
+              <span class="progress num">{% if run.progress %}{{ run.progress.done }}/{{ run.progress.total }}{% endif %}</span>
+            </div>
+            <span class="bar wide"><span style="width:{{ (100 * run.progress.done / run.progress.total)|round|int if run.progress and run.progress.total else 0 }}%"></span></span>
+          </div>
           {% endfor %}
-        </ul>
+        </div>
         {% endif %}
       </div>
     </section>
 
     <section class="card">
       <div class="card-head">
-        <h2>Recent runs</h2>
-        <a class="small" href="/ui/jobs?tree={{ tree }}">All runs</a>
+        <h2>Last run</h2>
+        {% if last %}<a class="small" href="/ui/jobs/{{ last.id }}?tree={{ tree }}">Open it</a>{% endif %}
       </div>
       <div class="card-body">
-        {% if not runs %}
+        {% if not last %}
         <div class="empty">
           <div class="title">Nothing has run yet</div>
           <p class="hint">A sync reads every source and files what changed.</p>
           <div class="mt-3">{{ start_sync(tree, user) }}</div>
         </div>
         {% else %}
-        <div class="table-wrap">
-          <table>
-            <tbody>
-              {% for run in runs %}
-              <tr>
-                <td class="when">{{ run.when }}</td>
-                <td>
-                  <a class="runlink" href="/ui/jobs/{{ run.id }}?tree={{ tree }}"><code>{{ run.op }}</code></a>
-                  {% if run.outcome.did %}
-                  <div class="hint small">{{ run.outcome.did|join(", ") }}</div>
-                  {% endif %}
-                </td>
-                <td><span class="state" data-state="{{ run.status }}">{{ run.status }}</span></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+        <p>
+          <code>{{ last.op }}</code>
+          <span class="state" data-state="{{ last.status }}">{{ last.status }}</span>
+          <span class="faint small">{{ last.started }}{% if last.took %}, took {{ last.took }}{% endif %}</span>
+        </p>
+        {% if last.failure %}
+        <p class="hint mt-2">{{ last.failure.says }}</p>
+        {% elif last.outcome.did %}
+        <ul class="didwhat mt-2">{% for line in last.outcome.did %}<li>{{ line }}</li>{% endfor %}</ul>
+        {% elif last.outcome.quiet %}
+        <p class="hint mt-2">Nothing had changed, so nothing was done.</p>
+        {% endif %}
         {% endif %}
       </div>
     </section>
   </div>
 
   <section class="card">
-    <div class="card-body spread">
-      <h2>Map<span class="tip" tabindex="0" role="note" data-tip="The tree drawn out: one circle per topic, sized by what it holds">?</span></h2>
-      <a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>
+    <div class="card-head">
+      <h2>Needs attention</h2>
+      <a class="small" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}">Health</a>
+    </div>
+    <div class="card-body">
+      {% if clean %}
+      <div class="callout ok">
+        <div class="body"><div class="title">All clear</div></div>
+      </div>
+      {% else %}
+      <ul class="kids">
+        {% for item in attention %}
+        <li>
+          <a href="{{ item.link }}" title="{{ item.detail }}">
+            <span>{{ item.kind }}</span>
+            <span class="chip warn num">{{ item.count }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </div>
   </section>
 </div>
+
+<script>
+// The same stream the Runs page reads, for the runs on this page: the bar and
+// the count move while a person watches, and the page is read again when a run
+// ends, so "last run" and the source states are the finished truth, not what
+// they were when the page opened.
+for (const row of document.querySelectorAll('[data-live][data-job]')) {
+  const source = new EventSource('/jobs/' + row.dataset.job + '/events');
+  source.addEventListener('state', (event) => {
+    const state = JSON.parse(event.data);
+    const badge = row.querySelector('.status');
+    badge.textContent = state.status;
+    badge.dataset.state = state.status;
+    row.querySelector('.progress').textContent =
+      state.progress ? state.progress.done + '/' + state.progress.total : '';
+    const bar = row.querySelector('.bar > span');
+    if (bar && state.progress && state.progress.total) {
+      bar.style.width = (100 * state.progress.done / state.progress.total) + '%';
+    }
+    if (['succeeded', 'failed', 'canceled'].includes(state.status)) {
+      source.close();
+      setTimeout(() => location.reload(), 800);
+    }
+  });
+  source.onerror = () => source.close();
+}
+</script>
 {% endif %}
 {% endblock %}

@@ -44,6 +44,7 @@ from hrono.registry.collections import COLLECTIONS
 from hrono.registry.engine import build_router
 from hrono.server.edits import router as edits_router
 from hrono.server.errors import install as install_errors
+from hrono.server.freshness import Heads
 from hrono.server.jobs import router as jobs_router
 from hrono.server.trees import router as trees_router
 from hrono.server.ui import LoginRequired
@@ -185,6 +186,7 @@ def create_app(
             else:
                 app.state.key_id = key_id
             cipher = Cipher.from_key(master_key, app.state.key_id)
+            app.state.cipher = cipher
             reclaim_stranded(database)
             worker = Worker(
                 database,
@@ -206,6 +208,7 @@ def create_app(
                 database.close()
 
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
+    app.state.heads = Heads()
     install_errors(app)
 
     @app.exception_handler(LoginRequired)
