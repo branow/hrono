@@ -6,6 +6,7 @@
   "parenting": "Held by hand: it was hung under this parent by hand and will not be re-attached"
 } %}
 {% set held = node.members|length or node.children|length %}
+{% set held_what = "topics" if node.children else "sections" %}
 
 {% macro topic_name(item) -%}
 {{ item.name or item.where or "topic %s"|format(item.id) }}
@@ -17,7 +18,7 @@
   <label class="candidate">
     <input type="radio" name="{{ field }}" value="{{ option.id }}"{% if option.id == chosen %} checked{% endif %}>
     <span class="who-holds">{{ topic_name(option) }}</span>
-    <span class="chip num nowrap">{{ option.holds }} {{ option.holds_what }}</span>
+    <span class="chip num nowrap">{{ option.holds|counted(option.holds_what) }}</span>
     <a class="peek" href="/ui/trees/{{ tree }}/nodes/{{ option.id }}?tree={{ tree }}"
        target="_blank" rel="noopener"
        aria-label="Open topic {{ option.id }} in a new tab"
@@ -31,7 +32,7 @@
 {% endmacro %}
 
 {% macro topic_option(option) -%}
-{{ topic_name(option) }} ({{ option.holds }} {{ option.holds_what }}, topic {{ option.id }})
+{{ topic_name(option) }} ({{ option.holds|counted(option.holds_what) }}, topic {{ option.id }})
 {%- endmacro %}
 
 {% import "prose.html" as prose %}
@@ -171,7 +172,7 @@
 
         <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
           <div class="what">
-            <span class="name">Remove this topic<span class="tip" tabindex="0" role="note" data-tip="This topic goes; each of its {{ held }} contents is re-filed under the nearest remaining topic. The CLI calls it a dissolve">?</span></span>
+            <span class="name">Remove this topic<span class="tip" tabindex="0" role="note" data-tip="This topic goes; what it holds ({{ held|counted(held_what) }}) is re-filed under the nearest remaining topic. The CLI calls it a dissolve">?</span></span>
           </div>
           <div class="act">
             <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
@@ -181,7 +182,7 @@
 
         <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
           <div class="what">
-            <span class="name">Split into narrower topics<span class="tip" tabindex="0" role="note" data-tip="Re-clusters what this holds into narrower topics that take its place">?</span></span>
+            <span class="name">Split into narrower topics<span class="tip" tabindex="0" role="note" data-tip="Regroups what this holds into narrower topics that take its place">?</span></span>
           </div>
           <div class="act">
             <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
@@ -204,7 +205,7 @@
         <li>
           <a href="/ui/trees/{{ tree }}/nodes/{{ child.id }}?tree={{ tree }}" title="{{ child.title }}">
             <span class="who-holds">{{ topic_name(child) }}</span>
-            <span class="chip num nowrap">{{ child.holds }} {{ child.holds_what }}</span><span class="chip plain nowrap">topic {{ child.id }}</span>
+            <span class="chip num nowrap">{{ child.holds|counted(child.holds_what) }}</span><span class="chip plain nowrap">topic {{ child.id }}</span>
           </a>
         </li>
         {% endfor %}
@@ -216,7 +217,7 @@
   {% if node.members or not node.children %}
   <section class="card">
     <div class="card-head">
-      <h2>Sections <span class="faint num">{{ node.members|length }}</span><span class="tip" tabindex="0" role="note" data-tip="A section is about 10 KB of one file. Worst fit first: the number is how close it sits to this topic's centre">?</span></h2>
+      <h2>Sections <span class="faint num">{{ node.members|length }}</span><span class="tip" tabindex="0" role="note" data-tip="A section is about {{ limits.section|size }} of one file. Worst fit first: the number is how close it sits to this topic's centre">?</span></h2>
     </div>
     <div class="card-body">
       {% if not node.members %}
@@ -234,7 +235,7 @@
               <span class="path"><span class="dim">{{ member.stem }}</span>{{ member.tail }}</span>
               {% if member.forced %}<span class="chip warn" title="Placed by rule rather than by similarity">forced</span>
               {% elif member.similarity is not none %}<span class="chip num" title="How close this section sits to the topic's centre">fit {{ "%.2f"|format(member.similarity) }}</span>
-              {% else %}<span class="chip" title="A confident placement at the centre of the cluster">core</span>{% endif %}
+              {% else %}<span class="chip" title="A confident placement at the centre of the topic">core</span>{% endif %}
             </summary>
             <div class="detail">
               <div class="section-head">
@@ -331,7 +332,7 @@
       {% else %}
       <dl class="facts">
         <dt>Model</dt><dd>{{ node.wrote.model }}</dd>
-        <dt>Build<span class="tip" tabindex="0" role="note" data-tip="A fingerprint of what that model name pointed at; repointing it changes every word (#191)">?</span></dt>
+        <dt>Build<span class="tip" tabindex="0" role="note" data-tip="A fingerprint of what that model name pointed at; repointing it changes every word">?</span></dt>
         <dd class="mono">{{ node.wrote.fingerprint or "not recorded" }}</dd>
         <dt>Prompt</dt><dd>{{ node.wrote.prompt }} <span class="faint mono">{{ node.wrote.prompt_hash }}</span></dd>
         <dt>Cost</dt>

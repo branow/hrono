@@ -29,9 +29,12 @@ from fastapi.templating import Jinja2Templates
 
 from hrono.auth.users import User
 from hrono.errors import AppError
+from hrono.ingest.split.constants import PASSAGE_BYTES, SECTION_BYTES
+from hrono.jobs.aggregate import PARTIAL
 from hrono.registry import store as registry_store
 from hrono.server import prose
 from hrono.server.auth import allows, require_role
+from hrono.server.words import counted, size
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -40,6 +43,27 @@ templates = Jinja2Templates(
 # Model-written text is markdown; `prose.markdown` renders it with HTML
 # escaped, so the filter's output is safe to mark safe (`server/prose.py`).
 templates.env.filters["markdown"] = prose.markdown
+
+
+def status_word(status: str) -> str:
+    """A run's status as a reader should see it.
+
+    `partial` is the parent-only status for a run with some stages done and
+    the rest still going (`jobs/aggregate.py`). To a person it reads as
+    "finished incompletely", so the page says `running` and the n/m beside it
+    says how far. The API and the CLI keep the derived word.
+    """
+    return "running" if status == PARTIAL else status
+
+
+templates.env.filters["status_word"] = status_word
+templates.env.filters["counted"] = counted
+templates.env.filters["size"] = size
+# the two leaf budgets, quoted on several pages: one source for the number
+templates.env.globals["limits"] = {
+    "section": SECTION_BYTES,
+    "passage": PASSAGE_BYTES,
+}
 
 # A year is wrong and an hour is annoying. A day is the shape of an operator's
 # session with a tool they open to look at something.

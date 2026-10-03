@@ -48,7 +48,7 @@ def node_page(
     """
     with request.app.state.db.connect() as conn:
         if not edits.node_exists(conn, tree, node_id):
-            raise NotFound(f"node not found in tree {tree}: {node_id}")
+            raise NotFound(f"topic not found in tree {tree}: {node_id}")
         # where every topic's sections live, read once: the page labels this
         # topic, its children AND every topic it offers to move into by it
         wheres = where.by_node(conn, tree)

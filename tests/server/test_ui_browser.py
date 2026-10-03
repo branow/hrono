@@ -8,6 +8,7 @@ one.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -274,3 +275,60 @@ def test_the_first_sync_of_an_empty_tree_moves_without_a_reload(
         timeout=8000,
     )
     assert page.evaluate("window.sameDocument") is True  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("width", (800, 1440))
+def test_the_guides_model_table_keeps_each_name_on_one_line(
+    fresh_page: object, fresh: Live, width: int
+) -> None:
+    """#216: the upstream model name wrapped onto its own line under the role.
+
+    Each cell of the role and model columns has to lay out as ONE line of
+    text, at the widest and the narrowest the dashboard is read at, with the
+    longest upstream name a provider hands out.
+    """
+    for role, kind in (
+        ("condense", "text"),
+        ("brief", "text"),
+        ("brief-upper", "text"),
+        ("judge", "text"),
+        ("embedding", "embedding"),
+    ):
+        fresh.write(
+            "INSERT INTO registry (collection, name, config, created_at, "
+            "updated_at) VALUES ('models', ?, ?, 't', 't')",
+            (
+                f"{role}-model",
+                json.dumps(
+                    {
+                        "name": f"{role}-model",
+                        "kind": kind,
+                        "role": role,
+                        "model": "claude-sonnet-4-5-20250929-extended",
+                    }
+                ),
+            ),
+        )
+    page = fresh_page
+    page.set_viewport_size({"width": width, "height": 900})  # type: ignore[attr-defined]
+    page.goto(f"{fresh.base}/ui/guide")  # type: ignore[attr-defined]
+
+    lines = page.evaluate(  # type: ignore[attr-defined]
+        """() => [...document.querySelectorAll(
+          'table.roles tbody tr')].map(row => [0, 2, 3].map(index => {
+            const range = document.createRange();
+            range.selectNodeContents(row.children[index]);
+            return new Set([...range.getClientRects()]
+              .map(rect => Math.round(rect.top))).size;
+          }))"""
+    )
+
+    assert len(lines) == 5
+    assert lines == [[1, 1, 1]] * 5
+    assert (
+        page.evaluate(  # type: ignore[attr-defined]
+            "document.documentElement.scrollWidth - "
+            "document.documentElement.clientWidth"
+        )
+        <= 0
+    )

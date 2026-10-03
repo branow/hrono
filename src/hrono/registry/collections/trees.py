@@ -39,7 +39,7 @@ class Tree(BaseModel):
         min_length=1,
         title="Sources",
         description=(
-            "The registered sources it maps. Only these are clustered into it."
+            "The registered sources it maps. Only these are grouped into it."
         ),
     )
 
@@ -82,7 +82,7 @@ def _before_delete(name: str, context: ValidationContext) -> str | None:
     if built == 0:
         return None
     return (
-        f"tree {name} now maps EVERY source: the next maintain will cluster "
+        f"tree {name} now maps EVERY source: the next maintain will group "
         f"the whole corpus into it, over the {built} topic(s) it holds today"
     )
 

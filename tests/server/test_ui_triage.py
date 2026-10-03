@@ -161,11 +161,11 @@ def test_a_clean_tree_says_it_is_clean(clean_tree: Browser) -> None:
 def test_every_kind_is_counted(messy: Browser) -> None:
     counts = messy.survey()
 
-    assert counts["topics nothing points at"] == 1
+    assert counts["topics cut off from the root"] == 1
     assert (
         counts["topics with no usable brief, or a stale one"] == 1
     )  # the orphan
-    assert counts["sections in no topic"] == 1
+    assert counts["sections waiting for a topic"] == 1
     assert counts["sections placed without a score"] == 1
     assert counts["runs that failed"] == 1
 
@@ -174,6 +174,32 @@ def test_a_messy_tree_does_not_claim_to_be_clean(messy: Browser) -> None:
     messy.sign_in()
 
     assert "nothing needs attention" not in messy.triage()
+
+
+def test_a_non_zero_check_reads_as_a_task_in_the_singular(
+    messy: Browser,
+) -> None:
+    messy.sign_in()
+    page = messy.triage()
+
+    assert "1 topic is cut off from the root" in page
+    assert "1 section is waiting for a topic" in page
+    assert "1 run has failed" in page
+    assert "1 topics" not in page
+
+
+def test_a_non_zero_check_is_plural_over_one() -> None:
+    item = triage.Item(
+        kind="k",
+        count=3,
+        detail="d",
+        link="l",
+        clear="none",
+        one="1 thing",
+        many="{n} things",
+    )
+
+    assert item.said == "3 things"
 
 
 def test_an_unreachable_topic_links_to_the_topic_itself(
@@ -188,7 +214,7 @@ def test_an_unreachable_topic_links_to_the_topic_itself(
     orphan = [
         item
         for item in triage.survey(messy.conn, TREE)  # type: ignore[arg-type]
-        if item.kind == "topics nothing points at"
+        if item.kind == "topics cut off from the root"
     ][0]
     assert f"/ui/trees/{TREE}/nodes/" in orphan.link
     assert orphan.link in page
@@ -200,15 +226,16 @@ def test_a_zero_is_shown_rather_than_hidden(clean_tree: Browser) -> None:
     page = clean_tree.triage()
 
     assert page.count('class="ok"') == 5  # every kind, all at zero
-    assert "runs that failed" in page
+    assert "No run has failed" in page
+    assert "Every topic can be reached from the root" in page
 
 
 def test_counts_are_per_tree(messy: Browser) -> None:
     # #054: a count that silently spans trees is worse than no count
     assert messy.survey("other") == {
-        "topics nothing points at": 0,
+        "topics cut off from the root": 0,
         "topics with no usable brief, or a stale one": 0,
-        "sections in no topic": 0,
+        "sections waiting for a topic": 0,
         "sections placed without a score": 0,
         "runs that failed": 0,
     }
@@ -222,7 +249,7 @@ def test_the_top_level_is_not_counted_as_unreachable(
     Counting it would put every healthy tree permanently at "1 topic nothing
     points at", which is how a triage page teaches people to ignore it.
     """
-    assert clean_tree.survey()["topics nothing points at"] == 0
+    assert clean_tree.survey()["topics cut off from the root"] == 0
 
 
 def test_no_internal_ticket_numbers_reach_the_page(

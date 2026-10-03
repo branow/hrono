@@ -69,3 +69,25 @@ def test_a_page_is_the_newest_runs_of_one_tree(tmp_path: Path) -> None:
     assert [row["id"] for row in page] == ["job_3", "job_2", "job_1"]
     assert [row["id"] for row in default] == ["job_none"]
     assert counted == 7
+
+
+def test_a_second_status_widens_the_filter(tmp_path: Path) -> None:
+    conn = open_database(tmp_path / "hrono.db")
+    store.create_fanout(
+        conn, "mid", "sync", "{}", [("m1", "{}"), ("m2", "{}")], "t", "t"
+    )
+    store.set_status(conn, "m1", "succeeded", None, "t")
+    store.create_fanout(conn, "busy", "sync", "{}", [("b1", "{}")], "t", "t")
+    store.set_status(conn, "b1", "running", None, "t")
+
+    def ids(**kept: str) -> set[str]:
+        return {
+            str(row["id"])
+            for row in store.page_roots(conn, "t", limit=10, offset=0, **kept)
+        }
+
+    assert ids(status="running") == {"busy"}
+    assert ids(status="running", also=PARTIAL) == {"busy", "mid"}
+    assert store.count_roots(conn, "t", status="running", also=PARTIAL) == 2
+    assert ids(also=PARTIAL) == {"busy", "mid"}
+    assert ids() == {"busy", "mid"}

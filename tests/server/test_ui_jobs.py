@@ -267,3 +267,26 @@ def test_the_id_shown_is_the_prefix_of_the_real_one(
 
     assert str(job).removeprefix("job_")[:8] in page
     assert f'title="{job}"' in page  # the whole id is there on hover
+
+
+def test_the_running_filter_includes_a_run_with_stages_done(
+    browser: Browser,
+) -> None:
+    # a run with some stages done is derived `partial`, which the page says as
+    # `running`; filtering for what is running has to find it (#216)
+    browser.sign_in()
+    parent = browser.fan_out()
+    first = job_store.children(browser.conn, parent)[0]  # type: ignore[arg-type]
+    job_store.set_status(
+        browser.conn,  # type: ignore[arg-type]
+        str(first["id"]),
+        "succeeded",
+        None,
+        "t",
+    )
+
+    page = browser.client.get("/ui/jobs?tree=default&status=running").text
+
+    assert f'data-job="{parent}"' in page
+    assert "1/2" in page
+    assert 'value="partial"' not in page

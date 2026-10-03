@@ -34,7 +34,7 @@
     <div class="title">The first sync is running</div>
     <div class="row">
       <a class="runlink" href="/ui/jobs/{{ running[0].id }}?tree={{ tree }}"><code>{{ running[0].op }}</code></a>
-      <span class="state status" data-state="{{ running[0].status }}">{{ running[0].status }}</span>
+      <span class="state status" data-state="{{ running[0].status|status_word }}">{{ running[0].status|status_word }}</span>
       <span class="progress num">{% if running[0].progress %}{{ running[0].progress.done }}/{{ running[0].progress.total }}{% endif %}</span>
     </div>
     <span class="bar wide"><span style="width:{{ (100 * running[0].progress.done / running[0].progress.total)|round|int if running[0].progress and running[0].progress.total else 0 }}%"></span></span>
@@ -51,7 +51,7 @@
         <a class="btn small{{ '' if sources else ' primary' }}" href="/ui/config?tree={{ tree }}&amp;add=sources">{{ "Add another source" if sources else "Add a source" }}</a>
       </li>
       <li>
-        <div class="what">Sync it<span class="tip" tabindex="0" role="note" data-tip="Reads the files, cuts them into sections, embeds, clusters and writes a brief for each">?</span></div>
+        <div class="what">Sync it<span class="tip" tabindex="0" role="note" data-tip="Reads the files, cuts them into sections, embeds them, groups them into topics and writes a brief for each">?</span></div>
         {% if running %}<span class="hint">Running now</span>{% else %}{{ start_sync(tree, user, "Sync now", sources > 0) }}{% endif %}
       </li>
     </ol>
@@ -67,15 +67,15 @@
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.leaves }}</div>
-      <div class="label">hold sections<span class="tip" tabindex="0" role="note" data-tip="The rest group other topics">?</span></div>
+      <div class="label">topics that hold sections<span class="tip" tabindex="0" role="note" data-tip="The others group other topics">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.filed }}</div>
-      <div class="label">sections filed<span class="tip" tabindex="0" role="note" data-tip="A section is roughly 10 KB of one file">?</span></div>
+      <div class="label">sections in topics<span class="tip" tabindex="0" role="note" data-tip="A section is roughly {{ limits.section|size }} of one file">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.parked }}</div>
-      <div class="label">sections waiting<span class="tip" tabindex="0" role="note" data-tip="Read, but not yet in any topic">?</span></div>
+      <div class="label">sections waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read and embedded, but not in any topic yet">?</span></div>
     </div>
   </section>
 
@@ -126,7 +126,7 @@
           <div data-job="{{ run.id }}" data-live="1">
             <div class="row">
               <a class="runlink" href="/ui/jobs/{{ run.id }}?tree={{ tree }}"><code>{{ run.op }}</code></a>
-              <span class="state status" data-state="{{ run.status }}">{{ run.status }}</span>
+              <span class="state status" data-state="{{ run.status|status_word }}">{{ run.status|status_word }}</span>
               <span class="progress num">{% if run.progress %}{{ run.progress.done }}/{{ run.progress.total }}{% endif %}</span>
             </div>
             <span class="bar wide"><span style="width:{{ (100 * run.progress.done / run.progress.total)|round|int if run.progress and run.progress.total else 0 }}%"></span></span>
@@ -152,7 +152,7 @@
         {% else %}
         <p>
           <code>{{ last.op }}</code>
-          <span class="state" data-state="{{ last.status }}">{{ last.status }}</span>
+          <span class="state" data-state="{{ last.status|status_word }}">{{ last.status|status_word }}</span>
           <span class="faint small">{{ last.started }}{% if last.took %}, took {{ last.took }}{% endif %}</span>
         </p>
         {% if last.failure %}
@@ -200,13 +200,16 @@
 // the count move while a person watches, and the page is read again when a run
 // ends, so "last run" and the source states are the finished truth, not what
 // they were when the page opened.
+// `partial` is the derived word for a run with some stages done; a reader
+// sees `running` (ui/__init__.py status_word)
+const word = (s) => (s === 'partial' ? 'running' : s);
 for (const row of document.querySelectorAll('[data-live][data-job]')) {
   const source = new EventSource('/jobs/' + row.dataset.job + '/events');
   source.addEventListener('state', (event) => {
     const state = JSON.parse(event.data);
     const badge = row.querySelector('.status');
-    badge.textContent = state.status;
-    badge.dataset.state = state.status;
+    badge.textContent = word(state.status);
+    badge.dataset.state = word(state.status);
     row.querySelector('.progress').textContent =
       state.progress ? state.progress.done + '/' + state.progress.total : '';
     const bar = row.querySelector('.bar > span');

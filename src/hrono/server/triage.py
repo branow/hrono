@@ -29,6 +29,19 @@ class Item:
     count: int
     detail: str
     link: str
+    # The same finding as a sentence, so a zero reads as an answer and a
+    # non-zero reads as a task: `{n}` is the count, `one` the singular form.
+    clear: str = ""
+    one: str = ""
+    many: str = ""
+
+    @property
+    def said(self) -> str:
+        if self.count == 0:
+            return self.clear
+        if self.count == 1:
+            return self.one
+        return self.many.format(n=self.count)
 
 
 def survey(conn: sqlite3.Connection, tree: str) -> tuple[Item, ...]:
@@ -59,9 +72,12 @@ def _unreachable(conn: sqlite3.Connection, tree: str) -> Item:
         for node in cluster_store.unparented(conn, tree, level)
     ]
     return Item(
-        kind="topics nothing points at",
+        kind="topics cut off from the root",
         count=len(orphans),
-        detail="a subtree that is not in the export",
+        detail="Everything beneath them is missing from the export.",
+        clear="Every topic can be reached from the root",
+        one="1 topic is cut off from the root",
+        many="{n} topics are cut off from the root",
         link=f"/ui/trees/{tree}/nodes/{orphans[0]}?tree={tree}"
         if orphans
         else f"/ui/trees/{tree}/graph?tree={tree}",
@@ -99,7 +115,10 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
         kind="topics with no usable brief, or a stale one",
         count=len(missing),
-        detail="recall cannot answer from these; the next sync rewrites them",
+        detail="Recall cannot answer from them until a sync rewrites them.",
+        clear="Every topic has a brief that holds",
+        one="1 topic has no usable brief, or a stale one",
+        many="{n} topics have no usable brief, or a stale one",
         link=f"/ui/trees/{tree}/nodes/{missing[0]}?tree={tree}"
         if missing
         else f"/ui/trees/{tree}/graph?tree={tree}",
@@ -108,9 +127,12 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
 
 def _parked(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
-        kind="sections in no topic",
+        kind="sections waiting for a topic",
         count=incubator.count(conn, tree),
-        detail="ingested, embedded, and not on the map",
+        detail="Read and embedded, but not on the map yet.",
+        clear="No sections are waiting for a topic",
+        one="1 section is waiting for a topic",
+        many="{n} sections are waiting for a topic",
         link=f"/ui/trees/{tree}/graph?tree={tree}",
     )
 
@@ -125,7 +147,10 @@ def _forced(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
         kind="sections placed without a score",
         count=int(row["n"]),
-        detail="forced in rather than matched",
+        detail="Filed by rule rather than matched to a topic.",
+        clear="Every section was placed by a score",
+        one="1 section was placed without a score",
+        many="{n} sections were placed without a score",
         link=f"/ui/trees/{tree}/graph?tree={tree}",
     )
 
@@ -139,7 +164,10 @@ def _failed(conn: sqlite3.Connection, tree: str) -> Item:
     return Item(
         kind="runs that failed",
         count=int(row["n"]),
-        detail="with the code and message they failed with",
+        detail="Open Runs for the code and message each one failed with.",
+        clear="No run has failed",
+        one="1 run has failed",
+        many="{n} runs have failed",
         link=f"/ui/jobs?tree={tree}",
     )
 

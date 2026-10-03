@@ -28,7 +28,7 @@ SAID: dict[str, tuple[str, str]] = {
     ),
     "cluster-error": (
         "Grouping sections into topics failed.",
-        "Make sure the clustering backend is installed "
+        "Make sure the topic-grouping backend is installed "
         "(pip install 'hrono[cluster]'), then retry.",
     ),
     "too-few-points": (

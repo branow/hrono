@@ -86,5 +86,7 @@ carries no similarity score.
 
 **chunk** — superseded by **section**.
 
+**node** — the database's and the URL's word for a topic. On screen it is always a topic.
+
 **paragraph** — not a unit in hrono. Splitting is by structure and byte budget,
 never by paragraph.

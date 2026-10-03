@@ -982,7 +982,7 @@ ul.checks li.needs a { font-weight: 600; }
 .state::before { content: ""; width: .4rem; height: .4rem; border-radius: 50%; background: currentColor; }
 .state[data-state="succeeded"] { background: var(--ok-wash); color: var(--ok); }
 .state[data-state="failed"] { background: var(--danger-wash); color: var(--danger); }
-.state[data-state="running"], .state[data-state="partial"] { background: var(--accent-wash); color: var(--accent); }
+.state[data-state="running"] { background: var(--accent-wash); color: var(--accent); }
 .state[data-state="pending"] { background: var(--warn-wash); color: var(--warn); }
 
 .bar {
@@ -1215,17 +1215,23 @@ ul.rules li { display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3);
 .when { font: 600 .8125rem/1.6 var(--mono); color: var(--accent); }
 .then { color: var(--ink-soft); font-size: .875rem; line-height: 1.55; }
 
-ul.roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r2); }
-ul.roles li { display: grid; grid-template-columns: 7rem 1fr auto; gap: var(--s3); align-items: baseline; padding: var(--s2) var(--s3); background: var(--surface); }
-.role-name { font: 600 .8125rem/1.6 var(--mono); color: var(--accent); }
-.role-does { color: var(--ink-soft); font-size: .875rem; }
+/* a table, not a grid of lists: the role, the model and the upstream name are
+   columns that each keep to one line, and only the sentence is allowed to wrap */
+table.roles th[scope=row], table.accounts th[scope=row] {
+  font: 600 .8125rem/1.6 var(--mono); color: var(--accent); text-align: left;
+  padding: .45rem var(--s3) .45rem 0; border-bottom: 1px solid var(--rule);
+  vertical-align: top; white-space: nowrap;
+}
+table.roles tbody tr:last-child th, table.accounts tbody tr:last-child th { border-bottom: 0; }
+table.roles td, table.accounts td { color: var(--ink-soft); }
+table.roles td:nth-child(n+3) { white-space: nowrap; }
 
 ul.overlay-keys { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s4); }
 ul.overlay-keys li { display: flex; gap: var(--s3); align-items: flex-start; }
 ul.overlay-keys .hint { margin-top: .2rem; }
 
 @media (max-width: 44rem) {
-  ul.layers li, ul.roles li, ul.rules li { grid-template-columns: 1fr; gap: .2rem; }
+  ul.layers li, ul.rules li { grid-template-columns: 1fr; gap: .2rem; }
   ul.overlay-keys li { flex-direction: column; }
 }
 

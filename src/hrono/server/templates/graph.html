@@ -12,7 +12,7 @@
 } %}
 {% set draws = {
   "pull": "Which sections sit in the wrong topic? An arc runs from the topic holding them to the one they actually resemble, and says how many. Fix it by moving them.",
-  "proximity": "Did the clustering split one subject in two? An arc joins two topics under the same parent that are nearly the same thing. Fix it by merging them.",
+  "proximity": "Did one subject get split across two topics? An arc joins two topics under the same parent that are nearly the same thing. Fix it by merging them.",
   "propagation": "After a sync, which briefs did an edit force a rewrite of? Shown on the Activity page, where the decisions it is made of are listed."
 } %}
 {% set full_bleed = graph.nodes %}
@@ -129,8 +129,8 @@
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
-      <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 43 }}">{{ node.holds }} {{ node.holds_what }}</text>
-      <title>{{ node.name }} — in {{ node.where or "no one directory" }}, {{ node.holds }} {{ node.holds_what }}, topic {{ node.id }}{% if node.spread %}, spread over {{ node.spread }}{% endif %}{% if node.stale %}, brief needs rewriting{% endif %}</title>
+      <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 43 }}">{{ node.holds|counted(node.holds_what) }}</text>
+      <title>{{ node.name }} — in {{ node.where or "no one directory" }}, {{ node.holds|counted(node.holds_what) }}, topic {{ node.id }}{% if node.spread %}, spread over {{ node.spread }}{% endif %}{% if node.stale %}, brief needs rewriting{% endif %}</title>
     </a>
     {% if node.has_children %}
     <a href="{{ node.toggle }}">
@@ -140,7 +140,7 @@
       {% else %}
       <path class="twist" d="M{{ node.x - 5 }},{{ node.y + node.radius + 57 }} l5,-5 l5,5"/>
       {% endif %}
-      <title>{% if node.has_hidden_children %}Open — show the {{ node.holds }} {{ node.holds_what }} beneath {{ node.name }}{% else %}Close {{ node.name }}{% endif %}</title>
+      <title>{% if node.has_hidden_children %}Open — show the {{ node.holds|counted(node.holds_what) }} beneath {{ node.name }}{% else %}Close {{ node.name }}{% endif %}</title>
     </a>
     {% endif %}
   </g>
@@ -163,7 +163,7 @@
   </div>
 
   <p class="panel-facts">
-    <span class="chip">{{ panel.holds }} {{ panel.holds_what }}</span>
+    <span class="chip">{{ panel.holds|counted(panel.holds_what) }}</span>
     <span class="chip plain">level {{ panel.level }}</span>
     <span class="chip plain">topic {{ panel.id }}</span>
     {% if panel.spread %}<span class="chip plain" title="No one directory holds this topic; these are the shares">{{ panel.spread }}</span>{% endif %}
@@ -181,7 +181,7 @@
   <p class="hint">No brief yet. Recall cannot answer from this topic until one is written.</p>
   {% endif %}
 
-  <h3>{{ panel.holds }} {{ panel.holds_what }}</h3>
+  <h3>{{ panel.holds|counted(panel.holds_what) }}</h3>
   <ul class="parts">
     {% for part in panel.parts %}
     <li>

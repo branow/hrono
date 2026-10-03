@@ -191,7 +191,7 @@ def test_a_pull_edge_points_at_the_topic_that_is_nearer(
     pulls = browser.links("pull")
 
     assert [(link.source, link.target) for link in pulls] == [(a, b)]
-    assert pulls[0].label == "1 chunk nearer"
+    assert pulls[0].label == "1 section nearer"
 
 
 def test_proximity_joins_near_siblings_and_not_distant_ones(

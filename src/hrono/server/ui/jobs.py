@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.errors import Forbidden, NotFound
 from hrono.jobs import store as job_store
-from hrono.jobs.aggregate import rollup, total_spend
+from hrono.jobs.aggregate import PARTIAL, rollup, total_spend
 from hrono.jobs.cancel import cancel
 from hrono.jobs.model import to_job
 from hrono.jobs.ops import OPS
@@ -115,7 +115,10 @@ def jobs_view(
         trees = _trees(conn)
         chosen = tree if tree in trees else trees[0]
         ran = job_store.root_ops(conn, chosen)
-        total = job_store.count_roots(conn, chosen, op=op, status=status)
+        also = PARTIAL if status == "running" else ""
+        total = job_store.count_roots(
+            conn, chosen, op=op, status=status, also=also
+        )
         pages = max(1, -(-total // PAGE))
         page = min(max(1, page), pages)
         rows = job_store.page_roots(
@@ -123,6 +126,7 @@ def jobs_view(
             chosen,
             op=op,
             status=status,
+            also=also,
             limit=PAGE,
             offset=(page - 1) * PAGE,
         )
@@ -145,7 +149,6 @@ def jobs_view(
                 "succeeded",
                 "failed",
                 "canceled",
-                "partial",
             ),
             "ops": ran,
             "paging": {

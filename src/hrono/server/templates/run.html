@@ -8,7 +8,7 @@
   <h1>{{ job.op }}</h1>
   <p class="said">{{ job.means }}</p>
   <p class="where-note row mt-2">
-    <span class="state status" data-state="{{ job.status }}">{{ job.status }}</span>
+    <span class="state status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span>
     <span class="chip">started {{ job.started }}</span>
     <span class="chip">{{ job.took }}</span>
     {% if job.scope.name %}<span class="chip">over {{ job.scope.name }}</span>{% endif %}
@@ -159,7 +159,7 @@
             <code>{{ child.op }}</code>
             {% if child.scope.name %}<span class="chip plain">{{ child.scope.name }}</span>{% endif %}
             <span class="grow"></span>
-            <span class="state" data-state="{{ child.status }}">{{ child.status }}</span>
+            <span class="state" data-state="{{ child.status|status_word }}">{{ child.status|status_word }}</span>
           </div>
           {% if child.means %}<p class="hint">{{ child.means }}</p>{% endif %}
           {% if child.outcome.did or child.outcome.found %}
@@ -179,7 +179,7 @@
 
 <aside class="topic-aside stack">
   <section class="card">
-    <div class="card-head"><h2>Exactly what it returned</h2></div>
+    <div class="card-head"><h2>Raw result</h2></div>
     <div class="card-body">
       {% if job.raw %}
       <pre class="preview">{{ job.raw|tojson(indent=2) }}</pre>
@@ -195,13 +195,14 @@
 // The same SSE stream the list uses, for one run: a progress bar that only
 // moves on reload is a progress bar nobody believes.
 (function () {
+  var word = function (s) { return s === "partial" ? "running" : s; };
   var run = document.getElementById("run");
   if (!run || !run.dataset.live) return;
   var source = new EventSource("/jobs/" + run.dataset.job + "/events");
   source.addEventListener("state", function (event) {
     var state = JSON.parse(event.data);
     var badge = run.ownerDocument.querySelector(".status");
-    if (badge) { badge.textContent = state.status; badge.dataset.state = state.status; }
+    if (badge) { badge.textContent = word(state.status); badge.dataset.state = word(state.status); }
     var said = run.querySelector(".progress");
     if (said && state.progress) {
       said.textContent = state.progress.done + " of " + state.progress.total + " done";

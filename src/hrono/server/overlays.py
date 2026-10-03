@@ -129,7 +129,7 @@ def _pull(
             kind="pull",
             source=holder,
             target=puller,
-            label=f"{count} chunk{'s' if count != 1 else ''} nearer",
+            label=f"{count} section{'s' if count != 1 else ''} nearer",
             weight=float(count),
         )
         for (holder, puller), count in sorted(counts.items())

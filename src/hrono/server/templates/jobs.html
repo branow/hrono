@@ -26,7 +26,7 @@
     </ul>
 
     <details class="reveal">
-      <summary class="twisty">One stage at a time, in pipeline order<span class="tip" tabindex="0" role="note" data-tip="Redo part of a tree: re-condense after changing a prompt, re-brief one source, re-cluster. Running a stage before the one it depends on leaves a tree that looks finished and is not — the three above exist to get the order right for you">?</span></summary>
+      <summary class="twisty">One stage at a time, in pipeline order<span class="tip" tabindex="0" role="note" data-tip="Redo part of a tree: re-condense after changing a prompt, re-brief one source, regroup the sections. Running a stage before the one it depends on leaves a tree that looks finished and is not — the three above exist to get the order right for you">?</span></summary>
       <ul class="stages">
         {% for item in runnable if not item.whole %}
         <li>
@@ -101,7 +101,7 @@
       <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
         <td class="when">{{ job.started }}</td>
         <td class="nowrap"><a class="runlink" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.means }}"><code>{{ job.op }}</code></a>{% if job.failure and job.failure.stage %} <span class="hint">at {{ job.failure.stage }}</span>{% endif %}</td>
-        <td><span class="state status" data-state="{{ job.status }}">{{ job.status }}</span></td>
+        <td><span class="state status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span></td>
         <td class="when">{{ job.took }}</td>
         <td class="num nowrap">
           <span class="progress">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% elif not job.live %}done{% endif %}</span>
@@ -136,15 +136,18 @@
 // EventSource is a browser built-in and /jobs/<id>/events already speaks it
 // — so this view is live with no library and nothing vendored. The cookie
 // rides along and no script can read it.
+// `partial` is the derived word for a run with some stages done; a reader
+// sees `running` (ui/__init__.py status_word)
+const word = (s) => (s === 'partial' ? 'running' : s);
 for (const row of document.querySelectorAll('tr[data-live]')) {
   const source = new EventSource('/jobs/' + row.dataset.job + '/events');
   source.addEventListener('state', (event) => {
     const state = JSON.parse(event.data);
     const badge = row.querySelector('.status');
-    badge.textContent = state.status;
+    badge.textContent = word(state.status);
     // the badge takes its colour from data-state, so a live update that moved
     // only the text would leave a finished run painted as a running one
-    badge.dataset.state = state.status;
+    badge.dataset.state = word(state.status);
     row.querySelector('.progress').textContent =
       state.progress ? state.progress.done + '/' + state.progress.total : '';
     const bar = row.querySelector('.bar > span');

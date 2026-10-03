@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, Response
 from hrono.db import update_log
 from hrono.server import graph, labels, overlays, panel, triage
 from hrono.server.ui import Reader, _trees, router, templates
+from hrono.server.words import counted
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
@@ -501,7 +502,7 @@ def topic_boxes(drawn: graph.Graph) -> list[labels.Box]:
             node.x,
             node.y,
             node.radius,
-            (node.label, node.place, f"{node.holds} {node.holds_what}"),
+            (node.label, node.place, counted(node.holds, node.holds_what)),
             node.has_children,
         )
     ]

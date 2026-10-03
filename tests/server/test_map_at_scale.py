@@ -55,7 +55,7 @@ class Scale:
         from each leaf up to its parent: far more than a person can read."""
         row = [node.id for node in drawn.nodes if node.level == 0]
         links = [
-            overlays.Link("pull", a, b, "3 chunks nearer", weight=3.0)
+            overlays.Link("pull", a, b, "3 sections nearer", weight=3.0)
             for a, b in itertools.pairwise(row)
         ]
         links += [
@@ -71,7 +71,7 @@ class Scale:
         middle = [node.id for node in drawn.nodes if node.level == 1]
         leaves = [node.id for node in drawn.nodes if node.level == 0]
         links = [
-            overlays.Link("pull", a, b, "3 chunks nearer", weight=3.0)
+            overlays.Link("pull", a, b, "3 sections nearer", weight=3.0)
             for a, b in itertools.combinations(middle, 2)
         ]
         links += [

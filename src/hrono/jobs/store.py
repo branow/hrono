@@ -178,6 +178,7 @@ def page_roots(
     *,
     op: str = "",
     status: str = "",
+    also: str = "",
     limit: int,
     offset: int,
 ) -> tuple[sqlite3.Row, ...]:
@@ -186,7 +187,9 @@ def page_roots(
     The runs list reads one page of rows however many runs a tree has (E002).
     ``status`` filters by the DERIVED status, the one ``aggregate.rollup``
     gives a parent from its children; ``_ROLLED`` is that rule in SQL, and a
-    test holds the two to the same answers.
+    test holds the two to the same answers. ``also`` is a second status the
+    filter accepts, for a caller whose one word covers two (`running` on the
+    page covers `partial`); empty matches nothing, since no run has no status.
     """
     rows = conn.execute(
         f"{_ROLLED} SELECT {_COLUMNS} FROM rolled_jobs {_ROOTS} "
@@ -195,6 +198,7 @@ def page_roots(
             "tree": tree,
             "op": op,
             "status": status,
+            "also": also,
             "limit": limit,
             "offset": offset,
         },
@@ -203,12 +207,17 @@ def page_roots(
 
 
 def count_roots(
-    conn: sqlite3.Connection, tree: str, *, op: str = "", status: str = ""
+    conn: sqlite3.Connection,
+    tree: str,
+    *,
+    op: str = "",
+    status: str = "",
+    also: str = "",
 ) -> int:
     """How many of a tree's runs ``page_roots`` would page through."""
     row = conn.execute(
         f"{_ROLLED} SELECT COUNT(*) FROM rolled_jobs {_ROOTS}",
-        {"tree": tree, "op": op, "status": status},
+        {"tree": tree, "op": op, "status": status, "also": also},
     ).fetchone()
     return int(row[0])
 
@@ -225,7 +234,8 @@ def root_ops(conn: sqlite3.Connection, tree: str) -> tuple[str, ...]:
 
 _ROOTS = (
     "WHERE parent_id IS NULL AND COALESCE(tree, 'default') = :tree "
-    "AND (:op = '' OR op = :op) AND (:status = '' OR rolled = :status)"
+    "AND (:op = '' OR op = :op) AND (:status = '' OR rolled = :status "
+    "OR rolled = :also)"
 )
 
 _ROLLED = """

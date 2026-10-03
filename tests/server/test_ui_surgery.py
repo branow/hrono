@@ -260,7 +260,7 @@ def test_a_reparent_that_would_detach_a_subtree_is_refused(
 
     answer = browser.post(f"nodes/{left}/reparent", to=str(a))
 
-    assert "below this node" in answer.text
+    assert "below this topic" in answer.text
     assert browser.parent_of(left) is None
 
 

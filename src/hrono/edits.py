@@ -34,7 +34,7 @@ def node_exists(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
 def require_node(conn: sqlite3.Connection, tree: str, node_id: int) -> None:
     """A node of ANOTHER tree is not found here, however real it is."""
     if not node_exists(conn, tree, node_id):
-        raise NotFound(f"node not found in tree {tree}: {node_id}")
+        raise NotFound(f"topic not found in tree {tree}: {node_id}")
 
 
 def require_one_level(
@@ -72,9 +72,9 @@ def require_leaf(conn: sqlite3.Connection, node_id: int) -> None:
     level = _level(conn, node_id)
     if level != 0:
         raise Invalid(
-            f"only a leaf topic holds sections, and node {node_id} is at "
+            f"only a leaf topic holds sections, and topic {node_id} is at "
             f"level {level}: an upper topic's content is the topics beneath "
-            f"it, not chunks"
+            f"it, not sections"
         )
 
 
@@ -149,16 +149,16 @@ def reparent(
     require_node(conn, tree, node_id)
     require_node(conn, tree, parent_id)
     if node_id == parent_id:
-        raise Invalid("a node cannot be its own parent")
+        raise Invalid("a topic cannot be its own parent")
     if parent_id in _descendants(conn, node_id):
         # a cycle here does not fail loudly: it detaches a whole subtree from
         # the root, and the export simply stops mentioning it.
-        raise Invalid("that parent is below this node")
+        raise Invalid("that parent is below this topic")
     own, above = _level(conn, node_id), _level(conn, parent_id)
     if above != own + 1:
         raise Invalid(
-            f"a parent sits exactly one level up: node {node_id} is at level "
-            f"{own}, so its parent must be at level {own + 1}, and node "
+            f"a parent sits exactly one level up: topic {node_id} is at level "
+            f"{own}, so its parent must be at level {own + 1}, and topic "
             f"{parent_id} is at level {above}"
         )
     store.move_child(conn, node_id, parent_id, similarity=None)
@@ -180,7 +180,7 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
     a new summary and the next run should write one.
     """
     if len(set(node_ids)) < 2:
-        raise Invalid("a merge needs at least two distinct nodes")
+        raise Invalid("a merge needs at least two distinct topics")
     for node_id in node_ids:
         require_node(conn, tree, node_id)
     require_one_level(conn, node_ids)
@@ -250,7 +250,7 @@ def _dissolve_upper(
     """
     if not levels.has_siblings(conn, tree, node_id):
         raise Invalid(
-            f"node {node_id} is the only topic at its level, so its children "
+            f"topic {node_id} is the only topic at its level, so its children "
             f"have nowhere to go: dissolving it would detach them from the "
             f"root"
         )
@@ -397,7 +397,7 @@ def split(
         # the ladder's floor, not a budget: below it there is no honest
         # reduction to run, so there is nothing to divide BY (#094).
         raise Invalid(
-            f"too few members to divide this topic: the clustering recipe "
+            f"too few members to divide this topic: the grouping recipe "
             f"needs at least {MIN_POINTS}"
         ) from exc
     if not children:
