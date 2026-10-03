@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}hrono — access{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div class="eyebrow">Admin</div>
+  <h1>Access<span class="tip" tabindex="0" role="note" data-tip="Who can sign in to this server, and what each may do. Readers look, writers also run work, admins also change who has access">?</span></h1>
+</div>
+
+<div class="stack">
+  {% if issued %}
+  <div class="callout warn" role="status">
+    <div class="body stack">
+      <div class="title">Token for {{ issued.name }} ({{ issued.role }})</div>
+      <p class="hint">Copy it now. It is shown this once and stored only as a hash, so nobody, including you, can read it back. Reloading this page will not show it again.</p>
+      <div class="act-row">
+        <input id="issued-token" class="mono" type="text" readonly size="48" value="{{ issued.token }}" aria-label="token for {{ issued.name }}" onfocus="this.select()">
+        <button class="btn small" type="button" id="copy-token">Copy</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById("copy-token").addEventListener("click", async (e) => {
+      const box = document.getElementById("issued-token");
+      box.select();
+      try { await navigator.clipboard.writeText(box.value); e.target.textContent = "Copied"; }
+      catch { e.target.textContent = "Press Ctrl+C"; }
+    });
+  </script>
+  {% endif %}
+
+  {% if delete %}
+  <div class="card"><div class="card-body stack">
+    <h2>Delete {{ delete }}</h2>
+    <p class="hint">{{ delete }} will no longer be able to sign in, and their token stops working at once.</p>
+    <form class="act-row" method="post" action="/ui/access/{{ delete|urlencode }}/delete">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      <input type="hidden" name="confirm" value="1">
+      <button class="btn danger" type="submit">Delete {{ delete }}</button>
+      <a class="btn quiet" href="/ui/access?tree={{ tree }}">Cancel</a>
+    </form>
+  </div></div>
+  {% endif %}
+
+  {% if reissue %}
+  <div class="card"><div class="card-body stack">
+    <h2>Reissue the token for {{ reissue }}</h2>
+    <p class="hint">Their current token stops working at once. You will be shown the new one once, to pass on.</p>
+    <form class="act-row" method="post" action="/ui/access/{{ reissue|urlencode }}/reissue">
+      <input type="hidden" name="tree" value="{{ tree }}">
+      <input type="hidden" name="confirm" value="1">
+      <button class="btn primary" type="submit">Reissue the token for {{ reissue }}</button>
+      <a class="btn quiet" href="/ui/access?tree={{ tree }}">Cancel</a>
+    </form>
+  </div></div>
+  {% endif %}
+
+  <section class="card" aria-labelledby="people-head">
+    <div class="card-head"><h2 id="people-head">People</h2></div>
+    <div class="card-body">
+      <table class="settings-table">
+        <thead>
+          <tr><th>Name</th><th>Role</th><th>Created</th><th><span class="visually-hidden">Actions</span></th></tr>
+        </thead>
+        <tbody>
+          {% for person in people %}
+          <tr>
+            <td class="name"><strong>{{ person.name }}</strong>{% if person.name == user.name %} <span class="chip">you</span>{% endif %}</td>
+            <td>
+              <form class="inline" method="post" action="/ui/access/{{ person.name|urlencode }}/role">
+                <input type="hidden" name="tree" value="{{ tree }}">
+                <select name="role" aria-label="role of {{ person.name }}">
+                  {% for role in roles %}<option value="{{ role }}"{% if role == person.role %} selected{% endif %}>{{ role }}</option>{% endfor %}
+                </select>
+                <button class="btn small" type="submit">Set role</button>
+              </form>
+            </td>
+            <td>{{ person.created_at[:10] }}</td>
+            <td class="acts">
+              <a class="btn small quiet" href="/ui/access?tree={{ tree }}&amp;reissue={{ person.name|urlencode }}">Reissue token</a>
+              <a class="btn small quiet danger-link" href="/ui/access?tree={{ tree }}&amp;delete={{ person.name|urlencode }}">Delete</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="add-head">
+    <div class="card-head"><h2 id="add-head">Add a person</h2></div>
+    <div class="card-body">
+      <form class="toolbar" method="post" action="/ui/access/create">
+        <input type="hidden" name="tree" value="{{ tree }}">
+        <label class="field"><span>Name</span>
+          <input type="text" name="name" value="{{ typed }}" required maxlength="64" autocomplete="off"></label>
+        <label class="field"><span>Role</span>
+          <select name="role">
+            {% for role in roles %}<option value="{{ role }}"{% if role == "reader" %} selected{% endif %}>{{ role }}</option>{% endfor %}
+          </select></label>
+        <button class="btn primary" type="submit">Create and show token</button>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

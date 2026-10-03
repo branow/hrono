@@ -29,6 +29,7 @@ ROUTES = (
     "/ui/jobs",
     "/ui/jobs/done-1",
     "/ui/trees/default/export",
+    "/ui/access",
     "/ui/config",
     "/ui/config?section=sources",
     "/ui/config?section=models",

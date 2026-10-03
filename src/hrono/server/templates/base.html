@@ -1387,7 +1387,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     </ul>
   </details>
   <nav class="tabs" aria-label="sections">
-    {% for item in tabs(here, tree) %}
+    {% for item in tabs(here, tree, user.role) %}
     <a class="tab" href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>
     {% endfor %}
   </nav>

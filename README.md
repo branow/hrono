@@ -102,6 +102,12 @@ model, a model whose connection is gone), and a delete or a reset shows what it
 would leave stale before you confirm it. The values the server's environment
 sets — version, database path, `HRONO_LLM_CONCURRENCY` — are shown read-only.
 
+Access is the admin-only page for who may sign in: list the people with their
+roles, add one (the new token is shown once, in the answer to the form, and is
+stored only as a hash), change a role, reissue a token or delete a person, each
+of the last two after a confirmation naming them. The last admin can be neither
+deleted nor demoted, here or through the API.
+
 ## In-process embedding
 
 Embedding sources locally (for clustering and recall) uses the heavyweight

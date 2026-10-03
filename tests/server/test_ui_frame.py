@@ -123,6 +123,17 @@ def test_the_navigation_is_the_agreed_set_of_pages_that_exist(
 
     labels = [name for name, _ in _read(browser.get("/ui")).tabs]
 
+    assert labels == [*LABELS[:-1], "Access", "Guide"]
+
+
+@pytest.mark.parametrize("role", ["reader", "writer"])
+def test_only_an_admin_is_offered_the_access_tab(
+    browser: Browser, role: str
+) -> None:
+    browser.sign_in(role)
+
+    labels = [name for name, _ in _read(browser.get("/ui")).tabs]
+
     assert labels == LABELS
 
 
@@ -138,6 +149,7 @@ def test_the_navigation_is_the_agreed_set_of_pages_that_exist(
         (f"/ui/trees/{TREE}/triage", "Health"),
         (f"/ui/trees/{TREE}/export", "Export"),
         ("/ui/config", "Settings"),
+        ("/ui/access", "Access"),
         ("/ui/guide", "Guide"),
     ],
 )
@@ -179,6 +191,12 @@ def test_the_tab_row_names_its_current_page_by_path_alone() -> None:
     assert [t["label"] for t in tabs("/ui/", TREE) if t["current"]] == ["Home"]
     assert [t["label"] for t in tabs("/ui/trees/x/nodes/9", "x")][2] == "Topic"
     assert "Topic" not in [t["label"] for t in tabs("/ui/trees/x/graph", "x")]
+
+
+def test_the_access_tab_is_marked_on_the_pages_its_posts_draw() -> None:
+    for path in ("/ui/access", "/ui/access/create", "/ui/access/rotate-key"):
+        shown = tabs(path, TREE, "admin")
+        assert [t["label"] for t in shown if t["current"]] == ["Access"]
 
 
 EMPTY_PAGES = (

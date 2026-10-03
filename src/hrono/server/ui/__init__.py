@@ -31,7 +31,7 @@ from hrono.auth.users import User
 from hrono.errors import AppError
 from hrono.registry import store as registry_store
 from hrono.server import prose
-from hrono.server.auth import require_role
+from hrono.server.auth import allows, require_role
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -168,16 +168,24 @@ TABS: tuple[tuple[str, str, str, str], ...] = (
 TOPIC_PAGE = r"/ui/trees/[^/]+/nodes/\d+"
 
 
-def tabs(here: str, tree: str) -> list[dict[str, object]]:
+# Drawn for an admin only, from the same rule that refuses everyone else the
+# page (#209), and placed before the Guide.
+ACCESS_TAB = ("access", "Access", "/ui/access", r"/ui/access(/.*)?")
+
+
+def tabs(here: str, tree: str, role: str = "reader") -> list[dict[str, object]]:
     """The navigation: every tab, the current one marked, and a topic's own."""
     path = here.rstrip("/") or "/ui"
+    shown = list(TABS)
+    if allows(role, "admin"):
+        shown.insert(-1, ACCESS_TAB)
     rows = [
         {
             "label": label,
             "href": f"{href.format(tree=tree)}?tree={tree}",
             "current": re.fullmatch(inside, path) is not None,
         }
-        for _, label, href, inside in TABS
+        for _, label, href, inside in shown
     ]
     if re.fullmatch(TOPIC_PAGE, path):
         rows.insert(
@@ -223,6 +231,7 @@ def _shape(conn: object, tree: str) -> tuple[int, int]:
 # Registering the routes: each of these imports this module for `router` and
 # the role dependencies, so they are imported last and only for that effect.
 from hrono.server.ui import (  # noqa: E402, F401
+    access,
     ask,
     export,
     guide,
