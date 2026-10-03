@@ -172,6 +172,89 @@ def children(
     )
 
 
+def page_roots(
+    conn: sqlite3.Connection,
+    tree: str,
+    *,
+    op: str = "",
+    status: str = "",
+    limit: int,
+    offset: int,
+) -> tuple[sqlite3.Row, ...]:
+    """One page of a tree's runs, newest first, filtered and paged in SQL.
+
+    The runs list reads one page of rows however many runs a tree has (E002).
+    ``status`` filters by the DERIVED status, the one ``aggregate.rollup``
+    gives a parent from its children; ``_ROLLED`` is that rule in SQL, and a
+    test holds the two to the same answers.
+    """
+    rows = conn.execute(
+        f"{_ROLLED} SELECT {_COLUMNS} FROM rolled_jobs {_ROOTS} "
+        "ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset",
+        {
+            "tree": tree,
+            "op": op,
+            "status": status,
+            "limit": limit,
+            "offset": offset,
+        },
+    ).fetchall()
+    return tuple(rows)
+
+
+def count_roots(
+    conn: sqlite3.Connection, tree: str, *, op: str = "", status: str = ""
+) -> int:
+    """How many of a tree's runs ``page_roots`` would page through."""
+    row = conn.execute(
+        f"{_ROLLED} SELECT COUNT(*) FROM rolled_jobs {_ROOTS}",
+        {"tree": tree, "op": op, "status": status},
+    ).fetchone()
+    return int(row[0])
+
+
+def root_ops(conn: sqlite3.Connection, tree: str) -> tuple[str, ...]:
+    """Every op a tree has run, once each, for the runs list's op filter."""
+    rows = conn.execute(
+        "SELECT DISTINCT op FROM jobs WHERE parent_id IS NULL "
+        "AND COALESCE(tree, 'default') = ? ORDER BY op",
+        (tree,),
+    ).fetchall()
+    return tuple(str(row["op"]) for row in rows)
+
+
+_ROOTS = (
+    "WHERE parent_id IS NULL AND COALESCE(tree, 'default') = :tree "
+    "AND (:op = '' OR op = :op) AND (:status = '' OR rolled = :status)"
+)
+
+_ROLLED = """
+WITH kids AS (
+    SELECT parent_id,
+           COUNT(*) AS total,
+           SUM(status IN ('succeeded', 'failed', 'canceled')) AS done,
+           SUM(status = 'failed') AS failed,
+           SUM(status = 'canceled') AS canceled,
+           SUM(status = 'succeeded') AS succeeded,
+           SUM(status = 'running') AS running
+    FROM jobs WHERE parent_id IS NOT NULL GROUP BY parent_id
+),
+rolled_jobs AS (
+    SELECT jobs.*,
+           CASE
+               WHEN kids.total IS NULL THEN jobs.status
+               WHEN kids.failed > 0 THEN 'failed'
+               WHEN kids.canceled > 0 THEN 'canceled'
+               WHEN kids.done = kids.total THEN 'succeeded'
+               WHEN kids.succeeded > 0 THEN 'partial'
+               WHEN kids.running > 0 THEN 'running'
+               ELSE 'pending'
+           END AS rolled
+    FROM jobs LEFT JOIN kids ON kids.parent_id = jobs.id
+)
+"""
+
+
 def list_jobs(
     conn: sqlite3.Connection,
     op: str | None = None,

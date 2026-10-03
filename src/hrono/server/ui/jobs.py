@@ -114,21 +114,19 @@ def jobs_view(
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         chosen = tree if tree in trees else trees[0]
-        rows = [
-            row
-            for row in reversed(job_store.list_jobs(conn))
-            if (row["tree"] or "default") == chosen and row["parent_id"] is None
-        ]
-        ran = sorted({str(row["op"]) for row in rows})
-        rendered = [
-            _render_job(conn, row) for row in rows if not op or row["op"] == op
-        ]
-        matching = [
-            job for job in rendered if not status or job["status"] == status
-        ]
-        pages = max(1, -(-len(matching) // PAGE))
+        ran = job_store.root_ops(conn, chosen)
+        total = job_store.count_roots(conn, chosen, op=op, status=status)
+        pages = max(1, -(-total // PAGE))
         page = min(max(1, page), pages)
-        jobs = matching[(page - 1) * PAGE : page * PAGE]
+        rows = job_store.page_roots(
+            conn,
+            chosen,
+            op=op,
+            status=status,
+            limit=PAGE,
+            offset=(page - 1) * PAGE,
+        )
+        jobs = [_render_job(conn, row) for row in rows]
         sources = [
             str(row["name"]) for row in registry_store.list_all(conn, "sources")
         ]
@@ -153,7 +151,7 @@ def jobs_view(
             "paging": {
                 "page": page,
                 "pages": pages,
-                "total": len(matching),
+                "total": total,
                 "newer": _page_url(chosen, status, op, page - 1)
                 if page > 1
                 else None,

@@ -1,6 +1,7 @@
 """#213: a run says what it did, what failed and where, and can be retried."""
 
 import json
+import sqlite3
 import subprocess
 import time
 from collections.abc import Iterator
@@ -96,9 +97,15 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 class Panel:
-    def __init__(self, client: TestClient, tokens: dict[str, str]) -> None:
+    def __init__(
+        self,
+        client: TestClient,
+        tokens: dict[str, str],
+        conn: sqlite3.Connection,
+    ) -> None:
         self.client = client
         self.tokens = tokens
+        self.conn = conn
 
     def as_(self, role: str) -> None:
         self.client.post("/ui/login", data={"token": self.tokens[role]})
@@ -114,7 +121,7 @@ def panel(repo: Path) -> Iterator[Panel]:
     with TestClient(app) as client:
         app.state.worker.stop()
         app.state.worker.join(timeout=5)
-        yield Panel(client, tokens)
+        yield Panel(client, tokens, conn)
     conn.close()
 
 
@@ -392,3 +399,30 @@ def test_the_runs_list_filters_and_pages(repo: Path, panel: Panel) -> None:
     assert rows.count('data-state="failed"') == 15
     assert 'data-state="succeeded"' not in failed.split("<tbody>")[1]
     assert monitors.count("<code>monitor</code>") == 10
+
+
+def test_the_runs_list_reads_one_page_of_a_long_history(
+    repo: Path, panel: Panel
+) -> None:
+    for n in range(5000):
+        stamp = f"2026-10-03T{n:05d}"
+        job_store.insert(
+            panel.conn, f"job_{n:05d}", None, "default", "sync", "{}", stamp
+        )
+        job_store.set_status(
+            panel.conn, f"job_{n:05d}", "succeeded", None, stamp
+        )
+    panel.as_("admin")
+    statements: list[str] = []
+    panel.conn.set_trace_callback(statements.append)
+
+    started = time.monotonic()
+    page = panel.client.get("/ui/jobs?tree=default").text
+    took = time.monotonic() - started
+    panel.conn.set_trace_callback(None)
+
+    assert page.count('data-job="') == 25
+    assert 'data-job="job_04999"' in page  # newest first
+    assert "page 1 of 200" in page
+    assert len(statements) < 100, f"{len(statements)} statements"
+    assert took < 2, f"{took:.2f}s"
