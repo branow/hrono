@@ -298,13 +298,13 @@ def test_a_running_job_is_not_reclaimed_while_its_worker_beats(
         db,
         {"slow": slow},
         poll_interval=0.01,
-        heartbeat_interval=0.02,
-        stale_after=0.15,
+        heartbeat_interval=0.01,
+        stale_after=0.08,
     )
     worker.start()
     try:
         job_id = enqueue(db, "slow", {})
-        time.sleep(0.6)
+        time.sleep(0.3)  # several times stale_after
         assert status_of(db, job_id) == "running"
         release.set()
         assert wait_terminal(db, job_id) == "succeeded"

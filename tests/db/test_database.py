@@ -155,7 +155,7 @@ def test_a_write_waits_out_another_writer_instead_of_failing(
         rival.execute("BEGIN IMMEDIATE")
         rival.execute("INSERT INTO probe (n) VALUES (1)")
         holding.set()
-        time.sleep(0.3)
+        time.sleep(0.1)
         rival.commit()
 
     keeper = threading.Thread(target=hold)

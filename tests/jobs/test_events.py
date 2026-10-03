@@ -54,7 +54,12 @@ class Harness:
 
 
 @pytest.fixture
-def harness(tmp_path: Path) -> Iterator[Harness]:
+def harness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[Harness]:
+    # The stream sleeps one poll between looks; a tenth of the real half
+    # second proves the same following and keeps each test off the clock.
+    monkeypatch.setattr(events, "POLL_SECONDS", 0.05)
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)
     token = create_user(conn, "admin", "admin")[1]

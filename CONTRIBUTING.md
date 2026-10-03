@@ -93,3 +93,9 @@ with `tests.stub_server.serving` (its poll interval is short; the default
 makes every teardown wait half a second). A module that runs the real UMAP ->
 HDBSCAN recipe goes in `_UMAP_MODULES` in `tests/conftest.py`, so its one-time
 nine-second import and compile is paid by two workers and not eight.
+
+A module whose tests all start from the same built tree builds it once, as a
+module fixture, and restores a copy per test (`tests/world.py`) instead of
+rebuilding: see `tests/tree/test_update.py`. A wait that proves something takes
+time (a heartbeat outliving a stale window) is scaled down, not slept at its
+production length, and a poll interval is a module constant the test patches.

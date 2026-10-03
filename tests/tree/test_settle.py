@@ -30,6 +30,7 @@ from hrono.summarize import store as condensations
 from hrono.tree import settle as settle_mod
 from hrono.tree.maintain import maintain
 from hrono.tree.settle import CHURN_THRESHOLD, settle, should_settle
+from tests import world
 from tests.cluster.harness import planted_groups
 from tests.cluster.invariant import (
     assert_every_leaf_is_reachable,
@@ -153,32 +154,50 @@ def _job() -> Job:
     )
 
 
+@pytest.fixture(scope="module")
+def _world(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    """The tree `maintain` builds over a repo, built once."""
+    root = tmp_path_factory.mktemp("world")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.chdir(root)
+        url = make_repo(root / "src-repo")
+        database = Database.at(root / "hrono.db")
+        with database.connect() as conn, conn:
+            register(conn, url)
+        maintain(
+            Job(
+                id="m",
+                parent_id=None,
+                tree=TREE,
+                op="maintain",
+                scope={},
+                status="running",
+                error=None,
+                created_at="t",
+                updated_at="t",
+            ),
+            job_context(database, root),
+            encoder_for=fake_encoder,
+            client=FakeCompletion(),
+            build=fake_build,
+        )
+        database.close()
+    return root, world.snapshot(root, tmp_path_factory.mktemp("copy"))
+
+
+@pytest.fixture
+def tmp_path(_world: tuple[Path, Path]) -> Path:
+    """Shadows pytest's: every test here starts in the built world."""
+    root, copy = _world
+    return world.restore(copy, root)
+
+
 @pytest.fixture
 def built(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[Database]:
     monkeypatch.chdir(tmp_path)
-    url = make_repo(tmp_path / "src-repo")
     database = Database.at(tmp_path / "hrono.db")
-    with database.connect() as conn, conn:
-        register(conn, url)
-    maintain(
-        Job(
-            id="m",
-            parent_id=None,
-            tree=TREE,
-            op="maintain",
-            scope={},
-            status="running",
-            error=None,
-            created_at="t",
-            updated_at="t",
-        ),
-        job_context(database, tmp_path),
-        encoder_for=fake_encoder,
-        client=FakeCompletion(),
-        build=fake_build,
-    )
     yield database
     database.close()
 
