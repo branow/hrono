@@ -29,6 +29,7 @@ CHATTER = (
     "has the heading. Paste the md content here and I'll condense it for you."
 )
 GOOD = "Defines the a() helper, which returns 1."
+SHORT = "Could you paste the file for me?"  # under MIN_CHARS (E015)
 
 
 class Talking:
@@ -234,3 +235,39 @@ def test_pending_reads_no_body_it_will_not_condense(built: Built) -> None:
     assert " IN (" in bodies[0]
     for row in good:
         assert row[0] not in bodies[0]
+
+
+def test_a_short_stored_talk_back_is_listed_and_redone(built: Built) -> None:
+    with built.database.write() as conn:
+        digest = conn.execute(
+            "SELECT content_hash FROM sections WHERE path = 'f4.txt'"
+        ).fetchone()[0]
+        conn.execute(
+            "DELETE FROM condensations WHERE content_hash = ?", (digest,)
+        )
+        store.upsert(conn, digest, "sonnet", SHORT, 1, 1)
+    key = Fernet.generate_key()
+    conn = open_database(built.root / "hrono.db")
+    reconcile(conn, key)
+    token = create_user(conn, "rita", "reader")[1]
+    conn.commit()
+    app = create_app(connection=conn, master_key=key, key_id=1)
+    with TestClient(app) as http:
+        app.state.worker.stop()
+        app.state.worker.join(timeout=5)
+        listed = http.get(
+            "/trees/default/unusable-condensations",
+            headers={"Authorization": f"Bearer {token}"},
+        ).json()
+    conn.close()
+    client = Talking(None)
+
+    condense(
+        condense_job(), job_context(built.database, built.root), client=client
+    )
+
+    with built.database.connect() as conn:
+        kept = store.get(conn, digest, "sonnet")["text"]
+    assert [c["path"] for c in listed["condensations"]] == ["f4.txt"]
+    assert listed["condensations"][0]["why"] == "asks-the-caller"
+    assert client.calls == 1 and kept == GOOD

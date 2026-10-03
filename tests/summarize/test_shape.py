@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
-from hrono.summarize.shape import answer, unusable
+from hrono.summarize.shape import answer, talks_back, unusable
 
 # the reply that was actually stored as a topic's brief in the QA run (F21)
 F21 = (
@@ -62,6 +62,42 @@ def test_an_empty_reply_is_rejected(reply: str) -> None:
 )
 def test_usable_briefs_are_left_alone(reply: str) -> None:
     assert unusable(reply) == ""
+
+
+@pytest.mark.parametrize(
+    ("reply", "why"),
+    [
+        pytest.param(
+            "Could you paste the file for me?", "asks-the-caller", id="asks"
+        ),
+        pytest.param("I cannot see any file.", "addresses-the-caller", id="me"),
+        pytest.param(
+            "Your message has no content.", "talks-to-the-caller", id="talks"
+        ),
+    ],
+)
+def test_a_short_talk_back_is_caught_under_the_floor(
+    reply: str, why: str
+) -> None:
+    # E015: the length floor ran first and called these "empty", which a
+    # condensation forgives, so a short talk-back was never caught
+    assert len(reply) < 40
+    assert talks_back(reply) == why
+    assert unusable(reply) == why
+
+
+@pytest.mark.parametrize(
+    ("reply", "why"),
+    [
+        pytest.param("Returns 1.", "", id="short-plain"),
+        pytest.param("", "empty", id="nothing"),
+        pytest.param("  \n ", "empty", id="blank"),
+    ],
+)
+def test_a_short_plain_condensation_is_still_usable(
+    reply: str, why: str
+) -> None:
+    assert talks_back(reply) == why
 
 
 class FakeCompletion:

@@ -96,11 +96,36 @@ _TAIL = re.compile(r"^(?:$|[-*+]\s|references:|sources:|\w+://)", re.IGNORECASE)
 
 
 def unusable(text: str) -> str:
-    """Return why ``text`` is not a brief, or "" when it is usable."""
+    """Return why ``text`` is not a brief, or "" when it is usable.
+
+    The conversational checks run BEFORE the length floor (E015): "Could you
+    paste the file for me?" is under ``MIN_CHARS``, and reading it as merely
+    short hid it from ``talks_back``, which forgives short.
+    """
     stripped = text.strip()
-    if len(stripped) < MIN_CHARS:
+    if not stripped:
         return "empty"
-    sentences = _prose(stripped)
+    reason = _answers_the_caller(stripped)
+    if reason:
+        return reason
+    return "empty" if len(stripped) < MIN_CHARS else ""
+
+
+def talks_back(text: str) -> str:
+    """``unusable`` without the length floor, for a CONDENSATION (#221).
+
+    A brief summarises a topic and is never legitimately a few words; a
+    condensation summarises one section, and a two-line ``__init__.py`` has a
+    true condensation shorter than ``MIN_CHARS``. Only the model answering the
+    caller disqualifies one. Nothing at all still does.
+    """
+    stripped = text.strip()
+    return _answers_the_caller(stripped) if stripped else "empty"
+
+
+def _answers_the_caller(text: str) -> str:
+    """Which conversational shape ``text`` has, or "" for none."""
+    sentences = _prose(text)
     if sentences and _interrogates(sentences[-1]):
         return "asks-the-caller"
     if sentences and _ADDRESSES.match(_LEADING.sub("", sentences[0])):
@@ -146,18 +171,6 @@ def _interrogates(last: str) -> bool:
     if not last.endswith("?") or not _YOU.search(last):
         return False
     return not _REPORTS.search(last)
-
-
-def talks_back(text: str) -> str:
-    """``unusable`` without the length floor, for a CONDENSATION (#221).
-
-    A brief summarises a topic and is never legitimately a few words; a
-    condensation summarises one section, and a two-line ``__init__.py`` has a
-    true condensation shorter than ``MIN_CHARS``. Only the model answering the
-    caller disqualifies one. Nothing at all still does.
-    """
-    reason = unusable(text)
-    return "" if reason == "empty" and text.strip() else reason
 
 
 def answer(
