@@ -49,6 +49,7 @@ there), not evidence the model failed to answer.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from hrono.llm.client import (
     Completion,
@@ -147,8 +148,22 @@ def _interrogates(last: str) -> bool:
     return not _REPORTS.search(last)
 
 
+def talks_back(text: str) -> str:
+    """``unusable`` without the length floor, for a CONDENSATION (#221).
+
+    A brief summarises a topic and is never legitimately a few words; a
+    condensation summarises one section, and a two-line ``__init__.py`` has a
+    true condensation shorter than ``MIN_CHARS``. Only the model answering the
+    caller disqualifies one. Nothing at all still does.
+    """
+    reason = unusable(text)
+    return "" if reason == "empty" and text.strip() else reason
+
+
 def answer(
-    completion: Completion, request: CompletionRequest
+    completion: Completion,
+    request: CompletionRequest,
+    gate: Callable[[str], str] = unusable,
 ) -> tuple[CompletionResult, str]:
     """Complete ``request``, retrying ONCE if the reply is not a brief.
 
@@ -160,11 +175,11 @@ def answer(
     both calls is summed, because that is what the node cost.
     """
     first = completion.complete(request)
-    flag = unusable(first.text)
+    flag = gate(first.text)
     if not flag:
         return first, ""
     second = completion.complete(request)
-    flag = unusable(second.text)
+    flag = gate(second.text)
     return (
         CompletionResult(
             second.text,

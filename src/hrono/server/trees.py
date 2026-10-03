@@ -12,6 +12,7 @@ outside the tree are visible rather than silently missing from the map.
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import asdict
 from typing import Annotated
 
@@ -27,6 +28,8 @@ from hrono.jobs.worker import enqueue
 from hrono.recall.ask import ask
 from hrono.server.auth import require_role
 from hrono.summarize import briefs
+from hrono.summarize import store as condensations
+from hrono.summarize.resolve import resolve_text_model
 
 _EXPORT_LEVELS = 4
 
@@ -149,6 +152,47 @@ def unusable_briefs(
             for node, level, why, text in found
         ],
     }
+
+
+@router.get("/trees/{name}/unusable-condensations")
+def unusable_condensations(
+    name: str, request: Request, _: Reader
+) -> dict[str, object]:
+    """Stored condensations in this tree that are the model talking back.
+
+    The condense stage treats each as missing, so the next sync re-condenses
+    exactly these sections and rewrites the briefs that read them (#221).
+    """
+    with request.app.state.db.connect() as conn:
+        model = str(resolve_text_model(conn, {}, "condense")["name"])
+        found = condensations.unusable(conn, model)
+        paths = _paths_in(conn, name, [digest for digest, _, _ in found])
+    listed = [
+        {"path": path, "content_hash": digest, "why": why, "text": text}
+        for digest, why, text in found
+        for path in paths.get(digest, ())
+    ]
+    return {"count": len(listed), "condensations": listed}
+
+
+def _paths_in(
+    conn: sqlite3.Connection, tree: str, digests: list[str]
+) -> dict[str, list[str]]:
+    """The files in ``tree`` whose sections have each content hash."""
+    if not digests:
+        return {}
+    marks = ",".join("?" * len(digests))
+    rows = conn.execute(
+        "SELECT DISTINCT s.content_hash AS h, s.path AS path FROM sections s "  # noqa: S608
+        "JOIN node_members m ON m.section_id = s.id "
+        "JOIN nodes n ON n.id = m.node_id "
+        f"WHERE n.tree = ? AND s.content_hash IN ({marks}) ORDER BY s.path",
+        (tree, *digests),
+    ).fetchall()
+    found: dict[str, list[str]] = {}
+    for row in rows:
+        found.setdefault(row["h"], []).append(row["path"])
+    return found
 
 
 @router.get("/trees/{name}/pending")

@@ -34,6 +34,7 @@ from hrono.llm.client import (
 from hrono.llm.providers import client_for
 from hrono.summarize import pool, spend, store
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.shape import answer, talks_back
 
 _CONTENT_PLACEHOLDER = "{content}"
 
@@ -57,17 +58,22 @@ def condense(
 
     completion = client_for(context, model, "condense", client=client)
 
-    def call(section: Section) -> CompletionResult:
+    def call(section: Section) -> tuple[CompletionResult, str]:
         rendered = template.replace(
             _CONTENT_PLACEHOLDER, section[1].decode("utf-8", "replace")
         )
-        return completion.complete(
-            CompletionRequest(model=model, system="", content=rendered)
+        return answer(
+            completion,
+            CompletionRequest(model=model, system="", content=rendered),
+            talks_back,
         )
 
-    def keep(section: Section, result: CompletionResult) -> None:
+    def keep(section: Section, made: tuple[CompletionResult, str]) -> None:
+        result, refused = made
+        if refused:
+            return  # never cached: the section stays pending (#221)
         with context.database.write() as conn:
-            store.upsert(
+            store.replace(
                 conn,
                 section[0],
                 model_name,
@@ -86,9 +92,12 @@ def condense(
     # an op that calls a model says what it spent (#179); until now condense
     # reported nothing at all, which made the most expensive stage of a first
     # build the one nobody could account for.
-    outcome: dict[str, object] = {"condensed": len(condensed)}
+    refused = sum(1 for _, flag in condensed if flag)
+    outcome: dict[str, object] = {"condensed": len(condensed) - refused}
+    if refused:
+        outcome["refused"] = refused
     tokens = spend.counts(
-        [(r.usage.input_tokens, r.usage.output_tokens) for r in condensed]
+        [(r.usage.input_tokens, r.usage.output_tokens) for r, _ in condensed]
     )
     if tokens is not None:
         outcome["tokens"] = tokens
