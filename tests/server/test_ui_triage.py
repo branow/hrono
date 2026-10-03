@@ -332,4 +332,4 @@ def test_a_settled_echo_does_not_promise_a_sync(clean_tree: Browser) -> None:
     detail = _briefless_detail(clean_tree)
 
     assert "sync" not in detail
-    assert "1 need a person" in detail
+    assert "1 needs a person" in detail

@@ -116,14 +116,12 @@ def unanswerable(conn: sqlite3.Connection, tree: str) -> list[int]:
 
 def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
     missing = unanswerable(conn, tree)
-    # A settled echo is one a sync leaves alone, so the line must not promise
-    # one: requirement 50, each item says whether automation or a person fixes.
     people = sum(1 for node in missing if briefs.settled(conn, node))
     detail = (
         "Recall cannot answer from them until a sync rewrites them."
         if not people
         else "Recall cannot answer from them until they are rewritten; "
-        f"{people} need a person."
+        f"{people} {'needs' if people == 1 else 'need'} a person."
     )
     return Item(
         kind="topics with no usable brief, or a stale one",
