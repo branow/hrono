@@ -242,11 +242,16 @@ def _lay_out(
         for node in visible
     }
     holds = {node: _holds(rows[node]) for node in visible}
-    shown_as = _labels(visible, drawn_kids, called)
     biggest = max(holds.values(), default=1) or 1
     radii = {node: _radius(holds[node], biggest) for node in visible}
     tall = {node: _own_height(bool(children.get(node))) for node in visible}
     boxes = _boxes(visible, drawn_kids, tall)
+    shown_as = _labels(
+        visible,
+        drawn_kids,
+        called,
+        {node: boxes[node].width for node in visible},
+    )
     tops = _drawn_roots(visible, drawn_kids)
     placed, edges, width, height = _place(tops, boxes, drawn_kids, radii, tall)
     blank = where_module.Where("", "")
@@ -502,47 +507,92 @@ def _labels(
     visible: Sequence[int],
     drawn_kids: dict[int, list[int]],
     called: dict[int, str],
+    room: dict[int, float],
 ) -> dict[int, str]:
     """Each topic's label, still told apart from its siblings once CUT.
 
-    Two names can differ only past the slot's width ("Handles the parser and
-    its tests" / "...and its errors"); cut, they would read the same, so a cut
-    that collides takes the topic's number as well.
+    A name is cut to the room its column has, and where siblings open with the
+    same words the shared words are what is dropped, not the end: three
+    "Handles assorted material for ..." cut at the slot all read "Handles
+    assorted mat...". Two names can still differ only past the cut; they would
+    read the same, so a cut that collides takes the topic's number as well.
     """
     hung = {kid for kids in drawn_kids.values() for kid in kids}
     families = [kids for kids in drawn_kids.values() if kids]
     families.append([node for node in visible if node not in hung])
     labels: dict[int, str] = {}
     for family in families:
+        names = {node: called.get(node, f"topic {node}") for node in family}
         cut = {
-            node: fitted_name(called.get(node, f"topic {node}"))
+            node: _cut_among(
+                names[node], list(names.values()), _budget(room[node])
+            )
             for node in family
         }
         seen: dict[str, int] = {}
         for label in cut.values():
             seen[label] = seen.get(label, 0) + 1
         for node in family:
-            name = called.get(node, f"topic {node}")
+            name = names[node]
             clash = seen[cut[node]] > 1 and " (#" not in name
             labels[node] = (
-                fitted_name(f"{name} (#{node})") if clash else cut[node]
+                _cut(f"{name} (#{node})", _budget(room[node]))
+                if clash
+                else cut[node]
             )
     return labels
 
 
+def _budget(room: float) -> int:
+    """How many characters of a name fit in ``room`` pixels, never fewer than a
+    slot's worth and never more than a title."""
+    return min(TITLE_CHARS, max(LABEL_CHARS, int(room // LABEL_CHAR) - 2))
+
+
+def _cut_among(name: str, siblings: Sequence[str], budget: int) -> str:
+    """``name`` cut to ``budget``, with the words it shares with a sibling
+    dropped from the front when there is something past them to show."""
+    if len(name) <= budget:
+        return name
+    shared = max(
+        (_shared_words(name, other) for other in siblings if other != name),
+        key=len,
+        default="",
+    )
+    rest = name[len(shared) :].strip()
+    if not shared or not rest:
+        return _cut(name, budget)
+    return "…" + _cut(rest, budget - 1)
+
+
+def _shared_words(name: str, other: str) -> str:
+    """The leading whole words two names have in common, with their spacing."""
+    kept: list[str] = []
+    for ours, theirs in zip(name.split(" "), other.split(" "), strict=False):
+        if ours != theirs:
+            break
+        kept.append(ours)
+    return " ".join(kept) + " " if kept else ""
+
+
 def fitted_name(name: str) -> str:
-    """Cut a name to its slot, never cutting off what tells it apart.
+    """Cut a name to its slot, never cutting off what tells it apart."""
+    return _cut(name, LABEL_CHARS)
+
+
+def _cut(name: str, budget: int) -> str:
+    """Cut a name to ``budget``, keeping the topic's number if it has one.
 
     ``naming`` ends a shared title with the topic's number; a cut that took
     the number with it would put two identical labels back side by side.
     """
-    if len(name) <= LABEL_CHARS:
+    if len(name) <= budget:
         return name
     title, mark, number = name.rpartition(" (#")
     if not mark:
-        return _fitted(name, LABEL_CHARS)
+        return _fitted(name, budget)
     tail = f" (#{number}"
-    return _fitted(title, LABEL_CHARS - len(tail)) + tail
+    return _fitted(title, budget - len(tail)) + tail
 
 
 def _fitted_where(place: str) -> str:

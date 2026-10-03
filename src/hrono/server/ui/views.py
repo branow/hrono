@@ -9,6 +9,7 @@ makes every view of it shareable (#183, #184).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
 from fastapi import Request
@@ -178,6 +179,7 @@ def graph_page(
     edges: str = "",
     done: str = "",
     focus: str = "",
+    arcs: str = "",
 ) -> Response:
     """The tree, drawn — and every view of it is a URL.
 
@@ -192,6 +194,7 @@ def graph_page(
     chosen = _opened(open) if open is not None and open != NO_OPEN else None
     kinds = overlays.parse(edges)
     wanted = int(focus) if focus.strip().isdigit() else 0
+    alone = int(arcs) if arcs.strip().isdigit() else 0
     with request.app.state.db.connect() as conn:
         opened = (
             chosen if chosen is not None else _down_to(conn, tree, OPEN_DEPTH)
@@ -203,7 +206,8 @@ def graph_page(
         )
         branches = _branches(conn, tree)
         focused = panel.build(conn, tree, wanted) if wanted else None
-    links = _drawn_links(overlay, drawn)
+    arcs_drawn = _drawn_links(overlay, drawn, alone)
+    links = arcs_drawn.drawn
     return templates.TemplateResponse(
         request,
         "graph.html",
@@ -228,6 +232,10 @@ def graph_page(
             },
             "overlay": {
                 "links": links,
+                "chips": _chips(
+                    drawn, arcs_drawn.unseen, tree, open, edges, focus
+                ),
+                "only": _only(drawn, alone, tree, open, edges, focus),
                 "unavailable": overlay.unavailable,
                 "toggles": _edge_toggles(tree, open, kinds, focus),
             },
@@ -250,6 +258,59 @@ def graph_page(
         },
     )
 
+
+def _chips(
+    drawn: graph.Graph,
+    unseen: dict[int, int],
+    tree: str,
+    open: str,
+    edges: str,
+    focus: str,
+) -> list[dict[str, object]]:
+    """A count beside each topic that has arcs the map did not draw, linking to
+    that topic's arcs alone."""
+    return [
+        {
+            "x": round(node.x + node.radius + CHIP_GAP, 1),
+            "y": round(node.y + 4, 1),
+            "text": _more(unseen[node.id]),
+            "says": (
+                f"{unseen[node.id]} more overlay arcs touch {node.name}. "
+                "Open them on their own."
+            ),
+            "href": _graph_url(
+                tree, open, edges, focus=focus, arcs=str(node.id)
+            ),
+        }
+        for node in drawn.nodes
+        if unseen.get(node.id)
+    ]
+
+
+def _more(count: int) -> str:
+    return f"+{count} arc{'s' if count != 1 else ''}"
+
+
+def _only(
+    drawn: graph.Graph,
+    alone: int,
+    tree: str,
+    open: str,
+    edges: str,
+    focus: str,
+) -> dict[str, str] | None:
+    """The way back from one topic's arcs to the whole map's."""
+    node = next((node for node in drawn.nodes if node.id == alone), None)
+    if node is None:
+        return None
+    return {
+        "name": node.label,
+        "href": _graph_url(tree, open, edges, focus=focus),
+    }
+
+
+# Between a topic's circle and the count of arcs left undrawn beside it.
+CHIP_GAP = 6.0
 
 # Room under the lowest thing an overlay draws, so its label is not against
 # the edge of the canvas.
@@ -332,7 +393,9 @@ def _folding(
     }
 
 
-def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
+def _graph_url(
+    tree: str, opened: str, edges: str, focus: str = "", arcs: str = ""
+) -> str:
     """A link to one view of the map.
 
     `open` is emitted even when EMPTY, and that is the whole of the Collapse
@@ -350,6 +413,7 @@ def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
                 ("open", "" if opened == NO_OPEN else opened),
                 ("edges", edges),
                 ("focus", focus),
+                ("arcs", arcs),
             )
             if value or (key == "open" and opened != NO_OPEN)
         },
@@ -359,9 +423,17 @@ def _graph_url(tree: str, opened: str, edges: str, focus: str = "") -> str:
     return f"/ui/trees/{tree}/graph?{query}"
 
 
+@dataclass(frozen=True)
+class Arcs:
+    """What the overlays drew, and what each topic has that was left undrawn."""
+
+    drawn: list[dict[str, object]]
+    unseen: dict[int, int]
+
+
 def _drawn_links(
-    overlay: overlays.Overlay, drawn: graph.Graph
-) -> list[dict[str, object]]:
+    overlay: overlays.Overlay, drawn: graph.Graph, only: int = 0
+) -> Arcs:
     """Give each link the path that joins the topics it is about, and a place
     to say what it found where no other words are (#212).
 
@@ -369,21 +441,53 @@ def _drawn_links(
     nowhere: the overlay describes what is DRAWN, and `?open=` decides that.
     Each label is placed in turn against every topic's furniture and every
     label already placed, so none is printed over another.
+
+    At most `ARC_CAP` arcs are drawn, the strongest first, and never one that
+    would run through a topic's words: on a hundred topics the overlays were a
+    solid band of arcs. Every link left out is counted against both topics it
+    joins, and `only` draws one topic's links alone.
     """
     nodes = {node.id: node for node in drawn.nodes}
     here = [
-        (link, nodes[link.source], nodes[link.target])
+        link
         for link in overlay.links
-        if link.source in nodes and link.target in nodes
+        if link.source in nodes
+        and link.target in nodes
+        and (not only or only in (link.source, link.target))
     ]
-    lanes = _lanes([(link, (a.x, a.y), (b.x, b.y)) for link, a, b in here])
+    chosen = overlays.strongest(here, ARC_CAP)
+    lanes = _lanes(
+        [
+            (
+                link,
+                (nodes[link.source].x, nodes[link.source].y),
+                (nodes[link.target].x, nodes[link.target].y),
+            )
+            for link in chosen
+        ]
+    )
     taken = list(topic_boxes(drawn))
     placed: list[dict[str, object]] = []
-    for link, start, end in here:
-        shape = _drawn(link, start, end, lanes.get(id(link), 0), taken)
+    missed = {id(link) for link in here}
+    for link in chosen:
+        shape = _drawn(
+            link,
+            nodes[link.source],
+            nodes[link.target],
+            lanes.get(id(link), 0),
+            taken,
+        )
+        if shape is None:
+            continue
+        missed.discard(id(link))
         taken.append(shape.pop("box"))  # type: ignore[arg-type]
         placed.append(shape)
-    return placed
+    unseen: dict[int, int] = {}
+    for link in here:
+        if id(link) in missed:
+            for end in (link.source, link.target):
+                unseen[end] = unseen.get(end, 0) + 1
+    return Arcs(drawn=placed, unseen=unseen)
 
 
 def topic_boxes(drawn: graph.Graph) -> list[labels.Box]:
@@ -407,6 +511,14 @@ def topic_boxes(drawn: graph.Graph) -> list[labels.Box]:
 BOW_FLOOR = 40.0
 LANE = 36.0
 BOW_CAP = 360.0
+# How many lanes a blocked arc may step down before it is given up on, and how
+# finely its curve is walked to see whether it runs through a word.
+MAX_LANES = 6
+STEPS = 48
+# The most arcs the overlays draw at once. Past a handful an arc stops pointing
+# at ONE repair and becomes texture; the rest stay one click away, counted
+# beside each topic they touch.
+ARC_CAP = 12
 
 
 def _lanes(
@@ -448,38 +560,24 @@ def _drawn(
     end: graph.Node,
     lane: int,
     taken: list[labels.Box],
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     """One overlay link: its path, and a clear spot ON that path for its label.
 
     A same-row link leaves each topic BELOW its furniture — its name, where it
     lives, its count — and bows further down, so the curve never runs through
     a topic's words (#212); a link between levels runs from under the upper
     topic's furniture to the top of the lower one's circle. The label tries
-    points along the path, middle first.
+    points along the path, middle first. A same-row link that would cut
+    through something steps down a lane until it does not; one that cannot
+    be drawn clear of every word is not drawn, and is counted instead.
     """
     if abs(start.y - end.y) > 1:
-        upper, lower = (start, end) if start.y < end.y else (end, start)
-        x1 = upper.x
-        y1 = labels.furniture_end(upper.y, upper.radius, upper.has_children)
-        x2, y2 = lower.x, lower.y - lower.radius
-        path = f"M{x1},{y1} L{x2},{y2}"
-        points = [(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t) for t in _ALONG]
-        low = max(y1, y2)
+        route = _between_levels(start, end, taken)
     else:
-        y1 = labels.furniture_end(start.y, start.radius, start.has_children)
-        y2 = labels.furniture_end(end.y, end.radius, end.has_children)
-        x1, x2 = start.x, end.x
-        bow = min(BOW_FLOOR + lane * LANE, BOW_CAP)
-        cx, cy = (x1 + x2) / 2, max(y1, y2) + bow
-        path = f"M{x1},{y1} Q{cx},{cy} {x2},{y2}"
-        points = [
-            (
-                (1 - t) ** 2 * x1 + 2 * t * (1 - t) * cx + t * t * x2,
-                (1 - t) ** 2 * y1 + 2 * t * (1 - t) * cy + t * t * y2 + 4,
-            )
-            for t in _ALONG
-        ]
-        low = (max(y1, y2) + cy) / 2  # the deepest point of the curve
+        route = _along_the_row(start, end, lane, taken)
+    if route is None:
+        return None
+    path, points, low = route
     x, y, box = labels.place(points, link.label, taken)
     return {
         "kind": link.kind,
@@ -490,6 +588,67 @@ def _drawn(
         "low": round(max(low, box.bottom), 1),
         "box": box,
     }
+
+
+Route = tuple[str, list[tuple[float, float]], float]
+
+
+def _between_levels(
+    start: graph.Node, end: graph.Node, taken: list[labels.Box]
+) -> Route | None:
+    upper, lower = (start, end) if start.y < end.y else (end, start)
+    x1 = upper.x
+    y1 = labels.furniture_end(upper.y, upper.radius, upper.has_children)
+    x2, y2 = lower.x, lower.y - lower.radius
+    if labels.crosses(taken, [(x1, y1), (x2, y2)]):
+        return None
+    points = [(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t) for t in _ALONG]
+    return f"M{x1},{y1} L{x2},{y2}", points, max(y1, y2)
+
+
+def _along_the_row(
+    start: graph.Node, end: graph.Node, lane: int, taken: list[labels.Box]
+) -> Route | None:
+    y1 = labels.furniture_end(start.y, start.radius, start.has_children)
+    y2 = labels.furniture_end(end.y, end.radius, end.has_children)
+    x1, x2 = start.x, end.x
+    bows = [
+        BOW_FLOOR + deeper * LANE
+        for deeper in range(lane, lane + MAX_LANES)
+        if BOW_FLOOR + deeper * LANE <= BOW_CAP
+    ] or [BOW_CAP]
+    for bow in bows:
+        cx, cy = (x1 + x2) / 2, max(y1, y2) + bow
+        if labels.crosses(taken, _curve(x1, y1, cx, cy, x2, y2, STEPS)):
+            continue
+        points = [
+            (px, py + 4)
+            for px, py in (_curve_at(x1, y1, cx, cy, x2, y2, t) for t in _ALONG)
+        ]
+        return (
+            f"M{x1},{y1} Q{cx},{cy} {x2},{y2}",
+            points,
+            (max(y1, y2) + cy) / 2,  # the deepest point of the curve
+        )
+    return None
+
+
+def _curve(
+    x1: float, y1: float, cx: float, cy: float, x2: float, y2: float, steps: int
+) -> list[tuple[float, float]]:
+    return [
+        _curve_at(x1, y1, cx, cy, x2, y2, step / steps)
+        for step in range(steps + 1)
+    ]
+
+
+def _curve_at(
+    x1: float, y1: float, cx: float, cy: float, x2: float, y2: float, t: float
+) -> tuple[float, float]:
+    return (
+        (1 - t) ** 2 * x1 + 2 * t * (1 - t) * cx + t * t * x2,
+        (1 - t) ** 2 * y1 + 2 * t * (1 - t) * cy + t * t * y2,
+    )
 
 
 # Where on its path a label is tried, middle first.

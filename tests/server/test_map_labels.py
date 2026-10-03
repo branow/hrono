@@ -16,7 +16,7 @@ from hrono.export.store import load
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.server import graph, labels, overlays
-from hrono.server.ui.views import _drawn_links, topic_boxes
+from hrono.server.ui.views import ARC_CAP, _drawn_links, topic_boxes
 from hrono.summarize import briefs
 
 TREE = "default"
@@ -181,14 +181,15 @@ def test_with_every_overlay_no_word_lands_on_another(
     )
     overlay = overlays.Overlay(kinds=overlays.KINDS, links=links)
 
-    placed = _drawn_links(overlay, drawn)
+    arcs = _drawn_links(overlay, drawn)
+    placed = arcs.drawn
 
     words = [
         labels.text(link["x"], link["y"], link["label"], labels.META_CHAR)
         for link in placed
     ]
     topics = topic_boxes(drawn)
-    assert len(placed) == len(links)
+    assert 0 < len(placed) <= ARC_CAP < len(links)
     for one, other in itertools.combinations(words, 2):
         assert not one.hits(other), (one, other)
     for word in words:
@@ -235,7 +236,8 @@ def test_an_arc_leaves_a_topic_below_its_words(
         for a, b in zip(row, row[1:], strict=False)
     )
 
-    placed = _drawn_links(overlays.Overlay(("pull",), links), drawn)
+    placed = _drawn_links(overlays.Overlay(("pull",), links), drawn).drawn
+    assert len(placed) == len(links)
 
     words = {
         node.id: max(

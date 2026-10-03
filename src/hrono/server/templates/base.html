@@ -566,6 +566,17 @@ main:has(.board) { max-width: 1480px; }
    drag is noise. */
 .canvas.panning, .canvas.panning text { cursor: grabbing; user-select: none; }
 .canvas svg { display: block; margin-inline: auto; }
+/* A scrollbar that is always THERE. The overlay kind most systems draw hides
+   itself until the box is scrolled, so a row wider than the window gave no
+   sign that anything lay beyond its edge. */
+.canvas::-webkit-scrollbar { width: 12px; height: 12px; }
+.canvas::-webkit-scrollbar-track { background: var(--sunken); }
+.canvas::-webkit-scrollbar-thumb {
+  background: var(--rule-firm);
+  border: 3px solid var(--sunken);
+  border-radius: 6px;
+}
+.canvas::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
 
 /* The panel the map opens beside itself rather than navigating away to. */
 .panel {
@@ -698,6 +709,9 @@ svg text {
   stroke-linejoin: round;
 }
 svg text.meta { font: 400 10.5px var(--mono); fill: var(--ink-faint); }
+/* The arcs a topic has that the map left undrawn, counted beside it. */
+svg text.meta.more { text-anchor: start; fill: var(--accent); font-weight: 600; cursor: pointer; }
+svg a.more:hover text { text-decoration: underline; }
 /* A name on the map is a name someone wants to paste into a search box or a
    ticket. The circles and chevrons are controls and select as nothing — but
    the two lines of text under each one are text, and the cursor says so. */
@@ -1084,6 +1098,11 @@ main.bleed .panel {
    panel's own heading. */
 main:has(.board.reading) .afloat.tr { right: calc(22rem + var(--s3)); }
 .afloat .keys { margin: 0; }
+.afloat.br { bottom: var(--s3); right: var(--s3); }
+/* The way to the topics lying past the window's edge: a button for each side,
+   present only while there is something that side. */
+.afloat.br button[hidden], .afloat.br:not(:has(button:not([hidden]))) { display: none; }
+main:has(.board.reading) .afloat.br { right: calc(22rem + var(--s3)); }
 .map-title { font: 620 .8125rem/1.5 var(--mono); color: var(--ink-soft); }
 @media (max-width: 54rem) {
   .afloat.tr, .afloat.bl { display: none; }

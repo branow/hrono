@@ -50,6 +50,42 @@ class Box:
             or other.bottom <= self.top
         )
 
+    def cut_by(
+        self, start: tuple[float, float], end: tuple[float, float]
+    ) -> bool:
+        """Whether the straight segment ``start`` -> ``end`` passes through."""
+        (x1, y1), (x2, y2) = start, end
+        near, far = 0.0, 1.0
+        for origin, delta, low, high in (
+            (x1, x2 - x1, self.left, self.right),
+            (y1, y2 - y1, self.top, self.bottom),
+        ):
+            if delta == 0:
+                if not low < origin < high:
+                    return False
+                continue
+            enter, leave = sorted(
+                ((low - origin) / delta, (high - origin) / delta)
+            )
+            near, far = max(near, enter), min(far, leave)
+            if near >= far:
+                return False
+        return True
+
+
+def crosses(
+    boxes: Iterable[Box], points: Sequence[tuple[float, float]]
+) -> bool:
+    """Whether the polyline through ``points`` runs through any of ``boxes``."""
+    held = tuple(boxes)
+    return any(
+        box.cut_by(start, end)
+        for start, end in zip(points, points[1:], strict=False)
+        for box in held
+        if min(start[0], end[0]) < box.right
+        and box.left < max(start[0], end[0])
+    )
+
 
 def text(x: float, baseline: float, words: str, char: float) -> Box:
     """The box of a line of text centred on ``x``, sitting on ``baseline``."""

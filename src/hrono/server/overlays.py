@@ -38,6 +38,7 @@ class Link:
     source: int
     target: int
     label: str
+    weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,33 @@ class Overlay:
     kinds: tuple[str, ...]
     links: tuple[Link, ...]
     unavailable: str | None = None
+
+
+def strongest(links: Sequence[Link], cap: int) -> tuple[Link, ...]:
+    """At most ``cap`` links, the strongest of each kind taking turns.
+
+    A weight only means something against its own kind: a count of chunks and
+    a similarity are not on one scale. So each kind is ranked on its own and
+    the kinds are dealt from in rotation, which is what keeps a hundred pull
+    arcs from crowding out the one near-duplicate pair.
+    """
+    if len(links) <= cap:
+        return tuple(links)
+    ranked = [
+        sorted(
+            (link for link in links if link.kind == kind),
+            key=lambda link: (-link.weight, link.source, link.target),
+        )
+        for kind in KINDS
+    ]
+    turns = max((len(group) for group in ranked), default=0)
+    dealt = (
+        group[turn]
+        for turn in range(turns)
+        for group in ranked
+        if turn < len(group)
+    )
+    return tuple(link for _, link in zip(range(cap), dealt, strict=False))
 
 
 def parse(requested: str) -> tuple[str, ...]:
@@ -102,6 +130,7 @@ def _pull(
             source=holder,
             target=puller,
             label=f"{count} chunk{'s' if count != 1 else ''} nearer",
+            weight=float(count),
         )
         for (holder, puller), count in sorted(counts.items())
     )
@@ -127,6 +156,7 @@ def _proximity(
             source=left,
             target=right,
             label=f"{similarity:.2f} similar",
+            weight=similarity,
         )
         for index, left in enumerate(drawn)
         for right in drawn[index + 1 :]
