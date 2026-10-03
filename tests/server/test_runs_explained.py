@@ -1,5 +1,6 @@
 """#213: a run says what it did, what failed and where, and can be retried."""
 
+import json
 import time
 from collections.abc import Iterator
 from functools import partial
@@ -204,6 +205,56 @@ def test_the_run_page_explains_a_failure_and_offers_a_retry(
     assert 'id="stages"' in page and "<code>condense</code>" in page
     assert "Run it again" in page
     assert "only what failed or was never reached costs anything" in page
+
+
+def test_a_failed_run_never_says_it_had_nothing_to_change(
+    repo: Path, panel: Panel
+) -> None:
+    _database, job_id = _run(
+        repo, client=Writing("module 4 does"), build=fake_build
+    )
+    panel.as_("writer")
+
+    page = panel.client.get(f"/ui/jobs/{job_id}?tree=default").text
+
+    assert "Failed at condense" in page
+    assert "Nothing to change" not in page
+    assert "makes no model calls" not in page
+    assert "It stopped before it finished" in page
+    assert "What finished first is in the stages above" in page
+
+
+@pytest.mark.parametrize(
+    ("status", "says"),
+    [
+        pytest.param("failed", "It stopped before it finished", id="failed"),
+        pytest.param(
+            "canceled", "It stopped before it finished", id="canceled"
+        ),
+        pytest.param("succeeded", "Nothing to change", id="succeeded"),
+    ],
+)
+def test_only_a_finished_run_reads_as_quiet(
+    repo: Path, panel: Panel, status: str, says: str
+) -> None:
+    database = Database.at(repo / "hrono.db")
+    job_id = enqueue(database, "maintain", {}, tree="default")
+    stages = json.dumps(
+        {
+            "stages": [
+                {"op": "sync", "over": None, "seconds": 0.1, "result": None}
+            ]
+        }
+    )
+    with database.write() as conn:
+        job_store.set_status(conn, job_id, status, None, "t", result=stages)
+    database.close()
+    panel.as_("writer")
+
+    page = panel.client.get(f"/ui/jobs/{job_id}?tree=default").text
+
+    assert says in page
+    assert ("Nothing to change" in page) is (status == "succeeded")
 
 
 def test_a_retry_runs_the_same_thing_again(repo: Path, panel: Panel) -> None:

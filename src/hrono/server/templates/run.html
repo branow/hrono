@@ -112,6 +112,11 @@
       <p class="mt-2"><a href="/ui/trees/{{ tree }}/activity?tree={{ tree }}">What changed, decision by decision, in the activity log</a></p>
       {% elif job.live %}
       <p class="hint">Still going. What it did appears here as it finishes.</p>
+      {% elif job.status in ("failed", "canceled") %}
+      <div class="empty">
+        <div class="title">It stopped before it finished</div>
+        {% if job.stages %}<p class="hint mt-2">What finished first is in the stages above. Anything after them was not done.</p>{% endif %}
+      </div>
       {% elif job.outcome.quiet %}
       <div class="empty">
         <div class="title">Nothing to change</div>
@@ -205,7 +210,7 @@
     }
     // a run that has finished has an outcome to show, and this page is built
     // server-side: reload once rather than rebuild it here
-    if (state.status && ["succeeded", "failed", "cancelled"].indexOf(state.status) >= 0) {
+    if (state.status && ["succeeded", "failed", "canceled"].indexOf(state.status) >= 0) {
       source.close();
       window.location.reload();
     }
