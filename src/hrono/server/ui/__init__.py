@@ -195,6 +195,12 @@ def switch(here: str, tree: str, to: str) -> str:
 TABS: tuple[tuple[str, str, str, str], ...] = (
     ("home", "Home", "/ui", r"/ui"),
     ("map", "Map", "/ui/trees/{tree}/graph", r"/ui/trees/[^/]+/graph"),
+    (
+        "find",
+        "Find",
+        "/ui/trees/{tree}/find",
+        r"/ui/trees/[^/]+/(find|outline|files)",
+    ),
     ("ask", "Ask", "/ui/trees/{tree}/ask", r"/ui/trees/[^/]+/ask"),
     (
         "runs",
@@ -281,6 +287,7 @@ from hrono.server.ui import (  # noqa: E402, F401
     access,
     ask,
     export,
+    find,
     guide,
     jobs,
     nodes,

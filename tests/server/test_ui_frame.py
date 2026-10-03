@@ -23,7 +23,17 @@ from hrono.server.ui import tabs
 
 KEY = Fernet.generate_key()
 TREE = "default"
-LABELS = ["Home", "Map", "Ask", "Runs", "Health", "Export", "Settings", "Guide"]
+LABELS = [
+    "Home",
+    "Map",
+    "Find",
+    "Ask",
+    "Runs",
+    "Health",
+    "Export",
+    "Settings",
+    "Guide",
+]
 
 
 class Browser:
@@ -142,6 +152,9 @@ def test_only_an_admin_is_offered_the_access_tab(
     [
         ("/ui", "Home"),
         (f"/ui/trees/{TREE}/graph", "Map"),
+        (f"/ui/trees/{TREE}/find", "Find"),
+        (f"/ui/trees/{TREE}/outline", "Find"),
+        (f"/ui/trees/{TREE}/files", "Find"),
         (f"/ui/trees/{TREE}/ask", "Ask"),
         ("/ui/jobs", "Runs"),
         ("/ui/jobs/finished", "Runs"),

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_find.html" import nav %}
+{% block title %}hrono — {{ tree }} files{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div class="eyebrow">{{ tree }}</div>
+  <h1>Files<span class="tip" tabindex="0" role="note" data-tip="From a file you know to where hrono filed it: a path, or the start of one, lists its sections and the topic each sits in">?</span></h1>
+</div>
+{{ nav(tree, page) }}
+
+<div class="stack">
+  <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/files" role="search">
+    <input type="hidden" name="tree" value="{{ tree }}">
+    <label class="field grow">
+      <span class="visually-hidden">File path or directory</span>
+      <input type="search" name="path" value="{{ path }}" placeholder="src/auth/tokens.py" autofocus>
+    </label>
+    <button class="btn primary small" type="submit">Find</button>
+  </form>
+
+  {% if not located %}
+  <p class="hint">Type a path, or just the start of one such as <span class="mono">src/auth</span>, to see every section cut from it and the topic it sits in.</p>
+  {% elif not located.files %}
+  <div class="callout" id="results">
+    <div class="body">
+      <div class="title">Not ingested</div>
+      <p class="hint"><span class="mono">{{ located.path }}</span> is not in any source hrono has read. It may be excluded by a source's filters, or not yet synced.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="stack" id="results">
+    <p class="hint">{{ located.files|length }}{% if located.more %} of {{ located.files|length + located.more }}{% endif %} file{{ '' if located.files|length == 1 else 's' }}{% if located.more %}; narrow the path to see the rest{% endif %}.</p>
+    {% for file in located.files %}
+    <section class="card" aria-label="{{ file.path }}">
+      <div class="card-head spread">
+        <h2 class="mono small">{{ file.path }}</h2>
+        <span class="faint small">{{ file.source }}</span>
+      </div>
+      <div class="card-body">
+        <ul class="outline root">
+          {% for s in file.sections %}
+          <li><div class="leaf">
+            <span class="mono small faint">section {{ s.ordinal + 1 }}, bytes {{ s.start }}–{{ s.end }} @{{ s.version }}</span>
+            {% if s.topic is not none %}
+            in <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}#section-{{ s.id }}">{{ s.topic_name }}</a>
+            {% elif s.parked %}<span class="chip warn" title="Ingested and embedded, but waiting to be filed into a topic">parked</span> not in any topic yet
+            {% else %}<span class="chip">not filed</span> not in a topic of this tree
+            {% endif %}
+          </div></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -95,6 +95,16 @@ what it did. Manual tree
 surgery — rename, brief, notes, reparent, merge, dissolve, split, move a chunk
 — is there for admins.
 
+Find is the other way in, for when you know a word or a file rather than
+where it sits on the map. The search box in the top bar looks for every word
+you type in topic names, briefs, file paths and file text, grouped by kind; it
+matches words and their prefixes, and is not semantic (a question in your own
+words belongs to Ask). Outline shows the whole tree as a collapsible list, with
+each topic's size and whether recall can answer from it, and stays readable at
+hundreds of topics. Files takes a path, or the start of one, to the sections
+cut from it and the topic each was filed under; a section waiting to be filed
+says it is parked, and a path hrono never read says it is not ingested.
+
 Settings shows one collection at a time — trees, sources, connections, models,
 prompts — as a table, with each field of a form labelled and explained. It says
 at the top whether the registry is complete enough to build (a role with no

@@ -84,10 +84,10 @@ def _unreachable(conn: sqlite3.Connection, tree: str) -> Item:
     )
 
 
-def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
+def unanswerable(conn: sqlite3.Connection, tree: str) -> list[int]:
     """Topics recall cannot answer from: no brief, a stale one, or a reply
     that is not a brief at all (#217) — a pinned brief is a person's, and
-    counts as written."""
+    counts as written. The one rule the Health page and the outline share."""
     held = pins.pinned(conn, pins.BRIEF)
     rows = conn.execute(
         "SELECT n.id AS id, b.node_id AS has, b.stale AS stale, "
@@ -96,7 +96,7 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
         "LEFT JOIN briefs b ON b.node_id = n.id WHERE n.tree = ? ORDER BY n.id",
         (tree,),
     ).fetchall()
-    missing = [
+    return [
         int(row["id"])
         for row in rows
         if int(row["id"]) not in held
@@ -112,6 +112,10 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
             )
         )
     ]
+
+
+def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
+    missing = unanswerable(conn, tree)
     return Item(
         kind="topics with no usable brief, or a stale one",
         count=len(missing),

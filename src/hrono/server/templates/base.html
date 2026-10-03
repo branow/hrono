@@ -281,6 +281,18 @@ details.reveal .hint { margin-top: var(--s2); }
   border-bottom-color: var(--accent);
 }
 
+.finder input { width: 9rem; padding: .3rem .55rem; font-size: .8125rem; }
+.finder input:focus { width: 13rem; }
+mark { background: var(--accent-wash); color: inherit; border-radius: 2px; padding: 0 .1em; }
+ul.outline { list-style: none; margin: 0; padding: 0; }
+ul.outline ul.outline { padding-left: 1.25rem; border-left: 1px solid var(--rule); margin-left: .5rem; }
+ul.outline details > summary, ul.outline .leaf {
+  display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap;
+  padding: .3rem .25rem; min-width: 0;
+}
+ul.outline details > summary:hover { background: var(--sunken); }
+ul.outline .leaf { padding-left: 1.5rem; }
+
 .who {
   display: flex; align-items: center; gap: var(--s2);
   padding-left: var(--s3);
@@ -1397,6 +1409,10 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     <a class="tab" href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>
     {% endfor %}
   </nav>
+  <form class="finder" method="get" action="/ui/trees/{{ tree }}/find" role="search">
+    <input type="hidden" name="tree" value="{{ tree }}">
+    <input type="search" name="q" placeholder="Search" aria-label="Search topics, files and text">
+  </form>
   <div class="who">
     <span class="name">{{ user.name }}</span>
     <span class="chip" title="{{ user.role }} — what this account may do">{{ user.role }}</span>

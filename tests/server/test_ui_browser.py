@@ -35,6 +35,10 @@ ROUTES = (
     "/ui/config?section=sources",
     "/ui/config?section=models",
     "/ui/guide",
+    "/ui/trees/default/find",
+    "/ui/trees/default/find?q=module",
+    "/ui/trees/default/outline?open=all",
+    "/ui/trees/default/files?path=f",
     "/ui/trees/default/nodes/{leaf}",
     "/ui/trees/default/nodes/{root}",
 )

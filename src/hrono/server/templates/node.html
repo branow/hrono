@@ -229,7 +229,7 @@
       {% else %}
       <ul class="members">
       {% for member in node.members %}
-        <li>
+        <li id="section-{{ member.id }}">
           <details>
             <summary class="twisty">
               <span class="path"><span class="dim">{{ member.stem }}</span>{{ member.tail }}</span>
