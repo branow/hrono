@@ -1422,6 +1422,11 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 </header>
 {% endblock %}
 <main{% if full_bleed %} class="bleed"{% endif %}>
+<script>
+// The one place the page's JS says what a run's status reads as; the Python
+// side is ui/__init__.py status_word, and both take the derived word from it.
+window.statusWord = (s) => (s === {{ partial_status|tojson }} ? 'running' : s);
+</script>
 {% set wrong = error or request.query_params.get("error") %}
 {% set said = done or request.query_params.get("done") %}
 {% set started = request.query_params.get("run") %}

@@ -57,6 +57,7 @@ def status_word(status: str) -> str:
 
 
 templates.env.filters["status_word"] = status_word
+templates.env.globals["partial_status"] = PARTIAL
 templates.env.filters["counted"] = counted
 templates.env.filters["size"] = size
 # the two leaf budgets, quoted on several pages: one source for the number

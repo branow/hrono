@@ -195,7 +195,7 @@
 // The same SSE stream the list uses, for one run: a progress bar that only
 // moves on reload is a progress bar nobody believes.
 (function () {
-  var word = function (s) { return s === "partial" ? "running" : s; };
+  var word = window.statusWord;
   var run = document.getElementById("run");
   if (!run || !run.dataset.live) return;
   var source = new EventSource("/jobs/" + run.dataset.job + "/events");

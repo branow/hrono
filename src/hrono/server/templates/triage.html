@@ -25,7 +25,7 @@
         {% endif %}</span>
         <span class="body">
           <a href="{{ item.link }}">{{ item.said }}</a>
-          <span class="hint">{{ item.detail }}</span>
+          {% if item.count %}<span class="hint">{{ item.detail }}</span>{% endif %}
         </span>
       </li>
       {% endfor %}

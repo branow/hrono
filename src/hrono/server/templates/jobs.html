@@ -136,9 +136,7 @@
 // EventSource is a browser built-in and /jobs/<id>/events already speaks it
 // — so this view is live with no library and nothing vendored. The cookie
 // rides along and no script can read it.
-// `partial` is the derived word for a run with some stages done; a reader
-// sees `running` (ui/__init__.py status_word)
-const word = (s) => (s === 'partial' ? 'running' : s);
+const word = window.statusWord;
 for (const row of document.querySelectorAll('tr[data-live]')) {
   const source = new EventSource('/jobs/' + row.dataset.job + '/events');
   source.addEventListener('state', (event) => {

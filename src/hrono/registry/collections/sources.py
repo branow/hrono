@@ -41,7 +41,8 @@ def _name() -> Any:
         title="Name",
         description=(
             "What this source is called in trees, on the map and on the "
-            "command line. Not starting with node-."
+            "command line. hrono keeps one name prefix for its own briefs, "
+            "and a name that starts with it is refused."
         ),
     )
 

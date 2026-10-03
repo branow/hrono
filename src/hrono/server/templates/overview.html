@@ -200,9 +200,7 @@
 // the count move while a person watches, and the page is read again when a run
 // ends, so "last run" and the source states are the finished truth, not what
 // they were when the page opened.
-// `partial` is the derived word for a run with some stages done; a reader
-// sees `running` (ui/__init__.py status_word)
-const word = (s) => (s === 'partial' ? 'running' : s);
+const word = window.statusWord;
 for (const row of document.querySelectorAll('[data-live][data-job]')) {
   const source = new EventSource('/jobs/' + row.dataset.job + '/events');
   source.addEventListener('state', (event) => {

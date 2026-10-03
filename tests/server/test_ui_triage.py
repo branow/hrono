@@ -156,6 +156,9 @@ def test_a_clean_tree_says_it_is_clean(clean_tree: Browser) -> None:
     page = clean_tree.triage()
 
     assert "nothing needs attention in default." in page
+    # a zero carries no non-zero sentence beneath it
+    for item in triage.survey(clean_tree.conn, TREE):  # type: ignore[arg-type]
+        assert item.detail not in page
 
 
 def test_every_kind_is_counted(messy: Browser) -> None:
@@ -173,7 +176,10 @@ def test_every_kind_is_counted(messy: Browser) -> None:
 def test_a_messy_tree_does_not_claim_to_be_clean(messy: Browser) -> None:
     messy.sign_in()
 
-    assert "nothing needs attention" not in messy.triage()
+    page = messy.triage()
+    assert "nothing needs attention" not in page
+    for item in triage.survey(messy.conn, TREE):  # type: ignore[arg-type]
+        assert item.detail in page
 
 
 def test_a_non_zero_check_reads_as_a_task_in_the_singular(

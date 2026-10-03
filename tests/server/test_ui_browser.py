@@ -241,6 +241,38 @@ def test_a_running_run_on_home_moves_without_a_reload(
     assert page.evaluate("window.sameDocument") is True  # type: ignore[attr-defined]
 
 
+@pytest.mark.parametrize(
+    ("route", "badge", "progress"),
+    [
+        ("/ui", "#running .status", "#running .progress"),
+        ("/ui/jobs", "tr[data-live] .status", "tr[data-live] .progress"),
+        ("/ui/jobs/going", "#run .status, .status", "#run .progress"),
+    ],
+)
+def test_a_live_run_with_a_stage_done_reads_running_never_partial(
+    solo_page: object, solo: Live, route: str, badge: str, progress: str
+) -> None:
+    """The streamed status turns `partial` once a stage succeeds; the badge
+    updated in place must still say `running` (and paint as running)."""
+    page = solo_page
+    solo.run_fanout(2)
+    page.goto(f"{solo.base}{route}")  # type: ignore[attr-defined]
+    page.wait_for_load_state("load")  # type: ignore[attr-defined]
+    shown = page.locator(badge).first  # type: ignore[attr-defined]
+    assert shown.inner_text() == "running"
+
+    solo.finish_piece(0)
+
+    page.wait_for_function(  # type: ignore[attr-defined]
+        "(sel) => /1\\s*(\\/|of)\\s*2/.test("
+        "document.querySelector(sel).textContent)",
+        arg=progress,
+        timeout=8000,
+    )
+    assert shown.inner_text() == "running"
+    assert shown.get_attribute("data-state") == "running"
+
+
 @pytest.mark.parametrize("width", WIDTHS)
 def test_the_home_of_a_tree_never_built_does_not_scroll_sideways(
     fresh_page: object, fresh: Live, width: int
