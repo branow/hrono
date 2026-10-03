@@ -10,9 +10,8 @@ shape rather than an SDK.
 from __future__ import annotations
 
 import json
-import threading
 from collections.abc import Iterator
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
@@ -29,6 +28,7 @@ from hrono.llm.openai import OpenAIClient, credential
 from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
 from hrono.registry.collections.connections import Connection
+from tests.stub_server import serving
 
 KEY = Fernet.generate_key()
 
@@ -57,14 +57,8 @@ class _Handler(BaseHTTPRequestHandler):
 def local() -> Iterator[str]:
     _Handler.responses = {}
     _Handler.requests = []
-    server = HTTPServer(("127.0.0.1", 0), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_port}/v1"
-    finally:
-        server.shutdown()
-        server.server_close()
+    with serving(_Handler) as base:
+        yield base + "/v1"
 
 
 @pytest.fixture

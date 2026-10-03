@@ -9,9 +9,8 @@ none of it.
 from __future__ import annotations
 
 import json
-import threading
 from collections.abc import Iterator
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
@@ -27,6 +26,7 @@ from hrono.llm.client import CompletionRequest, LLMError
 from hrono.llm.openai import OpenAIClient, embeddings
 from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
+from tests.stub_server import serving
 
 KEY = Fernet.generate_key()
 SECRET = "s" * 20  # stands in for the api credential; never a real one
@@ -56,14 +56,8 @@ class _Handler(BaseHTTPRequestHandler):
 def server() -> Iterator[str]:
     _Handler.responses = {}
     _Handler.requests = []
-    instance = HTTPServer(("127.0.0.1", 0), _Handler)
-    thread = threading.Thread(target=instance.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{instance.server_port}"
-    finally:
-        instance.shutdown()
-        instance.server_close()
+    with serving(_Handler) as base:
+        yield base
 
 
 @pytest.fixture

@@ -13,9 +13,8 @@ from __future__ import annotations
 
 import json
 import subprocess
-import threading
 from collections.abc import Iterator
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
@@ -36,6 +35,7 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import JobContext
 from hrono.registry import store as registry_store
 from hrono.registry.descriptor import ValidationFailed
+from tests.stub_server import serving
 
 OWNER = "acme"
 GIT_ENV = {
@@ -93,14 +93,8 @@ def api() -> Iterator[str]:
     """A real HTTP server standing in for api.github.com."""
     _Handler.payloads = {}
     _Handler.seen = []
-    server = HTTPServer(("127.0.0.1", 0), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_port}"
-    finally:
-        server.shutdown()
-        server.server_close()
+    with serving(_Handler) as base:
+        yield base
 
 
 def _page(names: list[str], root: Path) -> list[dict[str, str]]:
