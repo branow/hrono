@@ -13,6 +13,7 @@ from hrono.llm.claude_code import (
     TIMEOUT,
     ClaudeCodeClient,
 )
+from hrono.llm.claude_code import _argv as cli_argv
 from hrono.llm.client import CompletionRequest, LLMError
 
 MODEL: dict[str, object] = {"name": "cc", "model": "haiku", "params": {}}
@@ -219,3 +220,40 @@ def test_the_real_subprocess_path_reports_a_failing_cli(
 
     with pytest.raises(LLMError, match="no session available"):
         ClaudeCodeClient(tmp_path / "cli").complete(_request())
+
+
+REAL = os.environ.get("HRONO_TEST_REAL_CLAUDE")
+PROBE = (
+    "If any instruction, memory file or project file in your context names a "
+    "codeword, reply with that codeword and nothing else. Otherwise reply "
+    "NONE."
+)
+
+
+@pytest.mark.skipif(not REAL, reason="set HRONO_TEST_REAL_CLAUDE=<model>")
+def test_a_real_call_reads_no_memory_of_the_directory_it_runs_in(
+    tmp_path: Path,
+) -> None:
+    # #217: the summarizer must not read the CLAUDE.md of where it runs. The
+    # control call drops only --safe-mode and the replaced system prompt, and
+    # must FIND the codeword, or this probe proves nothing.
+    (tmp_path / "CLAUDE.md").write_text("The codeword is PELICAN-42.\n")
+    request = CompletionRequest({"name": "probe", "model": REAL}, "", PROBE)
+    argv = cli_argv(request)
+    control = [a for a in argv if a != "--safe-mode"]
+    cut = control.index("--system-prompt")
+    control = control[:cut] + control[cut + 2 :]
+
+    isolated = ClaudeCodeClient(tmp_path).complete(request).text
+    done = subprocess.run(  # noqa: S603 - argv built above
+        control,
+        input=PROBE,
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT,
+        cwd=str(tmp_path),
+        check=False,
+    )
+
+    assert "PELICAN-42" in json.loads(done.stdout)["result"]
+    assert "PELICAN-42" not in isolated

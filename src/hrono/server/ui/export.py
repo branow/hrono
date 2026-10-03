@@ -29,6 +29,7 @@ from hrono.export.produce import Export, produce
 from hrono.export.render import heading
 from hrono.server import prose
 from hrono.server.ui import Reader, _trees, router, templates
+from hrono.summarize import briefs
 
 ROOT_PAGE = "root.md"
 DEFAULT_LEVELS = 4
@@ -115,7 +116,8 @@ def _flagged(
     ids = sorted(made.tree.nodes)
     marks = ",".join("?" * len(ids))
     rows = conn.execute(
-        "SELECT n.id AS id, b.flagged AS flagged, b.node_id AS has "  # noqa: S608
+        "SELECT n.id AS id, b.flagged AS flagged, b.text AS text, "  # noqa: S608
+        "b.node_id AS has "
         f"FROM nodes n LEFT JOIN briefs b ON b.node_id = n.id "
         f"WHERE n.id IN ({marks}) ORDER BY n.id",
         ids,
@@ -123,11 +125,13 @@ def _flagged(
     return [
         {
             "title": heading(conn, int(row["id"])),
-            "why": "no brief" if row["has"] is None else str(row["flagged"]),
+            "why": "no brief"
+            if row["has"] is None
+            else briefs.refusal(row["flagged"], row["text"]),
             "link": page_link(tree, levels, _page_of(made, int(row["id"]))),
         }
         for row in rows
-        if row["has"] is None or row["flagged"]
+        if row["has"] is None or briefs.refusal(row["flagged"], row["text"])
     ]
 
 

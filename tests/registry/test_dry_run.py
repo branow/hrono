@@ -90,7 +90,7 @@ def _brief(
     briefs.upsert(
         conn,  # type: ignore[arg-type]
         node,
-        f"A summary of {node}.",
+        f"A summary of node {node}: what its members hold, in brief.",
         model_name=MODEL,
         prompt_name="brief",
         prompt_hash=prompt_hash,
@@ -520,7 +520,7 @@ def _upper(api: Api, tree: str) -> int:
         briefs.upsert(
             api.conn,  # type: ignore[arg-type]
             node,
-            "A summary of summaries.",
+            "A summary of summaries, covering what every child topic holds.",
             model_name=MODEL,
             prompt_name="brief-upper",
             prompt_hash=template_hash(UPPER_TEMPLATE),
@@ -625,7 +625,7 @@ def test_the_roles_are_told_apart_by_role_not_by_their_text(
         briefs.upsert(
             api.conn,  # type: ignore[arg-type]
             node,
-            "A summary of summaries.",
+            "A summary of summaries, covering what every child topic holds.",
             model_name=MODEL,
             prompt_name="brief-upper",
             prompt_hash=template_hash(TEMPLATE),  # the SAME words

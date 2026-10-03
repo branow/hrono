@@ -32,6 +32,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from hrono.server import where as where_module
+from hrono.summarize import briefs
 
 # A topic's own footprint: one cell wide, with its circle at the top and its
 # two lines of text centred under it.
@@ -130,6 +131,7 @@ def _rows(conn: sqlite3.Connection, tree: str) -> dict[int, sqlite3.Row]:
         for row in conn.execute(
             "SELECT n.id AS id, n.level AS level, n.title AS title, "
             "b.text AS brief, COALESCE(b.stale, 0) AS stale, "
+            "b.flagged AS flagged, "
             "(SELECT COUNT(*) FROM node_members m WHERE m.node_id = n.id) "
             "AS members, "
             "(SELECT COUNT(*) FROM node_children c WHERE c.parent_id = n.id) "
@@ -250,7 +252,9 @@ def _lay_out(
             title=_title(rows[node], node),
             holds=holds[node],
             holds_what=_holds_what(rows[node]),
-            stale=bool(rows[node]["stale"]) or rows[node]["brief"] is None,
+            stale=bool(rows[node]["stale"])
+            or rows[node]["brief"] is None
+            or bool(briefs.refusal(rows[node]["flagged"], rows[node]["brief"])),
             branch=tint.get(node, 0),
             has_children=bool(children.get(node)),
             has_hidden_children=bool(children.get(node)) and node not in opened,

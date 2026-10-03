@@ -815,7 +815,7 @@ def _brief_written_by(
         briefs.upsert(
             conn,  # type: ignore[arg-type]
             node,
-            "What this topic says.",
+            "What this topic says about the code it groups together.",
             model_name="writer",
             prompt_name=prompt,
             prompt_hash=template_hash(template),

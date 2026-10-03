@@ -81,7 +81,11 @@ def panel(tmp_path: Path) -> Iterator[Panel]:
     root = int(
         conn.execute("SELECT id FROM nodes WHERE level = 1").fetchone()["id"]
     )
-    _brief(conn, leaves[0], "# Alpha\n\nAlpha holds the signing code.")
+    _brief(
+        conn,
+        leaves[0],
+        "# Alpha\n\nAlpha holds the signing code and its key rotation.",
+    )
     _brief(
         conn,
         leaves[1],
@@ -89,7 +93,11 @@ def panel(tmp_path: Path) -> Iterator[Panel]:
         flagged="asks the caller a question",
     )
     # leaves[2] has no brief at all
-    _brief(conn, root, "# Root\n\nOverview of everything.")
+    _brief(
+        conn,
+        root,
+        "# Root\n\nOverview of everything this tree holds, in brief.",
+    )
     conn.commit()
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
@@ -126,8 +134,8 @@ def test_the_pages_read_in_place_and_their_links_work(panel: Panel) -> None:
     )
     child = panel.client.get(alpha).text
 
-    assert "Overview of everything." in root
-    assert "Alpha holds the signing code." in child
+    assert "Overview of everything this tree holds" in root
+    assert "Alpha holds the signing code" in child
     section = next(link for link in _links(child) if "alpha-py" in link)
     assert "alpha body" in panel.client.get(section).text
 
@@ -180,3 +188,13 @@ def test_the_hop_limit_is_chosen_on_the_page(panel: Panel) -> None:
     assert 'name="levels" min="2" max="30" value="2"' in html
     assert f'href="/trees/{TREE}/export.zip?levels=2"' in html
     assert "hrono tree export default -o ./default-export --levels 2" in html
+
+
+def test_the_stored_non_briefs_are_listed_over_http(panel: Panel) -> None:
+    answer = panel.client.get(
+        f"/trees/{TREE}/unusable-briefs",
+        headers={"Authorization": f"Bearer {panel.tokens['reader']}"},
+    ).json()
+
+    assert answer["count"] == 1
+    assert answer["briefs"][0]["why"] == "asks the caller a question"

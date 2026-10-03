@@ -15,8 +15,10 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from hrono import pins
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
+from hrono.summarize import briefs
 
 
 @dataclass(frozen=True)
@@ -67,17 +69,33 @@ def _unreachable(conn: sqlite3.Connection, tree: str) -> Item:
 
 
 def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
-    row = conn.execute(
-        "SELECT COUNT(*) AS n FROM nodes n "
-        "LEFT JOIN briefs b ON b.node_id = n.id "
-        "WHERE n.tree = ? AND (b.node_id IS NULL OR b.stale = 1)",
+    """Topics recall cannot answer from: no brief, a stale one, or a reply
+    that is not a brief at all (#217) — a pinned brief is a person's, and
+    counts as written."""
+    held = pins.pinned(conn, pins.BRIEF)
+    rows = conn.execute(
+        "SELECT n.id AS id, b.node_id AS has, b.stale AS stale, "
+        "b.flagged AS flagged, b.text AS text FROM nodes n "
+        "LEFT JOIN briefs b ON b.node_id = n.id WHERE n.tree = ? ORDER BY n.id",
         (tree,),
-    ).fetchone()
+    ).fetchall()
+    missing = [
+        int(row["id"])
+        for row in rows
+        if int(row["id"]) not in held
+        and (
+            row["has"] is None
+            or row["stale"]
+            or briefs.refusal(row["flagged"], row["text"])
+        )
+    ]
     return Item(
-        kind="topics with no brief, or a stale one",
-        count=int(row["n"]),
-        detail="recall cannot answer from these",
-        link=f"/ui/trees/{tree}/graph?tree={tree}",
+        kind="topics with no usable brief, or a stale one",
+        count=len(missing),
+        detail="recall cannot answer from these; the next sync rewrites them",
+        link=f"/ui/trees/{tree}/nodes/{missing[0]}?tree={tree}"
+        if missing
+        else f"/ui/trees/{tree}/graph?tree={tree}",
     )
 
 

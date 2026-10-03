@@ -350,11 +350,12 @@
         </dd>
         <dt>State</dt>
         <dd>
-          {% if node.wrote.marked %}<span class="chip warn">marked for rewrite</span>
+          {% if node.wrote.flagged %}<span class="chip warn">not a brief — the next run rewrites it</span>
+          {% elif node.wrote.marked %}<span class="chip warn">marked for rewrite</span>
           {% else %}<span class="chip ok">stands</span>{% endif %}
         </dd>
         {% if node.wrote.flagged %}
-        <dt>Flagged<span class="tip left" tabindex="0" role="note" data-tip="The reply did not look like a brief, and was stored anyway rather than losing the topic">?</span></dt>
+        <dt>Flagged<span class="tip left" tabindex="0" role="note" data-tip="Why the reply is not a brief. It is kept so the topic stays on the map, and every run tries it again">?</span></dt>
         <dd>{{ node.wrote.flagged }}</dd>
         {% endif %}
         {% if node.wrote.unsupported %}

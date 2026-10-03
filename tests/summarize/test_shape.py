@@ -1,5 +1,8 @@
 """#103: the shape guard between the model and the stored tree."""
 
+import json
+from pathlib import Path
+
 import pytest
 
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
@@ -207,6 +210,36 @@ def test_the_tail_drop_keeps_a_prose_closing_line() -> None:
         "The signer module builds and verifies signatures.\n"
         "\n"
         "It rejects a tampered payload and honours max_age."
+    )
+
+    assert unusable(text) == ""
+
+
+# Replies stored as briefs on the 2026-10-03 review tree, verbatim (#217), and
+# real briefs a model wrote for the prototype corpus, which must still pass.
+SEEN = json.loads((Path(__file__).parent / "briefs_seen.json").read_text())
+
+
+@pytest.mark.parametrize(
+    "text",
+    [pytest.param(text, id=name) for name, text in SEEN["talked_back"].items()],
+)
+def test_the_review_trees_non_briefs_are_rejected(text: str) -> None:
+    assert unusable(text) == "talks-to-the-caller"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [pytest.param(text, id=name) for name, text in SEEN["written"].items()],
+)
+def test_real_briefs_still_pass(text: str) -> None:
+    assert unusable(text) == ""
+
+
+def test_the_first_person_of_an_acronym_is_not_a_speaker() -> None:
+    text = (
+        "The I/O layer buffers reads; you configure it with BUFSIZE, and the "
+        "retry loop backs off on EAGAIN."
     )
 
     assert unusable(text) == ""

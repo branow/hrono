@@ -100,7 +100,7 @@ def clean_tree(tmp_path: Path) -> Iterator[Browser]:
             briefs.upsert(
                 conn,
                 node,
-                f"A summary of {node}.",
+                f"A summary of node {node}: what its members hold, in brief.",
                 model_name="m",
                 prompt_name="brief",
                 prompt_hash="h",
@@ -162,7 +162,9 @@ def test_every_kind_is_counted(messy: Browser) -> None:
     counts = messy.survey()
 
     assert counts["topics nothing points at"] == 1
-    assert counts["topics with no brief, or a stale one"] == 1  # the orphan
+    assert (
+        counts["topics with no usable brief, or a stale one"] == 1
+    )  # the orphan
     assert counts["sections in no topic"] == 1
     assert counts["sections placed without a score"] == 1
     assert counts["runs that failed"] == 1
@@ -205,7 +207,7 @@ def test_counts_are_per_tree(messy: Browser) -> None:
     # #054: a count that silently spans trees is worse than no count
     assert messy.survey("other") == {
         "topics nothing points at": 0,
-        "topics with no brief, or a stale one": 0,
+        "topics with no usable brief, or a stale one": 0,
         "sections in no topic": 0,
         "sections placed without a score": 0,
         "runs that failed": 0,

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hrono import pins
+from hrono.summarize import shape
 
 
 def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
@@ -69,6 +70,7 @@ def _is_fresh(
     """
     return (
         not row["stale"]
+        and not unusable(row)
         and row["member_signature"] == member_sig
         and row["prompt_hash"] == prompt_hash
         and row["model_name"] == model_name
@@ -77,6 +79,45 @@ def _is_fresh(
             or row["model_fingerprint"] is None
             or row["model_fingerprint"] == model_fingerprint
         )
+    )
+
+
+def unusable(row: sqlite3.Row) -> str:
+    """Why a stored brief is not a brief, or "" when it is one (#217).
+
+    The flag stored when it was written, or the CURRENT gate's verdict on its
+    text — so a brief stored before a rule existed is caught by it too, and
+    one that is not a brief is never fresh: the next brief pass rewrites it,
+    and only it.
+    """
+    return refusal(row["flagged"], row["text"])
+
+
+def refusal(flagged: object, text: object) -> str:
+    """``unusable`` over the two columns, for a caller holding just those."""
+    return str(flagged or "") or shape.unusable(str(text or ""))
+
+
+def unusable_in(
+    conn: sqlite3.Connection, tree: str
+) -> tuple[tuple[int, int, str, str], ...]:
+    """Every stored brief in ``tree`` that is not a brief (#217).
+
+    (node id, level, why, text), top level first. A pinned brief is a
+    person's and is left out: its words are not a model's reply.
+    """
+    held = pins.pinned(conn, pins.BRIEF)
+    rows = conn.execute(
+        "SELECT b.node_id AS id, n.level AS level, b.flagged AS flagged, "
+        "b.text AS text FROM briefs b JOIN nodes n ON n.id = b.node_id "
+        "WHERE n.tree = ? ORDER BY n.level DESC, b.node_id",
+        (tree,),
+    ).fetchall()
+    return tuple(
+        (int(row["id"]), int(row["level"]), why, str(row["text"]))
+        for row in rows
+        if int(row["id"]) not in held
+        and (why := refusal(row["flagged"], row["text"]))
     )
 
 

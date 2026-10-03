@@ -30,6 +30,16 @@ rejected, each a thing a summary of code or docs does not do:
   — which the rule always claimed, while actually scanning the whole first
   sentence (#121).
 
+- ``talks-to-the-caller`` (#217) — a sentence about the CONVERSATION rather
+  than the material ("your message is just system context", "there's no
+  actual input content", "your prompt got blocked"), or one where the model
+  speaks as itself to the reader — a first-person ``I``/``me`` and a ``you`` in
+  the same sentence ("I haven't acted on them; say the word if you want...").
+  A summary of code or docs describes the material in the third person; the
+  two together are an assistant offering, refusing or explaining itself. Both
+  shapes reached the export's root page on the 2026-10-03 review tree, and
+  neither asked a question, so the rules above passed them.
+
 Everything else passes, including shapes that are merely untidy: a brief with a
 generic "## Summary" heading, no heading at all, bullet lists, or an unusual
 length. Those are the renderer's problem (#103 chose to fix the export title
@@ -67,6 +77,19 @@ _REPORTS = re.compile(
     r"|[\"\u201c\u2018]",  # a QUOTE mark, never an apostrophe: "you'd" is not
     re.IGNORECASE,
 )
+_CONVERSATION = re.compile(
+    r"\byour (?:message|prompt|request|input)\b"
+    r"|\bthere(?:'s|\u2019s| is) no (?:actual |real )?"
+    r"(?:task|question|input|content|user message)\b"
+    r"|\bno actual (?:task|question|input|content)\b",
+    re.IGNORECASE,
+)
+# "I" as a pronoun, not the I of "I/O"; case-sensitive on purpose.
+_ME = re.compile(r"(?<![\w/])(?:I(?:['\u2019](?:ll|ve|m|d))?|me)(?![\w/])")
+_QUOTED = re.compile(
+    r"(?<!\w)'[^']*'(?!\w)|\"[^\"]*\"|\u201c[^\u201d]*\u201d"
+    r"|\u2018[^\u2019]*\u2019(?!\w)|`[^`]*`"
+)
 _LEADING = re.compile(r"^[^A-Za-z]*")
 _TAIL = re.compile(r"^(?:$|[-*+]\s|references:|sources:|\w+://)", re.IGNORECASE)
 
@@ -81,7 +104,17 @@ def unusable(text: str) -> str:
         return "asks-the-caller"
     if sentences and _ADDRESSES.match(_LEADING.sub("", sentences[0])):
         return "addresses-the-caller"
+    if any(_converses(sentence) for sentence in sentences):
+        return "talks-to-the-caller"
     return ""
+
+
+def _converses(sentence: str) -> bool:
+    """Is this sentence about the exchange, or the model speaking to a you?"""
+    if _CONVERSATION.search(sentence):
+        return True
+    spoken = _QUOTED.sub("", sentence)  # a quote is the material talking
+    return bool(_ME.search(spoken) and _YOU.search(spoken))
 
 
 def _prose(text: str) -> list[str]:

@@ -427,3 +427,28 @@ def test_a_section_not_condensed_yet_says_so(browser: Browser) -> None:
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
     assert "Not condensed yet" in page
+
+
+def test_a_reply_that_is_not_a_brief_does_not_stand(browser: Browser) -> None:
+    # #217: the review tree's root was the model talking back, shown "stands"
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        briefs.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            node,
+            "There's no task here — your message is just system context. "
+            "Paste the briefs and I'll merge them.",
+            model_name="scribe-9",
+            prompt_name="brief",
+            prompt_hash="pr00mpth4sh",
+            member_signature="sig-written",
+            input_tokens=1,
+            output_tokens=1,
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    assert "not a brief — the next run rewrites it" in page
+    assert "talks-to-the-caller" in page
+    assert '<span class="chip ok">stands</span>' not in page

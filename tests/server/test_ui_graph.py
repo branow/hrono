@@ -87,7 +87,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         briefs.upsert(
             conn,
             big,
-            "Signing modules.",
+            "Signing modules. The code that signs and verifies tokens.",
             model_name="m",
             prompt_name="brief",
             prompt_hash="h",
@@ -943,3 +943,29 @@ def test_an_overlay_toggled_on_a_collapsed_map_leaves_it_collapsed(
         f'href="/ui/trees/{TREE}/graph?tree={TREE}&amp;open=&amp;edges=pull"'
         in page
     )
+
+
+def test_a_reply_that_is_not_a_brief_draws_as_needing_one(
+    browser: Browser,
+) -> None:
+    # #217: the model talking back is a topic without a brief, on the map too
+    database = browser.client.app.state.db  # type: ignore[attr-defined]
+    browser.client.app.state.worker.stop()  # type: ignore[attr-defined]
+    browser.client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
+    with database.write() as conn:
+        briefs.upsert(
+            conn,
+            browser.ids["big"],
+            "Your prompt got blocked by a hook. Strip the secret and resend.",
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature="sig",
+            input_tokens=1,
+            output_tokens=1,
+        )
+        drawn = graph.build(conn, TREE, [browser.ids["root"]])
+
+    by_id = {node.id: node for node in drawn.nodes}
+
+    assert by_id[browser.ids["big"]].stale is True

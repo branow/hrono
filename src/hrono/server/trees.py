@@ -28,6 +28,7 @@ from hrono.export.produce import Export, archive, produce
 from hrono.jobs.worker import enqueue
 from hrono.recall import engine
 from hrono.server.auth import require_role
+from hrono.summarize import briefs
 
 _EXPORT_LEVELS = 4
 
@@ -159,6 +160,26 @@ def _exported(request: Request, name: str, levels: int) -> Export:
     if made is None:
         raise NotFound(f"tree not built: {name}")
     return made
+
+
+@router.get("/trees/{name}/unusable-briefs")
+def unusable_briefs(
+    name: str, request: Request, _: Reader
+) -> dict[str, object]:
+    """Stored briefs that are not briefs — the model talking back (#217).
+
+    Each is already stale to the pipeline, so ``POST /trees/{name}/sync``
+    rewrites exactly these and nothing else; this is the list to check first.
+    """
+    with request.app.state.db.connect() as conn:
+        found = briefs.unusable_in(conn, name)
+    return {
+        "count": len(found),
+        "briefs": [
+            {"node_id": node, "level": level, "why": why, "text": text}
+            for node, level, why, text in found
+        ],
+    }
 
 
 @router.get("/trees/{name}/pending")
