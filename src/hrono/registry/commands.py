@@ -7,8 +7,10 @@ product surface — it is the absence of one.
 
 ``set`` reads its config as JSON from a file or stdin and PUTs it, so a config
 is declarative: say what it IS and get that, whether or not it was there before
-(#138's PUT-creates half). ``rm`` deletes, except for a seeded default, which
-the server resets rather than removes.
+(#138's PUT-creates half), with a budget long enough for the validation the
+server runs first, and a timeout that names the command which shows whether the
+write landed. ``rm`` deletes, except for a seeded default, which the server
+resets rather than removes.
 
 Secrets are never printed: what comes back from the server is already masked,
 and nothing here un-masks it.
@@ -24,6 +26,14 @@ from typing import Annotated
 import typer
 
 from hrono.client.http import from_profile
+
+# ``set`` is not a CRUD write: the server validates what it is given before
+# storing it — a connection against its provider, a local embedding model by
+# LOADING ITS WEIGHTS (13.3s cold where #168 measured it, more on a slower disk
+# or a larger model). The client's 10s default was chosen for reads and fell
+# under that, so a write that landed reported a timeout (#199). The same
+# budget recall's cold path has, for the same cost.
+WRITE_TIMEOUT = 120.0
 
 
 def _read(source: Path | None) -> dict[str, object]:
@@ -70,7 +80,12 @@ def build_app(collection: str) -> typer.Typer:
 
         body = _read(file)
         body.setdefault("name", name)
-        from_profile().put(f"/{collection}/{name}", body)
+        from_profile().put(
+            f"/{collection}/{name}",
+            body,
+            timeout=WRITE_TIMEOUT,
+            check=f"hrono {collection} get {name}",
+        )
         typer.echo(f"Wrote {collection}/{name}.")
 
     @group.command("rm")

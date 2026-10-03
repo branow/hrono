@@ -39,10 +39,13 @@ class TimedOut(ClientError):
     "cannot reach", an operator goes to check a process that is fine.
     """
 
-    def __init__(self, server_url: str, seconds: float) -> None:
+    def __init__(
+        self, server_url: str, seconds: float, *, check: str | None = None
+    ) -> None:
         super().__init__("timed out")
         self.server_url = server_url
         self.seconds = seconds
+        self.check = check
 
 
 class Unauthorized(ClientError):
@@ -119,8 +122,17 @@ class Client:
         except httpx.HTTPError as exc:
             raise Unreachable(self._base) from exc
 
-    def put(self, path: str, body: dict[str, object]) -> object:
-        return self._request("PUT", path, body, None)
+    def put(
+        self,
+        path: str,
+        body: dict[str, object],
+        *,
+        timeout: float | None = None,
+        check: str | None = None,
+    ) -> object:
+        """Write ``body``; ``check`` is the command a timeout tells the reader
+        to run, since a write that timed out may still have landed (E003)."""
+        return self._request("PUT", path, body, timeout, check)
 
     def delete(self, path: str) -> object:
         return self._request("DELETE", path, None, None)
@@ -131,13 +143,14 @@ class Client:
         path: str,
         body: dict[str, object] | None,
         timeout: float | None,
+        check: str | None = None,
     ) -> object:
         headers = {"Authorization": f"Bearer {self._token}"}
         budget = self._timeout if timeout is None else timeout
         try:
             response = self._send(method, path, body, headers, budget)
         except httpx.TimeoutException as exc:
-            raise TimedOut(self._base, budget) from exc
+            raise TimedOut(self._base, budget, check=check) from exc
         except httpx.HTTPError as exc:
             raise Unreachable(self._base) from exc
         if response.status_code >= 400:
@@ -153,7 +166,9 @@ class Client:
         timeout: float,
     ) -> httpx.Response:
         if self._http is not None:
-            return self._http.request(method, path, json=body, headers=headers)
+            return self._http.request(
+                method, path, json=body, headers=headers, timeout=timeout
+            )
         with httpx.Client(base_url=self._base, timeout=timeout) as http:
             return http.request(method, path, json=body, headers=headers)
 
@@ -235,11 +250,24 @@ _MESSAGES: dict[type[ClientError], Callable[[ClientError], str]] = {
     Unreachable: lambda e: (
         f"Cannot reach hrono server at {e.server_url}."  # type: ignore[attr-defined]
     ),
-    TimedOut: lambda e: (
-        f"hrono server at {e.server_url} did not answer within "  # type: ignore[attr-defined]
-        f"{e.seconds:g}s. It is running — the request is just slow."  # type: ignore[attr-defined]
-    ),
+    TimedOut: lambda e: _timed_out(e),  # type: ignore[arg-type]
     Unauthorized: lambda _: "Unauthorized — check the token for this profile.",
     Forbidden: lambda _: "Forbidden — this token's role lacks permission.",
     NotFound: lambda _: "Not found.",
 }
+
+
+def _timed_out(error: TimedOut) -> str:
+    """A slow answer; for a write, also how to see whether it landed (E003).
+
+    A write that timed out may still have been applied, and retrying one that
+    succeeded is how someone ends up with two of something — so the reader is
+    told what to run instead of being left to guess.
+    """
+    line = (
+        f"hrono server at {error.server_url} did not answer within "
+        f"{error.seconds:g}s. It is running — the request is just slow."
+    )
+    if error.check is None:
+        return line
+    return f"{line} It may have landed; check with '{error.check}'."

@@ -70,3 +70,44 @@ def test_a_per_request_budget_overrides_the_client_default() -> None:
     client.post("/trees/t/recall", {"question": "q"}, timeout=99.0)
 
     assert seen == [99.0]
+
+
+def test_a_write_budget_reaches_the_request() -> None:
+    # #199: the per-request budget must be on the wire, injected client or not.
+    seen: list[float | None] = []
+
+    def record(request: httpx.Request) -> httpx.Response:
+        seen.append(request.extensions.get("timeout", {}).get("read"))
+        return httpx.Response(200, json={})
+
+    _client(record).put("/models/m", {"name": "m"}, timeout=120.0)
+
+    assert seen == [120.0]
+
+
+@pytest.mark.parametrize(
+    ("check", "expected"),
+    [
+        pytest.param(
+            "hrono models get m",
+            "check with 'hrono models get m'",
+            id="a-write-names-its-check",
+        ),
+        pytest.param(None, None, id="a-read-has-nothing-to-check"),
+    ],
+)
+def test_a_timeout_says_how_to_see_whether_a_write_landed(
+    check: str | None, expected: str | None
+) -> None:
+    def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("too slow", request=request)
+
+    with pytest.raises(TimedOut) as timed:
+        _client(slow).put("/models/m", {"name": "m"}, check=check)
+
+    text = message(timed.value)
+    assert "running" in text
+    if expected is None:
+        assert "check with" not in text
+    else:
+        assert expected in text

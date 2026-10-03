@@ -27,8 +27,11 @@ class FakeClient:
         self.calls.append(("POST", path, body))
         return self.reply
 
-    def put(self, path: str, body: dict[str, object]) -> object:
+    def put(
+        self, path: str, body: dict[str, object], **options: object
+    ) -> object:
         self.calls.append(("PUT", path, body))
+        self.options = options
         return self.reply
 
     def delete(self, path: str) -> object:
@@ -103,6 +106,54 @@ def test_set_defaults_the_name_from_the_path(
     runner.invoke(app, ["sources", "set", "repo", "-f", str(config)])
 
     assert client.calls[0][2]["name"] == "repo"
+
+
+def test_set_gives_the_write_the_budget_its_validation_needs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # #199: validating a local model loads its weights, which outlasts the
+    # client's 10s read default — the write landed and reported a timeout.
+    from hrono.registry.commands import WRITE_TIMEOUT
+
+    client = _patch(monkeypatch, "hrono.registry.commands", FakeClient())
+    config = tmp_path / "m.json"
+    config.write_text(json.dumps({"kind": "embedding"}))
+
+    runner.invoke(app, ["models", "set", "emb", "-f", str(config)])
+
+    assert WRITE_TIMEOUT > 10.0
+    assert client.options == {
+        "timeout": WRITE_TIMEOUT,
+        "check": "hrono models get emb",
+    }
+
+
+def test_a_timed_out_set_names_the_command_that_shows_if_it_landed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # E003: through the real client and the one boundary — a write that timed
+    # out may have landed, so the reader is told what to run, not to retry.
+    import httpx
+
+    from hrono.client.http import Client
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("too slow", request=request)
+
+    http = httpx.Client(
+        transport=httpx.MockTransport(slow), base_url="http://server"
+    )
+    real = Client("http://server", "t", http=http)
+    monkeypatch.setattr("hrono.registry.commands.from_profile", lambda: real)
+    config = tmp_path / "m.json"
+    config.write_text(json.dumps({"kind": "embedding"}))
+
+    result = runner.invoke(app, ["models", "set", "emb", "-f", str(config)])
+
+    assert result.exit_code == 1
+    assert "within 120s" in result.stderr
+    assert "check with 'hrono models get emb'" in result.stderr
+    assert "Wrote" not in result.stdout
 
 
 def test_a_config_that_is_not_json_fails_cleanly(
