@@ -219,8 +219,12 @@ def stale_or_missing(
     prompt_hash: str,
     model_name: str,
     model_fingerprint: str | None = None,
+    only: int | None = None,
 ) -> tuple[int, ...]:
     """Return ids of nodes at (tree, level) needing a (re)brief.
+
+    ``only`` narrows the pass to one topic: a person fixing one stale brief
+    must not pay for every other topic that happens to be stale too.
 
     A node needs work when it has no brief, or when its brief is stale — its
     member set changed, or the resolved prompt template hash / model no longer
@@ -234,8 +238,9 @@ def stale_or_missing(
     node_ids = [
         int(row["id"])
         for row in conn.execute(
-            "SELECT id FROM nodes WHERE tree = ? AND level = ? ORDER BY id",
-            (tree, level),
+            "SELECT id FROM nodes WHERE tree = ? AND level = ? "
+            "AND (? IS NULL OR id = ?) ORDER BY id",
+            (tree, level, only, only),
         ).fetchall()
     ]
     held = pins.pinned(conn, pins.BRIEF)
@@ -254,6 +259,46 @@ def stale_or_missing(
         ):
             result.append(node_id)
     return tuple(result)
+
+
+def scoped_node(scope: dict[str, object]) -> int | None:
+    """The one topic a job's scope names, if it names one."""
+    node = scope.get("node")
+    return (
+        node if isinstance(node, int) and not isinstance(node, bool) else None
+    )
+
+
+def stale_why(conn: sqlite3.Connection, node_id: int) -> str:
+    """Why a topic's brief needs rewriting, in a person's words; "" if it
+    does not.
+
+    The prompt and the model are not resolved here, so a brief whose sections
+    are unchanged and which no one marked stale is the prompt or the model
+    that moved: the one cause left once the others are ruled out.
+    """
+    row = get(conn, node_id)
+    if row is None:
+        return "it has no brief yet"
+    if pins.is_pinned(conn, pins.BRIEF, node_id):
+        return ""
+    if row["stale"]:
+        return "something beneath it changed since it was written"
+    why = unusable(conn, {**dict(row), "template": _template(conn, row)})
+    if why:
+        return f"what was stored is not a brief ({why})"
+    if row["member_signature"] != member_signature(conn, node_id):
+        return "its members changed since it was written"
+    return "its prompt or model changed since it was written"
+
+
+def _template(conn: sqlite3.Connection, row: sqlite3.Row) -> object:
+    found = conn.execute(
+        "SELECT json_extract(config, '$.template') AS t FROM registry "
+        "WHERE collection = 'prompts' AND name = ?",
+        (row["prompt_name"],),
+    ).fetchone()
+    return None if found is None else found["t"]
 
 
 def counts(

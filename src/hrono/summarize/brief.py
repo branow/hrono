@@ -95,7 +95,13 @@ def brief(
                 briefs.member_signature(conn, node_id),
             )
             for node_id in briefs.stale_or_missing(
-                conn, tree, _LEVEL, prompt_hash, model_name, fingerprint
+                conn,
+                tree,
+                _LEVEL,
+                prompt_hash,
+                model_name,
+                fingerprint,
+                only=briefs.scoped_node(job.scope),
             )
         ]
     pending = [(n, i, s) for (n, i, s) in pending if i.texts]
