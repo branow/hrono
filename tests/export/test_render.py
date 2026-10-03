@@ -374,7 +374,9 @@ def test_a_long_first_line_is_trimmed_to_a_usable_title(
         files = _files(database)
         directories = {p.rsplit("/", 1)[0] for p in files if "/" in p}
         assert not [d for d in directories if d.startswith("summary-")]
-        long_one = next(d for d in directories if d.startswith("this-is-a-"))
+        long_one = next(
+            d for d in directories if d.startswith("specification-document-")
+        )
         assert len(long_one.rsplit("-", 1)[0]) <= 60  # slug stays a directory
         links = [
             line
@@ -485,3 +487,69 @@ def test_an_index_entry_says_what_the_child_holds(
         f"- [Beta topic](beta-topic-{ids['n1']}/brief.md) — Beta stuff."
         in root.splitlines()
     )
+
+
+def test_a_briefs_fact_links_the_section_page_that_states_it(
+    tmp_path: object,
+) -> None:
+    # E018: the root cites a fact from a section two levels down, and the leaf
+    # cites it from beside the page, so each link is relative to its own file.
+    database = Database.at(tmp_path / "e.db")
+    with database.connect() as conn, conn:
+        s0 = add_section(conn, "a.py", b"TAU is 0.70 here\n")
+        s1 = add_section(conn, "b.py", b"nothing\n")
+        cluster_store.replace_tree(
+            conn,
+            TREE,
+            0,
+            [(0, s0, False, None), (1, s1, False, None)],
+            [(s0, [0.1]), (s1, [0.2])],
+        )
+        level0 = sorted(
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE level = 0"
+            ).fetchall()
+        )
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            1,
+            [(0, level0[0], False, None), (0, level0[1], False, None)],
+        )
+        root = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 1").fetchone()[
+                "id"
+            ]
+        )
+        brief(conn, level0[0], "# Alpha\n\nTAU is 0.70.")
+        brief(conn, level0[1], "# Beta\n\nBeta stuff.")
+        brief(conn, root, "# Root\n\nTAU is 0.70 everywhere.")
+    try:
+        files = _files(database)
+        section = next(p for p in files if p.endswith(f"-{s0}.md"))
+        directory = section.rsplit("/", 1)[0]
+        assert f"[{section}]({section})" in files["root.md"]
+        assert (
+            f"[{section}]({section.rsplit('/', 1)[1]})"
+            in files[f"{directory}/brief.md"]
+        )
+    finally:
+        database.close()
+
+
+def test_an_index_summary_skips_the_sentence_that_became_the_name(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    with database.connect() as conn, conn:
+        brief(
+            conn,
+            ids["n0"],
+            "These condensations describe the signing library. It rotates"
+            " keys.",
+        )
+    root = _files(database)["root.md"]
+    assert "[Signing library.](signing-library-" in root
+    assert "describe" not in root
+    assert "— It rotates keys." in root

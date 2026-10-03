@@ -309,8 +309,8 @@ def test_a_child_topic_is_listed_by_its_name_not_its_number(
 def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
     """A heading that stops mid-clause reads as a rendering fault."""
     long_brief = (
-        "This group covers the parts of the system that decide which chunks "
-        "belong together and which do not, at some length."
+        "The parts of the system that decide which chunks belong together and "
+        "which do not, at some length."
     )
     node = _node_id(browser)
     parent = int(

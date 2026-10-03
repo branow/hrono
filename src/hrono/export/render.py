@@ -20,13 +20,15 @@ one key.
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 import sqlite3
 from collections.abc import Mapping
 
+from hrono.export.citations import cite
 from hrono.export.collapse import ExportTree
 from hrono.ingest.store import get_content
-from hrono.naming import heading, names, sentence, slug
+from hrono.naming import heading, names, sentence, slug, unframe
 from hrono.summarize import briefs
 
 
@@ -44,16 +46,61 @@ def render(
         for child in node.children
     }
     files: dict[str, str] = {}
+    directories = {
+        node_id: _directory(node_id, parent, tree.root, conn)
+        for node_id in tree.nodes
+    }
+    where = {
+        section_id: _under(
+            directories[node_id], _section_name(conn, section_id)
+        )
+        for node_id, node in tree.nodes.items()
+        for section_id in node.sections
+    }
+    bodies = {
+        sid: _reassemble(conn, sid).decode("utf-8", "replace") for sid in where
+    }
 
     for node_id in sorted(tree.nodes):
         node = tree.nodes[node_id]
-        directory = _directory(node_id, parent, tree.root, conn)
+        directory = directories[node_id]
         path = "root.md" if node_id == tree.root else _under(directory, "brief")
-        files[path] = _node_markdown(conn, tree, node_id, notes.get(node_id))
+        under = _subtree_sections(tree, node_id)
+        files[path] = _node_markdown(
+            conn,
+            tree,
+            node_id,
+            notes.get(node_id),
+            _cited(
+                _brief_text(conn, node_id),
+                {where[sid]: bodies[sid] for sid in under},
+                path,
+            ),
+        )
         for section_id in node.sections:
-            name = _section_name(conn, section_id)
-            files[_under(directory, name)] = _section_markdown(conn, section_id)
+            files[where[section_id]] = _section_markdown(
+                conn, section_id, bodies[section_id]
+            )
     return files
+
+
+def _subtree_sections(tree: ExportTree, node_id: int) -> tuple[int, ...]:
+    node = tree.nodes[node_id]
+    return node.sections + tuple(
+        section
+        for child in node.children
+        for section in _subtree_sections(tree, child)
+    )
+
+
+def _cited(text: str, pages: Mapping[str, str], page: str) -> str:
+    """The brief with its facts linked to the section pages that state them."""
+    start = posixpath.dirname(page)
+    return cite(
+        text,
+        pages,
+        link={path: posixpath.relpath(path, start or ".") for path in pages},
+    )
 
 
 def _under(directory: str, name: str) -> str:
@@ -66,9 +113,10 @@ def _node_markdown(
     tree: ExportTree,
     node_id: int,
     note: str | None,
+    brief: str,
 ) -> str:
     node = tree.nodes[node_id]
-    parts = [_brief_text(conn, node_id).rstrip()]
+    parts = [brief.rstrip()]
     if node.children:
         parts.append("## Children\n")
         parts.append(
@@ -117,7 +165,7 @@ def _summary(conn: sqlite3.Connection, node_id: int) -> str:
         if line.strip() and not line.lstrip().startswith(_NOT_PROSE)
     )
     for said in re.split(r"(?<=[.!?])\s+", prose):
-        if said and not said.startswith(title.removesuffix("…")):
+        if said and not unframe(said).startswith(title.removesuffix("…")):
             return sentence(said, _SUMMARY_CHARS)
     return ""
 
@@ -151,11 +199,12 @@ def _references(conn: sqlite3.Connection, node_id: int) -> str:
     return f"## References\n\n{listed}"
 
 
-def _section_markdown(conn: sqlite3.Connection, section_id: int) -> str:
+def _section_markdown(
+    conn: sqlite3.Connection, section_id: int, body: str
+) -> str:
     row = conn.execute(
         "SELECT path, uri FROM sections WHERE id = ?", (section_id,)
     ).fetchone()
-    body = _reassemble(conn, section_id).decode("utf-8", "replace")
     return f"# {row['path']}\n\n<!-- {row['uri']} -->\n\n{body}"
 
 

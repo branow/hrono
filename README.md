@@ -130,6 +130,14 @@ dry-run). It has not been run against a large corpus in anger; recall costs
 about 0.011 ms per passage per query, so a corpus of a few hundred thousand
 passages is the first size where that is worth re-measuring.
 
+## The export an agent reads
+
+`hrono tree export` writes the tree as a folder of markdown. A topic's
+directory is named by its subject, not by the clause a brief opens with, and
+the facts a brief states (constants, environment variables, sizes) carry links
+to the section pages they were found in, added when the folder is written; the
+stored brief is never altered.
+
 ## Evaluating the export
 
 Whether an agent finds things in an export faster than in the raw repository

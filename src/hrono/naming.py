@@ -106,7 +106,7 @@ def heading(conn: sqlite3.Connection, node_id: int) -> str:
     if stored:
         return stored
     for line in _brief_text(conn, node_id).strip().splitlines():
-        found = title(line)
+        found = title(unframe(line.lstrip("#").strip()))
         if found and slug(found) not in _BOILERPLATE:
             return found
     return f"topic {node_id}"
@@ -125,6 +125,26 @@ def _stored_title(conn: sqlite3.Connection, node_id: int) -> str | None:
         return None
     title = row["title"]
     return str(title).strip() or None if title else None
+
+
+def unframe(line: str) -> str:
+    """``line`` without the clause that announces what the brief is.
+
+    A brief opens by saying what it is ("These condensations describe the
+    SQLite schema", "What this is: a set of condensed notes on tree building")
+    before it says what it is ABOUT, and a name made of the announcement is the
+    same on every sibling and is cut before the subject (E018). What is left is
+    the subject; a line that is nothing but the announcement is returned whole.
+    """
+    text = _EMPHASIS.sub("", line).strip()
+    rest = _ANNOUNCES.sub("", _WHAT_IT_IS.sub("", text, count=1), count=1)
+    rest = _FILLER_THEN_PREPOSITION.sub("", rest, count=1)
+    if rest == text:
+        return line
+    rest = _ARTICLES.sub("", rest, count=1)
+    if len(rest) < _MIN_SUBJECT_CHARS:
+        return line
+    return rest[:1].upper() + rest[1:]
 
 
 def title(line: str) -> str:
@@ -149,6 +169,24 @@ def slug(text: str) -> str:
 
 
 _TITLE_CHARS = 80
+_MIN_SUBJECT_CHARS = 3
+_WHAT_IT_IS = re.compile(r"^what this is\W+", re.I)
+_ANNOUNCES = re.compile(
+    r"^(?:this|these|the following)\b(?:\W+\w+){0,5}?\W+"
+    r"(?:is|are|describes?|covers?|contains?|documents?|holds?|spans?"
+    r"|comprises?|collects?|captures?|explains?|defines?)\s+",
+    re.I,
+)
+_FILLER_THEN_PREPOSITION = re.compile(
+    r"^(?:(?:a|an|the|full|whole|complete|condensed|(?:set|collection|batch"
+    r"|series|group|body)\s+of|walkthrough|notes|documentation|docs|material"
+    r"|sections|condensations|changelog)\s+)*"
+    r"(?:of|on|for|about|covering|describing)\s+",
+    re.I,
+)
+_ARTICLES = re.compile(
+    r"^(?:(?:a|an|the|full|whole|complete|condensed)\s+)+", re.I
+)
 _EMPHASIS = re.compile(r"[*_`]+")
 _BOILERPLATE = frozenset(
     {
