@@ -394,3 +394,48 @@ def test_another_trees_source_sharing_a_path_is_not_this_trees(
 
     assert {file.source for file in shared.files} == {mine}
     assert "Not ingested" in theirs
+
+
+def leave_every_source_out(p: Panel) -> None:
+    """The tree's entry now names no source its sections come from."""
+    registry_store.insert(
+        p.conn,
+        "trees",
+        TREE,
+        json.dumps({"name": TREE, "sources": ["dropped-source"]}),
+        None,
+        "t",
+    )
+    p.conn.commit()
+
+
+def test_a_section_still_filed_here_outlives_its_source_leaving_the_tree(
+    panel: Panel,
+) -> None:
+    leave_every_source_out(panel)
+
+    html = page(panel, "files", path="f5.txt")
+
+    assert "Not ingested" not in html
+    assert f"/nodes/{topic_of(panel, 'f5.txt')}?tree={TREE}#section-" in html
+
+
+def test_a_section_still_parked_here_outlives_its_source_leaving_the_tree(
+    panel: Panel,
+) -> None:
+    section = int(
+        panel.conn.execute(
+            "SELECT id FROM sections WHERE path = 'f8.txt'"
+        ).fetchone()[0]
+    )
+    panel.conn.execute(
+        "DELETE FROM node_members WHERE section_id = ?", (section,)
+    )
+    incubator.park(panel.conn, TREE, section, 1)
+    panel.conn.commit()
+    leave_every_source_out(panel)
+
+    html = page(panel, "files", path="f8.txt")
+
+    assert "Not ingested" not in html
+    assert ">parked</span>" in html
