@@ -80,6 +80,25 @@ def test_a_number_that_is_the_tail_of_a_version_is_not_a_match() -> None:
     assert run("It is 60 wide.", {"a.md": "v1.60"}) == "It is 60 wide."
 
 
+def test_a_number_that_heads_a_decimal_or_ends_a_sentence_is_a_match() -> None:
+    # the word index holds the head of a run before each dot
+    assert run("It is 60 wide.", {"a.md": "ratio 60.5 here"}) == (
+        "It is 60 wide. ([§](../a.md))"
+    )
+    assert run("It is 60 wide.", {"a.md": "wide: 60. Then"}) == (
+        "It is 60 wide. ([§](../a.md))"
+    )
+
+
+def test_a_fact_with_a_unit_is_a_match_only_as_a_whole_token() -> None:
+    line = "Cache is 64 KB."
+    hit = {"a.md": "the cache holds 64 KB of rows"}
+    assert run(line, hit) == f"{line} ([§](../a.md))"
+    assert run(line, {"a.md": "x64 KB"}) == line
+    assert run(line, {"a.md": "v1.64 KB"}) == line
+    assert run(line, {"a.md": "64 KBs"}) == line
+
+
 def test_a_subtree_filter_offers_only_its_own_sections() -> None:
     out = cite(
         "Set HRONO_HOME first.",
