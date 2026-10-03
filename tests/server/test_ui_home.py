@@ -8,6 +8,7 @@ runs are written the way the runner writes them.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from hrono.registry import store as registry_store
 from hrono.server import outcome
 from hrono.server.app import create_app
 from hrono.server.freshness import Heads
+from hrono.server.ui.overview import RECENT_RUNS
 from tests.server.repo import commit, head_of, make_repo
 
 KEY = Fernet.generate_key()
@@ -340,9 +342,11 @@ def test_home_reads_only_the_runs_it_shows(browser: Browser) -> None:
     browser.conn.set_trace_callback(None)  # type: ignore[attr-defined]
 
     asked = [s for s in statements if "FROM jobs" in s]
-    unbounded = [
-        s
-        for s in asked
-        if "LIMIT" not in s and "WHERE" not in s.split("FROM jobs")[1]
+    bounds = [
+        int(m.group(1)) for s in asked if (m := re.search(r"LIMIT (\d+)", s))
     ]
-    assert asked and not unbounded, f"reads every job: {unbounded[:1]}"
+    # The bound the roots query carries is what it reads: a query with no
+    # LIMIT, or one far above RECENT_RUNS, reads every run of the tree.
+    assert bounds, f"no bounded jobs query among {asked[:2]}"
+    assert max(bounds) == RECENT_RUNS, f"limits {bounds}"
+    assert all("LIMIT" in s for s in asked if "parent_id IS NULL" in s)
