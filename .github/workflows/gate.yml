@@ -46,4 +46,4 @@ jobs:
       # (HRONO_TEST_REAL_MODEL) are meant to skip here; a suite that quietly
       # shrinks to forty tests looks exactly as green as one that does not.
       - name: Test
-        run: uv run pytest -q -rs
+        run: uv run pytest -q -rs -n auto

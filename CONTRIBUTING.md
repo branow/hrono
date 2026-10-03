@@ -83,6 +83,13 @@ thing it claims to change.
 ## The gate
 
 Before finishing any code change, in order: `uv run ruff format .`, then
-`uv run ruff check --fix .`, then `uv run pytest`. Ruff's formatter is
+`uv run ruff check --fix .`, then `uv run pytest -n auto`. Ruff's formatter is
 authoritative — do not hand-format or fight its output. All three must be clean
 before the work is done.
+
+The suite runs in parallel, so a test may not share a port, a file or global
+state with another. Bind port 0, write under `tmp_path`, and serve a stub API
+with `tests.stub_server.serving` (its poll interval is short; the default
+makes every teardown wait half a second). A module that runs the real UMAP ->
+HDBSCAN recipe goes in `_UMAP_MODULES` in `tests/conftest.py`, so its one-time
+nine-second import and compile is paid by two workers and not eight.

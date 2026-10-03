@@ -61,6 +61,7 @@ dev = [
     "umap-learn>=0.5.6,<0.6",
     "hdbscan>=0.8.38,<0.9",
     "numpy>=1.26,<3",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
@@ -79,3 +80,6 @@ docstring-code-format = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# loadgroup keeps the "umap" groups of tests/conftest.py on one worker; without
+# -n it changes nothing.
+addopts = "--dist loadgroup"
