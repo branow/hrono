@@ -759,6 +759,13 @@ blockquote {
   font: 400 .78125rem/1.5 var(--mono); color: var(--ink-faint); }
 .crumbs .sep { color: var(--rule-firm); }
 
+/* Ask (#207): a passage is shown as the agent receives it, whole, and wraps
+   rather than pushing the page sideways. */
+pre.passage { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 24rem; overflow: auto; padding: var(--s3);
+  background: var(--sunken); border-radius: var(--r); }
+.toolbar .field.grow { flex: 1 1 20rem; }
+
 h1.where { font-family: var(--mono); font-size: 1.375rem; letter-spacing: -.01em; }
 .said { color: var(--ink-soft); margin-top: .15rem; }
 
@@ -1363,6 +1370,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     {{ tab("/ui?tree=" ~ tree, "Overview", here == "/ui") }}
     {{ tab("/ui/trees/" ~ tree ~ "/triage?tree=" ~ tree, "Needs attention", here.endswith("/triage")) }}
     {{ tab("/ui/trees/" ~ tree ~ "/graph?tree=" ~ tree, "Map", here.endswith("/graph") or "/nodes/" in here) }}
+    {{ tab("/ui/trees/" ~ tree ~ "/ask?tree=" ~ tree, "Ask", here.endswith("/ask")) }}
     {{ tab("/ui/trees/" ~ tree ~ "/activity?tree=" ~ tree, "Activity", here.endswith("/activity")) }}
     {{ tab("/ui/jobs?tree=" ~ tree, "Runs", here == "/ui/jobs") }}
     {{ tab("/ui/trees/" ~ tree ~ "/export?tree=" ~ tree, "Export", here.endswith("/export")) }}

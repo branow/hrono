@@ -106,7 +106,7 @@ def harness(
     conn.commit()
     # the endpoint embeds the query via _query_encode -> fake it (e0 = answer)
     monkeypatch.setattr(
-        "hrono.server.trees._query_encode",
+        "hrono.recall.ask._query_encode",
         lambda model_id: lambda texts: [unit(0) for _ in texts],
     )
     app = create_app(connection=conn, master_key=KEY, key_id=1)
@@ -133,7 +133,16 @@ def test_reader_can_recall_and_gets_ranked_hits(harness: Harness) -> None:
     assert payload["message"] is None
     assert payload["hits"]
     hit = payload["hits"][0]
-    assert set(hit) == {"uri", "kind", "header", "body", "score"}
+    assert set(hit) == {
+        "uri",
+        "kind",
+        "header",
+        "body",
+        "score",
+        "start",
+        "end",
+        "topic",
+    }
     assert hit["kind"] == "source"
     assert "bearer tokens" in hit["body"]
 
@@ -143,7 +152,7 @@ def test_no_answer_returns_the_explore_message(
 ) -> None:
     # re-point the query encoder at an orthogonal vector -> no confident hit
     monkeypatch.setattr(
-        "hrono.server.trees._query_encode",
+        "hrono.recall.ask._query_encode",
         lambda model_id: lambda texts: [unit(3) for _ in texts],
     )
     resp = harness.client.post(

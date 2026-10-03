@@ -29,6 +29,9 @@ class Hit:
     header: str
     body: str
     score: float
+    start: int  # byte range of the passage in its file
+    end: int
+    topic: int | None  # the topic holding it; a brief's own topic (#207)
 
 
 @dataclass(frozen=True)
@@ -69,7 +72,7 @@ def recall(
 
     cap = min(limit, fusion.CAP)
     hits = tuple(
-        _render(conn, passage_id, score)
+        _render(conn, passage_id, score, tree)
         for passage_id, score in fused.ranked[:cap]
     )
     return Recall(hits=hits, message=None)
@@ -99,10 +102,14 @@ def _documents(
     return {int(row["id"]): str(row["uri"]) for row in rows}
 
 
-def _render(conn: sqlite3.Connection, passage_id: int, score: float) -> Hit:
+def _render(
+    conn: sqlite3.Connection, passage_id: int, score: float, tree: str | None
+) -> Hit:
     row = conn.execute(
         "SELECT p.uri AS uri, p.sp_paths AS sp_paths, p.source_type AS "
-        "source_type, c.body AS body FROM passages p "
+        "source_type, p.source AS source, p.section_id AS section_id, "
+        "p.byte_start AS start, p.byte_end AS end, c.body AS body "
+        "FROM passages p "
         "JOIN contents c ON c.content_hash = p.content_hash WHERE p.id = ?",
         (passage_id,),
     ).fetchone()
@@ -115,4 +122,22 @@ def _render(conn: sqlite3.Connection, passage_id: int, score: float) -> Hit:
         header=header,
         body=bytes(row["body"]).decode("utf-8", "replace"),
         score=score,
+        start=int(row["start"]),
+        end=int(row["end"]),
+        topic=_topic(conn, row, tree),
     )
+
+
+def _topic(
+    conn: sqlite3.Connection, row: sqlite3.Row, tree: str | None
+) -> int | None:
+    """Where a hit sits on the map: a brief's own topic, or its section's."""
+    if row["source_type"] == "node":
+        return int(str(row["source"]).removeprefix("node-"))
+    held = conn.execute(
+        "SELECT MIN(m.node_id) AS node FROM node_members m "
+        "JOIN nodes n ON n.id = m.node_id "
+        "WHERE m.section_id = ? AND (? IS NULL OR n.tree = ?)",
+        (row["section_id"], tree, tree),
+    ).fetchone()
+    return None if held["node"] is None else int(held["node"])

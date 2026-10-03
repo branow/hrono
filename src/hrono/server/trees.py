@@ -21,12 +21,10 @@ from pydantic import BaseModel
 
 from hrono.auth.users import User
 from hrono.cluster import incubator
-from hrono.embed.model import resolve_embedding_model
-from hrono.embed.runner import Encoder, ready_encoder_for
-from hrono.errors import NotFound, Unavailable
+from hrono.errors import NotFound
 from hrono.export.produce import Export, archive, produce
 from hrono.jobs.worker import enqueue
-from hrono.recall import engine
+from hrono.recall.ask import ask
 from hrono.server.auth import require_role
 from hrono.summarize import briefs
 
@@ -73,40 +71,11 @@ def recall_tree(
     name: str, body: RecallRequest, request: Request, _: Reader
 ) -> dict[str, object]:
     """Run the recall engine synchronously and return its ranked hits."""
-    database = request.app.state.db
-    with database.connect() as conn:
-        model = resolve_embedding_model(conn, {})
-    encode = _query_encode(str(model["model"]))
-    with database.connect() as conn:
-        result = engine.recall(
-            conn,
-            body.question,
-            str(model["name"]),
-            encode,
-            limit=body.limit,
-            tree=name,
-        )
+    result = ask(request.app.state.db, name, body.question, body.limit)
     return {
         "hits": [asdict(hit) for hit in result.hits],
         "message": result.message,
     }
-
-
-def _query_encode(model_id: str) -> Encoder:
-    """The query encoder, if it is ready; otherwise say so and do not wait.
-
-    A question has someone waiting on it, so it does not queue behind a load it
-    cannot see — it reports that the model is still arriving and asks them back
-    (#169). The miss starts the load, so "shortly" is true rather than
-    hopeful.
-    """
-    encoder = ready_encoder_for(model_id)
-    if encoder is None:
-        raise Unavailable(
-            f"the embedding model is still loading ({model_id}); "
-            f"recall will answer once it is in memory"
-        )
-    return encoder
 
 
 @router.get("/trees/{name}/export")
