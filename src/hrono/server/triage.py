@@ -75,7 +75,8 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
     held = pins.pinned(conn, pins.BRIEF)
     rows = conn.execute(
         "SELECT n.id AS id, b.node_id AS has, b.stale AS stale, "
-        "b.flagged AS flagged, b.text AS text FROM nodes n "
+        f"b.flagged AS flagged, b.text AS text, {briefs.TEMPLATE} AS template "
+        "FROM nodes n "
         "LEFT JOIN briefs b ON b.node_id = n.id WHERE n.tree = ? ORDER BY n.id",
         (tree,),
     ).fetchall()
@@ -86,7 +87,7 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
         and (
             row["has"] is None
             or row["stale"]
-            or briefs.refusal(row["flagged"], row["text"])
+            or briefs.refusal(row["flagged"], row["text"], row["template"])
         )
     ]
     return Item(

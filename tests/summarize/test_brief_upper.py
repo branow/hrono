@@ -17,6 +17,7 @@ from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from hrono.summarize.brief_upper import brief_upper
 from tests.summarize.concurrent_client import Paired
+from tests.summarize.test_shape import ECHOED, _default
 
 MODEL = "sonnet"
 TEMPLATE = "Abstract across children: {content}"
@@ -235,3 +236,39 @@ def test_the_upper_nodes_are_briefed_concurrently(
     with database.connect() as conn:
         for node_id in _parents(database):
             assert briefs.get(conn, node_id) is not None
+
+
+def test_an_echo_of_the_upper_prompt_is_retried_and_stored_flagged(
+    db: Database,
+) -> None:
+    # E015: the ~/hrono-demo parents were the brief-upper prompt's own words
+    database, _ = db
+    with database.connect() as conn, conn:
+        registry_store.replace(
+            conn,
+            "prompts",
+            "brief-upper",
+            json.dumps(
+                {
+                    "name": "brief-upper",
+                    "role": "brief-upper",
+                    "template": _default("brief-upper"),
+                }
+            ),
+            None,
+            "t",
+        )
+
+    class Echoing(FakeCompletion):
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            self.calls += 1
+            return CompletionResult(ECHOED["brief-upper"], Usage(5, 5))
+
+    client = Echoing()
+
+    brief_upper(job(), JobContext(database), client=client)
+
+    with database.connect() as conn:
+        flags = [briefs.get(conn, n)["flagged"] for n in _parents(database)]
+    assert client.calls == 4  # each parent retried once
+    assert flags == ["echoes-the-prompt", "echoes-the-prompt"]

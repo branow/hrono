@@ -52,7 +52,7 @@ from hrono.summarize.resolve import (
     resolve_text_model,
     template_hash,
 )
-from hrono.summarize.shape import answer
+from hrono.summarize.shape import answer, brief_gate
 
 _CONTENT_PLACEHOLDER = "{content}"
 _LEVEL = 0
@@ -102,6 +102,7 @@ def brief(
     if not pending:
         return {"briefed": 0, "skipped_pinned": held}
 
+    gate = brief_gate(template)
     completion = client_for(context, model, "brief", client=client)
 
     def call(entry: Pending) -> Written:
@@ -111,6 +112,7 @@ def brief(
         result, flagged = answer(
             completion,
             CompletionRequest(model=model, system="", content=rendered),
+            gate,
         )
         return Written(
             result,

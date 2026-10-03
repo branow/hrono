@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
-from hrono.summarize.shape import answer, talks_back, unusable
+from hrono.registry.collections.prompts import PROMPTS
+from hrono.summarize.shape import (
+    answer,
+    brief_gate,
+    echoes,
+    talks_back,
+    unusable,
+)
 
 # the reply that was actually stored as a topic's brief in the QA run (F21)
 F21 = (
@@ -279,3 +286,64 @@ def test_the_first_person_of_an_acronym_is_not_a_speaker() -> None:
     )
 
     assert unusable(text) == ""
+
+
+def _default(name: str) -> str:
+    return next(
+        str(d["template"]) for d in PROMPTS.defaults if d["name"] == name
+    )
+
+
+# Stored on ~/hrono-demo, verbatim: one text for 26 level-0 topics, another
+# for every topic above them — each made of its prompt's own words (E015).
+ECHOED = {
+    "brief": (
+        "This group covers State, what, group, condensations, whole, then. "
+        "It also touches surface, natural, groupings, actually, present, "
+        "never. The material is drawn from the source files listed below."
+    ),
+    "brief-upper": (
+        "This group covers Summarize, child, briefs, below, into, higher. It "
+        "also touches level, brief, parent, node, Keep, concrete. The "
+        "material is drawn from the source files listed below."
+    ),
+}
+
+
+@pytest.mark.parametrize("prompt", list(ECHOED))
+def test_the_demo_trees_echo_of_its_prompt_is_rejected(prompt: str) -> None:
+    text = ECHOED[prompt]
+
+    assert unusable(text) == ""  # why it was stored: it talks to nobody
+    assert brief_gate(_default(prompt))(text) == "echoes-the-prompt"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [pytest.param(GOOD, id="good")]
+    + [pytest.param(text, id=name) for name, text in SEEN["written"].items()],
+)
+@pytest.mark.parametrize("prompt", list(ECHOED))
+def test_real_briefs_do_not_echo_their_prompt(text: str, prompt: str) -> None:
+    assert brief_gate(_default(prompt))(text) == ""
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param(
+            "Two natural groupings: the parsers and the writers.\n\n"
+            "Caution: the YAML reader drops comments, so a round trip "
+            "loses them.",
+            id="obeys",
+        ),
+        # half its words are the prompt's: only the floor tells it from echo
+        pytest.param("Natural groupings: the parsers, the writers.", id="tiny"),
+    ],
+)
+def test_a_short_brief_that_obeys_the_prompt_is_not_an_echo(text: str) -> None:
+    assert brief_gate(_default("brief"))(text) == ""
+
+
+def test_an_echo_of_a_prompt_that_no_longer_exists_cannot_be_told() -> None:
+    assert echoes(ECHOED["brief"], None) == ""

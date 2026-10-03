@@ -82,6 +82,15 @@ def _is_fresh(
     )
 
 
+# The template of the prompt a brief was written with, as a column: a query
+# over ``briefs b`` selects ``{TEMPLATE} AS template`` and hands it to
+# ``refusal``, which cannot tell an echo of the prompt without it (E015).
+TEMPLATE = (
+    "(SELECT json_extract(p.config, '$.template') FROM registry p "
+    "WHERE p.collection = 'prompts' AND p.name = b.prompt_name)"
+)
+
+
 def unusable(row: sqlite3.Row) -> str:
     """Why a stored brief is not a brief, or "" when it is one (#217).
 
@@ -90,12 +99,17 @@ def unusable(row: sqlite3.Row) -> str:
     one that is not a brief is never fresh: the next brief pass rewrites it,
     and only it.
     """
-    return refusal(row["flagged"], row["text"])
+    return refusal(row["flagged"], row["text"], row["template"])
 
 
-def refusal(flagged: object, text: object) -> str:
-    """``unusable`` over the two columns, for a caller holding just those."""
-    return str(flagged or "") or shape.unusable(str(text or ""))
+def refusal(flagged: object, text: object, template: object) -> str:
+    """``unusable`` over the columns, for a caller holding just those."""
+    words = str(text or "")
+    return (
+        str(flagged or "")
+        or shape.unusable(words)
+        or shape.echoes(words, template)
+    )
 
 
 def unusable_in(
@@ -109,15 +123,15 @@ def unusable_in(
     held = pins.pinned(conn, pins.BRIEF)
     rows = conn.execute(
         "SELECT b.node_id AS id, n.level AS level, b.flagged AS flagged, "
-        "b.text AS text FROM briefs b JOIN nodes n ON n.id = b.node_id "
+        f"b.text AS text, {TEMPLATE} AS template FROM briefs b "
+        "JOIN nodes n ON n.id = b.node_id "
         "WHERE n.tree = ? ORDER BY n.level DESC, b.node_id",
         (tree,),
     ).fetchall()
     return tuple(
         (int(row["id"]), int(row["level"]), why, str(row["text"]))
         for row in rows
-        if int(row["id"]) not in held
-        and (why := refusal(row["flagged"], row["text"]))
+        if int(row["id"]) not in held and (why := unusable(row))
     )
 
 
@@ -334,8 +348,8 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     return conn.execute(
         "SELECT node_id, text, model_name, prompt_name, prompt_hash, "
         "member_signature, input_tokens, output_tokens, model_fingerprint, "
-        "unfaithful, flagged, members, stale, judged_signature "
-        "FROM briefs WHERE node_id = ?",
+        "unfaithful, flagged, members, stale, judged_signature, "
+        f"{TEMPLATE} AS template FROM briefs b WHERE node_id = ?",
         (node_id,),
     ).fetchone()
 

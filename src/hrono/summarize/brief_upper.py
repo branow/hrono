@@ -39,7 +39,7 @@ from hrono.summarize.resolve import (
     resolve_text_model,
     template_hash,
 )
-from hrono.summarize.shape import answer
+from hrono.summarize.shape import answer, brief_gate
 
 _CONTENT_PLACEHOLDER = "{content}"
 _DEFAULT_LEVEL = 1
@@ -88,6 +88,7 @@ def brief_upper(
     if not pending:
         return {"briefed": 0, "skipped_pinned": held}
 
+    gate = brief_gate(template)
     completion = client_for(context, model, "brief-upper", client=client)
 
     def call(entry: Pending) -> Written:
@@ -96,6 +97,7 @@ def brief_upper(
         result, flagged = answer(
             completion,
             CompletionRequest(model=model, system="", content=rendered),
+            gate,
         )
         return Written(
             result, flagged, json.dumps(faithfulness(result.text, source))

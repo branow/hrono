@@ -40,6 +40,18 @@ rejected, each a thing a summary of code or docs does not do:
   shapes reached the export's root page on the 2026-10-03 review tree, and
   neither asked a question, so the rules above passed them.
 
+A brief is also checked against the PROMPT it answered (``brief_gate``):
+
+- ``echoes-the-prompt`` (E015) — a reply whose vocabulary is the
+  instruction's rather than the material's. A local model on ~/hrono-demo
+  wrote one brief for 26 different topics, "This group covers State, what,
+  group, condensations, whole, then...": the brief prompt's own words, and
+  identical for every topic because the prompt was. It neither asks nor
+  addresses anybody, so the rules above passed it. On real briefs at most
+  15% of the distinct words also occur in the instruction (6% typical); the
+  echo was 57%. A real brief quotes the prompt's few words it obeys ("five
+  natural groupings", "Caution:"), never most of them.
+
 Everything else passes, including shapes that are merely untidy: a brief with a
 generic "## Summary" heading, no heading at all, bullet lists, or an unusual
 length. Those are the renderer's problem (#103 chose to fix the export title
@@ -59,6 +71,8 @@ from hrono.llm.client import (
 )
 
 MIN_CHARS = 40
+ECHO_SHARE = 0.3
+ECHO_WORDS = 6
 
 _SENTENCE = re.compile(r"[^.!?]*[.!?]|[^.!?]+$")
 _ADDRESSES = re.compile(
@@ -91,6 +105,8 @@ _QUOTED = re.compile(
     r"(?<!\w)'[^']*'(?!\w)|\"[^\"]*\"|\u201c[^\u201d]*\u201d"
     r"|\u2018[^\u2019]*\u2019(?!\w)|`[^`]*`"
 )
+_WORD = re.compile(r"[a-z]{4,}")
+_PLACEHOLDER = re.compile(r"\{\w+\}")
 _LEADING = re.compile(r"^[^A-Za-z]*")
 _TAIL = re.compile(r"^(?:$|[-*+]\s|references:|sources:|\w+://)", re.IGNORECASE)
 
@@ -121,6 +137,35 @@ def talks_back(text: str) -> str:
     """
     stripped = text.strip()
     return _answers_the_caller(stripped) if stripped else "empty"
+
+
+def brief_gate(template: str) -> Callable[[str], str]:
+    """``unusable``, plus ``echoes``, for a brief written from ``template``."""
+
+    def gate(text: str) -> str:
+        return unusable(text) or echoes(text, template)
+
+    return gate
+
+
+def echoes(text: str, template: object) -> str:
+    """ "echoes-the-prompt" when ``text`` restates its instruction, else "".
+
+    The words compared are lowercased runs of four letters or more, so the
+    articles and "is"/"of" glue that every English text shares carry no
+    weight; the placeholders are not the instruction's words. Both a share
+    and a floor have to hold: a two-line brief can share three words with
+    anything. ``template`` is untyped because a stored brief whose prompt no
+    longer exists reads back NULL, and no instruction echoes nothing.
+    """
+    if not isinstance(template, str):
+        return ""
+    instruction = set(_WORD.findall(_PLACEHOLDER.sub("", template).lower()))
+    said = set(_WORD.findall(text.lower()))
+    shared = len(said & instruction)
+    if shared >= ECHO_WORDS and shared >= ECHO_SHARE * len(said):
+        return "echoes-the-prompt"
+    return ""
 
 
 def _answers_the_caller(text: str) -> str:

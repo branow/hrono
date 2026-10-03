@@ -117,7 +117,7 @@ def _flagged(
     marks = ",".join("?" * len(ids))
     rows = conn.execute(
         "SELECT n.id AS id, b.flagged AS flagged, b.text AS text, "  # noqa: S608
-        "b.node_id AS has "
+        f"b.node_id AS has, {briefs.TEMPLATE} AS template "
         f"FROM nodes n LEFT JOIN briefs b ON b.node_id = n.id "
         f"WHERE n.id IN ({marks}) ORDER BY n.id",
         ids,
@@ -127,11 +127,12 @@ def _flagged(
             "title": name(conn, int(row["id"])),
             "why": "no brief"
             if row["has"] is None
-            else briefs.refusal(row["flagged"], row["text"]),
+            else briefs.refusal(row["flagged"], row["text"], row["template"]),
             "link": page_link(tree, levels, _page_of(made, int(row["id"]))),
         }
         for row in rows
-        if row["has"] is None or briefs.refusal(row["flagged"], row["text"])
+        if row["has"] is None
+        or briefs.refusal(row["flagged"], row["text"], row["template"])
     ]
 
 
