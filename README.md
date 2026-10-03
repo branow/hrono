@@ -134,9 +134,11 @@ passages is the first size where that is worth re-measuring.
 
 `hrono tree export` writes the tree as a folder of markdown. A topic's
 directory is named by its subject, not by the clause a brief opens with, and
-the facts a brief states (constants, environment variables, sizes) carry links
-to the section pages they were found in, added when the folder is written; the
-stored brief is never altered.
+the facts a brief states (constants, environment variables, sizes) carry a `[§]`
+link to the section pages they were found in, added when the folder is written;
+the stored brief is never altered. A page that has children shows only its
+opening and its `## Children` list, because every turn of a session carries the
+pages it has read; the detail is one hop down.
 
 ## Evaluating the export
 
