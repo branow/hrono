@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from hrono.ingest.git_syncer import git_sync
+from hrono.ingest.remote_head import remote_head
 from hrono.registry.collections.sources import GitSource
 from hrono.registry.descriptor import ValidationFailed
 from hrono.registry.validation.git_validation import validate_git
@@ -53,26 +54,50 @@ def test_a_dash_inside_a_url_is_fine() -> None:
     assert source.url.endswith("my-repo.git")
 
 
-def test_ls_remote_ends_options_before_the_url(
+def _clone_to_work_in(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # git runs `--upload-pack=...` from a clone's directory, as it would for
+    # a url that is an option, so the marker proves whether it was run.
+    repo = _repo_named(tmp_path, "r")
+    work = tmp_path / "work"
+    subprocess.run(["git", "clone", "-q", str(repo), str(work)], check=True)
+    monkeypatch.chdir(work)
+
+
+def test_validate_git_does_not_run_a_url_that_is_an_option(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # git itself refuses a "-"-named path for ls-remote even after "--", so
-    # the separator is pinned on the argv, and a real ls-remote of an ordinary
-    # local repo proves the command still works with it.
-    argv: list[list[str]] = []
-    real_run = subprocess.run
+    _clone_to_work_in(tmp_path, monkeypatch)
+    marker = tmp_path / "marker"
+    with pytest.raises(ValidationFailed):
+        validate_git(
+            {
+                "url": f"--upload-pack=touch {marker}",
+                "auth": {"method": "none"},
+            }
+        )
+    assert not marker.exists()
 
-    def spy(command: list[str], **kwargs: object):  # type: ignore[no-untyped-def]
-        argv.append(command)
-        return real_run(command, **kwargs)  # type: ignore[call-overload]
 
-    monkeypatch.setattr(
-        "hrono.registry.validation.git_validation.subprocess.run", spy
-    )
+def test_remote_head_does_not_run_a_url_that_is_an_option(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _clone_to_work_in(tmp_path, monkeypatch)
+    marker = tmp_path / "marker"
+    config = {
+        "url": f"--upload-pack=touch {marker}",
+        "auth": {"method": "none"},
+    }
+    assert remote_head(config, 30.0) is None
+    assert not marker.exists()
+
+
+def test_ls_remote_of_an_ordinary_local_repo_still_works(
+    tmp_path: Path,
+) -> None:
     repo = _repo_named(tmp_path, "ok")
-    argv.clear()
-    validate_git({"url": str(repo), "auth": {"method": "none"}})
-    assert argv[0][-2:] == ["--", str(repo)]
+    config = {"url": str(repo), "auth": {"method": "none"}}
+    validate_git(config)
+    assert len(remote_head(config, 30.0) or "") == 40
     with pytest.raises(ValidationFailed):
         validate_git(
             {"url": str(tmp_path / "nope"), "auth": {"method": "none"}}

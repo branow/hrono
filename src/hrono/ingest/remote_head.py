@@ -29,7 +29,7 @@ def remote_head(config: dict[str, object], timeout: float) -> str | None:
     with git_auth(str(config["url"]), auth_dict) as (url, env, config_args):
         try:
             done = subprocess.run(
-                ["git", *config_args, "ls-remote", url, "HEAD"],
+                ["git", *config_args, "ls-remote", "--", url, "HEAD"],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
