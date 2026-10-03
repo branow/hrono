@@ -77,7 +77,7 @@
     {% else %}
     <p class="hint">A few of these are normal. The next sync checks them again and moves any that fit better elsewhere, unless you move one by hand: then it stays.</p>
     <table class="settings-table">
-      <thead><tr><th>Section</th><th>In topic</th><th>Nearer topic</th>{% if can_write %}<th>Move to</th>{% endif %}</tr></thead>
+      <thead><tr><th>Section</th><th>In topic</th><th>Nearer topic</th>{% if can_write %}<th>Place in</th>{% endif %}</tr></thead>
       <tbody>
       {% for row in misfits %}
         <tr>
@@ -100,15 +100,15 @@
     {% if not stale %}
     <p class="hint">Every topic has a brief that holds.</p>
     {% else %}
-    <p class="hint">The next sync rewrites each of these. Rewrite one now to fix only that topic.</p>
+    <p class="hint">The next sync rewrites each of these except a brief marked as needing a person. Rewrite one now to fix only that topic.</p>
     <table class="settings-table">
       <thead><tr><th>Topic</th><th>Why</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
       <tbody>
       {% for row in stale %}
         <tr>
           <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">{{ row.name }}</a></td>
-          <td>{{ row.why }}</td>
-          {% if can_write %}<td><form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/regenerate"><input type="hidden" name="node" value="{{ row.node_id }}"><button class="btn" type="submit">Rewrite this brief</button></form></td>{% endif %}
+          <td>{{ row.why }}{% if row.settled %}. A sync will not rewrite it: a person must write this brief by hand, or change the topic's members, prompt or model.{% endif %}</td>
+          {% if can_write %}<td>{% if not row.settled %}<form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/regenerate"><input type="hidden" name="node" value="{{ row.node_id }}"><button class="btn" type="submit">Rewrite this brief</button></form>{% endif %}</td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>
@@ -129,9 +129,9 @@
       <tbody>
       {% for row in held %}
         <tr>
-          <td>{{ {"brief": "brief", "membership": "placement", "parenting": "parent"}[row.kind] }}</td>
+          <td class="nowrap">{{ {"brief": "brief", "membership": "placement", "parenting": "parent"}[row.kind] }}</td>
           <td>{% if row.kind == "membership" %}<span class="mono">{{ row.label }}</span> in {{ row.where }}{% else %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.target_id }}?tree={{ tree }}">{{ row.label }}</a>{% endif %}{% if row.reason %} <span class="hint">{{ row.reason }}</span>{% endif %}</td>
-          <td class="num">{{ row.since }}</td>
+          <td class="num nowrap">{{ row.since }}</td>
           {% if can_write %}<td><form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/release"><input type="hidden" name="kind" value="{{ row.kind }}"><input type="hidden" name="target" value="{{ row.target_id }}"><button class="btn" type="submit">Hand back</button></form></td>{% endif %}
         </tr>
       {% endfor %}

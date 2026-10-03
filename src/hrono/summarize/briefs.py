@@ -270,12 +270,13 @@ def scoped_node(scope: dict[str, object]) -> int | None:
 
 
 def stale_why(conn: sqlite3.Connection, node_id: int) -> str:
-    """Why a topic's brief needs rewriting, in a person's words; "" if it
-    does not.
+    """Why a topic's brief is listed as unusable, in a person's words.
 
-    The prompt and the model are not resolved here, so a brief whose sections
-    are unchanged and which no one marked stale is the prompt or the model
-    that moved: the one cause left once the others are ruled out.
+    Meant for a topic `triage.unanswerable` lists: "" only for a pinned brief.
+    The prompt and the model are not resolved here, so a listed brief whose
+    sections are unchanged and which no one marked stale is the prompt or
+    the model that moved: the one cause left once the others are ruled out.
+    Called on a fresh brief it would say that too, so do not.
     """
     row = get(conn, node_id)
     if row is None:
@@ -290,6 +291,24 @@ def stale_why(conn: sqlite3.Connection, node_id: int) -> str:
     if row["member_signature"] != member_signature(conn, node_id):
         return "its members changed since it was written"
     return "its prompt or model changed since it was written"
+
+
+def settled(conn: sqlite3.Connection, node_id: int) -> bool:
+    """Whether a topic's brief is unusable yet no rewrite will change it.
+
+    A settled echo (E019): the next sync and a scoped rewrite both leave it
+    until its members, prompt or model change, so only a person can fix it.
+    The prompt and model are not resolved here (see `stale_why`): a page that
+    lists the topic reads a moved one as settled until the next sync rewrites.
+    """
+    row = get(conn, node_id)
+    if row is None or row["stale"]:
+        return False
+    return (
+        bool(unusable(conn, row))
+        and not _rewritable(conn, row)
+        and row["member_signature"] == member_signature(conn, node_id)
+    )
 
 
 def _template(conn: sqlite3.Connection, row: sqlite3.Row) -> object:

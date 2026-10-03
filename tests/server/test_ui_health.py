@@ -8,6 +8,7 @@ pipeline does next, not about what the form posted.
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -16,6 +17,7 @@ from hrono import pins
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.repair import migrate
+from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from tests.server.test_ui_surgery import (  # noqa: F401
     MODEL,
@@ -24,6 +26,7 @@ from tests.server.test_ui_surgery import (  # noqa: F401
     _section,
 )
 from tests.server.test_ui_surgery import browser as _surgery_browser
+from tests.summarize.test_shape import ECHOED, _default
 
 browser = _surgery_browser
 
@@ -143,6 +146,46 @@ def test_a_stale_brief_says_why_and_regenerates_only_itself(
     assert [(row["op"], row["scope"]) for row in started] == [
         ("brief", f'{{"node": {a}, "level": 0}}')
     ]
+
+
+def test_a_settled_echo_says_a_person_must_write_it_and_offers_no_button(
+    browser: Browser,
+) -> None:
+    a, b, _ = browser.leaves
+    conn = browser.conn
+    with conn:  # type: ignore[union-attr]
+        registry_store.insert(
+            conn,  # type: ignore[arg-type]
+            "prompts",
+            "brief",
+            json.dumps({"name": "brief", "template": _default("brief")}),
+            None,
+            "t",
+        )
+        for node in (a, b):
+            briefs.upsert(
+                conn,  # type: ignore[arg-type]
+                node,
+                ECHOED["brief"],
+                model_name="m",
+                prompt_name="brief",
+                prompt_hash="h",
+                member_signature=briefs.member_signature(conn, node),  # type: ignore[arg-type]
+                input_tokens=1,
+                output_tokens=1,
+                flagged="echoes-the-prompt",
+            )
+        briefs.mark_stale(conn, b)  # type: ignore[arg-type]
+    browser.sign_in()
+
+    page = _health(browser)
+
+    echo = page.split(f"/nodes/{a}?", 1)[1].split("</tr>", 1)[0]
+    assert "a person must write this brief by hand" in echo
+    assert "triage/regenerate" not in echo
+    plain = page.split(f"/nodes/{b}?", 1)[1].split("</tr>", 1)[0]
+    assert "triage/regenerate" in plain
+    assert "must write" not in plain
 
 
 @pytest.mark.parametrize(

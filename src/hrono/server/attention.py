@@ -42,6 +42,7 @@ class Stale:
     name: str
     level: int
     why: str
+    settled: bool = False
 
 
 @dataclass(frozen=True)
@@ -125,6 +126,7 @@ def stale(conn: sqlite3.Connection, tree: str) -> tuple[Stale, ...]:
                 ).fetchone()["level"]
             ),
             briefs.stale_why(conn, node),
+            briefs.settled(conn, node),
         )
         for node in ids[:SHOWN]
     )

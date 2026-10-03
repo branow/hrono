@@ -295,6 +295,41 @@ def test_a_stubborn_echo_is_not_re_paid_until_something_it_rests_on_moves(
     assert third.calls == 4  # a moved member is the "until"
 
 
+def test_a_settled_echo_is_settled_and_a_scoped_rewrite_leaves_it(
+    db: Database,  # noqa: F811
+) -> None:
+    with db.connect() as conn, conn:
+        _default_prompts(conn)
+    brief(job(), JobContext(db), client=Echoing())
+    node = next(iter(_rows(db)))
+    again = Echoing()
+
+    done = brief(job({"node": node}), JobContext(db), client=again)
+
+    assert again.calls == 0
+    assert done["briefed"] == 0
+    with db.connect() as conn:
+        assert briefs.settled(conn, node)
+        with conn:
+            conn.execute(
+                "UPDATE briefs SET flagged = 'talks-back', text = ? "
+                "WHERE node_id = ?",
+                ("Could you tell me more?", node),
+            )
+        # a talk-back is retried by the next pass, so it is not settled
+        assert not briefs.settled(conn, node)
+        with conn:
+            conn.execute(
+                "UPDATE briefs SET flagged = 'echoes-the-prompt', text = ? "
+                "WHERE node_id = ?",
+                (ECHOED["brief"], node),
+            )
+        assert briefs.settled(conn, node)
+        with conn:
+            conn.execute("UPDATE briefs SET member_signature = 'moved'")
+        assert not briefs.settled(conn, node)  # its "until" has come
+
+
 class Writing:
     """Answers every brief with one fixed, honest reply."""
 
