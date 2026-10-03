@@ -116,12 +116,13 @@ def test_a_type_with_no_syncer_fails_by_name(
     context: tuple[Database, JobContext],
 ) -> None:
     database, ctx = context
-    _register(database, "wiki", {"name": "wiki", "type": "notion"})
+    _register(database, "wiki", {"name": "wiki", "type": "no-such-type"})
+    assert "no-such-type" not in SYNCERS
 
     with pytest.raises(SyncError) as raised:
         sync(_job("wiki"), ctx)
 
-    assert "notion" in str(raised.value)
+    assert "no-such-type" in str(raised.value)
 
 
 def test_the_syncer_receives_declared_secrets_decrypted(
