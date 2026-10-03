@@ -71,8 +71,8 @@ def idents(text: str) -> Markup:
         return Markup(escape(text))
     return Markup(
         "".join(
-            f"<code>{part}</code>" if odd else part
-            for odd, part in enumerate(parts)
+            f"<code>{part}</code>" if index % 2 else part
+            for index, part in enumerate(parts)
             if part
         )
     )

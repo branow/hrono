@@ -428,3 +428,32 @@ def test_the_name_help_names_the_prefix_as_an_identifier(
 
     assert "<code>node-</code>" in page
     assert offences(page) == []
+
+
+def test_idents_wraps_only_the_backticked_parts_in_code() -> None:
+    from hrono.server.ui import idents
+
+    assert (
+        str(idents("a `node-` is <b> for `x` and more"))
+        == "a <code>node-</code> is &lt;b&gt; for <code>x</code> and more"
+    )
+    assert str(idents("no ticks")) == "no ticks"
+    assert str(idents("one ` tick")) == "one ` tick"
+
+
+def test_the_refusal_sets_only_the_prefix_as_code(empty: Browser) -> None:
+    empty.sign_in()
+    response = empty.client.post(
+        "/ui/config/sources/item",
+        data={
+            "variant": "git",
+            "f.name": "node-x",
+            "f.url": "https://example.com/r.git",
+            "f.auth.method": "none",
+        },
+    )
+
+    assert re.search(
+        r"<code>node-</code> is reserved for hrono&#39;s own briefs",
+        response.text,
+    )
