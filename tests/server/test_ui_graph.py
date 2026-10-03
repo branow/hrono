@@ -110,6 +110,10 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         ids.update(big=big, small=small, root=root)
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
+        # Tests write through `conn` after this point, and the worker polls
+        # that same connection from its own thread (#194).
+        app.state.worker.stop()
+        app.state.worker.join(timeout=5)
         yield Browser(client, token, ids, conn)
     conn.close()
 
