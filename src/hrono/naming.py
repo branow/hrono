@@ -137,14 +137,29 @@ def unframe(line: str) -> str:
     the subject; a line that is nothing but the announcement is returned whole.
     """
     text = _EMPHASIS.sub("", line).strip()
-    rest = _ANNOUNCES.sub("", _WHAT_IT_IS.sub("", text, count=1), count=1)
-    rest = _FILLER_THEN_PREPOSITION.sub("", rest, count=1)
+    rest = _SELF_LABEL.sub("", text, count=1)
+    announced = _ANNOUNCES.sub("", _WHAT_IT_IS.sub("", rest, count=1), count=1)
+    if announced != rest:
+        # only after an announcement: "For each source, ..." and "On disk,
+        # ..." open with a preposition because the sentence needs one
+        rest = _without_filler(announced)
     if rest == text:
         return line
     rest = _ARTICLES.sub("", rest, count=1)
     if len(rest) < _MIN_SUBJECT_CHARS:
         return line
     return rest[:1].upper() + rest[1:]
+
+
+def _without_filler(text: str) -> str:
+    """``text`` without "a set of condensed notes on" and the like.
+
+    A bare preposition is not filler: it is cut only after a filler noun.
+    """
+    found = _FILLER_THEN_PREPOSITION.match(text)
+    if found is None or len(found.group(0).split()) < _MIN_FILLER_WORDS:
+        return text
+    return text[found.end() :]
 
 
 def title(line: str) -> str:
@@ -170,6 +185,12 @@ def slug(text: str) -> str:
 
 _TITLE_CHARS = 80
 _MIN_SUBJECT_CHARS = 3
+_MIN_FILLER_WORDS = 2
+_SELF_LABEL = re.compile(
+    r"\s*[—–-]+\s*(?:(?:parent|child|top-level|root)\s+)?"
+    r"(?:brief|overview|summary)\s*$",
+    re.I,
+)
 _WHAT_IT_IS = re.compile(
     r"^(?:what this is\W+|(?:overview|summary|scope|about)\s*:\s*)", re.I
 )

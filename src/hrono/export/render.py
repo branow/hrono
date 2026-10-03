@@ -25,7 +25,7 @@ import re
 import sqlite3
 from collections.abc import Mapping
 
-from hrono.export.citations import cite
+from hrono.export.citations import FactIndex, cite
 from hrono.export.collapse import ExportTree
 from hrono.ingest.store import get_content
 from hrono.naming import heading, names, sentence, slug, unframe
@@ -61,21 +61,21 @@ def render(
         sid: _reassemble(conn, sid).decode("utf-8", "replace") for sid in where
     }
 
+    index = FactIndex({where[sid]: body for sid, body in bodies.items()})
     for node_id in sorted(tree.nodes):
         node = tree.nodes[node_id]
         directory = directories[node_id]
         path = "root.md" if node_id == tree.root else _under(directory, "brief")
-        under = _subtree_sections(tree, node_id)
+        under = {where[sid] for sid in _subtree_sections(tree, node_id)}
+        text = _brief_text(conn, node_id)
+        if node.children:  # cite only what the index page keeps
+            text = _routing(text)
         files[path] = _node_markdown(
             conn,
             tree,
             node_id,
             notes.get(node_id),
-            _cited(
-                _brief_text(conn, node_id),
-                {where[sid]: bodies[sid] for sid in under},
-                path,
-            ),
+            _cited(text, index, under, path),
         )
         for section_id in node.sections:
             files[where[section_id]] = _section_markdown(
@@ -93,13 +93,14 @@ def _subtree_sections(tree: ExportTree, node_id: int) -> tuple[int, ...]:
     )
 
 
-def _cited(text: str, pages: Mapping[str, str], page: str) -> str:
+def _cited(text: str, index: FactIndex, within: set[str], page: str) -> str:
     """The brief with its facts linked to the section pages that state them."""
-    start = posixpath.dirname(page)
+    start = posixpath.dirname(page) or "."
     return cite(
         text,
-        pages,
-        link={path: posixpath.relpath(path, start or ".") for path in pages},
+        index,
+        link=lambda path: posixpath.relpath(path, start),
+        within=within,
     )
 
 
@@ -116,8 +117,6 @@ def _node_markdown(
     brief: str,
 ) -> str:
     node = tree.nodes[node_id]
-    if node.children:
-        brief = _routing(brief)
     parts = [brief.rstrip()]
     if node.children:
         parts.append("## Children\n")

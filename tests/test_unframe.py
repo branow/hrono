@@ -70,8 +70,40 @@ def test_the_announcement_is_dropped_and_the_subject_kept(
         "The schema of the db",
         "This is it",
         "Fusion",
+        "For each source, hrono splits files.",
+        "On disk, hrono keeps one SQLite file.",
+        "About twenty modules make up hrono.",
+        "Release notes for v2.3 of hrono",
     ],
-    ids=["no-announcement", "article-and-of", "nothing-left", "single-word"],
+    ids=[
+        "no-announcement",
+        "article-and-of",
+        "nothing-left",
+        "single-word",
+        "for-each",
+        "on-disk",
+        "about-twenty",
+        "release-notes-for",
+    ],
 )
 def test_a_line_that_announces_nothing_is_returned_whole(line: str) -> None:
     assert unframe(line) == line
+
+
+@pytest.mark.parametrize(
+    ("line", "subject"),
+    [
+        ("hrono — parent brief", "Hrono"),
+        ("hrono - overview", "Hrono"),
+        (
+            "Overview: About twenty modules make up hrono.",
+            "About twenty modules make up hrono.",
+        ),
+        ("Click's termui \u2013 child brief", "Click's termui"),
+    ],
+    ids=["parent-brief", "overview", "label-then-about", "child-brief"],
+)
+def test_a_trailing_label_naming_the_brief_is_dropped(
+    line: str, subject: str
+) -> None:
+    assert unframe(line) == subject

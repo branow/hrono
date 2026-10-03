@@ -561,8 +561,13 @@ def test_an_index_summary_skips_the_sentence_that_became_the_name(
         ("# Root\n\nIntro.\n\n## Facts\n- TAU is 7.", "Intro.", "TAU is 7"),
         ("## Summary\nIntro.\n\n## Facts\n- TAU is 7.", "Intro.", "TAU is 7"),
         ("Just prose, no headings.", "Just prose", "\x00"),
+        (
+            "# Title\n## Summary\nIntro.\n## Facts\n- TAU is 7.",
+            "Intro.",
+            "TAU is 7",
+        ),
     ],
-    ids=["after-prose", "heading-first", "no-headings"],
+    ids=["after-prose", "heading-first", "no-headings", "two-headings-first"],
 )
 def test_the_root_keeps_its_opening_and_leaves_the_facts_to_its_children(
     db: tuple[Database, dict[str, int]],
@@ -579,3 +584,88 @@ def test_the_root_keeps_its_opening_and_leaves_the_facts_to_its_children(
     assert kept in root
     assert dropped not in root
     assert "## Children" in root
+
+
+def test_a_brief_opening_with_a_heading_is_named_by_its_subject(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    with database.connect() as conn, conn:
+        brief(
+            conn,
+            ids["n0"],
+            "# These condensations describe the signing library.\n\nKeys.",
+        )
+    root = _files(database)["root.md"]
+    assert f"[Signing library.](signing-library-{ids['n0']}/brief.md)" in root
+    assert "condensations" not in root
+
+
+def test_only_a_page_with_children_is_trimmed_to_its_opening(
+    tmp_path: object,
+) -> None:
+    # E018: the root, a middle index page and a leaf. The middle page has
+    # children and keeps its opening; the leaf has none and keeps every fact.
+    database = Database.at(tmp_path / "m.db")
+    text = "# Topic\n\nIntro.\n\n## Facts\n- TAU is 7."
+    with database.connect() as conn, conn:
+        s = [
+            add_section(conn, f"{n}.py", b"body one\nbody two\n") for n in "abc"
+        ]
+        cluster_store.replace_tree(
+            conn,
+            TREE,
+            0,
+            [(n, sid, False, None) for n, sid in enumerate(s)],
+            [(sid, [0.1 * n]) for n, sid in enumerate(s)],
+        )
+        leaves = sorted(
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE level = 0"
+            ).fetchall()
+        )
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            1,
+            [
+                (0, leaves[0], False, None),
+                (0, leaves[1], False, None),
+                (1, leaves[2], False, None),
+            ],
+        )
+        middle = sorted(
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM nodes WHERE level = 1"
+            ).fetchall()
+        )
+        cluster_store.replace_level(
+            conn,
+            TREE,
+            2,
+            [(0, middle[0], False, None), (0, middle[1], False, None)],
+        )
+        for node in (*leaves, *middle):
+            brief(conn, node, text)
+        root = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 2").fetchone()[
+                "id"
+            ]
+        )
+        brief(conn, root, text)
+    try:
+        with database.connect() as conn:
+            stored = load(conn, TREE)
+            assert stored is not None
+            files = render(conn, collapse(stored, 4))
+        pages = {p: c for p, c in files.items() if p.endswith("brief.md")}
+        indexes = [c for c in pages.values() if "## Children" in c]
+        leaves_md = [c for c in pages.values() if "## Sections" in c]
+        assert indexes
+        assert leaves_md
+        assert all("TAU is 7" not in c for c in indexes)
+        assert all("TAU is 7" in c for c in leaves_md)
+    finally:
+        database.close()
