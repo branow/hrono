@@ -125,15 +125,18 @@ def _flagged(
     return [
         {
             "title": name(conn, int(row["id"])),
-            "why": "no brief"
-            if row["has"] is None
-            else briefs.refusal(row["flagged"], row["text"], row["template"]),
+            "why": "no brief" if row["has"] is None else _refusal(conn, row),
             "link": page_link(tree, levels, _page_of(made, int(row["id"]))),
         }
         for row in rows
-        if row["has"] is None
-        or briefs.refusal(row["flagged"], row["text"], row["template"])
+        if row["has"] is None or _refusal(conn, row)
     ]
+
+
+def _refusal(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+    return briefs.refusal(
+        conn, int(row["id"]), row["flagged"], row["text"], row["template"]
+    )
 
 
 def _page_of(made: Export, node_id: int) -> str:

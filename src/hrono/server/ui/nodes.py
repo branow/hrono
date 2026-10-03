@@ -437,7 +437,7 @@ def _provenance(
         "signature": _short(signed),
         "moved": bool(signed) and signed != now,
         "marked": bool(brief["stale"]),  # type: ignore[index]
-        "flagged": briefs.unusable(brief),  # type: ignore[arg-type]
+        "flagged": briefs.unusable(conn, brief),  # type: ignore[arg-type]
         "unsupported": _listed(brief["unfaithful"]),  # type: ignore[index]
         "cites": len(_listed(brief["members"])),  # type: ignore[index]
     }

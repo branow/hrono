@@ -87,7 +87,13 @@ def _briefless(conn: sqlite3.Connection, tree: str) -> Item:
         and (
             row["has"] is None
             or row["stale"]
-            or briefs.refusal(row["flagged"], row["text"], row["template"])
+            or briefs.refusal(
+                conn,
+                int(row["id"]),
+                row["flagged"],
+                row["text"],
+                row["template"],
+            )
         )
     ]
     return Item(

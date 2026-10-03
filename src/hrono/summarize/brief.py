@@ -102,7 +102,6 @@ def brief(
     if not pending:
         return {"briefed": 0, "skipped_pinned": held}
 
-    gate = brief_gate(template)
     completion = client_for(context, model, "brief", client=client)
 
     def call(entry: Pending) -> Written:
@@ -112,7 +111,7 @@ def brief(
         result, flagged = answer(
             completion,
             CompletionRequest(model=model, system="", content=rendered),
-            gate,
+            brief_gate(template, source),
         )
         return Written(
             result,

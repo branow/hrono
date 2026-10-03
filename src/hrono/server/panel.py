@@ -81,7 +81,7 @@ def build(conn: sqlite3.Connection, tree: str, node_id: int) -> Panel | None:
         # because both mean recall cannot answer from this topic
         stale=brief is None
         or bool(brief["stale"])
-        or bool(briefs.unusable(brief)),
+        or bool(briefs.unusable(conn, brief)),
         holds=len(sections) or len(children),
         holds_what="sections" if sections else "topics",
         parts=sections or children,

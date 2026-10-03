@@ -121,7 +121,7 @@ def test_a_brief_stored_before_the_rule_is_caught_by_it(
             output_tokens=1,
             model_fingerprint=row["model_fingerprint"],
         )
-        found = briefs.unusable(briefs.get(conn, good))
+        found = briefs.unusable(conn, briefs.get(conn, good))
 
     assert found == "talks-to-the-caller"
     assert _briefless(written) == 2
@@ -271,3 +271,25 @@ def test_a_stored_echo_is_listed_and_rewritten_by_the_next_maintain(
     assert ECHOED["brief"] not in left
     assert _listed(echoed, "rob")["count"] == 0
     assert client.calls == 1  # that brief alone: everything else held
+
+
+def test_a_stubborn_echo_is_not_re_paid_until_something_it_rests_on_moves(
+    db: Database,  # noqa: F811
+) -> None:
+    with db.connect() as conn, conn:
+        _default_prompts(conn)
+    first = Echoing()
+    brief(job(), JobContext(db), client=first)
+    second = Echoing()
+
+    brief(job(), JobContext(db), client=second)
+
+    assert first.calls == 4
+    assert second.calls == 0  # settled: same members, prompt and model
+    assert _briefless(db) == 2  # still listed as not a brief
+
+    with db.write() as conn:
+        conn.execute("UPDATE briefs SET member_signature = 'moved'")
+    third = Echoing()
+    brief(job(), JobContext(db), client=third)
+    assert third.calls == 4  # a moved member is the "until"

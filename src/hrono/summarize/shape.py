@@ -153,16 +153,20 @@ def talks_back(text: str) -> str:
     return _answers_the_caller(stripped) if stripped else "empty"
 
 
-def brief_gate(template: str) -> Callable[[str], str]:
-    """``unusable``, plus ``echoes``, for a brief written from ``template``."""
+ECHOES = "echoes-the-prompt"
+
+
+def brief_gate(template: str, material: str = "") -> Callable[[str], str]:
+    """``unusable``, plus ``echoes``, for a brief of ``material`` written from
+    ``template``."""
 
     def gate(text: str) -> str:
-        return unusable(text) or echoes(text, template)
+        return unusable(text) or echoes(text, template, material)
 
     return gate
 
 
-def echoes(text: str, template: object) -> str:
+def echoes(text: str, template: object, material: str = "") -> str:
     """ "echoes-the-prompt" when ``text`` restates its instruction, else "".
 
     The words compared are lowercased runs of four letters or more, less a
@@ -171,16 +175,21 @@ def echoes(text: str, template: object) -> str:
     words that could tell one prompt from another carry weight; the
     placeholders are not the instruction's words. Both a share
     and a floor have to hold: a two-line brief can share three words with
-    anything. ``template`` is untyped because a stored brief whose prompt no
-    longer exists reads back NULL, and no instruction echoes nothing.
+    anything. A word the ``material`` itself uses is not evidence (E019): a
+    brief on an INI parser, or on a node/parent/child tree, shares the
+    prompt's words because its subject does, and an echo is the prompt's words
+    with nothing of the material behind them. Nor is a word the prompt quotes
+    ("Caution:"): it tells the model to write that. ``template`` is untyped
+    because a stored brief whose prompt no longer exists reads back NULL, and
+    no instruction echoes nothing.
     """
     if not isinstance(template, str):
         return ""
-    instruction = _vocabulary(_PLACEHOLDER.sub("", template))
+    instruction = _vocabulary(_QUOTED.sub("", _PLACEHOLDER.sub("", template)))
     said = _vocabulary(text)
-    shared = len(said & instruction)
+    shared = len((said & instruction) - _vocabulary(material))
     if shared >= ECHO_WORDS and shared >= ECHO_SHARE * len(said):
-        return "echoes-the-prompt"
+        return ECHOES
     return ""
 
 

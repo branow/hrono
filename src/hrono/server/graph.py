@@ -124,6 +124,7 @@ def build(conn: sqlite3.Connection, tree: str, opened: Sequence[int]) -> Graph:
     roots = _roots(rows, children)
     visible = _visible(roots, children, set(opened))
     return _lay_out(
+        conn,
         rows,
         children,
         visible,
@@ -223,6 +224,7 @@ def _branches(
 
 
 def _lay_out(
+    conn: sqlite3.Connection,
     rows: dict[int, sqlite3.Row],
     children: dict[int, list[int]],
     visible: Sequence[int],
@@ -272,6 +274,8 @@ def _lay_out(
             or rows[node]["brief"] is None
             or bool(
                 briefs.refusal(
+                    conn,
+                    node,
                     rows[node]["flagged"],
                     rows[node]["brief"],
                     rows[node]["template"],

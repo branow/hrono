@@ -55,6 +55,7 @@ def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
 
 
 def _is_fresh(
+    conn: sqlite3.Connection,
     row: sqlite3.Row,
     member_sig: str,
     prompt_hash: str,
@@ -67,10 +68,15 @@ def _is_fresh(
     `sonnet` at another upstream model leaves the name identical and every
     word different. A brief written before the column existed carries NULL,
     and NULL is not staleness — see `0034_brief_model_fingerprint.sql`.
+
+    A brief that was written, retried and stored flagged is not re-paid while
+    nothing it was written from changes (E019): the member signature, prompt
+    hash and model checks below are the "until" — it stays listed, and it is
+    rewritten once one of them moves.
     """
     return (
         not row["stale"]
-        and not unusable(row)
+        and not _rewritable(conn, row)
         and row["member_signature"] == member_sig
         and row["prompt_hash"] == prompt_hash
         and row["model_name"] == model_name
@@ -79,6 +85,23 @@ def _is_fresh(
             or row["model_fingerprint"] is None
             or row["model_fingerprint"] == model_fingerprint
         )
+    )
+
+
+def _rewritable(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
+    """Whether a stored brief is worth another call for what it says.
+
+    A stored ``echoes-the-prompt`` flag the gate STILL raises is settled: the
+    model was asked twice and echoed twice, and the same members, prompt and
+    model will echo again (E019). A talk-back (#217) is retried, and so is a
+    flag the gate would no longer raise.
+    """
+    if not unusable(conn, row):
+        return False
+    return not (
+        row["flagged"] == shape.ECHOES
+        and refusal(conn, row["node_id"], "", row["text"], row["template"])
+        == shape.ECHOES
     )
 
 
@@ -91,7 +114,7 @@ TEMPLATE = (
 )
 
 
-def unusable(row: sqlite3.Row) -> str:
+def unusable(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
     """Why a stored brief is not a brief, or "" when it is one (#217).
 
     The flag stored when it was written, or the CURRENT gate's verdict on its
@@ -99,17 +122,52 @@ def unusable(row: sqlite3.Row) -> str:
     one that is not a brief is never fresh: the next brief pass rewrites it,
     and only it.
     """
-    return refusal(row["flagged"], row["text"], row["template"])
+    return refusal(
+        conn, row["node_id"], row["flagged"], row["text"], row["template"]
+    )
 
 
-def refusal(flagged: object, text: object, template: object) -> str:
-    """``unusable`` over the columns, for a caller holding just those."""
+def refusal(
+    conn: sqlite3.Connection,
+    node_id: int,
+    flagged: object,
+    text: object,
+    template: object,
+) -> str:
+    """``unusable`` over the columns, for a caller holding just those.
+
+    A node's material is read only for a text that echoes the prompt without
+    it (E019): that is rare, and a page of nodes must not read the corpus.
+    """
     words = str(text or "")
     return (
         str(flagged or "")
         or shape.unusable(words)
-        or shape.echoes(words, template)
+        or _echo(conn, node_id, words, template)
     )
+
+
+def _echo(
+    conn: sqlite3.Connection, node_id: int, text: str, template: object
+) -> str:
+    if not shape.echoes(text, template):
+        return ""
+    return shape.echoes(text, template, material(conn, node_id))
+
+
+def material(conn: sqlite3.Connection, node_id: int) -> str:
+    """What a node's brief is written from: its member condensations, or its
+    child briefs. The words a brief may share with its prompt (E019)."""
+    rows = conn.execute(
+        "SELECT d.text AS text FROM node_members m "
+        "JOIN sections s ON s.id = m.section_id "
+        "JOIN condensations d ON d.content_hash = s.content_hash "
+        "WHERE m.node_id = ? "
+        "UNION ALL SELECT b.text FROM node_children c "
+        "JOIN briefs b ON b.node_id = c.child_id WHERE c.parent_id = ?",
+        (node_id, node_id),
+    ).fetchall()
+    return "\n\n".join(row["text"] for row in rows)
 
 
 def unusable_in(
@@ -122,7 +180,8 @@ def unusable_in(
     """
     held = pins.pinned(conn, pins.BRIEF)
     rows = conn.execute(
-        "SELECT b.node_id AS id, n.level AS level, b.flagged AS flagged, "
+        "SELECT b.node_id AS id, b.node_id AS node_id, n.level AS level, "
+        "b.flagged AS flagged, "
         f"b.text AS text, {TEMPLATE} AS template FROM briefs b "
         "JOIN nodes n ON n.id = b.node_id "
         "WHERE n.tree = ? ORDER BY n.level DESC, b.node_id",
@@ -131,7 +190,7 @@ def unusable_in(
     return tuple(
         (int(row["id"]), int(row["level"]), why, str(row["text"]))
         for row in rows
-        if int(row["id"]) not in held and (why := unusable(row))
+        if int(row["id"]) not in held and (why := unusable(conn, row))
     )
 
 
@@ -168,6 +227,7 @@ def stale_or_missing(
             continue
         row = get(conn, node_id)
         if row is None or not _is_fresh(
+            conn,
             row,
             member_signature(conn, node_id),
             prompt_hash,
@@ -198,6 +258,7 @@ def counts(
         brief = get(conn, node_id)
         assert brief is not None
         if _is_fresh(
+            conn,
             brief,
             member_signature(conn, node_id),
             prompt_hash,

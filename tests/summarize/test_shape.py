@@ -408,3 +408,41 @@ def test_the_echo_thresholds_flip_the_verdict_at_their_boundary(
     shared: int, other: int, verdict: str
 ) -> None:
     assert _echo_of(shared, other) == verdict
+
+
+INI = (
+    "This group covers the INI parser: it reads each section, then the "
+    "keys below it, and keeps a comment beside its parent section. Caution: "
+    "a repeated section is merged into the first."
+)
+INI_MATERIAL = (
+    "The parser reads a section header, then each key below it. A comment "
+    "stays beside its parent section; a repeated section merges into the "
+    "first. Covers every group of keys; each group is kept in its section."
+)
+
+
+def test_a_brief_about_the_prompts_own_vocabulary_is_not_an_echo() -> None:
+    template = _default("brief")
+    gate = brief_gate(template, INI_MATERIAL)
+
+    assert gate(INI) == ""
+    # the same words, with nothing of the material behind them, are an echo
+    unrelated = "Retries use backoff with jitter and stop after five attempts."
+    assert echoes(ECHOED["brief"], template, unrelated) == "echoes-the-prompt"
+
+
+def test_the_material_clears_only_the_words_it_uses() -> None:
+    template = " ".join(_words(10))
+    text = " ".join(_words(10))
+
+    assert echoes(text, template, "") == "echoes-the-prompt"
+    assert echoes(text, template, " ".join(_words(2))) == "echoes-the-prompt"
+    assert echoes(text, template, " ".join(_words(3))) == ""
+
+
+def test_a_word_the_prompt_quotes_is_not_the_prompts_vocabulary() -> None:
+    quoted = _words(8)
+    template = "Write " + " ".join(f'"{w}"' for w in quoted)
+
+    assert echoes(" ".join(quoted), template) == ""
