@@ -109,11 +109,22 @@ def test_all_noise_is_one_topic_of_density_members() -> None:
     assert result.attached == (False, False)
     assert result.assignment_similarity == (None, None)
     assert result.coords == ((1.0,) * STUB_DIMS,) * 2
+    assert result.collapsed is True
 
 
-def structureless(count: int, dim: int = 384) -> np.ndarray:
+def test_a_build_with_a_core_is_not_collapsed() -> None:
+    vectors = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    result = build_clusters(
+        vectors,
+        reduce=lambda vecs, init: np.ones((len(vecs), STUB_DIMS)),
+        cluster=_labeler([0, -1]),
+    )
+    assert result.collapsed is False
+
+
+def structureless(count: int, dim: int = 384, seed: int = 0) -> np.ndarray:
     """Unit vectors with no density anywhere: real HDBSCAN finds no cluster."""
-    points = np.random.default_rng(0).normal(size=(count, dim))
+    points = np.random.default_rng(seed).normal(size=(count, dim))
     return points / np.linalg.norm(points, axis=1, keepdims=True)
 
 
@@ -126,6 +137,7 @@ def test_real_recipe_makes_a_structureless_level_one_topic() -> None:
     result = build_clusters(vectors)
     assert result.labels == (0,) * 30
     assert len(result.coords) == 30
+    assert result.collapsed is True
 
 
 def test_empty_input_fails_cleanly() -> None:

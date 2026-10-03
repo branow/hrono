@@ -6,8 +6,9 @@ import numpy as np
 import pytest
 
 from hrono.cluster import op as cluster_op
+from hrono.cluster import store as cstore
 from hrono.cluster.blend import path_body, register_path_bodies
-from hrono.cluster.build import ClusterResult, build_clusters
+from hrono.cluster.build import ClusterResult, build_clusters, core_labels
 from hrono.cluster.recipe import recipe_for
 from hrono.db.database import Database
 from hrono.embed import store as vstore
@@ -17,6 +18,7 @@ from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.worker import Worker
+from tests.cluster.test_build import structureless
 
 MODEL = "emb"
 DIMS = 4
@@ -346,6 +348,43 @@ def test_a_collected_build_says_it_collected(tmp_path: object) -> None:
         assert outcome["collected"] is True
         assert outcome["topics"] == 1
         assert outcome["sections"] == 3
+    finally:
+        database.close()
+
+
+def test_an_all_noise_build_says_it_collected(tmp_path: object) -> None:
+    # E003 round 2: a corpus the real clusterer labels entirely noise becomes
+    # one topic, and the run must say so, or a large corpus folded into one
+    # topic reads exactly like one that clustered (#133).
+    database = Database.at(tmp_path / "noise.db")
+    bodies = structureless(30)
+    paths = structureless(30, seed=3)
+    try:
+        with database.connect() as conn, conn:
+            register_model(conn)
+            for i in range(30):  # above MIN_POINTS: the ladder reduces it
+                body, path = f"noise {i}\n".encode(), f"src/n{i}.py"
+                istore.upsert_content(conn, content_hash(body), body)
+                register_path_bodies(conn, [path])
+                for text, point in (  # stored first: the insert-or-ignore
+                    (body, bodies[i]),  # in add_embedded_section keeps them
+                    (path_body(path), paths[i]),
+                ):
+                    vstore.upsert_vector(
+                        conn, content_hash(text), MODEL, point.tolist()
+                    )
+                add_embedded_section(conn, path, body, i)
+            combined = cstore.section_combined_vectors(conn, MODEL)
+        # the real clusterer finds no core in what the op will read
+        assert set(core_labels([v for _, v in combined])) == {-1}
+
+        outcome = cluster_op.cluster(
+            cluster_job(), JobContext(database), build=build_clusters
+        )
+
+        assert outcome["collected"] is True
+        assert outcome["topics"] == 1
+        assert outcome["sections"] == 30
     finally:
         database.close()
 

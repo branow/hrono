@@ -20,10 +20,12 @@ lifecycle.md, how-hrono-works.md) is:
    topic. Attached members carry the attachment similarity; density-core members
    do not. A level HDBSCAN labels ENTIRELY noise has no core to attach to and is
    one topic — the answer the ladder gives a level too small to reduce (#112),
-   not a failure (E003). Structureless input does that deterministically, and
-   near-identical input (a level of identical briefs) does it on some runs and
-   not others: UMAP over tied points is not reproducible even seeded, which is
-   what made one ``maintain`` fail and the identical next one succeed (#198).
+   not a failure (E003) — and the result says so (``collapsed``), so a large
+   corpus folded into one topic is never mistaken for one that clustered.
+   Structureless input does that deterministically, and near-identical input
+   (a level of identical briefs) does it on some runs and not others: UMAP
+   over tied points is not reproducible even seeded, which is what made one
+   ``maintain`` fail and the identical next one succeed (#198).
 
 The parameters that scale with the point count (dims, neighbours, minimum
 cluster size) come from ``recipe`` — the same machinery reduces a level of
@@ -63,12 +65,17 @@ class ClusterResult:
     attached by proximity; ``assignment_similarity`` is its combined-space
     similarity to the cluster it joined (None for density-core members).
     ``coords`` is the reduced position, kept for warm-init and the graph.
+    ``collapsed`` is True when the clusterer labelled every vector noise and
+    the level became one topic for want of a core: a fair answer for a few
+    points and a surprising one for many, so the caller must be able to say
+    which happened (#133).
     """
 
     labels: tuple[int, ...]
     attached: tuple[bool, ...]
     assignment_similarity: tuple[float | None, ...]
     coords: tuple[tuple[float, ...], ...]
+    collapsed: bool = False
 
 
 def build_clusters(
@@ -88,6 +95,7 @@ def build_clusters(
 
     reduced = np.asarray(reducer(vectors, init_coords), dtype=np.float32)
     labels = np.asarray(clusterer(reduced))
+    collapsed = bool(np.all(labels == -1))
     labels, attached, sims = _attach_noise(vectors, labels)
 
     return ClusterResult(
@@ -97,6 +105,7 @@ def build_clusters(
             None if np.isnan(value) else float(value) for value in sims
         ),
         coords=tuple(tuple(float(v) for v in row) for row in reduced),
+        collapsed=collapsed,
     )
 
 

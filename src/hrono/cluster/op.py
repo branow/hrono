@@ -18,11 +18,12 @@ fails and when it is not installed, and collapsing a large corpus into one topic
 because its clustering BROKE would answer with a confident, wrong map instead of
 failing. Every one of those still fails the job. A level the clusterer labels
 entirely noise is different — it ran and found no density — and the builder
-itself returns that as one topic (E003). A full build homes every embedded
-section, so the incubator pool (#086) is swept in the same transaction — its
-rows would otherwise claim a re-homed chunk is still stranded. Reads only local
-vectors — no secret — so it needs no cipher. Registers into the op registry so
-the worker dispatches ``cluster``.
+itself returns that as one topic (E003), flagged ``collapsed``; the run reports
+it as ``collected`` too, since from outside it is the same surprise. A full
+build homes every embedded section, so the incubator pool (#086) is swept in
+the same transaction — its rows would otherwise claim a re-homed chunk is
+still stranded. Reads only local vectors — no secret — so it needs no cipher.
+Registers into the op registry so the worker dispatches ``cluster``.
 """
 
 from __future__ import annotations
@@ -61,9 +62,9 @@ def cluster(
         return {"sections": 0, "topics": 0, "collected": False}
 
     vectors = [vector for _, vector in pairs]
-    collected = False
     try:
         result = builder(vectors, init=init)
+        collected = result.collapsed  # all noise: one topic, said out loud
     except TooFewPoints:
         result = _one_topic(len(vectors))
         collected = True  # a one-topic tree is a legitimate answer for a small
