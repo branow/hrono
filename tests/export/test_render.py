@@ -110,11 +110,11 @@ def db(tmp_path: object) -> Iterator[tuple[Database, dict[str, int]]]:
     database.close()
 
 
-def _files(db: Database, notes=None) -> dict[str, str]:
+def _files(db: Database, notes=None, hops: int = 3) -> dict[str, str]:
     with db.connect() as conn:
         stored = load(conn, TREE)
         assert stored is not None
-        return render(conn, collapse(stored, 3), notes=notes)
+        return render(conn, collapse(stored, hops), notes=notes)
 
 
 def test_root_renders_brief_and_mechanical_child_listing(
@@ -681,11 +681,15 @@ def _grove(
     shape: list[list[list[str]]],
     texts: dict[str, str],
     bodies: dict[str, bytes] | None = None,
+    apex: bool = False,
 ) -> tuple[Database, dict[str, int]]:
     """A tree from nested names: root -> middles -> leaves -> sections.
 
     ``shape`` is a list of middle nodes, each a list of leaves, each a list of
     section paths. ``texts`` maps "root", "m<i>" and "l<i>.<j>" to a brief.
+    ``apex`` puts one more node above "root", so that "root" is an ordinary
+    index page below the export's root.md (which carries no section links,
+    E027); export it with ``hops=4``. Its page is ``_page(ids["root"])``.
     """
     database = Database.at(tmp_path / "grove.db")
     ids: dict[str, int] = {}
@@ -737,6 +741,16 @@ def _grove(
                 "id"
             ]
         )
+        if apex:
+            cluster_store.replace_level(
+                conn, TREE, 3, [(0, ids["root"], False, None)]
+            )
+            ids["apex"] = int(
+                conn.execute("SELECT id FROM nodes WHERE level = 3").fetchone()[
+                    "id"
+                ]
+            )
+            brief(conn, ids["apex"], "# Apex\n\nEverything.")
         flat = iter(leaf_of)
         for m, leaves in enumerate(shape):
             ids[f"m{m}"] = middles[m]
@@ -746,6 +760,11 @@ def _grove(
         for key, text in texts.items():
             brief(conn, ids[key], text)
     return database, ids
+
+
+def _page(node_id: int) -> str:
+    """Where the export puts the page of the node titled "Root" (``_grove``)."""
+    return f"root-{node_id}/brief.md"
 
 
 def _page_links(files: dict[str, str], page: str, entry: str) -> list[str]:
@@ -771,21 +790,45 @@ def test_an_index_entry_names_the_section_files_beneath_it(
             "l0.0": "# Leaf A\n\nLeaf alpha.",
             "l1.0": "# Leaf B\n\nLeaf beta.",
         },
+        apex=True,
     )
     try:
-        files = _files(database)
+        files = _files(database, hops=4)
     finally:
         database.close()
-    root = files["root.md"]
+    root = files[_page(ids["root"])]
     assert "[a/x1.py](" in root  # the link carries the rest of the path
     assert "[src/deep" not in root
     assert "[b/y1.py](" in root
     for entry in ("[Mid A]", "[Mid B]"):
-        for target in _page_links(files, "root.md", entry):
+        for target in _page_links(files, _page(ids["root"]), entry):
             assert target in files  # every named file exists in the export
-    mid = f"mid-a-{ids['m0']}/brief.md"
+    mid = f"root-{ids['root']}/mid-a-{ids['m0']}/brief.md"
     assert len(_page_links(files, mid, "[Leaf A]")) == 2
     assert not [line for line in root.splitlines() if "more" in line]
+
+
+def test_the_root_page_carries_no_section_links(tmp_path: object) -> None:
+    # E027: every turn of every session reads root.md, and its links cost the
+    # grep arm more than they saved the walk arm
+    database, ids = _grove(
+        tmp_path,
+        [[["a/x1.py"], ["b/y1.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid\n\nThings.",
+            "l0.0": "# Leaf A\n\nOne.",
+            "l0.1": "# Leaf B\n\nTwo.",
+        },
+        apex=True,
+    )
+    try:
+        files = _files(database, hops=4)
+    finally:
+        database.close()
+    assert "[Root](" in files["root.md"]  # it still lists its children
+    assert "Sections:" not in files["root.md"]
+    assert "Sections:" in files[_page(ids["root"])]  # a page below does
 
 
 def test_an_entry_over_many_sections_samples_each_leaf_and_counts_the_rest(
@@ -800,12 +843,13 @@ def test_an_entry_over_many_sections_samples_each_leaf_and_counts_the_rest(
             "l0.0": "# Leaf A\n\nOne.",
             "l0.1": "# Leaf B\n\nTwo.",
         },
+        apex=True,
     )
     try:
-        files = _files(database)
+        files = _files(database, hops=4)
     finally:
         database.close()
-    root = files["root.md"]
+    root = files[_page(ids["root"])]
     sections_line = next(
         line for line in root.splitlines() if line.startswith("  Sections:")
     )
@@ -826,14 +870,15 @@ def test_a_file_split_into_sections_is_named_once(tmp_path: object) -> None:
             "m0": "# Mid\n\nThings.",
             "l0.0": "# Leaf\n\nOne.",
         },
+        apex=True,
     )
     try:
-        files = _files(database)
+        files = _files(database, hops=4)
     finally:
         database.close()
     line = next(
         line
-        for line in files["root.md"].splitlines()
+        for line in files[_page(ids["root"])].splitlines()
         if line.startswith("  Sections:")
     )
     assert line.count("[big/x.py]") == 1
@@ -861,14 +906,15 @@ def test_an_entry_offers_first_the_sections_its_brief_drew_its_facts_from(
             "p/a5.py": b"the knob MAX_CAP_Q is set here\n",
             "q/b1.py": b"MAX_CAP_Q is read here too\n",
         },
+        apex=True,
     )
     try:
-        files = _files(database)
+        files = _files(database, hops=4)
     finally:
         database.close()
     line = next(
         line
-        for line in files["root.md"].splitlines()
+        for line in files[_page(ids["root"])].splitlines()
         if line.startswith("  Sections:")
     )
     assert line.startswith("  Sections: [p/a5.py]")
@@ -984,7 +1030,7 @@ def test_an_index_page_at_full_width_stays_within_one_section(
     # E022: the Sections line is not allowed to push a WIDTH-entry page past
     # the budget collapse.py sizes it on
     middles = 40
-    database, _ = _grove(
+    database, ids = _grove(
         tmp_path,
         [
             [[f"src/hrono/package{m}/module_{k}.py" for k in range(6)]]
@@ -1000,12 +1046,13 @@ def test_an_index_page_at_full_width_stays_within_one_section(
             },
             **{f"l{m}.0": f"# Leaf {m}\n\nBody." for m in range(middles)},
         },
+        apex=True,
     )
     try:
-        files = _files(database)
+        files = _files(database, hops=4)
     finally:
         database.close()
-    root = files["root.md"]
+    root = files[_page(ids["root"])]
     assert root.count("](") >= middles
     assert len(root.encode()) <= section_budget(Path("index.md"))
 
@@ -1013,7 +1060,7 @@ def test_an_index_page_at_full_width_stays_within_one_section(
 def test_a_narrow_index_page_keeps_all_its_section_links(
     tmp_path: object,
 ) -> None:
-    database, _ = _grove(
+    database, ids = _grove(
         tmp_path,
         [[["a/x.py", "a/y.py", "a/z.py", "a/w.py"]], [["b/q.py"]]],
         {
@@ -1023,12 +1070,13 @@ def test_a_narrow_index_page_keeps_all_its_section_links(
             "l0.0": "# Leaf A\n\nOne.",
             "l1.0": "# Leaf B\n\nTwo.",
         },
+        apex=True,
     )
     try:
-        files = _files(database)
+        files = _files(database, hops=4)
     finally:
         database.close()
-    assert len(_page_links(files, "root.md", "[Mid A]")) == 3
+    assert len(_page_links(files, _page(ids["root"]), "[Mid A]")) == 3
 
 
 def _links_at_budget(
@@ -1051,16 +1099,20 @@ def _links_at_budget(
             "l0.0": "# Leaf A\n\nOne.",
             "l1.0": "# Leaf B\n\nTwo.",
         },
+        apex=True,
     )
     monkeypatch.setattr(render_module, "_LEADS", leads)
     monkeypatch.setattr(render_module, "_PAGE_BYTES", budget)
     try:
-        files = _files(database, {ids["root"]: note} if note else None)
+        files = _files(database, {ids["root"]: note} if note else None, hops=4)
     finally:
         database.close()
     return (
-        files["root.md"].split("[Mid A]")[1].split("[Mid B]")[0].count("]("),
-        len(files["root.md"].encode()),
+        files[_page(ids["root"])]
+        .split("[Mid A]")[1]
+        .split("[Mid B]")[0]
+        .count("]("),
+        len(files[_page(ids["root"])].encode()),
     )
 
 
@@ -1111,8 +1163,10 @@ def _note_page(
         tmp_path,
         [[["a/x.py"]]],
         {"root": "# Root\n\nAll.", "m0": "# Mid\n\nA.", "l0.0": "# L\n\nB."},
+        apex=True,
     )
     try:
-        return _files(database, {ids["root"]: note})["root.md"]
+        files = _files(database, {ids["root"]: note}, hops=4)
+        return files[_page(ids["root"])]
     finally:
         database.close()

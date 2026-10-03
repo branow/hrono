@@ -4,8 +4,8 @@ Per agent node: its stored brief text as-is (#059/#061 — already ends with its
 Caution section; never regenerated), its member references re-attached from the
 metadata #102 keeps them in, then a MECHANICAL child listing rendered
 from the collapsed tree in code (titles + relative links, no LLM, no
-hallucinated links; each entry also links a few of the section files beneath
-it). Leaf nodes list their sections; each section is rendered to
+hallucinated links; each entry below the root also links a few of the section
+files beneath it). Leaf nodes list their sections; each section is rendered to
 its own file, reassembled byte-identically from its stored passages (#032) with
 an address header. Human notes render only when passed (M9 creates them; here
 render-if-present). No file I/O — returns a deterministic path -> content map
@@ -155,7 +155,10 @@ def _node_markdown(
         base = (
             len("\n\n".join([*parts, "## Children\n", "", *after]).encode()) + 1
         )
-        for leads in range(_LEADS, 0, -1):
+        # the root carries no links: every turn of every session reads it,
+        # and what it spent on them cost the grep arm more than the walk
+        # arm saved (E027)
+        for leads in range(0 if node_id == tree.root else _LEADS, 0, -1):
             children = listing(leads)
             if base + len(children.encode()) <= _PAGE_BYTES:
                 break

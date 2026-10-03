@@ -179,11 +179,13 @@ the facts a brief states (constants, environment variables, sizes) carry a `[§]
 link to the section pages they were found in, added when the folder is written;
 the stored brief is never altered. A page that has children shows only its
 opening and its `## Children` list, because every turn of a session carries the
-pages it has read; the detail is one hop down. Each child entry also links up to
-three section files beneath it, first those its brief's facts came from, so an
-agent that has picked a branch can open the answer from the index; as many as
-keep the page, human note included, within one section's size (10 KB), fewer on
-a wide page. Siblings whose titles read alike are told apart in their directory
+pages it has read; the detail is one hop down. On every page below the root,
+each child entry also links up to three section files beneath it, first those
+its brief's facts came from, so an agent that has picked a branch can open the
+answer from the index; as many as keep the page, human note included, within
+one section's size (10 KB), fewer on a wide page. The root has none: it is read
+on every turn, and measured, its links cost the searching agent more than they
+saved the walking one. Siblings whose titles read alike are told apart in their directory
 names by what each one says next, not by a number alone.
 
 ## Evaluating the export
