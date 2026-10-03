@@ -698,6 +698,9 @@ def _parsed_list(
     return body, []
 
 
+VALUE_ERROR = "Value error, "  # pydantic's own prefix on a validator's text
+
+
 def _errors(error: AppError) -> list[dict[str, str]]:
     """The server's rejection, per field.
 
@@ -712,7 +715,7 @@ def _errors(error: AppError) -> list[dict[str, str]]:
         return [_problem(error.message)]
     return [
         _problem(
-            str(item.get("msg", "")),
+            str(item.get("msg", "")).removeprefix(VALUE_ERROR),
             field=".".join(str(part) for part in item.get("loc", ())),
         )
         for item in reported

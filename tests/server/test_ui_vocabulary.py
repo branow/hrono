@@ -397,3 +397,34 @@ def test_a_run_still_going_reads_running_never_partial(
     # and it says how far it has got
     assert 'data-state="running"' in page
     assert "1/2" in page
+
+
+def test_a_refused_source_name_names_its_prefix_as_an_identifier(
+    empty: Browser,
+) -> None:
+    empty.sign_in()
+    response = empty.client.post(
+        "/ui/config/sources/item",
+        data={
+            "variant": "git",
+            "f.name": "node-x",
+            "f.url": "https://example.com/r.git",
+            "f.auth.method": "none",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "<code>node-</code>" in response.text
+    assert "is reserved for" in response.text
+    assert "Value error" not in response.text
+    assert offences(response.text) == []
+
+
+def test_the_name_help_names_the_prefix_as_an_identifier(
+    empty: Browser,
+) -> None:
+    empty.sign_in()
+    page = empty.client.get("/ui/config?add=sources&variant=git").text
+
+    assert "<code>node-</code>" in page
+    assert offences(page) == []

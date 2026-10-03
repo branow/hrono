@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlencode
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from hrono.auth.users import User
 from hrono.errors import AppError
@@ -57,6 +58,27 @@ def status_word(status: str) -> str:
 
 
 templates.env.filters["status_word"] = status_word
+
+
+def idents(text: str) -> Markup:
+    """Text with `backticked` identifiers set as `<code>`, the rest escaped.
+
+    A refusal has to name an identifier a person types (a name prefix) that
+    is not a glossary word; `<code>` is where the page keeps those.
+    """
+    parts = str(escape(text)).split("`")
+    if len(parts) % 2 == 0:  # an unpaired backtick is just text
+        return Markup(escape(text))
+    return Markup(
+        "".join(
+            f"<code>{part}</code>" if odd else part
+            for odd, part in enumerate(parts)
+            if part
+        )
+    )
+
+
+templates.env.filters["idents"] = idents
 templates.env.globals["partial_status"] = PARTIAL
 templates.env.filters["counted"] = counted
 templates.env.filters["size"] = size

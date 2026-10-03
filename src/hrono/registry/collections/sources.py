@@ -41,8 +41,8 @@ def _name() -> Any:
         title="Name",
         description=(
             "What this source is called in trees, on the map and on the "
-            "command line. hrono keeps one name prefix for its own briefs, "
-            "and a name that starts with it is refused."
+            "command line. hrono keeps the prefix `node-` for its own "
+            "briefs, and a name that starts with it is refused."
         ),
     )
 
@@ -144,8 +144,8 @@ def _reject_reserved(value: str) -> str:
     """`node-` is hrono's own source namespace, not a user's (#076)."""
     if value.lower().startswith(RESERVED_PREFIX):
         raise ValueError(
-            f"source names starting with {RESERVED_PREFIX!r} are reserved "
-            f"for hrono's own brief passages"
+            f"`{RESERVED_PREFIX}` is reserved for hrono's own briefs, so a "
+            f"source name cannot start with it"
         )
     return value
 
