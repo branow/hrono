@@ -110,6 +110,9 @@ def _check_models(
     _judge(run(api_root(str(endpoint)) + "/models", key, timeout), key)
 
 
+_REASON_LIMIT = 200
+
+
 def _judge(reply: Reply, key: str) -> None:
     """Accept a 200; otherwise refuse with the provider's own reason, if any.
 
@@ -122,6 +125,7 @@ def _judge(reply: Reply, key: str) -> None:
         return
     if key:
         said = said.replace(key, "***")
+    said = said[:_REASON_LIMIT]
     if status in (401, 403):
         raise ValidationFailed(
             f"authentication failed: {said}"
@@ -165,7 +169,7 @@ def _reason(response: httpx.Response) -> str:
         said = error["message"] if isinstance(error, dict) else error
     except (ValueError, KeyError, TypeError):
         return ""
-    return said.strip()[:200] if isinstance(said, str) else ""
+    return said.strip() if isinstance(said, str) else ""
 
 
 def _get(url: str, api_key: str, timeout: float) -> Reply:

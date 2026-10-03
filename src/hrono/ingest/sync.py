@@ -43,15 +43,24 @@ def sync_source(context: JobContext, name: str) -> Mapping[str, int]:
     show what it holds, and must fetch it the way a sync does or the two would
     disagree about what the cache is.
     """
+    version = fetch_source(context, name)
+    previous = _pinned_version(context, name)
+    _record_version(context, name, version)
+    return {"fetched": int(version != previous)}
+
+
+def fetch_source(context: JobContext, name: str) -> str:
+    """Fill one source's cache without pinning its version.
+
+    The setup preview reads the cache before any build; pinning there would
+    make the first real sync report nothing to do (#213).
+    """
     config = _load_source(context, name)
     source_type = str(config["type"])
     syncer = SYNCERS.get(source_type)
     if syncer is None:
         raise SyncError(f"no syncer for source type: {source_type}")
-    version = syncer(config, context.cache_for(name), _TIMEOUT)
-    previous = _pinned_version(context, name)
-    _record_version(context, name, version)
-    return {"fetched": int(version != previous)}
+    return syncer(config, context.cache_for(name), _TIMEOUT)
 
 
 def _load_source(context: JobContext, name: str) -> dict[str, object]:

@@ -282,3 +282,12 @@ def test_the_real_request_reads_the_reason_off_the_providers_answer() -> None:
     with serving(Rejects) as base, pytest.raises(ValidationFailed) as caught:
         validate_connection(anthropic(endpoint=base))
     assert str(caught.value) == "authentication failed: invalid x-api-key"
+
+
+def test_a_key_across_the_cut_is_masked_before_the_reason_is_cut() -> None:
+    long = "sk-ant-api03-" + "A" * 95
+    echoed = "x" * 175 + long + " tail"
+    body = anthropic(auth={"method": "api-key", "key": long})
+    with pytest.raises(ValidationFailed) as caught:
+        validate_connection(body, run=lambda url, key, t: (401, echoed))
+    assert "sk-ant" not in str(caught.value)

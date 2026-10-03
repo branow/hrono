@@ -26,6 +26,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import Request
 from fastapi.concurrency import run_in_threadpool
@@ -34,7 +35,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from hrono.auth.users import User
 from hrono.errors import AppError
 from hrono.ingest import SyncError
-from hrono.ingest.sync import sync_source
+from hrono.ingest.sync import fetch_source as fill_cache
 from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import enqueue
 from hrono.onboarding import defaults
@@ -515,7 +516,7 @@ async def _fetched(
         cache_root=request.app.state.cache_root,
     )
     try:
-        await run_in_threadpool(sync_source, context, name)
+        await run_in_threadpool(fill_cache, context, name)
     except SyncError as exc:
         return _render(
             request,
@@ -525,16 +526,15 @@ async def _fetched(
             source=name,
             problems=[problem(f"saved, but it could not be read: {exc}")],
         )
-    return RedirectResponse(
-        f"/ui/setup?tree={tree}&step=source&source={name}", status_code=303
-    )
+    query = urlencode({"tree": tree, "step": "source", "source": name})
+    return RedirectResponse(f"/ui/setup?{query}", status_code=303)
 
 
 def _next(tree: str, step: str, said: str) -> Response:
-    suffix = f"&done={said}" if said else ""
-    return RedirectResponse(
-        f"/ui/setup?tree={tree}&step={step}{suffix}", status_code=303
-    )
+    query = {"tree": tree, "step": step}
+    if said:
+        query["done"] = said
+    return RedirectResponse(f"/ui/setup?{urlencode(query)}", status_code=303)
 
 
 def dollars(amount: float | None) -> str:

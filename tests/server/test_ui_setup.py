@@ -16,6 +16,8 @@ import re
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
+from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from cryptography.fernet import Fernet
@@ -25,6 +27,7 @@ from hrono.auth.users import create_user
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import completeness
 from hrono.registry import store as registry_store
 from hrono.registry.collections import COLLECTIONS
@@ -548,3 +551,75 @@ def test_a_built_homes_load_does_not_ask_what_setup_lacks(
     setup.client.get(f"/ui?tree={TREE}")
 
     assert asked == []
+
+
+# ------------------------------------------- a source's own filter, and syncing
+
+
+def _context(setup: Setup) -> JobContext:
+    state = setup.client.app.state  # type: ignore[attr-defined]
+    return JobContext(state.db, state.cipher, cache_root=state.cache_root)
+
+
+def _job(name: str) -> SimpleNamespace:
+    return SimpleNamespace(scope={"name": name})
+
+
+def test_the_preview_and_estimate_use_the_sources_own_filter(
+    setup: Setup, repo: Path
+) -> None:
+    (repo / "docs.md").write_text("# one\ntext\n\n# two\nmore\n" * 30)
+    commit(repo, "three")
+    setup.connect_claude_code()
+    setup.register_models()
+    setup.add_source(str(repo), **{"f.filter.only": "app.py"})
+
+    shown = text(setup.page("source", source="repo"))
+    estimate = text(setup.page("build"))
+
+    # what the real sync and split keep for this source
+    context = _context(setup)
+    OPS["sync"](_job("repo"), context)  # type: ignore[arg-type]
+    OPS["split"](_job("repo"), context)  # type: ignore[arg-type]
+    with setup.client.app.state.db.connect() as conn:  # type: ignore[attr-defined]
+        files = conn.execute(
+            "SELECT COUNT(DISTINCT path) FROM sections WHERE source = 'repo'"
+        ).fetchone()[0]
+        stored = conn.execute(
+            "SELECT COUNT(*) FROM sections WHERE source = 'repo'"
+        ).fetchone()[0]
+    assert files == 1 and stored > 0
+    assert f"{files} file would be read" in shown
+    assert f"over {stored} sections" in estimate
+
+
+def test_the_first_build_after_setup_still_fetches_the_source(
+    setup: Setup, repo: Path
+) -> None:
+    _ready(setup, repo)  # the wizard has already fetched the cache
+
+    first = OPS["sync"](_job("repo"), _context(setup))  # type: ignore[arg-type]
+    again = OPS["sync"](_job("repo"), _context(setup))  # type: ignore[arg-type]
+
+    assert dict(first) == {"fetched": 1}
+    assert dict(again) == {"fetched": 0}
+
+
+def test_a_source_name_with_query_syntax_stays_one_value(
+    setup: Setup, repo: Path
+) -> None:
+    setup.connect_claude_code()
+    setup.register_models()
+
+    moved = setup.post(
+        "/ui/setup/source",
+        variant="git",
+        **{
+            "f.name": "x&source=repo",
+            "f.url": str(repo),
+            "f.auth.method": "none",
+        },
+    )
+
+    query = parse_qs(urlparse(moved.headers["location"]).query)
+    assert query["source"] == ["x&source=repo"]
