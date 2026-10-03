@@ -50,8 +50,9 @@ def render(
         for child in node.children
     }
     files: dict[str, str] = {}
+    stems = _stems(conn, tree)
     directories = {
-        node_id: _directory(node_id, parent, tree.root, conn)
+        node_id: _directory(node_id, parent, tree.root, stems)
         for node_id in tree.nodes
     }
     where = {
@@ -81,6 +82,7 @@ def render(
             node_id,
             notes.get(node_id),
             _cited(text, index, under, path),
+            stems,
             lambda child, leads, start=start: _leads_to(
                 conn,
                 tree,
@@ -129,6 +131,7 @@ def _node_markdown(
     node_id: int,
     note: str | None,
     brief: str,
+    stems: Mapping[int, str],
     leads_to: Callable[[int, int], str],
 ) -> str:
     node = tree.nodes[node_id]
@@ -138,7 +141,9 @@ def _node_markdown(
 
         def listing(leads: int) -> str:
             return "\n".join(
-                _child_entry(conn, child, called[child], leads_to(child, leads))
+                _child_entry(
+                    conn, child, called[child], stems, leads_to(child, leads)
+                )
                 for child in node.children
             )
 
@@ -200,6 +205,7 @@ def _child_entry(
     conn: sqlite3.Connection,
     child: int,
     title: str,
+    stems: Mapping[int, str],
     leads: str,
 ) -> str:
     """An index page's entry: title, link, what the child holds, where to read.
@@ -209,7 +215,7 @@ def _child_entry(
     the ones that do not matter. ``leads`` names section files beneath the
     child, so an agent that has chosen can open the answer from the index.
     """
-    link = f"- [{title}]({_name(conn, child)}/brief.md)"
+    link = f"- [{title}]({_name(child, stems)}/brief.md)"
     summary = _summary(conn, child)
     entry = f"{link} — {summary}" if summary else link
     return f"{entry}\n  {leads}" if leads else entry
@@ -358,7 +364,7 @@ def _directory(
     node_id: int,
     parent: Mapping[int, int],
     root: int,
-    conn: sqlite3.Connection,
+    stems: Mapping[int, str],
 ) -> str:
     # the chain of names from the root down to this node, root excluded — so
     # only the ROOT is "" and every other node, parentless or not, gets its own
@@ -368,7 +374,7 @@ def _directory(
     parts: list[str] = []
     cur = node_id
     while cur != root:
-        parts.append(_name(conn, cur))
+        parts.append(_name(cur, stems))
         above = parent.get(cur)
         if above is None:
             break
@@ -381,11 +387,53 @@ def _brief_text(conn: sqlite3.Connection, node_id: int) -> str:
     return row["text"] if row is not None else ""
 
 
-def _name(conn: sqlite3.Connection, node_id: int) -> str:
+def _name(node_id: int, stems: Mapping[int, str]) -> str:
     # append the node id so sibling briefs with the same heading (LLM briefs
     # readily repeat "Overview" etc.) never collide onto one directory and drop
     # a subtree — the same collision-safety sections already have.
-    return f"{slug(heading(conn, node_id)) or 'node'}-{node_id}"
+    return f"{stems[node_id]}-{node_id}"
+
+
+def _stems(conn: sqlite3.Connection, tree: ExportTree) -> dict[int, str]:
+    """What each node's directory is called before its id.
+
+    Siblings whose titles slug alike (a weak model opens two briefs with the
+    same clause) would differ by a number alone, which tells an agent nothing
+    about which to open. Each of them is named by what it says after the
+    title, its own summary, when that tells them apart.
+    """
+    stems = {
+        node_id: slug(heading(conn, node_id)) or "node"
+        for node_id in tree.nodes
+    }
+    for node in tree.nodes.values():
+        alike: dict[str, list[int]] = {}
+        for child in node.children:
+            alike.setdefault(stems[child], []).append(child)
+        for shared in alike.values():
+            if len(shared) > 1:
+                others = {
+                    stems[child]
+                    for child in node.children
+                    if child not in shared
+                }
+                stems |= _tell_apart(conn, shared, others)
+    return stems
+
+
+def _tell_apart(
+    conn: sqlite3.Connection, shared: list[int], others: set[str]
+) -> dict[int, str]:
+    """The new stems of ``shared``, or none when they would not help.
+
+    A stem taken from a summary may equal a sibling's own stem; that would
+    make a new shared stem, so the titles stay.
+    """
+    said = {node: slug(_summary(conn, node)) for node in shared}
+    stems = set(said.values())
+    if "" in stems or len(stems) < len(said) or stems & others:
+        return {}
+    return said
 
 
 def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
@@ -401,6 +449,6 @@ def _section_name(conn: sqlite3.Connection, section_id: int) -> str:
 
 _SUMMARY_CHARS = 160
 _LEADS = 3
+_PAGE_BYTES = section_budget(Path("index.md"))  # one SECTION
 _NOT_PROSE = ("#", "-", "*", "|", ">", "```")
 _EMPHASIS = re.compile(r"[*_`]+")
-_PAGE_BYTES = section_budget(Path("index.md"))  # one SECTION

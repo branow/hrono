@@ -898,6 +898,86 @@ def test_a_page_links_from_its_own_directory(tmp_path: object) -> None:
     ]
 
 
+def _siblings_saying(
+    tmp_path: object, first: str, second: str
+) -> tuple[list[str], Database]:
+    database, ids = _grove(
+        tmp_path,
+        [[["a.py"]], [["b.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": f"# Hrono is a knowledge base\n\n{first}",
+            "m1": f"# Hrono is a knowledge base\n\n{second}",
+            "l0.0": "# One\n\nx.",
+            "l1.0": "# Two\n\ny.",
+        },
+    )
+    files = _files(database)
+    stems = sorted(
+        path.split("/")[0].rsplit("-", 1)[0]
+        for path in files
+        if path.endswith("/brief.md") and path.count("/") == 1
+    )
+    return stems, database
+
+
+def test_siblings_with_the_same_title_are_named_by_what_each_says(
+    tmp_path: object,
+) -> None:
+    stems, database = _siblings_saying(
+        tmp_path, "It stores sources.", "It serves recall."
+    )
+    database.close()
+    assert stems == ["it-serves-recall", "it-stores-sources"]
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        ("It stores sources.", "It stores sources."),
+        ("", "It serves recall."),
+    ],
+    ids=["same-summary", "one-silent"],
+)
+def test_siblings_with_nothing_to_tell_them_apart_keep_the_title(
+    tmp_path: object, first: str, second: str
+) -> None:
+    stems, database = _siblings_saying(tmp_path, first, second)
+    database.close()
+    assert stems == ["hrono-is-a-knowledge-base"] * 2
+
+
+def test_a_summary_stem_is_not_taken_when_a_sibling_already_has_it(
+    tmp_path: object,
+) -> None:
+    # A and B read alike; A's summary slugs to C's title, so renaming them
+    # would put A and C on one stem
+    database, _ = _grove(
+        tmp_path,
+        [[["a.py"]], [["b.py"]], [["c.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Hrono is a knowledge base\n\nIt serves recall.",
+            "m1": "# Hrono is a knowledge base\n\nIt stores sources.",
+            "m2": "# It serves recall\n\nElsewhere.",
+            "l0.0": "# One\n\nx.",
+            "l1.0": "# Two\n\ny.",
+            "l2.0": "# Three\n\nz.",
+        },
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    stems = sorted(
+        path.split("/")[0].rsplit("-", 1)[0]
+        for path in files
+        if path.endswith("/brief.md") and path.count("/") == 1
+    )
+    assert len(set(stems)) == 2  # A and B keep the title; C is alone
+    assert stems.count("it-serves-recall") == 1
+
+
 def test_an_index_page_at_full_width_stays_within_one_section(
     tmp_path: object,
 ) -> None:

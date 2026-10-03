@@ -157,6 +157,8 @@ three section files beneath it, first those its brief's facts came from, so an
 agent that has picked a branch can open the answer from the index; as many as
 keep the page, human note included, within one section's size (10 KB),
 fewer on a wide page.
+Siblings whose titles read alike are told apart in their directory names by
+what each one says next, not by a number alone.
 
 ## Evaluating the export
 
