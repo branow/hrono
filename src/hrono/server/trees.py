@@ -45,14 +45,16 @@ class RecallRequest(BaseModel):
 
 
 @router.post("/trees/{name}/maintain")
-def maintain_tree(name: str, request: Request, _: Writer) -> dict[str, str]:
+def maintain_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
     """Enqueue a maintain job for ``name`` and return its job id."""
-    job_id = enqueue(request.app.state.db, "maintain", {}, tree=name)
+    job_id = enqueue(
+        request.app.state.db, "maintain", {}, tree=name, started_by=user.name
+    )
     return {"job_id": job_id}
 
 
 @router.post("/trees/{name}/sync")
-def sync_tree(name: str, request: Request, _: Writer) -> dict[str, str]:
+def sync_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
     """Enqueue the incremental chain for ``name`` and return its job id.
 
     THE operator verb (#137/#138): one call brings an existing tree up to date —
@@ -61,7 +63,9 @@ def sync_tree(name: str, request: Request, _: Writer) -> dict[str, str]:
     COLD build of a tree that does not exist yet; the two have very different
     costs and conflating them is how a user pays for a rebuild by accident.
     """
-    job_id = enqueue(request.app.state.db, "sync-tree", {}, tree=name)
+    job_id = enqueue(
+        request.app.state.db, "sync-tree", {}, tree=name, started_by=user.name
+    )
     return {"job_id": job_id}
 
 

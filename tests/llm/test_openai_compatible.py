@@ -222,10 +222,12 @@ def test_the_provider_table_serves_an_openai_compatible_connection(
     _keyless(db, local)
 
     client = client_for(
-        JobContext(database, cipher, tmp_path / "cache"), _model("text")
+        JobContext(database, cipher, tmp_path / "cache"),
+        _model("text"),
+        "brief",
     )
 
-    assert isinstance(client, OpenAIClient)
+    assert isinstance(client.inner, OpenAIClient)  # type: ignore[attr-defined]
 
 
 def test_a_connection_without_an_endpoint_is_refused_by_the_model() -> None:

@@ -30,6 +30,7 @@ def test_jobs_table_shape(tmp_path: Path) -> None:
         "updated_at",
         "heartbeat",
         "result",
+        "started_by",
     }
     conn.close()
 

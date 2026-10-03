@@ -59,6 +59,7 @@ def fan_out(
     scope: dict[str, object] | None,
     *,
     tree: str | None = None,
+    started_by: str | None = None,
 ) -> str:
     """Create a parent + one leaf per resolved item; return the parent id."""
     items = resolve(database, scope)
@@ -67,7 +68,14 @@ def fan_out(
     parent_scope = serialize_scope(scope if scope else {"type": "all"})
     with database.write() as conn:
         store.create_fanout(
-            conn, parent_id, op, parent_scope, leaves, tree, _now()
+            conn,
+            parent_id,
+            op,
+            parent_scope,
+            leaves,
+            tree,
+            _now(),
+            started_by,
         )
     return parent_id
 

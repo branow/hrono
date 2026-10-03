@@ -13,6 +13,7 @@ from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.worker import Worker
+from hrono.llm import providers
 from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
@@ -311,7 +312,11 @@ def test_runs_as_a_job_through_the_worker(
     import hrono.summarize.brief as brief_mod
 
     monkeypatch.setattr(
-        brief_mod, "client_for", lambda context, model: FakeCompletion()
+        brief_mod,
+        "client_for",
+        lambda context, model, role, client=None: providers.client_for(
+            context, model, role, client=FakeCompletion()
+        ),
     )
     worker = Worker(db)
     worker.start()

@@ -55,13 +55,29 @@ def enqueue(
     *,
     tree: str | None = None,
     parent_id: str | None = None,
+    started_by: str | None = None,
 ) -> str:
-    """Insert a pending job and return its id (ops/endpoints call this)."""
+    """Insert a pending job and return its id (ops/endpoints call this).
+
+    ``started_by`` is the user whose request this is (#201); a child names no
+    one of its own and takes its parent's, so a run's calls add up under the
+    person who started it.
+    """
     job_id = f"job_{uuid.uuid4().hex}"
     now = _now()
     with database.write() as conn:
+        if parent_id is not None and started_by is None:
+            parent = store.get(conn, parent_id)
+            started_by = None if parent is None else parent["started_by"]
         store.insert(
-            conn, job_id, parent_id, tree, op, serialize_scope(scope), now
+            conn,
+            job_id,
+            parent_id,
+            tree,
+            op,
+            serialize_scope(scope),
+            now,
+            started_by,
         )
     return job_id
 
@@ -216,7 +232,9 @@ class Worker(threading.Thread):
                 raise BadRequest(f"unknown op: {job.op}")
             outcome = handler(
                 job,
-                JobContext(self._database, self._cipher, self._cache_root),
+                JobContext(
+                    self._database, self._cipher, self._cache_root, job.id
+                ),
             )
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
             # the record keeps the CODE; the driver's own wording lives here,

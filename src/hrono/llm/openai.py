@@ -164,13 +164,25 @@ def _completion(payload: dict[str, object]) -> CompletionResult:
         raise LLMError("the model server returned no message text")
     usage = payload.get("usage")
     counts = usage if isinstance(usage, dict) else {}
+    prompt = int(counts.get("prompt_tokens", 0) or 0)
+    cached = _cached(counts)
+    model = payload.get("model")
     return CompletionResult(
         text=text,
         usage=Usage(
-            input_tokens=int(counts.get("prompt_tokens", 0) or 0),
+            input_tokens=prompt - (cached or 0),
             output_tokens=int(counts.get("completion_tokens", 0) or 0),
+            cache_read=cached,
+            model=model if isinstance(model, str) else None,
         ),
     )
+
+
+def _cached(counts: dict[str, object]) -> int | None:
+    """Cached prompt tokens, which this API counts INSIDE ``prompt_tokens``."""
+    details = counts.get("prompt_tokens_details")
+    cached = details.get("cached_tokens") if isinstance(details, dict) else None
+    return cached if isinstance(cached, int) else None
 
 
 def _vectors(

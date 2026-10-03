@@ -55,7 +55,7 @@ def condense(
     if not sections:
         return {"condensed": 0}
 
-    completion = client if client is not None else client_for(context, model)
+    completion = client_for(context, model, "condense", client=client)
 
     def call(section: Section) -> CompletionResult:
         rendered = template.replace(

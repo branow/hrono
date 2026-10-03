@@ -149,7 +149,34 @@ def _read(code: int, out: str, err: str) -> CompletionResult:
         Usage(
             input_tokens=int(counts.get("input_tokens", 0)),
             output_tokens=int(counts.get("output_tokens", 0)),
+            cache_read=_count(counts.get("cache_read_input_tokens")),
+            cache_creation=_count(counts.get("cache_creation_input_tokens")),
+            model=_upstream(payload.get("modelUsage")),
         ),
+    )
+
+
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+def _upstream(models: object) -> str | None:
+    """The model that did the work, by the CLI's own per-model account.
+
+    The CLI may name more than one model for a call; the one that wrote the
+    most output is the one that answered.
+    """
+    if not isinstance(models, dict) or not models:
+        return None
+    return str(
+        max(
+            models,
+            key=lambda name: (
+                models[name].get("outputTokens", 0)
+                if isinstance(models[name], dict)
+                else 0
+            ),
+        )
     )
 
 

@@ -27,12 +27,15 @@ class JobContext:
     server resolves it from the database path at startup and it is passed here,
     never re-derived from the working directory. It is None only for a context
     whose ops never touch the cache — asking for a path then is a bug, not a
-    reason to guess a location, so ``cache_for`` raises.
+    reason to guess a location, so ``cache_for`` raises. ``job_id`` is the job
+    the worker is running, which every model call is recorded against (#201);
+    None for an op driven directly, outside any job.
     """
 
     database: Database
     cipher: Cipher | None = None
     cache_root: Path | None = None
+    job_id: str | None = None
 
     def cli_dir(self) -> Path:
         """Where a subprocess LLM backend runs (#107), beside the clone cache.

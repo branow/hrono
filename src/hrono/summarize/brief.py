@@ -102,7 +102,7 @@ def brief(
     if not pending:
         return {"briefed": 0, "skipped_pinned": held}
 
-    completion = client if client is not None else client_for(context, model)
+    completion = client_for(context, model, "brief", client=client)
 
     def call(entry: Pending) -> Written:
         _, inputs, _ = entry

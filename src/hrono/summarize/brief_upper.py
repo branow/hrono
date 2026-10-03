@@ -88,7 +88,7 @@ def brief_upper(
     if not pending:
         return {"briefed": 0, "skipped_pinned": held}
 
-    completion = client if client is not None else client_for(context, model)
+    completion = client_for(context, model, "brief-upper", client=client)
 
     def call(entry: Pending) -> Written:
         source = "\n\n".join(entry[1])

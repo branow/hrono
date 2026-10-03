@@ -73,6 +73,7 @@ def _job(
         "status": rolled.status if rolled is not None else job.status,
         "error": _error(job),
         "result": job.result,
+        "started_by": job.started_by,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
     }
@@ -96,7 +97,7 @@ def _rolled(conn: sqlite3.Connection, job_id: str) -> Rollup | None:
 
 
 @router.post("/jobs", status_code=status.HTTP_201_CREATED)
-def run_job(body: JobRequest, request: Request, _: Admin) -> dict[str, str]:
+def run_job(body: JobRequest, request: Request, user: Admin) -> dict[str, str]:
     """Enqueue any registered op. A service door, not a product surface.
 
     **Stages run out of order can leave a tree that looks fine and is wrong.**
@@ -116,9 +117,17 @@ def run_job(body: JobRequest, request: Request, _: Admin) -> dict[str, str]:
         # machinery existed and nothing called it, so every such request ran as
         # one opaque job.
         return {
-            "job_id": fan_out(database, body.op, body.scope, tree=body.tree)
+            "job_id": fan_out(
+                database,
+                body.op,
+                body.scope,
+                tree=body.tree,
+                started_by=user.name,
+            )
         }
-    job_id = enqueue(database, body.op, body.scope, tree=body.tree)
+    job_id = enqueue(
+        database, body.op, body.scope, tree=body.tree, started_by=user.name
+    )
     return {"job_id": job_id}
 
 

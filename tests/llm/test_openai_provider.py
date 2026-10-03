@@ -237,7 +237,9 @@ def test_the_provider_table_resolves_an_openai_connection(
     _connection(db, "oa", "openai", server)
     context = JobContext(database, cipher, tmp_path / "cache")
 
-    assert isinstance(client_for(context, _model("text", "oa")), OpenAIClient)
+    client = client_for(context, _model("text", "oa"), "brief")
+
+    assert isinstance(client.inner, OpenAIClient)  # type: ignore[attr-defined]
 
 
 def test_an_embedding_model_with_no_connection_still_loads_locally(

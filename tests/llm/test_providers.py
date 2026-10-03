@@ -43,9 +43,9 @@ def _model(connection: str | None) -> dict[str, object]:
 def test_a_claude_code_connection_resolves_to_the_cli_client(
     db: Database, tmp_path: Path
 ) -> None:
-    client = client_for(job_context(db, tmp_path), _model("cli"))
+    client = client_for(job_context(db, tmp_path), _model("cli"), "brief")
 
-    assert isinstance(client, ClaudeCodeClient)
+    assert isinstance(client.inner, ClaudeCodeClient)
 
 
 def test_the_cli_client_runs_in_the_contexts_own_directory(
@@ -57,7 +57,8 @@ def test_the_cli_client_runs_in_the_contexts_own_directory(
     # `cli_dir()` to itself and checked a parent that holds however it is
     # computed, so `cli_dir()` returning the clone cache passed both.
     context = job_context(db, tmp_path)
-    cli_dir = client_for(context, _model("cli"))._workdir  # noqa: SLF001
+    client = client_for(context, _model("cli"), "brief").inner
+    cli_dir = client._workdir  # noqa: SLF001
     clones = context.cache_root
 
     assert cli_dir != clones  # not the clone root itself
@@ -73,7 +74,9 @@ def test_an_anthropic_connection_still_resolves_to_the_sdk_client(
         db, tmp_path, Cipher(Fernet(Fernet.generate_key()), 1)
     )
 
-    assert isinstance(client_for(context, _model("sdk")), AnthropicClient)
+    client = client_for(context, _model("sdk"), "brief")
+
+    assert isinstance(client.inner, AnthropicClient)
 
 
 def test_a_model_with_no_connection_keeps_the_anthropic_default(
@@ -84,14 +87,16 @@ def test_a_model_with_no_connection_keeps_the_anthropic_default(
         db, tmp_path, Cipher(Fernet(Fernet.generate_key()), 1)
     )
 
-    assert isinstance(client_for(context, _model(None)), AnthropicClient)
+    client = client_for(context, _model(None), "brief")
+
+    assert isinstance(client.inner, AnthropicClient)
 
 
 def test_an_unknown_connection_is_one_llm_error(
     db: Database, tmp_path: Path
 ) -> None:
     with pytest.raises(LLMError, match="unknown connection"):
-        client_for(job_context(db, tmp_path), _model("ghost"))
+        client_for(job_context(db, tmp_path), _model("ghost"), "brief")
 
 
 def test_an_unsupported_provider_is_one_llm_error(
@@ -104,4 +109,4 @@ def test_an_unsupported_provider_is_one_llm_error(
         _connection(conn, "future", "gemini")
 
     with pytest.raises(LLMError, match="unsupported provider"):
-        client_for(job_context(db, tmp_path), _model("future"))
+        client_for(job_context(db, tmp_path), _model("future"), "brief")

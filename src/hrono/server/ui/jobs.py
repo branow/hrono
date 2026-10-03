@@ -279,9 +279,9 @@ async def run_from_the_page(
     )
     database = request.app.state.db
     if fans_out(op, scope):
-        fan_out(database, op, scope, tree=tree)
+        fan_out(database, op, scope, tree=tree, started_by=user.name)
     else:
-        enqueue(database, op, scope, tree=tree)
+        enqueue(database, op, scope, tree=tree, started_by=user.name)
     return RedirectResponse(
         f"/ui/jobs?tree={tree or 'default'}&notice={quote(f'started {op}')}",
         status_code=303,

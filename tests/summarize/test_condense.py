@@ -12,6 +12,7 @@ from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.worker import Worker
+from hrono.llm import providers
 from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
@@ -231,7 +232,11 @@ def test_runs_as_a_job_through_the_worker(
     import hrono.summarize.condense as condense_mod
 
     monkeypatch.setattr(
-        condense_mod, "client_for", lambda context, model: FakeCompletion()
+        condense_mod,
+        "client_for",
+        lambda context, model, role, client=None: providers.client_for(
+            context, model, role, client=FakeCompletion()
+        ),
     )
     worker = Worker(db)
     worker.start()
@@ -256,6 +261,11 @@ def test_runs_as_a_job_through_the_worker(
     assert row is not None and row["status"] == "succeeded"
     with db.connect() as conn:
         assert store.count(conn, MODEL) == 2
+        calls = conn.execute(
+            "SELECT job_id, run_id, role, ok FROM llm_calls"
+        ).fetchall()
+    # the worker names the job it runs, so each call is booked to it (#201)
+    assert [tuple(c) for c in calls] == [("cj", "cj", "condense", 1)] * 2
 
 
 def test_the_run_reports_what_it_condensed_and_spent(db: Database) -> None:

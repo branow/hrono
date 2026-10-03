@@ -40,6 +40,7 @@ class Job:
     result: dict[str, object] | None = None  # what the op did (#132)
     error_code: str | None = None  # kebab-case, the envelope's (#109)
     error_details: dict[str, object] | None = None
+    started_by: str | None = None  # the user who started the run (#201)
 
 
 def serialize_scope(scope: dict[str, object]) -> str:
@@ -75,6 +76,7 @@ def to_job(row: sqlite3.Row) -> Job:
         result=deserialize_result(row["result"]),
         error_code=row["error_code"],
         error_details=deserialize_result(row["error_details"]),
+        started_by=row["started_by"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )

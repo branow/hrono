@@ -18,7 +18,10 @@ from collections.abc import Callable
 from hrono.embed.runner import EmbedError, Encoder
 from hrono.jobs.ops import JobContext
 from hrono.llm import openai
+from hrono.llm.ledger import metered
 from hrono.llm.providers import provider_for
+
+LOCAL = "local"  # the ledger's provider for a model loaded in process
 
 Builder = Callable[[JobContext, dict[str, object]], Encoder]
 
@@ -40,13 +43,17 @@ def encoder_for_model(
     config: dict[str, object],
     local: object,
 ) -> Encoder:
-    """Build the encoder this model asks for: in process, or over HTTP."""
+    """Build the encoder this model asks for: in process, or over HTTP.
+
+    Either way each batch it embeds is recorded in the usage ledger (#201).
+    """
     if config.get("connection") is None:
-        return local(str(config["model"]))  # type: ignore[operator, no-any-return]
+        encode = local(str(config["model"]))  # type: ignore[operator]
+        return metered(encode, context, config, provider=LOCAL)
     provider = provider_for(context, config)
     builder = ENCODERS.get(provider)
     if builder is None:
         raise EmbedError(
             f"provider cannot serve an embedding model: {provider}"
         )
-    return builder(context, config)
+    return metered(builder(context, config), context, config, provider=provider)

@@ -78,7 +78,7 @@ def propagate(
     if not topics:
         return _outcome(())
 
-    completion = client if client is not None else client_for(context, model)
+    completion = client_for(context, model, "judge", client=client)
     spent: list[tuple[int, int]] = []
     verdicts = [
         (topic, _judge(completion, model, template, topic, spent))

@@ -11,7 +11,7 @@ import sqlite3
 
 _COLUMNS = (
     "id, parent_id, tree, op, scope, status, error, error_code, "
-    "error_details, result, created_at, updated_at"
+    "error_details, result, started_by, created_at, updated_at"
 )
 
 
@@ -23,13 +23,14 @@ def insert(
     op: str,
     scope: str,
     now: str,
+    started_by: str | None = None,
 ) -> None:
     with conn:
         conn.execute(
-            "INSERT INTO jobs "
-            "(id, parent_id, tree, op, scope, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
-            (job_id, parent_id, tree, op, scope, now, now),
+            "INSERT INTO jobs (id, parent_id, tree, op, scope, status, "
+            "started_by, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
+            (job_id, parent_id, tree, op, scope, started_by, now, now),
         )
 
 
@@ -41,6 +42,7 @@ def create_fanout(
     leaves: list[tuple[str, str]],
     tree: str | None,
     now: str,
+    started_by: str | None = None,
 ) -> None:
     """Insert a parent and its leaves atomically (one transaction).
 
@@ -52,14 +54,16 @@ def create_fanout(
     with conn:
         conn.execute(
             "INSERT INTO jobs (id, parent_id, tree, op, scope, status, "
-            "created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)",
-            (parent_id, tree, op, scope, parent_status, now, now),
+            "started_by, created_at, updated_at) "
+            "VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)",
+            (parent_id, tree, op, scope, parent_status, started_by, now, now),
         )
         conn.executemany(
             "INSERT INTO jobs (id, parent_id, tree, op, scope, status, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+            "started_by, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
             [
-                (leaf_id, parent_id, tree, op, leaf_scope, now, now)
+                (leaf_id, parent_id, tree, op, leaf_scope, started_by, now, now)
                 for leaf_id, leaf_scope in leaves
             ],
         )

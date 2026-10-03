@@ -118,5 +118,7 @@ def sync_from_the_page(tree: str, request: Request, user: Writer) -> Response:
 
     Redirect-after-POST so a refresh does not start a second run.
     """
-    enqueue(request.app.state.db, "sync-tree", {}, tree=tree)
+    enqueue(
+        request.app.state.db, "sync-tree", {}, tree=tree, started_by=user.name
+    )
     return RedirectResponse(f"/ui?tree={tree}", status_code=303)

@@ -36,10 +36,19 @@ class LLMError(DomainError):
 
 @dataclass(frozen=True)
 class Usage:
-    """Token accounting for one completion (drives cost/provenance later)."""
+    """Token accounting for one completion (drives cost/provenance later).
+
+    ``input_tokens`` never includes cached input: a provider that reports a
+    cache hit or a cache write has it in ``cache_read`` / ``cache_creation``,
+    and one that reports neither leaves them None, which is unknown rather than
+    zero (#201). ``model`` is what the provider says it ran.
+    """
 
     input_tokens: int
     output_tokens: int
+    cache_read: int | None = None
+    cache_creation: int | None = None
+    model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,13 +135,23 @@ def _read(response: object) -> CompletionResult:
     blocks = getattr(response, "content", None) or []
     text = "".join(getattr(block, "text", "") for block in blocks)
     usage = getattr(response, "usage", None)
+    model = getattr(response, "model", None)
     return CompletionResult(
         text=text,
         usage=Usage(
             input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
             output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+            cache_read=_count(getattr(usage, "cache_read_input_tokens", None)),
+            cache_creation=_count(
+                getattr(usage, "cache_creation_input_tokens", None)
+            ),
+            model=model if isinstance(model, str) else None,
         ),
     )
+
+
+def _count(value: object) -> int | None:
+    return value if isinstance(value, int) else None
 
 
 def _default_invoke(
