@@ -30,4 +30,13 @@ __pycache__/
 .venv/
 .hrono/
 .autodev/
-.e2e/
+
+# .e2e/ holds hand-run evaluations and their scratch homes, which stay local.
+# The export evaluation's runner and question set are the exception (E004): a
+# repeatable measurement that lived in one working copy would be repeatable on
+# one machine (#171). Its runs go under .e2e/eval/runs/ and stay ignored.
+.e2e/*
+!/.e2e/eval/
+!/.e2e/eval/run.py
+!/.e2e/eval/questions.toml
+!/.e2e/eval/README.md

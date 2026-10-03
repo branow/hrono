@@ -105,6 +105,15 @@ dry-run). It has not been run against a large corpus in anger; recall costs
 about 0.011 ms per passage per query, so a corpus of a few hundred thousand
 passages is the first size where that is worth re-measuring.
 
+## Evaluating the export
+
+Whether an agent finds things in an export faster than in the raw repository
+is measured, not assumed: `.e2e/eval/` runs headless Claude Code over exports
+at several hop limits and over the raw checkout, asks the same questions with
+known answers, and reports reads, tokens, time and correctness side by side.
+It costs money, so it is run by hand; [its README](.e2e/eval/README.md) says
+how.
+
 ## CI
 
 Every push to `main` and every pull request runs the same gate
