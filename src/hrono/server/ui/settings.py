@@ -41,6 +41,9 @@ It is the first section and the one the page lands on.
 from __future__ import annotations
 
 import json
+import os
+import sqlite3
+from importlib.metadata import version
 from urllib.parse import parse_qs, urlencode
 
 from fastapi import Request
@@ -48,13 +51,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth.users import User
 from hrono.errors import AppError, NotFound
-from hrono.registry import engine, store
+from hrono.registry import completeness, engine, impact, store
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import decrypt, unmask
 from hrono.server import config_view, forms
 from hrono.server.auth import allows, require_role
 from hrono.server.ui import Reader, _trees, router, templates
+from hrono.summarize import pool
 
 FROZEN = (
     "a shipped default cannot be edited — reset it, or add your own beside it"
@@ -336,6 +340,8 @@ def _render(
             ]
             for descriptor in COLLECTIONS
         }
+        gaps = completeness.gaps(conn)
+        environment = _environment(conn)
     showing = _showing(section, edit, add, delete)
     opened, open_name = _split(edit)
     doomed_in, doomed = _split(delete)
@@ -368,11 +374,38 @@ def _render(
                 draft=draft,
             ),
             "can_write": user.role in {"writer", "admin"},
+            "gaps": gaps,
+            "environment": environment,
             "done": done,
             "error": error,
             "draft": draft,
         },
     )
+
+
+def _environment(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    """What the server's environment sets, which no registry write changes.
+
+    The database path is asked of the connection itself rather than of the
+    app's arguments, so an app built over an injected connection reports the
+    file it is really on.
+    """
+    files = {
+        str(row["name"]): str(row["file"])
+        for row in conn.execute("PRAGMA database_list").fetchall()
+    }
+    return [
+        ("Version", version("hrono")),
+        ("Database", files.get("main") or "in memory"),
+        ("LLM calls at once", _width()),
+    ]
+
+
+def _width() -> str:
+    """The LLM pool width, and whether the environment or the default set it."""
+    if os.environ.get(pool.ENV_WIDTH) is None:
+        return f"{pool.width()} (the default; {pool.ENV_WIDTH} changes it)"
+    return f"{pool.width()} (from {pool.ENV_WIDTH})"
 
 
 def _showing(section: str, edit: str, add: str, delete: str) -> str:
@@ -476,9 +509,30 @@ def _collection(
             "note": ""
             if doomed.is_default
             else _delete_note(descriptor, doomed.name, request),
+            "impact": _removal(descriptor, doomed, request),
         },
         "draft": refused,
     }
+
+
+def _removal(
+    descriptor: Descriptor, row: config_view.Row, request: Request
+) -> list[object]:
+    """What removing this row would strand, asked BEFORE the button is.
+
+    A shipped default resets rather than deletes, so its impact is the edit
+    back to what shipped — the same preview a save would show.
+    """
+    shipped = next(
+        (d for d in descriptor.defaults if d.get("name") == row.name), None
+    )
+    with request.app.state.db.connect() as conn:
+        found = (
+            impact.preview(conn, descriptor.collection, row.name, shipped)
+            if row.is_default and shipped is not None
+            else impact.of_delete(conn, descriptor.collection, row.name)
+        )
+    return list(impact.as_json(found)["affected_trees"])  # type: ignore[call-overload]
 
 
 def _held_config(

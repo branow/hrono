@@ -85,6 +85,13 @@ HTML, and every view is a URL you can paste to someone else. Manual tree
 surgery — rename, brief, notes, reparent, merge, dissolve, split, move a chunk
 — is there for admins.
 
+Settings shows one collection at a time — trees, sources, connections, models,
+prompts — as a table, with each field of a form labelled and explained. It says
+at the top whether the registry is complete enough to build (a role with no
+model, a model whose connection is gone), and a delete or a reset shows what it
+would leave stale before you confirm it. The values the server's environment
+sets — version, database path, `HRONO_LLM_CONCURRENCY` — are shown read-only.
+
 ## In-process embedding
 
 Embedding sources locally (for clustering and recall) uses the heavyweight

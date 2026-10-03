@@ -56,6 +56,29 @@
 {% endif %}
 {% endmacro %}
 
+{% macro removal_of(hits, verb) %}
+{% if hits %}
+<div class="callout warn">
+  <div class="body">
+    <div class="title">Nothing {{ verb }} yet — this is what it would do</div>
+    {% for hit in hits %}
+    <p class="hint">
+      <strong>{{ "every tree" if hit.tree == "*" else hit.tree }}</strong>{% if hit.stale.nodes %}: {{ hit.stale.nodes }} topic{{ "" if hit.stale.nodes == 1 else "s" }}{% if hit.stale.levels %} at level {{ hit.stale.levels|join(", ") }}{% endif %}{% if hit.stale.sections %}, holding {{ hit.stale.sections }} section{{ "" if hit.stale.sections == 1 else "s" }}{% endif %}{% endif %}
+      — {{ hit.reason }}.{% if hit.ops %} Redone by: {{ hit.ops|join(", ") }}.{% endif %}
+      {% if hit.estimated_cost %}
+      <br>About {{ hit.estimated_cost.brief_calls }} brief call{{ "" if hit.estimated_cost.brief_calls == 1 else "s" }}{% if hit.estimated_cost.tokens %}, {{ hit.estimated_cost.tokens.input }} tokens in and {{ hit.estimated_cost.tokens.output }} out{% endif %} ({{ hit.estimated_cost.basis }}).
+      {% endif %}
+    </p>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="callout ok">
+  <div class="body"><p class="hint">Nothing in any tree goes stale or stops working.</p></div>
+</div>
+{% endif %}
+{% endmacro %}
+
 {% macro input_for(field, id) %}
 {% if field.kind == "choice" %}
 <select id="{{ id }}" name="{{ field.input_name }}">
@@ -112,7 +135,7 @@
       {% endif %}
       {{ input_for(field, id) }}
       {% if field.help %}<p class="hint">{{ field.help }}</p>{% endif %}
-      {% if field.kind == "secret" %}<p class="hint">Leave it as <code>***</code> to keep the credential already stored.</p>{% endif %}
+      {% if field.kind == "secret" and field.value == "***" %}<p class="hint">Leave it as <code>***</code> to keep the credential already stored.</p>{% endif %}
     </div>
     {% endfor %}
   </fieldset>
@@ -130,6 +153,21 @@
 <div class="page-head">
   <h1>Settings<span class="tip" tabindex="0" role="note" data-tip="What hrono reads, which models write, and which sources each tree maps. Secrets are masked before they reach this page and stay as they are unless you type over them">?</span></h1>
 </div>
+
+{% if gaps %}
+<div class="callout warn mb-3" id="missing">
+  <div class="body">
+    <div class="title">Not ready to build — {{ gaps|length }} thing{{ "" if gaps|length == 1 else "s" }} missing</div>
+    <ul class="field-errors">
+      {% for gap in gaps %}
+      <li><a href="/ui/config?tree={{ tree }}&amp;section={{ gap.section }}">{{ gap.section|capitalize }}</a> {{ gap.says }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% else %}
+<p class="hint mb-3" id="missing"><span class="chip ok">ready to build</span> Every role has a model and a prompt, and every model's connection is registered.</p>
+{% endif %}
 
 <nav class="subnav" aria-label="settings">
   {% for s in sections %}
@@ -179,8 +217,11 @@
   {% elif c.mode == "delete" %}
     {% if c.doomed.is_default %}
     <p class="hint">This puts back the configuration hrono shipped with, discarding any change.</p>
-    <pre class="preview">{{ c.doomed.config }}</pre>
-    {% elif c.doomed.note %}
+    {{ removal_of(c.doomed.impact, "reset") }}
+    {% else %}
+    {{ removal_of(c.doomed.impact, "deleted") }}
+    {% endif %}
+    {% if c.doomed.note %}
     <div class="callout warn">
       <div class="body"><div class="title">Before you delete {{ c.doomed.name }}</div><p class="hint">{{ c.doomed.note }}</p></div>
     </div>
@@ -284,5 +325,14 @@
   </div>
   {% endif %}
 {% endif %}
+</section>
+
+<section class="env" aria-labelledby="env-head">
+  <h2 id="env-head">Set by the server's environment<span class="tip" tabindex="0" role="note" data-tip="Read-only here: these come from how hrono serve was started, not from anything saved on this page">?</span></h2>
+  <dl>
+    {% for label, value in environment %}
+    <div><dt>{{ label }}</dt><dd><code>{{ value }}</code></dd></div>
+    {% endfor %}
+  </dl>
 </section>
 {% endblock %}

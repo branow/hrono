@@ -126,6 +126,192 @@ def preview(
     return ()
 
 
+def of_delete(
+    conn: sqlite3.Connection, collection: str, name: str
+) -> tuple[TreeImpact, ...]:
+    """What deleting this row would leave stale or broken, before it goes.
+
+    The same rule as `preview`: what the system would actually do. Freshness
+    keys on the model NAME and the prompt HASH, so removing a model or a
+    prompt strands exactly what it wrote; removing a source strands nothing
+    and stops its sections following the repository; removing a connection
+    rewrites nothing and breaks the models that call through it. A tree's
+    own delete is `trees._before_delete`'s note, not a count (#167).
+    """
+    if collection == "sources":
+        return _source_removal(conn, name)
+    if collection == "models":
+        return _model_removal(conn, name)
+    if collection == "prompts":
+        return _prompt_removal(conn, name)
+    if collection == "connections":
+        return _connection_removal(conn, name)
+    return ()
+
+
+def _source_removal(
+    conn: sqlite3.Connection, name: str
+) -> tuple[TreeImpact, ...]:
+    """Nothing is pulled out: `scoped_sources` skips an unregistered source,
+    and the cluster scope is the tree's own list, so its sections stay."""
+    impacts = []
+    for tree in _trees(conn):
+        held = _sections_from(conn, tree, name)
+        if not held:
+            continue
+        named = name in (sources_of(conn, tree) or ())
+        impacts.append(
+            TreeImpact(
+                tree=tree,
+                stale=Stale(
+                    sections=held, nodes=_holders(conn, tree, name), levels=()
+                ),
+                ops=(),
+                reason=(
+                    "hrono stops syncing this source: its sections stay in "
+                    "the tree as they are and no longer follow the "
+                    "repository"
+                    + (
+                        ". The tree's config still names it, so saving that "
+                        "tree again is refused until the name is removed"
+                        if named
+                        else ""
+                    )
+                ),
+            )
+        )
+    return tuple(impacts)
+
+
+def _sections_from(conn: sqlite3.Connection, tree: str, source: str) -> int:
+    row = conn.execute(
+        "SELECT COUNT(DISTINCT m.section_id) AS n FROM node_members m "
+        "JOIN nodes n ON n.id = m.node_id "
+        "JOIN sections s ON s.id = m.section_id "
+        "WHERE n.tree = ? AND s.source = ?",
+        (tree, source),
+    ).fetchone()
+    return int(row["n"])
+
+
+def _model_removal(
+    conn: sqlite3.Connection, name: str
+) -> tuple[TreeImpact, ...]:
+    """Everything recorded under this model's name is redone by whichever
+    model the role resolves to next — or the run fails, if none is left."""
+    impacts = []
+    for tree in _trees(conn):
+        written = _brief_count(conn, tree, name)
+        if not written:
+            continue
+        levels = tuple(level for level, _ in _model_levels(conn, tree, name))
+        impacts.append(
+            TreeImpact(
+                tree=tree,
+                stale=Stale(sections=0, nodes=written, levels=levels),
+                ops=("brief",),
+                reason=(
+                    "these briefs were written by this model; the next run "
+                    "rewrites them with the model left for their role, or "
+                    "fails if there is none"
+                ),
+                estimate=estimate(conn, tree, levels, written),
+            )
+        )
+    for table, what, op in (
+        ("condensations", "condensation", "condense"),
+        ("embeddings", "section vector", "embed"),
+    ):
+        made = _made_by(conn, table, name)
+        if made:
+            impacts.append(
+                TreeImpact(
+                    tree="*",
+                    stale=Stale(sections=made, nodes=0, levels=()),
+                    ops=(op,),
+                    reason=(
+                        f"{made} {what}(s) are stored under this model's "
+                        f"name; the next run makes them again with the model "
+                        f"left for {op}"
+                    ),
+                )
+            )
+    return tuple(impacts)
+
+
+def _made_by(conn: sqlite3.Connection, table: str, name: str) -> int:
+    row = conn.execute(
+        f"SELECT COUNT(*) AS n FROM {table} WHERE model_name = ?", (name,)
+    ).fetchone()
+    return int(row["n"])
+
+
+def _prompt_removal(
+    conn: sqlite3.Connection, name: str
+) -> tuple[TreeImpact, ...]:
+    """A brief records its template's hash, so removing a brief prompt
+    strands what it wrote; a condense or judge prompt strands nothing."""
+    current = _current(conn, "prompts", name)
+    role = str(current.get("role", ""))
+    if role not in (LEAF_ROLE, UPPER_ROLE):
+        return ()
+    written = template_hash(str(current.get("template", "")))
+    impacts = []
+    for tree in _trees(conn):
+        rows = conn.execute(
+            "SELECT n.level AS level FROM briefs b "
+            "JOIN nodes n ON n.id = b.node_id "
+            "WHERE n.tree = ? AND b.prompt_hash = ?",
+            (tree, written),
+        ).fetchall()
+        if not rows:
+            continue
+        levels = tuple(sorted({int(row["level"]) for row in rows}))
+        impacts.append(
+            TreeImpact(
+                tree=tree,
+                stale=Stale(sections=0, nodes=len(rows), levels=levels),
+                ops=(role,),
+                reason=(
+                    f"these briefs were written under this template; the "
+                    f"next run rewrites them under the {role} prompt that is "
+                    f"left, or fails if there is none"
+                ),
+                estimate=estimate(conn, tree, levels, len(rows)),
+            )
+        )
+    return tuple(impacts)
+
+
+def _connection_removal(
+    conn: sqlite3.Connection, name: str
+) -> tuple[TreeImpact, ...]:
+    """Nothing goes stale; the models that call through it stop working."""
+    users = _callers(conn, name)
+    if not users:
+        return ()
+    return (
+        TreeImpact(
+            tree="*",
+            stale=Stale(sections=0, nodes=0, levels=()),
+            ops=(),
+            reason=(
+                "nothing goes stale, but these models call through it and "
+                "cannot be called until they point at another connection: "
+                + ", ".join(users)
+            ),
+        ),
+    )
+
+
+def _callers(conn: sqlite3.Connection, connection: str) -> list[str]:
+    return sorted(
+        str(json.loads(row["config"]).get("name"))
+        for row in store.list_all(conn, "models")
+        if json.loads(row["config"]).get("connection") == connection
+    )
+
+
 def _current(
     conn: sqlite3.Connection, collection: str, name: str
 ) -> dict[str, object]:
@@ -410,11 +596,7 @@ def _connection_impact(
     conn: sqlite3.Connection, name: str
 ) -> tuple[TreeImpact, ...]:
     """A credential edit changes no output; it can break the models on it."""
-    users = [
-        str(json.loads(row["config"]).get("name"))
-        for row in store.list_all(conn, "models")
-        if json.loads(row["config"]).get("connection") == name
-    ]
+    users = _callers(conn, name)
     if not users:
         return ()
     return (
@@ -424,7 +606,7 @@ def _connection_impact(
             ops=(),
             reason=(
                 "nothing goes stale — a connection carries the credential, not "
-                f"the words. It is used by: {', '.join(sorted(users))}"
+                f"the words. It is used by: {', '.join(users)}"
             ),
         ),
     )

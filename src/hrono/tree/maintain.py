@@ -34,6 +34,7 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages
 from hrono.registry.collections.trees import scoped_sources
+from hrono.registry.completeness import BUILD_ROLES
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense
@@ -42,8 +43,9 @@ from hrono.tree import changes
 
 _DEFAULT_TREE = "default"
 
-# The roles this chain will ask for, in the order it asks for them.
-_ROLES = ("condense", "brief", "brief-upper")
+# The roles this chain will ask for, in the order it asks for them — the same
+# tuple Settings checks before anyone starts a build (#210).
+_ROLES = BUILD_ROLES
 
 
 def _require_models(conn: sqlite3.Connection) -> None:

@@ -30,6 +30,7 @@ import json
 import re
 import subprocess
 from collections.abc import Iterator
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -1026,3 +1027,102 @@ def test_an_empty_collection_says_so(browser: Browser) -> None:
     browser.sign_in()
 
     assert "no models yet" in browser.config(section="models")
+
+
+# ------------------------------------------- delete, completeness, environment
+
+
+def test_delete_shows_what_it_would_strand_before_confirming(
+    browser: Browser,
+) -> None:
+    """#210: delete was a checkbox under every row, with nothing said about
+    what it took with it. It is now a row action that leads here first — and
+    the count is of the briefs that template actually wrote."""
+    browser.sign_in()
+    browser.item(
+        "prompts",
+        **{"f.name": "mine", "f.role": "brief", "f.template": "S {content}"},
+    )
+    _brief_written_by(
+        browser, _a_topic_in(browser, "default"), "mine", "S {content}"
+    )
+
+    listing = browser.config(section="prompts")
+    page = browser.config(delete="prompts:mine")
+
+    assert "delete=prompts:mine" in listing
+    assert "Nothing deleted yet — this is what it would do" in page
+    assert "<strong>default</strong>: 1 topic at level 0" in page
+    assert 'name="confirm" value="1"' in page
+    assert browser.stored("prompts", "mine") is not None  # only shown
+
+    browser.remove("prompts", "mine", confirm="1")
+
+    assert browser.stored("prompts", "mine") is None
+
+
+@pytest.mark.parametrize(
+    ("current", "said"),
+    [
+        ("drifted {content}", "1 topic at level 0"),
+        (None, "Nothing in any tree goes stale"),
+    ],
+    ids=["drifted", "as-shipped"],
+)
+def test_a_reset_shows_what_going_back_to_the_default_would_strand(
+    browser: Browser, current: str | None, said: str
+) -> None:
+    """A shipped default resets rather than deletes, so its preview is the
+    edit BACK to what shipped: briefs written under a drifted template go
+    stale, and a default that never drifted strands nothing — even though
+    every brief it wrote carries its hash, which a delete would count."""
+    browser.sign_in()
+    shipped = browser.stored("prompts", "brief")
+    template = current or str(shipped["template"])  # type: ignore[index]
+    registry_store.replace(
+        browser.conn,  # type: ignore[arg-type]
+        "prompts",
+        "brief",
+        json.dumps({**shipped, "template": template}),  # type: ignore[dict-item]
+        None,
+        "t",
+    )
+    node = _a_topic_in(browser, "default")
+    _brief_written_by(browser, node, "brief", template)
+
+    page = browser.config(delete="prompts:brief")
+
+    assert "Reset brief" in page
+    assert said in page
+
+
+def test_the_page_says_what_is_missing_to_build(browser: Browser) -> None:
+    """The fixture registers no model, so every role is unserved — and the
+    page names each, linked to the section that fixes it."""
+    browser.sign_in()
+
+    page = browser.config(section="sources")
+
+    assert "Not ready to build" in page
+    assert "role brief: no text model available" in page
+    assert "embedding: no embedding model available" in page
+    assert (
+        'href="/ui/config?tree=default&amp;section=models">Models</a>' in page
+    )
+
+
+def test_environment_values_are_shown_read_only(
+    browser: Browser, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("HRONO_LLM_CONCURRENCY", "7")
+    browser.sign_in("reader")
+
+    page = browser.config()
+
+    assert str(tmp_path / "hrono.db") in page
+    assert "7 (from HRONO_LLM_CONCURRENCY)" in page
+    assert version("hrono") in page
+    monkeypatch.delenv("HRONO_LLM_CONCURRENCY")
+    assert "4 (the default; HRONO_LLM_CONCURRENCY changes it)" in (
+        browser.config()
+    )
