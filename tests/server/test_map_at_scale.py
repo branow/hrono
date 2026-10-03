@@ -320,6 +320,10 @@ def test_a_topic_with_arcs_left_out_says_how_many_and_opens_them(
     mine = re.findall(r'<path d="[^"]+" class="link', alone)
     assert 0 < len(mine) <= ARC_CAP
     assert "Only this topic" in alone  # and the way back to the whole map
+    tip = re.search(r'data-tip="([^"]*)"[^>]*>Only this topic', alone)
+    assert tip, "the way back has no tooltip"
+    # Topic names end in a full stop; the copy must not stack another on it.
+    assert ".." not in tip.group(1)
 
 
 def test_a_chip_sits_clear_of_every_topics_words(scale: Scale) -> None:
