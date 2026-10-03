@@ -11,7 +11,10 @@ Lock discipline mirrors #035/#040: load the pending sections + the cached
 hashes UNDER the #008 lock, release it, make each LLM call OUTSIDE the lock, and
 re-acquire only to persist that one result — so a section that fails its call
 fails the leaf cleanly while every section condensed before it is kept, and an
-idempotent re-run fills only the gaps. No token cap and no truncation: the
+idempotent re-run fills only the gaps. A section the model refuses twice is
+recorded as refused for this model and prompt (E015), so a re-run skips it
+until its body, the model or the prompt changes, instead of paying two calls
+on every sync to be refused again. No token cap and no truncation: the
 recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
 
 Because the calls are keyed by CONTENT HASH they are independent of each other,
@@ -52,7 +55,8 @@ def condense(
         model = resolve_text_model(conn, job.scope, "condense")
         model_name = str(model["name"])
         _, template = resolve_prompt(conn, "condense")
-        sections = store.pending(conn, model_name)
+        request = store.request_for(model, template)
+        sections = store.pending(conn, model_name, request=request)
     if not sections:
         return {"condensed": 0}
 
@@ -70,9 +74,12 @@ def condense(
 
     def keep(section: Section, made: tuple[CompletionResult, str]) -> None:
         result, refused = made
-        if refused:
-            return  # never cached: the section stays pending (#221)
         with context.database.write() as conn:
+            if refused:  # never cached (#221), but never re-paid either (E015)
+                store.refuse(
+                    conn, section[0], model_name, request, refused, result.text
+                )
+                return
             store.replace(
                 conn,
                 section[0],

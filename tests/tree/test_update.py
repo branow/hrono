@@ -19,7 +19,8 @@ from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.summarize import store as condensations
-from hrono.summarize.resolve import resolve_text_model
+from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.shape import talks_back
 from hrono.tree.maintain import maintain
 from hrono.tree.settle import settle
 from hrono.tree.update import update
@@ -917,6 +918,137 @@ def test_an_update_over_unchanged_content_redoes_a_talked_back_condensation(
     assert client.calls == 1  # exactly the one, nothing else re-condensed
     with db.connect() as conn:
         assert condensations.unusable(conn, model) == ()
+
+
+class Refusing(FakeCompletion):
+    """Talks back whenever the section is f4's, condenses everything else."""
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        if "module 4" not in request.content:
+            return super().complete(request)
+        self.calls += 1
+        return CompletionResult(_TALKED_BACK, Usage(10, 4))
+
+
+def _talk_back_on_f4(db: Database) -> tuple[str, str]:
+    """Store a talk-back as f4's condensation, as a run before #221 did."""
+    with db.connect() as conn, conn:
+        model = str(resolve_text_model(conn, {}, "condense")["name"])
+        digest = conn.execute(
+            "SELECT content_hash FROM sections WHERE path = 'f4.txt'"
+        ).fetchone()[0]
+        conn.execute(
+            "DELETE FROM condensations WHERE content_hash = ?", (digest,)
+        )
+        condensations.upsert(conn, digest, model, _TALKED_BACK, 1, 1)
+    return model, digest
+
+
+def _refusing_update(db: Database, tmp_path: Path) -> Refusing:
+    client = Refusing()
+    update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=client,
+    )
+    return client
+
+
+def test_a_refused_redo_is_not_paid_again_on_an_unchanged_sync(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # E015: a refusal is never cached, so the talk-back stayed and every sync
+    # of a steady tree paid two calls to be refused again, forever
+    db, _ = built
+    model, digest = _talk_back_on_f4(db)
+
+    first = _refusing_update(db, tmp_path)
+    second = _refusing_update(db, tmp_path)
+
+    with db.connect() as conn:
+        listed = [d for d, _, _ in condensations.unusable(conn, model)]
+        request = condensations.request_for(
+            resolve_text_model(conn, {}, "condense"),
+            resolve_prompt(conn, "condense")[1],
+        )
+        held = condensations.redo(conn, model, request)
+    assert first.calls == 2  # the redo and its one retry
+    assert second.calls == 0
+    assert held == ()  # nothing for a steady sync to run condense for
+    assert listed == [digest]  # still on the operator's list
+
+
+def test_a_refused_section_with_nothing_stored_is_listed_and_held(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # a NEW body refused on its first condense has no row to fail the gate;
+    # it is listed from its refusal and not retried by the next changed sync
+    db, origin = built
+    edit(origin, "f4.txt", "module 4 was rewritten and the model refuses\n")
+    first = _refusing_update(db, tmp_path)
+    edit(origin, "f0.txt", "module 0 changed as well\n")
+
+    second = _refusing_update(db, tmp_path)
+
+    with db.connect() as conn:
+        model = str(resolve_text_model(conn, {}, "condense")["name"])
+        listed = condensations.unusable(conn, model)
+    assert first.calls == 2
+    assert second.calls == 1  # f0's new body only
+    assert [(why, text) for _, why, text in listed] == [
+        ("asks-the-caller", _TALKED_BACK)
+    ]
+
+
+def test_a_changed_body_is_condensed_after_a_refusal(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    model, digest = _talk_back_on_f4(db)
+    _refusing_update(db, tmp_path)
+    edit(origin, "f4.txt", "the file is now about something else\n")
+
+    again = _refusing_update(db, tmp_path)
+
+    with db.connect() as conn:
+        now = conn.execute(
+            "SELECT content_hash FROM sections WHERE path = 'f4.txt'"
+        ).fetchone()[0]
+        kept = condensations.get(conn, now, model)
+    assert now != digest
+    assert again.calls == 1  # the new body, condensed
+    assert kept is not None and not talks_back(kept["text"])
+
+
+@pytest.mark.parametrize(
+    ("collection", "name", "field", "value"),
+    [
+        pytest.param("models", "sonnet", "model", "claude-2", id="model"),
+        pytest.param("prompts", "condense", "template", "Y {content}", id="p"),
+    ],
+)
+def test_a_changed_model_or_prompt_retries_a_refusal(
+    built: tuple[Database, Path],
+    tmp_path: Path,
+    collection: str,
+    name: str,
+    field: str,
+    value: str,
+) -> None:
+    db, _ = built
+    _talk_back_on_f4(db)
+    _refusing_update(db, tmp_path)
+    with db.connect() as conn, conn:
+        row = registry_store.get(conn, collection, name)
+        config = {**json.loads(row["config"]), field: value}
+        registry_store.replace(
+            conn, collection, name, json.dumps(config), None, "t2"
+        )
+
+    again = _refusing_update(db, tmp_path)
+
+    assert again.calls == 2  # asked again under the new request
 
 
 def test_an_update_with_nothing_to_do_needs_no_text_model(

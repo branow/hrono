@@ -159,10 +159,13 @@ def unusable_briefs(
 def unusable_condensations(
     name: str, request: Request, _: Reader
 ) -> dict[str, object]:
-    """Stored condensations in this tree that are the model talking back.
+    """Condensations in this tree that are the model talking back.
 
     The condense stage treats each as missing, so the next sync re-condenses
-    exactly these sections and rewrites the briefs that read them (#221).
+    exactly these sections and rewrites the briefs that read them (#221). One
+    the model refuses again stays listed — with its last reply, even when
+    nothing was ever stored — and is not retried until its body, the condense
+    model or the condense prompt changes (E015).
     """
     with request.app.state.db.connect() as conn:
         model = str(resolve_text_model(conn, {}, "condense")["name"])

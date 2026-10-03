@@ -46,6 +46,10 @@ those, and on an unchanged corpus — the usual state of a tree an operator is
 asking that of — the guard above meant no sync ever did (E001's e2e). So the
 stage also runs when the condense model has one; with no condense model there
 is nothing stored under it to redo, and the no-op run still asks for nothing.
+A talk-back the model has already refused to redo for the same model and
+prompt does not count (E015): it stays listed, and the next try waits for its
+body, the model or the prompt to change, rather than costing two calls on
+every sync of a steady tree.
 
 Accepting LLM calls inside ``update`` is the decision this ticket made: the
 promise is that work is proportional to the change, not that the op is free —
@@ -92,7 +96,7 @@ from hrono.llm.client import LLMError
 from hrono.registry.collections.trees import scoped_sources
 from hrono.summarize import store as condensations
 from hrono.summarize.condense import condense
-from hrono.summarize.resolve import resolve_text_model
+from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
 _DEFAULT_TREE = "default"
 
@@ -122,13 +126,19 @@ def update(
 
 
 def _talked_back(context: JobContext) -> bool:
-    """Does the condense model hold a stored reply that talked back (#221)?"""
+    """Is there a reply that talked back (#221) this request may still redo?
+
+    One already refused for the same model and prompt is not (E015): a sync
+    over an unchanged corpus would otherwise pay two calls for it every time.
+    """
     with context.database.connect() as conn:
         try:
             model = resolve_text_model(conn, {}, "condense")
+            _, template = resolve_prompt(conn, "condense")
         except LLMError:
             return False  # no condense model: nothing stored under it to redo
-        return bool(condensations.unusable(conn, str(model["name"])))
+        request = condensations.request_for(model, template)
+        return bool(condensations.redo(conn, str(model["name"]), request))
 
 
 def _outcome(

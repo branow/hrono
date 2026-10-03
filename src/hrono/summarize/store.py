@@ -5,33 +5,42 @@ returns the distinct SECTION content hashes (bodies, not passages or paths) that
 have no condensation for the target model yet, so a re-run condenses nothing and
 a model swap re-condenses under the new key. ``upsert`` stores one condensation
 once; a repeat key is a no-op.
+
+A section the model REFUSED (``refuse``) is held back from ``pending`` while the
+request is the same one it refused (E015): a refusal is never cached as a
+condensation (#221), so without the record every sync paid two calls to be
+refused again, forever. ``request_for`` is what "the same request" means.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
+from hrono.summarize.resolve import model_fingerprint, template_hash
 from hrono.summarize.shape import talks_back
 
 
 def pending(
-    conn: sqlite3.Connection, model_name: str
+    conn: sqlite3.Connection, model_name: str, *, request: str | None = None
 ) -> tuple[tuple[str, bytes], ...]:
     """Return (content_hash, body) for sections not yet condensed for a model.
 
     Distinct section content hashes only — passage and path bodies never
     condense. A stored condensation that is the model talking back counts as
     MISSING (#221): it was cached by content hash forever, and every brief over
-    that section read it as source.
+    that section read it as source. A section already refused for ``request``
+    is left out (E015); with no ``request``, refusals are not consulted.
 
     Bodies are read only for what is pending. Condense runs on every sync, and
     reading every section body to find the few that changed would make an
     unchanged tree cost its whole corpus in I/O (qa, #221). The selection is
-    set-based and binds two parameters whatever the corpus size: one bound
-    parameter per pending hash fails outright past SQLite's 32,766-variable
-    limit, which is every first build of a large corpus (E001).
+    set-based and binds a fixed number of parameters whatever the corpus size:
+    one bound parameter per pending hash fails outright past SQLite's
+    32,766-variable limit, which is every first build of a large corpus (E001).
     """
     redo = sorted({digest for digest, _, _ in unusable(conn, model_name)})
     rows = conn.execute(
@@ -40,25 +49,94 @@ def pending(
         "WHERE s.source_type != 'node' AND (NOT EXISTS (SELECT 1 FROM "
         "condensations d WHERE d.content_hash = s.content_hash "
         "AND d.model_name = ?) OR s.content_hash IN "
-        "(SELECT value FROM json_each(?))) ORDER BY s.content_hash",
-        (model_name, json.dumps(redo)),
+        "(SELECT value FROM json_each(?))) AND NOT EXISTS (SELECT 1 FROM "
+        "condense_refusals r WHERE r.content_hash = s.content_hash "
+        "AND r.model_name = ? AND r.request = ?) ORDER BY s.content_hash",
+        (model_name, json.dumps(redo), model_name, request),
     ).fetchall()
     return tuple((row["h"], bytes(row["body"])) for row in rows)
+
+
+def redo(
+    conn: sqlite3.Connection, model_name: str, request: str
+) -> tuple[str, ...]:
+    """Hashes whose condensation is not one and that ``request`` may retry.
+
+    What makes a sync over an unchanged corpus run condense at all (E001): a
+    talk-back not yet refused for this request. Once it is, the sync leaves it
+    alone until the body, the model or the prompt changes (E015).
+    """
+    held = {
+        row["content_hash"]
+        for row in conn.execute(
+            "SELECT content_hash FROM condense_refusals "
+            "WHERE model_name = ? AND request = ?",
+            (model_name, request),
+        )
+    }
+    return tuple(
+        digest
+        for digest, _, _ in unusable(conn, model_name)
+        if digest not in held
+    )
 
 
 def unusable(
     conn: sqlite3.Connection, model_name: str
 ) -> tuple[tuple[str, str, str], ...]:
-    """Stored condensations that fail the current gate: (hash, why, text)."""
+    """Condensations that are not ones: (hash, why, text).
+
+    Every stored condensation the current gate fails, and every section the
+    model refused with nothing stored for it — that one has no row in
+    ``condensations`` to fail, and without the refusal it would leave the
+    operator's list while still uncondensed (E015).
+    """
     rows = conn.execute(
         "SELECT content_hash, text FROM condensations WHERE model_name = ? "
         "ORDER BY content_hash",
         (model_name,),
     ).fetchall()
-    return tuple(
+    stored = tuple(
         (row["content_hash"], why, row["text"])
         for row in rows
         if (why := talks_back(row["text"]))
+    )
+    refused = conn.execute(
+        "SELECT r.content_hash, r.reason, r.text FROM condense_refusals r "
+        "WHERE r.model_name = ? AND NOT EXISTS (SELECT 1 FROM condensations "
+        "d WHERE d.content_hash = r.content_hash AND d.model_name = ?) "
+        "ORDER BY r.content_hash",
+        (model_name, model_name),
+    ).fetchall()
+    return stored + tuple(
+        (row["content_hash"], row["reason"], row["text"]) for row in refused
+    )
+
+
+def request_for(model: Mapping[str, object], template: str) -> str:
+    """What a refusal was refused FOR: the model's words and the prompt.
+
+    The model fingerprint (#191) rather than its name, so repointing a name
+    at another upstream model is a new request; the template hash, so an
+    edited prompt is one too.
+    """
+    material = f"{model_fingerprint(model)}:{template_hash(template)}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def refuse(
+    conn: sqlite3.Connection,
+    content_hash: str,
+    model_name: str,
+    request: str,
+    reason: str,
+    text: str,
+) -> None:
+    """Record that ``request`` was refused for a section, over any older."""
+    conn.execute(
+        "INSERT OR REPLACE INTO condense_refusals(content_hash, model_name, "
+        "request, reason, text, refused_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (content_hash, model_name, request, reason, text, _now()),
     )
 
 
