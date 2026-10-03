@@ -35,7 +35,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
-from itertools import combinations
+from operator import add
 
 WIDTH = 40
 
@@ -140,34 +140,66 @@ def shape(tree: ExportTree) -> Shape:
 def _narrowest(stored: StoredTree, levels: int) -> list[int]:
     """The ``levels`` stored levels whose index pages come out narrowest.
 
-    The root level and level 0 are always kept; every choice of the levels
-    between is scored by the widest index page it would make, measured with
-    ``_frontier`` — how many nodes a page at level a lists when the next kept
-    level is b.
+    The root level and level 0 are always kept. A choice of kept levels is a
+    chain from the top down, and each step of the chain is one layer of index
+    pages whose width is ``cost(high, low)`` — the widest page at ``high``
+    when ``low`` is the next level kept. So this is a shortest-path problem,
+    solved in two passes over (level, levels kept so far) rather than by
+    scoring every combination, which grows exponentially with the hop limit
+    (qa measured ~15 minutes for 12 hops on a 30-level tree):
+
+    1. the smallest possible WIDEST page, by a min-max pass;
+    2. among the chains that achieve it, the one with the fewest entries in
+       total, ties to the chain with the lower levels.
     """
-    present = sorted(set(stored.node_level.values()))
-    top, bottom = present[-1], present[0]
-    inner = present[1:-1]
+    present = sorted(set(stored.node_level.values()), reverse=True)
     frontier = _frontier(stored)
-    by_level = {level: _at_level(stored, level) for level in present[1:]}
-
-    def widths(kept: tuple[int, ...]) -> tuple[int, ...]:
-        desc = sorted(kept, reverse=True)
-        return tuple(
-            sorted(
-                (
-                    max((frontier(n, low) for n in by_level[high]), default=0)
-                    for high, low in zip(desc, desc[1:], strict=False)
-                ),
-                reverse=True,
-            )
+    width = {
+        (high, low): max(
+            (frontier(n, low) for n in _at_level(stored, high)), default=0
         )
+        for i, high in enumerate(present)
+        for low in present[i + 1 :]
+    }
+    widest = _best(present, levels, width, max)[0]
+    allowed = {pair: w for pair, w in width.items() if w <= widest}
+    return sorted(_best(present, levels, allowed, add)[1])
 
-    choices = [
-        (bottom, *middle, top) for middle in combinations(inner, levels - 2)
-    ]
-    best = min(choices, key=lambda kept: (widths(kept), kept))
-    return list(best)
+
+def _best(
+    present: list[int],
+    levels: int,
+    width: Mapping[tuple[int, int], int],
+    join: Callable[[int, int], int],
+) -> tuple[int, tuple[int, ...]]:
+    """The cheapest chain of ``levels`` kept levels, top to bottom.
+
+    ``join`` folds one step's width into the chain's cost (``max`` for the
+    widest page, ``+`` for the total); chains compare by cost, then by their
+    levels from the bottom up, so the answer depends on the tree alone.
+    """
+    top, bottom = present[0], present[-1]
+    reach: dict[tuple[int, int], tuple[int, tuple[int, ...]]] = {
+        (top, 1): (0, (top,))
+    }
+    for i, high in enumerate(present):
+        for used in range(1, levels):
+            here = reach.get((high, used))
+            if here is None:
+                continue
+            for low in present[i + 1 :]:
+                if (high, low) not in width:
+                    continue
+                cost = join(here[0], width[(high, low)])
+                step = (cost, (*here[1], low))
+                key = (low, used + 1)
+                if key not in reach or _rank(step) < _rank(reach[key]):
+                    reach[key] = step
+    return reach[(bottom, levels)]
+
+
+def _rank(chain: tuple[int, tuple[int, ...]]) -> tuple[int, tuple[int, ...]]:
+    return chain[0], tuple(sorted(chain[1]))
 
 
 def _frontier(stored: StoredTree) -> Callable[[int, int], int]:

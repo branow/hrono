@@ -1,5 +1,7 @@
 """#204: compaction trades depth for width and says what it got."""
 
+import time
+
 import pytest
 
 from hrono.export.collapse import (
@@ -176,3 +178,84 @@ def test_a_jumped_edge_counts_toward_the_width_it_lands_on() -> None:
 
     assert measured.widest_page == 50
     assert measured.widest_node == 2
+
+
+def broad_deep_tree() -> StoredTree:
+    """26 levels, widening toward the leaves: 8,192 nodes, 2,048 leaves."""
+    node_level: dict[int, int] = {}
+    children: dict[int, list[int]] = {}
+    sections: dict[int, list[int]] = {}
+    ids = iter(range(1, 100_000))
+
+    def build(level: int) -> int:
+        nid = next(ids)
+        node_level[nid] = level
+        if level == 0:
+            sections[nid] = [nid]
+            return nid
+        fan = 2 if level % 2 == 0 and level <= 22 else 1
+        children[nid] = [build(level - 1) for _ in range(fan)]
+        return nid
+
+    return StoredTree(build(25), node_level, children, sections)
+
+
+@pytest.mark.parametrize("limit", [4, 8, 12, 25])
+def test_any_hop_limit_compacts_a_big_deep_tree_quickly(limit: int) -> None:
+    # every combination of kept levels took ~15 minutes at 12 hops on a
+    # 30-level tree (qa); the choice is a shortest path now. Measured on this
+    # tree: 4 hops 0.10 s, 8 hops 0.32 s, 12 hops 0.11 s, 25 hops 0.09 s.
+    stored = broad_deep_tree()
+
+    started = time.perf_counter()
+    tree = collapse(stored, limit)
+    elapsed = time.perf_counter() - started
+
+    assert len(stored.node_level) == 8192
+    assert tree.levels == limit
+    assert set(hops_to_each_section(tree)) == planted(stored)
+    assert elapsed < 2.0
+
+
+def test_a_page_of_exactly_the_budget_is_within_it() -> None:
+    node_level = {1: 1}
+    children = {1: list(range(100, 100 + WIDTH))}
+    sections: dict[int, list[int]] = {}
+    for leaf in children[1]:
+        node_level[leaf] = 0
+        sections[leaf] = [leaf]
+
+    measured = shape(collapse(StoredTree(1, node_level, children, sections), 2))
+
+    assert measured.widest_page == WIDTH
+    assert measured.within_budget
+
+
+def test_the_widest_page_is_minimised_before_the_total() -> None:
+    # keeping level 2 makes two layers of 30; keeping level 1 makes 50 then 2.
+    # Fewer entries in total (52 < 60), but one page of 50: the widest page is
+    # what an agent pays for, so level 2 is kept.
+    ids = iter(range(2, 10_000))
+    node_level = {1: 3}
+    children: dict[int, list[int]] = {1: []}
+    sections: dict[int, list[int]] = {}
+
+    def add(parent: int, level: int) -> int:
+        nid = next(ids)
+        node_level[nid] = level
+        children.setdefault(parent, []).append(nid)
+        if level == 0:
+            sections[nid] = [nid]
+        return nid
+
+    for twos in [15] + [2] * 6 + [1] * 23:
+        middle = add(1, 2)
+        for _ in range(twos):
+            one = add(middle, 1)
+            for _ in range(2 if twos == 15 else 1):
+                add(one, 0)
+
+    tree = collapse(StoredTree(1, node_level, children, sections), 3)
+
+    assert {node_level[n] for n in tree.nodes} == {3, 2, 0}
+    assert shape(tree).widest_page == 30
