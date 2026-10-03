@@ -173,6 +173,10 @@ def test_the_tab_row_names_its_current_page_by_path_alone() -> None:
     assert [t["label"] for t in tabs("/ui/jobs/abc", TREE) if t["current"]] == [
         "Runs"
     ]
+    assert [t["label"] for t in tabs("/ui/jobs/", TREE) if t["current"]] == [
+        "Runs"
+    ]
+    assert [t["label"] for t in tabs("/ui/", TREE) if t["current"]] == ["Home"]
     assert [t["label"] for t in tabs("/ui/trees/x/nodes/9", "x")][2] == "Topic"
     assert "Topic" not in [t["label"] for t in tabs("/ui/trees/x/graph", "x")]
 
@@ -256,7 +260,11 @@ def test_starting_a_sync_comes_back_saying_what_it_started(
     assert 'id="done"' in page
     assert "Started a sync" in page
     run = sent.headers["location"].split("run=")[1]
-    assert f'href="/ui/jobs/{run}?tree={TREE}"' in page
+    # the banner's own link: the page under it may list the same run
+    banner = page[
+        page.index('id="done"') : page.index("</div>", page.index('id="done"'))
+    ]
+    assert f'href="/ui/jobs/{run}?tree={TREE}">Watch it run' in banner
 
 
 def test_stopping_and_re_running_say_what_they_did(browser: Browser) -> None:

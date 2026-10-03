@@ -102,7 +102,15 @@ def _section(conn: sqlite3.Connection, path: str, body: bytes) -> int:
     )
 
 
-def _seed(conn: sqlite3.Connection, repo: Path, commit: str) -> None:
+def _seed(
+    conn: sqlite3.Connection, repo: Path, commit: str, built: bool
+) -> None:
+    if built:
+        _build(conn)
+    _register(conn, repo, commit, built)
+
+
+def _build(conn: sqlite3.Connection) -> None:
     with conn:
         sections = [
             (
@@ -133,6 +141,11 @@ def _seed(conn: sqlite3.Connection, repo: Path, commit: str) -> None:
         cluster_store.add_child(
             conn, parent, leaf, attached=False, similarity=None
         )
+
+
+def _register(
+    conn: sqlite3.Connection, repo: Path, commit: str, ran: bool
+) -> None:
     registry_store.insert(
         conn,
         "sources",
@@ -148,6 +161,8 @@ def _seed(conn: sqlite3.Connection, repo: Path, commit: str) -> None:
         None,
         "t",
     )
+    if not ran:
+        return
     job_store.insert(
         conn,
         "done-1",
@@ -176,13 +191,14 @@ def _free_port() -> int:
 
 
 @contextmanager
-def live_server(tmp_path: Path) -> Iterator[Live]:
+def live_server(tmp_path: Path, built: bool = True) -> Iterator[Live]:
+    """`built=False` is a first run: a source, and no topics or runs yet."""
     repo, commit = _repo(tmp_path / "repo")
     db_path = tmp_path / "hrono.db"
     conn = open_database(db_path)
     reconcile(conn, KEY)
     token = create_user(conn, "admin", "admin")[1]
-    _seed(conn, repo, commit)
+    _seed(conn, repo, commit, built)
     conn.close()
     port = _free_port()
     app = create_app(db_path=db_path, master_key=KEY)
@@ -205,3 +221,4 @@ def live_server(tmp_path: Path) -> Iterator[Live]:
     finally:
         server.should_exit = True
         thread.join(timeout=10)
+        assert not thread.is_alive(), "the server did not shut down"

@@ -47,18 +47,18 @@
 <div class="afloat tl" id="controls">
   <strong class="map-title">{{ tree }}</strong>
   <span class="chip plain num">{{ graph.shown }} drawn</span>
-  <a class="btn small" href="{{ graph.fold.href }}" data-tip="{{ graph.fold.says }}" data-tip-below>{{ graph.fold.label }}</a>
+  <a class="btn small" href="{{ graph.fold.href }}" data-tip="{{ graph.fold.says }}">{{ graph.fold.label }}</a>
   {% if overlay.only %}
-  <a class="btn small" href="{{ overlay.only.href }}" data-tip="Click to draw the strongest arcs of the whole map again. Showing only the arcs of: {{ overlay.only.name }}" data-tip-below>Only this topic's arcs &times;</a>
+  <a class="btn small" href="{{ overlay.only.href }}" data-tip="Click to draw the strongest arcs of the whole map again. Showing only the arcs of: {{ overlay.only.name }}">Only this topic's arcs &times;</a>
   {% endif %}
   <button class="btn small quiet" type="button" id="fit" hidden
-          data-tip="Switch between the whole map in the window and its actual size" data-tip-below>Actual size</button>
+          data-tip="Switch between the whole map in the window and its actual size">Actual size</button>
 </div>
 
 <div class="afloat tr" id="overlays">
   {% for toggle in overlay.toggles %}
   <a href="{{ toggle.href }}" class="toggle {{ toggle.kind }}{% if toggle.on %} edge-on{% endif %}"
-     data-tip="{{ draws.get(toggle.kind, toggle.kind) }}" data-tip-below>
+     data-tip="{{ draws.get(toggle.kind, toggle.kind) }}">
     <span class="swatch"></span>{{ names.get(toggle.kind, toggle.kind) }}</a>
   {% endfor %}
 </div>

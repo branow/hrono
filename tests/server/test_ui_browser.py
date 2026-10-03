@@ -20,6 +20,7 @@ playwright_sync = pytest.importorskip("playwright.sync_api")
 
 WIDTHS = (800, 1100, 1440)
 ROUTES = (
+    "/ui/login",
     "/ui",
     "/ui/trees/default/triage",
     "/ui/trees/default/graph",
@@ -93,7 +94,8 @@ def test_no_route_scrolls_sideways(
     for route in _routes(live):
         page.goto(live.base + route)  # type: ignore[attr-defined]
         page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
-        assert "/ui/login" not in page.url  # type: ignore[attr-defined]
+        if route != "/ui/login":
+            assert "/ui/login" not in page.url  # type: ignore[attr-defined]
         over = page.evaluate(  # type: ignore[attr-defined]
             "document.documentElement.scrollWidth - "
             "document.documentElement.clientWidth"
@@ -104,6 +106,7 @@ def test_no_route_scrolls_sideways(
 
 
 HINT_ROUTES = (
+    "/ui/login",
     "/ui",
     "/ui/jobs",
     "/ui/config",
@@ -169,17 +172,43 @@ def solo(tmp_path: Path) -> Iterator[Live]:
         yield server
 
 
-def _home(page: object, live: Live) -> None:
-    page.context.add_cookies(  # type: ignore[attr-defined]
+@pytest.fixture
+def fresh(tmp_path: Path) -> Iterator[Live]:
+    """A server whose tree has never been built."""
+    with live_server(tmp_path, built=False) as server:
+        yield server
+
+
+def _signed_in(browser: object, live: Live) -> Iterator[object]:
+    context = browser.new_context()  # type: ignore[attr-defined]
+    context.add_cookies(
         [{"name": "hrono_token", "value": live.token, "url": live.base}]
     )
+    yield context.new_page()
+    context.close()
+
+
+# These depend on the server, so the browser closes first and its open event
+# stream does not hold the server's shutdown to its timeout.
+@pytest.fixture
+def solo_page(browser: object, solo: Live) -> Iterator[object]:
+    yield from _signed_in(browser, solo)
+
+
+@pytest.fixture
+def fresh_page(browser: object, fresh: Live) -> Iterator[object]:
+    yield from _signed_in(browser, fresh)
+
+
+def _home(page: object, live: Live) -> None:
     page.goto(f"{live.base}/ui")  # type: ignore[attr-defined]
     page.wait_for_load_state("load")  # type: ignore[attr-defined]
 
 
 def test_home_follows_a_source_from_up_to_date_to_behind(
-    page: object, solo: Live
+    solo_page: object, solo: Live
 ) -> None:
+    page = solo_page
     _home(page, solo)
     row = page.locator('[data-source="docs"] [data-state]')  # type: ignore[attr-defined]
     assert row.get_attribute("data-state") == "current"
@@ -192,8 +221,9 @@ def test_home_follows_a_source_from_up_to_date_to_behind(
 
 
 def test_a_running_run_on_home_moves_without_a_reload(
-    page: object, solo: Live
+    solo_page: object, solo: Live
 ) -> None:
+    page = solo_page
     solo.run_fanout(2)
     _home(page, solo)
     page.evaluate("window.sameDocument = true")  # type: ignore[attr-defined]
@@ -201,6 +231,42 @@ def test_a_running_run_on_home_moves_without_a_reload(
     assert shown.inner_text() == "0/2"
 
     solo.finish_piece(0)
+
+    page.wait_for_function(  # type: ignore[attr-defined]
+        "document.querySelector('#running .progress').textContent === '1/2'",
+        timeout=8000,
+    )
+    assert page.evaluate("window.sameDocument") is True  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("width", WIDTHS)
+def test_the_home_of_a_tree_never_built_does_not_scroll_sideways(
+    fresh_page: object, fresh: Live, width: int
+) -> None:
+    page = fresh_page
+    page.set_viewport_size({"width": width, "height": 900})  # type: ignore[attr-defined]
+    _home(page, fresh)
+    assert page.locator("[data-empty]").count() == 1  # type: ignore[attr-defined]
+    assert (
+        page.evaluate(  # type: ignore[attr-defined]
+            "document.documentElement.scrollWidth - "
+            "document.documentElement.clientWidth"
+        )
+        <= 0
+    )
+
+
+def test_the_first_sync_of_an_empty_tree_moves_without_a_reload(
+    fresh_page: object, fresh: Live
+) -> None:
+    page = fresh_page
+    fresh.run_fanout(2)
+    _home(page, fresh)
+    page.evaluate("window.sameDocument = true")  # type: ignore[attr-defined]
+    assert page.locator("#running .progress").inner_text() == "0/2"  # type: ignore[attr-defined]
+    assert page.locator("button:has-text('Sync now')").count() == 0  # type: ignore[attr-defined]
+
+    fresh.finish_piece(0)
 
     page.wait_for_function(  # type: ignore[attr-defined]
         "document.querySelector('#running .progress').textContent === '1/2'",

@@ -17,7 +17,7 @@
     </div>
     <div class="row">
       {% if topics %}<a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a>{% endif %}
-      {% if can_write %}
+      {% if can_write and not (topics == 0 and running) %}
       <form method="post" action="/ui/trees/{{ tree }}/sync">
         <button class="btn primary" type="submit"
                 title="Re-reads every source, re-files what changed, rewrites only the briefs that no longer hold">Sync now</button>
@@ -30,8 +30,14 @@
 {% if topics == 0 %}
 {% if running %}
 <div class="callout mb-3" id="running">
-  <div class="body">
-    <div class="title">{{ running[0].op }} is {{ running[0].status }}</div>
+  <div class="body" data-job="{{ running[0].id }}" data-live="1">
+    <div class="title">The first sync is running</div>
+    <div class="row">
+      <a class="runlink" href="/ui/jobs/{{ running[0].id }}?tree={{ tree }}"><code>{{ running[0].op }}</code></a>
+      <span class="state status" data-state="{{ running[0].status }}">{{ running[0].status }}</span>
+      <span class="progress num">{% if running[0].progress %}{{ running[0].progress.done }}/{{ running[0].progress.total }}{% endif %}</span>
+    </div>
+    <span class="bar wide"><span style="width:{{ (100 * running[0].progress.done / running[0].progress.total)|round|int if running[0].progress and running[0].progress.total else 0 }}%"></span></span>
     <p class="hint">The tree fills in as it works. <a href="/ui/jobs/{{ running[0].id }}?tree={{ tree }}">Watch it run</a></p>
   </div>
 </div>
@@ -46,7 +52,7 @@
       </li>
       <li>
         <div class="what">Sync it<span class="tip" tabindex="0" role="note" data-tip="Reads the files, cuts them into sections, embeds, clusters and writes a brief for each">?</span></div>
-        {{ start_sync(tree, user, "Sync now", sources > 0) }}
+        {% if running %}<span class="hint">Running now</span>{% else %}{{ start_sync(tree, user, "Sync now", sources > 0) }}{% endif %}
       </li>
     </ol>
   </div>
@@ -187,6 +193,8 @@
   </section>
 </div>
 
+
+{% endif %}
 <script>
 // The same stream the Runs page reads, for the runs on this page: the bar and
 // the count move while a person watches, and the page is read again when a run
@@ -213,5 +221,4 @@ for (const row of document.querySelectorAll('[data-live][data-job]')) {
   source.onerror = () => source.close();
 }
 </script>
-{% endif %}
 {% endblock %}

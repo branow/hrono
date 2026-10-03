@@ -68,6 +68,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             database,
             request.app.state.cipher,
             request.app.state.heads,
+            chosen,
         )
     ]
     return templates.TemplateResponse(

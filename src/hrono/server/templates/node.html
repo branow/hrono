@@ -295,15 +295,15 @@
 <aside class="topic-aside stack">
   <section class="card">
     <div class="card-head">
-      <h2>Where it sits<span class="tip left" tabindex="0" role="note" data-tip="The facts that change what you would do to this topic. Its id, level and contents are in the line under the title">?</span></h2>
+      <h2>Where it sits<span class="tip" tabindex="0" role="note" data-tip="The facts that change what you would do to this topic. Its id, level and contents are in the line under the title">?</span></h2>
     </div>
     <div class="card-body">
       <dl class="facts">
         <dt>Parent</dt>
         <dd>{% if node.parent %}<a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a>{% else %}<span class="chip warn">none — nothing points at this topic</span>{% endif %}</dd>
-        <dt>Name<span class="tip left" tabindex="0" role="note" data-tip="Whether the name came from a person or from the brief's first line">?</span></dt>
+        <dt>Name<span class="tip" tabindex="0" role="note" data-tip="Whether the name came from a person or from the brief's first line">?</span></dt>
         <dd>{{ "given by hand" if node.named else "taken from the brief" }}</dd>
-        <dt>Pins<span class="tip left" tabindex="0" role="note" data-tip="What a hand-edit is holding against the pipeline, and why">?</span></dt>
+        <dt>Pins<span class="tip" tabindex="0" role="note" data-tip="What a hand-edit is holding against the pipeline, and why">?</span></dt>
         <dd>
           {% if node.pins %}
           <ul class="held">
@@ -320,7 +320,7 @@
 
   <section class="card">
     <div class="card-head">
-      <h2>Who wrote the brief<span class="tip left" tabindex="0" role="note" data-tip="The provenance a re-run compares against to decide whether this brief still stands">?</span></h2>
+      <h2>Who wrote the brief<span class="tip" tabindex="0" role="note" data-tip="The provenance a re-run compares against to decide whether this brief still stands">?</span></h2>
     </div>
     <div class="card-body">
       {% if not node.wrote %}
@@ -331,14 +331,14 @@
       {% else %}
       <dl class="facts">
         <dt>Model</dt><dd>{{ node.wrote.model }}</dd>
-        <dt>Build<span class="tip left" tabindex="0" role="note" data-tip="A fingerprint of what that model name pointed at; repointing it changes every word (#191)">?</span></dt>
+        <dt>Build<span class="tip" tabindex="0" role="note" data-tip="A fingerprint of what that model name pointed at; repointing it changes every word (#191)">?</span></dt>
         <dd class="mono">{{ node.wrote.fingerprint or "not recorded" }}</dd>
         <dt>Prompt</dt><dd>{{ node.wrote.prompt }} <span class="faint mono">{{ node.wrote.prompt_hash }}</span></dd>
         <dt>Cost</dt>
         <dd class="num">{{ "{:,}".format(node.wrote.tokens_in) }} in, {{ "{:,}".format(node.wrote.tokens_out) }} out</dd>
         <dt>Written</dt><dd class="mono">{{ node.wrote.written }}</dd>
         <dt>Cites</dt><dd>{{ node.wrote.cites }} source{{ "" if node.wrote.cites == 1 else "s" }}</dd>
-        <dt>Members<span class="tip left" tabindex="0" role="note" data-tip="The signature over the content it was written from. When it no longer matches what this topic holds, the brief describes something else">?</span></dt>
+        <dt>Members<span class="tip" tabindex="0" role="note" data-tip="The signature over the content it was written from. When it no longer matches what this topic holds, the brief describes something else">?</span></dt>
         <dd>
           <span class="mono">{{ node.wrote.signature or "not recorded" }}</span>
           {% if node.wrote.moved %}<span class="chip warn">changed since</span>
@@ -351,11 +351,11 @@
           {% else %}<span class="chip ok">stands</span>{% endif %}
         </dd>
         {% if node.wrote.flagged %}
-        <dt>Flagged<span class="tip left" tabindex="0" role="note" data-tip="Why the reply is not a brief. It is kept so the topic stays on the map, and every run tries it again">?</span></dt>
+        <dt>Flagged<span class="tip" tabindex="0" role="note" data-tip="Why the reply is not a brief. It is kept so the topic stays on the map, and every run tries it again">?</span></dt>
         <dd>{{ node.wrote.flagged }}</dd>
         {% endif %}
         {% if node.wrote.unsupported %}
-        <dt>Unsupported<span class="tip left" tabindex="0" role="note" data-tip="Identifiers the brief used that its sources do not contain">?</span></dt>
+        <dt>Unsupported<span class="tip" tabindex="0" role="note" data-tip="Identifiers the brief used that its sources do not contain">?</span></dt>
         <dd class="mono">{{ node.wrote.unsupported|join(", ") }}</dd>
         {% endif %}
       </dl>

@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.ingest.git_syncer import git_sync
 from hrono.jobs import store as job_store
 from hrono.registry import store as registry_store
 from hrono.server import outcome
@@ -156,6 +157,58 @@ def test_each_source_has_its_own_row(browser: Browser, tmp_path: Path) -> None:
     assert 'data-state="behind"' in _row(page, "old")
     assert 'data-state="current"' in _row(page, "new")
     assert "1 of 2 sources behind" in page
+
+
+def test_home_counts_only_the_sources_the_tree_is_built_from(
+    browser: Browser, tmp_path: Path
+) -> None:
+    mine, other = make_repo(tmp_path / "mine"), make_repo(tmp_path / "other")
+    browser.source("docs", mine)
+    browser.source("other", other)
+    registry_store.insert(
+        browser.conn,  # type: ignore[arg-type]
+        "trees",
+        TREE,
+        json.dumps({"name": TREE, "sources": ["docs"]}),
+        None,
+        "t",
+    )
+    commit(other, "two")
+    browser.sign_in()
+
+    page = browser.home()
+
+    assert 'data-source="other"' not in page
+    assert "up to date with every source" in page
+
+
+def test_a_commit_pinned_by_the_real_sync_reads_as_up_to_date_then_behind(
+    browser: Browser, tmp_path: Path
+) -> None:
+    # the pin comes from git_sync's own `rev-parse HEAD`, the remote's from
+    # `ls-remote`: the seam between them is what home's verdict rests on
+    repo = make_repo(tmp_path / "r")
+    browser.source("docs", repo)
+    browser.sign_in()
+
+    def read() -> None:
+        pinned = git_sync(
+            {"name": "docs", "url": str(repo), "auth": None},
+            tmp_path / "cache",
+            60.0,
+        )
+        with browser.conn:  # type: ignore[attr-defined]
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "UPDATE source_state SET version = ? WHERE source = 'docs'",
+                (pinned,),
+            )
+
+    read()
+    assert 'data-state="current"' in _row(browser.home(), "docs")
+    commit(repo, "two")
+    assert 'data-state="behind"' in _row(browser.home(), "docs")
+    read()
+    assert 'data-state="current"' in _row(browser.home(), "docs")
 
 
 def test_no_sources_offers_a_button_to_add_one(browser: Browser) -> None:

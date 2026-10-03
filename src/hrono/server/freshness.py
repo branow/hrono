@@ -26,6 +26,7 @@ from hrono.db.database import Database
 from hrono.ingest.remote_head import remote_head
 from hrono.registry import store as registry_store
 from hrono.registry.collections.sources import SOURCES
+from hrono.registry.collections.trees import scoped_sources
 from hrono.registry.write import decrypt
 
 Probe = Callable[[dict[str, object], float], str | None]
@@ -102,10 +103,13 @@ def _answer(future: object) -> str | None:
 
 
 def survey(
-    database: Database, cipher: Cipher | None, heads: Heads
+    database: Database, cipher: Cipher | None, heads: Heads, tree: str
 ) -> list[SourceState]:
-    """Every registered source: when it was last read, at what, and whether
-    its remote has moved since.
+    """Every source the tree is built from: when it was last read, at what,
+    and whether its remote has moved since.
+
+    Only the tree's own sources: one the tree does not ingest cannot be
+    cleared by syncing the tree, so it is not the tree's to be behind on.
 
     The registry is read and the lock let go BEFORE the remotes are asked: a
     page waiting on a slow remote must not be holding the database while it
@@ -116,7 +120,12 @@ def survey(
             str(row["source"]): row
             for row in conn.execute("SELECT * FROM source_state")
         }
-        rows = registry_store.list_all(conn, "sources")
+        scope = set(scoped_sources(conn, tree))
+        rows = [
+            row
+            for row in registry_store.list_all(conn, "sources")
+            if str(row["name"]) in scope
+        ]
     configs = {
         str(row["name"]): _config(row, cipher)
         for row in rows

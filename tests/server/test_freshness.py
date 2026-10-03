@@ -54,7 +54,7 @@ def _read(database: Database, name: str, commit_: str) -> None:
 def _states(database: Database) -> dict[str, str]:
     return {
         one.name: one.state
-        for one in survey(database, None, Heads(fresh_for=0.0))
+        for one in survey(database, None, Heads(fresh_for=0.0), "default")
     }
 
 
@@ -91,12 +91,33 @@ def test_each_source_is_judged_on_its_own(
     assert _states(database) == {"old": "behind", "new": "current"}
 
 
+def test_a_source_the_tree_does_not_ingest_is_not_its_to_be_behind_on(
+    database: Database, tmp_path: Path
+) -> None:
+    mine, other = make_repo(tmp_path / "mine"), make_repo(tmp_path / "other")
+    for name, repo in (("mine", mine), ("other", other)):
+        _source(database, name, str(repo))
+        _read(database, name, head_of(repo))
+    with database.connect() as conn:
+        registry_store.insert(
+            conn,
+            "trees",
+            "default",
+            json.dumps({"name": "default", "sources": ["mine"]}),
+            None,
+            "t",
+        )
+    commit(other, "two")
+
+    assert _states(database) == {"mine": "current"}
+
+
 def test_a_source_never_read_says_so_and_is_not_asked_about(
     database: Database, tmp_path: Path
 ) -> None:
     _source(database, "docs", str(make_repo(tmp_path / "r")))
 
-    [one] = survey(database, None, Heads(fresh_for=0.0))
+    [one] = survey(database, None, Heads(fresh_for=0.0), "default")
 
     assert (one.state, one.read_at, one.commit) == ("unread", None, None)
 
@@ -116,7 +137,7 @@ def test_a_source_that_cannot_be_compared_says_when_it_was_read(
     _source(database, "wiki", "https://example.invalid", kind="notion")
     _read(database, "wiki", "v7")
 
-    [one] = survey(database, None, Heads(fresh_for=0.0))
+    [one] = survey(database, None, Heads(fresh_for=0.0), "default")
 
     assert (one.state, one.read_at, one.commit) == (
         "not-compared",

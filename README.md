@@ -82,11 +82,12 @@ are absent as well as refused.
 It is server-rendered Jinja with no build step and no JavaScript to vendor: the
 map, the runs view, the health checks, the activity log and the config tables
 are plain HTML, and every view is a URL you can paste to someone else. Home
-answers four questions in order: whether the tree is up to date (each git source
-says when it was last read, at which commit, and whether its remote has moved on
-since — asked of the remote with `git ls-remote`, at most once a minute), whether
-anything is running (live, from the same event stream as the Runs page), whether
-anything needs a person, and what the last run did. Every empty state offers its
+answers four questions: whether the tree is up to date (each git source of the
+tree says when it was last read, at which commit, and whether its remote has
+moved on since — asked of the remote with `git ls-remote`, at most once a
+minute), whether anything is running (live, from the same event stream as the
+Runs page, on an empty tree too), what the last run did (the two sit side by
+side), and, below them, whether anything needs a person. Every empty state offers its
 next step as a button, and every action returns to the page it came from saying
 what it did. Manual tree
 surgery — rename, brief, notes, reparent, merge, dissolve, split, move a chunk
