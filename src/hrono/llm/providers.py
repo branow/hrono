@@ -52,6 +52,18 @@ def client_for(
     return Ledgered(inner, context, role=role, provider=provider)
 
 
+def bounded_cli_client(
+    context: JobContext, role: str, timeout: float
+) -> Completion:
+    """The claude-code client with its own time limit, still ledgered.
+
+    A validation probe must end before the caller's own wait does, so it
+    cannot take the client's generous default.
+    """
+    inner = ClaudeCodeClient(context.cli_dir(), timeout=timeout)
+    return Ledgered(inner, context, role=role, provider="claude-code")
+
+
 def _build(
     context: JobContext, provider: str, model: dict[str, object]
 ) -> Completion:

@@ -188,16 +188,17 @@ def create_app(
             cipher = Cipher.from_key(master_key, app.state.key_id)
             app.state.cipher = cipher
             reclaim_stranded(database)
+            anchored_cache = cache_root(db_path) if owned else None
             worker = Worker(
                 database,
                 cipher=cipher,
                 # an injected connection says nothing about where its file is,
                 # so there is no anchor to hang a cache on: None makes an
                 # ingest op raise rather than guess a cwd-relative one (#098).
-                cache_root=cache_root(db_path) if owned else None,
+                cache_root=anchored_cache,
             )
             app.state.worker = worker
-            app.state.cache_root = cache_root(db_path) if owned else None
+            app.state.cache_root = anchored_cache
             worker.start()
             _warm_query_encoder(database)
             yield

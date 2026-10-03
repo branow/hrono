@@ -21,12 +21,16 @@ from pathlib import Path
 
 from hrono.jobs.ops import JobContext
 from hrono.llm.client import CompletionRequest, LLMError
-from hrono.llm.providers import client_for
+from hrono.llm.providers import bounded_cli_client
 from hrono.llm.urls import api_root
 from hrono.registry import store
 from hrono.registry.descriptor import ValidationContext, ValidationFailed
 
 _TIMEOUT = 10.0
+# A cold CLI call measured about 7 s, so the 10 s every HTTP probe gets is too
+# tight. The client waits 120 s for a `set`; this stays well under it so a hung
+# CLI ends in a 400 rather than in "the write may have landed".
+_CLI_TIMEOUT = 60.0
 
 Embed = Callable[[dict[str, object], dict[str, object] | None, float], Sequence]
 Generate = Callable[[dict[str, object], dict[str, object], float], str]
@@ -168,24 +172,24 @@ def _generate_in(context: ValidationContext) -> Generate:
         timeout: float,
     ) -> str:
         if str(connection.get("provider")) == "claude-code":
-            return _generate_with_cli(config, context)
+            return _generate_with_cli(config, context, _CLI_TIMEOUT)
         return _default_generate(config, connection, timeout)
 
     return generate
 
 
 def _generate_with_cli(
-    config: dict[str, object], context: ValidationContext
+    config: dict[str, object], context: ValidationContext, timeout: float
 ) -> str:
     """One trivial question through the same client a job would use (#107).
 
-    It goes through ``client_for`` so the probe is ledgered like any other
-    call, and runs from the directory hrono owns.
+    It is ledgered like any other call and runs from the directory hrono
+    owns, bounded by ``timeout`` so a hung CLI ends in a bad request.
     """
     with tempfile.TemporaryDirectory() as scratch:
         root = context.cache_root or Path(scratch) / "cache" / "sources"
         job = JobContext(context.database, context.cipher, cache_root=root)
-        client = client_for(job, config, "validate")
+        client = bounded_cli_client(job, "validate", timeout)
         try:
             return client.complete(CompletionRequest(config, "", "hi")).text
         except LLMError as exc:

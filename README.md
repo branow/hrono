@@ -29,9 +29,10 @@ each takes a JSON config on stdin or `-f`), and build the tree with
 A `set` is validated before it is stored: a connection against its provider, a
 local embedding model by loading its weights (about 14 s the first time for
 MiniLM), a text model on a `claude-code` connection by asking the `claude`
-CLI one trivial question (a few seconds, and one call's overhead). It waits up to 120 s for that. If it still times out, the write may
-have landed anyway. The message names the command that shows whether it did
-(`hrono models get <name>`), so run that before you retry.
+CLI one trivial question (a few seconds, and one call's overhead). It waits up
+to 120 s for that. If it still times out, the write may have landed anyway. The
+message names the command that shows whether it did (`hrono models get
+<name>`), so run that before you retry.
 
 ### Choose the backend before the first build
 

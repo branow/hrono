@@ -8,6 +8,7 @@ as production runs them (#108). The README's first-run path depends on this.
 import json
 import sqlite3
 import stat
+import time
 from collections.abc import Iterator
 from contextlib import closing
 from pathlib import Path
@@ -20,6 +21,7 @@ from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.paths import cli_workdir
+from hrono.registry.validation import model_validation
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -126,3 +128,31 @@ def test_an_empty_answer_is_rejected(served) -> None:
     )
 
     assert client.post("/models", json=TEXT, headers=headers).status_code == 400
+
+
+def test_the_registered_model_reaches_the_cli(served, tmp_path: Path) -> None:
+    client, headers, bin_dir = served
+    argv = tmp_path / "argv"
+    fake_claude(
+        bin_dir,
+        f"echo \"$@\" > {argv}\ncat >/dev/null\necho '{OK}'\n",
+    )
+
+    client.post("/models", json=TEXT, headers=headers)
+
+    assert "--model haiku" in argv.read_text()
+
+
+def test_a_hung_cli_ends_in_a_bad_request(
+    served, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, headers, bin_dir = served
+    monkeypatch.setattr(model_validation, "_CLI_TIMEOUT", 0.5)
+    fake_claude(bin_dir, "sleep 5\n")
+
+    started = time.monotonic()
+    response = client.post("/models", json=TEXT, headers=headers)
+
+    assert response.status_code == 400
+    assert "timed out" in response.text
+    assert time.monotonic() - started < 4
