@@ -439,3 +439,24 @@ def test_a_section_still_parked_here_outlives_its_source_leaving_the_tree(
 
     assert "Not ingested" not in html
     assert ">parked</span>" in html
+
+
+def test_a_section_parked_only_in_another_tree_is_not_ingested_here(
+    panel: Panel,
+) -> None:
+    section = int(
+        panel.conn.execute(
+            "SELECT id FROM sections WHERE path = 'f7.txt'"
+        ).fetchone()[0]
+    )
+    panel.conn.execute(
+        "DELETE FROM node_members WHERE section_id = ?", (section,)
+    )
+    incubator.park(panel.conn, "elsewhere", section, 1)
+    panel.conn.commit()
+    leave_every_source_out(panel)
+
+    html = page(panel, "files", path="f7.txt")
+
+    assert "Not ingested" in html
+    assert ">parked</span>" not in html

@@ -103,7 +103,8 @@ words belongs to Ask). Outline shows the whole tree as a collapsible list, with
 each topic's size and whether recall can answer from it, and stays readable at
 hundreds of topics. Files takes a path, or the start of one, to the sections
 cut from it and the topic each was filed under; a section waiting to be filed
-says it is parked, and a path outside the tree's sources says it is not ingested.
+says it is parked, and a path outside the tree's sources says it is not
+ingested.
 
 Settings shows one collection at a time — trees, sources, connections, models,
 prompts — as a table, with each field of a form labelled and explained. It says
