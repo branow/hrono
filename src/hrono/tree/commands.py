@@ -62,7 +62,14 @@ def sync(name: str) -> None:
 def export(
     name: str,
     out: Annotated[Path, typer.Option("-o", "--out")],
-    levels: Annotated[int, typer.Option("--levels")] = 4,
+    levels: Annotated[
+        int,
+        typer.Option(
+            "--levels",
+            help="Hop limit: links an agent follows from root.md to a "
+            "section (at least 2).",
+        ),
+    ] = 4,
 ) -> None:
     """Materialize a tree's rendered map into a folder under ``--out``."""
 
@@ -71,8 +78,27 @@ def export(
     written, refused = _materialize(out, files)
     plural = "file" if written == 1 else "files"
     typer.echo(f"Wrote {written} {plural} to {out}.")
+    shape = result.get("shape") if isinstance(result, dict) else None
+    if isinstance(shape, dict):
+        typer.echo(describe(shape))
     if refused:
         raise UnsafePath(_refusal(out, len(files), refused))
+
+
+def describe(shape: dict[str, object]) -> str:
+    """The export's shape in a sentence or two, as #204 reports it."""
+    pages = shape.get("pages_per_level") or []
+    line = (
+        f"{shape.get('levels')} hops; pages per level "
+        f"{' / '.join(str(n) for n in pages)}; "  # type: ignore[union-attr]
+        f"widest page lists {shape.get('widest_page')} entries"
+    )
+    if shape.get("within_budget"):
+        return line + "."
+    return (
+        f"{line}, over the {shape.get('width_budget')}-entry budget: the hop "
+        f"limit was kept, so that page is wide. A higher --levels narrows it."
+    )
 
 
 @app.command("pending")

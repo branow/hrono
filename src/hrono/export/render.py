@@ -71,10 +71,7 @@ def _node_markdown(
     if node.children:
         parts.append("## Children\n")
         parts.append(
-            "\n".join(
-                f"- [{_heading(conn, child)}]({_name(conn, child)}/brief.md)"
-                for child in node.children
-            )
+            "\n".join(_child_entry(conn, child) for child in node.children)
         )
     elif node.sections:
         parts.append("## Sections\n")
@@ -92,6 +89,32 @@ def _node_markdown(
         if references:
             parts.append(references)
     return "\n\n".join(parts) + "\n"
+
+
+def _child_entry(conn: sqlite3.Connection, child: int) -> str:
+    """One line on an index page: title, link, and what the child holds.
+
+    The summary is there so an agent can choose a branch WITHOUT opening it
+    (#204); a wider page is only affordable if each entry says enough to skip
+    the ones that do not matter.
+    """
+    link = f"- [{_heading(conn, child)}]({_name(conn, child)}/brief.md)"
+    summary = _summary(conn, child)
+    return f"{link} — {summary}" if summary else link
+
+
+def _summary(conn: sqlite3.Connection, node_id: int) -> str:
+    """The brief's first sentence of prose that is not already its title."""
+    heading = _heading(conn, node_id)
+    prose = " ".join(
+        _EMPHASIS.sub("", line.strip())
+        for line in _brief_text(conn, node_id).splitlines()
+        if line.strip() and not line.lstrip().startswith(_NOT_PROSE)
+    )
+    for sentence in re.split(r"(?<=[.!?])\s+", prose):
+        if sentence and not sentence.startswith(heading):
+            return _sentence(sentence, _SUMMARY_CHARS)
+    return ""
 
 
 def _references(conn: sqlite3.Connection, node_id: int) -> str:
@@ -205,11 +228,15 @@ def _heading(conn: sqlite3.Connection, node_id: int) -> str:
 
 
 def _title(line: str) -> str:
+    return _sentence(line, _TITLE_CHARS)
+
+
+def _sentence(line: str, limit: int) -> str:
     text = _EMPHASIS.sub("", line.lstrip("#").strip())
     sentence = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0].strip()
-    if len(sentence) <= _TITLE_CHARS:
+    if len(sentence) <= limit:
         return sentence
-    return sentence[:_TITLE_CHARS].rsplit(" ", 1)[0].rstrip()  # whole words
+    return sentence[:limit].rsplit(" ", 1)[0].rstrip()  # whole words
 
 
 def _name(conn: sqlite3.Connection, node_id: int) -> str:
@@ -231,6 +258,8 @@ def _section_name(conn: sqlite3.Connection, section_id: int) -> str:
 
 
 _TITLE_CHARS = 80
+_SUMMARY_CHARS = 160
+_NOT_PROSE = ("#", "-", "*", "|", ">", "```")
 _EMPHASIS = re.compile(r"[*_`]+")
 _BOILERPLATE = frozenset(
     {

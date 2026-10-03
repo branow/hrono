@@ -246,3 +246,24 @@ def test_export_during_a_build_is_409_not_500(harness: Harness) -> None:
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "conflict"
+
+
+def test_the_export_reports_its_shape_and_is_the_same_bytes_twice(
+    harness: Harness,
+) -> None:
+    def fetch() -> dict:
+        return harness.client.get(
+            "/trees/default/export?levels=4", headers=harness.auth("reader")
+        ).json()
+
+    first, second = fetch(), fetch()
+
+    assert first == second
+    assert first["shape"] == {
+        "levels": 2,
+        "pages_per_level": [1, 2],
+        "widest_page": 2,
+        "widest_node": first["shape"]["widest_node"],
+        "width_budget": 40,
+        "within_budget": True,
+    }

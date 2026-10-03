@@ -25,7 +25,7 @@ from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import Encoder, ready_encoder_for
 from hrono.errors import NotFound, Unavailable
 from hrono.export import store as export_store
-from hrono.export.collapse import collapse
+from hrono.export.collapse import collapse, shape
 from hrono.export.render import render
 from hrono.jobs.worker import enqueue
 from hrono.recall import engine
@@ -116,8 +116,10 @@ def export_tree(
 ) -> dict[str, object]:
     """Return the rendered agent-facing tree as a path -> content manifest.
 
-    ``levels`` sets the collapse depth (default 3-4); #078 floors it at 2, so
-    ``levels`` below 2 yields a 2-level export rather than an error. A
+    ``levels`` is the hop limit, the links an agent follows from ``root.md``
+    to a section (default 4); #078 floors it at 2, so ``levels`` below 2
+    yields a 2-level export rather than an error. ``shape`` says what came out
+    (#204): pages per level and the widest page against the width budget. A
     non-integer ``levels`` is a clean 422 (FastAPI validation); an unbuilt tree
     is a clean 404.
     """
@@ -126,15 +128,13 @@ def export_tree(
         stored = export_store.load(conn, name)
         if stored is None:
             raise NotFound(f"tree not built: {name}")
-        files = render(
-            conn,
-            collapse(stored, levels),
-            notes=notes.rendered(conn, notes.NODE),
-        )
+        agent_tree = collapse(stored, levels)
+        files = render(conn, agent_tree, notes=notes.rendered(conn, notes.NODE))
     return {
         "files": [
             {"path": path, "content": files[path]} for path in sorted(files)
-        ]
+        ],
+        "shape": asdict(shape(agent_tree)),
     }
 
 

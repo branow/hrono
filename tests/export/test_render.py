@@ -381,7 +381,10 @@ def test_a_long_first_line_is_trimmed_to_a_usable_title(
             for line in files["root.md"].splitlines()
             if line.startswith("- [")
         ]
-        assert all(len(line) < 160 for line in links)  # not a whole paragraph
+        titles = [line.split("](", 1)[0] for line in links]
+        assert all(len(title) < 90 for title in titles)  # not a paragraph
+        # the sentence that became the title is not repeated as its summary
+        assert any(line.endswith(" — More follows.") for line in links)
     finally:
         database.close()
 
@@ -464,3 +467,21 @@ def test_a_childless_upper_node_still_skips_its_references(
     files = _files(database)
     assert "## References" not in files["root.md"]
     assert not [path for path, body in files.items() if "- node " in body]
+
+
+def test_an_index_entry_says_what_the_child_holds(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    # #204: an agent picks a branch from the index page without opening it
+    database, ids = db
+
+    root = _files(database)["root.md"]
+
+    assert (
+        f"- [Alpha topic](alpha-topic-{ids['n0']}/brief.md) — Alpha stuff."
+        in root.splitlines()
+    )
+    assert (
+        f"- [Beta topic](beta-topic-{ids['n1']}/brief.md) — Beta stuff."
+        in root.splitlines()
+    )

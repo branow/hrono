@@ -282,3 +282,33 @@ def test_an_error_the_table_does_not_know_is_not_rendered() -> None:
     from hrono.cli_boundary import render
 
     assert render(RuntimeError("a genuine bug")) is None
+
+
+def test_export_keeps_levels_and_reports_the_shape(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    shape = {
+        "levels": 3,
+        "pages_per_level": [1, 2, 120],
+        "widest_page": 61,
+        "widest_node": 7,
+        "width_budget": 40,
+        "within_budget": False,
+    }
+    client = _patch(
+        monkeypatch,
+        "hrono.tree.commands",
+        FakeClient(
+            {"files": [{"path": "root.md", "content": "x"}], "shape": shape}
+        ),
+    )
+
+    result = runner.invoke(
+        app, ["tree", "export", "t", "-o", str(tmp_path), "--levels", "3"]
+    )
+
+    assert result.exit_code == 0
+    assert client.calls == [("GET", "/trees/t/export?levels=3", None)]
+    assert "pages per level 1 / 2 / 120" in result.stdout
+    assert "widest page lists 61 entries" in result.stdout
+    assert "over the 40-entry budget" in result.stdout
