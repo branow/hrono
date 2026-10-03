@@ -23,6 +23,15 @@ from hrono.registry.validation.model_validation import validate_model
 SummarisationRole = Literal["condense", "brief", "brief-upper", "judge"]
 
 
+class ModelPrice(BaseModel):
+    """USD per million tokens, overriding the baked table (#202)."""
+
+    input: float = Field(ge=0)
+    output: float = Field(ge=0)
+    cache_read: float = Field(default=0.0, ge=0)
+    cache_write: float = Field(default=0.0, ge=0)
+
+
 class Model(BaseModel):
     name: RegistryName
     kind: Literal["text", "embedding"]
@@ -30,6 +39,7 @@ class Model(BaseModel):
     model: str
     role: SummarisationRole | None = None
     params: dict[str, object] = Field(default_factory=dict)
+    price: ModelPrice | None = None
 
 
 MODELS = Descriptor(

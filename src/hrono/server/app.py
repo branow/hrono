@@ -48,6 +48,7 @@ from hrono.server.jobs import router as jobs_router
 from hrono.server.trees import router as trees_router
 from hrono.server.ui import LoginRequired
 from hrono.server.ui import router as ui_router
+from hrono.server.usage import router as usage_router
 from hrono.server.users import router as users_router
 
 _VERSION = version("hrono")
@@ -215,6 +216,7 @@ def create_app(
     app.include_router(router)
     app.include_router(users_router)
     app.include_router(jobs_router)
+    app.include_router(usage_router)
     app.include_router(trees_router)
     app.include_router(edits_router)
     app.include_router(ui_router)

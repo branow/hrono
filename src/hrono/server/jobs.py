@@ -32,6 +32,7 @@ from hrono.jobs.scope import fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.server import events
 from hrono.server.auth import require_role
+from hrono.usage.rollup import for_jobs
 
 router = APIRouter()
 
@@ -152,7 +153,8 @@ def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
         children = store.children(conn, job_id)
         rolled = rollup([str(child["status"]) for child in children])
         spent = total_spend([to_job(child).result for child in children])
-        return _job(row, rolled, spent)
+        # every model call this run made, its children's included (#202)
+        return {**_job(row, rolled, spent), "usage": for_jobs(conn, job_id)}
 
 
 @router.get("/jobs/{job_id}/events")
