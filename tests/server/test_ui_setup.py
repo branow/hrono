@@ -244,6 +244,8 @@ def test_models_step_without_the_embed_backend_says_how_to_get_it(
     assert "uv pip install" in page and "hrono[embed]" in page
     assert 'action="/ui/setup/models"' not in page
     assert 'id="step-models"' in page
+    assert "remote embedding model instead" in page
+    assert 'section=models">Settings</a>' in page
 
 
 def test_models_step_with_the_embed_backend_offers_the_form(
