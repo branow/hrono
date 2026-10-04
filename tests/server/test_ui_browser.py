@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -208,6 +209,45 @@ def solo_page(browser: object, solo: Live) -> Iterator[object]:
 @pytest.fixture
 def fresh_page(browser: object, fresh: Live) -> Iterator[object]:
     yield from _signed_in(browser, fresh)
+
+
+def _snippet_bars(live: Live) -> list[list[int]]:
+    with playwright_sync.sync_playwright() as play:
+        try:
+            chrome = play.chromium.launch(
+                ignore_default_args=["--hide-scrollbars"]
+            )
+        except playwright_sync.Error:
+            if os.environ.get("CI"):
+                raise
+            pytest.skip("no chromium: run `playwright install chromium`")
+        try:
+            context = chrome.new_context(viewport={"width": 800, "height": 900})
+            context.add_cookies(
+                [{"name": "hrono_token", "value": live.token, "url": live.base}]
+            )
+            page = context.new_page()
+            page.goto(f"{live.base}/ui/trees/default/export")
+            page.wait_for_load_state("load")
+            return page.eval_on_selector_all(
+                "pre.snippet",
+                "els => els.map(e => [e.scrollWidth - e.clientWidth,"
+                " e.offsetHeight - e.clientHeight])",
+            )
+        finally:
+            chrome.close()
+
+
+def test_a_clipped_snippet_shows_a_scrollbar_even_where_the_system_hides_it(
+    live: Live,
+) -> None:
+    # The module browser hides scrollbars, and a second sync playwright cannot
+    # start on this thread while it runs, so this one runs on its own.
+    with ThreadPoolExecutor(1) as pool:
+        sizes = pool.submit(_snippet_bars, live).result()
+    clipped = [bar for over, bar in sizes if over > 0]
+    assert clipped, "no snippet overflows, so the check proves nothing"
+    assert all(bar > 0 for bar in clipped)
 
 
 def _home(page: object, live: Live) -> None:
