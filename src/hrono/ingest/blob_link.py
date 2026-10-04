@@ -29,7 +29,7 @@ def blob_url(
     if kind is None or not rest:
         return None
     repo = rest
-    if "/" not in rest and host != "gitlab.com":
+    if "/" not in rest:
         name, _, path = path.partition("/")
         repo = f"{rest}/{name}"
     if not path:

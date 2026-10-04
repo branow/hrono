@@ -60,6 +60,17 @@ SHA = "a1b2c3"
             "git.internal/acme/repo", "a.md", 1, 2, None, id="unknown-host"
         ),
         pytest.param("github.com", "a.md", 1, 2, None, id="no-owner"),
+        pytest.param(
+            "gitlab.com/owner", "a.md", 1, 2, None, id="gitlab-owner-only"
+        ),
+        pytest.param(
+            "gitlab.com/owner",
+            "repo/a.md",
+            1,
+            2,
+            f"https://gitlab.com/owner/repo/-/blob/{SHA}/a.md#L1-2",
+            id="gitlab-owner-with-repo-in-path",
+        ),
     ],
 )
 def test_the_link_is_the_hosts_blob_page_at_the_commit(
