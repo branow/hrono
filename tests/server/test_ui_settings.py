@@ -1326,6 +1326,8 @@ def test_a_failed_preview_says_why(browser: Browser, model_api: str) -> None:
     page = browser.client.get(location).text
 
     assert "The preview failed" in page
+    assert "did not come back with an answer" in page
+    assert "Check the model and its connection in Settings" in page
     assert WRITTEN not in page
 
 
