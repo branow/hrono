@@ -165,7 +165,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             redact(json.dumps(asdict(isolation)))
         )
         if not isolation.verified and not args.allow_unisolated:
-            print(render_isolation(isolation), file=sys.stderr)
+            print(redact(render_isolation(isolation)), file=sys.stderr)
             return 2
         runs = _ask_all(arms, questions, args)
     report = render_report(
