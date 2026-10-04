@@ -8,13 +8,14 @@ its own sums would be a third set of numbers to disagree with those two.
 from __future__ import annotations
 
 import sqlite3
-from urllib.parse import urlencode
+from typing import cast
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
 from hrono.recall import log as recall_log
 from hrono.server.ui import Reader, _trees, router, templates
+from hrono.server.ui.ask import ask_link
 from hrono.server.ui.spend import describe
 from hrono.usage.rollup import Filter, total, usage
 
@@ -51,6 +52,7 @@ def usage_view(request: Request, user: Reader, tree: str = "") -> Response:
             "people": people,
             "can_write": can_write,
             "asked": asked,
+            "window": DAYS,
         },
     )
 
@@ -58,8 +60,8 @@ def usage_view(request: Request, user: Reader, tree: str = "") -> Response:
 def _asked(conn: sqlite3.Connection, tree: str) -> dict[str, object]:
     """Agent recall calls: per day, the share that was not confident, latest."""
     days = recall_log.per_day(conn, tree)[-DAYS:]
-    calls = sum(int(day["calls"]) for day in days)  # type: ignore[call-overload]
-    unsure = sum(int(day["unsure"]) for day in days)  # type: ignore[call-overload]
+    calls = sum(day["calls"] for day in days)
+    unsure = sum(day["unsure"] for day in days)
     questions = recall_log.latest(conn, tree, QUESTIONS)
     return {
         "days": days,
@@ -68,8 +70,7 @@ def _asked(conn: sqlite3.Connection, tree: str) -> dict[str, object]:
         "questions": [
             {
                 **row,
-                "link": f"/ui/trees/{tree}/ask?"
-                + urlencode({"tree": tree, "q": row["question"]}),
+                "link": ask_link(tree, str(row["question"])),
             }
             for row in questions
         ],
@@ -78,7 +79,11 @@ def _asked(conn: sqlite3.Connection, tree: str) -> dict[str, object]:
 
 def _rows(groups: list[dict[str, object]]) -> list[dict[str, object]]:
     return [
-        {"key": group["key"], "run": group.get("run"), **describe(group)}  # type: ignore[dict-item]
+        {
+            "key": group["key"],
+            "run": group.get("run"),
+            **(describe(group) or {}),
+        }
         for group in groups
     ]
 
@@ -86,8 +91,9 @@ def _rows(groups: list[dict[str, object]]) -> list[dict[str, object]]:
 def _bars(groups: list[dict[str, object]]) -> list[dict[str, object]]:
     """One bar a day, as long as that day's tokens are to the busiest day's."""
     rows = _rows(groups)
-    most = max((int(row["volume"]) for row in rows), default=0)  # type: ignore[call-overload]
+    volumes = [cast(int, row["volume"]) for row in rows]
+    most = max(volumes, default=0)
     return [
-        {**row, "share": round(100 * int(row["volume"]) / most) if most else 0}  # type: ignore[call-overload]
-        for row in rows
+        {**row, "share": round(100 * volume / most) if most else 0}
+        for row, volume in zip(rows, volumes, strict=True)
     ]

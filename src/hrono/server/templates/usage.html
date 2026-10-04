@@ -23,8 +23,9 @@
     <div><a class="btn" href="/ui/jobs?tree={{ tree }}">Runs</a></div>
   </div>
 </div>
-{% else %}
+{% endif %}
 <div class="stack">
+{% if total %}
   <section class="card" id="over-time">
     <div class="card-head"><h2>Over time<span class="tip" tabindex="0" role="note" data-tip="One bar a day, as long as that day's tokens are to the busiest day's">?</span></h2></div>
     <div class="card-body">
@@ -109,48 +110,48 @@
       </div>
     </div>
   </section>
-</div>
 {% endif %}
-
-{% if asked is not none %}
-<section class="card mt-4" id="asked">
-  <div class="card-head"><h2>Agent questions<span class="tip" tabindex="0" role="note" data-tip="Every recall an agent makes through the API. Asking on the Ask page is not counted">?</span></h2></div>
-  <div class="card-body stack">
-    {% if not asked.calls %}
-    <p class="hint" data-empty>No agent has asked this tree anything yet.</p>
-    {% else %}
-    <p class="where-note row">
-      <span class="chip plain num">{{ asked.calls|string ~ (" call" if asked.calls == 1 else " calls") }}</span>
-      <span class="chip plain num">{{ asked.unsure_share }}% not confident</span>
-    </p>
-    <ul class="daily">
-      {% for day in asked.days %}
-      <li data-asked-day="{{ day.day }}">
-        <span class="num">{{ day.day }}</span>
-        <span class="num">{{ day.calls|string ~ (" call" if day.calls == 1 else " calls") }}</span>
-        <span class="num faint">{{ day.unsure }} not confident</span>
-      </li>
-      {% endfor %}
-    </ul>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Question</th><th>Asked by</th><th>Hits</th><th>When</th></tr></thead>
-        <tbody>
-          {% for row in asked.questions %}
-          <tr data-question>
-            <td>{% if not row.confident %}<a href="{{ row.link }}">{{ row.question }}</a>{% else %}{{ row.question }}{% endif %}</td>
-            <td>{{ row.user }}</td>
-            <td class="num">{{ row.hits }}</td>
-            <td class="num">{{ row.asked_at[:16]|replace("T", " ") }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  {% if asked is not none %}
+  <section class="card" id="asked">
+    <div class="card-head"><h2>Agent questions<span class="tip" tabindex="0" role="note" data-tip="Every recall an agent makes through the API. Asking on the Ask page is not counted">?</span></h2></div>
+    <div class="card-body stack">
+      {% if not asked.calls %}
+      <p class="hint" data-empty>No agent has asked this tree anything yet.</p>
+      {% else %}
+      <p class="where-note row">
+        <span class="faint">Last {{ window }} days</span>
+        <span class="chip plain num">{{ asked.calls|string ~ (" call" if asked.calls == 1 else " calls") }}</span>
+        <span class="chip plain num">{{ asked.unsure_share }}% not confident</span>
+      </p>
+      <ul class="daily">
+        {% for day in asked.days %}
+        <li data-asked-day="{{ day.day }}">
+          <span class="num">{{ day.day }}</span>
+          <span class="num">{{ day.calls|string ~ (" call" if day.calls == 1 else " calls") }}</span>
+          <span class="num faint">{{ day.unsure }} not confident</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Question</th><th>Asked by</th><th>Hits</th><th>When</th></tr></thead>
+          <tbody>
+            {% for row in asked.questions %}
+            <tr data-question>
+              <td>{% if not row.confident %}<a href="{{ row.link }}">{{ row.question }}</a>{% else %}{{ row.question }}{% endif %}</td>
+              <td>{{ row.user }}</td>
+              <td class="num">{{ row.hits }}</td>
+              <td class="num">{{ row.asked_at[:16]|replace("T", " ") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
-  </div>
-</section>
-{% endif %}
+  </section>
+  {% endif %}
+</div>
 <style>
 .daily { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
 .daily li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, auto) minmax(0, auto); gap: var(--s3); align-items: center; }

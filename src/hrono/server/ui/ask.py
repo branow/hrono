@@ -76,7 +76,7 @@ def ask_page(
             "loading": outcome.loading,
             "explore": explore,
             "change": change,
-            "asked": [(a.question, _link(tree, a.question)) for a in asked],
+            "asked": [(a.question, ask_link(tree, a.question)) for a in asked],
         },
     )
     if question:
@@ -151,5 +151,6 @@ def _explore(conn: sqlite3.Connection, tree: str) -> list[dict[str, str]]:
     ]
 
 
-def _link(tree: str, question: str) -> str:
+def ask_link(tree: str, question: str) -> str:
+    """The Ask page address that asks ``question`` of ``tree``."""
     return f"/ui/trees/{tree}/ask?{urlencode({'tree': tree, 'q': question})}"

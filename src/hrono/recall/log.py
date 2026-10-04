@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
+from typing import TypedDict
 
 from hrono.recall.engine import Recall
 
@@ -45,7 +46,15 @@ def record(
     )
 
 
-def per_day(conn: sqlite3.Connection, tree: str) -> list[dict[str, object]]:
+class Day(TypedDict):
+    """One day's calls and how many of them were not confident."""
+
+    day: str
+    calls: int
+    unsure: int
+
+
+def per_day(conn: sqlite3.Connection, tree: str) -> list[Day]:
     """Calls and refusals per day, oldest first."""
     rows = conn.execute(
         "SELECT substr(asked_at, 1, 10) AS day, COUNT(*) AS calls, "
@@ -53,7 +62,10 @@ def per_day(conn: sqlite3.Connection, tree: str) -> list[dict[str, object]]:
         "GROUP BY day ORDER BY day",
         (tree,),
     ).fetchall()
-    return [dict(row) for row in rows]
+    return [
+        Day(day=row["day"], calls=row["calls"], unsure=row["unsure"])
+        for row in rows
+    ]
 
 
 def latest(

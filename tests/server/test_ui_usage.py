@@ -360,6 +360,47 @@ def test_writers_see_agent_questions_and_unsure_ones_link_to_ask(
     assert "ask?tree=default&amp;q=how" not in asked  # a confident one: text
 
 
+def test_the_agent_chips_count_only_the_newest_window_and_say_so(
+    panel: Panel,
+) -> None:
+    panel.as_("writer")
+    days = DAYS + 5
+    for _ in range(days):
+        ask_api(panel, "ana", "old and unsure", 0)
+    first = date(2026, 1, 1)
+    with panel.db.write() as conn:
+        rows = conn.execute("SELECT id FROM recall_log ORDER BY id").fetchall()
+        for offset, row in enumerate(rows):
+            conn.execute(
+                "UPDATE recall_log SET asked_at = ?, confident = ? "
+                "WHERE id = ?",
+                (
+                    f"{first + timedelta(days=offset)}T10:00:00+00:00",
+                    int(offset >= 5),
+                    row["id"],
+                ),
+            )
+
+    page = panel.get("/ui/usage?tree=default")
+
+    asked = page.split('id="asked"')[1].split("</section>")[0]
+    assert f"Last {DAYS} days" in asked
+    assert f"{DAYS} calls" in asked and "0% not confident" in asked
+    assert asked.count("data-asked-day") == DAYS
+    assert str(first) not in asked
+
+
+def test_the_agent_card_sits_in_the_page_stack(panel: Panel) -> None:
+    panel.as_("writer")
+    ask_api(panel, "ana", "q", 1)
+
+    page = panel.get("/ui/usage?tree=default")
+
+    assert "mt-4" not in page.split('id="asked"')[0].rsplit("<section", 1)[1]
+    stack = page.split('<div class="stack">')[1]
+    assert 'id="asked"' in stack.split("</div>\n<style>")[0]
+
+
 def test_a_reader_never_receives_the_questions(panel: Panel) -> None:
     panel.as_("reader")
     ask_api(panel, "ana", "secret question", 1)
