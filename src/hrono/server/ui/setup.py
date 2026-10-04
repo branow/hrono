@@ -33,6 +33,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth.users import User
+from hrono.embed import runner
 from hrono.errors import AppError
 from hrono.ingest import SyncError
 from hrono.ingest.sync import fetch_source as fill_cache
@@ -369,6 +370,8 @@ def _models(
             (typed or {}).get("embedding") or defaults.EMBEDDING_MODEL
         ),
         "foreign": _foreign(conn),
+        "embed_missing": not runner.backend_installed(),
+        "embed_install": runner.INSTALL,
     }
 
 

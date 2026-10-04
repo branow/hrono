@@ -19,6 +19,7 @@ import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from hrono.embed.runner import NOT_INSTALLED
 from hrono.jobs.ops import JobContext
 from hrono.llm.client import CompletionRequest, LLMError
 from hrono.llm.providers import bounded_cli_client
@@ -142,9 +143,7 @@ def _embed_in_process(model_id: str) -> Sequence:
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
-        raise ValidationFailed(
-            "in-process embedding backend is not installed"
-        ) from exc
+        raise ValidationFailed(NOT_INSTALLED) from exc
     return list(SentenceTransformer(model_id).encode("probe"))
 
 

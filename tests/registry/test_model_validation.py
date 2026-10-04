@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -187,3 +188,15 @@ def test_a_local_endpoint_is_probed_at_its_own_root(tmp_path: Path) -> None:
         httpx.post = original  # type: ignore[assignment]
 
     assert seen == ["http://127.0.0.1:11434/v1/chat/completions"]
+
+
+def test_a_missing_embedding_backend_says_how_to_install_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "sentence_transformers", None)
+
+    with pytest.raises(ValidationFailed) as caught:
+        validate_model(embedding(), context(tmp_path, with_connection=False))
+
+    assert "uv sync --extra embed" in str(caught.value)
+    assert "hrono[embed]" in str(caught.value)

@@ -27,6 +27,7 @@ from hrono.auth.users import create_user
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.embed import runner
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry import completeness
 from hrono.registry import store as registry_store
@@ -128,6 +129,7 @@ def setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Setup]:
             made.probes.append(str(config["name"]))
             return "ok"
 
+        monkeypatch.setattr(runner, "backend_installed", lambda: True)
         monkeypatch.setattr(model_validation, "_default_embed", embed)
         monkeypatch.setattr(model_validation, "_generate_with_cli", ask)
         made.sign_in()
@@ -229,6 +231,30 @@ def test_the_whole_path_from_nothing_to_an_estimate(
 
 
 # --------------------------------------------------------------- a wrong key
+
+
+def test_models_step_without_the_embed_backend_says_how_to_get_it(
+    setup: Setup, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    setup.connect_claude_code()
+    monkeypatch.setattr(runner, "backend_installed", lambda: False)
+
+    page = setup.page("models")
+
+    assert "uv sync --extra embed" in page
+    assert 'action="/ui/setup/models"' not in page
+    assert 'id="step-models"' in page
+
+
+def test_models_step_with_the_embed_backend_offers_the_form(
+    setup: Setup,
+) -> None:
+    setup.connect_claude_code()
+
+    page = setup.page("models")
+
+    assert 'action="/ui/setup/models"' in page
+    assert "uv sync --extra embed" not in page
 
 
 def test_a_wrong_key_is_refused_with_the_providers_reason_and_saves_nothing(

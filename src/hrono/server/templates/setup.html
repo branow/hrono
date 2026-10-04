@@ -75,6 +75,11 @@
       <p class="hint">An embedding model and a writing model for every job answered a test call.</p>
     </div></div>
     <div class="act-row"><a class="btn primary" href="/ui/setup?tree={{ tree }}&amp;step=source">Continue</a></div>
+    {% elif embed_missing %}
+    <div class="callout warn"><div class="body">
+      <div class="title">This install cannot embed sections yet</div>
+      <p class="hint">The embedding backend runs on this machine and is not installed. Install it with {{ embed_install|idents }}, restart the server, then reload this page.</p>
+    </div></div>
     {% else %}
     <p class="hint">One model embeds sections on this machine, which needs no key. Each writing job gets its own model: a cheaper one condenses every section, a stronger one writes the briefs. Change an id if you want a different one.</p>
     {% if can_write %}

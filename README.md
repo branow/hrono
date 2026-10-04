@@ -160,7 +160,9 @@ install stays lean:
     uv pip install "hrono[embed]"
 
 Without it the default install has no `torch`, and the `embed` operation fails
-with a clear "in-process embedding backend is not installed" message.
+with a clear "in-process embedding backend is not installed" message that
+names the install line. The browser setup's models step says the same, and
+offers no form, until the extra is installed and the server restarted.
 
 ## Status
 

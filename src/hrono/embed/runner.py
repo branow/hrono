@@ -11,6 +11,7 @@ emitting fixed-dim vectors.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import threading
 from collections.abc import Callable, Sequence
@@ -27,6 +28,17 @@ class EmbedError(DomainError):
     code = "embed-error"
 
     """Embedding could not run (reason is client-safe, never a traceback)."""
+
+
+INSTALL = '`uv sync --extra embed` or `pip install "hrono[embed]"`'
+NOT_INSTALLED = (
+    f"in-process embedding backend is not installed; install it with {INSTALL}"
+)
+
+
+def backend_installed() -> bool:
+    """Whether the in-process embedding backend can be imported."""
+    return importlib.util.find_spec("sentence_transformers") is not None
 
 
 def embed_texts(
@@ -188,9 +200,7 @@ def _load(model_id: str, timeout: float) -> object:
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
-        raise EmbedError(
-            "in-process embedding backend is not installed"
-        ) from exc
+        raise EmbedError(NOT_INSTALLED) from exc
 
     box: dict[str, object] = {}
 

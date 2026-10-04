@@ -76,8 +76,9 @@ def test_missing_backend_reports_cleanly(
     monkeypatch.setattr(builtins, "__import__", blocked)
     from hrono.embed.runner import encoder_for
 
-    with pytest.raises(EmbedError, match="not installed"):
+    with pytest.raises(EmbedError, match="not installed") as caught:
         encoder_for("any/model")
+    assert "uv sync --extra embed" in str(caught.value)
 
 
 @pytest.mark.skipif(
