@@ -24,7 +24,6 @@ from hrono.db.database import open_database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.server.app import create_app
-from hrono.server.ui.nodes import _when
 from hrono.summarize import briefs
 
 KEY = Fernet.generate_key()
@@ -645,7 +644,7 @@ def _stamp(browser: Browser, who: str, kind: str = "brief") -> str:
     row = browser.conn.execute(  # type: ignore[attr-defined]
         "SELECT made_at FROM edit_log WHERE who = ? AND kind = ?", (who, kind)
     ).fetchone()
-    return _when(row["made_at"])
+    return str(row["made_at"]).replace("T", " ")[:16]
 
 
 def test_a_topic_with_no_edits_has_no_edits_heading(browser: Browser) -> None:
