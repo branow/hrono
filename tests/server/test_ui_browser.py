@@ -391,3 +391,62 @@ def test_a_callout_code_span_does_not_wrap_at_1100px(
         }"""
     )
     assert lines == 1
+
+
+def test_a_diff_line_copies_without_its_marker_and_long_ones_show_gaps(
+    browser: object, tmp_path: Path
+) -> None:
+    from hrono.db.database import open_database
+    from hrono.summarize import briefs
+
+    with live_server(tmp_path) as server:
+        conn = open_database(server.db_path)
+        node = conn.execute(
+            "SELECT node_id FROM briefs ORDER BY node_id LIMIT 1"
+        ).fetchone()[0]
+        old = "\n".join(f"line {n}" for n in range(30))
+        new = old.replace("line 2\n", "line two\n").replace(
+            "line 27\n", "line twenty-seven\n"
+        )
+        for text in (old, new):
+            with conn:
+                briefs.upsert(
+                    conn,
+                    node,
+                    text,
+                    model_name="m",
+                    prompt_name="brief",
+                    prompt_hash="h",
+                    member_signature="s",
+                    input_tokens=1,
+                    output_tokens=1,
+                )
+        conn.close()
+        context = browser.new_context()  # type: ignore[attr-defined]
+        context.add_cookies(
+            [{"name": "hrono_token", "value": server.token, "url": server.base}]
+        )
+        page = context.new_page()
+        page.goto(f"{server.base}/ui/trees/default/nodes/{node}")
+        page.locator("details:has-text('kept') > summary").first.click()
+        copied = page.evaluate(
+            """() => {
+              const line = document.querySelector('.diff-add');
+              const range = document.createRange();
+              range.selectNodeContents(line.parentElement);
+              const sel = getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              return sel.toString();
+            }"""
+        )
+        gaps = page.locator(".diff-gap").count()
+        full = page.locator("summary:has-text('Full text')").first
+        full.click()
+        shown = full.locator("xpath=following-sibling::pre").inner_text()
+        context.close()
+
+    assert "+" not in copied and "-line" not in copied
+    assert "line twenty-seven" in copied
+    assert gaps == 3
+    assert shown == old

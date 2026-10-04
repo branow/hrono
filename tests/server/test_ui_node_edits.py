@@ -288,9 +288,26 @@ def test_a_rewritten_brief_shows_the_old_text_and_what_changed(
     page = browser.page()
 
     assert "Previous versions" in page
-    assert "rewritten by hand" in page
-    assert '<span class="diff-del">-The summary the model wrote.</span>' in page
+    assert "replaced by a hand rewrite" in page
     assert (
-        '<span class="diff-add">+What an operator actually knows.</span>'
-        in page
-    )
+        '<span class="diff-del" data-mark="-">The summary the model wrote.'
+        "</span>"
+    ) in page
+    assert (
+        '<span class="diff-add" data-mark="+">What an operator actually '
+        "knows.</span>"
+    ) in page
+
+
+def test_two_hand_rewrites_in_a_row_never_read_by_by_hand(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    browser.post("brief", text="First rewrite.")
+    browser.post("brief", text="Second rewrite.")
+    page = browser.page()
+
+    assert "by by" not in page
+    assert page.count("by hand (") == 1
+    assert "replaced by a hand rewrite (" in page

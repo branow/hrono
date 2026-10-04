@@ -105,8 +105,9 @@ estimate and never added to metered spend, and a run from before spend was
 recorded reads unknown rather than free. A topic's page opens with a
 breadcrumb from the root, then who wrote its brief, when and with how many
 tokens; hashes are behind Details. A brief that was replaced, by a run or by
-hand, is kept (the last 5 per topic) under Previous versions, each with a line
-diff against the current one. Its sections show where each starts (the
+hand, is kept (the last 5 per topic) under Previous versions, each saying who
+wrote it and what replaced it, with a line diff against the current one and the
+full old text behind Details; saving a brief unchanged keeps nothing. Its sections show where each starts (the
 heading, the lines, the size), worst fit first, filterable by path and paged.
 For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
 split) sit in the page head, each saying what it will change before it runs;

@@ -414,29 +414,57 @@ def _versions(
     current = str(brief["text"]) if brief is not None else ""  # type: ignore[index]
     return [
         {
-            "when": _when(row["replaced_at"]),
-            "who": "by hand"
-            if row["model_name"] == "hand-edited"
-            else str(row["model_name"]),
-            "why": "rewritten by hand"
-            if row["reason"] == "rewrite"
-            else "regenerated",
-            "diff": [
-                {"kind": _DIFF_KINDS[line[:1]], "text": line}
-                for line in difflib.unified_diff(
-                    str(row["text"]).splitlines(),
-                    current.splitlines(),
-                    lineterm="",
-                    n=1,
-                )
-                if line[:1] in _DIFF_KINDS and line[:3] not in {"---", "+++"}
-            ],
+            "line": _version_line(row),
+            "diff": _diff(str(row["text"]), current),
+            "old": str(row["text"]),
         }
         for row in briefs.versions(conn, node_id)  # type: ignore[arg-type]
     ]
 
 
-_DIFF_KINDS = {"+": "add", "-": "del", " ": "same"}
+def _version_line(row: object) -> str:
+    """Who wrote a kept brief, and what replaced it, each with its minute."""
+    hand = row["model_name"] == "hand-edited"  # type: ignore[index]
+    who = "a hand rewrite" if hand else str(row["model_name"])  # type: ignore[index]
+    by = "hand" if hand else who
+    replaced = (
+        "a hand rewrite" if row["reason"] == "rewrite" else "a regeneration"  # type: ignore[index]
+    )
+    return (
+        f"by {by} ({_when(row['written_at'])}), "  # type: ignore[index]
+        f"replaced by {replaced} ({_when(row['replaced_at'])})"  # type: ignore[index]
+    )
+
+
+def _diff(old: str, new: str) -> list[dict[str, str]]:
+    """Changed lines with a line of context, and a gap where lines are skipped.
+
+    The sign is a ``mark`` apart from the text, so a selection copies the
+    line and nothing else.
+    """
+    a, b = old.splitlines(), new.splitlines()
+    groups = list(difflib.SequenceMatcher(None, a, b).get_grouped_opcodes(1))
+    rows: list[dict[str, str]] = []
+    for number, group in enumerate(groups):
+        if number == 0 and (group[0][1] or group[0][3]) or number:
+            rows.append(_GAP)
+        for tag, i1, i2, j1, j2 in group:
+            if tag == "equal":
+                rows += [_row("same", line) for line in a[i1:i2]]
+                continue
+            rows += [_row("del", line) for line in a[i1:i2]]
+            rows += [_row("add", line) for line in b[j1:j2]]
+    if groups and (groups[-1][-1][2] < len(a) or groups[-1][-1][4] < len(b)):
+        rows.append(_GAP)
+    return rows
+
+
+def _row(kind: str, text: str) -> dict[str, str]:
+    return {"kind": kind, "mark": _MARKS[kind], "text": text}
+
+
+_MARKS = {"add": "+", "del": "-", "same": " "}
+_GAP = {"kind": "gap", "mark": "", "text": ""}
 
 
 def _is_root(conn: object, tree: str, node_id: int, parent: object) -> bool:

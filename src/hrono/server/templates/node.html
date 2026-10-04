@@ -361,8 +361,12 @@
         <summary class="twisty">{{ node.versions|length }} kept</summary>
         {% for v in node.versions %}
         <div class="stack mt-3">
-          <div class="title">{{ v.when }} <span class="faint small">{{ v.why }}, written by {{ v.who }}</span></div>
-          <pre class="mono small">{% for line in v.diff %}<span class="diff-{{ line.kind }}">{{ line.text }}</span>{% endfor %}</pre>
+          <div class="title">{{ v.line }}</div>
+          <pre class="mono small">{% for line in v.diff %}<span class="diff-{{ line.kind }}" data-mark="{{ line.mark }}">{{ line.text }}</span>{% endfor %}</pre>
+          <details>
+            <summary class="faint small">Full text of this version</summary>
+            <pre class="mono small">{{ v.old }}</pre>
+          </details>
         </div>
         {% endfor %}
       </details>

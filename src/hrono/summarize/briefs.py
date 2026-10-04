@@ -463,7 +463,8 @@ def upsert(
 
     A brief this replaces is first copied to ``brief_versions`` with ``reason``
     ('regen', or 'rewrite' for a hand edit), and only the newest
-    ``KEEP_VERSIONS`` are kept (E033); a first write copies nothing.
+    ``KEEP_VERSIONS`` are kept (E033); a first write, or one that leaves the
+    text unchanged, copies nothing (E035).
 
     ``unfaithful`` is the faithfulness gate's JSON verdict (#063); default '[]'
     keeps callers that do not run the gate unchanged. ``flagged`` is the shape
@@ -474,7 +475,7 @@ def upsert(
     ``source_model`` is the condense model whose condensations it was written
     from, so the echo gate reads the same material later (E019).
     """
-    _keep_replaced(conn, node_id, reason)
+    _keep_replaced(conn, node_id, text, reason)
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
@@ -500,7 +501,15 @@ def upsert(
     )
 
 
-def _keep_replaced(conn: sqlite3.Connection, node_id: int, reason: str) -> None:
+def _keep_replaced(
+    conn: sqlite3.Connection, node_id: int, text: str, reason: str
+) -> None:
+    """Copy the stored brief aside, unless the new text is the same text."""
+    stored = conn.execute(
+        "SELECT text FROM briefs WHERE node_id = ?", (node_id,)
+    ).fetchone()
+    if stored is not None and stored["text"] == text:
+        return
     conn.execute(
         "INSERT INTO brief_versions(node_id, text, model_name, written_at, "
         "replaced_at, reason) SELECT node_id, text, model_name, created_at, "

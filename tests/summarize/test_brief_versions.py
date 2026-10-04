@@ -99,3 +99,16 @@ def test_only_the_newest_five_are_kept(world) -> None:  # type: ignore[no-untype
     kept = [row["text"] for row in briefs.versions(conn, node)]
     assert kept == [f"text {n}" for n in (5, 4, 3, 2, 1)]
     assert str(briefs.get(conn, node)["text"]) == "text 6"
+
+
+def test_an_unchanged_save_keeps_nothing_and_pushes_none_out(world) -> None:  # type: ignore[no-untyped-def]
+    conn, node = world
+    for number in range(6):
+        _write(conn, node, f"text {number}")
+    before = [row["text"] for row in briefs.versions(conn, node)]
+
+    _write(conn, node, "text 5")
+    with conn:
+        edits.override_brief(conn, TREE, node, "text 5")
+
+    assert [row["text"] for row in briefs.versions(conn, node)] == before

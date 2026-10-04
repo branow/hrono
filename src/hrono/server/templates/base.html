@@ -370,6 +370,8 @@ main {
 .chip.accent { background: var(--accent-wash); border-color: var(--accent); color: var(--accent); }
 .chip.ok { background: var(--ok-wash); border-color: transparent; color: var(--ok); }
 .diff-add, .diff-del, .diff-same { display: block; white-space: pre-wrap; }
+.diff-add::before, .diff-del::before, .diff-same::before { content: attr(data-mark); display: inline-block; width: 1.5ch; user-select: none; }
+.diff-gap { display: block; height: 0; margin: .35rem 0; border-top: 1px dashed var(--rule-firm); user-select: none; }
 .diff-add { background: var(--ok-wash); color: var(--ok); }
 .diff-del { background: var(--danger-wash); color: var(--danger); }
 .chip.warn { background: var(--warn-wash); border-color: transparent; color: var(--warn); }
