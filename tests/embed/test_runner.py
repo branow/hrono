@@ -78,7 +78,7 @@ def test_missing_backend_reports_cleanly(
 
     with pytest.raises(EmbedError, match="not installed") as caught:
         encoder_for("any/model")
-    assert "uv sync --extra embed" in str(caught.value)
+    assert 'uv pip install "hrono[embed]"' in str(caught.value)
 
 
 @pytest.mark.skipif(

@@ -174,7 +174,7 @@ def test_the_last_questions_are_kept_to_compare(panel: Panel) -> None:
         ),
         pytest.param(
             EmbedError("sentence-transformers is not installed"),
-            "pip install 'hrono[embed]'",
+            'uv pip install "hrono[embed]"',
             id="missing",
         ),
     ],

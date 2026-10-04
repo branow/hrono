@@ -24,7 +24,7 @@ SAID: dict[str, tuple[str, str]] = {
         "The embedding model could not turn text into vectors.",
         "Check the embedding model in Settings. A model that runs on this "
         "server needs the embedding backend installed "
-        "(pip install 'hrono[embed]').",
+        '(uv pip install "hrono[embed]").',
     ),
     "cluster-error": (
         "Grouping sections into topics failed.",

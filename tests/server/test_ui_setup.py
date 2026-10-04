@@ -241,7 +241,7 @@ def test_models_step_without_the_embed_backend_says_how_to_get_it(
 
     page = setup.page("models")
 
-    assert "uv sync --extra embed" in page
+    assert "uv pip install" in page and "hrono[embed]" in page
     assert 'action="/ui/setup/models"' not in page
     assert 'id="step-models"' in page
 
@@ -254,7 +254,7 @@ def test_models_step_with_the_embed_backend_offers_the_form(
     page = setup.page("models")
 
     assert 'action="/ui/setup/models"' in page
-    assert "uv sync --extra embed" not in page
+    assert "hrono[embed]" not in page
 
 
 def test_a_wrong_key_is_refused_with_the_providers_reason_and_saves_nothing(

@@ -198,5 +198,5 @@ def test_a_missing_embedding_backend_says_how_to_install_it(
     with pytest.raises(ValidationFailed) as caught:
         validate_model(embedding(), context(tmp_path, with_connection=False))
 
-    assert "uv sync --extra embed" in str(caught.value)
+    assert 'uv pip install "hrono[embed]"' in str(caught.value)
     assert "hrono[embed]" in str(caught.value)

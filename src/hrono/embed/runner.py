@@ -30,7 +30,7 @@ class EmbedError(DomainError):
     """Embedding could not run (reason is client-safe, never a traceback)."""
 
 
-INSTALL = '`uv sync --extra embed` or `pip install "hrono[embed]"`'
+INSTALL = '`uv pip install "hrono[embed]"`'
 NOT_INSTALLED = (
     f"in-process embedding backend is not installed; install it with {INSTALL}"
 )

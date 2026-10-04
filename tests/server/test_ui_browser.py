@@ -372,3 +372,22 @@ def test_the_guides_model_table_keeps_each_name_on_one_line(
         )
         <= 0
     )
+
+
+def test_a_callout_code_span_does_not_wrap_at_1100px(
+    page: object, live: Live
+) -> None:
+    page.set_viewport_size({"width": 1100, "height": 900})  # type: ignore[attr-defined]
+    page.goto(live.base + "/ui/setup")  # type: ignore[attr-defined]
+    lines = page.evaluate(  # type: ignore[attr-defined]
+        """() => {
+          const box = document.createElement("div");
+          box.className = "callout warn";
+          box.style.width = "160px";
+          box.innerHTML = '<div class="body"><p class="hint">Install it with '
+            + '<code>uv pip install "hrono[embed]"</code>, restart.</p></div>';
+          document.querySelector("main").prepend(box);
+          return box.querySelector("code").getClientRects().length;
+        }"""
+    )
+    assert lines == 1

@@ -78,7 +78,7 @@
     {% elif embed_missing %}
     <div class="callout warn"><div class="body">
       <div class="title">This install cannot embed sections yet</div>
-      <p class="hint">The embedding backend runs on this machine and is not installed. Install it with {{ embed_install|idents }}, restart the server, then reload this page.</p>
+      <p class="hint">The embedding backend runs on this machine and is not installed. Install it with {{ embed_install|idents }}, restart the server, then reload this page. To use a remote embedding model instead, choose one in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>.</p>
     </div></div>
     {% else %}
     <p class="hint">One model embeds sections on this machine, which needs no key. Each writing job gets its own model: a cheaper one condenses every section, a stronger one writes the briefs. Change an id if you want a different one.</p>
