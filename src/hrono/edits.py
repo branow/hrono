@@ -101,7 +101,8 @@ def rename(
         "SELECT title FROM nodes WHERE id = ?", (node_id,)
     ).fetchone()["title"]
     _set_title(conn, node_id, title)
-    _record(conn, node_id, "rename", who, before=before)
+    if before != title:
+        _record(conn, node_id, "rename", who, before=before)
 
 
 def _set_title(
@@ -126,24 +127,34 @@ def override_brief(
     stored = briefs.get(conn, node_id)
     before = None if stored is None else str(stored["text"])
     _write_brief(conn, node_id, text, "brief written by hand")
-    _record(conn, node_id, "brief", who, before=before)
+    if before != text:
+        _record(conn, node_id, "brief", who, before=before)
 
 
 def _write_brief(
-    conn: sqlite3.Connection, node_id: int, text: str, reason: str
+    conn: sqlite3.Connection,
+    node_id: int,
+    text: str,
+    reason: str,
+    author: sqlite3.Row | None = None,
 ) -> None:
     signature = briefs.member_signature(conn, node_id)
+    by = {
+        "model_name": "hand-edited",
+        "prompt_name": "hand-edited",
+        "prompt_hash": "",
+        "input_tokens": 0,
+        "output_tokens": 0,
+    }
+    if author is not None:
+        by = {key: author[key] for key in by}
     briefs.upsert(
         conn,
         node_id,
         text,
-        model_name="hand-edited",
-        prompt_name="hand-edited",
-        prompt_hash="",
         member_signature=signature,
-        input_tokens=0,
-        output_tokens=0,
         reason="rewrite",
+        **by,  # type: ignore[arg-type]
     )
     store_brief(conn, node_id, text, signature)
     pins.pin(conn, pins.BRIEF, node_id, reason=reason)
@@ -193,8 +204,13 @@ def undo(
     if kind == "rename":
         _set_title(conn, node_id, latest["before"])
     elif kind == "brief":
+        before = str(latest["before"])
         _write_brief(
-            conn, node_id, str(latest["before"]), "brief restored by hand"
+            conn,
+            node_id,
+            before,
+            "brief restored by hand",
+            briefs.kept_version(conn, node_id, before),
         )
     else:
         conn.execute("DELETE FROM notes WHERE id = ?", (latest["ref"],))
@@ -216,15 +232,22 @@ def _record(
         "VALUES (?, ?, ?, ?, ?, ?)",
         (node_id, kind, before, ref, who, datetime.now(UTC).isoformat()),
     )
+    conn.execute(
+        "DELETE FROM edit_log WHERE node_id = ? AND id < last_insert_rowid()",
+        (node_id,),
+    )
 
 
 def release(conn: sqlite3.Connection, tree: str, node_id: int) -> int:
     """Hand a node back to automation; return how many pins were released.
 
     Every pin on the node, not one kind: an operator saying "hand this back"
-    means the topic, not a vocabulary they have never been shown.
+    means the topic, not a vocabulary they have never been shown. Its undo
+    goes too: a restored name or brief would pin the topic again over whatever
+    the pipeline has written since (E036).
     """
     require_node(conn, tree, node_id)
+    conn.execute("DELETE FROM edit_log WHERE node_id = ?", (node_id,))
     return pins.unpin_all(conn, node_id)
 
 

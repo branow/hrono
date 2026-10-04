@@ -512,8 +512,10 @@ def _keep_replaced(
         return
     conn.execute(
         "INSERT INTO brief_versions(node_id, text, model_name, written_at, "
-        "replaced_at, reason) SELECT node_id, text, model_name, created_at, "
-        "?, ? FROM briefs WHERE node_id = ?",
+        "replaced_at, reason, prompt_name, prompt_hash, input_tokens, "
+        "output_tokens) SELECT node_id, text, model_name, created_at, ?, ?, "
+        "prompt_name, prompt_hash, input_tokens, output_tokens "
+        "FROM briefs WHERE node_id = ?",
         (_now(), reason, node_id),
     )
     conn.execute(
@@ -522,6 +524,18 @@ def _keep_replaced(
         "ORDER BY id DESC LIMIT ?)",
         (node_id, node_id, KEEP_VERSIONS),
     )
+
+
+def kept_version(
+    conn: sqlite3.Connection, node_id: int, text: str
+) -> sqlite3.Row | None:
+    """The newest kept version of a node's brief with this text, if any."""
+    return conn.execute(
+        "SELECT model_name, prompt_name, prompt_hash, input_tokens, "
+        "output_tokens FROM brief_versions WHERE node_id = ? AND text = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (node_id, text),
+    ).fetchone()
 
 
 def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:

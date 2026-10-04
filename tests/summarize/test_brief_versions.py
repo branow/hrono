@@ -107,7 +107,7 @@ def test_an_unchanged_save_keeps_nothing_and_pushes_none_out(world) -> None:  # 
         _write(conn, node, f"text {number}")
     before = [row["text"] for row in briefs.versions(conn, node)]
 
-    _write(conn, node, "text 5", "t")
+    _write(conn, node, "text 5")
     with conn:
         edits.override_brief(conn, TREE, node, "text 5", "t")
 

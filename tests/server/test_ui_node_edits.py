@@ -366,12 +366,106 @@ def test_each_manual_edit_records_what_it_replaced(browser: Browser) -> None:
     browser.post("brief", text="Hand text.")
     browser.post("note", text="A remark")
 
-    assert _log(browser) == [
-        ("rename", None, "admin"),
-        ("rename", "First name", "admin"),
-        ("brief", "The summary the model wrote.", "admin"),
-        ("note", None, "admin"),
-    ]
+    assert _log(browser) == [("note", None, "admin")]
+
+
+@pytest.mark.parametrize(
+    ("edits_made", "kind", "before"),
+    [
+        (
+            (("rename", "First name"), ("rename", "Second name")),
+            "rename",
+            "First name",
+        ),
+        (
+            (("rename", "A name"), ("brief", "Hand text.")),
+            "brief",
+            "The summary the model wrote.",
+        ),
+    ],
+    ids=["two-renames", "rename-then-brief"],
+)
+def test_the_log_keeps_one_row_per_topic(
+    browser: Browser,
+    edits_made: tuple[tuple[str, str], ...],
+    kind: str,
+    before: str,
+) -> None:
+    browser.sign_in()
+
+    for route, value in edits_made:
+        browser.post(route, **{"title" if route == "rename" else "text": value})
+
+    assert _log(browser) == [(kind, before, "admin")]
+
+
+@pytest.mark.parametrize(
+    ("route", "field", "same"),
+    [
+        ("rename", "title", "Same name"),
+        ("brief", "text", "The summary the model wrote."),
+    ],
+    ids=["rename", "brief"],
+)
+def test_a_same_value_edit_offers_no_undo(
+    browser: Browser, route: str, field: str, same: str
+) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE nodes SET title = ? WHERE id = ?",
+            ("Same name", browser.node),
+        )
+
+    browser.post(route, **{field: same})
+
+    assert _log(browser) == []
+    assert "Undo" not in browser.page()
+    assert browser.pins()
+
+
+def test_handing_back_clears_the_undo_so_a_regeneration_stands(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.post("brief", text="A hand rewrite.")
+    assert "Undo brief rewrite" in browser.page()
+
+    browser.post("release")
+    with browser.conn:  # type: ignore[attr-defined]
+        briefs.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            browser.node,
+            "Regenerated after the hand-back.",
+            model_name="m2",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature="sig",
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+    assert _log(browser) == []
+    assert "Undo" not in browser.page()
+    assert browser.pins() == {}
+    assert _brief(browser) == "Regenerated after the hand-back."
+
+
+def test_an_undone_rewrite_names_the_original_author(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.post("brief", text="A wrong rewrite.")
+    assert "hand-edited" in browser.page()
+
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+    row = briefs.get(browser.conn, browser.node)  # type: ignore[arg-type]
+
+    assert row["model_name"] == "m"  # type: ignore[index]
+    assert (row["prompt_name"], row["prompt_hash"]) == ("brief", "h")  # type: ignore[index]
+    assert (row["input_tokens"], row["output_tokens"]) == (1, 1)  # type: ignore[index]
+    assert "hand-edited" not in browser.page()
+    assert "brief" in browser.pins()
 
 
 def test_a_refused_edit_records_nothing(browser: Browser) -> None:
