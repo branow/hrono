@@ -48,6 +48,7 @@ from hrono.registry.collections.sources import SOURCES
 from hrono.registry.collections.trees import scoped_sources
 from hrono.server import forms
 from hrono.server.auth import allows
+from hrono.server.trees import require_tree
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.settings import (
     existing,
@@ -233,6 +234,7 @@ async def start_build(request: Request, user: Writer) -> Response:
     """Start the first build and land on its run."""
     form = await posted(request)
     tree = first(form, "tree")
+    require_tree(request, tree)
     with request.app.state.db.connect() as conn:
         state = progress(conn, tree)
         busy = conn.execute(

@@ -380,6 +380,20 @@ def test_building_queues_the_first_run_and_lands_on_it(
     )
 
 
+def test_building_an_unregistered_tree_is_refused_and_queues_nothing(
+    setup: Setup, repo: Path
+) -> None:
+    _ready(setup, repo)
+
+    refused = setup.post("/ui/setup/build", tree="nope")
+
+    assert refused.status_code == 404
+    assert "tree not registered: nope" in refused.json()["error"]["message"]
+    with setup.client.app.state.db.connect() as conn:  # type: ignore[attr-defined]
+        assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] == 0
+
+
 def test_pressing_build_twice_does_not_start_a_second_run(
     setup: Setup, repo: Path
 ) -> None:

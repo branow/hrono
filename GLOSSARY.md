@@ -50,7 +50,8 @@ One database can hold several.
 verb: it touches only what moved.
 
 **maintain** — build a tree that does not exist yet, end to end. The cold verb,
-and the expensive one.
+and the expensive one. It refuses a tree nobody registered (`default`
+always exists).
 
 **recall** — answer a question by injecting the passages that answer it, with
 provenance. Strict on purpose: when nothing clears the confidence floor it says

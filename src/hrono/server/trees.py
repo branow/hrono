@@ -27,6 +27,7 @@ from hrono.errors import NotFound
 from hrono.export.produce import Export, archive, produce
 from hrono.jobs.worker import enqueue
 from hrono.recall.ask import ask
+from hrono.registry.collections.trees import is_known
 from hrono.server.auth import require_role
 from hrono.summarize import briefs
 from hrono.summarize import store as condensations
@@ -48,10 +49,21 @@ class RecallRequest(BaseModel):
 @router.post("/trees/{name}/maintain")
 def maintain_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
     """Enqueue a maintain job for ``name`` and return its job id."""
+    require_tree(request, name)
     job_id = enqueue(
         request.app.state.db, "maintain", {}, tree=name, started_by=user.name
     )
     return {"job_id": job_id}
+
+
+def require_tree(request: Request, name: str) -> None:
+    """Refuse a tree nobody registered, before any job is queued."""
+    with request.app.state.db.connect() as conn:
+        if not is_known(conn, name):
+            raise NotFound(
+                f"tree not registered: {name}; register it first, or use "
+                "`default`"
+            )
 
 
 @router.post("/trees/{name}/sync")

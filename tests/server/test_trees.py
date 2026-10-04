@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -12,6 +13,7 @@ from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
+from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -72,6 +74,39 @@ def test_writer_kicks_a_maintain_job_and_gets_a_job_id(
     ).json()
     assert fetched["op"] == "maintain"
     assert fetched["tree"] == "default"
+
+
+def test_maintain_for_an_unregistered_tree_is_refused_and_queues_nothing(
+    harness: Harness,
+) -> None:
+    resp = harness.client.post(
+        "/trees/nope/maintain", headers=harness.auth("writer")
+    )
+
+    assert resp.status_code == 404
+    assert "tree not registered: nope" in resp.json()["error"]["message"]
+    assert harness.conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+    assert harness.conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] == 0
+
+
+def test_maintain_for_a_registered_tree_queues_a_job(
+    harness: Harness,
+) -> None:
+    registry_store.insert(
+        harness.conn,
+        "trees",
+        "alpha",
+        json.dumps({"name": "alpha"}),
+        None,
+        "t",
+    )
+    harness.conn.commit()
+
+    resp = harness.client.post(
+        "/trees/alpha/maintain", headers=harness.auth("writer")
+    )
+
+    assert resp.status_code == 200
 
 
 def test_pending_requires_auth(harness: Harness) -> None:

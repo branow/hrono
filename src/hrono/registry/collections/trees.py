@@ -29,6 +29,8 @@ from hrono.registry.descriptor import (
     ValidationFailed,
 )
 
+DEFAULT_TREE = "default"
+
 
 class Tree(BaseModel):
     name: RegistryName = Field(
@@ -95,6 +97,15 @@ TREES = Descriptor(
     validate=_validate,
     before_delete=_before_delete,
 )
+
+
+def is_known(conn: sqlite3.Connection, tree: str) -> bool:
+    """Whether work may be queued for ``tree``: registered, or the default.
+
+    A database nobody has partitioned has exactly one tree, `default`, with no
+    registry row (#054); any other name that is not registered is a typo.
+    """
+    return tree == DEFAULT_TREE or store.get(conn, "trees", tree) is not None
 
 
 def sources_of(conn: sqlite3.Connection, tree: str) -> tuple[str, ...] | None:
