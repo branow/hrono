@@ -513,8 +513,11 @@ def _keep_replaced(
     conn.execute(
         "INSERT INTO brief_versions(node_id, text, model_name, written_at, "
         "replaced_at, reason, prompt_name, prompt_hash, input_tokens, "
-        "output_tokens) SELECT node_id, text, model_name, created_at, ?, ?, "
-        "prompt_name, prompt_hash, input_tokens, output_tokens "
+        "output_tokens, member_signature, members, source_model, "
+        "model_fingerprint, unfaithful, flagged) SELECT node_id, text, "
+        "model_name, created_at, ?, ?, prompt_name, prompt_hash, input_tokens, "
+        "output_tokens, member_signature, members, source_model, "
+        "model_fingerprint, unfaithful, flagged "
         "FROM briefs WHERE node_id = ?",
         (_now(), reason, node_id),
     )
@@ -529,11 +532,16 @@ def _keep_replaced(
 def kept_version(
     conn: sqlite3.Connection, node_id: int, text: str
 ) -> sqlite3.Row | None:
-    """The newest kept version of a node's brief with this text, if any."""
+    """The newest kept version of a node's brief with this text, if any.
+
+    The whole record, so a restored brief is the one that was replaced and
+    not a lookalike that counts as fresh without its members (E036).
+    """
     return conn.execute(
         "SELECT model_name, prompt_name, prompt_hash, input_tokens, "
-        "output_tokens FROM brief_versions WHERE node_id = ? AND text = ? "
-        "ORDER BY id DESC LIMIT 1",
+        "output_tokens, member_signature, members, source_model, "
+        "model_fingerprint, unfaithful, flagged FROM brief_versions "
+        "WHERE node_id = ? AND text = ? ORDER BY id DESC LIMIT 1",
         (node_id, text),
     ).fetchone()
 

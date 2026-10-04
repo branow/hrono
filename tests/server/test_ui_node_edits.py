@@ -468,6 +468,100 @@ def test_an_undone_rewrite_names_the_original_author(
     assert "brief" in browser.pins()
 
 
+def _record_of(conn: object, node: int) -> dict[str, object]:
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT * FROM briefs WHERE node_id = ?", (node,)
+    ).fetchone()
+    return dict(row)
+
+
+def test_an_undone_rewrite_keeps_the_briefs_whole_record(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    conn = browser.conn  # type: ignore[attr-defined]
+    with conn:
+        briefs.upsert(
+            conn,
+            browser.node,
+            "The summary the model wrote.",
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature=briefs.member_signature(conn, browser.node),
+            input_tokens=1,
+            output_tokens=1,
+            model_fingerprint="fp",
+            unfaithful='["x"]',
+            flagged="shape",
+            members='["git://ex/docs/a.md"]',
+            source_model="cm",
+        )
+    before = _record_of(conn, browser.node)
+
+    browser.post("brief", text="A wrong rewrite.")
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+    browser.post("release")
+    after = _record_of(conn, browser.node)
+
+    for key in (
+        "members",
+        "source_model",
+        "model_fingerprint",
+        "member_signature",
+        "unfaithful",
+        "flagged",
+    ):
+        assert after[key] == before[key], key
+
+
+def test_a_handed_back_undone_rewrite_stays_fresh_with_its_references(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    conn = browser.conn  # type: ignore[attr-defined]
+    with conn:
+        briefs.upsert(
+            conn,
+            browser.node,
+            "The docs describe how the service is configured, started and "
+            "stopped, and which settings an operator changes most often.",
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature=briefs.member_signature(conn, browser.node),
+            input_tokens=1,
+            output_tokens=1,
+            members='["git://ex/docs/a.md"]',
+            source_model="cm",
+        )
+
+    browser.post("brief", text="A wrong rewrite.")
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+    browser.post("release")
+
+    assert _record_of(conn, browser.node)["members"] == '["git://ex/docs/a.md"]'
+    assert briefs.stale_or_missing(conn, TREE, 0, "h", "m") == ()
+
+
+def test_an_undone_rewrite_of_an_unknown_record_is_rebriefed(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    conn = browser.conn  # type: ignore[attr-defined]
+    browser.post("brief", text="A rewrite over a brief with a stale record.")
+    with conn:
+        conn.execute(
+            "UPDATE brief_versions SET member_signature = '' WHERE node_id = ?",
+            (browser.node,),
+        )
+
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+    browser.post("release")
+
+    assert briefs.stale_or_missing(conn, TREE, 0, "h", "m") == (browser.node,)
+
+
 def test_a_refused_edit_records_nothing(browser: Browser) -> None:
     browser.sign_in()
 

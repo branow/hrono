@@ -138,25 +138,18 @@ def _write_brief(
     reason: str,
     author: sqlite3.Row | None = None,
 ) -> None:
-    signature = briefs.member_signature(conn, node_id)
-    by = {
+    by: dict[str, object] = {
         "model_name": "hand-edited",
         "prompt_name": "hand-edited",
         "prompt_hash": "",
         "input_tokens": 0,
         "output_tokens": 0,
+        "member_signature": briefs.member_signature(conn, node_id),
     }
     if author is not None:
-        by = {key: author[key] for key in by}
-    briefs.upsert(
-        conn,
-        node_id,
-        text,
-        member_signature=signature,
-        reason="rewrite",
-        **by,  # type: ignore[arg-type]
-    )
-    store_brief(conn, node_id, text, signature)
+        by = dict(author)
+    briefs.upsert(conn, node_id, text, reason="rewrite", **by)  # type: ignore[arg-type]
+    store_brief(conn, node_id, text, str(by["member_signature"]))
     pins.pin(conn, pins.BRIEF, node_id, reason=reason)
 
 
