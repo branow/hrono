@@ -33,15 +33,13 @@ from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages
-from hrono.registry.collections.trees import scoped_sources
+from hrono.registry.collections.trees import DEFAULT_TREE, scoped_sources
 from hrono.registry.completeness import BUILD_ROLES
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense
 from hrono.summarize.resolve import resolve_text_model
 from hrono.tree import changes
-
-_DEFAULT_TREE = "default"
 
 # The roles this chain will ask for, in the order it asks for them — the same
 # tuple Settings checks before anyone starts a build (#210).
@@ -81,7 +79,7 @@ def maintain(
     Every stage is timed and its counts kept (#213), and a failing one is
     reported by name with the item it was on and the stages before it.
     """
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         sources = scoped_sources(conn, tree)
         _require_models(conn)

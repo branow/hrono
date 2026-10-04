@@ -48,10 +48,10 @@ from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 
-_DEFAULT_TREE = "default"
 CHURN_THRESHOLD = 50  # accumulated drift points since the last settle
 MISFIT_FACTOR = 2.0  # global misfit above 2x baseline forces a reconcile
 
@@ -66,7 +66,7 @@ def settle(
     client: object | None = None,
 ) -> Mapping[str, object]:
     """Warm-reconcile the tree when churn/misfit crosses the trigger."""
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         if not (force or should_settle(conn, tree)):
             return {"settled": False, "held": 0, "released": 0}

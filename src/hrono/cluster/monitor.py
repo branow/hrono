@@ -42,13 +42,14 @@ from hrono.cluster.placement import TAU
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.registry.collections.trees import DEFAULT_TREE
 
 SAMPLE_SIZE = 32  # bounded per-batch re-check beyond the dirty clusters
 
 
 def monitor(job: Job, context: JobContext) -> Mapping[str, object]:
     """Refresh misfit counts for the batch's dirty clusters (+ a sample)."""
-    tree = job.tree or "default"
+    tree = job.tree or DEFAULT_TREE
     dirty = [int(node_id) for node_id in job.scope.get("dirty", [])]
     with context.database.write() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])

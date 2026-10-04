@@ -44,14 +44,13 @@ from hrono.cluster.repair import repair
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages
+from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize.brief import brief
 from hrono.summarize.brief_upper import brief_upper
 from hrono.summarize.propagate import propagate
 from hrono.tree import changes
 from hrono.tree.settle import should_settle
 from hrono.tree.update import update
-
-_DEFAULT_TREE = "default"
 
 
 def sync(
@@ -66,7 +65,7 @@ def sync(
 
     Each stage is timed and kept, and a failure names its stage (#213).
     """
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         before = changes.snapshot(conn, tree)
     run = Stages()

@@ -31,6 +31,7 @@ from hrono.ingest.identity import content_hash
 from hrono.ingest.store import upsert_content
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize import briefs
 
 Builder = Callable[..., object]
@@ -45,7 +46,7 @@ def cluster_briefs(
 ) -> None:
     """Cluster a level's briefs into the next level up (members = node ids)."""
     builder = build if build is not None else _load_builder()
-    tree = job.tree or "default"
+    tree = job.tree or DEFAULT_TREE
     source_level = _source_level(job.scope)
 
     with context.database.connect() as conn:
@@ -138,7 +139,7 @@ def attach_orphans(
     nothing to attach or no level above yet (a corpus whose tree is a single
     level is normal — ``_collect_root`` gives it a root first).
     """
-    tree = job.tree or "default"
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         leaf_briefs = briefs.level_briefs(conn, tree, level)
         homeless = set(store.unparented(conn, tree, level))

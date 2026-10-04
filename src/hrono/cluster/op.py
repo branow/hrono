@@ -35,7 +35,7 @@ from hrono.cluster.build import ClusterResult
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.registry.collections.trees import sources_of
+from hrono.registry.collections.trees import DEFAULT_TREE, sources_of
 
 _LEVEL = 0
 
@@ -50,7 +50,7 @@ def cluster(
 ) -> Mapping[str, object]:
     """Cluster the tree's embedded sections into bottom-level topics."""
     builder = build if build is not None else _load_builder()
-    tree = job.tree or "default"
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         config = resolve_embedding_model(conn, job.scope)
         pairs = store.section_combined_vectors(

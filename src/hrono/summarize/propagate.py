@@ -33,6 +33,7 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion, CompletionRequest
 from hrono.llm.providers import client_for
+from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize import briefs, spend
 from hrono.summarize.resolve import (
     producer_model_name,
@@ -40,7 +41,6 @@ from hrono.summarize.resolve import (
     resolve_text_model,
 )
 
-_DEFAULT_TREE = "default"
 _LEAF_LEVEL = 0
 D_MAX = 5  # cap the climb at five levels above the changed leaf
 BEST_OF = 3  # judge panel size; majority verdict
@@ -66,7 +66,7 @@ def propagate(
     client: Completion | None = None,
 ) -> Mapping[str, object]:
     """Judge each changed leaf and mark its ancestors stale on drift."""
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         model = resolve_text_model(conn, job.scope, "judge")
         _prompt_name, template = resolve_prompt(conn, "judge")

@@ -44,6 +44,7 @@ from hrono.cluster.levels import migrate_children
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.registry.collections.trees import DEFAULT_TREE
 
 MAX_CAP = 30  # summarization budget: a cluster larger than this splits
 MISFIT_THRESHOLD = 0.25  # per-cluster misfit fraction that triggers a migrate
@@ -59,7 +60,7 @@ def repair(
     core_labeler: CoreLabeler | None = None,
 ) -> Mapping[str, object]:
     """Apply the fitting local repair to each cluster from its size + misfit."""
-    tree = job.tree or "default"
+    tree = job.tree or DEFAULT_TREE
     done = {"dissolved": 0, "split": 0, "migrated": 0, "freed": 0}
     with context.database.write() as conn:
         # what a pin HELD is part of this run's outcome (#155)

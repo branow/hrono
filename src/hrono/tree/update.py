@@ -93,12 +93,10 @@ from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import LLMError
-from hrono.registry.collections.trees import scoped_sources
+from hrono.registry.collections.trees import DEFAULT_TREE, scoped_sources
 from hrono.summarize import store as condensations
 from hrono.summarize.condense import condense
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
-
-_DEFAULT_TREE = "default"
 
 
 def update(
@@ -109,7 +107,7 @@ def update(
     client: object | None = None,
 ) -> Mapping[str, object]:
     """Apply each source's change batch incrementally to the tree."""
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         sources = scoped_sources(conn, tree)
         model_name = str(resolve_embedding_model(conn, job.scope)["name"])

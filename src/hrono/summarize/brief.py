@@ -43,6 +43,7 @@ from hrono.llm.client import (
 )
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
+from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize import briefs, pool, spend
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import (
@@ -56,8 +57,6 @@ from hrono.summarize.shape import answer, brief_gate
 
 _CONTENT_PLACEHOLDER = "{content}"
 _LEVEL = 0
-_DEFAULT_TREE = "default"
-
 Pending = tuple[int, briefs.ReduceInput, str]  # node, inputs, signature
 
 
@@ -76,7 +75,7 @@ def brief(
     client: Completion | None = None,
 ) -> Mapping[str, object]:
     """Write a brief per stale-or-missing bottom-level node, with provenance."""
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         held = len(pins.pinned(conn, pins.BRIEF))
         model = resolve_text_model(conn, job.scope, "brief")

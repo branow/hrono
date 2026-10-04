@@ -40,11 +40,11 @@ from hrono.cluster.levels import attach_orphans, cluster_briefs
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion
+from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize import UnreachableTree
 from hrono.summarize.brief_upper import brief_upper
 
 D_MAX = 5
-_DEFAULT_TREE = "default"
 
 
 def build_tree(
@@ -56,7 +56,7 @@ def build_tree(
     build: object | None = None,
 ) -> None:
     """Recurse the brief levels of a tree up to a single root node."""
-    tree = job.tree or _DEFAULT_TREE
+    tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         start = _highest_brief_level(conn, tree)
     if start is None:
