@@ -217,7 +217,8 @@ def history(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
 def _close(conn: sqlite3.Connection, node_id: int, how: str) -> None:
     conn.execute(
         "UPDATE edit_log SET closed = ? WHERE id = "
-        "(SELECT MAX(id) FROM edit_log WHERE node_id = ?)",
+        "(SELECT MAX(id) FROM edit_log WHERE node_id = ?) "
+        "AND closed IS NULL",
         (how, node_id),
     )
 

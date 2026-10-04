@@ -666,6 +666,19 @@ def test_an_undone_edit_stays_listed_and_is_tagged(browser: Browser) -> None:
     assert "Undo rename" not in page
 
 
+def test_a_hand_back_after_an_undo_keeps_the_edit_undone(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Named")
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+
+    browser.post("release")
+
+    assert _closed(browser) == ["undone"]
+    assert "undone</span>" in browser.page()
+
+
 def test_the_edits_list_caps_at_ten_and_counts_the_rest(
     browser: Browser,
 ) -> None:
