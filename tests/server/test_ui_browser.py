@@ -490,3 +490,92 @@ def test_a_diff_line_copies_without_its_marker_and_long_ones_show_gaps(
     assert "line twenty-seven" in copied
     assert gaps == 3
     assert shown == old
+
+
+def _topics_for_the_filter(live: Live) -> None:
+    import json as _json
+
+    from hrono.cluster import store as cluster_store
+    from hrono.db.database import open_database
+    from hrono.registry import store as registry_store
+    from hrono.summarize import briefs
+    from tests.server.live import _section
+
+    conn = open_database(live.db_path)
+    with conn:
+        parent = conn.execute(
+            "SELECT MAX(id) FROM nodes WHERE level = 1"
+        ).fetchone()[0]
+        texts = {parent: "Overview of everything"}
+        for index in range(12):
+            leaf = cluster_store.add_leaf_node(
+                conn,
+                "default",
+                [(_section(conn, f"x/{index}.md", b"x"), False, None)],
+            )
+            texts[leaf] = f"Leaf topic {index}"
+        for node, text in texts.items():
+            briefs.upsert(
+                conn,
+                node,
+                text,
+                model_name="m",
+                prompt_name="brief",
+                prompt_hash="h",
+                member_signature="s",
+                input_tokens=1,
+                output_tokens=1,
+            )
+    registry_store.insert(
+        conn,
+        "prompts",
+        "mine",
+        _json.dumps({"name": "mine", "role": "brief", "template": "{content}"}),
+        None,
+        "t",
+    )
+    conn.close()
+
+
+def test_the_topic_filter_hides_empty_levels_and_resets_a_hidden_pick(
+    solo_page: object, solo: Live
+) -> None:
+    _topics_for_the_filter(solo)
+    page = solo_page
+    page.goto(f"{solo.base}/ui/config?tree=default&edit=prompts:mine")  # type: ignore[attr-defined]
+    pick = page.locator("#preview-topic-pick")  # type: ignore[attr-defined]
+    find = page.locator("#preview-topic-find")  # type: ignore[attr-defined]
+
+    def shown() -> list[str]:
+        return pick.evaluate(
+            "s => [...s.querySelectorAll('option[value]:not([value=\"\"])')]"
+            ".filter(o => !o.hidden).map(o => o.textContent)"
+        )
+
+    def levels() -> list[str]:
+        return pick.evaluate(
+            "s => [...s.querySelectorAll('optgroup')]"
+            ".filter(g => !g.hidden).map(g => g.label)"
+        )
+
+    everything = shown()
+    assert len(everything) == 14
+    assert levels() == ["Level 0", "Level 1"]
+
+    find.fill("leaf topic 1")
+    assert shown() == ["Leaf topic 1", "Leaf topic 10", "Leaf topic 11"]
+    assert levels() == ["Level 0"]
+
+    find.fill("overview")
+    assert shown() == ["Overview of everything"]
+    assert levels() == ["Level 1"]
+
+    find.fill("")
+    pick.select_option(label="Overview of everything")
+    find.fill("leaf")
+    assert pick.input_value() == ""
+    assert levels() == ["Level 0"]
+
+    find.fill("")
+    assert shown() == everything
+    assert levels() == ["Level 0", "Level 1"]
