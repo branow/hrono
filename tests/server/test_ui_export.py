@@ -198,3 +198,39 @@ def test_the_stored_non_briefs_are_listed_over_http(panel: Panel) -> None:
 
     assert answer["count"] == 1
     assert answer["briefs"][0]["why"] == "asks the caller a question"
+
+
+def test_connect_snippets_are_filled_and_carry_no_secret(
+    panel: Panel,
+) -> None:
+    panel.sign_in("reader")
+
+    html = unescape(panel.page("&levels=3"))
+
+    assert f"hrono profile add {TREE} --server http://testserver" in html
+    assert f'hrono recall {TREE} "' in html
+    assert f"curl -s -X POST http://testserver/trees/{TREE}/recall" in html
+    assert f"hrono tree export {TREE} -o ./{TREE}-export --levels 3" in html
+    assert f"/trees/{TREE}/export.zip?levels=3" in html
+    assert html.count("Bearer YOUR_TOKEN") == 2
+    assert panel.tokens["reader"] not in html
+    assert 'id="connect"' in html
+
+
+def test_each_snippet_url_is_a_route_a_reader_may_call(panel: Panel) -> None:
+    panel.sign_in("reader")
+    headers = {"Authorization": f"Bearer {panel.tokens['reader']}"}
+    html = unescape(panel.page())
+    recall = re.search(r"curl -s -X POST http://testserver(\S+)", html)
+    export = re.search(r"curl -s '?http://testserver(\S+?)'? ", html)
+    assert recall is not None and export is not None
+
+    archive = panel.client.get(export.group(1), headers=headers)
+    asked = panel.client.post(
+        recall.group(1).strip("'"),
+        headers=headers,
+        json={"question": "signing code"},
+    )
+
+    assert archive.status_code == 200
+    assert asked.status_code not in {401, 403, 404, 405, 422}

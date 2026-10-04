@@ -17,9 +17,10 @@ is not a brief there misleads every traversal below it.
 from __future__ import annotations
 
 import posixpath
+import shlex
 import sqlite3
 from collections.abc import Callable
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
@@ -56,7 +57,9 @@ def export_page(
         "tree": tree,
         "levels": levels,
         "built": made is not None,
-        "server": str(request.base_url).rstrip("/"),
+        "snippets": connect_snippets(
+            str(request.base_url).rstrip("/"), tree, levels
+        ),
         "can_write": user.role in {"writer", "admin"},
     }
     if made is not None:
@@ -79,6 +82,46 @@ def export_page(
             "download": f"/trees/{tree}/export.zip?levels={levels}",
         }
     return templates.TemplateResponse(request, "export.html", context)
+
+
+TOKEN = "YOUR_TOKEN"
+
+
+def connect_snippets(
+    server: str, tree: str, levels: int
+) -> list[tuple[str, str, str]]:
+    """The three ways in as (id, heading, text) to paste into a terminal.
+
+    The token is a placeholder the reader replaces with their own, never the
+    viewer's real one, and every command is a route a reader may call.
+    """
+    name_arg = shlex.quote(tree)
+    base = f"{server}/trees/{quote(tree, safe='')}"
+    header = f'-H "Authorization: Bearer {TOKEN}"'
+    folder = shlex.quote(f"./{tree}-export")
+    return [
+        (
+            "cli",
+            "Ask from the command line",
+            f"hrono profile add {name_arg} --server {shlex.quote(server)}"
+            f" --token {TOKEN}\n"
+            f'hrono recall {name_arg} "what does this tree know about ...?"',
+        ),
+        (
+            "http",
+            "Ask over HTTP",
+            f"curl -s -X POST {shlex.quote(base + '/recall')} {header} \\\n"
+            '  -H "Content-Type: application/json" \\\n'
+            '  -d \'{"question": "what does this tree know about ...?"}\'',
+        ),
+        (
+            "export",
+            "Hand over the export",
+            f"hrono tree export {name_arg} -o {folder} --levels {levels}\n"
+            f"curl -s {shlex.quote(f'{base}/export.zip?levels={levels}')}"
+            f" {header} -o {shlex.quote(tree + '-export.zip')}",
+        ),
+    ]
 
 
 def page_link(tree: str, levels: int, page: str) -> str:

@@ -164,7 +164,7 @@
   <div class="card-head"><h2>What export produces</h2></div>
   <div class="card-body">
     <p class="hint">A folder of Markdown an agent reads without hrono running: <code>root.md</code> first, then one link per level down to the source text. The stored tree can be deeper than an agent should have to walk, so the export flattens it to a hop limit, {{ export.hops }} by default, choosing the levels that keep the widest page shortest. A page aims to list at most {{ export.width }} topics, about as much to read as one section.</p>
-    <p class="hint">Export is built from what is stored, with no model call. It comes from the <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export page</a> as a zip, or from the command line with <code>hrono tree export</code>. Topics with no usable brief are listed there first, because an agent reads those pages first.</p>
+    <p class="hint">Export is built from what is stored, with no model call. It comes from the <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export page</a> as a zip, or from the command line with <code>hrono tree export</code>. Topics with no usable brief are listed there first, because an agent reads those pages first. The same page has a <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}#connect">Connect an agent</a> block: ready-to-paste commands for the command line, a <code>curl</code> call to recall, and the export, filled with this server and tree.</p>
   </div>
 </section>
 

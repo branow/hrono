@@ -208,6 +208,11 @@ measured, its links cost the searching agent more than they saved the walking
 one. Siblings whose titles read alike are told apart in their directory names by
 what each one says next, not by a number alone.
 
+To wire an agent to a tree, open the tree's Export page in the dashboard: its
+Connect an agent block has ready-to-paste commands for the CLI, a `curl` call to
+recall and the export, filled with this server and tree. The token in them is
+the placeholder `YOUR_TOKEN`, never yours; mint one on the Access page.
+
 ## Evaluating the export
 
 Whether an agent finds things in an export faster than in the raw repository

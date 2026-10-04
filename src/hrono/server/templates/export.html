@@ -69,14 +69,31 @@
   </div>
   {% endif %}
 
-  <section class="card">
+  <section class="card" id="connect">
     <div class="card-body stack">
-      <h2>Hand it to an agent</h2>
-      <p class="hint">Write the same files to a folder with the CLI, signed in to this server:</p>
-      <pre class="mono"><code>hrono profile add {{ tree }} --server {{ server }} --token &lt;your token&gt;
-hrono tree export {{ tree }} -o ./{{ tree }}-export --levels {{ levels }}</code></pre>
+      <h2>Connect an agent</h2>
+      <p class="hint">Each snippet is filled with this server and tree. Replace <code>YOUR_TOKEN</code> with a token from the Access page; a reader's token is enough.</p>
+      {% for key, heading, text in snippets %}
+      <div class="stack" data-snippet="{{ key }}">
+        <div class="act-row">
+          <h3>{{ heading }}</h3>
+          <button class="btn small" type="button" data-copy="snippet-{{ key }}" hidden>Copy</button>
+        </div>
+        <pre class="mono" id="snippet-{{ key }}"><code>{{ text }}</code></pre>
+      </div>
+      {% endfor %}
     </div>
   </section>
+  <script>
+    document.querySelectorAll("[data-copy]").forEach((button) => {
+      button.hidden = false;
+      button.addEventListener("click", async () => {
+        const code = document.getElementById(button.dataset.copy);
+        try { await navigator.clipboard.writeText(code.textContent); button.textContent = "Copied"; }
+        catch { getSelection().selectAllChildren(code); button.textContent = "Press Ctrl+C"; }
+      });
+    });
+  </script>
 
   <section class="card" id="page">
     <div class="card-body stack">
