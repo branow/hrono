@@ -549,17 +549,49 @@ def test_an_undone_rewrite_of_an_unknown_record_is_rebriefed(
 ) -> None:
     browser.sign_in()
     conn = browser.conn  # type: ignore[attr-defined]
+    long = (
+        "The docs describe how the service is configured, started and "
+        "stopped, and which settings an operator changes most often."
+    )
+    with conn:
+        briefs.upsert(
+            conn,
+            browser.node,
+            long,
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature=briefs.member_signature(conn, browser.node),
+            input_tokens=1,
+            output_tokens=1,
+        )
     browser.post("brief", text="A rewrite over a brief with a stale record.")
     with conn:
         conn.execute(
-            "UPDATE brief_versions SET member_signature = '' WHERE node_id = ?",
+            "UPDATE brief_versions SET member_signature = 'old' "
+            "WHERE node_id = ?",
             (browser.node,),
         )
 
     browser.post("undo", edit=_latest(browser), confirm="yes")
     browser.post("release")
 
+    assert _brief(browser) == long
     assert briefs.stale_or_missing(conn, TREE, 0, "h", "m") == (browser.node,)
+
+
+def test_a_stale_undo_never_undoes_a_later_edit(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Renamed")
+    stale = _latest(browser)
+    browser.post("undo", edit=stale, confirm="yes")
+    browser.post("brief", text="A later rewrite of the brief.")
+
+    answer = browser.post("undo", edit=stale, confirm="yes")
+
+    assert "no longer the topic" in answer.text
+    assert _brief(browser) == "A later rewrite of the brief."
+    assert _latest(browser) != stale
 
 
 def test_a_refused_edit_records_nothing(browser: Browser) -> None:

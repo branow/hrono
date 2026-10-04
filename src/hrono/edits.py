@@ -138,18 +138,40 @@ def _write_brief(
     reason: str,
     author: sqlite3.Row | None = None,
 ) -> None:
-    by: dict[str, object] = {
-        "model_name": "hand-edited",
-        "prompt_name": "hand-edited",
-        "prompt_hash": "",
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "member_signature": briefs.member_signature(conn, node_id),
-    }
-    if author is not None:
-        by = dict(author)
-    briefs.upsert(conn, node_id, text, reason="rewrite", **by)  # type: ignore[arg-type]
-    store_brief(conn, node_id, text, str(by["member_signature"]))
+    if author is None:
+        signature = briefs.member_signature(conn, node_id)
+        briefs.upsert(
+            conn,
+            node_id,
+            text,
+            model_name="hand-edited",
+            prompt_name="hand-edited",
+            prompt_hash="",
+            input_tokens=0,
+            output_tokens=0,
+            member_signature=signature,
+            reason="rewrite",
+        )
+    else:
+        signature = str(author["member_signature"])
+        briefs.upsert(
+            conn,
+            node_id,
+            text,
+            model_name=author["model_name"],
+            prompt_name=author["prompt_name"],
+            prompt_hash=author["prompt_hash"],
+            input_tokens=author["input_tokens"],
+            output_tokens=author["output_tokens"],
+            member_signature=signature,
+            model_fingerprint=author["model_fingerprint"],
+            unfaithful=author["unfaithful"],
+            flagged=author["flagged"],
+            members=author["members"],
+            source_model=author["source_model"],
+            reason="rewrite",
+        )
+    store_brief(conn, node_id, text, signature)
     pins.pin(conn, pins.BRIEF, node_id, reason=reason)
 
 
