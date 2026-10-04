@@ -443,6 +443,9 @@ def test_an_export_page_cited_counts_as_the_file_it_carries(
         (f"{run.CANARY}", "NONE", "graphify", False),
         (f"{run.CANARY}, graphify", f"I see {run.CANARY}", "graphify", False),
         (f"{run.CANARY}, graphify", "the GraphiFy skill", "graphify", False),
+        (f"{run.CANARY}", 'userEmail: "a@b.io"', "", False),
+        (f"{run.CANARY}", "my user is someone@example.com", "", False),
+        (f"{run.CANARY}", "I know of a userEmail entry", "", False),
     ],
     ids=[
         "both-seen-none-leaked",
@@ -451,6 +454,9 @@ def test_an_export_page_cited_counts_as_the_file_it_carries(
         "control-misses-mark",
         "isolated-quotes-canary",
         "isolated-quotes-mark",
+        "isolated-quotes-user-email-entry",
+        "isolated-quotes-an-address",
+        "isolated-names-the-user-context-key",
     ],
 )
 def test_isolation_is_verified_only_when_the_control_sees_and_nothing_leaks(
@@ -640,3 +646,22 @@ def test_only_names_a_question_that_does_not_exist(
     with pytest.raises(SystemExit, match="no such question q09, q10"):
         run.main([*argv, "--only", "q01,q10,q09"])
     assert not (tmp_path / "out").exists()
+
+
+def test_a_report_redacts_an_email_a_reply_quoted(export: Path) -> None:
+    arm = run.Arm("levels-2", export, "export")
+    session = run.build_run(
+        arm,
+        "q1",
+        _session(export, ["root.md"], "ANSWER: mail me at me@example.com"),
+        export,
+        1.0,
+    )
+    isolation = run.Isolation(
+        (), 'userEmail: "orest@example.com"', run.CANARY, (), (), False
+    )
+
+    report = run.render_report([arm], [_question()], [session], isolation, "m")
+
+    assert "@" not in report.replace("@@", "")
+    assert report.count(run.REDACTED) >= 2

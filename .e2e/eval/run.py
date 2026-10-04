@@ -29,6 +29,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,9 @@ HERE = Path(__file__).resolve().parent
 TOOLS = "Read,Glob,Grep"
 NOT_FOUND = "NOT FOUND"
 CANARY = "PELICAN-7731"
+USER_CONTEXT = "userEmail"
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+REDACTED = "[email redacted]"
 PROBE_SYSTEM = "You are a helpful assistant."
 SESSION_TIMEOUT = 900  # seconds one question's session may take
 
@@ -157,7 +161,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     else:
         isolation = check_isolation(args.model, args.operator_mark)
-        (args.out / "isolation.json").write_text(json.dumps(asdict(isolation)))
+        (args.out / "isolation.json").write_text(
+            redact(json.dumps(asdict(isolation)))
+        )
         if not isolation.verified and not args.allow_unisolated:
             print(render_isolation(isolation), file=sys.stderr)
             return 2
@@ -278,11 +284,15 @@ def isolation_verdict(control: str, isolated: str, operator_mark: str) -> bool:
 
     The control session (no isolation flags) must quote the canary, and the
     operator mark when one is given, or the probe proves nothing. The
-    isolated session must quote none of them.
+    isolated session must quote none of them, and no harness-injected user
+    context either: a ``userEmail`` entry or an email address.
     """
     marks = (CANARY, operator_mark) if operator_mark else (CANARY,)
-    return all(_quotes(control, m) for m in marks) and not any(
-        _quotes(isolated, m) for m in marks
+    return (
+        all(_quotes(control, m) for m in marks)
+        and not any(_quotes(isolated, m) for m in marks)
+        and not _quotes(isolated, USER_CONTEXT)
+        and not EMAIL.search(isolated)
     )
 
 
@@ -596,7 +606,12 @@ def render_report(
             for i, p in enumerate(run.pages, start=1)
         ]
         out.append("")
-    return "\n".join(out)
+    return redact("\n".join(out))
+
+
+def redact(text: str) -> str:
+    """A report never carries an email address a model reply quoted."""
+    return EMAIL.sub(REDACTED, text)
 
 
 def render_isolation(isolation: Isolation) -> str:
@@ -634,7 +649,9 @@ def render_isolation(isolation: Isolation) -> str:
             f"MCP servers: {', '.join(isolation.mcp_servers) or 'none'}",
             "",
             f"Verified means the control quoted {named} (the probe can see "
-            "that memory) and the isolated session quoted none of them.",
+            "that memory) and the isolated session quoted none of them, nor "
+            f"a `{USER_CONTEXT}` entry or an email address (the harness's "
+            "user context).",
         ]
     )
 

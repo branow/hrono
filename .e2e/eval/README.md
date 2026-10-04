@@ -91,6 +91,13 @@ is kept out. To prove the same for user memory, pass
 `--operator-mark <word>`, a distinctive word your own `~/.claude/CLAUDE.md`
 carries (a skill name, say): the control must quote it too and the isolated
 session must not. Without the flag the report says user memory was not tested.
+
+The probe also fails when the isolated reply quotes the harness's user context,
+a `userEmail` entry or an email address. The CLI has no flag that drops it (the
+account email is injected even under `--safe-mode`), so an isolated session may
+still see it: the probe is then NOT verified and the run stops unless
+`--allow-unisolated` is given. Either way a report and `isolation.json` have
+every email address replaced by `[email redacted]` before they are written.
 If the probe fails the run stops before spending anything else; the report
 prints both replies.
 
