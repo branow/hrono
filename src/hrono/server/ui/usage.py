@@ -7,14 +7,19 @@ its own sums would be a third set of numbers to disagree with those two.
 
 from __future__ import annotations
 
+import sqlite3
+from urllib.parse import urlencode
+
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
+from hrono.recall import log as recall_log
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.server.ui.spend import describe
 from hrono.usage.rollup import Filter, total, usage
 
 COSTLIEST_RUNS = 10
+QUESTIONS = 20
 DAYS = 30
 
 
@@ -30,6 +35,8 @@ def usage_view(request: Request, user: Reader, tree: str = "") -> Response:
         models = _rows(usage(conn, "model", where))
         runs = _rows(usage(conn, "run", where)[:COSTLIEST_RUNS])
         people = _rows(usage(conn, "user", where))
+        can_write = user.role in {"writer", "admin"}
+        asked = _asked(conn, chosen) if can_write else None
     return templates.TemplateResponse(
         request,
         "usage.html",
@@ -42,9 +49,31 @@ def usage_view(request: Request, user: Reader, tree: str = "") -> Response:
             "models": models,
             "runs": runs,
             "people": people,
-            "can_write": user.role in {"writer", "admin"},
+            "can_write": can_write,
+            "asked": asked,
         },
     )
+
+
+def _asked(conn: sqlite3.Connection, tree: str) -> dict[str, object]:
+    """Agent recall calls: per day, the share that was not confident, latest."""
+    days = recall_log.per_day(conn, tree)[-DAYS:]
+    calls = sum(int(day["calls"]) for day in days)  # type: ignore[call-overload]
+    unsure = sum(int(day["unsure"]) for day in days)  # type: ignore[call-overload]
+    questions = recall_log.latest(conn, tree, QUESTIONS)
+    return {
+        "days": days,
+        "calls": calls,
+        "unsure_share": round(100 * unsure / calls) if calls else 0,
+        "questions": [
+            {
+                **row,
+                "link": f"/ui/trees/{tree}/ask?"
+                + urlencode({"tree": tree, "q": row["question"]}),
+            }
+            for row in questions
+        ],
+    }
 
 
 def _rows(groups: list[dict[str, object]]) -> list[dict[str, object]]:

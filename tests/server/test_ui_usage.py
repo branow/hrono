@@ -324,3 +324,52 @@ def test_a_job_api_usage_is_keyed_by_the_job(panel: Panel) -> None:
     ).json()
 
     assert body["usage"]["key"] == run
+
+
+def ask_api(panel: Panel, role: str, question: str, hits: int) -> None:
+    from hrono.recall import log
+    from hrono.recall.engine import Hit, Recall
+
+    got = Recall(
+        tuple([Hit("u", "source", "h", "b", 0.8, 0, 1, None)] * hits)
+        if hits
+        else (),
+        None if hits else "nothing",
+    )
+    with panel.db.write() as conn:
+        log.record(conn, "default", role, got, question)
+
+
+def test_writers_see_agent_questions_and_unsure_ones_link_to_ask(
+    panel: Panel,
+) -> None:
+    panel.as_("writer")
+    ask_api(panel, "ana", "how do I deploy?", 3)
+    ask_api(panel, "bo", "what is a zebra?", 0)
+    ask_api(panel, "bo", "what is a zebra?", 0)
+
+    page = panel.get("/ui/usage?tree=default")
+
+    asked = page.split('id="asked"')[1].split("</section>")[0]
+    assert "3 calls" in asked and "67% not confident" in asked
+    assert asked.count("data-question") == 3
+    assert "how do I deploy?" in asked and "ana" in asked
+    assert (
+        "/ui/trees/default/ask?tree=default&amp;q=what+is+a+zebra%3F" in asked
+    )
+    assert "ask?tree=default&amp;q=how" not in asked  # a confident one: text
+
+
+def test_a_reader_never_receives_the_questions(panel: Panel) -> None:
+    panel.as_("reader")
+    ask_api(panel, "ana", "secret question", 1)
+
+    page = panel.get("/ui/usage?tree=default")
+
+    assert "secret question" not in page and 'id="asked"' not in page
+
+
+def test_no_agent_calls_is_an_empty_state(panel: Panel) -> None:
+    panel.as_("admin")
+
+    assert "No agent has asked" in panel.get("/ui/usage?tree=default")

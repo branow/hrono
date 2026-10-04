@@ -55,7 +55,8 @@ always exists).
 
 **recall** — answer a question by injecting the passages that answer it, with
 provenance. Strict on purpose: when nothing clears the confidence floor it says
-so and hands over to explore rather than inject something plausible.
+so and hands over to explore rather than inject something plausible. Each
+call an agent makes through the API is logged for the Usage page.
 
 **explore** — the other door: an agent walks the tree itself, reading briefs to
 decide where to go.
