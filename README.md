@@ -114,12 +114,14 @@ synced commit, on its lines; any other source shows the path alone.
 For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
 split) sit in the page head, each saying what it will change before it runs;
 moving a section is on the section. Edit also offers Undo for the topic's
-latest name, brief or note: it says what will change, asks for a tick, puts the
-old value back and goes away, so it is one step and a second Undo finds
-nothing. An edit that changes nothing offers no Undo, an undone brief
-rewrite goes back to the model and prompt that wrote it, when hrono kept
-them, and handing the topic
-back clears its Undo. Structural changes are not undone.
+latest name, brief or note: it says what will change, asks for a tick and puts
+the old value back, so it is one step and a second Undo finds nothing. An edit
+that changes nothing offers no Undo, an undone brief rewrite goes back to the
+model and prompt that wrote it, when hrono kept them, and handing the topic
+back closes its Undo. Every manual edit stays listed under Edits on the topic
+page, readers included: what it was, who made it, when, and an "undone" tag on
+those put back; past ten it says how many older there are. Structural changes
+are not undone.
 
 Find is the other way in, for when you know a word or a file rather than
 where it sits on the map. The search box in the top bar looks for every word

@@ -370,6 +370,26 @@ def _undo(conn: object, node_id: int) -> dict[str, object] | None:
     }
 
 
+_EDITS_SHOWN = 10
+
+
+def _edits(conn: object, node_id: int) -> dict[str, object]:
+    """The topic's manual edits, newest first, capped for the page."""
+    rows = edits.history(conn, node_id)  # type: ignore[arg-type]
+    return {
+        "rows": [
+            {
+                "label": _UNDO[str(r["kind"])],
+                "who": str(r["who"]),
+                "when": _when(r["made_at"]),
+                "closed": r["closed"],
+            }
+            for r in rows[:_EDITS_SHOWN]
+        ],
+        "older": max(0, len(rows) - _EDITS_SHOWN),
+    }
+
+
 def _node(
     conn: object,
     tree: str,
@@ -450,6 +470,7 @@ def _node(
         "wrote": _provenance(conn, node_id, brief),
         "versions": _versions(conn, node_id, brief),
         "undo": _undo(conn, node_id),
+        "edits": _edits(conn, node_id),
         "members": _members(
             conn, node_id, wheres.get(node_id, ""), brief, q, page, section
         ),

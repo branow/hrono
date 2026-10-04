@@ -186,19 +186,40 @@ def note(
 
 
 def latest_edit(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
-    """The topic's newest recorded edit that an undo can put back, or None.
+    """The topic's newest edit if an undo can still put it back, else None.
 
-    A rewrite of a topic that had no brief is recorded but not offered: there
+    Only the newest row is ever offered, and only while it is open: an undo or
+    a hand-back closes it, and an older row never comes back (E034, E039). A
+    rewrite of a topic that had no brief is recorded but not offered: there
     is no earlier text to restore.
     """
     row = conn.execute(
-        "SELECT id, kind, before, ref, who, made_at FROM edit_log "
+        "SELECT id, kind, before, ref, who, made_at, closed FROM edit_log "
         "WHERE node_id = ? ORDER BY id DESC LIMIT 1",
         (node_id,),
     ).fetchone()
-    if row is not None and row["kind"] == "brief" and row["before"] is None:
+    if row is None or row["closed"] is not None:
+        return None
+    if row["kind"] == "brief" and row["before"] is None:
         return None
     return row
+
+
+def history(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
+    """Every recorded edit on the topic, newest first, closed ones included."""
+    return conn.execute(
+        "SELECT id, kind, who, made_at, closed FROM edit_log "
+        "WHERE node_id = ? ORDER BY id DESC",
+        (node_id,),
+    ).fetchall()
+
+
+def _close(conn: sqlite3.Connection, node_id: int, how: str) -> None:
+    conn.execute(
+        "UPDATE edit_log SET closed = ? WHERE id = "
+        "(SELECT MAX(id) FROM edit_log WHERE node_id = ?)",
+        (how, node_id),
+    )
 
 
 def undo(
@@ -207,8 +228,8 @@ def undo(
     """Put back what the topic's latest edit replaced; return the edit's kind.
 
     ``edit_id`` is the edit the person was shown: if another edit has landed
-    since, or this one was already undone, nothing is touched. The log is then
-    cleared, so undoing twice never reaches an older edit (one step, E034).
+    since, or this one was already undone, nothing is touched. The edit is then
+    closed, so undoing twice never reaches an older edit (one step, E034).
     A restored name or brief keeps the pin an edit by hand carries.
     """
     require_node(conn, tree, node_id)
@@ -229,7 +250,7 @@ def undo(
         )
     else:
         conn.execute("DELETE FROM notes WHERE id = ?", (latest["ref"],))
-    conn.execute("DELETE FROM edit_log WHERE node_id = ?", (node_id,))
+    _close(conn, node_id, "undone")
     return kind
 
 
@@ -247,10 +268,6 @@ def _record(
         "VALUES (?, ?, ?, ?, ?, ?)",
         (node_id, kind, before, ref, who, datetime.now(UTC).isoformat()),
     )
-    conn.execute(
-        "DELETE FROM edit_log WHERE node_id = ? AND id < last_insert_rowid()",
-        (node_id,),
-    )
 
 
 def release(conn: sqlite3.Connection, tree: str, node_id: int) -> int:
@@ -258,11 +275,11 @@ def release(conn: sqlite3.Connection, tree: str, node_id: int) -> int:
 
     Every pin on the node, not one kind: an operator saying "hand this back"
     means the topic, not a vocabulary they have never been shown. Its undo
-    goes too: a restored name or brief would pin the topic again over whatever
-    the pipeline has written since (E036).
+    is closed too: a restored name or brief would pin the topic again over
+    whatever the pipeline has written since (E036).
     """
     require_node(conn, tree, node_id)
-    conn.execute("DELETE FROM edit_log WHERE node_id = ?", (node_id,))
+    _close(conn, node_id, "released")
     return pins.unpin_all(conn, node_id)
 
 

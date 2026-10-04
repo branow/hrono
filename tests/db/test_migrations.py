@@ -125,11 +125,14 @@ def test_edit_log_rebuild_keeps_rows_and_never_reuses_an_id(
             "INSERT INTO edit_log(id, node_id, kind, before, ref, who, "
             "made_at) VALUES (7, 1, 'brief', 'old text', 3, 'ann', 'then')"
         )
-    rows_before = conn.execute("SELECT * FROM edit_log").fetchall()
+    rows_before = [tuple(r) for r in conn.execute("SELECT * FROM edit_log")]
 
-    assert migrate(conn) == (42,)
+    assert migrate(conn) == (42, 43)
 
-    assert conn.execute("SELECT * FROM edit_log").fetchall() == rows_before
+    # 43 adds `closed`, open (NULL) on every row that was already there
+    assert [tuple(r) for r in conn.execute("SELECT * FROM edit_log")] == [
+        (*row, None) for row in rows_before
+    ]
     with conn:
         conn.execute(
             "INSERT INTO edit_log(node_id, kind, who, made_at) "

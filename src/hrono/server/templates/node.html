@@ -365,6 +365,22 @@
     </div>
   </section>
 
+  {% if node.edits.rows %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Edits<span class="tip" tabindex="0" role="note" data-tip="Changes made by hand on this topic, newest first. Only the latest can be undone">?</span></h2>
+    </div>
+    <div class="card-body stack">
+      <ul class="edit-list">
+        {% for e in node.edits.rows %}
+        <li>{{ e.label|capitalize }} by {{ e.who }}, <span class="faint">{{ e.when }}</span>{% if e.closed == "undone" %} <span class="chip">undone</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% if node.edits.older %}<p class="faint small">and {{ node.edits.older }} older</p>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+
   {% if node.versions %}
   <section class="card">
     <div class="card-head">

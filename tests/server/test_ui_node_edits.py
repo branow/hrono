@@ -8,6 +8,7 @@ reason `edits.rename` pins the brief (#156).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from hrono import notes, pins
+from hrono import edits, notes, pins
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
@@ -23,6 +24,7 @@ from hrono.db.database import open_database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.server.app import create_app
+from hrono.server.ui.nodes import _when
 from hrono.summarize import briefs
 
 KEY = Fernet.generate_key()
@@ -346,6 +348,16 @@ def _log(browser: Browser) -> list[tuple[str, str | None, str]]:
     ]
 
 
+def _closed(browser: Browser) -> list[str | None]:
+    return [
+        r["closed"]
+        for r in browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT closed FROM edit_log WHERE node_id = ? ORDER BY id",
+            (browser.node,),
+        )
+    ]
+
+
 def _latest(browser: Browser) -> str:
     return str(
         browser.conn.execute(  # type: ignore[attr-defined]
@@ -366,7 +378,12 @@ def test_each_manual_edit_records_what_it_replaced(browser: Browser) -> None:
     browser.post("brief", text="Hand text.")
     browser.post("note", text="A remark")
 
-    assert _log(browser) == [("note", None, "admin")]
+    assert _log(browser) == [
+        ("rename", None, "admin"),
+        ("rename", "First name", "admin"),
+        ("brief", "The summary the model wrote.", "admin"),
+        ("note", None, "admin"),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -385,7 +402,7 @@ def test_each_manual_edit_records_what_it_replaced(browser: Browser) -> None:
     ],
     ids=["two-renames", "rename-then-brief"],
 )
-def test_the_log_keeps_one_row_per_topic(
+def test_the_log_keeps_every_edit_and_offers_the_newest(
     browser: Browser,
     edits_made: tuple[tuple[str, str], ...],
     kind: str,
@@ -396,7 +413,9 @@ def test_the_log_keeps_one_row_per_topic(
     for route, value in edits_made:
         browser.post(route, **{"title" if route == "rename" else "text": value})
 
-    assert _log(browser) == [(kind, before, "admin")]
+    assert _log(browser)[-1] == (kind, before, "admin")
+    assert len(_log(browser)) == 2
+    assert edits.latest_edit(browser.conn, browser.node)["kind"] == kind  # type: ignore[arg-type,index]
 
 
 @pytest.mark.parametrize(
@@ -445,7 +464,8 @@ def test_handing_back_clears_the_undo_so_a_regeneration_stands(
             output_tokens=1,
         )
 
-    assert _log(browser) == []
+    assert [r[0] for r in _log(browser)] == ["brief"]
+    assert _closed(browser) == ["released"]
     assert "Undo" not in browser.page()
     assert browser.pins() == {}
     assert _brief(browser) == "Regenerated after the hand-back."
@@ -594,6 +614,71 @@ def test_a_stale_undo_never_undoes_a_later_edit(browser: Browser) -> None:
     assert _latest(browser) != stale
 
 
+def test_the_edits_list_shows_each_edit_with_who_and_when(
+    browser: Browser,
+) -> None:
+    create_user(browser.conn, "bea", "admin")  # type: ignore[arg-type]
+    browser.sign_in()
+    browser.post("rename", title="Named")
+    browser.post("note", text="A remark")
+    browser.client.post("/ui/logout")
+    browser.client.post(
+        "/ui/login",
+        data={"token": create_user(browser.conn, "cy", "admin")[1]},  # type: ignore[arg-type]
+    )
+    browser.post("brief", text="Cy's rewrite.")
+    browser.sign_in("reader")
+
+    page = browser.page()
+
+    assert "<h2>Edits" in page
+    items = re.findall(r"<li>(.*?)</li>", page.split("<h2>Edits")[1])
+    assert [re.sub(r"<[^>]+>", "", i) for i in items[:3]] == [
+        f"Brief rewrite by cy, {_stamp(browser, 'cy')}",
+        f"Note by admin, {_stamp(browser, 'admin', 'note')}",
+        f"Rename by admin, {_stamp(browser, 'admin', 'rename')}",
+    ]
+    assert "Undo" not in page
+
+
+def _stamp(browser: Browser, who: str, kind: str = "brief") -> str:
+    row = browser.conn.execute(  # type: ignore[attr-defined]
+        "SELECT made_at FROM edit_log WHERE who = ? AND kind = ?", (who, kind)
+    ).fetchone()
+    return _when(row["made_at"])
+
+
+def test_a_topic_with_no_edits_has_no_edits_heading(browser: Browser) -> None:
+    browser.sign_in("reader")
+
+    assert "<h2>Edits" not in browser.page()
+
+
+def test_an_undone_edit_stays_listed_and_is_tagged(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Named")
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+
+    page = browser.page()
+
+    assert "undone</span>" in page
+    assert len(_log(browser)) == 1
+    assert "Undo rename" not in page
+
+
+def test_the_edits_list_caps_at_ten_and_counts_the_rest(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    for n in range(13):
+        browser.post("note", text=f"remark {n}")
+
+    section = browser.page().split("<h2>Edits")[1].split("</section>")[0]
+
+    assert section.count("<li>") == 10
+    assert "and 3 older" in section
+
+
 def test_a_refused_edit_records_nothing(browser: Browser) -> None:
     browser.sign_in()
 
@@ -663,6 +748,7 @@ def test_undo_twice_does_not_reach_an_older_edit(browser: Browser) -> None:
     assert "no longer the topic" in answer.text
     assert browser.title() == "Older"
     assert "Undo rename" not in browser.page()
+    assert _closed(browser) == [None, "undone"]
 
 
 def test_undo_of_a_shown_edit_is_refused_once_another_landed(
