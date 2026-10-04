@@ -353,6 +353,10 @@ def test_the_page_says_the_history_lives_in_this_browser_only(
     assert "in this browser only" in panel.ask(ANSWERABLE)
 
 
+def _snapshot(score: str) -> str:
+    return quote(f'[{{"q":"{ANSWERABLE}","r":[["a",{score},"b"]]}}]')
+
+
 @pytest.mark.parametrize(
     "raw",
     [
@@ -367,6 +371,13 @@ def test_the_page_says_the_history_lives_in_this_browser_only(
             quote(json.dumps([{"q": ANSWERABLE, "r": [["a", True, "l"]]}])),
             id="bool-score",
         ),
+        pytest.param(
+            _snapshot("1" + "0" * 400),
+            id="huge-int-score",
+        ),
+        pytest.param(_snapshot("NaN"), id="nan-score"),
+        pytest.param(_snapshot("Infinity"), id="inf-score"),
+        pytest.param(_snapshot("1e999"), id="overflow-float"),
         pytest.param(
             quote(
                 json.dumps(

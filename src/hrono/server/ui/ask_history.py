@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from urllib.parse import quote, unquote
 
@@ -184,5 +185,16 @@ def _seen(rows: object) -> tuple[Seen, ...] | None:
             and isinstance(row[2], str)
         ):
             return None
-        out.append(Seen(row[0], float(row[1]), row[2]))
+        score = _finite(row[1])
+        if score is None:
+            return None
+        out.append(Seen(row[0], score, row[2]))
     return tuple(out)
+
+
+def _finite(value: int | float) -> float | None:
+    try:
+        score = float(value)
+    except OverflowError:
+        return None
+    return score if math.isfinite(score) else None
