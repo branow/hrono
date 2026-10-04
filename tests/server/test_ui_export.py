@@ -2,6 +2,7 @@
 
 import io
 import re
+import shlex
 import zipfile
 from collections.abc import Iterator
 from html import unescape
@@ -16,6 +17,7 @@ from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.server.app import create_app
+from hrono.server.ui.export import connect_snippets
 from hrono.summarize import briefs
 from hrono.tree.commands import _materialize
 from tests.server.test_export_endpoint import add_section
@@ -211,13 +213,13 @@ def test_connect_snippets_are_filled_and_carry_no_secret(
     assert f'hrono recall {TREE} "' in html
     # `profile add` only makes the first profile current, so each snippet
     # must switch to the pasted one before it runs a command.
-    use = f"hrono profile use {TREE}\n"
+    use = f"hrono profile use {TREE}"
     assert html.index(f"hrono profile add {TREE}") < html.index(use)
     assert html.index(use) < html.index(f"hrono recall {TREE}")
     assert html.count(use) == 2
-    assert html.index(use, html.index(use) + 1) < html.index(
-        f"hrono tree export {TREE}"
-    )
+    # Chained, so a profile that is not there stops the export instead of
+    # running it against whichever profile was current.
+    assert f"{use} && \\\nhrono tree export {TREE} -o ./{TREE}-export" in html
     assert f"curl -s -X POST http://testserver/trees/{TREE}/recall" in html
     assert f"hrono tree export {TREE} -o ./{TREE}-export --levels 3" in html
     assert f"/trees/{TREE}/export.zip?levels=3" in html
@@ -243,3 +245,28 @@ def test_each_snippet_url_is_a_route_a_reader_may_call(panel: Panel) -> None:
 
     assert archive.status_code == 200
     assert asked.status_code not in {401, 403, 404, 405, 422}
+
+
+def test_connect_snippets_quote_a_tree_name_for_shell_and_url() -> None:
+    name = "a&b#c'd"
+
+    cli, http, export = (
+        text for _, _, text in connect_snippets("http://h", name, 2)
+    )
+
+    assert shlex.split(cli.splitlines()[1])[3] == name
+    assert "/trees/a%26b%23c%27d/recall" in http
+    assert "/trees/a%26b%23c%27d/export.zip?levels=2" in export
+    assert shlex.split(export.splitlines()[0].removesuffix(" && \\"))[3] == name
+
+
+def test_the_copy_buttons_stay_hidden_until_script_shows_them(
+    panel: Panel,
+) -> None:
+    panel.sign_in("reader")
+
+    html = panel.page()
+
+    assert html.count("data-copy=") == 3
+    assert html.count(" hidden>Copy") == 3
+    assert ".btn[hidden] { display: none; }" in html

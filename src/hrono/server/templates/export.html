@@ -72,7 +72,7 @@
   <section class="card" id="connect">
     <div class="card-body stack">
       <h2>Connect an agent</h2>
-      <p class="hint">Each snippet is filled with this server and tree. Replace <code>YOUR_TOKEN</code> with a token from the Access page; a reader's token is enough.</p>
+      <p class="hint">Each snippet is filled with this server and tree. Replace <code>YOUR_TOKEN</code> with a token from the Access page; a reader's token is enough. The export snippet uses the profile the first one adds, and if you added it already, skip that <code>profile add</code> line, which fails on a duplicate.</p>
       {% for key, heading, text in snippets %}
       <div class="stack" data-snippet="{{ key }}">
         <div class="act-row">

@@ -766,11 +766,17 @@ blockquote {
   font: 400 .78125rem/1.5 var(--mono); color: var(--ink-faint); }
 .crumbs .sep { color: var(--rule-firm); }
 
+/* Connect snippets (E041): shell commands, so a long line scrolls inside its
+   own box rather than wrapping or widening the page. The scrollbar is styled
+   so it stays visible where the system hides it, showing a clipped tail. */
+pre.snippet { margin: 0; max-width: 100%; overflow-x: auto;
+  scrollbar-color: var(--rule-firm) transparent; }
+pre.snippet::-webkit-scrollbar { height: .5rem; }
+pre.snippet::-webkit-scrollbar-thumb { background: var(--rule-firm);
+  border-radius: var(--r); }
+.btn[hidden] { display: none; }
 /* Ask (#207): a passage is shown as the agent receives it, whole, and wraps
    rather than pushing the page sideways. */
-/* Connect snippets (E041): shell commands, so a long line scrolls inside its
-   own box rather than wrapping or widening the page. */
-pre.snippet { margin: 0; max-width: 100%; overflow-x: auto; }
 pre.passage { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   max-height: 24rem; overflow: auto; padding: var(--s3);
   background: var(--sunken); border-radius: var(--r); }
