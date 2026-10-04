@@ -275,3 +275,22 @@ def test_a_note_is_shown_as_text_not_markup(browser: Browser) -> None:
     browser.post("note", text="<img src=x onerror=alert(1)>")
 
     assert "<img src=x" not in browser.page()
+
+
+def test_a_rewritten_brief_shows_the_old_text_and_what_changed(
+    browser: Browser,
+) -> None:
+    """E033: the page that wrote a brief can show what it replaced."""
+    browser.sign_in()
+    assert "Previous versions" not in browser.page()
+
+    browser.post("brief", text="What an operator actually knows.")
+    page = browser.page()
+
+    assert "Previous versions" in page
+    assert "rewritten by hand" in page
+    assert '<span class="diff-del">-The summary the model wrote.</span>' in page
+    assert (
+        '<span class="diff-add">+What an operator actually knows.</span>'
+        in page
+    )

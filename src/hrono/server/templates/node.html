@@ -351,6 +351,25 @@
     </div>
   </section>
 
+  {% if node.versions %}
+  <section class="card">
+    <div class="card-head">
+      <h2>Previous versions<span class="tip" tabindex="0" role="note" data-tip="What the brief said before it was replaced. The diff shows what changed from that version to the brief above">?</span></h2>
+    </div>
+    <div class="card-body stack">
+      <details>
+        <summary class="twisty">{{ node.versions|length }} kept</summary>
+        {% for v in node.versions %}
+        <div class="stack mt-3">
+          <div class="title">{{ v.when }} <span class="faint small">{{ v.why }}, written by {{ v.who }}</span></div>
+          <pre class="mono small">{% for line in v.diff %}<span class="diff-{{ line.kind }}">{{ line.text }}</span>{% endfor %}</pre>
+        </div>
+        {% endfor %}
+      </details>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="card">
     <div class="card-head">
       <h2>Who wrote the brief<span class="tip" tabindex="0" role="note" data-tip="The provenance a re-run compares against to decide whether this brief still stands">?</span></h2>

@@ -8,6 +8,7 @@ would be a second, weaker authorization for the same operation.
 
 from __future__ import annotations
 
+import difflib
 import json
 
 from fastapi import Request
@@ -399,10 +400,43 @@ def _node(
             for _, text, when in notes.get(conn, notes.NODE, node_id)  # type: ignore[arg-type]
         ],
         "wrote": _provenance(conn, node_id, brief),
+        "versions": _versions(conn, node_id, brief),
         "members": _members(
             conn, node_id, wheres.get(node_id, ""), brief, q, page, section
         ),
     }
+
+
+def _versions(
+    conn: object, node_id: int, brief: object
+) -> list[dict[str, object]]:
+    """The briefs this topic had before, each with a diff to the current one."""
+    current = str(brief["text"]) if brief is not None else ""  # type: ignore[index]
+    return [
+        {
+            "when": _when(row["replaced_at"]),
+            "who": "by hand"
+            if row["model_name"] == "hand-edited"
+            else str(row["model_name"]),
+            "why": "rewritten by hand"
+            if row["reason"] == "rewrite"
+            else "regenerated",
+            "diff": [
+                {"kind": _DIFF_KINDS[line[:1]], "text": line}
+                for line in difflib.unified_diff(
+                    str(row["text"]).splitlines(),
+                    current.splitlines(),
+                    lineterm="",
+                    n=1,
+                )
+                if line[:1] in _DIFF_KINDS and line[:3] not in {"---", "+++"}
+            ],
+        }
+        for row in briefs.versions(conn, node_id)  # type: ignore[arg-type]
+    ]
+
+
+_DIFF_KINDS = {"+": "add", "-": "del", " ": "same"}
 
 
 def _is_root(conn: object, tree: str, node_id: int, parent: object) -> bool:
