@@ -768,6 +768,9 @@ blockquote {
 
 /* Ask (#207): a passage is shown as the agent receives it, whole, and wraps
    rather than pushing the page sideways. */
+/* Connect snippets (E041): shell commands, so a long line scrolls inside its
+   own box rather than wrapping or widening the page. */
+pre.snippet { margin: 0; max-width: 100%; overflow-x: auto; }
 pre.passage { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   max-height: 24rem; overflow: auto; padding: var(--s3);
   background: var(--sunken); border-radius: var(--r); }
