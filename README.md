@@ -109,6 +109,8 @@ hand, is kept (the last 5 per topic) under Previous versions, each saying who
 wrote it and what replaced it, with a line diff against the current one and the
 full old text behind Details; saving a brief unchanged keeps nothing. Its sections show where each starts (the
 heading, the lines, the size), worst fit first, filterable by path and paged.
+A section from a GitHub, GitLab or Bitbucket repo links to its file at the
+synced commit, on its lines; any other source shows the path alone.
 For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
 split) sit in the page head, each saying what it will change before it runs;
 moving a section is on the section. Edit also offers Undo for the topic's

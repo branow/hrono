@@ -688,3 +688,52 @@ def test_the_edit_actions_sit_in_the_page_head_for_an_admin(
     assert "Folds this topic" in head
     assert "re-filed under the nearest remaining topic" in head
     assert "replaced by narrower ones" in head
+
+
+def _ingest_from(
+    browser: Browser, source_type: str, instance: str, path: str
+) -> int:
+    with browser.conn:  # type: ignore[union-attr]
+        stored = store_unit(
+            browser.conn,  # type: ignore[arg-type]
+            Unit(path=path, body=_guide_text(), version="c0ffee"),
+            "docs",
+            source_type,
+            instance,
+            "c0ffee",
+        )
+    return _topic_over(browser, [sid for sid, _, _ in stored])
+
+
+def test_a_git_section_links_to_its_file_at_the_synced_commit(
+    browser: Browser,
+) -> None:
+    topic = _ingest_from(browser, "git", "github.com/acme/repo", "docs/g.md")
+    browser.sign_in()
+
+    page = browser.node(topic).text  # type: ignore[attr-defined]
+
+    links = re.findall(r'<a href="(https://github[^"]+)"', page)
+    assert links
+    base = "https://github.com/acme/repo/blob/c0ffee/docs/g.md#L"
+    assert all(link.startswith(base) for link in links)
+    assert any("-L" in link for link in links)
+
+
+def test_a_section_off_a_known_host_shows_its_path_and_no_link(
+    browser: Browser,
+) -> None:
+    topic = _ingest_from(browser, "git", "git.internal/acme/repo", "g.md")
+    browser.sign_in()
+
+    page = browser.node(topic).text  # type: ignore[attr-defined]
+
+    assert "Open the file" not in page
+    assert "g.md" in page
+
+
+def test_a_page_section_has_no_file_link(browser: Browser) -> None:
+    topic = _ingest_from(browser, "confluence", "github.com/acme/repo", "g.md")
+    browser.sign_in()
+
+    assert "Open the file" not in browser.node(topic).text  # type: ignore[attr-defined]

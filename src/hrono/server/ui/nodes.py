@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 from hrono import edits, naming, notes, pins
 from hrono.embed.model import resolve_embedding_model
 from hrono.errors import AppError, DomainError, NotFound
+from hrono.ingest.blob_link import blob_url
 from hrono.server import where
 from hrono.server.edits import BriefText, NoteText, Rename
 from hrono.server.ui import (
@@ -718,6 +719,7 @@ def _members(
         for row in conn.execute(  # type: ignore[attr-defined]
             "SELECT s.id AS id, s.source AS source, s.path AS path, "
             "s.version AS version, s.uri AS uri, "
+            "s.source_type AS source_type, s.instance AS instance, "
             "s.byte_start AS start, s.byte_end AS stop, "
             "m.assignment_similarity AS score, "
             "m.forced AS forced, c.body AS body, "
@@ -817,12 +819,26 @@ def _member(row: object, where: str, first: int) -> dict[str, object]:
         "tail": path.removeprefix(shared),
         "heading": _heading(body),
         "lines": f"{first}-{last}" if last > first else str(first),
+        "link": _link(row, first, last),
         "bytes": int(row["stop"]) - int(row["start"]),  # type: ignore[index]
         "similarity": row["score"],  # type: ignore[index]
         "forced": bool(row["forced"]),  # type: ignore[index]
         "content": _content(body),
         "condensed": _condensation(row),
     }
+
+
+def _link(row: object, first: int, last: int) -> str | None:
+    """The section's file on its git host, for a source that has one."""
+    if row["source_type"] != "git":  # type: ignore[index]
+        return None
+    return blob_url(
+        str(row["instance"]),  # type: ignore[index]
+        str(row["path"]),  # type: ignore[index]
+        str(row["version"]),  # type: ignore[index]
+        first,
+        last,
+    )
 
 
 def _condensation(row: object) -> dict[str, object] | None:

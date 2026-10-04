@@ -279,7 +279,7 @@
             <div class="detail">
               <div class="section-head">
                 <span class="mono">{{ member.uri }}</span>
-                <span class="nowrap">section {{ member.id }}</span>
+                <span class="nowrap">{% if member.link %}<a href="{{ member.link }}" target="_blank" rel="noopener noreferrer">Open the file</a> · {% endif %}section {{ member.id }}</span>
               </div>
               {% if member.content.missing %}
               <p class="hint">Its content is not stored here — only the section's address and where it sits.</p>
