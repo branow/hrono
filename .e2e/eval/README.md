@@ -31,17 +31,15 @@ The raw folder is the baseline: the same files the tree ingested, at the same
 commit, so both sides of the comparison hold the same facts. A folder with a
 `root.md` is treated as an export, anything else as raw.
 
-`--tools Read,Glob` takes Grep away, so the agent has nothing to do but walk
-the folder: that measures the export's navigation rather than its
-searchability. `--only q01,q05` runs a subset (an id the question set does not have stops
-the run, naming it), `--model` picks the agent
-(default `sonnet`),
-`--jobs` how many sessions run at once (default 4). `--rerender` grades and
-reports the sessions already recorded under `--out` again without running any,
-so a corrected question or grading rule costs nothing to apply; with `--only`
-or fewer `--arm`s it reports just that subset, and it stops, naming the pair,
-if one asked for was never recorded. `--operator-mark` is described under
-Isolation.
+`--tools Read,Glob` takes Grep away, so the agent has nothing to do but walk the
+folder: that measures the export's navigation rather than its searchability.
+`--only q01,q05` runs a subset (an id the question set does not have stops the
+run, naming it), `--model` picks the agent (default `sonnet`), `--jobs` how many
+sessions run at once (default 4). `--rerender` grades and reports the sessions
+already recorded under `--out` again without running any, so a corrected
+question or grading rule costs nothing to apply; with `--only` or fewer `--arm`s
+it reports just that subset, and it stops, naming the pair, if one asked for was
+never recorded. `--operator-mark` is described under Isolation.
 
 ## What it writes
 
@@ -98,6 +96,8 @@ account email is injected even under `--safe-mode`), so an isolated session may
 still see it: the probe is then NOT verified and the run stops unless
 `--allow-unisolated` is given. Either way a report and `isolation.json` have
 every email address replaced by `[email redacted]` before they are written.
+Injected context that is not email-shaped, such as a company name, is neither
+probed nor redacted.
 If the probe fails the run stops before spending anything else; the report
 prints both replies.
 
