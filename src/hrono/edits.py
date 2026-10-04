@@ -15,8 +15,9 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from hrono import pins
+from hrono import notes, pins
 from hrono.cluster import TooFewPoints, incubator, levels, repair, store
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.errors import Invalid, NotFound
@@ -87,7 +88,7 @@ def require_section(conn: sqlite3.Connection, section_id: int) -> None:
 
 
 def rename(
-    conn: sqlite3.Connection, tree: str, node_id: int, title: str
+    conn: sqlite3.Connection, tree: str, node_id: int, title: str, who: str
 ) -> None:
     """Name a topic, and pin its brief so the name cannot be re-derived.
 
@@ -96,12 +97,22 @@ def rename(
     regeneration — the silent revert in a different costume.
     """
     require_node(conn, tree, node_id)
+    before = conn.execute(
+        "SELECT title FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()["title"]
+    _set_title(conn, node_id, title)
+    _record(conn, node_id, "rename", who, before=before)
+
+
+def _set_title(
+    conn: sqlite3.Connection, node_id: int, title: str | None
+) -> None:
     conn.execute("UPDATE nodes SET title = ? WHERE id = ?", (title, node_id))
     pins.pin(conn, pins.BRIEF, node_id, reason="renamed by hand")
 
 
 def override_brief(
-    conn: sqlite3.Connection, tree: str, node_id: int, text: str
+    conn: sqlite3.Connection, tree: str, node_id: int, text: str, who: str
 ) -> None:
     """Replace a node's brief with an operator's words, and pin it.
 
@@ -112,6 +123,15 @@ def override_brief(
     can attribute is worse than one attributed to a human.
     """
     require_node(conn, tree, node_id)
+    stored = briefs.get(conn, node_id)
+    before = None if stored is None else str(stored["text"])
+    _write_brief(conn, node_id, text, "brief written by hand")
+    _record(conn, node_id, "brief", who, before=before)
+
+
+def _write_brief(
+    conn: sqlite3.Connection, node_id: int, text: str, reason: str
+) -> None:
     signature = briefs.member_signature(conn, node_id)
     briefs.upsert(
         conn,
@@ -126,7 +146,76 @@ def override_brief(
         reason="rewrite",
     )
     store_brief(conn, node_id, text, signature)
-    pins.pin(conn, pins.BRIEF, node_id, reason="brief written by hand")
+    pins.pin(conn, pins.BRIEF, node_id, reason=reason)
+
+
+def note(
+    conn: sqlite3.Connection, tree: str, node_id: int, text: str, who: str
+) -> int:
+    """Annotate a topic; return the note's id. Notes never pin."""
+    require_node(conn, tree, node_id)
+    note_id = notes.add(conn, notes.NODE, node_id, text)
+    _record(conn, node_id, "note", who, ref=note_id)
+    return note_id
+
+
+def latest_edit(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
+    """The topic's newest recorded edit that an undo can put back, or None.
+
+    A rewrite of a topic that had no brief is recorded but not offered: there
+    is no earlier text to restore.
+    """
+    row = conn.execute(
+        "SELECT id, kind, before, ref, who, made_at FROM edit_log "
+        "WHERE node_id = ? ORDER BY id DESC LIMIT 1",
+        (node_id,),
+    ).fetchone()
+    if row is not None and row["kind"] == "brief" and row["before"] is None:
+        return None
+    return row
+
+
+def undo(
+    conn: sqlite3.Connection, tree: str, node_id: int, edit_id: int
+) -> str:
+    """Put back what the topic's latest edit replaced; return the edit's kind.
+
+    ``edit_id`` is the edit the person was shown: if another edit has landed
+    since, or this one was already undone, nothing is touched. The log is then
+    cleared, so undoing twice never reaches an older edit (one step, E034).
+    A restored name or brief keeps the pin an edit by hand carries.
+    """
+    require_node(conn, tree, node_id)
+    latest = latest_edit(conn, node_id)
+    if latest is None or int(latest["id"]) != edit_id:
+        raise Invalid("that edit is no longer the topic's latest: reload")
+    kind = str(latest["kind"])
+    if kind == "rename":
+        _set_title(conn, node_id, latest["before"])
+    elif kind == "brief":
+        _write_brief(
+            conn, node_id, str(latest["before"]), "brief restored by hand"
+        )
+    else:
+        conn.execute("DELETE FROM notes WHERE id = ?", (latest["ref"],))
+    conn.execute("DELETE FROM edit_log WHERE node_id = ?", (node_id,))
+    return kind
+
+
+def _record(
+    conn: sqlite3.Connection,
+    node_id: int,
+    kind: str,
+    who: str,
+    *,
+    before: str | None = None,
+    ref: int | None = None,
+) -> None:
+    conn.execute(
+        "INSERT INTO edit_log(node_id, kind, before, ref, who, made_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (node_id, kind, before, ref, who, datetime.now(UTC).isoformat()),
+    )
 
 
 def release(conn: sqlite3.Connection, tree: str, node_id: int) -> int:

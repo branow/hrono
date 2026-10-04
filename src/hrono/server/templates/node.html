@@ -94,6 +94,20 @@
           </div>
         </form>
 
+        {% if node.undo %}
+        <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/undo">
+          <input type="hidden" name="edit" value="{{ node.undo.id }}">
+          <div class="what">
+            <span class="name">Undo {{ node.undo.label }}<span class="tip" tabindex="0" role="note" data-tip="Puts back what the last edit by hand replaced. Only the latest edit can be undone, and only once">?</span></span>
+            <p class="hint">{{ node.undo.will }} Made by {{ node.undo.who }}, {{ node.undo.when }}.</p>
+          </div>
+          <div class="act">
+            <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
+            <button class="btn danger" type="submit">Undo</button>
+          </div>
+        </form>
+        {% endif %}
+
         {% if node.pin_kinds %}
         <form class="tool" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
           <div class="tool-label">

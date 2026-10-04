@@ -49,21 +49,21 @@ class SectionMove(BaseModel):
 
 @router.patch("/trees/{name}/nodes/{node_id}")
 def rename_node(
-    name: str, node_id: int, body: Rename, request: Request, _: Admin
+    name: str, node_id: int, body: Rename, request: Request, user: Admin
 ) -> dict[str, object]:
     """Name a topic; the export shows this instead of the derived title."""
     with request.app.state.db.write() as conn:
-        edits.rename(conn, name, node_id, body.title)
+        edits.rename(conn, name, node_id, body.title, user.name)
     return {"node_id": node_id, "title": body.title, "pinned": True}
 
 
 @router.put("/trees/{name}/nodes/{node_id}/brief")
 def override_brief(
-    name: str, node_id: int, body: BriefText, request: Request, _: Admin
+    name: str, node_id: int, body: BriefText, request: Request, user: Admin
 ) -> dict[str, object]:
     """Replace a node's brief with the operator's own words (pins)."""
     with request.app.state.db.write() as conn:
-        edits.override_brief(conn, name, node_id, body.text)
+        edits.override_brief(conn, name, node_id, body.text, user.name)
     return {"node_id": node_id, "pinned": True}
 
 
@@ -79,12 +79,11 @@ def unpin_node(
 
 @router.post("/trees/{name}/nodes/{node_id}/notes")
 def note_node(
-    name: str, node_id: int, body: NoteText, request: Request, _: Admin
+    name: str, node_id: int, body: NoteText, request: Request, user: Admin
 ) -> dict[str, object]:
     """Annotate a topic; the export shows it to the traversing agent."""
     with request.app.state.db.write() as conn:
-        edits.require_node(conn, name, node_id)
-        note_id = notes.add(conn, notes.NODE, node_id, body.text)
+        note_id = edits.note(conn, name, node_id, body.text, user.name)
     return {"note_id": note_id, "node_id": node_id}
 
 

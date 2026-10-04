@@ -78,7 +78,7 @@ def test_a_hand_rewrite_keeps_the_text_it_replaced(world) -> None:  # type: igno
     _write(conn, node, "first")
 
     with conn:
-        edits.override_brief(conn, TREE, node, "by a person")
+        edits.override_brief(conn, TREE, node, "by a person", "t")
     _write(conn, node, "regenerated")
 
     newest, older = briefs.versions(conn, node)
@@ -107,8 +107,8 @@ def test_an_unchanged_save_keeps_nothing_and_pushes_none_out(world) -> None:  # 
         _write(conn, node, f"text {number}")
     before = [row["text"] for row in briefs.versions(conn, node)]
 
-    _write(conn, node, "text 5")
+    _write(conn, node, "text 5", "t")
     with conn:
-        edits.override_brief(conn, TREE, node, "text 5")
+        edits.override_brief(conn, TREE, node, "text 5", "t")
 
     assert [row["text"] for row in briefs.versions(conn, node)] == before

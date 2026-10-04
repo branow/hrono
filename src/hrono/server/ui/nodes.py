@@ -112,7 +112,7 @@ async def rename_from_the_page(
     if body is None:
         return _back(tree, node_id, error=problem)
     with request.app.state.db.write() as conn:
-        edits.rename(conn, tree, node_id, body.title)  # type: ignore[attr-defined]
+        edits.rename(conn, tree, node_id, body.title, user.name)  # type: ignore[attr-defined]
     return _back(tree, node_id, done="renamed")
 
 
@@ -125,7 +125,7 @@ async def brief_from_the_page(
     if body is None:
         return _back(tree, node_id, error=problem)
     with request.app.state.db.write() as conn:
-        edits.override_brief(conn, tree, node_id, body.text)  # type: ignore[attr-defined]
+        edits.override_brief(conn, tree, node_id, body.text, user.name)  # type: ignore[attr-defined]
     return _back(tree, node_id, done="brief written")
 
 
@@ -138,8 +138,7 @@ async def note_from_the_page(
     if body is None:
         return _back(tree, node_id, error=problem)
     with request.app.state.db.write() as conn:
-        edits.require_node(conn, tree, node_id)
-        notes.add(conn, notes.NODE, node_id, body.text)  # type: ignore[attr-defined]
+        edits.note(conn, tree, node_id, body.text, user.name)  # type: ignore[attr-defined]
     return _back(tree, node_id, done="note added")
 
 
@@ -312,6 +311,25 @@ async def move_section_from_the_page(
     )
 
 
+@router.post("/ui/trees/{tree}/nodes/{node_id}/undo")
+async def undo_from_the_page(
+    tree: str, node_id: int, request: Request, user: Admin
+) -> Response:
+    """Put back what the topic's latest edit replaced, once confirmed."""
+    fields = await _fields(request)
+    if not _confirmed(fields):
+        return _back(tree, node_id, error="tick the box to confirm an undo")
+    edit = fields.get("edit", "")
+    if not edit.isdigit():
+        return _back(tree, node_id, error="that edit is no longer the latest")
+    try:
+        with request.app.state.db.write() as conn:
+            kind = edits.undo(conn, tree, node_id, int(edit))
+    except AppError as exc:
+        return _back(tree, node_id, error=str(exc))
+    return _back(tree, node_id, done=f"undone: {_UNDO[kind]}")
+
+
 @router.post("/ui/trees/{tree}/nodes/{node_id}/release")
 def release_from_the_page(
     tree: str, node_id: int, request: Request, user: Admin
@@ -320,6 +338,35 @@ def release_from_the_page(
     with request.app.state.db.write() as conn:
         released = edits.release(conn, tree, node_id)
     return _back(tree, node_id, done=f"handed back, {released} pins released")
+
+
+_UNDO = {"rename": "rename", "brief": "brief rewrite", "note": "note"}
+
+
+def _undo(conn: object, node_id: int) -> dict[str, object] | None:
+    """The edit an Undo would put back, and what it will change."""
+    row = edits.latest_edit(conn, node_id)  # type: ignore[arg-type]
+    if row is None:
+        return None
+    kind = str(row["kind"])
+    if kind == "rename":
+        before = row["before"]
+        will = (
+            f'The name goes back to "{before}".'
+            if before
+            else "The name is removed; the topic takes its name from its brief."
+        )
+    elif kind == "brief":
+        will = "The brief goes back to the text it had before your rewrite."
+    else:
+        will = "The note is deleted."
+    return {
+        "id": int(row["id"]),
+        "label": _UNDO[kind],
+        "will": will,
+        "when": _when(row["made_at"]),
+        "who": str(row["who"]),
+    }
 
 
 def _node(
@@ -401,6 +448,7 @@ def _node(
         ],
         "wrote": _provenance(conn, node_id, brief),
         "versions": _versions(conn, node_id, brief),
+        "undo": _undo(conn, node_id),
         "members": _members(
             conn, node_id, wheres.get(node_id, ""), brief, q, page, section
         ),

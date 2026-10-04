@@ -111,7 +111,10 @@ full old text behind Details; saving a brief unchanged keeps nothing. Its sectio
 heading, the lines, the size), worst fit first, filterable by path and paged.
 For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
 split) sit in the page head, each saying what it will change before it runs;
-moving a section is on the section.
+moving a section is on the section. Edit also offers Undo for the topic's
+latest name, brief or note: it says what will change, asks for a tick, puts the
+old value back and goes away, so it is one step and a second Undo finds
+nothing. Structural changes are not undone.
 
 Find is the other way in, for when you know a word or a file rather than
 where it sits on the map. The search box in the top bar looks for every word

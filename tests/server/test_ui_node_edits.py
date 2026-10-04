@@ -335,6 +335,167 @@ def test_a_regeneration_replaced_version_says_so(browser: Browser) -> None:
     assert "replaced by a hand rewrite" not in page
 
 
+def _log(browser: Browser) -> list[tuple[str, str | None, str]]:
+    return [
+        (r["kind"], r["before"], r["who"])
+        for r in browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT kind, before, who FROM edit_log WHERE node_id = ? "
+            "ORDER BY id",
+            (browser.node,),
+        )
+    ]
+
+
+def _latest(browser: Browser) -> str:
+    return str(
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT MAX(id) FROM edit_log WHERE node_id = ?", (browser.node,)
+        ).fetchone()[0]
+    )
+
+
+def _brief(browser: Browser) -> str:
+    return str(briefs.get(browser.conn, browser.node)["text"])  # type: ignore[arg-type,index]
+
+
+def test_each_manual_edit_records_what_it_replaced(browser: Browser) -> None:
+    browser.sign_in()
+
+    browser.post("rename", title="First name")
+    browser.post("rename", title="Second name")
+    browser.post("brief", text="Hand text.")
+    browser.post("note", text="A remark")
+
+    assert _log(browser) == [
+        ("rename", None, "admin"),
+        ("rename", "First name", "admin"),
+        ("brief", "The summary the model wrote.", "admin"),
+        ("note", None, "admin"),
+    ]
+
+
+def test_a_refused_edit_records_nothing(browser: Browser) -> None:
+    browser.sign_in()
+
+    browser.post("rename", title="")
+    browser.post("brief", text="")
+
+    assert _log(browser) == []
+
+
+def test_undo_puts_the_old_name_back(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Mistake")
+
+    page = browser.page()
+    assert "Undo rename" in page
+    assert "The name is removed" in page
+    answer = browser.post("undo", edit=_latest(browser), confirm="yes")
+
+    assert "undone: rename" in answer.text
+    assert browser.title() is None
+    assert "Undo rename" not in browser.page()
+    assert browser.pins() == {"brief": "renamed by hand"}
+
+
+def test_undo_restores_a_named_topics_earlier_name(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Good")
+    browser.post("rename", title="Bad")
+
+    assert "The name goes back to &#34;Good&#34;" in browser.page()
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+
+    assert browser.title() == "Good"
+
+
+def test_undo_restores_the_old_brief_for_recall_too(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("brief", text="A wrong rewrite.")
+
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+
+    assert _brief(browser) == "The summary the model wrote."
+    assert "The summary the model wrote." in _brief_passage_text(browser)
+    assert "wrong rewrite" not in _brief_passage_text(browser)
+    assert "brief" in browser.pins()
+
+
+def test_undo_removes_the_note(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("note", text="Added by mistake")
+
+    browser.post("undo", edit=_latest(browser), confirm="yes")
+
+    assert notes.get(browser.conn, notes.NODE, browser.node) == ()  # type: ignore[arg-type]
+    assert browser.pins() == {}
+
+
+def test_undo_twice_does_not_reach_an_older_edit(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Older")
+    browser.post("rename", title="Newer")
+    stale = _latest(browser)
+
+    browser.post("undo", edit=stale, confirm="yes")
+    answer = browser.post("undo", edit=stale, confirm="yes")
+
+    assert "no longer the topic" in answer.text
+    assert browser.title() == "Older"
+    assert "Undo rename" not in browser.page()
+
+
+def test_undo_of_a_shown_edit_is_refused_once_another_landed(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Shown")
+    shown = _latest(browser)
+    browser.post("note", text="Landed after the page was drawn")
+
+    answer = browser.post("undo", edit=shown, confirm="yes")
+
+    assert "no longer the topic" in answer.text
+    assert browser.title() == "Shown"
+
+
+def test_undo_needs_the_box_ticked(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Kept")
+
+    answer = browser.post("undo", edit=_latest(browser))
+
+    assert "tick the box" in answer.text
+    assert browser.title() == "Kept"
+
+
+def test_undo_of_a_rewrite_with_no_earlier_brief_is_not_offered(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "DELETE FROM briefs WHERE node_id = ?", (browser.node,)
+        )
+    browser.post("brief", text="First ever brief.")
+
+    assert "Undo brief rewrite" not in browser.page()
+
+
+def test_a_readers_and_a_writers_undo_is_refused(browser: Browser) -> None:
+    browser.sign_in()
+    browser.post("rename", title="Kept")
+    edit = _latest(browser)
+    for role in ("reader", "writer"):
+        browser.sign_in(role)
+
+        answer = browser.post("undo", edit=edit, confirm="yes")
+
+        assert answer.status_code == 403
+        assert browser.title() == "Kept"
+        assert "Undo rename" not in browser.page()
+
+
 def _kinds(old: str, new: str) -> list[str]:
     from hrono.server.ui.nodes import _diff
 
