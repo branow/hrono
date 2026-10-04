@@ -738,12 +738,14 @@ svg .twist { fill: none; stroke: var(--ink-faint); stroke-width: 1.6;
 svg a:hover .twist { stroke: var(--accent); }
 /* Focus on the map is drawn on the topic itself: an outline round an SVG link
    is a box of whatever size the browser measures, the disc is the thing you
-   are on. Ringed apart from the topic being read by its width and a halo. */
+   are on. A ring of its own, parted from the disc by a gap in the page's
+   colour, so it stands apart from a disc filled with the same accent. */
 svg a:focus { outline: none; }
+svg circle.ring { fill: none; stroke: none; pointer-events: none; }
 svg a:focus-visible circle.disc {
-  stroke: var(--accent); stroke-width: 4;
-  paint-order: stroke; filter: drop-shadow(0 0 3px var(--accent));
+  stroke: var(--bg); stroke-width: 4; paint-order: stroke;
 }
+svg a:focus-visible circle.ring { stroke: var(--accent); stroke-width: 2.5; }
 svg a:focus-visible text.label { fill: var(--accent); text-decoration: underline; }
 svg a:focus-visible .twist { stroke: var(--accent); }
 svg a:focus-visible .twist-hit { stroke: var(--accent); stroke-width: 2; }
@@ -1087,13 +1089,19 @@ tr.needs td.count { font-weight: 700; color: var(--warn); }
    application works. Its controls stop being a row above the chart and become
    panels ON it, so the pixels go to the tree rather than to chrome. */
 .topbar { min-height: var(--topbar); }
+/* The page is exactly one window tall: the header takes what its rows need
+   (it wraps on a narrow window) and the map takes the rest, so the document
+   has nothing to scroll when a topic takes focus. */
+body:has(main.bleed) { display: flex; flex-direction: column; height: 100dvh; }
 main.bleed {
   max-width: none;
   margin: 0;
   padding: 0;
-  height: calc(100dvh - var(--topbar));
+  flex: 1; min-height: 0;
   position: relative;
-  overflow: hidden;
+  /* clip, not hidden: hidden is still scrollable, and focusing a topic
+     scrolled the page under the header. The board scrolls itself. */
+  overflow: clip;
 }
 main.bleed .board { height: 100%; gap: 0; }
 main.bleed .canvas {

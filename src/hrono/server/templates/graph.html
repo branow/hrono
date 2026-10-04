@@ -129,6 +129,7 @@
   <g class="node b{{ node.branch }}{% if node.stale %} stale{% endif %}{% if node.focused %} reading{% endif %}">
     <a href="{{ node.read }}"{% if node.focused %} aria-current="true"{% endif %}>
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
+      <circle class="ring" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius + 5 }}"/>
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 43 }}">{{ node.holds|counted(node.holds_what) }}</text>
@@ -306,7 +307,8 @@
 
   /* The swap replaces the link that had focus, and focus would fall to the
      page's top and cost the keyboard its place on a map of hundreds of
-     topics. Put it back on the same link, or on the panel the link opened. */
+     topics. Opening a topic moves it into that topic's panel; any other
+     link is found again where it was. */
   function keep(href) {
     var same = Array.prototype.find.call(
       document.querySelectorAll("#board a, #controls a, #overlays a, #panel a"),

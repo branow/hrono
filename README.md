@@ -88,7 +88,7 @@ content" link (on the map, a second one skips to the outline, a plain list of
 the topics); `/` focuses Search from anywhere that is not a text field; the
 tree switcher opens with Enter and folds with Escape; and on the map Tab walks
 the topics in drawing order, a ringed disc shows where you are, and Enter opens
-the topic with focus kept where it was.
+the topic and moves focus into its panel.
 
 It is server-rendered Jinja with no build step and no JavaScript to vendor: the
 map, the runs view, the health checks, the activity log and the config tables

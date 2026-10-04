@@ -637,6 +637,17 @@ def test_the_first_tab_is_a_skip_link_that_lands_on_the_content(
     assert page.evaluate("document.activeElement.id") == "content"  # type: ignore[attr-defined]
 
 
+def _tab_to(page: object, probe: str, limit: int = 60) -> None:
+    """Tab until `probe` (a JS expression on the active element) holds."""
+    for _ in range(limit):
+        page.keyboard.press("Tab")  # type: ignore[attr-defined]
+        if page.evaluate(  # type: ignore[attr-defined]
+            f"(e => !!e && ({probe}))(document.activeElement)"
+        ):
+            return
+    raise AssertionError(f"Tab never reached: {probe}")
+
+
 def test_slash_focuses_search_but_types_normally_inside_a_field(
     page: object, live: Live
 ) -> None:
@@ -647,18 +658,37 @@ def test_slash_focuses_search_but_types_normally_inside_a_field(
     assert box.input_value() == ""
     page.keyboard.type("a/b")  # type: ignore[attr-defined]
     assert box.input_value() == "a/b"
+    with page.expect_navigation():  # type: ignore[attr-defined]
+        page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert "/find?" in page.url and "q=a%2Fb" in page.url  # type: ignore[attr-defined]
 
 
 def test_the_tree_switcher_and_theme_button_work_by_keyboard(
-    page: object, live: Live
+    solo_page: object, solo: Live
 ) -> None:
-    page.goto(f"{live.base}/ui/trees/default/activity")  # type: ignore[attr-defined]
-    page.locator(".treepick summary").focus()  # type: ignore[attr-defined]
+    from hrono.db.database import open_database
+    from hrono.registry import store as registry_store
+
+    conn = open_database(solo.db_path)
+    for name in ("default", "other"):
+        registry_store.insert(
+            conn, "trees", name, json.dumps({"name": name}), None, "t"
+        )
+    conn.commit()
+    conn.close()
+    page = solo_page
+    page.goto(f"{solo.base}/ui/trees/default/activity")  # type: ignore[attr-defined]
+    _tab_to(page, "e.matches('.treepick summary')")
     page.keyboard.press("Enter")  # type: ignore[attr-defined]
     assert page.locator(".treepick").get_attribute("open") is not None  # type: ignore[attr-defined]
     page.keyboard.press("Escape")  # type: ignore[attr-defined]
     assert page.locator(".treepick").get_attribute("open") is None  # type: ignore[attr-defined]
-    page.locator(".themer").focus()  # type: ignore[attr-defined]
+    page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    _tab_to(page, "e.textContent.trim() === 'other'", 4)
+    with page.expect_navigation():  # type: ignore[attr-defined]
+        page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert "/ui/trees/other/" in page.url  # type: ignore[attr-defined]
+    _tab_to(page, "e.matches('.themer')")
     with page.expect_navigation():  # type: ignore[attr-defined]
         page.keyboard.press("Enter")  # type: ignore[attr-defined]
     assert page.locator("html").get_attribute("data-theme") in ("light", "dark")  # type: ignore[attr-defined]
@@ -669,32 +699,47 @@ def test_tab_reaches_every_topic_enter_opens_it_and_focus_is_drawn(
 ) -> None:
     page.goto(f"{live.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
     page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
-    topics = page.locator("svg g.node > a:first-child")  # type: ignore[attr-defined]
-    total = topics.count()
-    assert total > 1
+    topics = set(
+        page.eval_on_selector_all(  # type: ignore[attr-defined]
+            "svg g.node > a:first-child",
+            "els => els.map(e => e.getAttribute('href'))",
+        )
+    )
+    assert len(topics) > 1
     reached = set()
     for _ in range(80):
         page.keyboard.press("Tab")  # type: ignore[attr-defined]
-        href = page.evaluate(  # type: ignore[attr-defined]
-            "document.activeElement.closest('svg g.node') ?"
-            " document.activeElement.getAttribute('href') : null"
+        reached.add(
+            page.evaluate("document.activeElement.getAttribute('href')")  # type: ignore[attr-defined]
         )
-        if href:
-            reached.add(href)
-    assert len(reached) >= total
+    assert topics <= reached
+    # the page stays put: the header is still in view with a topic focused
+    assert page.evaluate("window.scrollY") == 0  # type: ignore[attr-defined]
+    assert page.locator(".topbar").bounding_box()["y"] >= 0  # type: ignore[attr-defined]
+    first = sorted(topics)[0]
     for scheme in ("light", "dark"):
         page.emulate_media(color_scheme=scheme)  # type: ignore[attr-defined]
-        disc = page.locator("svg a:focus circle.disc")  # type: ignore[attr-defined]
-        if disc.count() == 0:
-            page.locator("svg g.node > a").first.focus()  # type: ignore[attr-defined]
-        assert (
-            float(disc.evaluate("e => getComputedStyle(e).strokeWidth")[:-2])
-            >= 4
+        page.reload()  # type: ignore[attr-defined]
+        _tab_to(page, f"e.getAttribute('href') === {first!r}", 80)
+        measured = page.evaluate(  # type: ignore[attr-defined]
+            """(() => {
+              const a = document.activeElement;
+              const ring = getComputedStyle(a.querySelector('circle.ring'));
+              const disc = getComputedStyle(a.querySelector('circle.disc'));
+              return [ring.stroke, ring.strokeWidth, disc.stroke,
+                      getComputedStyle(document.body).backgroundColor];
+            })()"""
         )
-    page.locator("svg g.node > a").first.focus()  # type: ignore[attr-defined]
+        accent = page.evaluate(  # type: ignore[attr-defined]
+            "getComputedStyle(document.documentElement)"
+            ".getPropertyValue('--accent').trim()"
+        )
+        assert measured[0] != "none" and float(measured[1][:-2]) >= 2
+        # a gap in the page colour parts the ring from the disc
+        assert measured[2] != measured[0], accent
     page.keyboard.press("Enter")  # type: ignore[attr-defined]
     page.wait_for_selector("#panel")  # type: ignore[attr-defined]
-    assert page.evaluate("!!document.activeElement.closest('#board, #panel')")  # type: ignore[attr-defined]
+    assert page.evaluate("!!document.activeElement.closest('#panel')")  # type: ignore[attr-defined]
 
 
 def test_the_map_has_a_skip_link_to_a_plain_list_of_topics(
@@ -713,7 +758,7 @@ def test_a_sync_starts_from_the_keyboard_alone(
 ) -> None:
     page = fresh_page
     page.goto(f"{fresh.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
-    page.locator("main button[type=submit]").first.focus()  # type: ignore[attr-defined]
+    _tab_to(page, "e.textContent.trim() === 'Start a sync'")
     with page.expect_navigation():  # type: ignore[attr-defined]
         page.keyboard.press("Enter")  # type: ignore[attr-defined]
-    assert "run=" in page.url or "done=" in page.url or "/jobs" in page.url  # type: ignore[attr-defined]
+    assert "run=job_" in page.url  # type: ignore[attr-defined]
