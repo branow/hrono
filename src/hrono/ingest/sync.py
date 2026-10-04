@@ -39,9 +39,7 @@ def sync(job: Job, context: JobContext) -> Mapping[str, int]:
 def sync_source(context: JobContext, name: str) -> Mapping[str, int]:
     """Bring one registered source into the cache and pin its version.
 
-    The op's body, callable without a job: the setup path fetches a source to
-    show what it holds, and must fetch it the way a sync does or the two would
-    disagree about what the cache is.
+    The op's body, called by the `sync` op for a job's source.
     """
     version = fetch_source(context, name)
     previous = _pinned_version(context, name)
@@ -52,8 +50,10 @@ def sync_source(context: JobContext, name: str) -> Mapping[str, int]:
 def fetch_source(context: JobContext, name: str) -> str:
     """Fill one source's cache without pinning its version.
 
-    The setup preview reads the cache before any build; pinning there would
-    make the first real sync report nothing to do (#213).
+    The setup path fetches a source to show what it holds, and must fetch it
+    the way a sync does or the two would disagree about what the cache is. It
+    reads the cache before any build; pinning there would make the first real
+    sync report nothing to do (#213).
     """
     config = _load_source(context, name)
     source_type = str(config["type"])
