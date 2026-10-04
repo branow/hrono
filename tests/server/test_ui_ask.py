@@ -300,7 +300,8 @@ def test_the_ask_page_leaves_no_row_in_the_agent_recall_log(
         headers={"Authorization": f"Bearer {panel.token}"},
     )
     assert rows() == 1
-=======
+
+
 def article_of(html: str, uri_path: str) -> str:
     start = html.index(uri_path)
     return html[
@@ -602,4 +603,3 @@ def test_a_long_question_is_cut_and_still_compares(panel: Panel) -> None:
 
     assert len(stored(panel)[0]["q"]) == ask_history.MAX_QUESTION
     assert "Compared with" in html
->>>>>>> 3fc4a85 (feat: re-asking a past question marks each passage new, moved or the same and lists what dropped out)
