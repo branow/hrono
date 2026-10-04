@@ -166,8 +166,11 @@ def _trim(entries: list[Entry]) -> list[Entry]:
 def _label(hit: Hit) -> str:
     path = hit.uri.rpartition("@")[0]
     tail = path[-LABEL:]
-    if len(path) > LABEL and path[-LABEL - 1] != "/" and "/" in tail:
-        tail = tail.partition("/")[2]
+    if len(path) > LABEL and path[-LABEL - 1] != "/":
+        if "/" in tail:
+            tail = tail.partition("/")[2]
+        else:
+            tail = path.rpartition("/")[2]
     return f"{tail} {hit.start}"
 
 

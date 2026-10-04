@@ -546,6 +546,13 @@ def test_a_label_is_cut_at_a_directory_boundary() -> None:
     )
 
 
+def test_a_long_file_name_is_shown_whole_not_cut_mid_word() -> None:
+    name = "a_very_long_file_name_indeed_over_the_limit.txt"
+    long = hit(f"git://run/src-repo/{name}@v", 4)
+
+    assert ask_history.snapshot((long,))[0].label == f"{name} 4"
+
+
 def test_the_same_place_under_a_new_version_is_changed_not_dropped() -> None:
     before = ask_history.snapshot((hit("git://r/a@v1"), hit("git://r/b@v1")))
 
