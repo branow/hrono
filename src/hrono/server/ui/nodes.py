@@ -425,8 +425,7 @@ def _versions(
 def _version_line(row: object) -> str:
     """Who wrote a kept brief, and what replaced it, each with its minute."""
     hand = row["model_name"] == "hand-edited"  # type: ignore[index]
-    who = "a hand rewrite" if hand else str(row["model_name"])  # type: ignore[index]
-    by = "hand" if hand else who
+    by = "hand" if hand else str(row["model_name"])  # type: ignore[index]
     replaced = (
         "a hand rewrite" if row["reason"] == "rewrite" else "a regeneration"  # type: ignore[index]
     )
@@ -446,7 +445,7 @@ def _diff(old: str, new: str) -> list[dict[str, str]]:
     groups = list(difflib.SequenceMatcher(None, a, b).get_grouped_opcodes(1))
     rows: list[dict[str, str]] = []
     for number, group in enumerate(groups):
-        if number == 0 and (group[0][1] or group[0][3]) or number:
+        if number or group[0][1] or group[0][3]:
             rows.append(_GAP)
         for tag, i1, i2, j1, j2 in group:
             if tag == "equal":

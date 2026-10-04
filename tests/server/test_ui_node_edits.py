@@ -311,3 +311,48 @@ def test_two_hand_rewrites_in_a_row_never_read_by_by_hand(
     assert "by by" not in page
     assert page.count("by hand (") == 1
     assert "replaced by a hand rewrite (" in page
+
+
+def test_a_regeneration_replaced_version_says_so(browser: Browser) -> None:
+    browser.sign_in()
+
+    with browser.conn:  # type: ignore[attr-defined]
+        briefs.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            browser.node,
+            "A regenerated summary.",
+            model_name="m2",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature="sig",
+            input_tokens=1,
+            output_tokens=1,
+        )
+    page = browser.page()
+
+    assert "by m (" in page
+    assert "replaced by a regeneration (" in page
+    assert "replaced by a hand rewrite" not in page
+
+
+def _kinds(old: str, new: str) -> list[str]:
+    from hrono.server.ui.nodes import _diff
+
+    return [row["kind"] for row in _diff(old, new)]
+
+
+def test_a_diff_marks_a_gap_before_a_change_that_is_not_the_first_line() -> (
+    None
+):
+    old = "\n".join(f"l{n}" for n in range(10))
+    new = old.replace("l5", "L5")
+
+    assert _kinds(old, new) == ["gap", "same", "del", "add", "same", "gap"]
+
+
+def test_a_diff_marks_a_gap_between_two_distant_changes() -> None:
+    old = "\n".join(f"l{n}" for n in range(20))
+    new = old.replace("l0", "L0").replace("l19", "L19")
+
+    kinds = _kinds(old, new)
+    assert kinds == ["del", "add", "same", "gap", "same", "del", "add"]
