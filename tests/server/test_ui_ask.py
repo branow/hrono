@@ -258,3 +258,22 @@ def test_a_long_history_cookie_is_read_only_as_far_as_the_cap(
     listed = html[html.index('aria-label="asked before"') :]
     listed = listed[: listed.index("</nav>")]
     assert [q for q in many if f">{q}<" in listed] == many[: ask.HISTORY]
+
+
+def test_the_ask_page_leaves_no_row_in_the_agent_recall_log(
+    panel: Panel,
+) -> None:
+    def rows() -> int:
+        return panel.conn.execute(  # type: ignore[attr-defined]
+            "SELECT count(*) FROM recall_log"
+        ).fetchone()[0]
+
+    panel.ask(ANSWERABLE)
+    assert rows() == 0
+
+    panel.client.post(
+        f"/trees/{TREE}/recall",
+        json={"question": ANSWERABLE},
+        headers={"Authorization": f"Bearer {panel.token}"},
+    )
+    assert rows() == 1

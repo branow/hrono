@@ -127,7 +127,7 @@ def test_edit_log_rebuild_keeps_rows_and_never_reuses_an_id(
         )
     rows_before = [tuple(r) for r in conn.execute("SELECT * FROM edit_log")]
 
-    assert migrate(conn) == (42, 43)
+    assert migrate(conn) == (42, 43, 44)
 
     # 43 adds `closed`, open (NULL) on every row that was already there
     assert [tuple(r) for r in conn.execute("SELECT * FROM edit_log")] == [
@@ -146,3 +146,18 @@ def test_edit_log_rebuild_keeps_rows_and_never_reuses_an_id(
             "VALUES (1, 'note', 'bob', 'later')"
         )
     assert conn.execute("SELECT max(id) FROM edit_log").fetchone()[0] == 9
+
+
+def test_recall_log_migration_keeps_existing_data(tmp_path: Path) -> None:
+    conn = make_conn(tmp_path)
+    Migrator(tuple(m for m in packaged() if m.version <= 43)).apply(conn)
+    with conn:
+        conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('t', 1, 0, 'now')"
+        )
+
+    assert migrate(conn) == (44,)
+
+    assert conn.execute("SELECT count(*) FROM nodes").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM recall_log").fetchone()[0] == 0

@@ -26,6 +26,7 @@ from hrono.cluster import incubator
 from hrono.errors import NotFound
 from hrono.export.produce import Export, archive, produce
 from hrono.jobs.worker import enqueue
+from hrono.recall import log as recall_log
 from hrono.recall.ask import ask
 from hrono.registry.collections.trees import is_known
 from hrono.server.auth import require_role
@@ -84,10 +85,16 @@ def sync_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
 
 @router.post("/trees/{name}/recall")
 def recall_tree(
-    name: str, body: RecallRequest, request: Request, _: Reader
+    name: str, body: RecallRequest, request: Request, user: Reader
 ) -> dict[str, object]:
-    """Run the recall engine synchronously and return its ranked hits."""
-    result = ask(request.app.state.db, name, body.question, body.limit)
+    """Run the recall engine synchronously and return its ranked hits.
+
+    Each answered call is logged (E042); a call that raises is not.
+    """
+    database = request.app.state.db
+    result = ask(database, name, body.question, body.limit)
+    with database.write() as conn:
+        recall_log.record(conn, name, user.name, result, body.question)
     return {
         "hits": [asdict(hit) for hit in result.hits],
         "message": result.message,

@@ -164,3 +164,50 @@ def test_no_answer_returns_the_explore_message(
     payload = resp.json()
     assert payload["hits"] == []
     assert payload["message"] == "no confident matches - explore the map."
+
+
+def log_rows(harness: Harness) -> list[dict[str, object]]:
+    db = harness.client.app.state.db  # type: ignore[attr-defined]
+    with db.connect() as conn:
+        return [
+            dict(r)
+            for r in conn.execute("SELECT * FROM recall_log ORDER BY id")
+        ]
+
+
+def recall(harness: Harness, role: str, question: str) -> None:
+    resp = harness.client.post(
+        "/trees/default/recall",
+        json={"question": question},
+        headers=harness.auth(role),
+    )
+    assert resp.status_code == 200
+
+
+def test_each_api_recall_adds_one_row_saying_who_and_how_sure(
+    harness: Harness,
+) -> None:
+    recall(harness, "reader", "authentication?")
+
+    (row,) = log_rows(harness)
+    assert (row["tree"], row["user"], row["question"]) == (
+        "default",
+        "reader",
+        "authentication?",
+    )
+    assert row["hits"] > 0 and row["confident"] == 1
+    assert row["top_score"] is not None
+
+
+def test_the_log_keeps_only_the_newest_rows(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("hrono.recall.log.KEEP", 3)
+    for n in range(5):
+        recall(harness, "reader", f"question {n}")
+
+    assert [r["question"] for r in log_rows(harness)] == [
+        "question 2",
+        "question 3",
+        "question 4",
+    ]
