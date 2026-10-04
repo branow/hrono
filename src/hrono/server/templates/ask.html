@@ -24,6 +24,11 @@
     <a href="{{ link }}">{{ text }}</a>
     {% endfor %}
   </nav>
+  <p class="hint">Asked before lives in this browser only, for a day. Ask one again to see what changed since.</p>
+  {% endif %}
+
+  {% if change %}
+  <p class="hint" id="change">Compared with the last time you asked this: {{ change.fresh }} new, {{ change.dropped|length }} dropped out.</p>
   {% endif %}
 
   {% if problem %}
@@ -66,6 +71,7 @@
         <div class="spread">
           <div class="mono small">
             <span class="chip">{{ hit.kind }}</span>
+            {% if hit.status %}<span class="chip {{ 'accent' if hit.status == 'new' else ('plain' if hit.status == 'same' else 'warn') }}">{{ hit.status }}</span>{% endif %}
             {{ hit.path }}{% if hit.where %} <span class="faint">{{ hit.where }}</span>{% endif %}
             <span class="faint">bytes {{ hit.start }}–{{ hit.end }} @{{ hit.version }}</span>
           </div>
@@ -78,6 +84,16 @@
       </div>
     </article>
     {% endfor %}
+  </section>
+  {% endif %}
+  {% if change and change.dropped %}
+  <section class="stack" id="dropped" aria-label="dropped out">
+    <p class="hint">Dropped out since the last time you asked this:</p>
+    <ul>
+      {% for rank, seen in change.dropped %}
+      <li class="mono small">#{{ rank }} {{ seen.label }} <span class="faint">score {{ "%.3f"|format(seen.score) }}</span></li>
+      {% endfor %}
+    </ul>
   </section>
   {% endif %}
 </div>

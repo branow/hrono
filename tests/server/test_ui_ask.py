@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -18,8 +19,9 @@ from hrono.embed.runner import EmbedError
 from hrono.errors import Unavailable
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.recall import engine
+from hrono.recall.engine import Hit
 from hrono.server.app import create_app
-from hrono.server.ui import ask
+from hrono.server.ui import ask, ask_history
 from tests.context import job_context
 from tests.tree.test_maintain import (
     fake_build,
@@ -71,6 +73,10 @@ class Panel:
         return self.client.get(
             f"/ui/trees/{TREE}/ask?tree={TREE}&q={quote(question)}"
         ).text
+
+
+def stored(panel: Panel) -> list[dict[str, object]]:
+    return json.loads(unquote(panel.client.cookies["hrono_asked"]))
 
 
 @pytest.fixture
@@ -147,8 +153,9 @@ def test_the_url_reproduces_the_answer(panel: Panel) -> None:
     ).text
 
     def passages(html: str) -> str:
-        return html[html.index('aria-label="passages"') :]
+        return "".join(re.findall(r"<pre .*?</pre>", html, re.DOTALL))
 
+    assert passages(first)
     assert passages(first) == passages(again)
 
 
@@ -158,10 +165,7 @@ def test_the_last_questions_are_kept_to_compare(panel: Panel) -> None:
 
     asked = html[html.index('aria-label="asked before"') :]
     assert asked.index(UNANSWERABLE) < asked.index(ANSWERABLE)
-    assert json.loads(unquote(panel.client.cookies["hrono_asked"])) == [
-        UNANSWERABLE,
-        ANSWERABLE,
-    ]
+    assert [e["q"] for e in stored(panel)] == [UNANSWERABLE, ANSWERABLE]
 
 
 @pytest.mark.parametrize(
@@ -237,7 +241,7 @@ def test_the_history_keeps_only_the_newest_few(panel: Panel) -> None:
     for question in questions:
         html = panel.ask(question)
 
-    kept = json.loads(unquote(panel.client.cookies["hrono_asked"]))
+    kept = [e["q"] for e in stored(panel)]
     listed = html[html.index('aria-label="asked before"') :]
     listed = listed[: listed.index("</nav>")]
     newest = list(reversed(questions))[: ask.HISTORY]
@@ -277,3 +281,195 @@ def test_the_ask_page_leaves_no_row_in_the_agent_recall_log(
         headers={"Authorization": f"Bearer {panel.token}"},
     )
     assert rows() == 1
+=======
+def article_of(html: str, uri_path: str) -> str:
+    start = html.index(uri_path)
+    return html[
+        html.rindex("<article", 0, start) : html.index("</article>", start)
+    ]
+
+
+def test_asking_again_after_a_rebrief_marks_new_and_dropped(
+    panel: Panel,
+) -> None:
+    first = panel.ask(ANSWERABLE)
+    assert "Compared with" not in first
+    api = panel.client.post(
+        f"/trees/{TREE}/recall",
+        json={"question": ANSWERABLE},
+        headers={"Authorization": f"Bearer {panel.token}"},
+    ).json()
+    top = api["hits"][0]["uri"]
+    # a rebrief or an edit gives a passage a new version, so a new uri
+    with panel.conn:  # type: ignore[attr-defined]
+        panel.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE passages SET uri = uri || 'x' WHERE uri = ?", (top,)
+        )
+
+    html = panel.ask(ANSWERABLE)
+
+    assert (
+        "Compared with the last time you asked this: 1 new, 1 dropped" in html
+    )
+    moved = article_of(html, top.rpartition("@")[0])
+    assert '<span class="chip accent">new</span>' in moved
+    dropped = html[html.index('aria-label="dropped out"') :]
+    assert "f" in dropped and "score 0." in dropped
+    assert (
+        html.count('<span class="chip plain">same</span>')
+        == len(api["hits"]) - 1
+    )
+
+
+def test_a_question_asked_again_unchanged_is_all_the_same(panel: Panel) -> None:
+    panel.ask(ANSWERABLE)
+
+    html = panel.ask(ANSWERABLE)
+
+    assert "0 new, 0 dropped out" in html
+    assert 'aria-label="dropped out"' not in html
+    assert '<span class="chip accent">new</span>' not in html
+
+
+def test_a_question_that_is_now_refused_lists_what_dropped(
+    panel: Panel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel.ask(ANSWERABLE)
+    monkeypatch.setattr(
+        "hrono.recall.ask._query_encode",
+        lambda model_id: lambda texts: [[0.0] * 8] * len(texts),
+    )
+
+    html = panel.ask(ANSWERABLE)
+
+    assert "Nothing here answers that confidently" in html
+    assert "0 new, " in html
+    assert 'aria-label="dropped out"' in html
+
+
+def test_the_page_says_the_history_lives_in_this_browser_only(
+    panel: Panel,
+) -> None:
+    assert "in this browser only" in panel.ask(ANSWERABLE)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param("not json", id="garbage"),
+        pytest.param(quote('{"q":"x"}'), id="not-a-list"),
+        pytest.param(quote('[{"q":1},7,null]'), id="wrong-shapes"),
+        pytest.param(
+            quote(json.dumps([{"q": ANSWERABLE, "r": [["a"]]}])),
+            id="bad-snapshot",
+        ),
+        pytest.param(
+            quote(json.dumps([{"q": ANSWERABLE, "r": [["a", True, "l"]]}])),
+            id="bool-score",
+        ),
+        pytest.param(
+            quote(
+                json.dumps(
+                    [
+                        {
+                            "q": ANSWERABLE,
+                            "r": [
+                                [f"k{n:05}", 0.1, "label"] for n in range(300)
+                            ],
+                        }
+                    ]
+                )
+            ),
+            id="oversized",
+        ),
+    ],
+)
+def test_a_corrupt_or_oversized_history_is_ignored_never_a_500(
+    panel: Panel, raw: str
+) -> None:
+    panel.client.post("/ui/login", data={"token": panel.token})
+    panel.client.cookies.set("hrono_asked", raw)
+
+    answer = panel.client.get(
+        f"/ui/trees/{TREE}/ask?tree={TREE}&q={quote(ANSWERABLE)}"
+    )
+
+    assert answer.status_code == 200
+    assert "Compared with" not in answer.text
+    written = answer.headers["set-cookie"].split("=", 1)[1].split(";")[0]
+    assert json.loads(unquote(written))[0]["q"] == ANSWERABLE
+
+
+def test_a_legacy_history_of_plain_questions_still_lists(panel: Panel) -> None:
+    panel.client.post("/ui/login", data={"token": panel.token})
+    panel.client.cookies.set("hrono_asked", quote(json.dumps(["old one"])))
+
+    html = panel.client.get(f"/ui/trees/{TREE}/ask?tree={TREE}").text
+
+    assert ">old one<" in html
+
+
+def hit(uri: str, start: int = 0) -> Hit:
+    return Hit(uri, "chunk", uri, "b", 0.5, start, start + 10, None)
+
+
+def test_compare_marks_new_moved_same_and_dropped() -> None:
+    a, b, c, d = (hit(f"git://r/{n}@v") for n in "abcd")
+    before = ask_history.snapshot((a, b, c))
+
+    change = ask_history.compare(before, (b, a, d))
+
+    assert change.status == ("moved from #2", "moved from #1", "new")
+    assert [(rank, s.key) for rank, s in change.dropped] == [
+        (3, ask_history.key(c))
+    ]
+    assert ask_history.compare(before, (a, b, c)).status == ("same",) * 3
+
+
+def test_a_range_is_part_of_a_passages_identity() -> None:
+    assert ask_history.key(hit("git://r/a@v", 0)) != ask_history.key(
+        hit("git://r/a@v", 10)
+    )
+
+
+def test_the_written_history_always_fits_one_cookie() -> None:
+    hits = tuple(hit(f"git://repo/dir/file{n}.txt@v", n) for n in range(10))
+    entries = [
+        ask_history.Entry(f"q{n} " + "w" * 150, ask_history.snapshot(hits))
+        for n in range(ask_history.HISTORY)
+    ]
+
+    value = ask_history.write(entries)
+
+    assert len(value) <= ask_history.MAX_COOKIE
+    back = ask_history.read(value)
+    assert [e.question for e in back] == [e.question for e in entries]
+    assert back[0].seen == entries[0].seen  # the newest keeps its answer
+    assert back[-1].seen is None  # the oldest gave its answer up first
+
+
+def test_a_model_that_is_loading_does_not_erase_the_last_answer(
+    panel: Panel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    panel.ask(ANSWERABLE)
+
+    def loading(model_id: str) -> object:
+        raise Unavailable("the embedding model is still loading (m)")
+
+    with monkeypatch.context() as patch:
+        patch.setattr("hrono.recall.ask._query_encode", loading)
+        panel.ask(ANSWERABLE)
+
+    assert stored(panel)[0]["r"]
+    assert "0 new, 0 dropped out" in panel.ask(ANSWERABLE)
+
+
+def test_a_long_question_is_cut_and_still_compares(panel: Panel) -> None:
+    long = ANSWERABLE + " " + "w" * 300
+    panel.ask(long)
+
+    html = panel.ask(long)
+
+    assert len(stored(panel)[0]["q"]) == ask_history.MAX_QUESTION
+    assert "Compared with" in html
+>>>>>>> 3fc4a85 (feat: re-asking a past question marks each passage new, moved or the same and lists what dropped out)

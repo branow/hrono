@@ -139,6 +139,12 @@ cut from it and the topic each was filed under; a section waiting to be filed
 says it is parked, and a path outside the tree's sources says it is not
 ingested.
 
+Ask is the other door, for a question in your own words: it shows the passages
+recall would hand an agent. The last six questions are kept in this browser
+only (a cookie, for a day), each with a compact snapshot of what it returned.
+Ask one again after a fix and every passage is marked new, moved from a rank
+or the same, and the ones that dropped out are listed.
+
 Set up is the path for a new install, reached from Home while the tree is empty
 and from Settings when you want to add a git source. Four steps, each a real
 form over the registry Settings edits: a connection (tested against its

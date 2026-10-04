@@ -12,16 +12,17 @@ error.
 
 The question lives in the URL (a GET, since asking changes nothing), so an
 answer can be shared; the last few questions this browser asked are kept in a
-cookie for comparing before and after a fix. A missing or still-loading
-embedding backend is a message with a next step, not a 503.
+cookie for comparing before and after a fix. The cookie keeps a compact
+snapshot of what each answered, so asking one again marks every passage new,
+moved or the same, and lists the ones that dropped out (#401). A missing or
+still-loading embedding backend is a message with a next step, not a 503.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from dataclasses import dataclass
-from urllib.parse import quote, unquote, urlencode
+from urllib.parse import unquote, urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
@@ -31,10 +32,10 @@ from hrono.errors import Unavailable
 from hrono.naming import name, names
 from hrono.recall.ask import ask
 from hrono.recall.engine import Hit
-from hrono.server.ui import Reader, _trees, router, templates
+from hrono.server.ui import Reader, _trees, ask_history, router, templates
 
 HISTORY_COOKIE = "hrono_asked"
-HISTORY = 6
+HISTORY = ask_history.HISTORY
 LIMIT = 10
 
 
@@ -44,13 +45,22 @@ def ask_page(
 ) -> Response:
     """Ask ``q`` of ``tree``; show the passages, the refusal, or what to fix."""
     question = q.strip()
-    asked = _history(request)
+    asked = ask_history.read(request.cookies.get(HISTORY_COOKIE, ""))
     outcome = _answer(request, tree, question) if question else Answer()
+    past = ask_history.before(asked, question) if question else None
+    change = (
+        ask_history.compare(past, outcome.hits)
+        if past is not None and outcome.problem is None
+        else None
+    )
     if question:
-        asked = [question, *[a for a in asked if a != question]][:HISTORY]
+        kept = None if outcome.problem else ask_history.snapshot(outcome.hits)
+        asked = ask_history.remember(asked, question, kept)
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         hits = [_shown(conn, tree, hit) for hit in outcome.hits]
+        for index, shown in enumerate(hits):
+            shown["status"] = change.status[index] if change else None
         explore = _explore(conn, tree) if outcome.refused else []
     page = templates.TemplateResponse(
         request,
@@ -65,13 +75,14 @@ def ask_page(
             "problem": outcome.problem,
             "loading": outcome.loading,
             "explore": explore,
-            "asked": [(a, _link(tree, a)) for a in asked],
+            "change": change,
+            "asked": [(a.question, _link(tree, a.question)) for a in asked],
         },
     )
     if question:
         page.set_cookie(
             HISTORY_COOKIE,
-            quote(json.dumps(asked)),
+            ask_history.write(asked),
             max_age=60 * 60 * 24,
             httponly=True,
             samesite="lax",
@@ -138,16 +149,6 @@ def _explore(conn: sqlite3.Connection, tree: str) -> list[dict[str, str]]:
         }
         for row in rows
     ]
-
-
-def _history(request: Request) -> list[str]:
-    try:
-        stored = json.loads(unquote(request.cookies.get(HISTORY_COOKIE, "[]")))
-    except ValueError:
-        return []
-    if not isinstance(stored, list):
-        return []
-    return [str(item) for item in stored][:HISTORY]
 
 
 def _link(tree: str, question: str) -> str:
