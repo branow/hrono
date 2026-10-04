@@ -30,6 +30,7 @@ import json
 import re
 import subprocess
 from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler
 from importlib.metadata import version
 from pathlib import Path
 
@@ -50,7 +51,10 @@ from hrono.registry.seeding import seed_defaults
 from hrono.registry.write import MASK
 from hrono.server.app import create_app
 from hrono.summarize import briefs
+from hrono.summarize import store as condensations
 from hrono.summarize.resolve import template_hash
+from hrono.usage.rollup import for_jobs
+from tests.stub_server import serving
 
 KEY = Fernet.generate_key()
 
@@ -1127,3 +1131,310 @@ def test_environment_values_are_shown_read_only(
     assert "4 (the default; HRONO_LLM_CONCURRENCY changes it)" in (
         browser.config()
     )
+
+
+# --------------------------------------------------- preview on a topic (#431)
+WRITTEN = "A rewritten brief in the new style, naming what the topic holds."
+CURRENT = "What this topic says about the code it groups together."
+
+
+class _Model(BaseHTTPRequestHandler):
+    """An openai-shaped completion API on a real socket (#108)."""
+
+    status = 200
+    seen: list[dict] = []
+
+    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's name
+        length = int(self.headers.get("Content-Length") or 0)
+        _Model.seen.append(json.loads(self.rfile.read(length) or b"{}"))
+        raw = json.dumps(
+            {
+                "choices": [{"message": {"content": WRITTEN}}],
+                "usage": {"prompt_tokens": 21, "completion_tokens": 9},
+            }
+        ).encode()
+        self.send_response(_Model.status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def log_message(self, *args: object) -> None:
+        return
+
+
+@pytest.fixture
+def model_api(browser: Browser) -> Iterator[str]:
+    """A text model named `writer` whose connection is the local API."""
+    _Model.status, _Model.seen = 200, []
+    with serving(_Model) as base:
+        secret = browser.cipher.encrypt(placeholder("model-key"))
+        registry_store.insert(
+            browser.conn,  # type: ignore[arg-type]
+            "connections",
+            "local",
+            json.dumps(
+                {
+                    "name": "local",
+                    "provider": "openai-compatible",
+                    "endpoint": base,
+                    "auth": {"method": "api-key", "key": secret.ciphertext},
+                }
+            ),
+            secret.key_id,
+            "t",
+        )
+        registry_store.insert(
+            browser.conn,  # type: ignore[arg-type]
+            "models",
+            "writer",
+            json.dumps(
+                {
+                    "name": "writer",
+                    "kind": "text",
+                    "connection": "local",
+                    "model": "a-model",
+                    "params": {"max_tokens": 64},
+                }
+            ),
+            None,
+            "t",
+        )
+        yield base
+
+
+def _previewable_topic(browser: Browser) -> int:
+    """A topic with a condensation to reduce and a brief to compare with."""
+    node = _a_topic_in(browser, "default")
+    with browser.conn:  # type: ignore[attr-defined]
+        digest = content_hash(b"a chunk of the corpus\n")
+        condensations.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            digest,
+            "writer",
+            "condensed: a chunk of the corpus",
+            5,
+            2,
+        )
+    _brief_written_by(browser, node, "mine", "Summarise {content}")
+    return node
+
+
+def _draft(topic: object, template: str = "Rewrite tersely: {content}") -> dict:
+    return {
+        "tree": "default",
+        "name": "mine",
+        "topic": str(topic),
+        "f.name": "mine",
+        "f.role": "brief",
+        "f.template": template,
+    }
+
+
+def _tree_and_config(browser: Browser) -> dict[str, list[tuple]]:
+    return {
+        table: [
+            tuple(row)
+            for row in browser.conn.execute(  # type: ignore[attr-defined]
+                f"SELECT * FROM {table}"  # noqa: S608
+            ).fetchall()
+        ]
+        for table in ("nodes", "node_members", "briefs", "registry")
+    }
+
+
+def _preview(browser: Browser, **fields: object):  # type: ignore[no-untyped-def]
+    return browser.client.post(
+        "/ui/config/prompts/preview", data=fields, follow_redirects=False
+    )
+
+
+def _run_the_job(browser: Browser) -> None:
+    """What the worker does, once, on this thread (the fixture stopped it)."""
+    browser.client.app.state.worker._cycle()  # type: ignore[attr-defined]
+
+
+def test_a_prompt_is_previewed_on_a_topic_beside_the_current_brief(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    browser.item(
+        "prompts",
+        **{
+            "f.name": "mine",
+            "f.role": "brief",
+            "f.template": "Summarise {content}",
+        },
+    )
+    node = _previewable_topic(browser)
+    before = _tree_and_config(browser)
+
+    posted = _preview(browser, **_draft(node))
+    _run_the_job(browser)
+    page = browser.client.get(posted.headers["location"]).text
+
+    assert posted.status_code == 303
+    assert "With this prompt" in page and "Current brief" in page
+    assert WRITTEN in page and CURRENT in page
+    assert "21 in, 9 out" in page
+    assert "Rewrite tersely:" in page  # the typed text is kept, unsaved
+    assert 'value="mine"' in page  # and so is the name it was typed under
+    sent = _Model.seen[0]["messages"][-1]["content"]
+    assert sent.startswith("Rewrite tersely:")
+    assert "condensed: a chunk of the corpus" in sent
+    assert _tree_and_config(browser) == before
+
+
+def test_a_preview_on_a_new_prompt_keeps_the_name_typed_for_it(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+
+    location = _preview(browser, **{**_draft(node), "name": ""}).headers[
+        "location"
+    ]
+    page = browser.client.get(location).text
+
+    assert "add=prompts" in location
+    assert 'name="f.name"' in page and 'value="mine"' in page
+
+
+def test_a_previews_cost_is_recorded_against_its_job(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+
+    location = _preview(browser, **_draft(node)).headers["location"]
+    _run_the_job(browser)
+
+    job = re.search(r"preview=(job_[0-9a-f]+)", location).group(1)  # type: ignore[union-attr]
+    spent = for_jobs(browser.conn, job)  # type: ignore[arg-type]
+    assert spent is not None and spent["calls"] == 1
+    usage = browser.client.get("/ui/usage?tree=default").text
+    assert f'data-run="{job}"' in usage
+
+
+def test_a_failed_preview_says_why(browser: Browser, model_api: str) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+    _Model.status = 500
+
+    location = _preview(browser, **_draft(node)).headers["location"]
+    _run_the_job(browser)
+    page = browser.client.get(location).text
+
+    assert "The preview failed" in page
+    assert WRITTEN not in page
+
+
+def test_a_preview_that_is_still_writing_says_so_and_refreshes(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+
+    location = _preview(browser, **_draft(node)).headers["location"]
+    page = browser.client.get(location).text
+
+    assert "Writing a preview" in page
+    assert "location.reload()" in page
+    assert "Rewrite tersely:" in page
+
+
+def test_saving_after_a_preview_still_shows_the_usual_impact(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    browser.item(
+        "prompts",
+        **{
+            "f.name": "mine",
+            "f.role": "brief",
+            "f.template": "Summarise {content}",
+        },
+    )
+    node = _previewable_topic(browser)
+    _preview(browser, **_draft(node))
+    _run_the_job(browser)
+
+    answer = browser.item(
+        "prompts",
+        name="mine",
+        preview="1",
+        **{k: v for k, v in _draft(node).items() if k.startswith("f.")},
+    )
+
+    assert "1 topic to rewrite at level 0" in answer.text
+    assert browser.stored("prompts", "mine")["template"] == (  # type: ignore[index]
+        "Summarise {content}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "says"),
+    [
+        ({"f.template": "no placeholder here"}, "{content}"),
+        ({"f.role": "condense"}, "only a brief prompt can be previewed"),
+        ({"topic": ""}, "pick a topic to preview on"),
+    ],
+    ids=["template", "role", "topic"],
+)
+def test_a_preview_that_cannot_run_is_refused_before_a_call_is_paid_for(
+    browser: Browser, model_api: str, change: dict[str, str], says: str
+) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+
+    answer = _preview(browser, **{**_draft(node), **change})
+
+    assert answer.status_code == 200
+    assert says in html.unescape(answer.text)
+    assert (
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT COUNT(*) FROM jobs"
+        ).fetchone()[0]
+        == 0
+    )
+
+
+def test_the_prompt_form_offers_the_topics_with_a_brief(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+
+    page = browser.config(add="prompts")
+
+    assert 'id="preview-topic"' in page
+    assert f'<option value="{node}"' in page
+    assert 'id="preview-topic"' not in browser.config(add="models")
+
+
+def test_a_reader_cannot_start_a_preview(
+    browser: Browser, model_api: str
+) -> None:
+    node = _previewable_topic(browser)
+    browser.sign_in("reader")
+
+    answer = _preview(browser, **_draft(node))
+
+    assert answer.status_code in {401, 403}
+    assert (
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT COUNT(*) FROM jobs"
+        ).fetchone()[0]
+        == 0
+    )
+
+
+def test_the_preview_op_is_not_a_stage_the_runs_page_offers(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    page = browser.client.get("/ui/jobs?tree=default").text
+
+    assert 'value="brief"' in page
+    assert 'value="brief-preview"' not in page

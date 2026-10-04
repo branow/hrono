@@ -57,6 +57,8 @@ MEANS = {
     "cluster-briefs": "group topics into higher-level topics",
     "brief": "write a summary for each topic that holds sections",
     "brief-upper": "write a summary for each topic that groups topics",
+    "brief-preview": "write one topic's summary with a prompt that is not "
+    "saved yet, and keep nothing",
     "build-tree": "throw the tree away and build it again from nothing — "
     "every section re-condensed, every brief rewritten, every model call paid "
     "for twice",
@@ -97,6 +99,9 @@ ORDER = (
 # (`server/jobs.py`), so the two that compose the others in the correct order
 # are offered first and marked, and the rest are behind a disclosure.
 WHOLE = ("sync-tree", "maintain", "build-tree")
+# Ops a person starts from somewhere that supplies what they need, not from a
+# button here: a preview needs the prompt it is previewing.
+OFFSTAGE = frozenset({"brief-preview"})
 
 
 PAGE = 25
@@ -195,6 +200,7 @@ def _runnable() -> list[dict[str, object]]:
         for name in sorted(
             OPS, key=lambda name: (known.get(name, len(ORDER)), name)
         )
+        if name not in OFFSTAGE
     ]
 
 

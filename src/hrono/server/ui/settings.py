@@ -51,11 +51,13 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth.users import User
 from hrono.errors import AppError, NotFound
+from hrono.jobs.worker import enqueue
 from hrono.registry import completeness, engine, impact, store
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import decrypt, unmask
 from hrono.server import config_view, forms
+from hrono.server import preview as preview_view
 from hrono.server.auth import allows, require_role
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.summarize import pool
@@ -90,6 +92,7 @@ def config_page(
     variant: str = "",
     done: str = "",
     error: str = "",
+    preview: str = "",
 ) -> Response:
     """One registry collection at a time, with secrets masked.
 
@@ -121,7 +124,68 @@ def config_page(
         variant=variant,
         done=done,
         error=error,
+        preview=preview,
     )
+
+
+@router.post("/ui/config/prompts/preview")
+async def preview_on_a_topic(request: Request, user: Reader) -> Response:
+    """Run the unsaved prompt on one topic, and come back to its form.
+
+    The config is validated through the engine's own dry run, so a template
+    the save would refuse is refused here too, before a model call is paid
+    for. What is POSTed is a job, and what comes back is the form with the
+    job's id: the typed text is rebuilt from the job, so a preview loses none
+    of it, and nothing about the prompt or the tree is written (#431).
+    """
+    descriptor = _descriptor("prompts")
+    _may_write(descriptor, request)
+    form = await posted(request)
+    tree, name = first(form, "tree"), first(form, "name").strip()
+    body = forms.config_from(descriptor, form, {})
+    spot = _spot("prompts", name, "", body)
+    topic = first(form, "topic").strip()
+    role = str(body.get("role", ""))
+    try:
+        engine.replace_item(
+            descriptor, str(body.get("name", name)), body, request, dry_run=True
+        )
+    except AppError as exc:
+        return _render(
+            request,
+            user,
+            tree,
+            **spot,
+            draft=_refused("prompts", field_errors(exc)),
+        )
+    if not preview_view.previewable(role) or not topic.isdigit():
+        message = (
+            "pick a topic to preview on"
+            if preview_view.previewable(role)
+            else "only a brief prompt can be previewed"
+        )
+        return _render(
+            request,
+            user,
+            tree,
+            **spot,
+            draft=_refused("prompts", [problem(message)]),
+        )
+    job_id = enqueue(
+        request.app.state.db,
+        preview_view.OP,
+        {
+            "node": int(topic),
+            "role": role,
+            "template": body["template"],
+            "prompt": str(body.get("name", "")),
+        },
+        tree=tree or None,
+        started_by=user.name,
+    )
+    query = {"tree": tree, "section": "prompts", "preview": job_id}
+    query["edit" if name else "add"] = f"prompts:{name}" if name else "prompts"
+    return RedirectResponse(f"/ui/config?{urlencode(query)}", status_code=303)
 
 
 @router.post("/ui/config/{collection}/item")
@@ -328,10 +392,21 @@ def _render(
     done: str = "",
     error: str = "",
     draft: dict[str, object] | None = None,
+    preview: str = "",
 ) -> Response:
     """The page, in whatever state the write that just ran left it."""
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
+        tree = tree if tree in trees else trees[0]
+        showing = _showing(section, edit, add, delete)
+        shown = preview_view.panel(conn, preview) if preview else None
+        if shown is not None and showing == "prompts" and typed is None:
+            typed, where = dict(shown["typed"]), "prompts"  # type: ignore[arg-type]
+        topics = (
+            preview_view.topics(conn, tree)
+            if showing == "prompts" and (edit or add)
+            else []
+        )
         tables = {table.name: table for table in config_view.tables(conn)}
         offers = {
             descriptor.collection: [
@@ -342,7 +417,6 @@ def _render(
         }
         gaps = completeness.gaps(conn)
         environment = _environment(conn)
-    showing = _showing(section, edit, add, delete)
     opened, open_name = _split(edit)
     doomed_in, doomed = _split(delete)
     return templates.TemplateResponse(
@@ -351,7 +425,7 @@ def _render(
         {
             "user": user,
             "trees": trees,
-            "tree": tree if tree in trees else trees[0],
+            "tree": tree,
             "view": view if view in VIEWS else VIEWS[0],
             "sections": [
                 {
@@ -372,6 +446,7 @@ def _render(
                 variant=variant,
                 typed=typed if where == showing else None,
                 draft=draft,
+                preview={"topics": topics, "panel": shown},
             ),
             "can_write": user.role in {"writer", "admin"},
             "gaps": gaps,
@@ -439,6 +514,7 @@ def _collection(
     variant: str,
     typed: dict[str, object] | None,
     draft: dict[str, object] | None,
+    preview: dict[str, object],
 ) -> dict[str, object]:
     """One collection, with the role its writes actually take.
 
@@ -512,6 +588,7 @@ def _collection(
             "impact": _removal(descriptor, doomed, request),
         },
         "draft": refused,
+        "preview": preview if descriptor.collection == "prompts" else None,
     }
 
 

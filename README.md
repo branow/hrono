@@ -153,7 +153,11 @@ Settings shows one collection at a time — trees, sources, connections, models,
 prompts — as a table, with each field of a form labelled and explained. It says
 at the top whether the registry is complete enough to build (a role with no
 model, a model whose connection is gone), and a delete or a reset shows what it
-would leave stale before you confirm it. The values the server's environment
+would leave stale before you confirm it. A brief prompt's form can also
+preview the edit on one topic: "Preview on topic" runs the unsaved prompt over
+that topic's own inputs with the model a real brief uses, and shows the result
+beside the current brief. Nothing is saved, no config changes, and the run is
+counted on Usage like any other. The values the server's environment
 sets — version, database path, `HRONO_LLM_CONCURRENCY` — are shown read-only.
 
 Access is the admin-only page for who may sign in: list the people with their

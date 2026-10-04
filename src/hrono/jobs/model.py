@@ -6,7 +6,9 @@ that executes jobs and the ops themselves land later. The parent-only
 from ``JobStatus`` here. ``result`` is what the op DID (#132) — counts, never
 prose — and is deliberately not a status: status is the state machine the
 worker and the filters branch on, and a job that succeeded incompletely is
-still a job that succeeded.
+still a job that succeeded. The one exception is `brief-preview` (#431), whose
+result carries the text it wrote: the preview is that text, and it has no
+place that is not the tree.
 """
 
 from __future__ import annotations

@@ -69,17 +69,63 @@
 {% endmacro %}
 
 
+{% macro preview_bar(p) %}
+<div class="act-row" id="preview-bar">
+  <label class="field">
+    <span>Topic</span>
+    <select name="topic" aria-label="the topic to preview the prompt on">
+      <option value="">pick a topic</option>
+      {% for topic in p.topics %}<option value="{{ topic.id }}"{% if p.panel and p.panel.node == topic.id %} selected{% endif %}>{{ topic.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn" type="submit" formaction="/ui/config/prompts/preview" id="preview-topic">Preview on topic</button>
+  <span class="tip" tabindex="0" role="note" data-tip="Writes one topic's brief with the prompt as typed, with the same model and the same inputs as a real brief, and shows it beside the current one. Nothing is saved, and the calls are counted on Usage">?</span>
+</div>
+{% endmacro %}
+
+{% macro preview_panel(p) %}
+<div class="callout{% if p.failed %} bad{% elif p.live %} warn{% endif %} mb-3" id="preview-panel"{% if p.live %} data-live="1"{% endif %}>
+  <div class="body stack">
+    {% if p.live %}
+    <div class="title">Writing a preview for topic {{ p.topic }}</div>
+    <p class="hint">The page refreshes when it is ready. What you typed is kept.</p>
+    {% elif p.failed %}
+    <div class="title">The preview failed</div>
+    <p>{{ p.failure.says }} {{ p.failure.next }}</p>
+    {% if p.failure.raw %}<p class="hint">{{ p.failure.raw }}</p>{% endif %}
+    {% else %}
+    <div class="title">Preview on topic {{ p.topic }}</div>
+    <p class="hint">Nothing was saved. {% if p.tokens %}It used {{ p.tokens }}. {% endif %}<a href="/ui/usage?tree={{ p.tree }}">Usage</a> has the cost.</p>
+    {% if p.flagged %}<p class="error">Flagged: {{ p.flagged }}</p>{% endif %}
+    <div class="grid two">
+      <div>
+        <h3>Current brief</h3>
+        {% if p.current %}<div class="prose">{{ p.current|markdown|safe }}</div>{% else %}<p class="hint">This topic has no brief yet.</p>{% endif %}
+      </div>
+      <div>
+        <h3>With this prompt</h3>
+        <div class="prose">{{ p.text|markdown|safe }}</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% if p.live %}<script>setTimeout(() => location.reload(), 2000);</script>{% endif %}
+{% endmacro %}
+
 {% macro item_form(c, submit) %}
 {% set form = c.form %}
 <form class="item-form" method="post" action="/ui/config/{{ c.name }}/item">
   <input type="hidden" name="tree" value="{{ tree }}">
   <input type="hidden" name="name" value="{{ c.editing }}">
   {% if form.discriminator %}<input type="hidden" name="variant" value="{{ form.chosen }}">{% endif %}
+  {% if c.preview and c.preview.panel %}{{ preview_panel(c.preview.panel) }}{% endif %}
   {% if c.draft and c.draft.on_form %}
   {% if c.draft.errors %}{{ problems(c.draft.errors, "Not saved — nothing was changed") }}{% endif %}
   {{ impact_of(c.draft) }}
   {% endif %}
   {{ form_fields(form, c.name) }}
+  {% if c.preview %}{{ preview_bar(c.preview) }}{% endif %}
   <div class="act-row">
     <button class="btn primary" type="submit">{{ submit }}</button>
     <button class="btn" type="submit" name="preview" value="1">Preview impact</button>
