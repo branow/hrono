@@ -101,39 +101,38 @@ Runs page, on an empty tree too), what the last run did (the two sit side by
 side), and, below them, whether anything needs a person. Health lists each
 problem and fixes it beside it: an admin places a waiting section into its
 nearest topic or a chosen one, and moves a section that was placed without a
-score (both placements are held by hand, so a sync leaves them where they
-are), rewrites one stale brief (not one the model echoed twice, which needs a
-person), and hands back any hand edit; a reader sees the same lists with no
-controls. Every empty state offers its next step as a button, and every action
-returns to the page it came from saying what it did. Spend is on Home and on
-every run's page (split by stage), and the Usage page, open to every role, adds
-it up by day, model, run and person, and, for a writer or admin, the
-questions agents asked through recall (the last 10,000 per tree are kept: a
-count per day, and over the last 30 days the share it was not confident
-about, and the latest, each unsure one linking to Ask; the Ask page itself is not counted); a
-subscription's figure is marked as an
-estimate and never added to metered spend, and a run from before spend was
-recorded reads unknown rather than free. A topic's page opens with a
-breadcrumb from the root, then who wrote its brief, when and with how many
-tokens; hashes are behind Details. A brief that was replaced, by a run or by
-hand, is kept (the last 5 per topic) under Previous versions, each saying who
+score (both placements are held by hand, so a sync leaves them where they are),
+rewrites one stale brief (not one the model echoed twice, which needs a person),
+and hands back any hand edit; a reader sees the same lists with no controls.
+Every empty state offers its next step as a button, and every action returns to
+the page it came from saying what it did. Spend is on Home and on every run's
+page (split by stage), and the Usage page, open to every role, adds it up by
+day, model, run and person, and, for a writer or admin, the questions agents
+asked through recall (the last 10,000 per tree are kept; over the last 30 days,
+a count per day, the share it was not confident about, and the latest, each
+unsure one linking to Ask; the Ask page itself is not counted); a subscription's
+figure is marked as an estimate and never added to metered spend, and a run from
+before spend was recorded reads unknown rather than free. A topic's page opens
+with a breadcrumb from the root, then who wrote its brief, when and with how
+many tokens; hashes are behind Details. A brief that was replaced, by a run or
+by hand, is kept (the last 5 per topic) under Previous versions, each saying who
 wrote it and what replaced it, with a line diff against the current one and the
-full old text behind Details; saving a brief unchanged keeps nothing. Its sections show where each starts (the
-heading, the lines, the size), worst fit first, filterable by path and paged.
-A section from a repo on github.com, gitlab.com or bitbucket.org links to its
-file at the synced commit, on its lines; any other source, a self-hosted
-instance included, shows the path alone.
+full old text behind Details; saving a brief unchanged keeps nothing. Its
+sections show where each starts (the heading, the lines, the size), worst fit
+first, filterable by path and paged. A section from a repo on github.com,
+gitlab.com or bitbucket.org links to its file at the synced commit, on its
+lines; any other source, a self-hosted instance included, shows the path alone.
 For admins, Edit (name, brief, note) and Structure (reparent, merge, dissolve,
 split) sit in the page head, each saying what it will change before it runs;
-moving a section is on the section. Edit also offers Undo for the topic's
-latest name, brief or note: it says what will change, asks for a tick and puts
-the old value back, so it is one step and a second Undo finds nothing. An edit
-that changes nothing offers no Undo, an undone brief rewrite goes back to the
-model and prompt that wrote it, when hrono kept them, and handing the topic
-back closes its Undo. Every manual edit stays listed under Edits on the topic
-page, readers included: what it was, who made it, when, and an "undone" tag on
-those put back; past ten it says how many older there are. Structural changes
-are not undone.
+moving a section is on the section. Edit also offers Undo for the topic's latest
+name, brief or note: it says what will change, asks for a tick and puts the old
+value back, so it is one step and a second Undo finds nothing. An edit that
+changes nothing offers no Undo, an undone brief rewrite goes back to the model
+and prompt that wrote it, when hrono kept them, and handing the topic back
+closes its Undo. Every manual edit stays listed under Edits on the topic page,
+readers included: what it was, who made it, when, and an "undone" tag on those
+put back; past ten it says how many older there are. Structural changes are not
+undone.
 
 Find is the other way in, for when you know a word or a file rather than
 where it sits on the map. The search box in the top bar looks for every word
