@@ -98,6 +98,10 @@
         option.hidden = hide;
         option.disabled = hide;
       }
+      for (const level of pick.querySelectorAll("optgroup")) {
+        level.hidden = !level.querySelector("option:not([hidden])");
+      }
+      if (pick.selectedOptions[0].hidden) pick.value = "";
     });
   })();
   </script>
