@@ -493,8 +493,6 @@ def test_a_diff_line_copies_without_its_marker_and_long_ones_show_gaps(
 
 
 def _topics_for_the_filter(live: Live) -> None:
-    import json as _json
-
     from hrono.cluster import store as cluster_store
     from hrono.db.database import open_database
     from hrono.registry import store as registry_store
@@ -530,7 +528,7 @@ def _topics_for_the_filter(live: Live) -> None:
         conn,
         "prompts",
         "mine",
-        _json.dumps({"name": "mine", "role": "brief", "template": "{content}"}),
+        json.dumps({"name": "mine", "role": "brief", "template": "{content}"}),
         None,
         "t",
     )
