@@ -209,6 +209,15 @@ def test_connect_snippets_are_filled_and_carry_no_secret(
 
     assert f"hrono profile add {TREE} --server http://testserver" in html
     assert f'hrono recall {TREE} "' in html
+    # `profile add` only makes the first profile current, so each snippet
+    # must switch to the pasted one before it runs a command.
+    use = f"hrono profile use {TREE}\n"
+    assert html.index(f"hrono profile add {TREE}") < html.index(use)
+    assert html.index(use) < html.index(f"hrono recall {TREE}")
+    assert html.count(use) == 2
+    assert html.index(use, html.index(use) + 1) < html.index(
+        f"hrono tree export {TREE}"
+    )
     assert f"curl -s -X POST http://testserver/trees/{TREE}/recall" in html
     assert f"hrono tree export {TREE} -o ./{TREE}-export --levels 3" in html
     assert f"/trees/{TREE}/export.zip?levels=3" in html
