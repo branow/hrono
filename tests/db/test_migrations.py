@@ -4,7 +4,14 @@ from pathlib import Path
 import pytest
 
 from hrono.db.connection import connect
-from hrono.db.migrations import DuplicateVersion, Migration, Migrator, discover
+from hrono.db.migrations import (
+    DuplicateVersion,
+    Migration,
+    Migrator,
+    discover,
+    migrate,
+    packaged,
+)
 
 
 def make_conn(tmp_path: Path) -> sqlite3.Connection:
@@ -101,3 +108,38 @@ def test_failed_migration_rolls_back_fully(tmp_path: Path) -> None:
     assert "good" not in names
     count = conn.execute("SELECT count(*) FROM schema_migrations").fetchone()[0]
     assert count == 0
+
+
+def test_edit_log_rebuild_keeps_rows_and_never_reuses_an_id(
+    tmp_path: Path,
+) -> None:
+    conn = make_conn(tmp_path)
+    before = tuple(m for m in packaged() if m.version <= 41)
+    Migrator(before).apply(conn)
+    with conn:
+        conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('t', 1, 0, 'now')"
+        )
+        conn.execute(
+            "INSERT INTO edit_log(id, node_id, kind, before, ref, who, "
+            "made_at) VALUES (7, 1, 'brief', 'old text', 3, 'ann', 'then')"
+        )
+    rows_before = conn.execute("SELECT * FROM edit_log").fetchall()
+
+    assert migrate(conn) == (42,)
+
+    assert conn.execute("SELECT * FROM edit_log").fetchall() == rows_before
+    with conn:
+        conn.execute(
+            "INSERT INTO edit_log(node_id, kind, who, made_at) "
+            "VALUES (1, 'note', 'bob', 'later')"
+        )
+    assert conn.execute("SELECT max(id) FROM edit_log").fetchone()[0] == 8
+    with conn:
+        conn.execute("DELETE FROM edit_log WHERE id = 8")
+        conn.execute(
+            "INSERT INTO edit_log(node_id, kind, who, made_at) "
+            "VALUES (1, 'note', 'bob', 'later')"
+        )
+    assert conn.execute("SELECT max(id) FROM edit_log").fetchone()[0] == 9
