@@ -102,8 +102,8 @@ returns to the page it came from saying what it did. Spend is on Home and on
 every run's page (split by stage), and the Usage page, open to every role, adds
 it up by day, model, run and person, and, for a writer or admin, the
 questions agents asked through recall (the last 10,000 per tree are kept: a
-count per day, the share it was not confident about, and the latest, each
-unsure one linking to Ask; the Ask page itself is not counted); a
+count per day, and over the last 30 days the share it was not confident
+about, and the latest, each unsure one linking to Ask; the Ask page itself is not counted); a
 subscription's figure is marked as an
 estimate and never added to metered spend, and a run from before spend was
 recorded reads unknown rather than free. A topic's page opens with a
