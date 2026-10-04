@@ -670,16 +670,14 @@ def test_a_report_redacts_an_email_a_reply_quoted(export: Path) -> None:
 def test_a_failed_probe_quoting_an_address_reaches_neither_file_nor_stderr(
     export: Path,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     def probe(prompt: str, model: str, flags: tuple[str, ...]) -> tuple:
         return 'userEmail: "orest@example.com"', []
 
-    monkeypatch.setattr(run, "_probe", probe)
     out = tmp_path / "out"
 
-    code = run.main(["--out", str(out), "--arm", f"a={export}"])
+    code = run.main(["--out", str(out), "--arm", f"a={export}"], probe)
 
     assert code == 2
     assert "orest@example.com" not in (out / "isolation.json").read_text()

@@ -143,7 +143,10 @@ class Isolation:
     verified: bool = field(default=False)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    probe: Callable[..., tuple[str, list[dict]]] | None = None,
+) -> int:
     args = _parse(argv)
     questions = load_questions(args.questions)
     if args.only:
@@ -160,7 +163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             **json.loads((args.out / "isolation.json").read_text())
         )
     else:
-        isolation = check_isolation(args.model, args.operator_mark)
+        isolation = check_isolation(args.model, args.operator_mark, probe)
         (args.out / "isolation.json").write_text(
             redact(json.dumps(asdict(isolation)))
         )

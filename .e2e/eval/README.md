@@ -94,8 +94,9 @@ The probe also fails when the isolated reply quotes the harness's user context,
 a `userEmail` entry or an email address. The CLI has no flag that drops it (the
 account email is injected even under `--safe-mode`), so an isolated session may
 still see it: the probe is then NOT verified and the run stops unless
-`--allow-unisolated` is given. Either way a report and `isolation.json` have
-every email address replaced by `[email redacted]` before they are written.
+`--allow-unisolated` is given. Either way the report, `isolation.json` and
+the isolation report printed to stderr on a failed probe have every email
+address replaced by `[email redacted]` before they are written.
 Injected context that is not email-shaped, such as a company name, is neither
 probed nor redacted.
 If the probe fails the run stops before spending anything else; the report
