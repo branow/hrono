@@ -736,7 +736,7 @@ def test_tab_reaches_every_topic_enter_opens_it_and_focus_is_drawn(
         )
         assert measured[0] != "none" and float(measured[1][:-2]) >= 2
         # a gap in the page colour parts the ring from the disc
-        assert measured[2] != measured[0], accent
+        assert measured[2] == measured[3], (measured, accent)
     page.keyboard.press("Enter")  # type: ignore[attr-defined]
     page.wait_for_selector("#panel")  # type: ignore[attr-defined]
     assert page.evaluate("!!document.activeElement.closest('#panel')")  # type: ignore[attr-defined]
