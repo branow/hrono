@@ -73,22 +73,49 @@
 <div class="act-row" id="preview-bar">
   <label class="field">
     <span>Topic</span>
-    <select name="topic" aria-label="the topic to preview the prompt on">
+    <select name="topic" id="preview-topic-pick" aria-label="the topic to preview the prompt on">
       <option value="">pick a topic</option>
-      {% for topic in p.topics %}<option value="{{ topic.id }}"{% if p.panel and p.panel.node == topic.id %} selected{% endif %}>{{ topic.name }}</option>{% endfor %}
+      {% for level in p.topics|groupby("level") %}
+      <optgroup label="Level {{ level.grouper }}">
+        {% for topic in level.list %}<option value="{{ topic.id }}"{% if p.panel and p.panel.node == topic.id %} selected{% endif %}>{{ topic.name }}</option>{% endfor %}
+      </optgroup>
+      {% endfor %}
     </select>
   </label>
+  {% if p.topics|length > 12 %}
+  <label class="field">
+    <span>Find a topic</span>
+    <input type="search" id="preview-topic-find" autocomplete="off" placeholder="type part of a name">
+  </label>
+  <script>
+  (() => {
+    const find = document.getElementById("preview-topic-find");
+    const pick = document.getElementById("preview-topic-pick");
+    find.addEventListener("input", () => {
+      const word = find.value.trim().toLowerCase();
+      for (const option of pick.querySelectorAll("option[value]:not([value=''])")) {
+        const hide = word !== "" && !option.textContent.toLowerCase().includes(word);
+        option.hidden = hide;
+        option.disabled = hide;
+      }
+    });
+  })();
+  </script>
+  {% endif %}
   <button class="btn" type="submit" formaction="/ui/config/prompts/preview" id="preview-topic">Preview on topic</button>
   <span class="tip" tabindex="0" role="note" data-tip="Writes one topic's brief with the prompt as typed, with the same model and the same inputs as a real brief, and shows it beside the current one. Nothing is saved, and the calls are counted on Usage">?</span>
 </div>
 {% endmacro %}
 
 {% macro preview_panel(p) %}
-<div class="callout{% if p.failed %} bad{% elif p.live %} warn{% endif %} mb-3" id="preview-panel"{% if p.live %} data-live="1"{% endif %}>
+<div class="callout{% if p.failed %} bad{% elif p.live or p.canceled %} warn{% endif %} mb-3" id="preview-panel"{% if p.live %} data-live="1"{% endif %}>
   <div class="body stack">
     {% if p.live %}
     <div class="title">Writing a preview for topic {{ p.topic }}</div>
     <p class="hint">The page refreshes when it is ready. What you typed is kept.</p>
+    {% elif p.canceled %}
+    <div class="title">The preview was canceled</div>
+    <p class="hint">Nothing was saved. What you typed is kept.</p>
     {% elif p.failed %}
     <div class="title">The preview failed</div>
     <p>{{ p.failure.says }} {{ p.failure.next }}</p>

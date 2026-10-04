@@ -1331,6 +1331,39 @@ def test_a_failed_preview_says_why(browser: Browser, model_api: str) -> None:
     assert WRITTEN not in page
 
 
+def test_a_canceled_preview_says_canceled_not_failed(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    node = _previewable_topic(browser)
+
+    location = _preview(browser, **_draft(node)).headers["location"]
+    job = re.search(r"preview=(job_[0-9a-f]+)", location).group(1)  # type: ignore[union-attr]
+    browser.client.post(f"/ui/jobs/{job}/cancel?tree=default")
+    page = browser.client.get(location).text
+
+    assert "The preview was canceled" in page
+    assert "The preview failed" not in page
+    assert "Writing a preview" not in page
+    assert "Rewrite tersely:" in page
+
+
+def test_the_topic_picker_groups_topics_by_level_and_offers_a_filter(
+    browser: Browser, model_api: str
+) -> None:
+    browser.sign_in()
+    _previewable_topic(browser)
+    for _ in range(12):
+        _brief_written_by(
+            browser, _a_topic_in(browser, "default"), "mine", "x {content}"
+        )
+
+    page = browser.config(edit="prompts:mine")
+
+    assert '<optgroup label="Level 0">' in page
+    assert 'id="preview-topic-find"' in page
+
+
 def test_a_preview_that_is_still_writing_says_so_and_refreshes(
     browser: Browser, model_api: str
 ) -> None:

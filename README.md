@@ -160,8 +160,10 @@ model, a model whose connection is gone), and a delete or a reset shows what it
 would leave stale before you confirm it. A brief prompt's form can also
 preview the edit on one topic: "Preview on topic" runs the unsaved prompt over
 that topic's own inputs with the model a real brief uses, and shows the result
-beside the current brief. Nothing is saved, no config changes, and the run is
-counted on Usage like any other. The values the server's environment
+beside the current brief. The topics are grouped by level, and on a large tree a
+box filters them by name. A preview canceled from Runs says it was canceled.
+Nothing is saved, no config changes, and the run is counted on Usage like any
+other. The values the server's environment
 sets — version, database path, `HRONO_LLM_CONCURRENCY` — are shown read-only.
 
 Access is the admin-only page for who may sign in: list the people with their

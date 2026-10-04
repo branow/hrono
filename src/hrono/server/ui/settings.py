@@ -43,6 +43,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from dataclasses import asdict
 from importlib.metadata import version
 from urllib.parse import parse_qs, urlencode
 
@@ -401,11 +402,11 @@ def _render(
         showing = _showing(section, edit, add, delete)
         shown = preview_view.panel(conn, preview) if preview else None
         if shown is not None and showing == "prompts" and typed is None:
-            typed, where = dict(shown["typed"]), "prompts"  # type: ignore[arg-type]
+            typed, where = asdict(shown.typed), "prompts"
         topics = (
             preview_view.topics(conn, tree)
             if showing == "prompts" and (edit or add)
-            else []
+            else ()
         )
         tables = {table.name: table for table in config_view.tables(conn)}
         offers = {
