@@ -15,6 +15,7 @@
     </label>
     <button class="btn primary small" type="submit">Ask</button>
   </form>
+  <p class="hint">Asked before lives in this browser only, for a day. Ask one again to see what changed since.</p>
 
   {% if asked %}
   <nav class="crumbs" aria-label="asked before">
@@ -24,11 +25,10 @@
     <a href="{{ link }}">{{ text }}</a>
     {% endfor %}
   </nav>
-  <p class="hint">Asked before lives in this browser only, for a day. Ask one again to see what changed since.</p>
   {% endif %}
 
   {% if change %}
-  <p class="hint" id="change">Compared with the last time you asked this: {{ change.fresh }} new, {{ change.dropped|length }} dropped out.</p>
+  <p class="hint" id="change">Compared with the last time you asked this: {{ change.fresh }} new, {% if change.changed %}{{ change.changed }} changed, {% endif %}{{ change.dropped|length }} dropped out.</p>
   {% endif %}
 
   {% if problem %}

@@ -23,6 +23,7 @@ HISTORY = 6
 MAX_COOKIE = 3800
 MAX_QUESTION = 200
 LABEL = 24
+PLACE = 8
 
 
 @dataclass(frozen=True)
@@ -46,12 +47,17 @@ class Entry:
 class Change:
     """A re-run set against the last answer to the same question."""
 
-    status: tuple[str, ...]  # per hit: "new", "same" or "moved from #n"
+    # per hit: "new", "same", "changed" or "moved from #n"
+    status: tuple[str, ...]
     dropped: tuple[tuple[int, Seen], ...]  # old rank (1-based) and passage
 
     @property
     def fresh(self) -> int:
-        return sum(1 for s in self.status if s == "new")
+        return self.status.count("new")
+
+    @property
+    def changed(self) -> int:
+        return self.status.count("changed")
 
 
 def read(raw: str) -> list[Entry]:
@@ -88,20 +94,34 @@ def snapshot(hits: tuple[Hit, ...]) -> tuple[Seen, ...]:
 
 
 def key(hit: Hit) -> str:
-    """A short stable name for a passage: its source version and range."""
-    raw = f"{hit.uri}:{hit.start}:{hit.end}".encode()
-    return hashlib.sha1(raw, usedforsecurity=False).hexdigest()[:8]
+    """A short stable name for a passage: its place, then its version.
+
+    The place is the path and range; the version tells an edited passage from
+    an untouched one at the same place.
+    """
+    path, _, version = hit.uri.rpartition("@")
+    return _digest(f"{path}:{hit.start}:{hit.end}") + _digest(version)
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha1(text.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def compare(before: tuple[Seen, ...], hits: tuple[Hit, ...]) -> Change:
-    """Mark each of ``hits`` new, moved or same, and list what dropped."""
+    """Mark each of ``hits`` new, changed, moved or same; list what dropped.
+
+    A passage at the same place under another version is changed, not a
+    new one plus a dropped one.
+    """
     old = {seen.key: rank for rank, seen in enumerate(before, 1)}
+    places = {seen.key[:PLACE] for seen in before}
     now = {key(hit) for hit in hits}
+    now_places = {k[:PLACE] for k in now}
     status = []
     for rank, hit in enumerate(hits, 1):
         was = old.get(key(hit))
         if was is None:
-            status.append("new")
+            status.append("changed" if key(hit)[:PLACE] in places else "new")
         elif was == rank:
             status.append("same")
         else:
@@ -109,7 +129,7 @@ def compare(before: tuple[Seen, ...], hits: tuple[Hit, ...]) -> Change:
     dropped = tuple(
         (rank, seen)
         for rank, seen in enumerate(before, 1)
-        if seen.key not in now
+        if seen.key not in now and seen.key[:PLACE] not in now_places
     )
     return Change(tuple(status), dropped)
 
@@ -145,7 +165,10 @@ def _trim(entries: list[Entry]) -> list[Entry]:
 
 def _label(hit: Hit) -> str:
     path = hit.uri.rpartition("@")[0]
-    return f"{path[-LABEL:]} {hit.start}"
+    tail = path[-LABEL:]
+    if len(path) > LABEL and path[-LABEL - 1] != "/" and "/" in tail:
+        tail = tail.partition("/")[2]
+    return f"{tail} {hit.start}"
 
 
 def _stored(entry: Entry) -> object:

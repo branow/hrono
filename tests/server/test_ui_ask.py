@@ -19,6 +19,7 @@ from hrono.embed.runner import EmbedError
 from hrono.errors import Unavailable
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.recall import engine
+from hrono.recall.brief_passages import store_brief
 from hrono.recall.engine import Hit
 from hrono.server.app import create_app
 from hrono.server.ui import ask, ask_history
@@ -67,6 +68,24 @@ class Panel:
         self.client = client
         self.token = token
         self.conn = conn
+
+    def brief_hit(self) -> Hit:
+        """A stored brief passage, as recall renders a hit."""
+        row = self.conn.execute(  # type: ignore[attr-defined]
+            "SELECT id FROM passages WHERE source_type = 'node' ORDER BY id"
+        ).fetchone()
+        return engine._render(self.conn, int(row["id"]), 0.5, TREE)  # noqa: SLF001
+
+    def rebrief(self, hit: Hit, text: str, signature: str) -> Hit:
+        """Store ``hit``'s brief again, as the brief op does; its new hit."""
+        node = int(hit.uri.split("/")[4])
+        with self.conn:  # type: ignore[attr-defined]
+            store_brief(self.conn, node, text, signature)  # type: ignore[arg-type]
+        row = self.conn.execute(  # type: ignore[attr-defined]
+            "SELECT id FROM passages WHERE source = ? ORDER BY id",
+            (f"node-{node}",),
+        ).fetchone()
+        return engine._render(self.conn, int(row["id"]), 0.5, TREE)  # noqa: SLF001
 
     def ask(self, question: str) -> str:
         self.client.post("/ui/login", data={"token": self.token})
@@ -289,7 +308,7 @@ def article_of(html: str, uri_path: str) -> str:
     ]
 
 
-def test_asking_again_after_a_rebrief_marks_new_and_dropped(
+def test_asking_again_after_an_edit_marks_new_and_dropped(
     panel: Panel,
 ) -> None:
     first = panel.ask(ANSWERABLE)
@@ -300,10 +319,10 @@ def test_asking_again_after_a_rebrief_marks_new_and_dropped(
         headers={"Authorization": f"Bearer {panel.token}"},
     ).json()
     top = api["hits"][0]["uri"]
-    # a rebrief or an edit gives a passage a new version, so a new uri
+    # a different passage at the top's place: a new path, not a new version
     with panel.conn:  # type: ignore[attr-defined]
         panel.conn.execute(  # type: ignore[attr-defined]
-            "UPDATE passages SET uri = uri || 'x' WHERE uri = ?", (top,)
+            "UPDATE passages SET uri = 'git://x/' || uri WHERE uri = ?", (top,)
         )
 
     html = panel.ask(ANSWERABLE)
@@ -319,6 +338,65 @@ def test_asking_again_after_a_rebrief_marks_new_and_dropped(
         html.count('<span class="chip plain">same</span>')
         == len(api["hits"]) - 1
     )
+
+
+def test_a_rebrief_that_keeps_its_members_compares_as_the_same(
+    panel: Panel,
+) -> None:
+    old = panel.brief_hit()
+    before = ask_history.snapshot((old,))
+    version = old.uri.rpartition("@")[2]
+
+    new = panel.rebrief(old, old.body, version)
+
+    assert ask_history.compare(before, (new,)).status == ("same",)
+
+
+def test_a_rebrief_with_other_members_is_one_changed_passage(
+    panel: Panel,
+) -> None:
+    old = panel.brief_hit()
+    before = ask_history.snapshot((old,))
+
+    new = panel.rebrief(old, old.body, "other-members")
+
+    change = ask_history.compare(before, (new,))
+    assert (change.status, change.dropped) == (("changed",), ())
+    assert new.uri != old.uri
+
+
+def test_a_rebrief_that_rewrites_the_brief_is_new_and_dropped(
+    panel: Panel,
+) -> None:
+    old = panel.brief_hit()
+    before = ask_history.snapshot((old,))
+
+    new = panel.rebrief(old, "A rewritten brief.", "other-members")
+
+    change = ask_history.compare(before, (new,))
+    assert change.status == ("new",)
+    assert [rank for rank, _ in change.dropped] == [1]
+
+
+def test_the_page_marks_a_changed_passage_and_counts_it(panel: Panel) -> None:
+    panel.ask(ANSWERABLE)
+    top = panel.client.post(
+        f"/trees/{TREE}/recall",
+        json={"question": ANSWERABLE},
+        headers={"Authorization": f"Bearer {panel.token}"},
+    ).json()["hits"][0]["uri"]
+    with panel.conn:  # type: ignore[attr-defined]
+        panel.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE passages SET uri = ? WHERE uri = ?",
+            (top.rpartition("@")[0] + "@edited", top),
+        )
+
+    html = panel.ask(ANSWERABLE)
+
+    assert "0 new, 1 changed, 0 dropped out" in html
+    changed = article_of(html, top.rpartition("@")[0])
+    assert '<span class="chip warn">changed</span>' in changed
+    assert 'aria-label="dropped out"' not in html
 
 
 def test_a_question_asked_again_unchanged_is_all_the_same(panel: Panel) -> None:
@@ -350,6 +428,12 @@ def test_a_question_that_is_now_refused_lists_what_dropped(
 def test_the_page_says_the_history_lives_in_this_browser_only(
     panel: Panel,
 ) -> None:
+    panel.client.post("/ui/login", data={"token": panel.token})
+
+    first_visit = panel.client.get(f"/ui/trees/{TREE}/ask?tree={TREE}").text
+
+    assert "in this browser only" in first_visit
+    assert 'aria-label="asked before"' not in first_visit
     assert "in this browser only" in panel.ask(ANSWERABLE)
 
 
@@ -441,6 +525,34 @@ def test_a_range_is_part_of_a_passages_identity() -> None:
     assert ask_history.key(hit("git://r/a@v", 0)) != ask_history.key(
         hit("git://r/a@v", 10)
     )
+
+
+def test_a_stored_score_is_rounded_to_three_places() -> None:
+    row = Hit("git://r/a@v", "chunk", "p", "b", 0.123456789, 0, 10, None)
+
+    assert [s.score for s in ask_history.snapshot((row,))] == [0.123]
+
+
+def test_a_label_is_cut_at_a_directory_boundary() -> None:
+    mid = hit("git://run/src-repo/deeper/dir/f7.txt@v", 4)
+    clean = hit("git://r/src-repo/deep/dir/f7.txt@v", 4)
+
+    assert ask_history.snapshot((mid,))[0].label == "deeper/dir/f7.txt 4"
+    assert (
+        ask_history.snapshot((clean,))[0].label == "src-repo/deep/dir/f7.txt 4"
+    )
+    assert ask_history.snapshot((hit("git://r/a@v", 4),))[0].label == (
+        "git://r/a 4"
+    )
+
+
+def test_the_same_place_under_a_new_version_is_changed_not_dropped() -> None:
+    before = ask_history.snapshot((hit("git://r/a@v1"), hit("git://r/b@v1")))
+
+    change = ask_history.compare(before, (hit("git://r/a@v2"),))
+
+    assert change.status == ("changed",)
+    assert change.dropped == ((2, before[1]),)
 
 
 def test_the_written_history_always_fits_one_cookie() -> None:
