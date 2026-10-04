@@ -608,3 +608,112 @@ def test_a_long_dropped_out_label_stays_inside_its_row_on_a_phone(
         }"""
     )
     assert overflow <= 0
+
+
+def _focus_trail(page: object, steps: int) -> list[str]:
+    """What each Tab lands on, as its tag, link target or label."""
+    trail = []
+    for _ in range(steps):
+        page.keyboard.press("Tab")  # type: ignore[attr-defined]
+        trail.append(
+            page.evaluate(  # type: ignore[attr-defined]
+                "(() => { const e = document.activeElement;"
+                " return (e.getAttribute('href') || e.textContent || e.id)"
+                ".trim().slice(0, 60); })()"
+            )
+        )
+    return trail
+
+
+def test_the_first_tab_is_a_skip_link_that_lands_on_the_content(
+    page: object, live: Live
+) -> None:
+    page.goto(f"{live.base}/ui/trees/default/activity")  # type: ignore[attr-defined]
+    page.keyboard.press("Tab")  # type: ignore[attr-defined]
+    skip = page.locator("a.skip").first  # type: ignore[attr-defined]
+    assert skip.evaluate("e => e === document.activeElement")
+    assert skip.bounding_box()["y"] >= 0
+    page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert page.evaluate("document.activeElement.id") == "content"  # type: ignore[attr-defined]
+
+
+def test_slash_focuses_search_but_types_normally_inside_a_field(
+    page: object, live: Live
+) -> None:
+    page.goto(f"{live.base}/ui/trees/default/activity")  # type: ignore[attr-defined]
+    page.keyboard.press("/")  # type: ignore[attr-defined]
+    box = page.locator(".finder input[name=q]")  # type: ignore[attr-defined]
+    assert box.evaluate("e => e === document.activeElement")
+    assert box.input_value() == ""
+    page.keyboard.type("a/b")  # type: ignore[attr-defined]
+    assert box.input_value() == "a/b"
+
+
+def test_the_tree_switcher_and_theme_button_work_by_keyboard(
+    page: object, live: Live
+) -> None:
+    page.goto(f"{live.base}/ui/trees/default/activity")  # type: ignore[attr-defined]
+    page.locator(".treepick summary").focus()  # type: ignore[attr-defined]
+    page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert page.locator(".treepick").get_attribute("open") is not None  # type: ignore[attr-defined]
+    page.keyboard.press("Escape")  # type: ignore[attr-defined]
+    assert page.locator(".treepick").get_attribute("open") is None  # type: ignore[attr-defined]
+    page.locator(".themer").focus()  # type: ignore[attr-defined]
+    with page.expect_navigation():  # type: ignore[attr-defined]
+        page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert page.locator("html").get_attribute("data-theme") in ("light", "dark")  # type: ignore[attr-defined]
+
+
+def test_tab_reaches_every_topic_enter_opens_it_and_focus_is_drawn(
+    page: object, live: Live
+) -> None:
+    page.goto(f"{live.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
+    page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
+    topics = page.locator("svg g.node > a:first-child")  # type: ignore[attr-defined]
+    total = topics.count()
+    assert total > 1
+    reached = set()
+    for _ in range(80):
+        page.keyboard.press("Tab")  # type: ignore[attr-defined]
+        href = page.evaluate(  # type: ignore[attr-defined]
+            "document.activeElement.closest('svg g.node') ?"
+            " document.activeElement.getAttribute('href') : null"
+        )
+        if href:
+            reached.add(href)
+    assert len(reached) >= total
+    for scheme in ("light", "dark"):
+        page.emulate_media(color_scheme=scheme)  # type: ignore[attr-defined]
+        disc = page.locator("svg a:focus circle.disc")  # type: ignore[attr-defined]
+        if disc.count() == 0:
+            page.locator("svg g.node > a").first.focus()  # type: ignore[attr-defined]
+        assert (
+            float(disc.evaluate("e => getComputedStyle(e).strokeWidth")[:-2])
+            >= 4
+        )
+    page.locator("svg g.node > a").first.focus()  # type: ignore[attr-defined]
+    page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    page.wait_for_selector("#panel")  # type: ignore[attr-defined]
+    assert page.evaluate("!!document.activeElement.closest('#board, #panel')")  # type: ignore[attr-defined]
+
+
+def test_the_map_has_a_skip_link_to_a_plain_list_of_topics(
+    page: object, live: Live
+) -> None:
+    page.goto(f"{live.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
+    page.keyboard.press("Tab")  # type: ignore[attr-defined]
+    page.keyboard.press("Tab")  # type: ignore[attr-defined]
+    with page.expect_navigation():  # type: ignore[attr-defined]
+        page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert "/outline" in page.url  # type: ignore[attr-defined]
+
+
+def test_a_sync_starts_from_the_keyboard_alone(
+    fresh_page: object, fresh: Live
+) -> None:
+    page = fresh_page
+    page.goto(f"{fresh.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
+    page.locator("main button[type=submit]").first.focus()  # type: ignore[attr-defined]
+    with page.expect_navigation():  # type: ignore[attr-defined]
+        page.keyboard.press("Enter")  # type: ignore[attr-defined]
+    assert "run=" in page.url or "done=" in page.url or "/jobs" in page.url  # type: ignore[attr-defined]

@@ -130,6 +130,18 @@ input:focus-visible, textarea:focus-visible, summary:focus-visible,
   border-radius: var(--r1);
 }
 
+/* The first stop in tab order: hidden until focused, then the one thing on
+   screen, so a keyboard user can step past the whole header. */
+.skip {
+  position: absolute; left: var(--s3); top: var(--s2); z-index: 60;
+  padding: var(--s2) var(--s3);
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--accent); border-radius: var(--r2);
+  transform: translateY(-300%);
+}
+.skip:focus { transform: none; text-decoration: none; }
+main:focus { outline: none; }
+
 code, pre, .mono { font-family: var(--mono); font-size: .8125rem; }
 .callout code { white-space: nowrap; }
 
@@ -724,6 +736,17 @@ svg .node.reading text.label { fill: var(--accent); }
 svg .twist { fill: none; stroke: var(--ink-faint); stroke-width: 1.6;
   stroke-linecap: round; stroke-linejoin: round; }
 svg a:hover .twist { stroke: var(--accent); }
+/* Focus on the map is drawn on the topic itself: an outline round an SVG link
+   is a box of whatever size the browser measures, the disc is the thing you
+   are on. Ringed apart from the topic being read by its width and a halo. */
+svg a:focus { outline: none; }
+svg a:focus-visible circle.disc {
+  stroke: var(--accent); stroke-width: 4;
+  paint-order: stroke; filter: drop-shadow(0 0 3px var(--accent));
+}
+svg a:focus-visible text.label { fill: var(--accent); text-decoration: underline; }
+svg a:focus-visible .twist { stroke: var(--accent); }
+svg a:focus-visible .twist-hit { stroke: var(--accent); stroke-width: 2; }
 /* The chevron is the toggle, so give it a real hit area rather than the 10px
    glyph — a target nobody can hit is not an affordance. */
 svg .twist-hit { fill: transparent; }
@@ -1405,6 +1428,8 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 </style>
 </head>
 <body>
+<a class="skip" href="#content">Skip to content</a>
+{% block skips %}{% endblock %}
 {% set here = request.url.path %}
 {% block chrome %}
 <header class="topbar">
@@ -1445,7 +1470,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
   </nav>
   <form class="finder" method="get" action="/ui/trees/{{ tree }}/find" role="search">
     <input type="hidden" name="tree" value="{{ tree }}">
-    <input type="search" name="q" placeholder="Search" aria-label="Search topics, files and text">
+    <input type="search" name="q" placeholder="Search (/)" aria-label="Search topics, files and text" aria-keyshortcuts="/">
   </form>
   <div class="who">
     <span class="name">{{ user.name }}</span>
@@ -1471,7 +1496,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
   </div>
 </header>
 {% endblock %}
-<main{% if full_bleed %} class="bleed"{% endif %}>
+<main id="content" tabindex="-1"{% if full_bleed %} class="bleed"{% endif %}>
 <script>
 // The one place the page's JS says what a run's status reads as; the Python
 // side is ui/__init__.py status_word, and both take the derived word from it.
@@ -1515,6 +1540,24 @@ window.statusWord = (s) => (s === {{ partial_status|tojson }} ? 'running' : s);
   document.addEventListener("pointerout", hide);
   document.addEventListener("focusout", hide);
   document.addEventListener("scroll", () => { box.hidden = true; }, true);
+})();
+</script>
+<script>
+/* "/" jumps to Search from anywhere that is not already a text field, and
+   Escape folds the tree switcher, so neither needs the mouse. */
+(() => {
+  const typing = (el) => el && el.closest &&
+    el.closest("input, textarea, select, [contenteditable]");
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "/" && !typing(e.target)) {
+      const box = document.querySelector(".finder input[name=q]");
+      if (box) { e.preventDefault(); box.focus(); box.select(); }
+    } else if (e.key === "Escape") {
+      const open = document.querySelector(".treepick[open]");
+      if (open) { open.removeAttribute("open"); open.querySelector("summary").focus(); }
+    }
+  });
 })();
 </script>
 </body>

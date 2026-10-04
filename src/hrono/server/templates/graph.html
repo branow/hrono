@@ -16,6 +16,10 @@
   "propagation": "After a sync, which briefs did an edit force a rewrite of? Shown on the Activity page, where the decisions it is made of are listed."
 } %}
 {% set full_bleed = graph.nodes %}
+{# Second in tab order, ahead of the header, so the list is one key away. #}
+{% block skips %}{% if graph.nodes %}
+<a class="skip" href="/ui/trees/{{ tree }}/outline?tree={{ tree }}&amp;open=all">Skip the map to a list of topics</a>
+{% endif %}{% endblock %}
 {% block main %}
 
 {% if not graph.nodes %}
@@ -34,8 +38,6 @@
   </div>
 </div>
 {% else %}
-
-
 
 {% if overlay.unavailable %}
 <div class="callout warn mb-3">
@@ -296,8 +298,24 @@
     /* The panel also links OFF the map, to the topic page. */
     if (!href || href.indexOf("/graph") === -1) return;
     event.preventDefault();
-    swap(href, true).catch(function () { window.location.href = href; });
+    var keyboard = event.detail === 0;
+    swap(href, true).then(function () {
+      if (keyboard) keep(href);
+    }).catch(function () { window.location.href = href; });
   });
+
+  /* The swap replaces the link that had focus, and focus would fall to the
+     page's top and cost the keyboard its place on a map of hundreds of
+     topics. Put it back on the same link, or on the panel the link opened. */
+  function keep(href) {
+    var same = Array.prototype.find.call(
+      document.querySelectorAll("#board a, #controls a, #overlays a, #panel a"),
+      function (a) { return a.getAttribute("href") === href; }
+    );
+    var panel = document.getElementById("panel");
+    var target = same || (panel && panel.querySelector("a, button"));
+    if (target) target.focus();
+  }
 
   window.addEventListener("popstate", function () {
     swap(window.location.href, false).catch(function () {

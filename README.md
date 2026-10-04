@@ -83,6 +83,13 @@ HttpOnly SameSite=Strict cookie and resolved by the same role check every API
 route uses, so a reader sees read-only views and the controls a role cannot use
 are absent as well as refused.
 
+Everything is reachable from the keyboard. The first Tab stops on a "Skip to
+content" link (on the map, a second one skips to the outline, a plain list of
+the topics); `/` focuses Search from anywhere that is not a text field; the
+tree switcher opens with Enter and folds with Escape; and on the map Tab walks
+the topics in drawing order, a ringed disc shows where you are, and Enter opens
+the topic with focus kept where it was.
+
 It is server-rendered Jinja with no build step and no JavaScript to vendor: the
 map, the runs view, the health checks, the activity log and the config tables
 are plain HTML, and every view is a URL you can paste to someone else. Home
