@@ -579,3 +579,32 @@ def test_the_topic_filter_hides_empty_levels_and_resets_a_hidden_pick(
     find.fill("")
     assert shown() == everything
     assert levels() == ["Level 0", "Level 1"]
+
+
+def test_a_long_dropped_out_label_stays_inside_its_row_on_a_phone(
+    page: object, live: Live
+) -> None:
+    page.set_viewport_size({"width": 375, "height": 800})  # type: ignore[attr-defined]
+    page.goto(f"{live.base}/ui/trees/default/ask")  # type: ignore[attr-defined]
+    page.wait_for_load_state("load")  # type: ignore[attr-defined]
+    # the page's own markup for the list, with a name that has no break
+    page.evaluate(  # type: ignore[attr-defined]
+        """() => {
+          const s = document.createElement('section');
+          s.id = 'dropped';
+          s.innerHTML = '<ul><li class="mono small">#1 '
+            + 'a'.repeat(80) + '.txt 4 <span class="faint">score 0.5</span>'
+            + '</li></ul>';
+          document.querySelector('main').appendChild(s);
+        }"""
+    )
+    overflow = page.evaluate(  # type: ignore[attr-defined]
+        """() => {
+          const li = document.querySelector('#dropped li');
+          const r = document.createRange();
+          r.selectNodeContents(li);
+          const box = li.getBoundingClientRect();
+          return r.getBoundingClientRect().right - box.right;
+        }"""
+    )
+    assert overflow <= 0
