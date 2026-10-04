@@ -413,8 +413,9 @@ def test_building_an_unregistered_tree_is_refused_and_queues_nothing(
 
     refused = setup.post("/ui/setup/build", tree="nope")
 
-    assert refused.status_code == 404
-    assert "tree not registered: nope" in refused.json()["error"]["message"]
+    assert refused.status_code == 200
+    assert 'id="step-build"' in refused.text
+    assert "tree not registered: nope" in refused.text
     with setup.client.app.state.db.connect() as conn:  # type: ignore[attr-defined]
         assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
         assert conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] == 0

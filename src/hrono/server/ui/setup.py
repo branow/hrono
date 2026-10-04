@@ -46,10 +46,9 @@ from hrono.registry import completeness, engine, store
 from hrono.registry.collections.connections import CONNECTIONS
 from hrono.registry.collections.models import MODELS
 from hrono.registry.collections.sources import SOURCES
-from hrono.registry.collections.trees import scoped_sources
+from hrono.registry.collections.trees import is_known, scoped_sources
 from hrono.server import forms
 from hrono.server.auth import allows
-from hrono.server.trees import require_tree
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.settings import (
     existing,
@@ -235,8 +234,15 @@ async def start_build(request: Request, user: Writer) -> Response:
     """Start the first build and land on its run."""
     form = await posted(request)
     tree = first(form, "tree")
-    require_tree(request, tree)
     with request.app.state.db.connect() as conn:
+        if not is_known(conn, tree):
+            return _render(
+                request,
+                user,
+                tree,
+                step="build",
+                problems=[problem(f"tree not registered: {tree}")],
+            )
         state = progress(conn, tree)
         busy = conn.execute(
             "SELECT id FROM jobs WHERE tree = ? AND parent_id IS NULL "

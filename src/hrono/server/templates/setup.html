@@ -183,6 +183,7 @@
 <section class="card" id="step-build">
   <div class="card-head"><h2>Estimate and build</h2></div>
   <div class="card-body stack">
+    {{ refused("Not built — nothing was queued") }}
     {% if state.built %}
     <div class="callout ok"><div class="body">
       <div class="title">This tree is already built</div>

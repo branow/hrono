@@ -107,6 +107,10 @@ def test_maintain_for_a_registered_tree_queues_a_job(
     )
 
     assert resp.status_code == 200
+    row = harness.conn.execute(
+        "SELECT id FROM jobs WHERE tree = 'alpha'"
+    ).fetchone()
+    assert row["id"] == resp.json()["job_id"]
 
 
 def test_pending_requires_auth(harness: Harness) -> None:
