@@ -123,6 +123,7 @@ def override_brief(
         member_signature=signature,
         input_tokens=0,
         output_tokens=0,
+        reason="rewrite",
     )
     store_brief(conn, node_id, text, signature)
     pins.pin(conn, pins.BRIEF, node_id, reason="brief written by hand")

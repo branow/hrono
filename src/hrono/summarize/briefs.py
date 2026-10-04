@@ -107,6 +107,9 @@ def _rewritable(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
     )
 
 
+# How many replaced briefs a topic keeps; the oldest beyond this are dropped.
+KEEP_VERSIONS = 5
+
 # The template of the prompt a brief was written with, as a column: a query
 # over ``briefs b`` selects ``{TEMPLATE} AS template`` and hands it to
 # ``refusal``, which cannot tell an echo of the prompt without it (E015).
@@ -454,8 +457,13 @@ def upsert(
     flagged: str = "",
     members: str = "[]",
     source_model: str = "",
+    reason: str = "regen",
 ) -> None:
     """Store one node's brief with its provenance and member signature.
+
+    A brief this replaces is first copied to ``brief_versions`` with ``reason``
+    ('regen', or 'rewrite' for a hand edit), and only the newest
+    ``KEEP_VERSIONS`` are kept (E033); a first write copies nothing.
 
     ``unfaithful`` is the faithfulness gate's JSON verdict (#063); default '[]'
     keeps callers that do not run the gate unchanged. ``flagged`` is the shape
@@ -466,6 +474,7 @@ def upsert(
     ``source_model`` is the condense model whose condensations it was written
     from, so the echo gate reads the same material later (E019).
     """
+    _keep_replaced(conn, node_id, reason)
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
@@ -489,6 +498,30 @@ def upsert(
             _now(),
         ),
     )
+
+
+def _keep_replaced(conn: sqlite3.Connection, node_id: int, reason: str) -> None:
+    conn.execute(
+        "INSERT INTO brief_versions(node_id, text, model_name, written_at, "
+        "replaced_at, reason) SELECT node_id, text, model_name, created_at, "
+        "?, ? FROM briefs WHERE node_id = ?",
+        (_now(), reason, node_id),
+    )
+    conn.execute(
+        "DELETE FROM brief_versions WHERE node_id = ? AND id NOT IN ("
+        "SELECT id FROM brief_versions WHERE node_id = ? "
+        "ORDER BY id DESC LIMIT ?)",
+        (node_id, node_id, KEEP_VERSIONS),
+    )
+
+
+def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
+    """Return a node's kept previous briefs, newest first (E033)."""
+    return conn.execute(
+        "SELECT text, model_name, written_at, replaced_at, reason "
+        "FROM brief_versions WHERE node_id = ? ORDER BY id DESC",
+        (node_id,),
+    ).fetchall()
 
 
 def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
