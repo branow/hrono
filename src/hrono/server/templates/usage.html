@@ -15,6 +15,7 @@
   {% endif %}
 </div>
 
+<div class="stack">
 {% if not total %}
 <div class="card">
   <div class="card-body stack" data-empty>
@@ -23,9 +24,7 @@
     <div><a class="btn" href="/ui/jobs?tree={{ tree }}">Runs</a></div>
   </div>
 </div>
-{% endif %}
-<div class="stack">
-{% if total %}
+{% else %}
   <section class="card" id="over-time">
     <div class="card-head"><h2>Over time<span class="tip" tabindex="0" role="note" data-tip="One bar a day, as long as that day's tokens are to the busiest day's">?</span></h2></div>
     <div class="card-body">
