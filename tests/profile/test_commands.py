@@ -166,10 +166,10 @@ def test_rm_removes_and_clears_current(
         "--token",
         "t1",
     )
-    removed = run(monkeypatch, tmp_path, "rm", "prod")
+    removed = run(monkeypatch, tmp_path, "rm", "prod", "--force")
     assert removed.exit_code == 0
     assert "no profile is current" in removed.output.lower()
-    assert run(monkeypatch, tmp_path, "rm", "ghost").exit_code != 0
+    assert run(monkeypatch, tmp_path, "rm", "ghost", "--force").exit_code != 0
 
 
 def test_token_never_leaks_across_commands(

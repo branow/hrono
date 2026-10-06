@@ -104,6 +104,16 @@ class Store:
         _write(self._path, state)
         return cleared
 
+    def set_token(self, name: str, token: str) -> None:
+        """Replace one profile's token, keeping everything else.
+
+        Recovery's missing verb: `admin reset-token` invalidates the stored
+        token, and the only way to record the new one used to be `rm` + `add`
+        — with the hint pointing at an `add` that fails whenever the profile
+        already exists, which in recovery it always does.
+        """
+        _write(self._path, _retoken(_read(self._path), name, token))
+
 
 def _add(state: State, profile: Profile) -> State:
     if any(p.name == profile.name for p in state.profiles):
@@ -116,6 +126,18 @@ def _use(state: State, name: str) -> State:
     if not any(p.name == name for p in state.profiles):
         raise UnknownProfile(name)
     return State(state.profiles, name)
+
+
+def _retoken(state: State, name: str, token: str) -> State:
+    if not any(p.name == name for p in state.profiles):
+        raise UnknownProfile(name)
+    profiles = tuple(
+        Profile(p.name, p.server_url, token, p.default_tree)
+        if p.name == name
+        else p
+        for p in state.profiles
+    )
+    return State(profiles, state.current)
 
 
 def _remove(state: State, name: str) -> tuple[State, bool]:

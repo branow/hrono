@@ -150,7 +150,7 @@ def test_a_timed_out_set_names_the_command_that_shows_if_it_landed(
 
     result = runner.invoke(app, ["models", "set", "emb", "-f", str(config)])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 3  # transport trouble, distinguishable by code
     assert "within 120s" in result.stderr
     assert "check with 'hrono models get emb'" in result.stderr
     assert "Wrote" not in result.stdout
@@ -248,14 +248,14 @@ def test_rm_says_whether_the_config_is_gone_or_reset(
     deleted = _patch(
         monkeypatch, "hrono.registry.commands", FakeClient({"deleted": "x"})
     )
-    gone = runner.invoke(app, ["prompts", "rm", "x"]).stdout
+    gone = runner.invoke(app, ["prompts", "rm", "x", "--force"]).stdout
     assert deleted.calls == [("DELETE", "/prompts/x", None)]
     assert "Deleted" in gone
 
     _patch(
         monkeypatch, "hrono.registry.commands", FakeClient({"reset": "brief"})
     )
-    reset = runner.invoke(app, ["prompts", "rm", "brief"]).stdout
+    reset = runner.invoke(app, ["prompts", "rm", "brief", "--force"]).stdout
     assert "Reset" in reset
 
 
@@ -363,3 +363,163 @@ def test_export_keeps_levels_and_reports_the_shape(
     assert "pages per level 1 / 2 / 120" in result.stdout
     assert "widest page lists 61 entries" in result.stdout
     assert "over the 40-entry budget" in result.stdout
+
+
+class LooseClient(FakeClient):
+    """FakeClient that tolerates per-call options (timeout, check)."""
+
+    def get(self, path: str, **options: object) -> object:
+        self.calls.append(("GET", path, None))
+        return self.reply
+
+    def post(
+        self, path: str, body: dict[str, object], **options: object
+    ) -> object:
+        self.calls.append(("POST", path, body))
+        return self.reply
+
+
+def test_recall_with_one_argument_uses_the_profile_default_tree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # --default-tree was stored and never read anywhere (a flag that lied);
+    # now `hrono recall "question"` answers from it.
+    monkeypatch.setenv("HRONO_HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        [
+            "profile",
+            "add",
+            "p",
+            "--server",
+            "http://s",
+            "--token",
+            "t",
+            "--default-tree",
+            "beta",
+        ],
+    )
+    client = _patch(
+        monkeypatch, "hrono.cli", LooseClient({"hits": [], "message": "none"})
+    )
+
+    result = runner.invoke(app, ["recall", "what is auth"])
+
+    assert result.exit_code == 0
+    assert client.calls[0][1] == "/trees/beta/recall"
+    assert client.calls[0][2]["question"] == "what is auth"
+
+
+def test_recall_with_two_arguments_names_the_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _patch(
+        monkeypatch, "hrono.cli", LooseClient({"hits": [], "message": "none"})
+    )
+
+    result = runner.invoke(app, ["recall", "alpha", "what is auth"])
+
+    assert result.exit_code == 0
+    assert client.calls[0][1] == "/trees/alpha/recall"
+
+
+def test_profile_set_token_replaces_only_the_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # recovery's missing verb: after `admin reset-token`, `profile add` fails
+    # on the profile that already exists, and nothing else recorded the new
+    # token.
+    from hrono.profile.store import Store, config_path
+
+    monkeypatch.setenv("HRONO_HOME", str(tmp_path))
+    runner.invoke(
+        app,
+        ["profile", "add", "p", "--server", "http://s", "--token", "old"],
+    )
+
+    result = runner.invoke(app, ["profile", "set-token", "p", "--token", "new"])
+
+    assert result.exit_code == 0
+    active = Store(config_path()).current()
+    assert active is not None
+    assert (active.token, active.server_url) == ("new", "http://s")
+
+
+def test_exit_codes_tell_transport_auth_and_missing_apart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # scripts gate on these; one code for every failure made "server down",
+    # "wrong token" and "no such tree" indistinguishable.
+    from hrono.client.http import NotFound, Unauthorized, Unreachable
+
+    class Raiser:
+        def __init__(self, error: Exception) -> None:
+            self._error = error
+
+        def post(self, path: str, body: object, **options: object) -> object:
+            raise self._error
+
+    cases = [
+        (Unreachable("http://s"), 3),
+        (Unauthorized("bad token"), 4),
+        (NotFound("tree not registered: ghost"), 5),
+    ]
+    for error, expected in cases:
+        monkeypatch.setattr(
+            "hrono.tree.commands.from_profile", lambda e=error: Raiser(e)
+        )
+        result = runner.invoke(app, ["tree", "sync", "ghost"])
+        assert result.exit_code == expected, (error, result.exit_code)
+    # and the server's own sentence survives to stderr for the 404
+    assert "tree not registered: ghost" in result.stderr
+
+
+def test_jobs_get_exits_nonzero_for_a_failed_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `jobs get` exited 0 whatever the status, so nothing could gate on it.
+    client = _patch(
+        monkeypatch,
+        "hrono.jobs.commands",
+        FakeClient({"id": "j1", "op": "sync-tree", "status": "failed"}),
+    )
+
+    result = runner.invoke(app, ["jobs", "get", "j1"])
+
+    assert client.calls == [("GET", "/jobs/j1", None)]
+    assert result.exit_code == 1
+
+
+def test_tree_sync_says_how_to_follow_the_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch(monkeypatch, "hrono.tree.commands", FakeClient({"job_id": "j9"}))
+
+    result = runner.invoke(app, ["tree", "sync", "default"])
+
+    assert "hrono jobs watch j9" in result.stdout
+
+
+def test_tree_sync_with_no_job_id_fails_instead_of_printing_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch(monkeypatch, "hrono.tree.commands", FakeClient({}))
+
+    result = runner.invoke(app, ["tree", "sync", "default"])
+
+    assert result.exit_code == 1
+    assert "None" not in result.stdout
+
+
+def test_registry_rm_without_force_asks_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # one mistyped name used to delete a connection with its secret, silently.
+    client = _patch(monkeypatch, "hrono.registry.commands", FakeClient())
+
+    refused = runner.invoke(app, ["connections", "rm", "prod"], input="n\n")
+    agreed = runner.invoke(app, ["connections", "rm", "prod"], input="y\n")
+
+    assert refused.exit_code == 1
+    assert agreed.exit_code == 0
+    assert client.calls == [("DELETE", "/connections/prod", None)]

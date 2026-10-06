@@ -51,13 +51,25 @@ class TimedOut(ClientError):
 class Unauthorized(ClientError):
     """The server rejected the token (401)."""
 
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(detail or "unauthorized")
+        self.detail = detail
+
 
 class Forbidden(ClientError):
     """The token's role lacks permission (403)."""
 
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(detail or "forbidden")
+        self.detail = detail
+
 
 class NotFound(ClientError):
     """The resource does not exist (404)."""
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(detail or "not found")
+        self.detail = detail
 
 
 class RequestFailed(ClientError):
@@ -117,6 +129,8 @@ class Client:
                     response.read()
                     raise _error(response)
                 yield from response.iter_lines()
+        except httpx.ConnectTimeout as exc:
+            raise Unreachable(self._base) from exc
         except httpx.TimeoutException as exc:
             raise TimedOut(self._base, self._timeout) from exc
         except httpx.HTTPError as exc:
@@ -149,6 +163,11 @@ class Client:
         budget = self._timeout if timeout is None else timeout
         try:
             response = self._send(method, path, body, headers, budget)
+        except httpx.ConnectTimeout as exc:
+            # a CONNECT timeout means nothing answered the socket at all --
+            # reporting it as "running, just slow" sent operators to watch a
+            # server that was down or firewalled.
+            raise Unreachable(self._base) from exc
         except httpx.TimeoutException as exc:
             raise TimedOut(self._base, budget, check=check) from exc
         except httpx.HTTPError as exc:
@@ -182,9 +201,16 @@ def from_profile() -> Client:
 
 
 def _error(response: httpx.Response) -> ClientError:
+    """A typed error that KEEPS the server's own message.
+
+    The envelope's message used to be thrown away for 401/403/404, so every
+    missing tree, job or model printed exactly "Not found." — and a profile
+    pointed at something that is not a hrono server looked identical to a
+    missing resource.
+    """
     factory = _STATUS_ERRORS.get(response.status_code)
     if factory is not None:
-        return factory()
+        return factory(_detail(response))
     return RequestFailed(response.status_code, _detail(response))
 
 
@@ -236,7 +262,7 @@ def message(error: ClientError) -> str:
     return str(error)
 
 
-_STATUS_ERRORS: dict[int, Callable[[], ClientError]] = {
+_STATUS_ERRORS: dict[int, Callable[[str], ClientError]] = {
     401: Unauthorized,
     403: Forbidden,
     404: NotFound,
@@ -248,13 +274,32 @@ _MESSAGES: dict[type[ClientError], Callable[[ClientError], str]] = {
         "'hrono profile add <name> --server <url> --token <token>'."
     ),
     Unreachable: lambda e: (
-        f"Cannot reach hrono server at {e.server_url}."  # type: ignore[attr-defined]
+        f"Cannot reach hrono server at {e.server_url}. "  # type: ignore[attr-defined]
+        "Is 'hrono serve' running? 'hrono profile current' shows which "
+        "server this profile points at."
     ),
     TimedOut: lambda e: _timed_out(e),  # type: ignore[arg-type]
-    Unauthorized: lambda _: "Unauthorized — check the token for this profile.",
-    Forbidden: lambda _: "Forbidden — this token's role lacks permission.",
-    NotFound: lambda _: "Not found.",
+    Unauthorized: lambda e: (
+        "Unauthorized — this profile's token was rejected. Update it with "
+        "'hrono profile set-token <name>'; if the token is lost, reissue one "
+        "with 'hrono admin reset-token <user>' on the server machine."
+    ),
+    Forbidden: lambda e: (
+        "Forbidden — this token's role lacks permission for that."
+    ),
+    NotFound: lambda e: _not_found(e),  # type: ignore[arg-type]
 }
+
+
+def _not_found(error: NotFound) -> str:
+    """The server's own sentence when it sent one; a bare 404 otherwise."""
+    detail = error.detail
+    if detail and not detail.startswith("request failed"):
+        return detail
+    return (
+        "Not found — the server answered 404 without saying what is missing. "
+        "Is this profile's URL really a hrono server?"
+    )
 
 
 def _timed_out(error: TimedOut) -> str:

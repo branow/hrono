@@ -161,6 +161,12 @@ def test_a_repeated_kick_hands_back_the_job_already_queued(
     # a double-clicked button queued the same multi-minute, LLM-billed build
     # twice; one live job per (op, tree) is the useful maximum, and answering
     # with its id makes the retry idempotent instead of an error.
+    # The worker is stopped first (the #194 harness rule): with it running,
+    # the first job can reach a terminal state between the two POSTs and the
+    # dedupe correctly stops applying.
+    worker = harness.client.app.state.worker  # type: ignore[attr-defined]
+    worker.stop()
+    worker.join(timeout=5)
     first = harness.client.post(
         "/trees/default/maintain", headers=harness.auth("writer")
     ).json()["job_id"]

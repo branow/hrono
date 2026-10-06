@@ -22,14 +22,60 @@ def _store() -> Store:
 @app.command("add")
 def add(
     name: str,
-    server: Annotated[str, typer.Option("--server")],
-    token: Annotated[str, typer.Option("--token")],
-    default_tree: Annotated[str | None, typer.Option("--default-tree")] = None,
+    server: Annotated[
+        str,
+        typer.Option(
+            "--server", help="Server URL, e.g. http://127.0.0.1:8080."
+        ),
+    ],
+    token: Annotated[
+        str,
+        typer.Option(
+            "--token",
+            help=(
+                "API token. Omit it to be prompted (keeps it out of shell "
+                "history), or set $HRONO_TOKEN."
+            ),
+            envvar="HRONO_TOKEN",
+            prompt="Token",
+            hide_input=True,
+        ),
+    ],
+    default_tree: Annotated[
+        str | None,
+        typer.Option(
+            "--default-tree",
+            help="The tree 'hrono recall' uses when none is named.",
+        ),
+    ] = None,
 ) -> None:
     """Register a profile; the first one added becomes current."""
 
     _store().add(Profile(name, server, token, default_tree))
     typer.echo(f"Added profile '{name}'.")
+
+
+@app.command("set-token")
+def set_token(
+    name: str,
+    token: Annotated[
+        str,
+        typer.Option(
+            "--token",
+            help=(
+                "The new API token. Omit it to be prompted, or set "
+                "$HRONO_TOKEN."
+            ),
+            envvar="HRONO_TOKEN",
+            prompt="Token",
+            hide_input=True,
+        ),
+    ],
+) -> None:
+    """Replace a profile's token — the step after 'hrono admin reset-token'."""
+
+    _store().set_token(name, token)
+    typer.echo(f"Updated the token of profile '{name}'.")
 
 
 @app.command("list")
@@ -68,9 +114,18 @@ def current() -> None:
 
 
 @app.command("rm")
-def remove(name: str) -> None:
+def remove(
+    name: str,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Skip the confirmation prompt."),
+    ] = False,
+) -> None:
     """Remove a profile; if it was current, clear the current pointer."""
 
+    if not force and not typer.confirm(f"Remove profile '{name}'?"):
+        typer.echo("Aborted; nothing was changed.", err=True)
+        raise typer.Exit(1)
     cleared = _store().remove(name)
     typer.echo(f"Removed profile '{name}'.")
     if cleared:

@@ -246,4 +246,4 @@ def test_the_cli_says_what_it_could_not_stop(
 
     assert result.exit_code == 0
     assert "Stopped 2 pending jobs." in result.output
-    assert "1 stage is already running and will finish." in result.output
+    assert "1 stage was told to stop and will finish its step." in result.output

@@ -103,6 +103,13 @@ def reset_token(
 
 
 def _reset_message(name: str, role: str, token: str) -> str:
+    """The recovery hint, pointed at the step that actually works.
+
+    It used to suggest `profile add local` with a hardcoded port — but in
+    recovery a `local` profile almost always EXISTS, so the one suggested
+    command failed with "already exists", at the exact moment the user was
+    locked out.
+    """
     return (
         f"\nReissued the API token for user '{name}'.\n"
         f"  user:  {name}\n"
@@ -110,9 +117,11 @@ def _reset_message(name: str, role: str, token: str) -> str:
         f"  token: {token}\n"
         "\nThis token is shown ONCE and is stored only as a hash. "
         "Save it now.\n"
-        "The previous token no longer works. Use the new one with the CLI:\n"
-        "  hrono profile add local --server http://127.0.0.1:8080 "
-        "--token <token>\n"
+        "The previous token no longer works. Record the new one on your "
+        "profile:\n"
+        "  hrono profile set-token <profile>   (prompts for the token)\n"
+        "or, if no profile exists yet:\n"
+        "  hrono profile add local --server <server url>\n"
         "or call the API directly with a Bearer token:\n"
         "  Authorization: Bearer <token>\n"
     )

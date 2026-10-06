@@ -38,10 +38,21 @@ WRITE_TIMEOUT = 120.0
 
 def _read(source: Path | None) -> dict[str, object]:
     """The config to write: a JSON file, or stdin when no file is given."""
+    if source is None and sys.stdin.isatty():
+        # without this, `set` at a terminal just sat there looking hung
+        typer.echo(
+            "Reading config from stdin — paste the JSON object, then press "
+            "Ctrl-D. (Or pass -f <file>.)",
+            err=True,
+        )
     text = source.read_text() if source is not None else sys.stdin.read()
     body = json.loads(text)
     if not isinstance(body, dict):
-        raise TypeError("config must be a JSON object")
+        # BadParameter renders as a clean usage error; a bare TypeError was a
+        # traceback.
+        raise typer.BadParameter(
+            "config must be a JSON object, not a list or a scalar"
+        )
     return body
 
 
@@ -52,10 +63,18 @@ def build_app(collection: str) -> typer.Typer:
     )
 
     @group.command("list")
-    def list_items() -> None:
+    def list_items(
+        as_json: Annotated[
+            bool,
+            typer.Option("--json", help="Print the full rows as JSON."),
+        ] = False,
+    ) -> None:
         """List every configured item in this collection."""
 
         rows = from_profile().get(f"/{collection}")
+        if as_json:
+            typer.echo(json.dumps(rows, indent=2))
+            return
         names = (
             [row.get("name") for row in rows] if isinstance(rows, list) else []
         )
@@ -73,7 +92,15 @@ def build_app(collection: str) -> typer.Typer:
         name: str,
         file: Annotated[
             Path | None,
-            typer.Option("-f", "--file", help="JSON config file, or stdin."),
+            typer.Option(
+                "-f",
+                "--file",
+                help="JSON config file; omitted, the config is read "
+                "from stdin.",
+                exists=True,
+                dir_okay=False,
+                readable=True,
+            ),
         ] = None,
     ) -> None:
         """Create or replace an item from a JSON config (file or stdin)."""
@@ -89,9 +116,22 @@ def build_app(collection: str) -> typer.Typer:
         typer.echo(f"Wrote {collection}/{name}.")
 
     @group.command("rm")
-    def remove(name: str) -> None:
-        """Delete an item; a seeded default is reset rather than removed."""
+    def remove(
+        name: str,
+        force: Annotated[
+            bool,
+            typer.Option("--force", help="Skip the confirmation prompt."),
+        ] = False,
+    ) -> None:
+        """Delete an item; a seeded default is reset rather than removed.
 
+        Asks first: one mistyped name deletes a connection with its encrypted
+        secret, or a source with everything ingested from it downstream.
+        """
+
+        if not force and not typer.confirm(f"Delete {collection}/{name}?"):
+            typer.echo("Aborted; nothing was changed.", err=True)
+            raise typer.Exit(1)
         result = from_profile().delete(f"/{collection}/{name}")
         reset = isinstance(result, dict) and "reset" in result
         verb = "Reset" if reset else "Deleted"

@@ -42,26 +42,56 @@ class UnsafePath(Exception):
 
 @app.command("maintain")
 def maintain(name: str) -> None:
-    """Kick a full build-to-root maintain for a tree; prints the job id."""
+    """Build a tree from scratch (the COLD, full, expensive build).
+
+    Use it once per tree, or to rebuild one wholesale. For a tree that already
+    exists, 'hrono tree sync' applies only what changed and costs
+    proportionally. Prints the job id; follow it with 'hrono jobs watch'.
+    """
 
     result = from_profile().post(f"/trees/{name}/maintain", {})
-    job_id = result.get("job_id") if isinstance(result, dict) else None
-    typer.echo(f"Started maintain job {job_id} for tree '{name}'.")
+    _started("maintain", name, result)
 
 
 @app.command("sync")
 def sync(name: str) -> None:
-    """Bring a tree up to date after its sources changed; prints the job id."""
+    """Bring a BUILT tree up to date after its sources changed (incremental).
+
+    The everyday verb: it ingests the diff, re-places what moved and rewrites
+    only the briefs that are now wrong. For a tree that does not exist yet,
+    run 'hrono tree maintain' first. Prints the job id; follow it with
+    'hrono jobs watch'.
+    """
 
     result = from_profile().post(f"/trees/{name}/sync", {})
+    _started("sync", name, result)
+
+
+def _started(verb: str, name: str, result: object) -> None:
     job_id = result.get("job_id") if isinstance(result, dict) else None
-    typer.echo(f"Started sync job {job_id} for tree '{name}'.")
+    if not job_id:
+        # printing "job None" told nobody anything; this server did not
+        # answer with a job, and that is the message.
+        typer.echo(
+            f"The server accepted the {verb} but returned no job id; "
+            "check 'hrono jobs list'.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    typer.echo(f"Started {verb} job {job_id} for tree '{name}'.")
+    typer.echo(f"Follow it:   hrono jobs watch {job_id}")
+    typer.echo(f"Its report:  hrono jobs get {job_id}")
 
 
 @app.command("export")
 def export(
     name: str,
-    out: Annotated[Path, typer.Option("-o", "--out")],
+    out: Annotated[
+        Path,
+        typer.Option(
+            "-o", "--out", help="Directory the rendered map is written into."
+        ),
+    ],
     levels: Annotated[
         int,
         typer.Option(

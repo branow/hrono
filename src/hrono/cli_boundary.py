@@ -35,7 +35,14 @@ import typer
 from click import Context
 from typer.core import TyperGroup
 
-from hrono.client.http import ClientError
+from hrono.client.http import (
+    ClientError,
+    Forbidden,
+    NotFound,
+    TimedOut,
+    Unauthorized,
+    Unreachable,
+)
 from hrono.client.http import message as client_message
 from hrono.errors import AppError, cli_message
 from hrono.tree.commands import UnsafePath
@@ -47,7 +54,30 @@ RENDERERS: Mapping[type[Exception], Callable[[Exception], str]] = {
     AppError: lambda exc: cli_message(exc),  # type: ignore[arg-type]
     json.JSONDecodeError: lambda exc: f"config is not valid JSON: {exc}",
     UnsafePath: str,  # an export payload that tried to escape its folder (#096)
+    PermissionError: lambda exc: (
+        f"permission denied: {getattr(exc, 'filename', None) or exc}"
+    ),
 }
+
+# Scripts gate on these. One code for every failure meant "server down",
+# "wrong token" and "no such tree" were indistinguishable to anything but a
+# human reading stderr. First-match by isinstance. 2 is skipped: click already
+# uses it for usage errors, and overloading it would make "typo in the
+# command" and "server down" the same thing to a script.
+EXIT_CODES: Mapping[type[Exception], int] = {
+    Unreachable: 3,
+    TimedOut: 3,
+    Unauthorized: 4,
+    Forbidden: 4,
+    NotFound: 5,
+}
+
+
+def exit_code(error: Exception) -> int:
+    for kind, code in EXIT_CODES.items():
+        if isinstance(error, kind):
+            return code
+    return EXIT_CODE
 
 
 def render(error: Exception) -> str | None:
@@ -69,4 +99,4 @@ class Boundary(TyperGroup):
             if line is None:
                 raise
             typer.echo(line, err=True)
-            raise typer.Exit(EXIT_CODE) from exc
+            raise typer.Exit(exit_code(exc)) from exc

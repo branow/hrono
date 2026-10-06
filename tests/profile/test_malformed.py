@@ -57,7 +57,7 @@ def test_every_command_reports_malformed_config(
         ["list"],
         ["current"],
         ["use", "prod"],
-        ["rm", "prod"],
+        ["rm", "prod", "--force"],
         ["add", "x", "--server", "u", "--token", "t"],
     ):
         result = run(monkeypatch, tmp_path, *args)

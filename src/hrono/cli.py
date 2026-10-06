@@ -12,6 +12,7 @@ and is quietly wrong, so they live behind an admin-only HTTP door (#139).
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Annotated
@@ -39,7 +40,7 @@ from hrono.server.app import create_app
 from hrono.tree.commands import app as tree_app
 from hrono.usage.commands import usage
 
-app = typer.Typer(add_completion=False, cls=Boundary)
+app = typer.Typer(cls=Boundary, no_args_is_help=True)
 app.add_typer(profile_app, name="profile")
 app.add_typer(admin_app, name="admin")
 app.add_typer(tree_app, name="tree")
@@ -67,29 +68,90 @@ RECALL_TIMEOUT = 120.0
 
 @app.command()
 def recall(
-    tree: str,
-    question: str,
-    limit: Annotated[int, typer.Option("--limit")] = 10,
+    tree_or_question: Annotated[
+        str,
+        typer.Argument(
+            metavar="[TREE] QUESTION",
+            help="A tree name followed by the question — or the question "
+            "alone, answered from the profile's default tree.",
+        ),
+    ],
+    question: Annotated[str | None, typer.Argument(hidden=True)] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="At most this many passages back."),
+    ] = 10,
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="Print the raw hits as JSON."),
+    ] = False,
 ) -> None:
-    """Recall passages from a tree for a question (the fast read door)."""
+    """Recall passages from a tree for a question (the fast read door).
+
+    With two arguments the first names the tree; with one, the tree is the
+    current profile's --default-tree (or 'default'):
+
+      hrono recall "how does auth work"
+
+      hrono recall beta "how does auth work"
+    """
+    if question is None:
+        tree, asked = _default_tree(), tree_or_question
+    else:
+        tree, asked = tree_or_question, question
     result = from_profile().post(
         f"/trees/{tree}/recall",
-        {"question": question, "limit": limit},
+        {"question": asked, "limit": limit},
         timeout=RECALL_TIMEOUT,
     )
+    if as_json:
+        typer.echo(json.dumps(result, indent=2))
+        return
     hits = result.get("hits") if isinstance(result, dict) else []
     message = result.get("message") if isinstance(result, dict) else None
     if not hits:
         typer.echo(message or "no hits.")
         return
     for hit in hits:
-        typer.echo(f"[{hit['kind']}] {hit['header']}")
-        typer.echo(hit["body"])
+        typer.echo(f"[{hit.get('kind', '?')}] {hit.get('header', '')}")
+        typer.echo(hit.get("body", ""))
         typer.echo("")
 
 
+def _default_tree() -> str:
+    """The current profile's --default-tree, or 'default'."""
+    from hrono.profile.store import Store, config_path
+
+    active = Store(config_path()).current()
+    if active is not None and active.default_tree:
+        return active.default_tree
+    return "default"
+
+
+def _version(wanted: bool) -> None:
+    if not wanted:
+        return
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        typer.echo(f"hrono {version('hrono')}")
+    except PackageNotFoundError:
+        typer.echo("hrono (version unknown — not installed as a package)")
+    raise typer.Exit(0)
+
+
 @app.callback()
-def main() -> None:
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            help="Print the version and exit.",
+            callback=_version,
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
     """hrono — a hierarchical knowledge base for AI agents."""
 
 
@@ -127,7 +189,12 @@ def reset(
             typer.echo("Aborted; nothing was changed.", err=True)
             raise typer.Exit(1)
     try:
-        removed = wipe(db_path)
+        # the help has always said "run it while the server is stopped", and
+        # nothing checked: this is the same flock `serve` holds, so a reset
+        # against a live server is refused instead of deleting the database
+        # out from under it.
+        with exclusive(db_path):
+            removed = wipe(db_path)
     except AppError as exc:
         # a wipe that stopped part-way still owes the operator the list of what
         # it destroyed — that report is what recovery is planned from. The
@@ -158,8 +225,16 @@ def _report_removed(removed: tuple[Path, ...]) -> None:
 
 @app.command()
 def serve(
-    host: str = "127.0.0.1",
-    port: int = 8080,
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            help="Interface to listen on; 0.0.0.0 exposes it to the network.",
+        ),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int, typer.Option("--port", help="Port to listen on.")
+    ] = 8080,
     key_file: Annotated[
         Path | None,
         typer.Option(
@@ -173,16 +248,24 @@ def serve(
     ] = None,
     db: Annotated[
         Path | None,
-        typer.Option("--db", help=f"Database path (or ${ENV_DB})."),
+        typer.Option(
+            "--db",
+            help=f"Database path (or ${ENV_DB}). The default, "
+            ".hrono/hrono.db, is RELATIVE to the directory serve runs from.",
+        ),
     ] = None,
 ) -> None:
     """Run the hrono HTTP server (owns the database and all compute).
 
     The database path anchors everything else: the synced source clones live in
     <db parent>/cache/sources, so two servers started from different directories
-    against the same --db share one cache instead of re-cloning.
+    against the same --db share one cache instead of re-cloning. The default
+    path is relative to the CURRENT DIRECTORY — starting serve somewhere else
+    quietly begins a fresh, empty database, which is why the resolved path is
+    printed first.
     """
     db_path = database_path(db)
+    typer.echo(f"Database: {db_path.resolve()}")
     key = load_key(key_file, os.environ.get("HRONO_MASTER_KEY"))
     with exclusive(db_path):
         _bootstrap(key, db_path, host, port)
