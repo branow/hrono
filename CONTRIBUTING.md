@@ -7,7 +7,10 @@ the next person who finds it inconvenient.
 
 The day-to-day working state (current ticket, local paths, the throwaway
 prototype) lives in `CLAUDE.md`, which is deliberately not committed. This file
-is the part that outlives one machine.
+is the part that outlives one machine. Files cited by bare name below
+(`rad/hrono/context.md`, `clustering-lifecycle.md`, the experiment notes) are
+the project's design workspace, outside this repository — the citation names
+the evidence, not a path a clone can open.
 
 ## Design decisions, settled
 

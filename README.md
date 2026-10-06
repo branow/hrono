@@ -11,22 +11,87 @@ The project ships as one binary, `hrono`. `hrono serve` is a long-running
 HTTP server that owns the SQLite database, all compute, and all LLM calls;
 every other subcommand is a thin HTTP client of that server.
 
+## Prerequisites and install
+
+- Python 3.13+ and [uv](https://docs.astral.sh/uv/); `git` for git sources;
+  the `claude` CLI, installed and signed in, only if you use the
+  `claude-code` provider.
+- From a clone, install with both heavyweight extras (in-process embedding
+  pulls torch; clustering pulls umap/hdbscan — several GB together):
+
+      uv sync --extra embed --extra cluster
+
+  From a package install it is `uv pip install "hrono[embed,cluster]"`.
+  Without `[embed]` the embed stage fails with "in-process embedding backend
+  is not installed"; without `[cluster]`, the build fails at the clustering
+  stage with the matching message.
+- The first embedding run downloads the model weights (the default is
+  `sentence-transformers/all-MiniLM-L6-v2`) from Hugging Face, so the first
+  build needs network access and about 14 s extra.
+- Clustering needs at least 12 sections, so a toy source of two small files
+  stops with "too few sections" — point it at something with a few dozen
+  files, or widen the filter.
+
 ## Getting started
 
 ```
 hrono admin new-key --out hrono.key     # the key every secret is encrypted under
 hrono serve --key-file hrono.key        # prints a bootstrap admin token, once
-hrono profile add local --server http://127.0.0.1:8080 --token <token>
+hrono profile add local --server http://127.0.0.1:8080   # prompts for the token
 ```
 
 Back the key up. Lose it and every stored secret is unreadable — hrono will
 start, and nothing it has encrypted will open.
 
-Then register a source and a model (`hrono sources set`, `hrono models set` —
-each takes a JSON config on stdin or `-f`), and build the tree with
-`hrono tree maintain default`. Or do all of that in the browser: sign in to the
-dashboard with the bootstrap token and its Set up page walks a new install from
-a connection to a built tree (below).
+The server owns a SQLite file at `.hrono/hrono.db` **relative to the directory
+you start it from** (it prints the resolved path first). Start it elsewhere and
+you get a fresh, empty database; pin it with `--db` or `$HRONO_DB`. The client
+profile lives separately, under `~/.hrono` (or `$HRONO_HOME`).
+
+Then register what a build needs — each `set` takes a JSON config with `-f` or
+on stdin. A connection, two models (one embedding, one text) and a source:
+
+```
+hrono connections set claude -f - <<'EOF'
+{"name": "claude", "provider": "claude-code", "auth": {"method": "none"}}
+EOF
+
+hrono models set emb -f - <<'EOF'
+{"name": "emb", "kind": "embedding", "connection": null,
+ "model": "sentence-transformers/all-MiniLM-L6-v2"}
+EOF
+
+hrono models set writer -f - <<'EOF'
+{"name": "writer", "kind": "text", "connection": "claude",
+ "model": "claude-sonnet-4-5"}
+EOF
+
+hrono sources set repo -f - <<'EOF'
+{"name": "repo", "type": "git",
+ "url": "https://github.com/you/your-repo.git", "auth": {}}
+EOF
+```
+
+(An `anthropic` connection instead takes
+`"auth": {"method": "api-key", "api_key": "sk-..."}` — see the backend note
+below for when each pays off. `hrono connections get <name>` shows a stored
+config with its secrets masked.)
+
+Build, watch, ask:
+
+```
+hrono tree maintain default      # the cold, full build; prints a job id
+hrono jobs watch <job id>        # follows it until it ends; exits 1 on failure
+hrono recall default "how does the authentication flow work"
+```
+
+After the sources change, `hrono tree sync default` applies only the diff —
+that is the everyday verb, and the whole point. `hrono recall "question"`
+with no tree name uses the profile's `--default-tree` (or `default`).
+
+Or do all of that in the browser: sign in to the dashboard with the bootstrap
+token and its Set up page walks a new install from a connection to a built
+tree (below).
 
 A `set` is validated before it is stored: a connection against its provider, a
 local embedding model by loading its weights (about 14 s the first time for
@@ -74,6 +139,43 @@ is a whitelist.
 default. Set `HRONO_LLM_CONCURRENCY` in the server's environment to raise it
 (an API key with headroom) or lower it to 1 (a rate limit, or a small box).
 Writes stay serial whatever it is set to.
+
+### Environment variables
+
+- `HRONO_DB` — the database path `serve`, `reset` and `admin` commands use
+  when `--db` is not given (default: `.hrono/hrono.db`, relative to the
+  current directory).
+- `HRONO_HOME` — where the client profile config lives (default `~/.hrono`).
+- `HRONO_MASTER_KEY` — the master key, as an alternative to `--key-file`.
+- `HRONO_TOKEN` — the token `profile add` / `profile set-token` read when
+  `--token` is not given (they prompt otherwise, keeping it out of history).
+- `HRONO_LLM_CONCURRENCY` — the pool width above.
+
+### If you lose the token or the key
+
+The bootstrap token is shown once. Lost, it is reissued locally, on the
+machine that has the database file — that is the trust boundary, so no token
+is needed:
+
+```
+hrono admin reset-token admin        # prints a fresh token, once
+hrono profile set-token local        # records it on the existing profile
+```
+
+A lost **master key** is not recoverable: `hrono reset` wipes the database
+(and the synced source caches) after a confirmation, and refuses to run while
+the server holds the file. The next `hrono serve` starts clean and bootstraps
+a new admin.
+
+### Known limits
+
+- A section is up to 10 KB, and the embedding model reads only what fits its
+  own input window (256 word pieces for MiniLM) — the vector represents the
+  head of a long section. The baked path-blend compensates in clustering;
+  a model with a larger window simply uses more of the text.
+- Scripts can gate on exit codes: 0 ok, 1 failure, 2 usage, 3 server
+  unreachable or timed out, 4 unauthorized/forbidden, 5 not found. `hrono
+  jobs get|watch` exit 1 for a job that failed or was canceled.
 
 ## The dashboard
 
@@ -188,18 +290,21 @@ the same page, which says how many secrets it re-encrypted. The running server
 switches to the new key at once, so credentials saved afterwards survive a
 restart; the key file must be updated before that restart.
 
-## In-process embedding
+## In-process embedding and clustering
 
 Embedding sources locally (for clustering and recall) uses the heavyweight
-`sentence-transformers` backend, which is an opt-in extra so the default
-install stays lean:
+`sentence-transformers` backend, and clustering uses `umap-learn` + `hdbscan`;
+both are opt-in extras so the default install stays lean:
 
-    uv pip install "hrono[embed]"
+    uv pip install "hrono[embed,cluster]"
+    # or, from a clone: uv sync --extra embed --extra cluster
 
-Without it the default install has no `torch`, and the `embed` operation fails
-with a clear "in-process embedding backend is not installed" message that
-names the install line. The browser setup's models step says the same, and
-offers no form, until the extra is installed and the server restarted.
+Without `[embed]` the default install has no `torch`, and the `embed`
+operation fails with a clear "in-process embedding backend is not installed"
+message that names the install line; without `[cluster]`, the build stops at
+clustering with the matching message. The browser setup's models step says the
+same, and offers no form, until the extra is installed and the server
+restarted.
 
 ## Status
 

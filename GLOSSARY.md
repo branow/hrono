@@ -1,8 +1,9 @@
 # Glossary
 
 The words hrono uses, and the ones it deliberately does not. Settled from
-`how-hrono-works.md` and the summarization experiments; this file is the copy a
-clone can actually read.
+the design notes (`how-hrono-works.md` and the summarization experiments,
+which live in the project's design workspace, outside this repository); this
+file is the copy a clone can actually read.
 
 Several of these were renamed during development and the old names are still
 findable in early design notes. Where that happened the superseded word is
@@ -16,8 +17,8 @@ Notion space. Registering one pulls nothing; `sync` does.
 **section** — the organizing unit. Around 10 KB of one file, filled greedily to
 a per-category budget (code 10 KB, docs 10 KB, data 2 KB). A section is what
 gets clustered, and what an agent reads when it explores.
-*Superseded name: **chunk**. Used throughout `design-sketch-v1.md`; do not
-reintroduce it.*
+*Superseded name: **chunk**. Used throughout the early design sketch (an
+external design note); do not reintroduce it.*
 
 **passage** — around 800 B, the unit **recall** injects into a prompt. A section
 reassembles byte-identically from its passages. Passages exist for retrieval;
