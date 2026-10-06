@@ -154,3 +154,23 @@ def test_a_store_call_does_not_commit_its_callers_transaction(
             assert conn.in_transaction
     finally:
         db.close()
+
+
+def test_prune_also_sweeps_old_update_log_rows(tmp_path: Path) -> None:
+    from hrono.db import update_log
+
+    db = Database.at(tmp_path / "hrono.db")
+    try:
+        with db.write() as conn:
+            update_log.record(conn, "default", 1, "drain", "core")
+            conn.execute(
+                "UPDATE update_log SET created_at = '2020-01-01T00:00:00'"
+            )
+            update_log.record(conn, "default", 2, "drain", "core")
+            removed = update_log.prune(conn, "2025-01-01T00:00:00")
+        assert removed == 1
+        with db.connect() as conn:
+            left = conn.execute("SELECT COUNT(*) FROM update_log").fetchone()[0]
+        assert int(left) == 1  # the recent decision survives
+    finally:
+        db.close()

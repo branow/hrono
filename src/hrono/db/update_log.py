@@ -40,6 +40,22 @@ def record(
 # A log view that renders forty thousand rows is one nobody opens twice.
 PAGE = 100
 
+RETENTION_DAYS = 90  # lifecycle decisions older than this are swept
+
+
+def prune(conn: sqlite3.Connection, cutoff: str) -> int:
+    """Delete decisions older than ``cutoff``; return how many went.
+
+    Nothing ever deleted a row here, so the audit trail grew for the life of
+    the database. Ninety days outlives any debugging of a decision while
+    keeping the table a log instead of an archive.
+    """
+    return int(
+        conn.execute(
+            "DELETE FROM update_log WHERE created_at < ?", (cutoff,)
+        ).rowcount
+    )
+
 
 def _match(
     tree: str, verdict: str, action: str, node_id: int

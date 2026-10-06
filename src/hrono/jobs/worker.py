@@ -25,6 +25,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
+from hrono.db import update_log
 from hrono.db.database import Database
 from hrono.errors import AppError, BadRequest, Internal, as_app_error
 from hrono.jobs import store
@@ -240,10 +241,14 @@ class Worker(threading.Thread):
         cutoff = (
             datetime.now(UTC) - timedelta(days=store.JOB_RETENTION_DAYS)
         ).isoformat()
+        stale_log = (
+            datetime.now(UTC) - timedelta(days=update_log.RETENTION_DAYS)
+        ).isoformat()
         with self._database.write() as conn:
             removed = store.prune(conn, cutoff)
+            removed += update_log.prune(conn, stale_log)
         if removed:
-            _logger.info("pruned %d finished job rows", removed)
+            _logger.info("pruned %d finished job and log rows", removed)
 
     def _claim(self) -> Job | None:
         # a read-door peek first: an idle worker must not take the write lock
