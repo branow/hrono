@@ -113,7 +113,10 @@ def test_worker_runs_leaves_and_leaves_parent_unrun(tmp_path: Path) -> None:
         parent = fan_out(db, "noop", {"type": "all"})
         wait_all_leaves(db, parent)
         assert all(r["status"] == "succeeded" for r in leaves(db, parent))
-        assert status_of(db, parent) == "pending"
+        # the worker never CLAIMS a parent; once its last leaf ends it is
+        # finalized to the derived status instead of sitting 'pending' in
+        # the claim scan for the life of the database.
+        assert status_of(db, parent) == "succeeded"
     finally:
         stop(workers)
     db.close()

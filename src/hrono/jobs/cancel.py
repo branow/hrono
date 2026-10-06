@@ -1,15 +1,15 @@
 """Stopping a run that is already going (T57.2, #173).
 
-COOPERATIVE, and the unit it cooperates at is a JOB. A pending job is stopped
-outright; a running one is left to finish, because the only way to stop a
-handler mid-flight is to kill the thread it is on, and #092 exists because a
-transaction interrupted halfway is how this database gets corrupted.
+COOPERATIVE. A pending job is stopped outright. A running one is SIGNALED: its
+row flips to ``canceled``, which is the predicate ``pool.running`` polls
+between LLM calls, so a long op halts at its next checkpoint — but the thread
+is never killed (#092: a transaction interrupted halfway is how this database
+gets corrupted), so the step in flight still finishes and its writes are kept.
 
-That is a real limit and the response says so rather than implying otherwise: a
-cancel reports how many jobs it STOPPED and how many are still running. An
-operator who cancels a fan-out over forty sources and is told "39 stopped, 1
-still finishing" knows exactly where they are. One that said "canceled" would
-be lying about the stage still writing.
+The response says exactly that: a cancel reports how many jobs it STOPPED and
+how many are still winding down. An operator who cancels a fan-out over forty
+sources and is told "39 stopped, 1 still finishing" knows exactly where they
+are.
 
 Cancel is not an undo: a job that already succeeded or failed keeps its
 outcome.
@@ -21,6 +21,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from hrono.db.database import tx
 from hrono.jobs import store
 from hrono.jobs.model import JobStatus
 
@@ -38,28 +39,35 @@ def cancel(conn: sqlite3.Connection, job_id: str) -> Cancellation:
     """Stop what can be stopped under ``job_id``; report the rest.
 
     A parent cancels its CHILDREN — they are the units of work, and the parent
-    row is not one. Its own status is derived from them (#172), so a parent
-    whose children are all canceled reads as canceled without anything writing
-    that to its row and creating a second source of truth.
+    row is not one. Its own status is derived from them (#172) and finalized
+    once the last of them ends.
 
-    The update is one statement guarded by ``status = 'pending'``, so a child
-    that the worker claimed between the read and the write is not overwritten:
-    it counts as running, which is what it is.
+    A PENDING job is stopped outright. A RUNNING one is flipped too — that is
+    the cooperative stop signal ``pool.running`` already polls between LLM
+    calls, so a long op halts at its next checkpoint instead of running to the
+    end of a multi-minute chain nobody wants anymore. Its worker thread still
+    finishes the step it is on (killing a thread mid-transaction is how a
+    database corrupts, #092), which is why the report counts it as ``running``:
+    told to stop, not yet stopped. The worker's terminal write is guarded on
+    ``status = 'running'``, so the flip is never overwritten by the outcome.
     """
     targets = [row["id"] for row in store.children(conn, job_id)] or [job_id]
     marks = ",".join("?" * len(targets))
     now = datetime.now(UTC).isoformat()
-    with conn:
+    with tx(conn):
         cursor = conn.execute(
             "UPDATE jobs SET status = ?, updated_at = ? "  # noqa: S608
             f"WHERE id IN ({marks}) AND status = ?",
             (JobStatus.CANCELED, now, *targets, JobStatus.PENDING),
         )
-    stopped = int(cursor.rowcount)
-    rows = [store.get(conn, target) for target in targets]
-    running = sum(
-        1 for row in rows if row is not None and row["status"] == "running"
-    )
+        stopped = int(cursor.rowcount)
+        signaled = conn.execute(
+            "UPDATE jobs SET status = ?, updated_at = ? "  # noqa: S608
+            f"WHERE id IN ({marks}) AND status = ?",
+            (JobStatus.CANCELED, now, *targets, JobStatus.RUNNING),
+        )
+        running = int(signaled.rowcount)
+        store.finalize_parent(conn, job_id, now)
     return Cancellation(
         stopped=stopped,
         running=running,

@@ -234,21 +234,28 @@ async def start_build(request: Request, user: Writer) -> Response:
     """Start the first build and land on its run."""
     form = await posted(request)
     tree = first(form, "tree")
-    with request.app.state.db.connect() as conn:
-        if not is_known(conn, tree):
-            return _render(
-                request,
-                user,
-                tree,
-                step="build",
-                problems=[problem(f"tree not registered: {tree}")],
-            )
-        state = progress(conn, tree)
-        busy = conn.execute(
-            "SELECT id FROM jobs WHERE tree = ? AND parent_id IS NULL "
-            "AND status IN ('pending', 'running') LIMIT 1",
-            (tree,),
-        ).fetchone()
+
+    def _checked() -> tuple[bool, object, object]:
+        with request.app.state.db.connect() as conn:
+            if not is_known(conn, tree):
+                return False, None, None
+            state = progress(conn, tree)
+            busy = conn.execute(
+                "SELECT id FROM jobs WHERE tree = ? AND parent_id IS NULL "
+                "AND status IN ('pending', 'running') LIMIT 1",
+                (tree,),
+            ).fetchone()
+        return True, state, busy
+
+    known, state, busy = await run_in_threadpool(_checked)
+    if not known:
+        return _render(
+            request,
+            user,
+            tree,
+            step="build",
+            problems=[problem(f"tree not registered: {tree}")],
+        )
     if busy is not None:
         return RedirectResponse(
             f"/ui/jobs/{busy['id']}?tree={tree}", status_code=303

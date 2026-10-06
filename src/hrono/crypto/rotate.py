@@ -27,6 +27,7 @@ from cryptography.fernet import Fernet
 
 from hrono.crypto.cipher import Cipher
 from hrono.crypto.keys import fingerprint
+from hrono.db.database import tx
 from hrono.errors import BadRequest, Forbidden
 from hrono.registry import store
 from hrono.registry.collections import COLLECTIONS
@@ -72,7 +73,7 @@ def rotate(
     except (ValueError, TypeError) as exc:
         raise UnusableNewKey from exc
 
-    with conn:
+    with tx(conn):
         cursor = conn.execute(
             "INSERT INTO keys (key_hash, created_at) VALUES (?, ?)",
             (fingerprint(new_key), datetime.now(UTC).isoformat()),

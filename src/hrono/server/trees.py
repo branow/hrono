@@ -51,8 +51,31 @@ class RecallRequest(BaseModel):
 def maintain_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
     """Enqueue a maintain job for ``name`` and return its job id."""
     require_tree(request, name)
+    return _one_build(request, "maintain", name, user.name)
+
+
+def _one_build(
+    request: Request, op: str, tree: str, started_by: str
+) -> dict[str, str]:
+    """Enqueue ``op`` for ``tree`` — or hand back the one already queued.
+
+    Nothing stopped a double-clicked button or a retried script from queueing
+    the same multi-minute, LLM-billed build twice; the duplicates ran back to
+    back, each paying for the no-op the other had made of it. One live job per
+    (op, tree) is the useful maximum, and answering with its id makes the
+    retry idempotent instead of an error.
+    """
+    with request.app.state.db.connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM jobs WHERE op = ? AND COALESCE(tree, 'default') "
+            "= ? AND status IN ('pending', 'running') AND parent_id IS NULL "
+            "ORDER BY created_at LIMIT 1",
+            (op, tree),
+        ).fetchone()
+    if row is not None:
+        return {"job_id": str(row["id"])}
     job_id = enqueue(
-        request.app.state.db, "maintain", {}, tree=name, started_by=user.name
+        request.app.state.db, op, {}, tree=tree, started_by=started_by
     )
     return {"job_id": job_id}
 
@@ -77,10 +100,8 @@ def sync_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
     COLD build of a tree that does not exist yet; the two have very different
     costs and conflating them is how a user pays for a rebuild by accident.
     """
-    job_id = enqueue(
-        request.app.state.db, "sync-tree", {}, tree=name, started_by=user.name
-    )
-    return {"job_id": job_id}
+    require_tree(request, name)  # `maintain` checks; this one forgot to
+    return _one_build(request, "sync-tree", name, user.name)
 
 
 @router.post("/trees/{name}/recall")

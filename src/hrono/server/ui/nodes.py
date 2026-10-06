@@ -29,6 +29,7 @@ from hrono.server.ui import (
     _trees,
     router,
     templates,
+    write_off_loop,
 )
 from hrono.summarize import briefs
 
@@ -112,8 +113,10 @@ async def rename_from_the_page(
     body, problem = await _edit(request, Rename)
     if body is None:
         return _back(tree, node_id, error=problem)
-    with request.app.state.db.write() as conn:
-        edits.rename(conn, tree, node_id, body.title, user.name)  # type: ignore[attr-defined]
+    await write_off_loop(
+        request.app.state.db,
+        lambda conn: edits.rename(conn, tree, node_id, body.title, user.name),  # type: ignore[attr-defined]
+    )
     return _back(tree, node_id, done="renamed")
 
 
@@ -125,8 +128,12 @@ async def brief_from_the_page(
     body, problem = await _edit(request, BriefText)
     if body is None:
         return _back(tree, node_id, error=problem)
-    with request.app.state.db.write() as conn:
-        edits.override_brief(conn, tree, node_id, body.text, user.name)  # type: ignore[attr-defined]
+    await write_off_loop(
+        request.app.state.db,
+        lambda conn: edits.override_brief(  # type: ignore[attr-defined]
+            conn, tree, node_id, body.text, user.name
+        ),
+    )
     return _back(tree, node_id, done="brief written")
 
 
@@ -138,8 +145,10 @@ async def note_from_the_page(
     body, problem = await _edit(request, NoteText)
     if body is None:
         return _back(tree, node_id, error=problem)
-    with request.app.state.db.write() as conn:
-        edits.note(conn, tree, node_id, body.text, user.name)  # type: ignore[attr-defined]
+    await write_off_loop(
+        request.app.state.db,
+        lambda conn: edits.note(conn, tree, node_id, body.text, user.name),  # type: ignore[attr-defined]
+    )
     return _back(tree, node_id, done="note added")
 
 
@@ -222,8 +231,10 @@ async def reparent_from_the_page(
     if not parent.isdigit():
         return _back(tree, node_id, error="choose a parent")
     try:
-        with request.app.state.db.write() as conn:
-            edits.reparent(conn, tree, node_id, int(parent))
+        await write_off_loop(
+            request.app.state.db,
+            lambda conn: edits.reparent(conn, tree, node_id, int(parent)),
+        )
     except AppError as exc:
         return _back(tree, node_id, error=str(exc))
     return _back(tree, node_id, done=f"moved under topic {parent}")
@@ -246,8 +257,10 @@ async def merge_from_the_page(
     if not _confirmed(fields):
         return _back(tree, node_id, error="tick the box to confirm a merge")
     try:
-        with request.app.state.db.write() as conn:
-            survivor = edits.merge(conn, tree, [node_id, int(partner)])
+        survivor = await write_off_loop(
+            request.app.state.db,
+            lambda conn: edits.merge(conn, tree, [node_id, int(partner)]),
+        )
     except AppError as exc:
         return _back(tree, node_id, error=str(exc))
     return _back(tree, survivor, done=f"merged with topic {partner}")
@@ -260,11 +273,14 @@ async def dissolve_from_the_page(
     """Retire a topic; its contents re-enter the placement rule."""
     if not _confirmed(await _fields(request)):
         return _back(tree, node_id, error="tick the box to confirm a dissolve")
+
+    def _dissolve(conn: object) -> int:
+        edits.require_node(conn, tree, node_id)
+        model = str(resolve_embedding_model(conn, {})["name"])
+        return edits.dissolve(conn, tree, node_id, model)
+
     try:
-        with request.app.state.db.write() as conn:
-            edits.require_node(conn, tree, node_id)
-            model = str(resolve_embedding_model(conn, {})["name"])
-            moved = edits.dissolve(conn, tree, node_id, model)
+        moved = await write_off_loop(request.app.state.db, _dissolve)
     except (AppError, DomainError) as exc:
         return _back(tree, node_id, error=str(exc))
     return RedirectResponse(
@@ -280,11 +296,14 @@ async def split_from_the_page(
     """Divide a topic through the same mini-pipeline repair uses."""
     if not _confirmed(await _fields(request)):
         return _back(tree, node_id, error="tick the box to confirm a split")
+
+    def _split(conn: object) -> tuple[int, ...]:
+        edits.require_node(conn, tree, node_id)
+        model = str(resolve_embedding_model(conn, {})["name"])
+        return edits.split(conn, tree, node_id, model)
+
     try:
-        with request.app.state.db.write() as conn:
-            edits.require_node(conn, tree, node_id)
-            model = str(resolve_embedding_model(conn, {})["name"])
-            children = edits.split(conn, tree, node_id, model)
+        children = await write_off_loop(request.app.state.db, _split)
     except (AppError, DomainError) as exc:
         return _back(tree, node_id, error=str(exc))
     # the topic they were on has retired; its children took over
@@ -302,8 +321,12 @@ async def move_section_from_the_page(
     if not target.isdigit():
         return _back(tree, back, error="choose a topic")
     try:
-        with request.app.state.db.write() as conn:
-            move = edits.move_section(conn, tree, section_id, int(target))
+        move = await write_off_loop(
+            request.app.state.db,
+            lambda conn: edits.move_section(
+                conn, tree, section_id, int(target)
+            ),
+        )
     except AppError as exc:
         return _back(tree, back, error=str(exc))
     emptied = " — that topic is now empty" if move.emptied else ""
@@ -324,8 +347,10 @@ async def undo_from_the_page(
     if not edit.isdigit():
         return _back(tree, node_id, error="that edit is no longer the latest")
     try:
-        with request.app.state.db.write() as conn:
-            kind = edits.undo(conn, tree, node_id, int(edit))
+        kind = await write_off_loop(
+            request.app.state.db,
+            lambda conn: edits.undo(conn, tree, node_id, int(edit)),
+        )
     except AppError as exc:
         return _back(tree, node_id, error=str(exc))
     return _back(tree, node_id, done=f"undone: {_UNDO[kind]}")

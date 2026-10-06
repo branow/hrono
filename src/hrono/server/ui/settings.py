@@ -49,6 +49,7 @@ from urllib.parse import parse_qs, urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from hrono.auth.users import User
 from hrono.errors import AppError, NotFound
@@ -148,8 +149,13 @@ async def preview_on_a_topic(request: Request, user: Reader) -> Response:
     topic = first(form, "topic").strip()
     role = str(body.get("role", ""))
     try:
-        engine.replace_item(
-            descriptor, str(body.get("name", name)), body, request, dry_run=True
+        await run_in_threadpool(
+            engine.replace_item,
+            descriptor,
+            str(body.get("name", name)),
+            body,
+            request,
+            dry_run=True,
         )
     except AppError as exc:
         return _render(
@@ -220,7 +226,8 @@ async def item_from_the_page(
         )
     sent = kept_secrets(descriptor, row, body, request)
     try:
-        result = engine.replace_item(
+        result = await run_in_threadpool(
+            engine.replace_item,
             descriptor,
             str(sent.get("name", name)),
             sent,
@@ -304,7 +311,9 @@ async def replace_the_collection(
             )
             for item in items
         ]
-        result = engine.sync_items(descriptor, kept, request)
+        result = await run_in_threadpool(
+            engine.sync_items, descriptor, kept, request
+        )
     except AppError as exc:
         return _render(
             request,
@@ -338,7 +347,9 @@ async def delete_from_the_page(
             error=f"confirm to delete: {name}",
         )
     try:
-        result = engine.delete_item(descriptor, name, request)
+        result = await run_in_threadpool(
+            engine.delete_item, descriptor, name, request
+        )
     except AppError as exc:
         return _render(request, user, tree, delete=doomed, error=exc.message)
     if "reset" in result:

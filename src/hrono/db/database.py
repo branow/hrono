@@ -28,6 +28,25 @@ _BUSY_ATTEMPTS = 4
 _BUSY_BACKOFF = 0.05
 
 
+@contextmanager
+def tx(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """One transaction around a block — WITHOUT committing a caller's.
+
+    ``with conn:`` commits whatever transaction is open on exit, so a store
+    function using it inside ``Database.write()`` committed the outer
+    ``BEGIN IMMEDIATE`` early and released the write lock in the middle of a
+    block that promises one transaction — ``rotate_running``'s "rekey under
+    the same lock" was false exactly this way. Inside an open transaction this
+    joins it (the owner commits or rolls back); outside one it behaves as
+    ``with conn:`` always did.
+    """
+    if conn.in_transaction:
+        yield conn
+        return
+    with conn:
+        yield conn
+
+
 def open_database(path: Path = DEFAULT_PATH) -> sqlite3.Connection:
     """Open the hrono database at ``path`` with pending migrations applied.
 
@@ -58,6 +77,7 @@ class Pool:
         self._path = path
         self._size = size
         self._guard = Lock()
+        self._closed = False
         self._idle: list[sqlite3.Connection] = [open_database(path)]
 
     def acquire(self) -> sqlite3.Connection:
@@ -71,13 +91,20 @@ class Pool:
     ) -> None:
         if reusable:
             with self._guard:
-                if len(self._idle) < self._size:
+                if not self._closed and len(self._idle) < self._size:
                     self._idle.append(connection)
                     return
         connection.close()
 
     def close(self) -> None:
+        """Close the idle set and refuse new parking.
+
+        Without the flag, a worker thread outliving the 5 s shutdown join
+        could release its connection AFTER this ran, parking a live handle in
+        a pool nobody will ever drain — an open file descriptor per restart.
+        """
         with self._guard:
+            self._closed = True
             idle, self._idle = self._idle, []
         for connection in idle:
             connection.close()

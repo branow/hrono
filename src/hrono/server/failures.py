@@ -46,6 +46,12 @@ SAID: dict[str, tuple[str, str]] = {
         "Retry. If it fails again on the same file, exclude that file in the "
         "source's filter.",
     ),
+    "crash-loop": (
+        "This job took its worker down on every try, so it was stopped "
+        "instead of being retried again.",
+        "Check the server log for what crashed (often memory), fix or shrink "
+        "the input, then retry the run.",
+    ),
     "shared-corpus": (
         "This tree is unscoped, and other trees exist: building it would "
         "ingest sources that belong to them, and two trees over one source "

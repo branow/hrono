@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from hrono.crypto.tokens import generate_token, hash_token
+from hrono.db.database import tx
 from hrono.errors import Conflict, Invalid, NotFound
 
 ROLES = frozenset({"reader", "writer", "admin"})
@@ -64,7 +65,7 @@ def create_user(
     token = generate_token()
     created_at = datetime.now(UTC).isoformat()
     try:
-        with conn:
+        with tx(conn):
             conn.execute(
                 "INSERT INTO users (name, role, token_hash, created_at, "
                 "modified_at) VALUES (?, ?, ?, ?, ?)",
@@ -90,7 +91,7 @@ def reset_token(conn: sqlite3.Connection, name: str) -> tuple[User, str]:
         raise NotFound(f"user not found: {name}")
     token = generate_token()
     modified_at = datetime.now(UTC).isoformat()
-    with conn:
+    with tx(conn):
         conn.execute(
             "UPDATE users SET token_hash = ?, modified_at = ? WHERE name = ?",
             (hash_token(token), modified_at, name),
@@ -124,7 +125,7 @@ def set_role(conn: sqlite3.Connection, name: str, role: str) -> User:
     """
     if role not in ROLES:
         raise InvalidRole(role)
-    with conn:
+    with tx(conn):
         user = get_user(conn, name)
         if user is None:
             raise NotFound(f"user not found: {name}")
@@ -143,7 +144,7 @@ def delete_user(conn: sqlite3.Connection, name: str) -> bool:
 
     Refuses to delete the last admin, for the reason ``set_role`` does.
     """
-    with conn:
+    with tx(conn):
         user = get_user(conn, name)
         if user is not None and user.role == "admin":
             _keep_an_admin(conn, name, "deleting them")

@@ -190,6 +190,10 @@ def serve(
             create_app(db_path=db_path, master_key=key),
             host=host,
             port=port,
+            # open SSE watchers otherwise hold the shutdown open, and the
+            # lifespan's worker stop (which releases the claimed job) never
+            # runs until every stream closes on its own.
+            timeout_graceful_shutdown=10,
         )
 
 

@@ -21,11 +21,19 @@ from urllib.parse import urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from hrono.auth import users
 from hrono.errors import AppError, Invalid
 from hrono.server.rotation import rotate_running
-from hrono.server.ui import Admin, _fields, _trees, router, templates
+from hrono.server.ui import (
+    Admin,
+    _fields,
+    _trees,
+    router,
+    templates,
+    write_off_loop,
+)
 
 
 @router.get("/ui/access", response_class=HTMLResponse)
@@ -45,8 +53,10 @@ async def create(request: Request, user: Admin) -> Response:
     form = await _fields(request)
     name = form.get("name", "").strip()
     try:
-        with request.app.state.db.write() as conn:
-            made, token = users.create_user(conn, name, form.get("role", ""))
+        made, token = await write_off_loop(
+            request.app.state.db,
+            lambda conn: users.create_user(conn, name, form.get("role", "")),
+        )
     except AppError as exc:
         return _refused(request, user, form, exc, typed=name)
     return _render(
@@ -61,8 +71,10 @@ async def create(request: Request, user: Admin) -> Response:
 async def re_role(request: Request, user: Admin, name: str) -> Response:
     form = await _fields(request)
     try:
-        with request.app.state.db.write() as conn:
-            changed = users.set_role(conn, name, form.get("role", ""))
+        changed = await write_off_loop(
+            request.app.state.db,
+            lambda conn: users.set_role(conn, name, form.get("role", "")),
+        )
     except AppError as exc:
         return _refused(request, user, form, exc)
     return _settled(form, done=f"{changed.name} is now {changed.role}")
@@ -76,8 +88,9 @@ async def reissue(request: Request, user: Admin, name: str) -> Response:
             request, user, form, Invalid(f"confirm to reissue: {name}")
         )
     try:
-        with request.app.state.db.write() as conn:
-            changed, token = users.reset_token(conn, name)
+        changed, token = await write_off_loop(
+            request.app.state.db, lambda conn: users.reset_token(conn, name)
+        )
     except AppError as exc:
         return _refused(request, user, form, exc)
     return _render(
@@ -96,8 +109,9 @@ async def remove(request: Request, user: Admin, name: str) -> Response:
             request, user, form, Invalid(f"confirm to delete: {name}")
         )
     try:
-        with request.app.state.db.write() as conn:
-            gone = users.delete_user(conn, name)
+        gone = await write_off_loop(
+            request.app.state.db, lambda conn: users.delete_user(conn, name)
+        )
     except AppError as exc:
         return _refused(request, user, form, exc)
     if not gone:
@@ -114,7 +128,8 @@ async def rotate_key(request: Request, user: Admin) -> Response:
             request, user, form, Invalid("confirm to rotate the master key")
         )
     try:
-        result = rotate_running(
+        result = await run_in_threadpool(
+            rotate_running,
             request.app,
             form.get("old_key", "").strip().encode(),
             form.get("new_key", "").strip().encode(),

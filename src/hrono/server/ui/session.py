@@ -17,6 +17,7 @@ from hrono.server.ui import (
     COOKIE_MAX_AGE,
     THEME_COOKIE,
     _fields,
+    read_off_loop,
     router,
     templates,
 )
@@ -35,8 +36,13 @@ async def sign_in(request: Request) -> Response:
     the thing they typed in front of them, which is where a correction starts.
     """
     token = (await _fields(request)).get("token", "")
-    with request.app.state.db.connect() as conn:
-        user = authenticate(conn, token) if token else None
+    user = (
+        await read_off_loop(
+            request.app.state.db, lambda conn: authenticate(conn, token)
+        )
+        if token
+        else None
+    )
     if user is None:
         return templates.TemplateResponse(
             request,

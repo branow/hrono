@@ -184,8 +184,10 @@ def test_a_finished_run_is_not_watched(browser: Browser) -> None:
     assert 'data-live="1"' not in browser.page()
 
 
-def test_a_writer_can_cancel_from_the_page(browser: Browser) -> None:
-    browser.sign_in("writer")
+def test_an_admin_can_cancel_from_the_page(browser: Browser) -> None:
+    # admin, because POST /jobs/{id}/cancel is admin: a page must never take
+    # a weaker role than the API for the same operation.
+    browser.sign_in("admin")
     parent = browser.fan_out()
 
     answer = browser.client.post(
@@ -200,11 +202,13 @@ def test_a_writer_can_cancel_from_the_page(browser: Browser) -> None:
     ] == ["canceled", "canceled"]
 
 
-def test_a_reader_sees_no_cancel_and_is_refused_at_the_route(
+def test_a_writer_sees_no_cancel_and_is_refused_at_the_route(
     browser: Browser,
 ) -> None:
     # #180's lesson: hiding it is courtesy, the route is the permission.
-    browser.sign_in("reader")
+    # A WRITER now, the strongest role the route must refuse: cancel is an
+    # operator decision, exactly as the API's own cancel is.
+    browser.sign_in("writer")
     parent = str(
         browser.client.post(
             "/jobs",
@@ -223,7 +227,7 @@ def test_a_reader_sees_no_cancel_and_is_refused_at_the_route(
 
 
 def test_cancelling_an_unknown_run_is_a_404(browser: Browser) -> None:
-    browser.sign_in("writer")
+    browser.sign_in("admin")
 
     assert (
         browser.client.post(

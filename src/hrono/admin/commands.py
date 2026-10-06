@@ -17,6 +17,7 @@ from cryptography.fernet import Fernet
 
 from hrono.auth.users import reset_token as reissue
 from hrono.db.database import open_database
+from hrono.db.lock import exclusive
 from hrono.paths import ENV_DB, database_path
 
 app = typer.Typer(
@@ -89,11 +90,15 @@ def reset_token(
             err=True,
         )
         raise typer.Exit(1)
-    connection = open_database(db_path)
-    try:
-        record, token = reissue(connection, user)
-    finally:
-        connection.close()
+    # the same flock `serve` holds: opening the database also MIGRATES it,
+    # and a newer CLI silently migrating a file a running server still uses
+    # is a recovery command corrupting the thing it recovers.
+    with exclusive(db_path):
+        connection = open_database(db_path)
+        try:
+            record, token = reissue(connection, user)
+        finally:
+            connection.close()
     typer.echo(_reset_message(record.name, record.role, token))
 
 

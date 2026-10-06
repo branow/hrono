@@ -42,6 +42,8 @@ _BEAT_GRACE = 4  # missed beats before the reclaimer counts as gone (#111)
 
 STALE_AFTER = 60.0
 
+_PRUNE_INTERVAL = 3600.0  # the retention sweep runs at most once an hour
+
 _RESTART_BACKOFF = 0.5
 
 _RESTART_BACKOFF_CAP = 5.0
@@ -87,15 +89,19 @@ def reclaim_stranded(database: Database) -> tuple[str, ...]:
     """Requeue every job left ``running`` by a worker that is gone.
 
     Called at startup, before any worker runs, so a job whose worker died with
-    the process is re-run rather than stranded for ever (F24).
+    the process is re-run rather than stranded for ever (F24). A job that has
+    taken its worker down ``MAX_ATTEMPTS`` times is failed instead of requeued:
+    re-running a poison pill on every restart is a crash loop nobody sees.
     """
     with database.write() as conn:
-        reclaimed = store.reclaim(conn, None, _now())
-    for job_id in reclaimed:
+        requeued, looping = store.reclaim(conn, None, _now())
+    for job_id in requeued:
         _logger.warning(
             "requeued job left running by a dead worker: %s", job_id
         )
-    return reclaimed
+    for job_id in looping:
+        _logger.error("failed crash-looping job: %s", job_id)
+    return requeued
 
 
 class Worker(threading.Thread):
@@ -121,6 +127,7 @@ class Worker(threading.Thread):
         self._heartbeat_interval = heartbeat_interval
         self._stale_after = stale_after
         self._held: str | None = None
+        self._last_prune = 0.0
         self._stopped = threading.Event()
         self._beat_thread = threading.Thread(target=self._beat, daemon=True)
         self._last_beat = time.monotonic()
@@ -200,12 +207,13 @@ class Worker(threading.Thread):
         """
         while not self._stopped.wait(self._heartbeat_interval):
             try:
-                reclaimed = self._sweep()
+                requeued = self._sweep()
+                self._prune()
             except Exception as exc:  # noqa: BLE001 - the beat must outlive it
                 _logger.warning("heartbeat failed: %s", exc)
                 continue
             self._last_beat = time.monotonic()
-            for job_id in reclaimed:
+            for job_id in requeued:
                 _logger.warning("requeued stranded job: %s", job_id)
 
     def _sweep(self) -> tuple[str, ...]:
@@ -213,9 +221,37 @@ class Worker(threading.Thread):
         with self._database.write() as conn:
             if held is not None:
                 store.touch(conn, held, _now())
-            return store.reclaim(conn, _cutoff(self._stale_after), _now())
+            requeued, looping = store.reclaim(
+                conn, _cutoff(self._stale_after), _now()
+            )
+        for job_id in looping:
+            _logger.error("failed crash-looping job: %s", job_id)
+        return requeued
+
+    def _prune(self) -> None:
+        """Sweep old terminal runs, at most once an hour.
+
+        Nothing else ever deletes a job row, so without this the table — and
+        the claim scan, the runs CTE and every listing — grows forever.
+        """
+        if time.monotonic() - self._last_prune < _PRUNE_INTERVAL:
+            return
+        self._last_prune = time.monotonic()
+        cutoff = (
+            datetime.now(UTC) - timedelta(days=store.JOB_RETENTION_DAYS)
+        ).isoformat()
+        with self._database.write() as conn:
+            removed = store.prune(conn, cutoff)
+        if removed:
+            _logger.info("pruned %d finished job rows", removed)
 
     def _claim(self) -> Job | None:
+        # a read-door peek first: an idle worker must not take the write lock
+        # dozens of times a second just to learn there is nothing to do.
+        with self._database.connect() as conn:
+            waiting = store.has_runnable(conn)
+        if not waiting:
+            return None
         with self._database.write() as conn:
             row = store.claim_next(conn, _now())
         if row is None:
@@ -279,7 +315,12 @@ class Worker(threading.Thread):
                 result,
                 code=mapped.code if mapped else None,
                 details=serialize_result(mapped.details if mapped else None),
+                # only over 'running': a cancel (or a reclaim) that moved the
+                # row first must not be overwritten by this thread's outcome.
+                expected="running",
             )
+            if job.parent_id is not None:
+                store.finalize_parent(conn, job.parent_id, _now())
 
 
 def _mapped(error: BaseException) -> AppError:

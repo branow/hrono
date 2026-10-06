@@ -153,3 +153,39 @@ def test_a_parked_chunk_is_visible_through_the_pool_route(
             "batch": 3,
         }
     ]
+
+
+def test_a_repeated_kick_hands_back_the_job_already_queued(
+    harness: Harness,
+) -> None:
+    # a double-clicked button queued the same multi-minute, LLM-billed build
+    # twice; one live job per (op, tree) is the useful maximum, and answering
+    # with its id makes the retry idempotent instead of an error.
+    first = harness.client.post(
+        "/trees/default/maintain", headers=harness.auth("writer")
+    ).json()["job_id"]
+    second = harness.client.post(
+        "/trees/default/maintain", headers=harness.auth("writer")
+    ).json()["job_id"]
+
+    assert second == first
+
+    synced = harness.client.post(
+        "/trees/default/sync", headers=harness.auth("writer")
+    ).json()["job_id"]
+    again = harness.client.post(
+        "/trees/default/sync", headers=harness.auth("writer")
+    ).json()["job_id"]
+    assert again == synced
+    assert synced != first  # per op: a sync is not the queued maintain
+
+
+def test_sync_for_an_unregistered_tree_is_refused_and_queues_nothing(
+    harness: Harness,
+) -> None:
+    # `maintain` checked; `sync` forgot to, so unregistered trees could be
+    # queued for the incremental chain.
+    resp = harness.client.post(
+        "/trees/nobody/sync", headers=harness.auth("writer")
+    )
+    assert resp.status_code == 404

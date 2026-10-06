@@ -120,8 +120,10 @@ def test_cancelling_a_parent_stops_its_pending_children(
 
 
 def test_the_parent_then_reads_as_canceled(harness: Harness) -> None:
-    # nothing writes `canceled` to the parent's row: #172 derives it from the
-    # children, so there is no second source of truth to keep in step.
+    # the derived answer (#172) and the stored row now AGREE: once the last
+    # child is terminal the parent is finalized, because a parent left
+    # 'pending' forever sat in the claim scan and the status filters for the
+    # life of the database.
     parent = harness.fan_out()
 
     harness.cancel(parent)
@@ -129,16 +131,19 @@ def test_the_parent_then_reads_as_canceled(harness: Harness) -> None:
     assert harness.status_of(parent) == "canceled"
     stored = store.get(harness.conn, parent)  # type: ignore[arg-type]
     assert stored is not None
-    assert stored["status"] == "pending"  # its own row, untouched
+    assert stored["status"] == "canceled"  # finalized, not derived-only
 
 
-def test_a_running_child_is_left_to_finish_and_reported(
+def test_a_running_child_is_signaled_and_reported(
     harness: Harness,
 ) -> None:
     """The honest half: a handler cannot be interrupted mid-transaction.
 
-    Saying "canceled" over a stage that is still writing would be a lie, and
-    #092 is why killing the thread is not on the table.
+    #092 is why killing the thread is not on the table — but the ROW flips to
+    canceled, which is the stop signal ``pool.running`` polls between calls,
+    and ``running: 1`` in the response means "told to stop, finishing its
+    step". The worker's terminal write is guarded on status = 'running', so
+    the signal is never overwritten by the step's outcome.
     """
     parent = harness.fan_out()
     claimed = store.claim_next(harness.conn, "t")  # type: ignore[arg-type]
@@ -152,11 +157,19 @@ def test_a_running_child_is_left_to_finish_and_reported(
         "running": 1,
         "finished": 0,
     }
-    assert sorted(harness.statuses(parent)) == [
-        "canceled",
-        "canceled",
-        "running",
-    ]
+    assert sorted(harness.statuses(parent)) == ["canceled"] * 3
+    # and the signal sticks: a worker announcing the step's outcome now
+    # cannot overwrite the cancel.
+    store.set_status(
+        harness.conn,  # type: ignore[arg-type]
+        claimed["id"],
+        "succeeded",
+        None,
+        "t2",
+        expected="running",
+    )
+    row = store.get(harness.conn, claimed["id"])  # type: ignore[arg-type]
+    assert row is not None and row["status"] == "canceled"
 
 
 def test_a_finished_child_keeps_its_outcome(harness: Harness) -> None:

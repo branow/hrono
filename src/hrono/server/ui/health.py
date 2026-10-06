@@ -24,8 +24,10 @@ from hrono.server.ui import (
     Reader,
     _fields,
     _trees,
+    read_off_loop,
     router,
     templates,
+    write_off_loop,
 )
 
 
@@ -76,8 +78,12 @@ async def place_from_health(
     if not (section.isdigit() and target.isdigit()):
         return _here(tree, error="choose a topic")
     try:
-        with request.app.state.db.write() as conn:
-            edits.move_section(conn, tree, int(section), int(target))
+        await write_off_loop(
+            request.app.state.db,
+            lambda conn: edits.move_section(
+                conn, tree, int(section), int(target)
+            ),
+        )
     except (AppError, DomainError) as exc:
         return _here(tree, error=str(exc))
     return _here(tree, done=f"section {section} filed in topic {target}")
@@ -93,13 +99,16 @@ async def regenerate_from_health(
     if not node.isdigit():
         return _here(tree, error="choose a topic")
     try:
-        with request.app.state.db.connect() as conn:
+
+        def _level(conn: object) -> int:
             edits.require_node(conn, tree, int(node))
-            level = int(
-                conn.execute(
+            return int(
+                conn.execute(  # type: ignore[attr-defined]
                     "SELECT level FROM nodes WHERE id = ?", (int(node),)
                 ).fetchone()["level"]
             )
+
+        level = await read_off_loop(request.app.state.db, _level)
     except AppError as exc:
         return _here(tree, error=str(exc))
     op = "brief" if level == 0 else "brief-upper"
@@ -127,8 +136,10 @@ async def release_from_health(
     if not target.isdigit():
         return _here(tree, error="choose an edit to release")
     try:
-        with request.app.state.db.write() as conn:
-            attention.release(conn, tree, kind, int(target))
+        await write_off_loop(
+            request.app.state.db,
+            lambda conn: attention.release(conn, tree, kind, int(target)),
+        )
     except AppError as exc:
         return _here(tree, error=str(exc))
     return _here(tree, done="handed back to automation")

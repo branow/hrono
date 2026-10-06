@@ -12,6 +12,7 @@ from urllib.parse import quote, urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from hrono.errors import Forbidden, NotFound
 from hrono.jobs import store as job_store
@@ -381,9 +382,13 @@ async def run_from_the_page(
     )
     database = request.app.state.db
     if fans_out(op, scope):
-        started = fan_out(database, op, scope, tree=tree, started_by=user.name)
+        started = await run_in_threadpool(
+            fan_out, database, op, scope, tree=tree, started_by=user.name
+        )
     else:
-        started = enqueue(database, op, scope, tree=tree, started_by=user.name)
+        started = await run_in_threadpool(
+            enqueue, database, op, scope, tree=tree, started_by=user.name
+        )
     return RedirectResponse(
         f"/ui/jobs?tree={tree or 'default'}"
         f"&done={quote(f'Started {op}.')}&run={started}",
@@ -393,16 +398,22 @@ async def run_from_the_page(
 
 @router.post("/ui/jobs/{job_id}/cancel")
 def cancel_from_the_page(
-    job_id: str, request: Request, user: Writer, tree: str = ""
+    job_id: str, request: Request, user: Admin, tree: str = ""
 ) -> Response:
-    """Cancel from the page, and say what could not be stopped (#173)."""
+    """Cancel from the page, and say what could not be stopped (#173).
+
+    Admin, exactly as ``POST /jobs/{id}/cancel`` requires: stopping someone
+    else's run is an operator decision, and a page must never accept a weaker
+    role than the API does for the same operation (the rule this module's
+    package docstring states and this route broke).
+    """
     with request.app.state.db.write() as conn:
         if job_store.get(conn, job_id) is None:
             raise NotFound(f"job not found: {job_id}")
         outcome = cancel(conn, job_id)
     notice = f"Stopped {outcome.stopped}."
     if outcome.running:
-        notice += f" {outcome.running} already running and will finish."
+        notice += f" {outcome.running} told to stop; each finishes its step."
     return RedirectResponse(
         f"/ui/jobs?tree={tree or 'default'}&done={quote(notice)}",
         status_code=303,

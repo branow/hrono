@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
+from starlette.concurrency import run_in_threadpool
 
 from hrono.auth.users import User
 from hrono.errors import AppError
@@ -107,6 +108,33 @@ async def _fields(request: Request) -> dict[str, str]:
         key: values[0]
         for key, values in parse_qs(body, keep_blank_values=True).items()
     }
+
+
+async def write_off_loop(database, fn):  # noqa: ANN001, ANN201
+    """One write block in the threadpool, not on the event loop.
+
+    A write can wait the whole busy timeout (seconds) while a build holds the
+    lock, and a handler doing that on the loop stalls every request, page and
+    SSE stream of the process. ``setup.py`` already offloaded its slow calls;
+    the other pages did not, which made the discipline accidental. ``fn`` runs
+    with the open write connection and its return value comes back.
+    """
+
+    def work():  # noqa: ANN202
+        with database.write() as conn:
+            return fn(conn)
+
+    return await run_in_threadpool(work)
+
+
+async def read_off_loop(database, fn):  # noqa: ANN001, ANN201
+    """One read block in the threadpool — ``write_off_loop``'s read twin."""
+
+    def work():  # noqa: ANN202
+        with database.connect() as conn:
+            return fn(conn)
+
+    return await run_in_threadpool(work)
 
 
 class LoginRequired(AppError):
