@@ -20,25 +20,25 @@ recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
 Because the calls are keyed by CONTENT HASH they are independent of each other,
 so they run in ``pool.mapped``'s bounded worker pool rather than one at a time:
 421 sections at 4-30 s each was 70 minutes of a process that was idle for all
-of it. The persist stays on this thread, one at a time.
+of it. The persist stays on this thread, one at a time. And each call carries
+up to ``packed.PACK_ITEMS`` sections, because through ``claude-code`` the
+call's own overhead, not the section, was most of what a build paid for.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Mapping
 
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.llm.client import (
-    Completion,
-    CompletionRequest,
-    CompletionResult,
-)
+from hrono.llm.client import Completion
 from hrono.llm.providers import client_for
 from hrono.registry.collections.trees import DEFAULT_TREE, sources_of
-from hrono.summarize import pool, spend, store
+from hrono.summarize import packed, pool, spend, store
+from hrono.summarize.packed import Made
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
-from hrono.summarize.shape import answer, talks_back
+from hrono.summarize.shape import talks_back
 
 _CONTENT_PLACEHOLDER = "{content}"
 
@@ -66,41 +66,48 @@ def condense(
 
     completion = client_for(context, model, "condense", client=client)
 
-    def call(section: Section) -> tuple[CompletionResult, str]:
-        rendered = template.replace(
+    def render(section: Section) -> str:
+        return template.replace(
             _CONTENT_PLACEHOLDER, section[1].decode("utf-8", "replace")
         )
-        return answer(
-            completion,
-            CompletionRequest(model=model, system="", content=rendered),
-            talks_back,
-        )
 
-    def keep(section: Section, made: tuple[CompletionResult, str]) -> None:
-        result, refused = made
-        with context.database.write() as conn:
-            if refused:  # never cached (#221), but never re-paid either (E015)
-                store.refuse(
-                    conn, section[0], model_name, request, refused, result.text
+    def call(pack: tuple[Section, ...]) -> list[Made]:
+        return packed.condense_pack(completion, model, render, pack, talks_back)
+
+    def keep(pack: tuple[Section, ...], made: list[Made]) -> None:
+        for section, (result, refused) in zip(pack, made, strict=True):
+            with context.database.write() as conn:
+                if refused:  # never cached (#221), never re-paid (E015)
+                    store.refuse(
+                        conn,
+                        section[0],
+                        model_name,
+                        request,
+                        refused,
+                        result.text,
+                    )
+                    continue
+                store.replace(
+                    conn,
+                    section[0],
+                    model_name,
+                    result.text,
+                    result.usage.input_tokens,
+                    result.usage.output_tokens,
                 )
-                return
-            store.replace(
-                conn,
-                section[0],
-                model_name,
-                result.text,
-                result.usage.input_tokens,
-                result.usage.output_tokens,
-            )
 
-    condensed = pool.mapped(
-        sections,
-        call,
-        keep,
-        workers=pool.width(),
-        proceed=pool.running(context.database, job.id),
-        named=lambda section: _named(context, section[0]),
-    )
+    condensed = [
+        made
+        for results in pool.mapped(
+            packed.packs(sections),
+            call,
+            keep,
+            workers=pool.width(),
+            proceed=pool.running(context.database, job.id),
+            named=lambda pack: _named(context, pack),
+        )
+        for made in results
+    ]
     # an op that calls a model says what it spent (#179); until now condense
     # reported nothing at all, which made the most expensive stage of a first
     # build the one nobody could account for.
@@ -116,14 +123,23 @@ def condense(
     return outcome
 
 
-def _named(context: JobContext, digest: str) -> str:
-    """A section by the file it is in, for a failure's message (#213)."""
+def _named(context: JobContext, pack: tuple[Section, ...]) -> str:
+    """The sections of a failed call by the files they are in (#213).
+
+    A pack fails as one call, so every section it carried is named: the one
+    that broke it is among them, and which one cannot be known.
+    """
     with context.database.connect() as conn:
-        row = conn.execute(
-            "SELECT path FROM sections WHERE content_hash = ? LIMIT 1",
-            (digest,),
-        ).fetchone()
-    return f"section {row['path'] if row else digest[:12]}"
+        paths = [_path(conn, digest) for digest, _ in pack]
+    return ("section " if len(paths) == 1 else "sections ") + ", ".join(paths)
+
+
+def _path(conn: sqlite3.Connection, digest: str) -> str:
+    row = conn.execute(
+        "SELECT path FROM sections WHERE content_hash = ? LIMIT 1",
+        (digest,),
+    ).fetchone()
+    return row["path"] if row else digest[:12]
 
 
 OPS["condense"] = condense

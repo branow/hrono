@@ -26,7 +26,7 @@ from hrono.llm.client import (
 from hrono.llm.ledger import Ledgered
 from hrono.registry import store as registry_store
 from hrono.server.app import create_app
-from hrono.summarize import pool
+from hrono.summarize import packed, pool
 from hrono.summarize.condense import condense
 from tests.context import job_context
 from tests.summarize.concurrent_client import Overlap
@@ -198,6 +198,7 @@ def test_a_concurrent_pool_loses_no_rows(
     # the REAL pool over a REAL pooled database: eight calls in flight, each
     # writing its row from its own thread on its own connection.
     monkeypatch.setenv(pool.ENV_WIDTH, "8")
+    monkeypatch.setattr(packed, "PACK_ITEMS", 1)  # one row per section
     with db.write() as conn:
         register_text_model(conn)
         register_condense_prompt(conn)

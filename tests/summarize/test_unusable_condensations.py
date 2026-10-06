@@ -18,7 +18,10 @@ from hrono.summarize import store
 from hrono.summarize.condense import condense
 from hrono.tree.maintain import maintain
 from tests.context import job_context
-from tests.summarize.test_condense import MODEL
+from tests.summarize.test_condense import (
+    MODEL,
+    one_per_call,  # noqa: F401
+)
 from tests.summarize.test_condense import db as condense_db  # noqa: F401
 from tests.summarize.test_condense import job as condense_job
 from tests.tree.test_maintain import fake_build, fake_encoder, job, make_repo

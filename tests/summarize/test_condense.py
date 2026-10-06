@@ -20,7 +20,7 @@ from hrono.llm.client import (
     Usage,
 )
 from hrono.registry import store as registry_store
-from hrono.summarize import pool, store
+from hrono.summarize import packed, pool, store
 from hrono.summarize.condense import condense
 from tests.summarize.concurrent_client import Overlap, Paired
 
@@ -116,6 +116,13 @@ def job(scope: dict[str, object] | None = None) -> Job:
         created_at="t",
         updated_at="t",
     )
+
+
+@pytest.fixture(autouse=True)
+def one_per_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests are about the POOL — overlap, stop, kept progress — and
+    count one call per section; packing is ``test_packed``'s subject."""
+    monkeypatch.setattr(packed, "PACK_ITEMS", 1)
 
 
 @pytest.fixture

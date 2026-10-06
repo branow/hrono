@@ -360,7 +360,9 @@ def test_a_failure_names_the_section_it_was_on(repo: Path) -> None:
 
     assert job.error_code == "llm-error"
     assert job.error_details["stage"] == "condense"  # type: ignore[index]
-    assert job.error_details["item"] == "section f4.txt"  # type: ignore[index]
+    item = str(job.error_details["item"])  # type: ignore[index]
+    assert item.startswith("sections ")  # a pack fails as one call
+    assert "f4.txt" in item.split(", ")
 
 
 def test_the_run_page_explains_a_failure_and_offers_a_retry(
