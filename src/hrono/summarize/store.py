@@ -25,7 +25,11 @@ from hrono.summarize.shape import talks_back
 
 
 def pending(
-    conn: sqlite3.Connection, model_name: str, *, request: str | None = None
+    conn: sqlite3.Connection,
+    model_name: str,
+    *,
+    request: str | None = None,
+    sources: tuple[str, ...] | None = None,
 ) -> tuple[tuple[str, bytes], ...]:
     """Return (content_hash, body) for sections not yet condensed for a model.
 
@@ -35,6 +39,12 @@ def pending(
     that section read it as source. A section already refused for ``request``
     is left out (E015); with no ``request``, refusals are not consulted.
 
+    ``sources`` scopes the selection to one tree's sections: condense runs as
+    a stage of one tree's sync or maintain, and an unscoped SELECT made that
+    run pay LLM calls for every other tree's pending sections too — spend the
+    operator asked for on no tree at all. None keeps the whole-corpus read for
+    an unscoped database.
+
     Bodies are read only for what is pending. Condense runs on every sync, and
     reading every section body to find the few that changed would make an
     unchanged tree cost its whole corpus in I/O (qa, #221). The selection is
@@ -43,16 +53,28 @@ def pending(
     32,766-variable limit, which is every first build of a large corpus (E001).
     """
     redo = sorted({digest for digest, _, _ in unusable(conn, model_name)})
+    scoped = (
+        ""
+        if sources is None
+        else "AND s.source IN (SELECT value FROM json_each(?)) "
+    )
     rows = conn.execute(
         "SELECT DISTINCT s.content_hash AS h, c.body AS body FROM sections s "
         "JOIN contents c ON c.content_hash = s.content_hash "
-        "WHERE s.source_type != 'node' AND (NOT EXISTS (SELECT 1 FROM "
+        f"WHERE s.source_type != 'node' {scoped}"  # noqa: S608
+        "AND (NOT EXISTS (SELECT 1 FROM "
         "condensations d WHERE d.content_hash = s.content_hash "
         "AND d.model_name = ?) OR s.content_hash IN "
         "(SELECT value FROM json_each(?))) AND NOT EXISTS (SELECT 1 FROM "
         "condense_refusals r WHERE r.content_hash = s.content_hash "
         "AND r.model_name = ? AND r.request = ?) ORDER BY s.content_hash",
-        (model_name, json.dumps(redo), model_name, request),
+        (
+            *(() if sources is None else (json.dumps(list(sources)),)),
+            model_name,
+            json.dumps(redo),
+            model_name,
+            request,
+        ),
     ).fetchall()
     return tuple((row["h"], bytes(row["body"])) for row in rows)
 

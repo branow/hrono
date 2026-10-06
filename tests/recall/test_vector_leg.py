@@ -10,7 +10,23 @@ from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.recall import fts
-from hrono.recall.vector_leg import Z_FLOOR, search
+from hrono.recall.vector_leg import Z_FLOOR, scores
+
+
+def search(conn, query_vec, model):
+    """The leg as recall uses it: scores, floored at Z_FLOOR, best first.
+
+    The old production ``search`` wrapper is gone (nothing but these
+    tests called it); this drives the same ``scores`` path the engine
+    does and applies the floor the engine's ``qualify`` applies.
+    """
+    hits = [
+        (pid, z)
+        for pid, z in scores(conn, query_vec, model).items()
+        if z >= Z_FLOOR
+    ]
+    return tuple(sorted(hits, key=lambda h: h[1], reverse=True))
+
 
 MODEL = "emb"
 DIMS = 8

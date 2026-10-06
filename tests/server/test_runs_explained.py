@@ -163,6 +163,7 @@ def test_a_successful_maintain_reports_each_stage(repo: Path) -> None:
         "embed",
         "condense",
         "cluster",
+        "restore-pins",
         "brief",
         "build-tree",
         "embed",

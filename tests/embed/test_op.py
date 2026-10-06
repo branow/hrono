@@ -159,3 +159,60 @@ def test_embed_runs_as_a_job_and_failure_is_isolated(
     assert row["status"] == "succeeded"
     with db.connect() as conn:
         assert vstore.vector_count(conn, "emb") == len(BODIES)
+
+
+def test_embed_of_a_scoped_tree_skips_other_trees_content(
+    db: Database, tmp_path: object
+) -> None:
+    """A tree's embed stage must not vectorise another tree's corpus.
+
+    ``missing`` selected every content row with no vector, so tree A's embed
+    paid for tree B's backlog (and for orphan rows nothing references). The
+    scope is everything A's pipeline reads vectors for: its sections and
+    passages, their paths, its briefs.
+    """
+    import json as _json
+
+    from hrono.ingest import store as istore
+    from hrono.ingest.identity import Address
+    from hrono.registry import store as registry_store
+
+    mine = b"content that belongs to the scoped tree"
+    foreign = b"content that belongs to someone else"
+    with db.connect() as conn, conn:
+        for body, source in ((mine, "mine-src"), (foreign, "other-src")):
+            istore.upsert_content(conn, content_hash(body), body)
+            istore.insert_section(
+                conn,
+                source=source,
+                address=Address("git", "x", f"{source}/f.py", "v"),
+                start=0,
+                end=len(body),
+                content_hash=content_hash(body),
+                ordinal=0,
+            )
+        registry_store.insert(
+            conn,
+            "trees",
+            "scoped",
+            _json.dumps({"name": "scoped", "sources": ["mine-src"]}),
+            None,
+            "t",
+        )
+    scoped = Job(
+        id="e-scoped",
+        parent_id=None,
+        tree="scoped",
+        op="embed",
+        scope={"type": "model", "name": "emb"},
+        status="running",
+        error=None,
+        created_at="t",
+        updated_at="t",
+    )
+
+    embed(scoped, JobContext(db), encoder_for=fake_encoder(4))
+
+    with db.connect() as conn:
+        assert vstore.get_vector(conn, content_hash(mine), "emb") is not None
+        assert vstore.get_vector(conn, content_hash(foreign), "emb") is None

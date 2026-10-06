@@ -35,6 +35,7 @@ from hrono.llm.client import (
     CompletionResult,
 )
 from hrono.llm.providers import client_for
+from hrono.registry.collections.trees import DEFAULT_TREE, sources_of
 from hrono.summarize import pool, spend, store
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 from hrono.summarize.shape import answer, talks_back
@@ -56,7 +57,10 @@ def condense(
         model_name = str(model["name"])
         _, template = resolve_prompt(conn, "condense")
         request = store.request_for(model, template)
-        sections = store.pending(conn, model_name, request=request)
+        scope = sources_of(conn, job.tree or DEFAULT_TREE)
+        sections = store.pending(
+            conn, model_name, request=request, sources=scope
+        )
     if not sections:
         return {"condensed": 0}
 

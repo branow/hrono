@@ -56,9 +56,19 @@ def materialize(cache: Path, pages: Sequence[Page]) -> str:
 
 
 def units(config: dict[str, object], cache: Path) -> Iterator[Unit]:
-    """Every materialized page, each carrying its own version."""
+    """Every materialized page, each carrying its own version.
+
+    An EMPTY page is skipped, matching ``filter.survey``'s zero-byte rule for
+    git files: an empty unit splits to no sections, so ``stored_files`` never
+    records it and every later diff reports it "new" again — a batch
+    allocated, the pool aged and condense run on every sync of an unchanged
+    corpus, for a page with nothing on it.
+    """
     for path, version in sorted(versions(cache).items()):
-        yield Unit(path, (cache / path).read_bytes(), version=version)
+        body = (cache / path).read_bytes()
+        if not body:
+            continue
+        yield Unit(path, body, version=version)
 
 
 def unit(config: dict[str, object], cache: Path, path: str) -> Unit:

@@ -344,3 +344,55 @@ def test_pending_finds_every_section_of_a_corpus_past_the_variable_limit(
         found = store.pending(conn, MODEL)
 
     assert len(found) == beyond + 2
+
+
+def test_condense_of_a_scoped_tree_skips_other_trees_sections(
+    db: Database,
+) -> None:
+    """A tree's sync must not pay LLM calls for another tree's corpus.
+
+    ``pending`` selected every uncondensed section in the database, so tree
+    A's condense stage condensed tree B's backlog on A's bill — spend the
+    operator asked for on no tree at all.
+    """
+    with db.connect() as conn, conn:
+        istore.upsert_content(conn, content_hash(b"foreign"), b"foreign")
+        istore.insert_section(
+            conn,
+            source="other-src",
+            address=Address("git", "example.com/other", "z.py", "v1"),
+            start=0,
+            end=7,
+            content_hash=content_hash(b"foreign"),
+            ordinal=0,
+        )
+        registry_store.insert(
+            conn,
+            "trees",
+            "scoped",
+            json.dumps({"name": "scoped", "sources": ["repo"]}),
+            None,
+            "t",
+        )
+    client = FakeCompletion()
+    scoped_job = Job(
+        id="c-scoped",
+        parent_id=None,
+        tree="scoped",
+        op="condense",
+        scope={},
+        status="running",
+        error=None,
+        created_at="t",
+        updated_at="t",
+    )
+
+    outcome = condense(scoped_job, JobContext(db), client=client)
+
+    assert outcome["condensed"] == 2  # a.py and b.py; never z.py
+    with db.connect() as conn:
+        foreign = conn.execute(
+            "SELECT 1 FROM condensations WHERE content_hash = ?",
+            (content_hash(b"foreign"),),
+        ).fetchone()
+    assert foreign is None

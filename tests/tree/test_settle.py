@@ -607,3 +607,57 @@ def test_an_untriggered_settle_reports_that_it_did_nothing(
     )
 
     assert outcome == {"settled": False, "held": 0, "released": 0}
+
+
+def test_settle_leaves_another_tree_s_pins_and_membership_alone(
+    built: Database, tmp_path: Path
+) -> None:
+    """Pins and memberships are GLOBAL rows; settle must act on its tree's.
+
+    Before the scope fix, this tree's settle read every membership pin, found
+    the other tree's anchor absent from its own live set, and RELEASED the pin
+    a human placed in a tree this run had no business touching.
+    """
+    with built.connect() as conn, conn:
+        other_node = int(
+            conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES ('other', 0, 0, 't')"
+            ).lastrowid
+        )
+        body = b"a chunk that lives in the other tree"
+        digest = content_hash(body)
+        upsert_content(conn, digest, body)
+        section = insert_section(
+            conn,
+            source="other-src",
+            address=Address("git", "x", "a.txt", "v"),
+            start=0,
+            end=len(body),
+            content_hash=digest,
+            ordinal=0,
+        )
+        cluster_store.add_member(
+            conn, other_node, section, forced=False, similarity=None
+        )
+        pins.pin(
+            conn, pins.MEMBERSHIP, section, reason="hand", anchor=other_node
+        )
+
+    settle(
+        _job(),
+        job_context(built, tmp_path),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    with built.connect() as conn:
+        held = pins.held_for(conn, pins.MEMBERSHIP, [section])
+        member = conn.execute(
+            "SELECT node_id FROM node_members WHERE section_id = ?",
+            (section,),
+        ).fetchone()
+    assert held == {section: (other_node, "hand")}
+    assert member is not None and int(member["node_id"]) == other_node

@@ -31,6 +31,7 @@ import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from hrono import pins
 from hrono.cluster import incubator, store
 from hrono.cluster.blend import combined_vector
 
@@ -47,6 +48,7 @@ class SectionDelta:
     prior_similarity: float | None = None  # the assignment as it was recorded
     prior_forced: bool = False  # ... including whether it was force-assigned
     prior_batch: int | None = None  # the batch it was parked at, if pending
+    pinned_anchor: int | None = None  # where a human holds it (#154)
 
 
 @dataclass(frozen=True)
@@ -109,6 +111,8 @@ def _apply(state: _Batch, delta: SectionDelta) -> None:
             state.affected.add(delta.prior_node_id)
         state.deleted += 1
         return
+    if _held(state, delta):
+        return
     if delta.kind == "moved":
         _in_place(state, delta)
         return
@@ -116,6 +120,36 @@ def _apply(state: _Batch, delta: SectionDelta) -> None:
         _sticky(state, delta)
         return
     _placement(state, delta)  # new
+
+
+def _held(state: _Batch, delta: SectionDelta) -> bool:
+    """Place a pinned chunk where the human holds it, whatever its score.
+
+    A pin is a HARD constraint (#154): the sticky re-check and the placement
+    rule are the machine's judgement, and this chunk is exempt from both. The
+    anchor can be gone — the node was dissolved or split since — and then the
+    hold has nothing to name, so it is released and the chunk takes the normal
+    rule rather than being parked somewhere nobody chose.
+    """
+    anchor = delta.pinned_anchor
+    if anchor is None or delta.section_id is None:
+        return False
+    alive = state.conn.execute(
+        "SELECT 1 FROM nodes WHERE id = ?", (anchor,)
+    ).fetchone()
+    if alive is None:
+        pins.unpin(state.conn, pins.MEMBERSHIP, delta.section_id)
+        return False
+    store.add_member(
+        state.conn,
+        anchor,
+        delta.section_id,
+        forced=False,
+        similarity=delta.prior_similarity,
+    )
+    incubator.unpark(state.conn, state.tree, delta.section_id)
+    state.stayed += 1
+    return True
 
 
 def _in_place(state: _Batch, delta: SectionDelta) -> None:
@@ -213,10 +247,13 @@ def assign_or_park(
 
 
 def _dissolve_sweep(state: _Batch) -> None:
+    held = pins.pinned(state.conn, pins.MEMBERSHIP)
     for node_id in sorted(state.affected):
         if store.member_count(state.conn, node_id) >= 2:
             continue
         survivors = store.node_member_rows(state.conn, node_id)
+        if any(section_id in held for section_id, _, _ in survivors):
+            continue  # a human holds a member here; the topic stays (#154)
         store.delete_node(state.conn, node_id)
         state.working.pop(node_id, None)
         state.dissolved += 1

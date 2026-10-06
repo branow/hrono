@@ -93,7 +93,7 @@ def _building(conn: sqlite3.Connection, tree: str) -> bool:
     row = conn.execute(
         "SELECT 1 FROM jobs WHERE tree = ? AND status IN ('pending', 'running')"
         " AND op IN ('maintain', 'sync-tree', 'build-tree', 'cluster', "
-        "'cluster-briefs', 'settle') LIMIT 1",
+        "'cluster-briefs', 'settle', 'update', 'repair') LIMIT 1",
         (tree,),
     ).fetchone()
     return row is not None

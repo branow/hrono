@@ -19,7 +19,12 @@ from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.registry import store as registry_store
-from hrono.registry.collections.trees import scoped_sources, sources_of
+from hrono.registry.collections.trees import (
+    SharedCorpus,
+    ingest_sources,
+    scoped_sources,
+    sources_of,
+)
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -99,6 +104,85 @@ def test_a_tree_naming_an_unregistered_source_is_refused(
     assert response.status_code == 400
     assert "no-such-src" in response.json()["error"]["message"]
     assert sources_of(conn, "ghost") is None  # type: ignore[arg-type]
+
+
+def test_a_source_claimed_by_another_tree_is_refused(
+    client: tuple[TestClient, dict, object],
+) -> None:
+    # sections are global rows with no tree column, so two trees over one
+    # source reconcile EACH OTHER's sections away: tree A's maintain drops
+    # them out of tree B's memberships and B's next diff sees nothing to do.
+    http, headers, conn = client
+
+    first = http.put(
+        "/trees/alpha",
+        json={"name": "alpha", "sources": ["alpha-src"]},
+        headers=headers,
+    )
+    assert first.status_code == 200
+
+    response = http.put(
+        "/trees/beta",
+        json={"name": "beta", "sources": ["alpha-src", "beta-src"]},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert "alpha-src" in response.json()["error"]["message"]
+    assert sources_of(conn, "beta") is None  # type: ignore[arg-type]
+
+
+def test_re_putting_a_tree_s_own_sources_is_not_a_claim_conflict(
+    client: tuple[TestClient, dict, object],
+) -> None:
+    # the overlap rule compares against OTHER trees: a tree re-declaring (or
+    # extending) its own claim must pass, or no tree config could ever be
+    # edited again.
+    http, headers, conn = client
+    assert (
+        http.put(
+            "/trees/alpha",
+            json={"name": "alpha", "sources": ["alpha-src"]},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+
+    response = http.put(
+        "/trees/alpha",
+        json={"name": "alpha", "sources": ["alpha-src", "beta-src"]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert sources_of(conn, "alpha") == (  # type: ignore[arg-type]
+        "alpha-src",
+        "beta-src",
+    )
+
+
+def test_an_unscoped_tree_may_not_ingest_once_other_trees_exist(
+    client: tuple[TestClient, dict, object],
+) -> None:
+    # the one door the claim check cannot close: an UNSCOPED tree maps every
+    # source, overlapping whatever another tree claims. The refusal happens
+    # where it would do harm — at ingest — because registration never re-runs
+    # on an existing database.
+    http, headers, conn = client
+    assert (
+        http.put(
+            "/trees/alpha",
+            json={"name": "alpha", "sources": ["alpha-src"]},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+
+    with pytest.raises(SharedCorpus):
+        ingest_sources(conn, "default")  # type: ignore[arg-type]
+    # scoped trees, and an unscoped tree in a database with no other tree,
+    # keep working
+    assert ingest_sources(conn, "alpha") == ("alpha-src",)  # type: ignore[arg-type]
 
 
 def test_a_tree_must_name_at_least_one_source(

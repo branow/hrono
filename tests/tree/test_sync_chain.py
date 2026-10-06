@@ -195,7 +195,7 @@ def test_the_result_says_what_the_run_did(
         "brief-upper",
         "monitor",
         "repair",
-        "after-repair",
+        "adopt",
     ]
     assert all(stage["seconds"] >= 0 for stage in outcome["stages"])
     assert outcome["incomplete"] is False
@@ -207,6 +207,7 @@ def test_the_result_says_what_the_run_did(
         "freed",
         "reparented",
         "pinned",
+        "removed",
     }
 
 
@@ -434,3 +435,104 @@ def test_a_forced_assignment_is_counted(
     outcome = _run(db, tmp_path, Judge())
 
     assert outcome["forced"] >= 1
+
+
+def _top(db: Database) -> tuple[int, int]:
+    """(level, node id) of the tree's current single top."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT id, level FROM nodes WHERE tree = ? ORDER BY level DESC, "
+            "id LIMIT 1",
+            (TREE,),
+        ).fetchone()
+    return int(row["level"]), int(row["id"])
+
+
+def test_sync_briefs_stale_uppers_above_level_one(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    """#137's hole two floors up.
+
+    The chain called ``brief_upper`` bare, and the op's scope defaults to
+    level 1 — so a stale or missing brief at level 2 or above (the root's
+    included) was marked by propagate and then never rewritten by any sync;
+    only a full maintain passed explicit levels.
+    """
+    db, _origin = built
+    top_level, old_top = _top(db)
+    with db.connect() as conn, conn:
+        grafted = int(
+            conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES (?, ?, 0, 't')",
+                (TREE, top_level + 1),
+            ).lastrowid
+        )
+        cluster_store.add_child(
+            conn, grafted, old_top, attached=False, similarity=None
+        )
+    assert top_level + 1 >= 2  # the case under test: above the op's default
+
+    _run(db, tmp_path, Judge())
+
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT text FROM briefs WHERE node_id = ?", (grafted,)
+        ).fetchone()
+    assert row is not None  # the level-2 top was briefed by the sync
+    assert "revision" in str(row["text"])  # ... by a real completion call
+
+
+def test_sync_adopts_a_leaf_even_when_repair_did_nothing(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    """A drain-emitted leaf must not wait for a settle to become reachable.
+
+    The closing stages used to run only "when repair changed anything" — and
+    the gate read ``repaired["pinned"]``, so on a pin-free steady tree a leaf
+    the drain emitted stayed under no parent, written to the export but
+    unreachable from root.md, until the next settle or maintain.
+    """
+    from hrono.ingest.identity import Address, content_hash
+    from hrono.ingest.store import insert_section, upsert_content
+    from hrono.summarize import store as condensations
+
+    db, _origin = built
+    with db.connect() as conn, conn:
+        leaf = int(
+            conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES (?, 0, 0, 't')",
+                (TREE,),
+            ).lastrowid
+        )
+        for n in range(2):
+            body = f"a freshly drained chunk number {n}".encode()
+            digest = content_hash(body)
+            upsert_content(conn, digest, body)
+            condensations.upsert(conn, digest, "sonnet", "its essence", 1, 1)
+            section = insert_section(
+                conn,
+                source="drained",  # not the git source: the diff must not
+                # classify these fixture rows as deletions of real files
+                address=Address("git", "x", f"drained/{n}.txt", "v"),
+                start=0,
+                end=len(body),
+                content_hash=digest,
+                ordinal=0,
+            )
+            cluster_store.add_member(
+                conn, leaf, section, forced=False, similarity=None
+            )
+
+    _run(db, tmp_path, Judge())
+
+    with db.connect() as conn:
+        parent = conn.execute(
+            "SELECT parent_id FROM node_children WHERE child_id = ?", (leaf,)
+        ).fetchone()
+        briefed = conn.execute(
+            "SELECT 1 FROM briefs WHERE node_id = ?", (leaf,)
+        ).fetchone()
+    assert briefed is not None  # the sync briefed the new topic itself
+    assert parent is not None  # ... and hung it under a parent, reachably

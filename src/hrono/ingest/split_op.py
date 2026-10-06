@@ -18,6 +18,7 @@ import sqlite3
 from collections.abc import Mapping
 from pathlib import Path
 
+from hrono import pins
 from hrono.cluster.blend import register_path_bodies
 from hrono.ingest import SplitError, Unit, store
 from hrono.ingest.identity import (
@@ -52,11 +53,13 @@ def split_source(job: Job, context: JobContext) -> Mapping[str, int]:
     cut: dict[str, tuple[str, ...]] = {}
     with context.database.write() as conn:
         before = _cut_by_path(conn, name)
+        held = _held_sections(conn, name)
         store.clear_source(conn, name)
         fts.clear_source(conn, name)
         for unit in reader.units(config, cache):
             stored = store_unit(conn, unit, name, addressed, instance, version)
             cut[unit.path] = tuple(digest for _id, _ord, digest in stored)
+            _repin(conn, held.get(unit.path, ()), stored)
         register_path_bodies(conn, list(cut))
     changed = [
         path for path, hashes in cut.items() if before.get(path) != hashes
@@ -128,6 +131,74 @@ def sections_of(tree: Node, path: str, raw: bytes) -> tuple[Section, ...]:
     """The sections one file is cut into: the cut a split stores and an
     estimate counts, so the two cannot disagree on how many there are."""
     return pack_sections(tree, section_budget(Path(path)), raw)
+
+
+#: one held section as the re-split needs it: ordinal, hash, anchor, reason
+_Held = tuple[int, str, int | None, str | None]
+
+
+def _held_sections(
+    conn: sqlite3.Connection, source: str
+) -> dict[str, tuple[_Held, ...]]:
+    """Each path's membership pins, read before the re-split erases them.
+
+    ``clear_source`` deletes every section and the 0030 trigger takes the pins
+    with them, so without this snapshot every full re-split released every
+    hand-placed chunk in the source — the silent revert pins exist to prevent,
+    through the maintenance door instead of the update one.
+    """
+    rows = conn.execute(
+        "SELECT s.path, s.ordinal, s.content_hash, p.anchor_id, p.reason "
+        "FROM pins p JOIN sections s ON s.id = p.target_id "
+        "WHERE p.kind = ? AND s.source = ? ORDER BY s.path, s.ordinal",
+        (pins.MEMBERSHIP, source),
+    ).fetchall()
+    held: dict[str, tuple[_Held, ...]] = {}
+    for row in rows:
+        entry: _Held = (
+            int(row["ordinal"]),
+            str(row["content_hash"]),
+            None if row["anchor_id"] is None else int(row["anchor_id"]),
+            row["reason"],
+        )
+        held[row["path"]] = (*held.get(row["path"], ()), entry)
+    return held
+
+
+def _repin(
+    conn: sqlite3.Connection,
+    held: tuple[_Held, ...],
+    stored: tuple[tuple[int, int, str], ...],
+) -> None:
+    """Re-pin a path's held sections onto their re-split successors.
+
+    Content hash first, ordinal second — the same pairing ``reconcile`` uses —
+    so an unchanged file re-pins exactly, and an edited one holds the section
+    in the slot the operator pinned.
+    """
+    consumed: set[int] = set()
+    for ordinal, digest, anchor, reason in held:
+        match = next(
+            (
+                sid
+                for sid, _, h in stored
+                if h == digest and sid not in consumed
+            ),
+            None,
+        )
+        if match is None:
+            match = next(
+                (
+                    sid
+                    for sid, o, _ in stored
+                    if o == ordinal and sid not in consumed
+                ),
+                None,
+            )
+        if match is None:
+            continue
+        consumed.add(match)
+        pins.pin(conn, pins.MEMBERSHIP, match, reason=reason, anchor=anchor)
 
 
 def _cut_by_path(

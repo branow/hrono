@@ -17,11 +17,10 @@ so ageing after it would only re-decide chunks the drain already placed.
 A leaf the drain emits here is NOT parented, and not briefed either: both need
 the brief pass this op deliberately does not run (``update`` makes no LLM calls
 at all). #114's attach places a leaf by its BRIEF vector, so there is nothing to
-place until something briefs it — the next ``settle`` or ``maintain`` briefs,
-attaches and re-briefs its parent in one pass, and the drain's own churn is what
-tends to trigger that settle. Until then the chunks are in a node and written to
-the export, but unreachable from ``root.md``: better than parked and invisible,
-worse than reachable, and bounded by the next brief pass. Briefing inside
+place until something briefs it — ``sync-tree``'s closing ``adopt`` stage does
+exactly that in the same run (brief, attach, re-brief the parent), so a leaf
+born here is reachable by the time the sync that made it returns. Only a bare
+``update`` job leaves it for the next sync, settle or maintain. Briefing inside
 ``update`` is the same question #122 asks about condensing, and belongs there.
 
 CONDENSES WHAT IT INGESTS (#122). ``condense`` used to have exactly one caller,
@@ -82,7 +81,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from hrono.cluster import incubator, placement
+from hrono.cluster import ClusterError, TooFewPoints, incubator, placement
 from hrono.cluster import store as cluster_store
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
@@ -93,7 +92,7 @@ from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import LLMError
-from hrono.registry.collections.trees import DEFAULT_TREE, scoped_sources
+from hrono.registry.collections.trees import DEFAULT_TREE, ingest_sources
 from hrono.summarize import store as condensations
 from hrono.summarize.condense import condense
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
@@ -109,21 +108,26 @@ def update(
     """Apply each source's change batch incrementally to the tree."""
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
-        sources = scoped_sources(conn, tree)
+        sources = ingest_sources(conn, tree)
         model_name = str(resolve_embedding_model(conn, job.scope)["name"])
 
     batch: int | None = None
+    deferred = 0
     for name in sources:
         sync(_stage(tree, "sync", {"type": "source", "name": name}), context)
-        batch = _update_source(
+        batch, held = _update_source(
             context, tree, name, model_name, encoder_for, batch
         )
+        deferred += held
+    rescued, batch = _rescue(
+        context, tree, sources, model_name, encoder_for, batch
+    )
     condensed = None
     if batch is not None or _talked_back(context):
         condensed = condense(
             _stage(tree, "condense", {}), context, client=client
         )
-    return _outcome(context, tree, batch, condensed)
+    return _outcome(context, tree, batch, condensed, rescued, deferred)
 
 
 def _talked_back(context: JobContext) -> bool:
@@ -147,6 +151,8 @@ def _outcome(
     tree: str,
     batch: int | None,
     condensed: Mapping[str, object] | None,
+    rescued: int,
+    deferred: int,
 ) -> Mapping[str, object]:
     """What this run changed, for the operator rather than the log (#133).
 
@@ -158,7 +164,13 @@ def _outcome(
     that redid talked-back condensations said ``changed: false`` and nothing
     else, and its calls showed only in the run's usage (#179, E015).
     """
-    spent = {} if condensed is None else {"condense": dict(condensed)}
+    spent: dict[str, object] = (
+        {} if condensed is None else {"condense": dict(condensed)}
+    )
+    if rescued:
+        spent["rescued"] = rescued
+    if deferred:
+        spent["drain_deferred"] = deferred
     if batch is None:
         return {"changed": False, "batch": None, **spent}
     with context.database.connect() as conn:
@@ -191,8 +203,8 @@ def _update_source(
     model_name: str,
     encoder_for: object | None,
     batch: int | None,
-) -> int | None:
-    """Apply one source's delta; return the run's batch, allocating it once.
+) -> tuple[int | None, int]:
+    """Apply one source's delta; return (run batch, drains deferred).
 
     ``batch`` is the number already allocated by an earlier source in THIS run,
     or None if nothing has changed yet — a source with no changes passes it
@@ -205,7 +217,7 @@ def _update_source(
     with context.database.write() as conn:
         changes = diff.diff(conn, name, reader, config, cache)
         if not changes:
-            return batch
+            return batch, 0
         centroids = cluster_store.node_centroids(conn, tree, model_name)
         deltas = reconcile.reconcile(
             conn,
@@ -224,10 +236,77 @@ def _update_source(
     with context.database.write() as conn:
         placement.place(conn, tree, deltas, centroids, model_name, current)
         incubator.age(conn, tree, model_name, current)
-    incubator.drain(context.database, tree, model_name)
+    deferred = _drain(context, tree, model_name)
     with context.database.write() as conn:
         cluster_store.backfill_coords(conn, tree, model_name)
-    return current
+    return current, deferred
+
+
+def _drain(context: JobContext, tree: str, model_name: str) -> int:
+    """Drain the pool, deferring (not failing) a degenerate one.
+
+    ``drain``'s mini-pipeline raises ``ClusterError`` on input UMAP cannot
+    reduce — tied or identical vectors (#198). That used to propagate out of
+    ``update`` AFTER placement and ageing had committed, failing the whole sync
+    at a stage that had already done its work, on every later run too, since
+    the pool stayed exactly as degenerate. A pool that cannot drain is a pool
+    that waits: ageing force-assigns anything past ``MAX_AGE``, so deferral is
+    bounded, and the outcome says it happened.
+    """
+    try:
+        incubator.drain(context.database, tree, model_name)
+    except TooFewPoints:
+        raise
+    except ClusterError:
+        return 1
+    return 0
+
+
+def _rescue(
+    context: JobContext,
+    tree: str,
+    sources: tuple[str, ...],
+    model_name: str,
+    encoder_for: object | None,
+    batch: int | None,
+) -> tuple[int, int | None]:
+    """Park any section of this tree's sources that is in NO node and NOT
+    pending; return (how many, the run batch).
+
+    The crash-shaped hole this closes: ``_update_source`` commits the reconcile
+    (old sections dropped, new ones inserted) in its first write block, then
+    embeds, then places. A failure between the first commit and placement — a
+    remote encoder down, a dims mismatch, the process dying — loses the deltas,
+    and the next run's diff sees stored == current and reports nothing to do.
+    Those sections were in no node and no pool, permanently, and only a full
+    maintain would have found them. Parking them re-enters them through the
+    pool's own ageing and drain, so every run heals whatever an earlier run
+    left homeless.
+    """
+    if not sources:
+        return 0, batch
+    marks = ",".join("?" * len(sources))
+    with context.database.write() as conn:
+        rows = conn.execute(
+            f"SELECT id FROM sections s WHERE s.source IN ({marks}) "  # noqa: S608
+            "AND s.source_type != 'node' AND NOT EXISTS ("
+            "SELECT 1 FROM node_members m JOIN nodes n ON n.id = m.node_id "
+            "WHERE m.section_id = s.id AND n.tree = ?) AND NOT EXISTS ("
+            "SELECT 1 FROM pending p WHERE p.section_id = s.id "
+            "AND p.tree = ?) ORDER BY s.id",
+            (*sources, tree, tree),
+        ).fetchall()
+        homeless = [int(row["id"]) for row in rows]
+        if not homeless:
+            return 0, batch
+        current = _next_batch(conn, tree) if batch is None else batch
+        for section_id in homeless:
+            incubator.park(conn, tree, section_id, current)
+    embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
+    with context.database.write() as conn:
+        incubator.age(conn, tree, model_name, current)
+    _drain(context, tree, model_name)
+    return len(homeless), current
 
 
 def _next_batch(conn: object, tree: str) -> int:

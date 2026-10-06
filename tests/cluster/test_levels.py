@@ -408,6 +408,27 @@ def _leaf(conn: object, topic: str, i: int) -> int:
     vector = [0.0] * DIMS
     vector[_TOPICS[topic]] = 1.0
     upsert_vector(conn, content_hash(body), MODEL, vector)  # type: ignore[arg-type]
+    # production-shaped: a leaf HOLDS members. The repair op now dissolves a
+    # leaf below two members (an emptied topic is a ghost), so a bare node
+    # here would vanish before the upper-level rule under test ever ran.
+    for n in range(2):
+        member = text + f" member {n}"
+        digest = content_hash(member.encode("utf-8"))
+        upsert_content(conn, digest, member.encode("utf-8"))  # type: ignore[arg-type]
+        cursor = conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO sections(source, source_type, instance, path, "
+            "version, uri, byte_start, byte_end, content_hash, ordinal, "
+            "created_at) VALUES ('src', 'git', 'x', ?, 'v', ?, 0, 1, ?, 0, "
+            "'t')",
+            (f"{topic}/{i}/{n}.txt", f"git://x/{topic}/{i}/{n}.txt@v", digest),
+        )
+        cluster_store.add_member(
+            conn,  # type: ignore[arg-type]
+            node_id,
+            int(cursor.lastrowid),
+            forced=False,
+            similarity=None,
+        )
     return node_id
 
 

@@ -137,3 +137,124 @@ def test_a_pin_records_the_node_it_anchors_to(
 
     with database.connect() as conn:
         assert pins.anchors(conn, pins.MEMBERSHIP) == {misfit: first}
+
+
+def test_placement_holds_a_pinned_delta_at_its_anchor(
+    db: tuple[Database, int, int, int],
+) -> None:
+    # the ingest door: reconcile carries a changed section's pin into its
+    # delta, and placement must put the chunk at the anchor instead of
+    # re-scoring it — the sticky rule and the placement rule are the machine's
+    # judgement, and a pin exempts the chunk from both (#154).
+    from hrono.cluster.placement import SectionDelta, place
+
+    database, first, second, misfit = db
+    with database.write() as conn:
+        conn.execute("DELETE FROM node_members WHERE section_id = ?", (misfit,))
+        centroids = cluster_store.node_centroids(conn, TREE, MODEL)
+        place(
+            conn,
+            TREE,
+            [
+                SectionDelta(
+                    "changed",
+                    _hash_of(conn, misfit),
+                    "b.py",
+                    section_id=misfit,
+                    pinned_anchor=first,
+                )
+            ],
+            centroids,
+            MODEL,
+            batch=1,
+        )
+
+    # scored on similarity it would join `second`; the pin holds it in `first`
+    assert _node_of(database, misfit) == first
+
+
+def test_placement_releases_a_pin_whose_anchor_is_gone(
+    db: tuple[Database, int, int, int],
+) -> None:
+    # a dead anchor has nothing to hold the chunk IN: parking it somewhere
+    # nobody chose would hide it, so the pin is released and the normal rule
+    # runs.
+    from hrono.cluster.placement import SectionDelta, place
+
+    database, first, second, misfit = db
+    with database.write() as conn:
+        pins.pin(conn, pins.MEMBERSHIP, misfit, anchor=999_999)
+        conn.execute("DELETE FROM node_members WHERE section_id = ?", (misfit,))
+        centroids = cluster_store.node_centroids(conn, TREE, MODEL)
+        place(
+            conn,
+            TREE,
+            [
+                SectionDelta(
+                    "changed",
+                    _hash_of(conn, misfit),
+                    "b.py",
+                    section_id=misfit,
+                    pinned_anchor=999_999,
+                )
+            ],
+            centroids,
+            MODEL,
+            batch=1,
+        )
+
+    assert _node_of(database, misfit) == second  # the normal rule ran
+    with database.connect() as conn:
+        assert not pins.is_pinned(conn, pins.MEMBERSHIP, misfit)
+
+
+def test_the_dissolve_sweep_spares_a_node_with_a_pinned_member(
+    db: tuple[Database, int, int, int],
+) -> None:
+    # deleting the other member leaves `first` below two members, which the
+    # sweep would dissolve — re-placing the pinned survivor by machine
+    # judgement. The pin makes the one-member topic the operator's call.
+    from hrono.cluster.placement import SectionDelta, place
+
+    database, first, _second, misfit = db
+    with database.write() as conn:
+        pins.pin(conn, pins.MEMBERSHIP, misfit, anchor=first)
+        stay = conn.execute(
+            "SELECT section_id FROM node_members WHERE node_id = ? "
+            "AND section_id != ?",
+            (first, misfit),
+        ).fetchone()
+        conn.execute(
+            "DELETE FROM node_members WHERE section_id = ?",
+            (int(stay["section_id"]),),
+        )
+        centroids = cluster_store.node_centroids(conn, TREE, MODEL)
+        place(
+            conn,
+            TREE,
+            [
+                SectionDelta(
+                    "deleted",
+                    "gone",
+                    "a.py",
+                    prior_node_id=first,
+                )
+            ],
+            centroids,
+            MODEL,
+            batch=1,
+        )
+
+    with database.connect() as conn:
+        alive = conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (first,)
+        ).fetchone()
+    assert alive is not None  # the sweep left the pinned topic standing
+    assert _node_of(database, misfit) == first
+
+
+def _hash_of(conn: object, section_id: int) -> str:
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT content_hash FROM sections WHERE id = ?", (section_id,)
+    ).fetchone()
+    return str(row["content_hash"])

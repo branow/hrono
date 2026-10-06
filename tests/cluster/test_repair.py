@@ -347,6 +347,7 @@ def test_repair_reports_what_it_did(db: Database) -> None:
         "freed",
         "reparented",
         "pinned",
+        "removed",
     }
     assert outcome["dissolved"] == 1  # the below-two cluster
     assert lonely not in [int(r["id"]) for r in _nodes(db)]
@@ -429,3 +430,143 @@ def test_a_split_leaves_both_halves_WHERE_THE_TOPIC_WAS(db: Database) -> None:
             assert cluster_store.parent_of(conn, child) == above
         # and the retired topic is not still hanging there beside them
         assert cluster_store.parent_of(conn, big) is None
+
+
+def test_an_emptied_leaf_is_dissolved_even_with_no_centroid(
+    db: Database,
+) -> None:
+    """A leaf whose members are gone must not keep serving its brief.
+
+    The op used to iterate ``node_centroids``, which skips a node with no
+    vectors — so a leaf emptied by a cascade or a migration was invisible to
+    the one repair (dissolve) it needed, and its brief and node:// passages
+    kept answering recall for ever.
+    """
+    with db.connect() as conn, conn:
+        a = add_section(conn, b"alpha body", unit(0))
+        b = add_section(conn, b"beta body", unit(0))
+        node_of(conn, [a, b])  # a healthy neighbour the sweep must keep
+        ghost = cluster_store.add_leaf_node(conn, TREE, [])
+
+    repair.repair(_job(), job_context(db, Path(".")))
+
+    with db.connect() as conn:
+        gone = conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (ghost,)
+        ).fetchone()
+        kept = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE tree = ?", (TREE,)
+        ).fetchone()[0]
+    assert gone is None
+    assert kept == 1
+
+
+def test_a_childless_upper_node_is_removed(db: Database) -> None:
+    # a parent that lost every child kept its stale brief: `brief_upper`
+    # skips a node with no child briefs, so nothing ever rewrote OR removed
+    # it, and export and recall kept serving text about children that no
+    # longer exist.
+    with db.connect() as conn, conn:
+        a = add_section(conn, b"alpha body", unit(0))
+        b = add_section(conn, b"beta body", unit(0))
+        node_of(conn, [a, b])
+        hollow = int(
+            conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES (?, 1, 0, 't')",
+                (TREE,),
+            ).lastrowid
+        )
+
+    outcome = repair.repair(_job(), job_context(db, Path(".")))
+
+    with db.connect() as conn:
+        gone = conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (hollow,)
+        ).fetchone()
+    assert gone is None
+    assert outcome["removed"] == 1
+
+
+def test_a_dissolve_spares_a_leaf_holding_a_pinned_member(
+    db: Database,
+) -> None:
+    # a one-member topic a human pinned a chunk into is the operator's
+    # decision, and dissolving it re-places the chunk by machine judgement —
+    # the revert pins exist to prevent (#154).
+    with db.connect() as conn, conn:
+        a = add_section(conn, b"alpha body", unit(0))
+        b = add_section(conn, b"beta body", unit(0))
+        node_of(conn, [a, b])
+        held = add_section(conn, b"hand placed", unit(1))
+        topic = node_of(conn, [held])
+        pins.pin(conn, pins.MEMBERSHIP, held, reason="hand", anchor=topic)
+
+    repair.repair(_job(), job_context(db, Path(".")))
+
+    with db.connect() as conn:
+        kept = conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (topic,)
+        ).fetchone()
+    assert kept is not None
+
+
+def test_split_deals_a_vectorless_member_into_the_biggest_child(
+    db: Database,
+) -> None:
+    # a member with no vector cannot be judged by the cores, but dropping it
+    # broke the #086 invariant: it ended up in no cluster and not pending.
+    with db.connect() as conn, conn:
+        left = [
+            add_section(conn, f"left {i}".encode(), unit(0)) for i in range(4)
+        ]
+        right = [
+            add_section(conn, f"right {i}".encode(), unit(1)) for i in range(2)
+        ]
+        blind = insert_section(
+            conn,
+            source="repo",
+            address=Address("git", "ex/repo", PATH, "v1"),
+            start=0,
+            end=5,
+            content_hash=_store_unvectored(conn, b"no vector here"),
+            ordinal=9,
+        )
+        node = node_of(conn, [*left, *right, blind])
+
+    with db.connect() as conn, conn:
+        halves = repair.split(
+            conn,
+            TREE,
+            node,
+            MODEL,
+            core_labeler=lambda vecs: [
+                0 if v[0] > 0 else 1 for v in list(vecs)
+            ],
+            over=5,
+        )
+
+    assert len(halves) == 2
+    with db.connect() as conn:
+        home = conn.execute(
+            "SELECT node_id, forced FROM node_members WHERE section_id = ?",
+            (blind,),
+        ).fetchone()
+        sizes = {
+            h: int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM node_members WHERE node_id = ?",
+                    (h,),
+                ).fetchone()[0]
+            )
+            for h in halves
+        }
+    assert home is not None  # the chunk is still in exactly one cluster
+    assert int(home["node_id"]) == max(sizes, key=lambda h: sizes[h])
+    assert int(home["forced"]) == 1  # flagged for the monitor to revisit
+
+
+def _store_unvectored(conn: object, body: bytes) -> str:
+    digest = content_hash(body)
+    upsert_content(conn, digest, body)  # type: ignore[arg-type]
+    return digest

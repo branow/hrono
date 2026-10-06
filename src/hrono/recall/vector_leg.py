@@ -1,4 +1,4 @@
-"""Recall's vector leg (T26.1): path-blended similarity, z-scored, z >= 3.5.
+"""Recall's vector leg (T26.1): path-blended similarity, z-scored and floored.
 
 Scores every embedded passage (source #069 and brief #071) by the a=0.5
 path-blended similarity used for clustering — the query is content-embedded and
@@ -70,11 +70,12 @@ nothing to fire on and changed not one result on any suite.
 The statistic is unchanged on purpose. An absolute cosine floor reads better on
 one corpus but is model-specific and would need recalibrating whenever the
 embedding model changes; the z-score is scale-free and portable, so ``Z_FLOOR``
-stays baked at 3.5 with no per-model constants.
+stays a baked constant with no per-model tuning.
 """
 
 from __future__ import annotations
 
+import json
 import math
 import sqlite3
 from array import array
@@ -146,22 +147,26 @@ def _stack(
 
     A passage missing either vector is skipped, exactly as scoring it one at a
     time did: half a blend is not a smaller score, it is a different question.
+
+    Scope is applied in the passage SELECT and the vectors are read for the
+    surviving hashes only: this used to read the WHOLE embeddings table per
+    query — every orphan row, every other tree's vectors — so query cost grew
+    with the database, not the tree asked.
     """
-    vectors = _vectors(conn, model_name)
+    rows = _passages(conn, scope)
+    needed = {str(row["content_hash"]) for row in rows} | {
+        content_hash(path_body(str(row["path"]))) for row in rows
+    }
+    vectors = _vectors(conn, model_name, needed)
     ids: list[int] = []
     bodies: list[numpy.ndarray] = []
     paths: list[numpy.ndarray] = []
-    for row in conn.execute(
-        "SELECT id, content_hash, path FROM passages ORDER BY id"
-    ).fetchall():
-        passage_id = int(row["id"])
-        if scope is not None and passage_id not in scope:
-            continue
+    for row in rows:
         body = vectors.get(str(row["content_hash"]))
         path = vectors.get(content_hash(path_body(str(row["path"]))))
         if body is None or path is None:
             continue
-        ids.append(passage_id)
+        ids.append(int(row["id"]))
         bodies.append(body)
         paths.append(path)
     if not ids:
@@ -174,14 +179,29 @@ def _stack(
     )
 
 
+def _passages(
+    conn: sqlite3.Connection, scope: frozenset[int] | None
+) -> list[sqlite3.Row]:
+    if scope is None:
+        return conn.execute(
+            "SELECT id, content_hash, path FROM passages ORDER BY id"
+        ).fetchall()
+    return conn.execute(
+        "SELECT id, content_hash, path FROM passages "
+        "WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id",
+        (json.dumps(sorted(scope)),),
+    ).fetchall()
+
+
 def _vectors(
-    conn: sqlite3.Connection, model_name: str
+    conn: sqlite3.Connection, model_name: str, needed: set[str]
 ) -> dict[str, numpy.ndarray]:
-    """Every stored vector for this model, by content hash."""
+    """The needed hashes' stored vectors for this model, by content hash."""
     out: dict[str, numpy.ndarray] = {}
     for row in conn.execute(
-        "SELECT content_hash, vector FROM embeddings WHERE model_name = ?",
-        (model_name,),
+        "SELECT content_hash, vector FROM embeddings WHERE model_name = ? "
+        "AND content_hash IN (SELECT value FROM json_each(?))",
+        (model_name, json.dumps(sorted(needed))),
     ).fetchall():
         values = array("f")
         values.frombytes(row["vector"])
@@ -251,20 +271,6 @@ def qualify(
     return tuple(sorted(qualified, key=lambda hit: hit[1], reverse=True))
 
 
-def search(
-    conn: sqlite3.Connection,
-    query_vec: Sequence[float],
-    model_name: str,
-) -> tuple[tuple[int, float], ...]:
-    """Return (passage_id, z) for passages clearing z >= 3.5, best first."""
-    qualified = [
-        (passage_id, z)
-        for passage_id, z in scores(conn, query_vec, model_name).items()
-        if z >= Z_FLOOR
-    ]
-    return tuple(sorted(qualified, key=lambda hit: hit[1], reverse=True))
-
-
 def _spread(raw: Sequence[float], centre: float) -> float:
     """The MAD as an sd-equivalent, falling back to the sd when it collapses.
 
@@ -287,7 +293,3 @@ def _median(values: Sequence[float]) -> float:
     if len(ordered) % 2:
         return ordered[middle]
     return (ordered[middle - 1] + ordered[middle]) / 2
-
-
-def _dot(a: Sequence[float], b: Sequence[float]) -> float:
-    return sum(x * y for x, y in zip(a, b, strict=True))

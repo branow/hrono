@@ -33,13 +33,14 @@ from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages
-from hrono.registry.collections.trees import DEFAULT_TREE, scoped_sources
+from hrono.registry.collections.trees import DEFAULT_TREE, ingest_sources
 from hrono.registry.completeness import BUILD_ROLES
 from hrono.summarize.brief import brief
 from hrono.summarize.build_tree import build_tree
 from hrono.summarize.condense import condense
 from hrono.summarize.resolve import resolve_text_model
 from hrono.tree import changes
+from hrono.tree.settle import anchor_members, restore_pinned
 
 # The roles this chain will ask for, in the order it asks for them — the same
 # tuple Settings checks before anyone starts a build (#210).
@@ -81,7 +82,7 @@ def maintain(
     """
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
-        sources = scoped_sources(conn, tree)
+        sources = ingest_sources(conn, tree)
         _require_models(conn)
         before = changes.snapshot(conn, tree)
 
@@ -100,6 +101,8 @@ def maintain(
             ),
             over=name,
         )
+    with context.database.connect() as conn:
+        anchored = anchor_members(conn, tree)
     run.run(
         "embed",
         lambda: embed(
@@ -114,6 +117,19 @@ def maintain(
         "cluster",
         lambda: cluster(_stage(tree, "cluster", {}), context, build=build),
     )
+
+    # the full rebuild re-assigned every membership by machine judgement, so a
+    # hand-placed chunk goes back where its pin holds it BEFORE brief writes
+    # summaries over membership — the same move `settle` makes, for the same
+    # reason. WHERE each pin points is read after the split (which re-pinned
+    # the re-minted section ids) and before the cluster (which erases the
+    # membership the anchor's company is recovered from).
+    def _restore() -> Mapping[str, int]:
+        with context.database.write() as conn:
+            held, released = restore_pinned(conn, tree, anchored)
+        return {"held": held, "released": released}
+
+    run.run("restore-pins", _restore)
     run.run(
         "brief",
         lambda: brief(_stage(tree, "brief", {}), context, client=client),

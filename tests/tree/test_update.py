@@ -1157,3 +1157,113 @@ def test_update_ingests_only_the_sources_its_tree_declares(
             ).fetchall()
         }
     assert ingested == {"repo"}  # `second` was never this tree's to ingest
+
+
+def _member_of(db: Database, section_id: int) -> int | None:
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT node_id FROM node_members WHERE section_id = ?",
+            (section_id,),
+        ).fetchone()
+    return None if row is None else int(row["node_id"])
+
+
+def test_a_membership_pin_survives_an_edit_to_the_pinned_file(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    """#154's promise through the ingest door.
+
+    Reconcile drops a changed file's sections and the 0030 trigger deletes
+    their pins with them, so until this fix ANY edit to a pinned file —
+    including edits that left the pinned section's bytes untouched — silently
+    released the operator's hold and let placement move the chunk.
+    """
+    from hrono import pins
+
+    db, origin = built
+    section = _section_ids(db, "f0.txt")[0]
+    anchor = _member_of(db, section)
+    assert anchor is not None
+    with db.connect() as conn, conn:
+        pins.pin(conn, pins.MEMBERSHIP, section, reason="hand", anchor=anchor)
+
+    edit(origin, "f0.txt", "a completely different module zero now\n")
+    run_update(db, tmp_path)
+
+    successor = _section_ids(db, "f0.txt")[0]
+    with db.connect() as conn:
+        held = pins.held_for(conn, pins.MEMBERSHIP, [successor])
+    assert held == {successor: (anchor, "hand")}
+    assert _member_of(db, successor) == anchor  # held in place, not re-scored
+
+
+def test_a_membership_pin_survives_a_full_resplit(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the maintenance door of the same revert: `split` clears the whole
+    # source and re-inserts every section under a new id, and the 0030
+    # trigger wiped every membership pin with the old rows.
+    from hrono import pins
+    from hrono.ingest.split_op import split_source
+
+    db, _origin = built
+    section = _section_ids(db, "f0.txt")[0]
+    anchor = _member_of(db, section)
+    with db.connect() as conn, conn:
+        pins.pin(conn, pins.MEMBERSHIP, section, reason="hand", anchor=anchor)
+
+    split_source(
+        Job(
+            id="sp",
+            parent_id=None,
+            tree="default",
+            op="split",
+            scope={"name": "repo"},
+            status="running",
+            error=None,
+            created_at="t",
+            updated_at="t",
+        ),
+        job_context(db, tmp_path),
+    )
+
+    successor = _section_ids(db, "f0.txt")[0]
+    assert successor != section  # the re-split really re-minted the id
+    with db.connect() as conn:
+        held = pins.held_for(conn, pins.MEMBERSHIP, [successor])
+    assert held == {successor: (anchor, "hand")}
+
+
+def test_update_rescues_a_section_an_earlier_run_left_homeless(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    """The crash-shaped hole (#085's two-commit window).
+
+    An update that died between its reconcile commit and its placement left
+    sections in no node and no pool, and the next diff saw stored == current —
+    nothing ever placed them again short of a full maintain.
+    """
+    db, _origin = built
+    section = _section_ids(db, "f2.txt")[0]
+    with db.connect() as conn, conn:
+        conn.execute(
+            "DELETE FROM node_members WHERE section_id = ?", (section,)
+        )
+        conn.execute("DELETE FROM pending WHERE section_id = ?", (section,))
+
+    outcome = update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=fake_encoder,
+        client=FakeCompletion(),
+    )
+
+    assert outcome.get("rescued") == 1
+    with db.connect() as conn:
+        placed = conn.execute(
+            "SELECT 1 FROM node_members WHERE section_id = ?", (section,)
+        ).fetchone()
+        parked = conn.execute(
+            "SELECT 1 FROM pending WHERE section_id = ?", (section,)
+        ).fetchone()
+    assert placed is not None or parked is not None  # never homeless again

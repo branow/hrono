@@ -6,9 +6,9 @@ which is hrono's whole differentiator, and until now was unreachable: every
 stage below was implemented and tested while the only thing an operator could
 trigger was a full cold rebuild.
 
-    update -> propagate -> brief (stale leaves) -> brief-upper (stale uppers)
-           -> monitor -> repair -> [brief -> attach -> brief-upper, if repair
-                                    changed anything]
+    update -> propagate -> brief (stale leaves) -> brief-upper (every upper
+           level, stale nodes only) -> monitor -> repair -> adopt (brief ->
+           attach orphans at every level -> brief-upper again), always
 
 PROPAGATE COMES BEFORE BRIEF, and the note that scoped this op had it the other
 way round. ``propagate`` judges a leaf's NEW content against its STORED brief —
@@ -47,6 +47,7 @@ from hrono.jobs.stages import Stages
 from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize.brief import brief
 from hrono.summarize.brief_upper import brief_upper
+from hrono.summarize.build_tree import build_tree
 from hrono.summarize.propagate import propagate
 from hrono.tree import changes
 from hrono.tree.settle import should_settle
@@ -87,9 +88,7 @@ def sync(
     )
     run.run(
         "brief-upper",
-        lambda: brief_upper(
-            _stage(tree, "brief-upper"), context, client=client
-        ),
+        lambda: _brief_upper_levels(tree, context, client=client),
     )
     measured = run.run(
         "monitor", lambda: monitor(_stage(tree, "monitor"), context)
@@ -101,10 +100,8 @@ def sync(
         ),
     )
     adopted = run.run(
-        "after-repair",
-        lambda: _after_repair(
-            tree, context, repaired, encoder_for=encoder_for, client=client
-        ),
+        "adopt",
+        lambda: _adopt(tree, context, encoder_for=encoder_for, client=client),
     )
     with context.database.connect() as conn:
         settle_due = should_settle(conn, tree)
@@ -124,40 +121,93 @@ def sync(
     )
 
 
-def _after_repair(
+def _adopt(
     tree: str,
     context: JobContext,
-    repaired: Mapping[str, object],
     *,
     encoder_for: object | None,
     client: object | None,
 ) -> int:
-    """Finish what ``repair`` started, in the same run.
+    """Brief, attach and re-brief whatever this run left loose. ALWAYS.
 
     **This is why a tree could come out of a sync with two roots (#200).**
-    `repair` is the last stage, and a split RETIRES a topic and makes two new
-    leaves in its place. New leaves have no brief, and the routine that parents
-    a briefless node cannot see it — so the halves sat at level 0 under
-    nothing, the map drew them as two more tops beside the real root, and the
-    root's own brief silently stopped covering them. The repair itself was
-    correct; the chain simply ended one stage too early.
+    A `repair` split retires a topic and makes two briefless leaves nothing
+    parents; `update`'s drain emits leaves the same way. Both sat at level 0
+    under nothing — on the map, two more tops beside the real root, and a root
+    brief that silently stopped covering them.
 
-    So a repair that CHANGED something is followed by the three stages its
-    change requires, in the order they require: brief the new leaves, attach
-    them to the level above, then rewrite the briefs above that now hold a
-    different set of children. A repair that changed nothing runs none of them
-    and costs nothing — the common case on a steady tree.
+    This used to run only "when repair changed anything", which was wrong
+    twice over: the gate read ``repaired["pinned"]``, a count of pins HELD
+    rather than work done, so any database with one pin ran it every sync —
+    and a drain-emitted leaf on a run where repair really did nothing was
+    never adopted at all, staying unreachable until the next settle or
+    maintain. So it runs unconditionally: `brief` and `brief_upper` skip
+    everything whose signature is fresh, and `attach_orphans` returns before
+    its embed when a level has no orphans, so a steady tree pays three reads.
     """
-    if not any(
-        isinstance(count, int) and count > 0 for count in repaired.values()
-    ):
-        return 0
     brief(_stage(tree, "brief"), context, client=client)
-    attached = attach_orphans(
-        _stage(tree, "cluster-briefs"), context, encoder_for=encoder_for
-    )
-    brief_upper(_stage(tree, "brief-upper"), context, client=client)
-    return len(attached)
+    attached = 0
+    for level in _levels(context, tree, floor=0):
+        attached += len(
+            attach_orphans(
+                _stage(tree, "cluster-briefs"),
+                context,
+                level=level,
+                encoder_for=encoder_for,
+            )
+        )
+    _brief_upper_levels(tree, context, client=client)
+    if _forest(context, tree):
+        # a drain on a one-topic tree leaves two tops and no level above to
+        # attach to; only `build_tree` may mint the root that collects them,
+        # and the export refuses a forest until something does.
+        build_tree(
+            _stage(tree, "build-tree"),
+            context,
+            client=client,
+            encoder_for=encoder_for,
+        )
+    return attached
+
+
+def _forest(context: JobContext, tree: str) -> bool:
+    """More than one node at the tree's top level: no single root."""
+    with context.database.connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM nodes WHERE tree = ? AND level = "
+            "(SELECT MAX(level) FROM nodes WHERE tree = ?)",
+            (tree, tree),
+        ).fetchone()
+    return row is not None and int(row["n"]) > 1
+
+
+def _brief_upper_levels(
+    tree: str, context: JobContext, *, client: object | None
+) -> None:
+    """Run ``brief_upper`` at EVERY upper level, lowest first.
+
+    The op briefs one level (scope ``level``, default 1), and the chain used to
+    call it bare — so a stale brief at level 2 or above, including the root's,
+    was marked by ``propagate`` and then never rewritten by any sync; only a
+    full ``maintain`` passed explicit levels. Lowest first, because a level's
+    brief is written over its CHILDREN's briefs, so level N must be current
+    before level N+1 reads it.
+    """
+    for level in _levels(context, tree, floor=1):
+        brief_upper(
+            _stage(tree, "brief-upper", level=level), context, client=client
+        )
+
+
+def _levels(context: JobContext, tree: str, *, floor: int) -> tuple[int, ...]:
+    """The tree's distinct levels at or above ``floor``, ascending."""
+    with context.database.connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT level FROM nodes WHERE tree = ? AND level >= ? "
+            "ORDER BY level",
+            (tree, floor),
+        ).fetchall()
+    return tuple(int(row["level"]) for row in rows)
 
 
 def _outcome(
@@ -195,13 +245,13 @@ def _outcome(
     }
 
 
-def _stage(tree: str, op: str) -> Job:
+def _stage(tree: str, op: str, *, level: int | None = None) -> Job:
     return Job(
         id=f"sync-{op}",
         parent_id=None,
         tree=tree,
         op=op,
-        scope={},
+        scope={} if level is None else {"level": level},
         status="running",
         error=None,
         created_at="t",

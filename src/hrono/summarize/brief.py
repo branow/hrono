@@ -18,8 +18,9 @@ assistant refusal — is retried ONCE and then stored WITH a flag (#103): the
 faithfulness gate cannot catch it, because a non-answer invents nothing, and
 dropping the node would cost the map a whole topic.
 
-A node that already has a brief is skipped, so a re-run over unchanged nodes
-makes zero LLM calls (membership-change invalidation is #064, out of scope).
+A node whose brief is FRESH is skipped — ``stale_or_missing`` compares the
+member signature, prompt hash and model fingerprint (#064) — so a re-run over
+unchanged nodes makes zero LLM calls.
 Lock discipline mirrors #058/#035: gather the nodes and their condensations
 UNDER the #008 lock, release it, make each LLM call OUTSIDE the lock, re-acquire
 only to persist that node — so a failing node fails its leaf cleanly and an

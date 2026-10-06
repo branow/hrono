@@ -28,6 +28,7 @@ import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from hrono import pins
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.blend import register_path_bodies
@@ -47,6 +48,7 @@ class _Old:
     content_hash: str
     member: cluster_store.Membership | None
     batch: int | None  # the batch it was parked at, if it was pending
+    pin: tuple[int | None, str | None] | None  # (anchor, reason) if held
 
 
 def reconcile(
@@ -123,7 +125,39 @@ def _apply(
     stored = store_unit(
         conn, fetch(change.path), source, source_type, instance, version
     )
-    return _match(kind, change.path, old, stored)
+    deltas = _match(kind, change.path, old, stored)
+    _carry_pins(conn, old, deltas)
+    return deltas
+
+
+def _carry_pins(
+    conn: sqlite3.Connection,
+    old: Sequence[_Old],
+    deltas: Sequence[SectionDelta],
+) -> None:
+    """Re-pin each held section onto the section that replaced it (#154).
+
+    The pins trigger (0030) deleted the old row's pin with the row, so the
+    operator's hold exists only in ``old`` now. A delta that matched a pinned
+    predecessor carries its anchor; this writes the hold back under the new id
+    — same anchor, same reason — so an edit to a pinned file does not release
+    what a human placed.
+    """
+    reasons = {
+        entry.pin[0]: entry.pin[1]
+        for entry in old
+        if entry.pin is not None and entry.pin[0] is not None
+    }
+    for delta in deltas:
+        if delta.section_id is None or delta.pinned_anchor is None:
+            continue
+        pins.pin(
+            conn,
+            pins.MEMBERSHIP,
+            delta.section_id,
+            reason=reasons.get(delta.pinned_anchor),
+            anchor=delta.pinned_anchor,
+        )
 
 
 def _match(
@@ -150,6 +184,7 @@ def _match(
         if prior is None:
             prior = _consume(old, consumed, lambda e, o=ordinal: e.ordinal == o)
         member = prior.member if prior is not None else None
+        pin = prior.pin if prior is not None else None
         deltas.append(
             SectionDelta(
                 kind if same_content else "changed",
@@ -160,6 +195,7 @@ def _match(
                 prior_similarity=None if member is None else member.similarity,
                 prior_forced=member is not None and member.forced,
                 prior_batch=prior.batch if prior is not None else None,
+                pinned_anchor=None if pin is None else pin[0],
             )
         )
     for index, entry in enumerate(old):
@@ -199,6 +235,7 @@ def _old_sections(
         "WHERE source = ? AND path = ? ORDER BY ordinal, id",
         (source, path),
     ).fetchall()
+    held = pins.held_for(conn, pins.MEMBERSHIP, (int(r["id"]) for r in rows))
     return [
         _Old(
             section_id=int(r["id"]),
@@ -206,6 +243,7 @@ def _old_sections(
             content_hash=r["content_hash"],
             member=cluster_store.membership(conn, tree, int(r["id"])),
             batch=incubator.parked_batch(conn, tree, int(r["id"])),
+            pin=held.get(int(r["id"])),
         )
         for r in rows
     ]

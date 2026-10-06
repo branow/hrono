@@ -74,7 +74,7 @@ def settle(
     # WHERE a pinned chunk belongs has to be read before the rebuild, because
     # the rebuild is what erases it.
     with context.database.connect() as conn:
-        anchored = _anchor_members(conn, tree)
+        anchored = anchor_members(conn, tree)
 
     cluster(_stage(tree, "cluster"), context, build=build)
     # the re-cluster rewrote every membership from scratch, so a hand-placed
@@ -82,7 +82,7 @@ def settle(
     # reads the new map: `brief` below writes summaries from membership, and a
     # brief written over the wrong members is the revert, one step removed.
     with context.database.write() as conn:
-        held, released = _restore_pinned(conn, tree, anchored)
+        held, released = restore_pinned(conn, tree, anchored)
     embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
     with context.database.connect() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
@@ -105,18 +105,29 @@ def settle(
     return {"settled": True, "held": held, "released": released}
 
 
-def _anchor_members(
+def anchor_members(
     conn: sqlite3.Connection, tree: str
 ) -> dict[int, tuple[int, tuple[int, ...]]]:
-    """For each pinned section: its anchor, and that anchor's OTHER members.
+    """Each section pinned IN THIS TREE: its anchor plus the anchor's company.
 
     The other members are what makes the anchor findable afterwards. A node is
     identified by the content of its members (#068), and a hand-move changes
     that content — so the very act the pin protects is what can retire the node
     the pin names. Its company survives the rebuild even when its id does not.
+
+    Pins are global rows (0030 has no tree column), so the anchor's TREE is the
+    scope test: a pin anchored in another tree is another tree's constraint,
+    and reading it here used to make this tree's settle release it — the anchor
+    was never in this tree's ``live`` set, so ``restore_pinned`` unpinned what
+    a human placed somewhere this run had no business touching.
     """
     out: dict[int, tuple[int, tuple[int, ...]]] = {}
     for section_id, anchor in pins.anchors(conn, pins.MEMBERSHIP).items():
+        owner = conn.execute(
+            "SELECT tree FROM nodes WHERE id = ?", (anchor,)
+        ).fetchone()
+        if owner is not None and str(owner["tree"]) != tree:
+            continue
         company = tuple(
             int(row["section_id"])
             for row in conn.execute(
@@ -130,7 +141,7 @@ def _anchor_members(
     return out
 
 
-def _restore_pinned(
+def restore_pinned(
     conn: sqlite3.Connection,
     tree: str,
     anchored: dict[int, tuple[int, tuple[int, ...]]],
@@ -142,6 +153,10 @@ def _restore_pinned(
     pointed at, under a new id. A pin is RELEASED only when the topic is gone
     entirely: guessing at that point would park the chunk somewhere nobody
     chose, invisibly.
+
+    Every membership read or write is scoped to THIS tree's nodes: the tables
+    are global, and an unscoped delete here removed the section's membership
+    in every other tree that held it.
     """
     held = released = 0
     live = {
@@ -151,18 +166,17 @@ def _restore_pinned(
         ).fetchall()
     }
     for section_id, (anchor, company) in anchored.items():
-        target = anchor if anchor in live else _successor(conn, company)
+        target = anchor if anchor in live else _successor(conn, tree, company)
         if target is None:
             pins.unpin(conn, pins.MEMBERSHIP, section_id)
             released += 1
             continue
-        current = conn.execute(
-            "SELECT node_id FROM node_members WHERE section_id = ?",
-            (section_id,),
-        ).fetchone()
-        if current is None or int(current["node_id"]) != target:
+        current = _member_node(conn, tree, section_id)
+        if current != target:
             conn.execute(
-                "DELETE FROM node_members WHERE section_id = ?", (section_id,)
+                "DELETE FROM node_members WHERE section_id = ? AND node_id IN "
+                "(SELECT id FROM nodes WHERE tree = ?)",
+                (section_id, tree),
             )
             store.add_member(
                 conn, target, section_id, forced=False, similarity=None
@@ -173,17 +187,26 @@ def _restore_pinned(
     return held, released
 
 
-def _successor(conn: sqlite3.Connection, company: Sequence[int]) -> int | None:
+def _member_node(
+    conn: sqlite3.Connection, tree: str, section_id: int
+) -> int | None:
+    row = conn.execute(
+        "SELECT m.node_id FROM node_members m JOIN nodes n "
+        "ON n.id = m.node_id WHERE m.section_id = ? AND n.tree = ?",
+        (section_id, tree),
+    ).fetchone()
+    return None if row is None else int(row["node_id"])
+
+
+def _successor(
+    conn: sqlite3.Connection, tree: str, company: Sequence[int]
+) -> int | None:
     """The node that inherited most of a retired anchor's other members."""
     counts: dict[int, int] = {}
     for section_id in company:
-        row = conn.execute(
-            "SELECT node_id FROM node_members WHERE section_id = ?",
-            (section_id,),
-        ).fetchone()
-        if row is None:
+        node_id = _member_node(conn, tree, section_id)
+        if node_id is None:
             continue
-        node_id = int(row["node_id"])
         counts[node_id] = counts.get(node_id, 0) + 1
     if not counts:
         return None

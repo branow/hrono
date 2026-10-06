@@ -324,3 +324,40 @@ def test_each_leg_scores_over_its_own_tree_s_population(
     assert any(scoped_vec[pid] != whole_vec[pid] for pid in shared)
     shared_kw = set(scoped_kw) & set(whole_kw)
     assert any(scoped_kw[pid] != whole_kw[pid] for pid in shared_kw)
+
+
+def test_an_unscoped_tree_still_answers_only_from_its_own_briefs(
+    two_trees: tuple[Database, Answers],
+) -> None:
+    # "unscoped" widens a tree's CONTENT to every source; it must not hand it
+    # every other tree's summaries too. A brief is tree-owned data wherever it
+    # lives.
+    database, _answers = two_trees
+    with database.connect() as conn, conn:
+        conn.execute(
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES ('beta', 0, 0, 't')"
+        )
+        node = int(conn.execute("SELECT MAX(id) FROM nodes").fetchone()[0])
+        add_passage(
+            conn,
+            b"a summary of the authentication topic\n",
+            unit(0),
+            source=f"node-{node}",
+            path=f"node-{node}",
+            source_type="node",
+        )
+
+    with database.connect() as conn:
+        from hrono.recall.scope import passages_of
+
+        undeclared = passages_of(conn, "nobody-declared-me")
+        content = {
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM passages WHERE source_type != 'node'"
+            ).fetchall()
+        }
+    brief = _brief_passage_id(database)
+    assert brief not in undeclared  # beta's summary is beta's alone
+    assert content <= undeclared  # every content passage is still searched

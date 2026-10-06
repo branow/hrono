@@ -64,13 +64,19 @@ def repair(
     done = {"dissolved": 0, "split": 0, "migrated": 0, "freed": 0}
     with context.database.write() as conn:
         # what a pin HELD is part of this run's outcome (#155)
-        done["pinned"] = len(pins.pinned(conn, pins.MEMBERSHIP))
+        held = pins.pinned(conn, pins.MEMBERSHIP)
+        done["pinned"] = len(held)
         model = str(resolve_embedding_model(conn, job.scope)["name"])
         batch = _batch(conn, tree)
-        for node_id in sorted(store.node_centroids(conn, tree, model)):
+        # every LEAF, not every centroid: a node whose members all lack a
+        # vector has no centroid, so iterating `node_centroids` made an
+        # emptied leaf invisible to the one repair (dissolve) it needs.
+        for node_id in _leaves(conn, tree):
             size = store.member_count(conn, node_id)
             forced = len(store.forced_members(conn, node_id))
             if size < 2:
+                if _holds_pin(conn, node_id, held):
+                    continue  # a human holds a member here (#154)
                 done["dissolved"] += int(
                     dissolve(conn, tree, node_id, model, batch)
                 )
@@ -85,7 +91,59 @@ def repair(
                 # decision an operator most wants to see the system revisit.
                 done["freed"] += min(moved, forced)
         done["reparented"] = _repair_upper_levels(conn, tree, model)
+        done["removed"] = _drop_childless(conn, tree)
     return done
+
+
+def _leaves(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
+    rows = conn.execute(
+        "SELECT id FROM nodes WHERE tree = ? AND level = 0 ORDER BY id",
+        (tree,),
+    ).fetchall()
+    return tuple(int(row["id"]) for row in rows)
+
+
+def _holds_pin(
+    conn: sqlite3.Connection, node_id: int, held: frozenset[int]
+) -> bool:
+    return any(
+        section_id in held
+        for section_id, _, _ in store.node_member_rows(conn, node_id)
+    )
+
+
+def _drop_childless(conn: sqlite3.Connection, tree: str) -> int:
+    """Delete upper nodes with no children left; return how many went.
+
+    A parent can lose every child — a dissolve, a split's retirement, a
+    migrate that empties it — and nothing removed it: ``brief_upper`` skips a
+    node with no child briefs, so its OLD brief kept being served by export
+    and recall, describing children that no longer exist. Bottom-up, because
+    deleting a childless level-1 node can leave its level-2 parent childless
+    in the same pass. The sole top node is exempt: a one-node tree's root is
+    legitimately childless.
+    """
+    removed = 0
+    for level in _upper_levels(conn, tree):
+        for row in conn.execute(
+            "SELECT id FROM nodes n WHERE n.tree = ? AND n.level = ? "
+            "AND NOT EXISTS (SELECT 1 FROM node_children c "
+            "WHERE c.parent_id = n.id) ORDER BY n.id",
+            (tree, level),
+        ).fetchall():
+            if _sole_node(conn, tree, int(row["id"])):
+                continue
+            store.delete_node(conn, int(row["id"]))
+            removed += 1
+    return removed
+
+
+def _sole_node(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM nodes WHERE tree = ? AND id != ? LIMIT 1",
+        (tree, node_id),
+    ).fetchone()
+    return row is None
 
 
 def _repair_upper_levels(
@@ -151,9 +209,15 @@ def split(
     floor. What does not change is the refusal below: fewer than two density
     cores is not a split, whoever asked.
     """
-    members = _vectors(conn, node_id, model_name)
-    if len(members) <= over:
+    rows = store.node_member_rows(conn, node_id)
+    if len(rows) <= over:
         return ()
+    members = _vectors(conn, node_id, model_name)
+    # a member with no vector cannot be judged, but dropping it breaks the
+    # #086 invariant (in exactly one cluster or pending): it is dealt into the
+    # biggest child below, with the topic's company, instead of into nothing.
+    vectored = {member[0] for member, _ in members}
+    unjudged = [row for row in rows if row[0] not in vectored]
     labeler = core_labeler if core_labeler is not None else _default_core
     labels = labeler([vector for _, vector in members])
     cores: dict[int, list[tuple[_Member, tuple[float, ...]]]] = defaultdict(
@@ -183,10 +247,13 @@ def split(
     # divided topic is still in the same place; it is only narrower.
     above = store.parent_of(conn, node_id)
     new_ids: list[int] = []
-    for group in positive.values():
+    biggest: int | None = None
+    for group in sorted(positive.values(), key=len, reverse=True):
         child = store.add_leaf_node(
             conn, tree, [(member[0], False, None) for member, _ in group]
         )
+        if biggest is None:
+            biggest = child
         if above is not None:
             store.add_child(conn, above, child, attached=False, similarity=None)
         for member, _vector in group:
@@ -195,8 +262,26 @@ def split(
                 # chunk IS what the operator pointed at, narrowed (#162).
                 pins.reanchor(conn, pins.MEMBERSHIP, member[0], child)
         new_ids.append(child)
+    for section_id, _, _ in unjudged:
+        store.add_member(
+            conn,
+            _require_child(biggest),
+            section_id,
+            forced=True,
+            similarity=None,
+        )
+        if anchored.get(section_id) == node_id:
+            pins.reanchor(
+                conn, pins.MEMBERSHIP, section_id, _require_child(biggest)
+            )
     store.delete_node(conn, node_id)  # its brief cascades (#068)
     return tuple(new_ids)
+
+
+def _require_child(child: int | None) -> int:
+    if child is None:  # unreachable: a split only proceeds with >= 2 cores
+        raise ValueError("split produced no children")
+    return child
 
 
 def migrate(

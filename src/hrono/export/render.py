@@ -371,9 +371,11 @@ def _directory(
 ) -> str:
     # the chain of names from the root down to this node, root excluded — so
     # only the ROOT is "" and every other node, parentless or not, gets its own
-    # id-suffixed directory. A parentless non-root node is a defect the loader
-    # refuses, but the renderer stays total: it can never collide two briefs
-    # onto one key, and it can never emit a leading slash.
+    # id-suffixed directory. A parentless non-root node is a defect (the loader
+    # refuses a forest at the TOP level; a lower-level orphan still loads and
+    # renders into an unlinked directory), but the renderer stays total: it can
+    # never collide two briefs onto one key, and it can never emit a leading
+    # slash.
     parts: list[str] = []
     cur = node_id
     while cur != root:

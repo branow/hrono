@@ -46,6 +46,13 @@ SAID: dict[str, tuple[str, str]] = {
         "Retry. If it fails again on the same file, exclude that file in the "
         "source's filter.",
     ),
+    "shared-corpus": (
+        "This tree is unscoped, and other trees exist: building it would "
+        "ingest sources that belong to them, and two trees over one source "
+        "corrupt each other.",
+        "Give the tree its own sources in Settings (or hrono tree config "
+        "set), then retry.",
+    ),
     "linked-cache": (
         "The local copy of a source is a link hrono will not follow.",
         "Remove the link from the cache directory and sync again.",

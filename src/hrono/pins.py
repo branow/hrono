@@ -107,6 +107,35 @@ def pinned(conn: sqlite3.Connection, kind: str) -> frozenset[int]:
     )
 
 
+def held_for(
+    conn: sqlite3.Connection, kind: str, targets: Iterable[int]
+) -> dict[int, tuple[int | None, str | None]]:
+    """target -> (anchor, reason) for the given targets that are pinned.
+
+    What a re-ingest reads before it drops a section: the trigger that keeps
+    pins from dangling (0030) deletes a membership pin WITH its section, so a
+    changed file's pin must be read here and re-pinned onto the section that
+    replaces it, or every edit silently releases the operator's hold (the
+    revert pins exist to prevent).
+    """
+    ids = tuple(targets)
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT target_id, anchor_id, reason FROM pins "  # noqa: S608
+        f"WHERE kind = ? AND target_id IN ({marks})",
+        (kind, *ids),
+    ).fetchall()
+    return {
+        int(row["target_id"]): (
+            None if row["anchor_id"] is None else int(row["anchor_id"]),
+            row["reason"],
+        )
+        for row in rows
+    }
+
+
 def anchors(conn: sqlite3.Connection, kind: str) -> dict[int, int]:
     """target -> anchor for every pin of ``kind`` that names one.
 
