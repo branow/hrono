@@ -15,7 +15,13 @@ about this very format) cannot close a result early.
 A section whose result is missing, or talks back to the caller, is condensed
 again ALONE through ``shape.answer`` — the path every section took before
 packing — so a pack can only ever save calls, never lose a condensation or
-change what a refusal means (E015).
+change what a refusal means (E015). A pack whose CALL fails is answered the
+same way, one section at a time: a pack is more likely than any one of its
+sections to run the model out of room, and one bad pack stopped an
+8505-section build 1484 sections in. A section the model cannot finish even
+alone is recorded as refused (``unfinished``), because that is a property of
+its content and a re-run would pay to fail on it again; any other failure of
+a single call still stops the op.
 """
 
 from __future__ import annotations
@@ -28,12 +34,15 @@ from hrono.llm.client import (
     Completion,
     CompletionRequest,
     CompletionResult,
+    LLMError,
+    Unfinished,
     Usage,
 )
 from hrono.summarize.shape import answer
 
 PACK_ITEMS = 8
 PACK_BYTES = 32_000
+UNFINISHED = "unfinished"
 
 Item = tuple[str, bytes]  # (content hash, section body)
 Made = tuple[CompletionResult, str]  # (reply, refusal reason or "")
@@ -68,9 +77,14 @@ def condense_pack(
     if len(pack) == 1:
         return [_single(completion, model, alone[0], gate)]
     nonce = secrets.token_hex(4)
-    reply = completion.complete(
-        CompletionRequest(model=model, system="", content=_wrap(alone, nonce))
-    )
+    try:
+        reply = completion.complete(
+            CompletionRequest(
+                model=model, system="", content=_wrap(alone, nonce)
+            )
+        )
+    except LLMError:
+        return [_single(completion, model, text, gate) for text in alone]
     found = _results(reply.text, nonce)
     shares = _apportion(reply.usage, alone, found, len(pack))
     made: list[Made] = []
@@ -90,7 +104,10 @@ def _single(
     gate: Callable[[str], str],
 ) -> Made:
     request = CompletionRequest(model=model, system="", content=rendered)
-    return answer(completion, request, gate)
+    try:
+        return answer(completion, request, gate)
+    except Unfinished:
+        return CompletionResult("", Usage(0, 0)), UNFINISHED
 
 
 def _wrap(rendered: Sequence[str], nonce: str) -> str:

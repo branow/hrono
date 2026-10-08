@@ -34,6 +34,17 @@ class LLMError(DomainError):
     code = "llm-error"
 
 
+class Unfinished(LLMError):
+    """The model ran out of room before it finished answering this content.
+
+    A property of the CONTENT, not of the provider's health: the same
+    material fails the same way on a retry, so a caller may record it and
+    move on, where any other ``LLMError`` has to stop the run.
+    """
+
+    code = "llm-unfinished"
+
+
 @dataclass(frozen=True)
 class Usage:
     """Token accounting for one completion (drives cost/provenance later).

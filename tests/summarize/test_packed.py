@@ -8,9 +8,16 @@ from pathlib import Path
 import pytest
 
 from hrono.db.database import Database
+from hrono.ingest.identity import content_hash
 from hrono.jobs.ops import JobContext
 from hrono.llm.claude_code import ClaudeCodeClient
-from hrono.llm.client import CompletionRequest, CompletionResult, Usage
+from hrono.llm.client import (
+    CompletionRequest,
+    CompletionResult,
+    LLMError,
+    Unfinished,
+    Usage,
+)
 from hrono.summarize import packed
 from hrono.summarize.condense import condense
 from hrono.summarize.shape import talks_back
@@ -161,6 +168,66 @@ def test_the_pack_cost_is_split_across_its_sections_without_loss(
             "SELECT SUM(input_tokens), SUM(output_tokens) FROM condensations"
         ).fetchone()
     assert tuple(spent) == (100, 40)
+
+
+class Failing(Packing):
+    """Fails every pack call; fails a single call as ``alone`` says."""
+
+    def __init__(self, alone: dict[str, LLMError]) -> None:
+        super().__init__()
+        self._alone = alone
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        if _TASK.search(request.content):
+            with self._guard:
+                self.contents.append(request.content)
+            raise Unfinished("claude-code refused the call: error_max_turns")
+        for marker, error in self._alone.items():
+            if marker in request.content:
+                with self._guard:
+                    self.contents.append(request.content)
+                raise error
+        return super().complete(request)
+
+
+def test_a_pack_whose_call_fails_is_answered_one_section_at_a_time(
+    db: Database,
+) -> None:
+    client = Failing({})
+
+    outcome = condense(job(), JobContext(db), client=client)
+
+    assert client.calls == 9  # the failed pack, then each of eight alone
+    assert outcome["condensed"] == 8
+    assert all(text.startswith("Alone: ") for text in _stored(db).values())
+
+
+def test_a_section_unfinished_even_alone_is_refused_and_the_run_goes_on(
+    db: Database,
+) -> None:
+    client = Failing({"def d()": Unfinished("error_max_turns")})
+
+    outcome = condense(job(), JobContext(db), client=client)
+
+    assert outcome["condensed"] == 7 and outcome["refused"] == 1
+    with db.connect() as conn:
+        refusal = conn.execute(
+            "SELECT reason FROM condense_refusals WHERE content_hash = ?",
+            (content_hash(b"def d(): return 1\n"),),
+        ).fetchone()
+        assert refusal["reason"] == packed.UNFINISHED
+    again = Packing()
+    condense(job(), JobContext(db), client=again)
+    assert again.calls == 0  # never paid for again
+
+
+def test_any_other_failure_of_a_single_call_still_stops_the_run(
+    db: Database,
+) -> None:
+    client = Failing({"def d()": LLMError("claude-code upstream error: 401")})
+
+    with pytest.raises(LLMError, match="401"):
+        condense(job(), JobContext(db), client=client)
 
 
 REAL = os.environ.get("HRONO_TEST_REAL_CLAUDE")

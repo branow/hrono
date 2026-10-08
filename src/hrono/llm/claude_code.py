@@ -54,6 +54,7 @@ from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
     LLMError,
+    Unfinished,
     Usage,
 )
 
@@ -135,6 +136,8 @@ def _read(code: int, out: str, err: str) -> CompletionResult:
     message always carries stdout as well as stderr.
     """
     payload = _payload(code, out, err)
+    if payload.get("subtype") == "error_max_turns":
+        raise Unfinished(f"claude-code refused the call: {_detail(payload)}")
     if payload.get("is_error") or payload.get("subtype") != "success":
         raise LLMError(f"claude-code refused the call: {_detail(payload)}")
     if payload.get("api_error_status"):

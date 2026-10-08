@@ -14,7 +14,7 @@ from hrono.llm.claude_code import (
     ClaudeCodeClient,
 )
 from hrono.llm.claude_code import _argv as cli_argv
-from hrono.llm.client import CompletionRequest, LLMError
+from hrono.llm.client import CompletionRequest, LLMError, Unfinished
 
 MODEL: dict[str, object] = {"name": "cc", "model": "haiku", "params": {}}
 
@@ -257,3 +257,24 @@ def test_a_real_call_reads_no_memory_of_the_directory_it_runs_in(
 
     assert "PELICAN-42" in json.loads(done.stdout)["result"]
     assert "PELICAN-42" not in isolated
+
+
+@pytest.mark.parametrize(
+    ("subtype", "unfinished"),
+    [
+        pytest.param("error_max_turns", True, id="out-of-room"),
+        pytest.param("error_during_execution", False, id="other-error"),
+    ],
+)
+def test_running_out_of_room_is_told_apart_from_other_failures(
+    tmp_path: Path, subtype: str, unfinished: bool
+) -> None:
+    # a pack of six sections ran the model out of turns and stopped an
+    # 8505-section build; the caller can only answer it per section if the
+    # failure says it was the CONTENT, not the provider.
+    runner = Recorder(out=_ok(subtype=subtype, is_error=True))
+
+    with pytest.raises(LLMError) as raised:
+        ClaudeCodeClient(tmp_path, run=runner).complete(_request())
+
+    assert isinstance(raised.value, Unfinished) is unfinished

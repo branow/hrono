@@ -20,6 +20,12 @@ SAID: dict[str, tuple[str, str]] = {
         "Check the model and its connection in Settings, then retry: work "
         "already done is kept and is not paid for again.",
     ),
+    "llm-unfinished": (
+        "The language model ran out of room before it finished an answer.",
+        "The material it was given is too large for one answer from this "
+        "model. Narrow the source's filter or choose a model with a larger "
+        "output limit, then retry: work already done is kept.",
+    ),
     "embed-error": (
         "The embedding model could not turn text into vectors.",
         "Check the embedding model in Settings. A model that runs on this "
