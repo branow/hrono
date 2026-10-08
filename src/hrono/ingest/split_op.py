@@ -30,6 +30,7 @@ from hrono.ingest.identity import (
 from hrono.ingest.readers import resolve
 from hrono.ingest.split import structure
 from hrono.ingest.split.constants import section_budget
+from hrono.ingest.split.encoded import encoded
 from hrono.ingest.split.node import Node
 from hrono.ingest.split.pack import sections as pack_sections
 from hrono.ingest.split.section import Section
@@ -129,8 +130,16 @@ def store_unit(
 
 def sections_of(tree: Node, path: str, raw: bytes) -> tuple[Section, ...]:
     """The sections one file is cut into: the cut a split stores and an
-    estimate counts, so the two cannot disagree on how many there are."""
-    return pack_sections(tree, section_budget(Path(path)), raw)
+    estimate counts, so the two cannot disagree on how many there are.
+
+    A section that is ``encoded`` data — a base64 font, a minified library —
+    is left out: it says nothing a summary can use and costs a model call.
+    """
+    return tuple(
+        section
+        for section in pack_sections(tree, section_budget(Path(path)), raw)
+        if not encoded(raw[section.start : section.end])
+    )
 
 
 #: one held section as the re-split needs it: ordinal, hash, anchor, reason
