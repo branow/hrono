@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -66,6 +67,10 @@ TIMEOUT = 300.0  # generous: a large judge prompt measured 32 s
 # so the extra turns buy the model room to finish an answer, not room to go
 # wandering. Measured: the same corpus completed at 3.
 MAX_TURNS = 3
+# Upstream answers that mean "not now" rather than "no": rate limited (429),
+# overloaded (529), unavailable (503). Waited out on BACKOFF, seconds apart.
+BUSY = frozenset({"429", "503", "529"})
+BACKOFF = (10.0, 30.0, 90.0)
 # What the CLI is, when hrono is driving it. Every caller in `summarize` asks
 # for the empty system prompt — meaning "no instructions of my own, they are
 # all in the content" — and the empty string is exactly what must NOT be
@@ -80,6 +85,10 @@ SYSTEM = (
 Runner = Callable[[list[str], str, Path, float], tuple[int, str, str]]
 
 
+class _Busy(LLMError):
+    """The upstream was rate limited or overloaded; worth asking again."""
+
+
 class ClaudeCodeClient:
     """A ``Completion`` over the Claude Code CLI in headless print mode."""
 
@@ -89,23 +98,39 @@ class ClaudeCodeClient:
         *,
         run: Runner | None = None,
         timeout: float = TIMEOUT,
+        pause: Callable[[float], None] = time.sleep,
     ) -> None:
         self._workdir = workdir
         self._run = run if run is not None else _subprocess
         self._timeout = timeout
+        self._pause = pause
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
+        """One answer, waiting out a rate limit rather than failing on it.
+
+        The SDK providers retry a 429 on their own; the CLI does not, and on
+        an 8505-section build one 429 stopped condense 4534 sections in, while
+        the very next call went through. A BUSY upstream is waited out on
+        ``BACKOFF``; every other failure is raised at once.
+        """
         self._workdir.mkdir(parents=True, exist_ok=True)
         argv = _argv(request)
+        for wait in (*BACKOFF, None):
+            try:
+                return _read(*self._call(argv, request.content))
+            except _Busy as busy:
+                if wait is None:
+                    raise LLMError(str(busy)) from busy
+                self._pause(wait)
+        raise AssertionError  # unreachable: the last pass returns or raises
+
+    def _call(self, argv: list[str], content: str) -> tuple[int, str, str]:
         try:
-            code, out, err = self._run(
-                argv, request.content, self._workdir, self._timeout
-            )
+            return self._run(argv, content, self._workdir, self._timeout)
         except subprocess.TimeoutExpired as exc:
             raise LLMError("claude-code call timed out") from exc
         except OSError as exc:
             raise LLMError("claude-code CLI could not be run") from exc
-        return _read(code, out, err)
 
 
 def _argv(request: CompletionRequest) -> list[str]:
@@ -136,6 +161,8 @@ def _read(code: int, out: str, err: str) -> CompletionResult:
     message always carries stdout as well as stderr.
     """
     payload = _payload(code, out, err)
+    if str(payload.get("api_error_status")) in BUSY:
+        raise _Busy(f"claude-code refused the call: {_detail(payload)}")
     if payload.get("subtype") == "error_max_turns":
         raise Unfinished(f"claude-code refused the call: {_detail(payload)}")
     if payload.get("is_error") or payload.get("subtype") != "success":

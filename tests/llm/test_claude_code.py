@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from hrono.llm.claude_code import (
+    BACKOFF,
     MAX_TURNS,
     SYSTEM,
     TIMEOUT,
@@ -278,3 +279,61 @@ def test_running_out_of_room_is_told_apart_from_other_failures(
         ClaudeCodeClient(tmp_path, run=runner).complete(_request())
 
     assert isinstance(raised.value, Unfinished) is unfinished
+
+
+class Replies:
+    """A fake CLI that answers each call with the next reply in turn."""
+
+    def __init__(self, *replies: str) -> None:
+        self.replies = list(replies)
+        self.calls = 0
+
+    def __call__(
+        self, argv: list[str], content: str, cwd: Path, timeout: float
+    ) -> tuple[int, str, str]:
+        self.calls += 1
+        return 0, self.replies.pop(0), ""
+
+
+def _status(code: int) -> str:
+    return _ok(text="API Error", is_error=True, api_error_status=code)
+
+
+def test_a_rate_limit_is_waited_out_and_the_answer_returned(
+    tmp_path: Path,
+) -> None:
+    # one 429 stopped an 8505-section build 4534 sections in; the very next
+    # call went through.
+    runner = Replies(_status(429), _status(529), _ok("the answer"))
+    waits: list[float] = []
+
+    client = ClaudeCodeClient(tmp_path, run=runner, pause=waits.append)
+    text = client.complete(_request()).text
+
+    assert text == "the answer"
+    assert waits == list(BACKOFF[:2])
+
+
+def test_a_rate_limit_that_outlasts_the_backoff_fails_the_call(
+    tmp_path: Path,
+) -> None:
+    runner = Replies(*[_status(429)] * (len(BACKOFF) + 1))
+    waits: list[float] = []
+    client = ClaudeCodeClient(tmp_path, run=runner, pause=waits.append)
+
+    with pytest.raises(LLMError, match="429"):
+        client.complete(_request())
+
+    assert runner.calls == len(BACKOFF) + 1
+    assert waits == list(BACKOFF)
+
+
+def test_a_failure_that_is_not_busy_is_not_retried(tmp_path: Path) -> None:
+    runner = Replies(_status(401), _ok())
+    waits: list[float] = []
+    client = ClaudeCodeClient(tmp_path, run=runner, pause=waits.append)
+
+    with pytest.raises(LLMError, match="401"):
+        client.complete(_request())
+
+    assert runner.calls == 1 and waits == []
