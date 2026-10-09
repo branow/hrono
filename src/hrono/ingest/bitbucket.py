@@ -1,6 +1,6 @@
-"""The ``bitbucket-workspace`` source type: a workspace's repos (T41.1).
+"""The ``bitbucket-workspace`` source type: a workspace's repos.
 
-Everything #147 settled for `github-user` holds here — one source row, each
+Everything that holds for `github-user` holds here — one source row, each
 repo keeping its own commit, every unit addressed `git://` because discovery
 is not an address — so all that is new is the enumeration, and it differs from
 github's in exactly two ways worth naming:
@@ -9,7 +9,7 @@ github's in exactly two ways worth naming:
   so the loop follows what the server gives it rather than guessing the next
   page's number;
 - a repo's clone url is one of several links; the ``https`` one is the one git
-  can use with a token, as ``x-token-auth`` (implementation-notes.md).
+  can use with a token, as ``x-token-auth`` (``docs/api.md``).
 """
 
 from __future__ import annotations

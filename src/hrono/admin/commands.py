@@ -105,10 +105,9 @@ def reset_token(
 def _reset_message(name: str, role: str, token: str) -> str:
     """The recovery hint, pointed at the step that actually works.
 
-    It used to suggest `profile add local` with a hardcoded port — but in
-    recovery a `local` profile almost always EXISTS, so the one suggested
-    command failed with "already exists", at the exact moment the user was
-    locked out.
+    It must not suggest `profile add local` with a hardcoded port: in
+    recovery a `local` profile almost always EXISTS, so that command would
+    fail with "already exists", at the exact moment the user is locked out.
     """
     return (
         f"\nReissued the API token for user '{name}'.\n"

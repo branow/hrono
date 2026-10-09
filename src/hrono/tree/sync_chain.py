@@ -1,31 +1,31 @@
-"""The ``sync`` op (#137): bring an existing tree up to date, in order.
+"""The ``sync`` op: bring an existing tree up to date, in order.
 
 The incremental twin of ``maintain``. ``maintain`` builds a tree that does not
 exist yet; this one refreshes a tree that does, touching only what changed —
-which is hrono's whole differentiator, and until now was unreachable: every
-stage below was implemented and tested while the only thing an operator could
-trigger was a full cold rebuild.
+which is hrono's whole differentiator. Without it every stage below is
+implemented and tested while the only thing an operator can trigger is a full
+cold rebuild.
 
     update -> propagate -> brief (stale leaves) -> brief-upper (every upper
            level, stale nodes only) -> monitor -> repair -> adopt (brief ->
            attach orphans at every level -> brief-upper again), always
 
-PROPAGATE COMES BEFORE BRIEF, and the note that scoped this op had it the other
-way round. ``propagate`` judges a leaf's NEW content against its STORED brief —
-the old one — and marks the ancestors above it stale. Re-briefing the leaf first
-rewrites that brief with the current member signature, so ``_changed_leaves``
-finds nothing, nothing is judged, and no ancestor is ever marked: the upper
-levels silently keep describing content that changed underneath them. The stage
-order is the op's whole reason to exist and this is the sharpest example of it.
+PROPAGATE COMES BEFORE BRIEF, not the other way round. ``propagate`` judges a
+leaf's NEW content against its STORED brief — the old one — and marks the
+ancestors above it stale. Re-briefing the leaf first rewrites that brief with
+the current member signature, so ``_changed_leaves`` finds nothing, nothing is
+judged, and no ancestor is ever marked: the upper levels silently keep
+describing content that changed underneath them. The stage order is the op's
+whole reason to exist and this is the sharpest example of it.
 
-ONE VERB, because the order is load-bearing and the coupling is not obvious.
-#122 was exactly the bug where the chain skipped a step: sections arrived
-unsummarised, `brief` silently dropped them from its input, and the briefs cited
-sources they had never read — a map that looks right and is quietly wrong, with
-no error anywhere. Exposing the stages separately hands every operator the
-chance to reproduce that. A single op cannot be sequenced incorrectly.
+ONE VERB, because the order is load-bearing and the coupling is not obvious. A
+chain that skips a step lets sections arrive unsummarised: `brief` silently
+drops them from its input, and the briefs cite sources they have never read — a
+map that looks right and is quietly wrong, with no error anywhere. Exposing the
+stages separately hands every operator the chance to reproduce that. A single op
+cannot be sequenced incorrectly.
 
-``settle`` is deliberately NOT in the chain (PO note D.3). It is expensive, and
+``settle`` is deliberately NOT in the chain. It is expensive, and
 hrono does not spend money unasked: the churn trigger INFORMS — the result says
 whether it has fired — and an operator decides. Nothing here runs on a timer.
 
@@ -64,7 +64,7 @@ def sync(
 ) -> Mapping[str, object]:
     """Run the incremental chain over ``tree``; report what each stage did.
 
-    Each stage is timed and kept, and a failure names its stage (#213).
+    Each stage is timed and kept, and a failure names its stage.
     """
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
@@ -130,18 +130,17 @@ def _adopt(
 ) -> int:
     """Brief, attach and re-brief whatever this run left loose. ALWAYS.
 
-    **This is why a tree could come out of a sync with two roots (#200).**
+    **This is why a tree could come out of a sync with two roots.**
     A `repair` split retires a topic and makes two briefless leaves nothing
     parents; `update`'s drain emits leaves the same way. Both sat at level 0
     under nothing — on the map, two more tops beside the real root, and a root
     brief that silently stopped covering them.
 
-    This used to run only "when repair changed anything", which was wrong
-    twice over: the gate read ``repaired["pinned"]``, a count of pins HELD
-    rather than work done, so any database with one pin ran it every sync —
-    and a drain-emitted leaf on a run where repair really did nothing was
-    never adopted at all, staying unreachable until the next settle or
-    maintain. So it runs unconditionally: `brief` and `brief_upper` skip
+    It must not be gated on "repair changed anything": a drain-emitted leaf on
+    a run where repair really did nothing would never be adopted, staying
+    unreachable until the next settle or maintain (and ``repaired["pinned"]``
+    counts pins HELD, not work done, so it is no such gate). So it runs
+    unconditionally: `brief` and `brief_upper` skip
     everything whose signature is fresh, and `attach_orphans` returns before
     its embed when a level has no orphans, so a steady tree pays three reads.
     """
@@ -186,12 +185,11 @@ def _brief_upper_levels(
 ) -> None:
     """Run ``brief_upper`` at EVERY upper level, lowest first.
 
-    The op briefs one level (scope ``level``, default 1), and the chain used to
-    call it bare — so a stale brief at level 2 or above, including the root's,
-    was marked by ``propagate`` and then never rewritten by any sync; only a
-    full ``maintain`` passed explicit levels. Lowest first, because a level's
-    brief is written over its CHILDREN's briefs, so level N must be current
-    before level N+1 reads it.
+    The op briefs one level (scope ``level``, default 1), so calling it bare
+    leaves a stale brief at level 2 or above, including the root's, marked by
+    ``propagate`` and then never rewritten by any sync. Lowest first, because a
+    level's brief is written over its CHILDREN's briefs, so level N must be
+    current before level N+1 reads it.
     """
     for level in _levels(context, tree, floor=1):
         brief_upper(
@@ -219,14 +217,14 @@ def _outcome(
     adopted: int,
     settle_due: bool,
 ) -> Mapping[str, object]:
-    """What the run did, for the operator (#132).
+    """What the run did, for the operator.
 
     One verb over six stages is a black box unless it says what happened, which
     is the honest objection to this design and the thing that answers it.
     ``settle_due`` is the trigger INFORMING: hrono has not run it and will not.
-    Every stage that makes a judgement contributes its counts (#133) — a
+    Every stage that makes a judgement contributes its counts — a
     force-assign, a freed pioneer, a collected build — because those are the
-    decisions an operator would act on and they used to be visible nowhere.
+    decisions an operator would act on and nothing else makes them visible.
     """
     return {
         "changed": ingested.get("changed", False),

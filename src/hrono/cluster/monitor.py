@@ -1,4 +1,4 @@
-"""The misfit-rate monitor (#089, T37): the health signal repair/settle read.
+"""The misfit-rate monitor: the health signal repair/settle read.
 
 After a change batch, ``monitor`` measures the MISFIT RATE — how many chunks sit
 in a cluster whose centroid is not their nearest. All vectors are unit length
@@ -6,15 +6,15 @@ and a centroid is the renormalized mean of its members' combined vectors, so
 the decision is a plain dot product: for chunk c in cluster K, ``own = c.K`` and
 ``best_other = max over J != K of c.J``; c is a misfit iff ``best_other > own``.
 
-A FORCE-ASSIGNED member (#086 T35.3) is the exception that rule cannot see: it
+A FORCE-ASSIGNED member is the exception that rule cannot see: it
 was attached to its NEAREST centroid ignoring TAU, so ``own`` is the maximum by
 construction and ``best_other > own`` is never true however alien it is. Such a
-member is a misfit while its own similarity is below TAU — which is what finally
+member is a misfit while its own similarity is below TAU — which is what
 makes 0017's promise ("flagged so the misfit monitor re-checks it preferentially
-and a mis-placed pioneer migrates once its real siblings form") readable (#113).
+and a mis-placed pioneer migrates once its real siblings form") readable.
 
 Above the leaf the same question is asked in BRIEF space, over child edges
-rather than sections (#123): `levels.upper_misfits` counts a child attached by
+rather than sections: `levels.upper_misfits` counts a child attached by
 proximity below TAU as a misfit of its parent, and its rows land in this same
 table, so one rate and one set of repairs cover the whole tree.
 
@@ -23,8 +23,8 @@ a batch re-checks only the DIRTY clusters it touched plus a bounded per-batch
 sample (deterministic, and preferring clusters that hold a forced member) — the
 global rate aggregates the stored rows without rescanning the corpus. The first
 (post-build) run captures the baseline global rate; a fresh tree's rate is
-nonzero by nature (HDBSCAN edge members lean toward neighbours), so repair (T38)
-and settle (T39) compare RELATIVE to that baseline.
+nonzero by nature (HDBSCAN edge members lean toward neighbours), so repair
+and settle compare RELATIVE to that baseline.
 Monitor only MEASURES — acting on the rate is repair/settle.
 """
 
@@ -84,7 +84,7 @@ def monitor(job: Job, context: JobContext) -> Mapping[str, object]:
         "measured": len(targets),
         "rate": round(rate, 4),
         "baseline": None if base is None else round(base, 4),
-        # what an operator acts on is the MOVE, not the number (#133)
+        # what an operator acts on is the MOVE, not the number
         "above_baseline": bool(base is not None and base > 0 and rate > base),
     }
 
@@ -92,7 +92,7 @@ def monitor(job: Job, context: JobContext) -> Mapping[str, object]:
 def _measure_upper_levels(
     conn: sqlite3.Connection, tree: str, model_name: str
 ) -> None:
-    """Measure every level above the leaf, in brief space (#123).
+    """Measure every level above the leaf, in brief space.
 
     Upper levels are small — a handful of parents per level — so they are
     measured in full rather than sampled; the bounded sample exists for the
@@ -129,8 +129,8 @@ class Verdict:
     """One member's standing in the cluster that holds it.
 
     ``puller`` is the candidate cluster whose centroid is NEARER than the
-    holder's — the thing `_misfits` used to compute and throw away, keeping
-    only the count. The graph draws it (#184) and the health signal counts it,
+    holder's — the comparison `_misfits` makes, kept rather than reduced to a
+    count. The graph draws it and the health signal counts it,
     from this one comparison, so the picture and the number cannot disagree.
     """
 
@@ -279,13 +279,12 @@ def sample(
 
     ``prefer`` jumps the round-robin: clusters holding a force-assigned member
     are the ones 0017 promised to re-check preferentially, and a pioneer only
-    leaves once someone looks at it again (#113).
+    leaves once someone looks at it again.
 
-    The preferred slice ROTATES with the batch, exactly as the remainder does
-    (#129). Taking it in sorted id order looked harmless while a corpus held
-    fewer forced holders than ``SAMPLE_SIZE`` — and starved every holder past
-    the thirty-second for ever once it did not, because the same lowest ids
-    were re-checked on every batch regardless of the clock.
+    The preferred slice ROTATES with the batch, exactly as the remainder does.
+    Sorted id order would starve every holder past the thirty-second for ever
+    once a corpus held more forced holders than ``SAMPLE_SIZE``, because the
+    same lowest ids would be re-checked on every batch regardless of the clock.
     """
     candidates = sorted(set(node_ids) - set(exclude))
     if not candidates or k <= 0:

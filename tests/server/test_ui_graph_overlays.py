@@ -1,4 +1,4 @@
-"""#184 (T50.3): non-tree edges — pull, proximity, propagation.
+"""Non-tree edges — pull, proximity, propagation.
 
 Every edge here comes from REAL stored vectors through `combined_vector`: the
 `assignment_similarity` column plays no part, which is the point — a pull edge
@@ -165,7 +165,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         # The worker polls the SAME adopted connection this fixture writes
         # through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         browser = Browser(client, token, conn)
@@ -262,8 +262,8 @@ def test_an_edge_to_a_topic_that_is_not_drawn_is_dropped(
         record(browser.conn, TREE, a, "major", "propagated", browser.root)  # type: ignore[arg-type]
     browser.sign_in()
 
-    # `open=` PRESENT and empty is what Collapse sends; absent now means a
-    # first visit, which opens three levels (#197)
+    # `open=` PRESENT and empty is what Collapse sends; absent means a
+    # first visit, which opens three levels
     collapsed = browser.client.get(
         f"/ui/trees/{TREE}/graph?open=&edges=propagation"
     ).text
@@ -281,12 +281,12 @@ def test_the_overlay_rides_in_the_url(browser: Browser) -> None:
     assert "edges=pull,proximity" in page
     # the map's own two kinds have a toggle, named by the QUESTION each
     # answers rather than by the mechanism: "pull / proximity" named the
-    # machinery to someone who already knew it (#200). The URL keeps the kind.
+    # machinery to someone who already knew it. The URL keeps the kind.
     assert ">near-duplicates<" in page
     assert ">misfiled<" in page
     # `propagation` is NOT offered here: it is a record of decisions a sync
     # already made, it draws nothing on a tree never re-synced, and it lives
-    # on Activity beside the decisions it is made of (#200)
+    # on Activity beside the decisions it is made of
     assert "edges=propagation" not in page
 
 
@@ -315,7 +315,7 @@ def test_without_an_embedding_model_the_tree_still_draws(
 
 
 def test_an_unknown_edge_kind_is_ignored(browser: Browser) -> None:
-    # a view cannot be invalid (#183): a hand-edited URL draws less, never 500
+    # a view cannot be invalid: a hand-edited URL draws less, never 500
     browser.sign_in()
 
     answer = browser.client.get(f"/ui/trees/{TREE}/graph?edges=nonsense")

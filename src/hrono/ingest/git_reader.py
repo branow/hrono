@@ -1,6 +1,6 @@
-"""The git reader: the ingestable files of a synced working tree (#143).
+"""The git reader: the ingestable files of a synced working tree.
 
-The filter rules (#026) are git's, not ingest's: globs, a size gate, symlinks
+The filter rules are git's, not ingest's: globs, a size gate, symlinks
 and a null-byte sniff all describe a filesystem, and a source type without one
 answers the same contract a different way.
 """

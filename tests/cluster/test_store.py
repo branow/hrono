@@ -165,7 +165,7 @@ def _placed(conn: object, path: str, body: bytes, vector: list[float]) -> int:
 def test_backfill_gives_a_placed_section_its_cluster_coordinate(
     db: Database,
 ) -> None:
-    # F28: incremental placement produces no UMAP coordinate, so a placed
+    # incremental placement produces no UMAP coordinate, so a placed
     # section inherits the one thing that is true of it — the cluster it joined.
     with db.connect() as conn, conn:
         covered = _placed(conn, "a.py", b"alpha\n", [1.0, 0.0, 0.0, 0.0])

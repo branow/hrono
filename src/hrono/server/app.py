@@ -1,8 +1,7 @@
 """The FastAPI application the CLI and dashboard both speak to.
 
-Only the two unauthenticated liveness routes exist today; every other endpoint
-arrives with its milestone. ``create_app`` is a factory so tests and future
-entry points build isolated apps instead of sharing a module singleton.
+``create_app`` is a factory so tests and other entry points build isolated
+apps instead of sharing a module singleton.
 """
 
 from __future__ import annotations
@@ -62,12 +61,11 @@ router = APIRouter()
 def health(request: Request) -> JSONResponse:
     """Report whether the server can actually work. Unauthenticated by design.
 
-    Being up is not being healthy: the run that produced #092 stayed up with an
-    unusable database and a dead worker. So this probes the database and the
-    worker, and answers 503 when either is gone. "The worker" is both of its
-    threads (#111): the supervisor that executes jobs AND the reclaimer that
-    requeues stranded ones, because a dead reclaimer is exactly the silence
-    #093 exists to break.
+    Being up is not being healthy: a server can stay up with an unusable
+    database and a dead worker. So this probes the database and the worker,
+    and answers 503 when either is gone. "The worker" is both of its threads:
+    the supervisor that executes jobs AND the reclaimer that requeues stranded
+    ones, because a dead reclaimer leaves stranded jobs waiting in silence.
     """
     database = getattr(request.app.state, "db", None)
     worker = getattr(request.app.state, "worker", None)
@@ -84,7 +82,7 @@ def health(request: Request) -> JSONResponse:
 
 
 def _working(worker: object) -> bool:
-    """Whether the worker can still do its whole job (#111)."""
+    """Whether the worker can still do its whole job."""
     if worker is None:
         return False
     healthy = getattr(worker, "healthy", None)
@@ -110,27 +108,26 @@ _logger = logging.getLogger("hrono")
 
 
 def _warm_query_encoder(database: Database) -> None:
-    """Load the query encoder in the background while the server boots (#168).
+    """Load the query encoder in the background while the server boots.
 
-    Recall's first request paid 13.3s to read the model's weights and every
-    later one 14ms, which is the whole cost sitting on one arbitrary user's
-    question. Loading here moves it off the request path entirely.
+    Unwarmed, recall's first request pays 13.3s to read the model's weights
+    and every later one 14ms, which is the whole cost sitting on one arbitrary
+    user's question. Loading here moves it off the request path entirely.
 
     The DATABASE is read here, on the startup thread, and only the weights are
-    read in the background. The first version read the config inside the thread
-    and that was wrong: an adopted connection is lent to one thread at a time
-    by ``Shared``'s lock, but a caller holding the raw connection — every test
-    that writes through ``with conn:`` — is not going through that lock, so a
-    background reader could be executing on the same sqlite3 connection at the
-    same moment. Nothing needs the database off the request path; only the
-    weights are slow.
+    read in the background. The config must not be read inside the thread: an
+    adopted connection is lent to one thread at a time by ``Shared``'s lock, but
+    a caller holding the raw connection — every test that writes through
+    ``with conn:`` — is not going through that lock, so a background reader
+    could be executing on the same sqlite3 connection at the same moment.
+    Nothing needs the database off the request path; only the weights are slow.
 
     Never fatal: a server with no embedding model registered yet is perfectly
     valid and must still start, and a model that cannot load is a problem for
     the request that needs it to report, not for startup to die of.
 
     The background load itself is ``runner.start_loading``, which recall also
-    calls on a miss (#169) — one loader, so a question arriving mid-boot joins
+    calls on a miss — one loader, so a question arriving mid-boot joins
     the load already running rather than starting a second one.
     """
     try:
@@ -162,7 +159,7 @@ def create_app(
     failed op cannot leave the next one wedged, and jobs left ``running`` by a
     previous process go back on the queue before the worker starts.
 
-    The ingest cache hangs off ``db_path`` (#098), so an app built from an
+    The ingest cache hangs off ``db_path``, so an app built from an
     injected ``connection`` has no cache root and its worker refuses ingest ops
     instead of resolving one against the working directory.
     """
@@ -194,7 +191,7 @@ def create_app(
                 cipher=cipher,
                 # an injected connection says nothing about where its file is,
                 # so there is no anchor to hang a cache on: None makes an
-                # ingest op raise rather than guess a cwd-relative one (#098).
+                # ingest op raise rather than guess a cwd-relative one.
                 cache_root=anchored_cache,
             )
             app.state.worker = worker

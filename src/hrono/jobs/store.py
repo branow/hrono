@@ -1,6 +1,6 @@
 """Row storage for the jobs table: enqueue, atomic claim, status, reads.
 
-All access is under the caller's ``Database`` lock (#008), so ``claim_next``'s
+All access is under the caller's ``Database`` lock, so ``claim_next``'s
 select-then-flip is atomic against other worker threads — a pending job is
 claimed exactly once.
 """
@@ -178,7 +178,7 @@ def set_status(
 ) -> None:
     """Record a job's terminal state, and what it did while it was there.
 
-    ``result`` is the op's outcome as JSON counts (#132); None leaves the
+    ``result`` is the op's outcome as JSON counts; None leaves the
     stored value alone, so a status flip that carries no outcome — a reclaim,
     a cancel — never erases one.
 
@@ -270,7 +270,7 @@ def get(conn: sqlite3.Connection, job_id: str) -> sqlite3.Row | None:
 def children(
     conn: sqlite3.Connection, parent_id: str
 ) -> tuple[sqlite3.Row, ...]:
-    """A parent's child jobs, oldest first (T57.1)."""
+    """A parent's child jobs, oldest first."""
     return tuple(
         conn.execute(
             f"SELECT {_COLUMNS} FROM jobs WHERE parent_id = ? "  # noqa: S608
@@ -292,7 +292,7 @@ def page_roots(
 ) -> tuple[sqlite3.Row, ...]:
     """One page of a tree's runs, newest first, filtered and paged in SQL.
 
-    The runs list reads one page of rows however many runs a tree has (E002).
+    The runs list reads one page of rows however many runs a tree has.
     ``status`` filters by the DERIVED status, the one ``aggregate.rollup``
     gives a parent from its children; ``_ROLLED`` is that rule in SQL, and a
     test holds the two to the same answers. ``also`` is a second status the

@@ -1,4 +1,4 @@
-"""#202: `hrono usage` prints a table a person reads without API docs."""
+"""`hrono usage` prints a table a person reads without API docs."""
 
 from pathlib import Path
 

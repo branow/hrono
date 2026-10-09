@@ -1,7 +1,7 @@
 """Load the vectors a cluster build needs and persist its result.
 
 Reading: ``section_combined_vectors`` walks every stored section and blends its
-content and path vectors (#039) into the combined clustering vector, skipping
+content and path vectors into the combined clustering vector, skipping
 sections whose components are not embedded yet. ``stored_coords`` returns the
 prior reduced coordinates for a warm-init rebuild, or None when any is missing.
 
@@ -32,7 +32,7 @@ def section_combined_vectors(
 ) -> tuple[tuple[int, tuple[float, ...]], ...]:
     """Return (section_id, combined vector) for the sections in scope.
 
-    ``sources`` is the tree's own sources (#054); None means every embedded
+    ``sources`` is the tree's own sources; None means every embedded
     section, which is what a tree with no registry entry still gets and what
     kept two named trees identical before this existed.
     """
@@ -86,11 +86,11 @@ def backfill_coords(
 ) -> int:
     """Give every level-0 member a reduced coordinate; return how many written.
 
-    Warm init (T39.2) needs a coordinate for EVERY section in the build, and
+    Warm init needs a coordinate for EVERY section in the build, and
     only a full build produces real UMAP coordinates — incremental placement
-    (#085) decides by dot product and produces none. So one `update` was enough
-    to break coverage, `stored_coords` correctly returned None, and settle cold
-    -inits for ever: the warm path could never fire in practice (#101, F28).
+    decides by dot product and produces none. Without this, one `update` is
+    enough to break coverage, `stored_coords` correctly returns None, and settle
+    cold-inits for ever: the warm path would never fire in practice.
 
     A placed section has no coordinate of its own, so it inherits its cluster's:
     the mean of the members that do have one, which keeps it inside the layout
@@ -196,7 +196,7 @@ def replace_tree(
     ``members`` is (label, section_id, attached, assignment_similarity). Each
     label's signature is the set of its members' CONTENT HASHES (stable across a
     re-split's new section ids), so a cluster whose content is unchanged reuses
-    its existing node id — keeping its brief (#068). ``coords`` is (section_id,
+    its existing node id — keeping its brief. ``coords`` is (section_id,
     reduced vector).
     """
     now = _now()
@@ -244,7 +244,7 @@ def replace_level(
     label's signature is the set of its child NODE IDs (stable once the level
     below is), so an unchanged grouping reuses its node id and keeps its brief;
     a child that changed id (its content changed) shifts its parent's signature,
-    minting a new parent — so a change propagates only up its own path (#068).
+    minting a new parent — so a change propagates only up its own path.
     """
     now = _now()
     by_label: dict[int, list[tuple[int, bool, float | None]]] = defaultdict(
@@ -289,14 +289,15 @@ def add_child(
     attached: bool,
     similarity: float | None,
 ) -> None:
-    """Attach one existing node to a parent one level up (#114).
+    """Attach one existing node to a parent one level up.
 
     The late-arrival counterpart of ``add_member``: a leaf the incubator emits
     after ``build_tree`` has recursed has no parent, and ``root.md``'s child
     listing is rendered from parent EDGES, so an agent walking the map from the
     root never reaches it. Refreshes the parent's signature over its child ids
-    — the same value ``replace_level`` writes — so #068 still matches the parent
-    to itself at the next rebuild, and #064 sees the parent's brief as stale.
+    — the same value ``replace_level`` writes — so the signature reconcile still
+    matches the parent to itself at the next rebuild, and brief freshness sees
+    the parent's brief as stale.
     """
     conn.execute(
         "INSERT INTO node_children(parent_id, child_id, attached, "
@@ -314,9 +315,9 @@ def attached_children(
 ) -> frozenset[int]:
     """Child ids attached to this parent by PROXIMITY, not by clustering.
 
-    The level >= 1 counterpart of ``forced_members`` (#113): ``attached = 1``
-    means #114 placed the child under its nearest parent because a node under
-    no parent is unreachable, which is worse than an imperfect one.
+    The level >= 1 counterpart of ``forced_members``: ``attached = 1`` means
+    attach-by-proximity placed the child under its nearest parent because a node
+    under no parent is unreachable, which is worse than an imperfect one.
     """
     rows = conn.execute(
         "SELECT child_id FROM node_children "
@@ -333,11 +334,11 @@ def move_child(
     *,
     similarity: float | None,
 ) -> None:
-    """Re-parent a node, recording the move as a confident placement (#123).
+    """Re-parent a node, recording the move as a confident placement.
 
-    Both signatures are refreshed — the parent it left and the one it joins —
-    so #064 sees each of their briefs as stale and regenerates over the child
-    set it actually has now.
+    Both signatures are refreshed — the parent it left and the one it joins — so
+    brief freshness sees each of their briefs as stale and regenerates over the
+    child set it actually has now.
     """
     old = conn.execute(
         "SELECT parent_id FROM node_children WHERE child_id = ?", (child_id,)
@@ -440,7 +441,7 @@ def add_leaf_node(
     tree: str,
     members: Sequence[tuple[int, bool, float | None]],
 ) -> int:
-    """Add ONE new level-0 node (incremental #086), return its id.
+    """Add ONE new level-0 node (incremental), return its id.
 
     ``members`` is (section_id, forced, assignment_similarity). Its signature is
     set from the members' content hashes so a later full rebuild can match it.
@@ -469,7 +470,7 @@ def add_member(
     forced: bool,
     similarity: float | None,
 ) -> None:
-    """Add one section to an existing node (force-assign #086); refresh sig."""
+    """Add one section to an existing node (force-assign); refresh sig."""
     _insert_member(conn, node_id, section_id, forced, similarity, _now())
     conn.execute(
         "UPDATE nodes SET signature = ? WHERE id = ?",
@@ -495,7 +496,7 @@ def _insert_member(
 def node_content_signature(conn: sqlite3.Connection, node_id: int) -> str:
     """The content-hash signature of a node's current section members.
 
-    A WRITE HELPER, and only that (#120). Its result is what the three
+    A WRITE HELPER, and only that. Its result is what the three
     membership writers stamp onto ``nodes.signature``; it is NOT the inverse of
     the stored column and is not expected to equal it at an arbitrary moment.
 
@@ -505,15 +506,15 @@ def node_content_signature(conn: sqlite3.Connection, node_id: int) -> str:
     drops a source's sections and re-inserts identical content under NEW section
     ids, so by the time ``replace_tree`` runs the members have already cascaded
     away — and the rebuild recognises the node by the signature it kept THROUGH
-    that teardown, which is what lets a re-split reuse node ids and their briefs
-    (#068). Refreshing on cascade sets it to the empty-set hash at delete time
-    and the node matches nothing;
-    ``tests/cluster/test_stable_ids.py`` fails in three places if anyone tries,
-    and ``test_a_cascade_delete_does_not_refresh_the_signature`` fails first.
+    that teardown, which is what lets a re-split reuse node ids and their
+    briefs. Refreshing on cascade sets it to the empty-set hash at delete time
+    and the node matches nothing; ``tests/cluster/test_stable_ids.py`` fails in
+    three places if anyone tries, and
+    ``test_a_cascade_delete_does_not_refresh_the_signature`` fails first.
 
     So "stored != recomputed" is not drift and has no victim. The column has
     exactly ONE reader in ``src/`` — ``_reconcile``'s label matching — and that
-    reader wants the snapshot. #064's brief freshness never touches it: it
+    reader wants the snapshot. Brief freshness never touches it: it
     compares ``briefs.member_signature``, computed on demand, against the value
     stored on the brief row.
     """
@@ -535,7 +536,7 @@ def node_centroids(
     """Return each leaf node's unit centroid (mean of member vectors).
 
     ``node_ids`` bounds the work to those leaves. A centroid costs every member
-    vector it is made of, so a page that wants a handful of them (#184) must be
+    vector it is made of, so a page that wants a handful of them must be
     able to ask for a handful rather than for the corpus — and must get the
     SAME centroid the monitor uses, which is why this is one function.
     """
@@ -579,7 +580,7 @@ def membership(
     """Return the section's level-0 membership in ``tree``, or None.
 
     Carries the assignment as it was recorded, so a rename can re-attach the
-    replacement section on exactly the terms the original had (#100).
+    replacement section on exactly the terms the original had.
     """
     row = conn.execute(
         "SELECT m.node_id AS n, m.assignment_similarity AS sim, "
@@ -620,7 +621,7 @@ def member_count(conn: sqlite3.Connection, node_id: int) -> int:
 
 
 def forced_members(conn: sqlite3.Connection, node_id: int) -> frozenset[int]:
-    """Section ids force-assigned into this node ignoring TAU (#086 T35.3)."""
+    """Section ids force-assigned into this node ignoring TAU."""
     rows = conn.execute(
         "SELECT section_id FROM node_members WHERE node_id = ? AND forced = 1",
         (node_id,),

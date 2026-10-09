@@ -1,4 +1,4 @@
-"""The ``openai`` and ``openai-compatible`` providers (T44.1, T44.3).
+"""The ``openai`` and ``openai-compatible`` providers.
 
 Both halves of a provider live here, because they are the same wire protocol
 and the same credential: completions through ``POST /v1/chat/completions`` and
@@ -8,7 +8,7 @@ embeddings through ``POST /v1/embeddings``.
 deliberately does not use it: the whole point of ``openai-compatible`` is that
 ollama, vllm and lm-studio speak this REST shape without being openai, httpx is
 already a dependency, and a stub server in a test is then a REAL round trip
-rather than a mocked client object (#108). Two endpoints and a bearer header
+rather than a mocked client object. Two endpoints and a bearer header
 are not enough surface to justify an SDK, and the SDK's retries and defaults
 would be one more thing to reason about when a local server misbehaves.
 

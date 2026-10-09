@@ -32,7 +32,7 @@ class Unreachable(ClientError):
 
 
 class TimedOut(ClientError):
-    """The server was reached and did not answer inside the budget (#168).
+    """The server was reached and did not answer inside the budget.
 
     Its own type because it sends the reader somewhere else entirely: an
     unreachable server is not running, and a timed-out one is working. Told
@@ -116,7 +116,7 @@ class Client:
         decodes a whole body, and a stream has no whole body until the job it
         is watching finishes. No read timeout either — a watch is meant to sit
         there quietly, and the 10s that suits registry CRUD would end it
-        mid-job (#168's lesson, one endpoint over).
+        mid-job.
         """
         headers = {"Authorization": f"Bearer {self._token}"}
         timeout = httpx.Timeout(None, connect=self._timeout)
@@ -145,7 +145,7 @@ class Client:
         check: str | None = None,
     ) -> object:
         """Write ``body``; ``check`` is the command a timeout tells the reader
-        to run, since a write that timed out may still have landed (E003)."""
+        to run, since a write that timed out may still have landed."""
         return self._request("PUT", path, body, timeout, check)
 
     def delete(self, path: str) -> object:
@@ -203,9 +203,9 @@ def from_profile() -> Client:
 def _error(response: httpx.Response) -> ClientError:
     """A typed error that KEEPS the server's own message.
 
-    The envelope's message used to be thrown away for 401/403/404, so every
-    missing tree, job or model printed exactly "Not found." — and a profile
-    pointed at something that is not a hrono server looked identical to a
+    The envelope's message must survive 401/403/404 too: without it every
+    missing tree, job or model prints exactly "Not found." — and a profile
+    pointed at something that is not a hrono server looks identical to a
     missing resource.
     """
     factory = _STATUS_ERRORS.get(response.status_code)
@@ -303,7 +303,7 @@ def _not_found(error: NotFound) -> str:
 
 
 def _timed_out(error: TimedOut) -> str:
-    """A slow answer; for a write, also how to see whether it landed (E003).
+    """A slow answer; for a write, also how to see whether it landed.
 
     A write that timed out may still have been applied, and retrying one that
     succeeded is how someone ends up with two of something — so the reader is

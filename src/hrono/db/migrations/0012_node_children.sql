@@ -6,9 +6,9 @@
 --
 -- `attached` carries node_members' meaning: 1 = attached by proximity to the
 -- nearest parent, 0 = a density-core member of it. `assignment_similarity`
--- DIVERGES from node_members' convention (#114): it is recorded on every row,
+-- DIVERGES from node_members' convention: it is recorded on every row,
 -- not only attached ones, because a confident attachment's score is the
--- diagnostic a misfit check one level up (#123) will read, and there is no
+-- diagnostic a misfit check one level up will read, and there is no
 -- reader today for discarding it to protect.
 
 CREATE TABLE node_children (

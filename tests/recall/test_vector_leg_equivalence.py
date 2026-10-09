@@ -1,10 +1,9 @@
-"""#194: the numpy scoring is the arithmetic the recipe describes.
+"""The numpy scoring is the arithmetic the recipe describes.
 
 The reference here is a plain, obvious loop written in the test — the
 specification, not a second production path. If the two ever disagree, the
 question is which one is wrong, and that is exactly the question worth being
-able to ask about a frozen recipe that was calibrated by measurement (#102,
-#127, #134).
+able to ask about a frozen recipe that was calibrated by measurement.
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ def _vector(rng: random.Random) -> list[float]:
 def _reference(
     conn: object, query_vec: Sequence[float], scope: frozenset[int] | None
 ) -> dict[int, float]:
-    """The pre-#194 loop, kept here as the statement of the arithmetic."""
+    """A plain loop, kept here as the statement of the arithmetic."""
     query = combine(query_vec, query_vec)
     content_query = unit(query_vec)
     blended: list[tuple[int, float]] = []
@@ -171,7 +170,7 @@ def test_the_ordering_is_the_same(corpus: Corpus) -> None:
 def test_a_scoped_recall_scores_only_its_trees_passages(
     corpus: Corpus,
 ) -> None:
-    """And the z is measured against THAT population, not the corpus (#166)."""
+    """And the z is measured against THAT population, not the corpus."""
     rng = random.Random(5)
     query = _vector(rng)
     scope = frozenset(corpus.ids[:10])

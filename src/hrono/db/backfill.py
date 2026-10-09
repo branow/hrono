@@ -1,12 +1,12 @@
 """Data steps that belong to a schema migration, in Python rather than SQL.
 
-A forward-only migration sometimes has to move DATA, not just shape: #102's
+A forward-only migration sometimes has to move DATA, not just shape:
 `0024_brief_members` takes the member list out of `briefs.text` and stores it
 beside the brief, and the rows already written have to move with it or the
 change applies only to briefs that do not exist yet. Some of that surgery is not
-expressible in SQL — re-splitting a brief into #071 passages is the packer's job
-— so a version may register a Python step here and the runner applies it in the
-same transaction as that version's ``.sql``.
+expressible in SQL — re-splitting a brief into node:// passages is the packer's
+job — so a version may register a Python step here and the runner applies it in
+the same transaction as that version's ``.sql``.
 
 Steps must be pure functions of the connection, idempotent, and safe on an
 empty database: they run once per database, guarded by the same bookkeeping
@@ -58,12 +58,13 @@ def brief_members(conn: sqlite3.Connection) -> None:
 def _orphaned_sources(conn: sqlite3.Connection) -> tuple[str, ...]:
     """node:// sources whose node no longer exists.
 
-    A retired node's brief cascades with it, but its #071 passages are keyed by
-    SOURCE and nothing cascades those — so the index keeps serving summaries of
-    topics the map no longer holds, footers and all. Measured on the QA corpus:
-    51 of 85 node:// passages belonged to three retired nodes. Clearing them is
-    part of taking the reference lists out of the index; stopping them being
-    created is #125, at the retirement site.
+    A retired node's brief cascades with it, but its node:// passages are keyed
+    by SOURCE and nothing cascades those — so the index keeps serving summaries
+    of topics the map no longer holds, footers and all. Measured on a
+    ~120-section test corpus: 51 of 85 node:// passages belonged to three
+    retired nodes. Clearing them is part of taking the reference lists out of
+    the index; stopping them being created is the retirement trigger's job
+    (``0025_node_brief_cleanup``).
     """
     return tuple(
         row["source"]

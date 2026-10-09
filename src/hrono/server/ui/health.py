@@ -1,4 +1,4 @@
-"""The Health page: what is wrong, and the fix beside it (E009, #218).
+"""The Health page: what is wrong, and the fix beside it.
 
 The reading is for everyone who can sign in. Every write here is the admin
 door the same operation has everywhere else (`edits`, `POST /jobs`): a page

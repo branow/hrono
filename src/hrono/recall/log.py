@@ -1,4 +1,4 @@
-"""The recall log (E042): what agents asked, bounded per tree.
+"""The recall log: what agents asked, bounded per tree.
 
 Only the API's recall route writes here. The Ask page asks the same question
 through the same engine and leaves no row: its asker is a curator checking

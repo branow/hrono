@@ -1,6 +1,6 @@
-"""#185 (T52): the triage view.
+"""The triage view.
 
-Each row is a state some earlier ticket learned to detect. The fixture builds
+Each row is a state hrono can detect. The fixture builds
 every one of them at once, because a triage page that is right about four
 kinds and silent about the fifth is the failure this view exists to prevent.
 """
@@ -74,7 +74,7 @@ def clean_tree(tmp_path: Path) -> Iterator[Browser]:
 
     Three and not two on purpose: with a two-level tree, "every level below the
     top" and "level 0 only" are the same set, and the orphan check would look
-    right while only ever looking at the leaves (#163).
+    right while only ever looking at the leaves.
     """
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)
@@ -124,7 +124,7 @@ def messy(clean_tree: Browser) -> Browser:
     """Every kind of trouble at once."""
     conn = clean_tree.conn
     with conn:  # type: ignore[union-attr]
-        # an UPPER topic nothing points at — the #163 shape, and the one a
+        # an UPPER topic nothing points at — an orphan above level 0, the one a
         # leaf-level check cannot see because its own child IS parented
         conn.execute(  # type: ignore[attr-defined]
             "INSERT INTO nodes(tree, level, label, created_at) "
@@ -214,7 +214,7 @@ def test_a_non_zero_check_is_plural_over_one() -> None:
 def test_an_unreachable_topic_links_to_the_topic_itself(
     messy: Browser,
 ) -> None:
-    # the defect that shipped twice is the one this view exists for, so the
+    # an unreachable topic is what this view exists for, so the
     # link lands on the thing rather than on a page you then have to search
     messy.sign_in()
 
@@ -240,7 +240,7 @@ def test_a_zero_is_shown_rather_than_hidden(clean_tree: Browser) -> None:
 
 
 def test_counts_are_per_tree(messy: Browser) -> None:
-    # #054: a count that silently spans trees is worse than no count
+    # a count that silently spans trees is worse than no count
     assert messy.survey("other") == {
         "topics cut off from the root": 0,
         "topics with no usable brief, or a stale one": 0,
@@ -264,9 +264,9 @@ def test_the_top_level_is_not_counted_as_unreachable(
 def test_no_internal_ticket_numbers_reach_the_page(
     clean_tree: Browser,
 ) -> None:
-    """#197: the most demo-able screen printed "(#124, #163)" and "(#113)".
+    """No issue number like "(#124)" is printed on the page.
 
-    Our issue numbers mean nothing to the person looking at the page, and
+    Issue numbers mean nothing to the person looking at the page, and
     invite a question nobody wants to answer in a demo.
     """
     clean_tree.sign_in()

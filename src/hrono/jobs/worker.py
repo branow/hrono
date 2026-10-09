@@ -8,7 +8,7 @@ queue.
 
 The loop supervises itself: a cycle that raises — the claim or the status write
 losing the database to a foreign writer past the retry budget — is logged and
-restarted under bounded backoff instead of ending the thread silently (F24). A
+restarted under bounded backoff instead of ending the thread silently. A
 job whose worker stops stamping its heartbeat goes back on the queue, and so
 does every running job at startup; re-running one is safe because the expensive
 stages are content-hash cached.
@@ -39,7 +39,7 @@ from hrono.jobs.ops import OPS, Handler, JobContext
 from hrono.jobs.stages import StageFailed
 
 HEARTBEAT_INTERVAL = 5.0
-_BEAT_GRACE = 4  # missed beats before the reclaimer counts as gone (#111)
+_BEAT_GRACE = 4  # missed beats before the reclaimer counts as gone
 
 STALE_AFTER = 60.0
 
@@ -63,7 +63,7 @@ def enqueue(
 ) -> str:
     """Insert a pending job and return its id (ops/endpoints call this).
 
-    ``started_by`` is the user whose request this is (#201); a child names no
+    ``started_by`` is the user whose request this is; a child names no
     one of its own and takes its parent's, so a run's calls add up under the
     person who started it.
     """
@@ -90,7 +90,7 @@ def reclaim_stranded(database: Database) -> tuple[str, ...]:
     """Requeue every job left ``running`` by a worker that is gone.
 
     Called at startup, before any worker runs, so a job whose worker died with
-    the process is re-run rather than stranded for ever (F24). A job that has
+    the process is re-run rather than stranded for ever. A job that has
     taken its worker down ``MAX_ATTEMPTS`` times is failed instead of requeued:
     re-running a poison pill on every restart is a crash loop nobody sees.
     """
@@ -142,13 +142,13 @@ class Worker(threading.Thread):
             beat.join(timeout=5)
 
     def healthy(self) -> bool:
-        """True when BOTH of this worker's threads are doing their job (#111).
+        """True when BOTH of this worker's threads are doing their job.
 
         ``is_alive()`` reports the supervisor, which claims and executes; the
         reclaimer that stamps heartbeats and requeues stranded jobs is a second
         thread, and if it ended while the supervisor lived nothing would recover
-        a stranded job while ``/health`` still answered ``alive`` — a quieter
-        replay of the failure #092's health check exists to catch.
+        a stranded job while ``/health`` still answered ``alive`` — the very
+        failure the health check exists to catch, only quieter.
 
         A worker that has started but whose beat has not begun answers False —
         starting is not yet healthy, which is the honest answer for a readiness
@@ -174,9 +174,9 @@ class Worker(threading.Thread):
     def _supervise(self) -> None:
         """Run cycles until stopped, surviving a cycle that raises.
 
-        The write inside a cycle used to escape ``run()`` and end the thread
-        with no log line, leaving the claimed job running for ever and every
-        later job unclaimed (F24).
+        A write inside a cycle must not escape ``run()``, because it would end
+        the thread with no log line, leaving the claimed job running for ever
+        and every later job unclaimed.
         """
         failures = 0
         while not self._stopped.is_set():
@@ -270,7 +270,7 @@ class Worker(threading.Thread):
             if handler is None:
                 # the op name came from the client's own request, so it is
                 # safe to say back — and useless to hide behind "the job
-                # failed" (#109).
+                # failed".
                 raise BadRequest(f"unknown op: {job.op}")
             outcome = handler(
                 job,
@@ -280,9 +280,9 @@ class Worker(threading.Thread):
             )
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
             # the record keeps the CODE; the driver's own wording lives here,
-            # where an operator can read it and a client cannot (#109).
+            # where an operator can read it and a client cannot.
             _logger.exception("job %s (%s) failed", job.id, job.op)
-            # a composite op's failure carries the stages it DID finish (#213)
+            # a composite op's failure carries the stages it DID finish
             self._finish(job, "failed", exc, getattr(exc, "outcome", None))
         else:
             self._finish(job, "succeeded", None, outcome)
@@ -298,11 +298,11 @@ class Worker(threading.Thread):
     ) -> None:
         """Record the terminal status, the failure's CODE, and the op's counts.
 
-        An op that returns nothing persists nothing (#132): most ops have no
+        An op that returns nothing persists nothing: most ops have no
         outcome worth a reader's time, and a null column says exactly that.
 
-        A failure is recorded in the envelope every other surface answers in
-        (#109): a kebab-case code, a client-safe message, and details. The
+        A failure is recorded in the envelope every other surface answers in:
+        a kebab-case code, a client-safe message, and details. The
         exception is mapped through ``as_app_error`` first, so a job never
         records the driver's phrasing as hrono's answer.
         """
@@ -332,7 +332,7 @@ def _mapped(error: BaseException) -> AppError:
     """The failure as hrono's envelope; a stage's failure names the stage.
 
     The code is the CAUSE's — ``llm-error``, not "a stage failed" — and the
-    stage and the item it was on go into the details beside it (#213).
+    stage and the item it was on go into the details beside it.
     """
     if not isinstance(error, StageFailed):
         return as_app_error(error)

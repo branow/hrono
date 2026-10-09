@@ -1,4 +1,4 @@
-"""T37: the misfit-rate monitor — exact rate, incremental, baseline-relative."""
+"""The misfit-rate monitor — exact rate, incremental, baseline-relative."""
 
 from collections.abc import Iterator
 
@@ -169,7 +169,7 @@ def forced_node(
 
 
 def test_a_forced_member_below_tau_is_a_misfit(db: Database) -> None:
-    # #113 / F29: a force-assigned chunk is attached to its NEAREST centroid by
+    # a force-assigned chunk is attached to its NEAREST centroid by
     # construction, so `best_other > own` can never see it however alien it is.
     with db.connect() as conn, conn:
         node, _pioneer = forced_node(conn, topic=0, pioneer_topic=3)
@@ -233,7 +233,7 @@ def test_the_sample_prefers_clusters_holding_a_forced_member() -> None:
 def test_the_monitor_reports_the_rate_and_whether_it_moved(
     db: Database,
 ) -> None:
-    # #133: what an operator acts on is the MOVE against the baseline, not the
+    # what an operator acts on is the MOVE against the baseline, not the
     # bare number — a fresh tree's rate is nonzero by nature.
     with db.connect() as conn, conn:
         make_node(conn, topic=0, extra=[1])
@@ -247,10 +247,10 @@ def test_the_monitor_reports_the_rate_and_whether_it_moved(
 
 
 def test_the_preferred_slice_rotates_with_the_batch() -> None:
-    # #129: taking the preferred clusters in sorted id order starved every
-    # holder past the thirty-second FOR EVER once a corpus had more forced
+    # taking the preferred clusters in sorted id order would starve every
+    # holder past the thirty-second FOR EVER once a corpus has more forced
     # holders than SAMPLE_SIZE — the same lowest ids re-checked on every batch,
-    # whatever the clock said.
+    # whatever the clock says.
     holders = list(range(1, 50))
     nodes = list(range(1, 200))
 
@@ -284,7 +284,7 @@ def test_rotation_is_still_deterministic_and_bounded() -> None:
 
 def test_a_small_preferred_pool_is_taken_whole() -> None:
     # below the cap there is nothing to rotate: every holder is checked every
-    # batch, which is the behaviour #113 shipped and must not change.
+    # batch, and that must not change.
     nodes = list(range(1, 200))
 
     for seed in range(3):

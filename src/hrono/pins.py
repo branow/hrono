@@ -1,4 +1,4 @@
-"""Pins: the hard constraint a hand-edit leaves behind (#154, T45).
+"""Pins: the hard constraint a hand-edit leaves behind.
 
 The spec's rule, in one sentence: "A hand-edit pins the entity, and the
 pipeline treats a pin as a hard constraint ... Without this, a manual fix gets
@@ -42,7 +42,7 @@ def pin(
 
     ``anchor`` says WHERE, for the kinds that need one: the node a membership
     must stay in, the parent a child must hang under. A brief anchors nothing —
-    it is held in place by being itself (#155).
+    it is held in place by being itself.
     """
     if kind not in KINDS:
         raise ValueError(f"unknown pin kind: {kind}")
@@ -64,7 +64,7 @@ def unpin(conn: sqlite3.Connection, kind: str, target_id: int) -> bool:
 
 
 def unpin_all(conn: sqlite3.Connection, target_id: int) -> int:
-    """Release every pin on one node — what "hand this back" means (#156)."""
+    """Release every pin on one node — what "hand this back" means."""
     cursor = conn.execute(
         "DELETE FROM pins WHERE kind IN (?, ?) AND target_id = ?",
         (BRIEF, PARENTING, target_id),
@@ -78,7 +78,7 @@ def reanchor(
     """Point an existing pin at a new node, keeping its reason and its date.
 
     A split retires the node an anchor names and hands its members to fresh
-    children (#162). The operator's decision has not changed and neither has
+    children. The operator's decision has not changed and neither has
     when they made it — only the id that expresses it — so this is an UPDATE
     of the address and not a re-pin, which would rewrite the reason with
     whatever the pipeline happened to be doing at the time.

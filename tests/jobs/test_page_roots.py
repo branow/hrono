@@ -1,4 +1,4 @@
-"""E002: the runs list pages in SQL, and filters by the status rollup gives.
+"""The runs list pages in SQL, and filters by the status rollup gives.
 
 `store.page_roots` filters on a parent's DERIVED status, computed in SQL. That
 is a second statement of `aggregate.rollup`'s rule, so every combination of

@@ -2,7 +2,7 @@
 
 Selectors are data-driven (one resolver per ``type``): ``all`` and ``source``
 resolve now; ``section``/``node``/``level`` are seamed but not yet supported
-(they need tree entities in M3). Fan-out creates a parent plus one atomic leaf
+(they need tree entities). Fan-out creates a parent plus one atomic leaf
 per resolved item, so the worker's failure-isolation applies per item.
 """
 
@@ -36,7 +36,7 @@ def resolve(
 # The ops whose unit of work is ONE SOURCE — they read `scope["name"]` and do
 # nothing without it, so a scope naming many sources is a job per source. Every
 # other op takes the whole tree at once and a fan-out would give it a scope it
-# cannot read. Data rather than a branch, like `OPS` itself (#175).
+# cannot read. Data rather than a branch, like `OPS` itself.
 SOURCE_SCOPED = frozenset({"sync", "split"})
 
 

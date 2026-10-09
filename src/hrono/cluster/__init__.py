@@ -20,12 +20,12 @@ class ClusterError(DomainError):
 
 
 class TooFewPoints(ClusterError):
-    """This level has too few points for any rung of the ladder (#094).
+    """This level has too few points for any rung of the ladder.
 
     Its own type because it is the one clustering failure that is not a
     failure: a caller may answer it by COLLECTING — `build_tree` reads it as
     "the current top is the root", and the `cluster` op as "then the corpus is
-    one topic" (#112). Every other ``ClusterError`` means the backend broke and
+    one topic". Every other ``ClusterError`` means the backend broke and
     must still fail the job, so the two must not be caught together.
     """
 

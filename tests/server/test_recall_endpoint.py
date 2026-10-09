@@ -1,4 +1,4 @@
-"""T28: the synchronous recall endpoint — role, shape, explore message."""
+"""The synchronous recall endpoint — role, shape, explore message."""
 
 import json
 from collections.abc import Iterator

@@ -1,4 +1,4 @@
-"""The syncer table: one entry per source type (#142, T40).
+"""The syncer table: one entry per source type.
 
 Every source type owes the ``sync`` op the same two things and only these two:
 the source's current content in the cache path it is given, and a VERSION

@@ -1,9 +1,9 @@
-"""#142: the sync op dispatches by source type; git is one entry.
+"""The sync op dispatches by source type; git is one entry.
 
 What every source type owes the op is the same two things — content in the
 cache, a version pinned — and nothing else. These pin that the op holds no
 knowledge of git, that a type without a syncer fails by name rather than with a
-KeyError, and (per #108) that the REAL git syncer still drives the whole path
+KeyError, and that the REAL git syncer still drives the whole path
 end to end through the seam.
 """
 
@@ -152,7 +152,7 @@ def test_the_syncer_receives_declared_secrets_decrypted(
 def test_the_real_git_syncer_still_clones_and_pins_the_sha(
     context: tuple[Database, JobContext], tmp_path: Path
 ) -> None:
-    # #108: the seam is only worth having if the REAL backend drives it. This
+    # the seam is only worth having if the REAL backend drives it. This
     # runs git for real against a local repo and checks both halves of the
     # contract — content in the cache, the commit SHA pinned as the version.
     database, ctx = context

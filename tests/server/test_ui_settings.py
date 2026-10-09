@@ -1,4 +1,4 @@
-"""#199/#200 (settings, edit half): config that can be changed from the page.
+"""Config that can be changed from the page.
 
 Every assertion is made against the REGISTRY the write lands in, not against
 the page that reports it — a settings page that rendered a confirmation while
@@ -16,7 +16,7 @@ registry path: the trap this feature sets is a form that posts back the mask it
 displayed, and only a real credential in the row can show it was not
 overwritten.
 
-**Two surfaces now (#200).** The page was five textareas of JSON; it is a FORM
+**Two surfaces.** The page is a FORM
 over fields derived from each collection's own pydantic model, with the JSON
 kept as a second view over the WHOLE collection. Both are exercised here,
 because they are two doors onto one registry and the thing that must not drift
@@ -63,10 +63,10 @@ def placeholder(what: str) -> str:
     """A stand-in credential, built rather than ASSIGNED.
 
     What these tests need is a real Fernet ciphertext in the row, not a
-    realistic prefix. It used to be a module constant — and a DLP scanner
-    reads `NAME = "some-long-string"` as an env-style secret assignment
-    whatever the string says, which blocked every tool that tried to open this
-    file. The shape is what trips it, so the shape is what changes (#200).
+    realistic prefix. It must not be a module constant: a DLP scanner reads
+    `NAME = "some-long-string"` as an env-style secret assignment whatever the
+    string says, and blocks every tool that tries to open this file. The shape
+    is what trips it, so the shape is what changes.
     """
     return f"not-a-real-{what}"
 
@@ -193,7 +193,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         for role in ("reader", "writer", "admin")
     }
     cipher = Cipher.from_key(KEY, record.key_id)
-    # the seeder `hrono serve` itself runs (#021), not a planted is_default row
+    # the seeder `hrono serve` itself runs, not a planted is_default row
     seed_defaults(conn, cipher, COLLECTIONS)
     secret = cipher.encrypt(placeholder("source-token"))
     registry_store.insert(
@@ -215,7 +215,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     with TestClient(app) as client:
         # The worker polls the SAME adopted connection this fixture writes
         # through; two threads on one sqlite connection interleave
-        # transactions (#194).
+        # transactions.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         yield Browser(client, tokens, conn, repos)
@@ -240,8 +240,8 @@ def _as_posted(fields: dict[str, str], **changes: object) -> dict[str, object]:
 
 
 def test_the_form_is_the_default_view(browser: Browser) -> None:
-    """#200: the page was five textareas of JSON, which is the API's surface
-    wearing a browser. Adding a model meant knowing the schema by heart."""
+    """Five textareas of JSON would be the API's surface wearing a browser,
+    and adding a model would mean knowing the schema by heart."""
     browser.sign_in()
 
     page = browser.config(section="models")
@@ -459,7 +459,7 @@ def test_a_confirmed_delete_removes_the_row(browser: Browser) -> None:
 def test_a_preview_writes_nothing_and_reports_the_blast_radius(
     browser: Browser,
 ) -> None:
-    """`?dry_run=true`'s own answer (#190), before the edit is applied."""
+    """`?dry_run=true`'s own answer, before the edit is applied."""
     browser.sign_in()
     browser.item(
         "prompts",
@@ -574,8 +574,8 @@ def test_a_write_redirects_so_a_refresh_repeats_nothing(
 def test_a_form_opens_as_its_own_view_and_leaves_the_list_alone(
     browser: Browser, query: dict[str, str]
 ) -> None:
-    """#210: an edit opened in the middle of a 3000px page and pushed the rest
-    down; an add put a picker ABOVE the items it was adding to. Each now opens
+    """An edit must not open in the middle of a 3000px page and push the rest
+    down, nor an add put a picker ABOVE the items it is adding to. Each opens
     on its own, and Cancel is the list exactly as it was."""
     browser.sign_in()
 
@@ -592,8 +592,8 @@ def test_a_form_opens_as_its_own_view_and_leaves_the_list_alone(
 
 
 def test_the_json_view_is_the_whole_collection(browser: Browser) -> None:
-    """#200: a collection could only be edited one item at a time, so there
-    was no way to say "these are my models"."""
+    """A collection is editable whole, not only one item at a time, so there
+    is a way to say "these are my models"."""
     browser.sign_in()
 
     document = json.loads(browser.document("prompts"))
@@ -714,9 +714,9 @@ def test_a_tree_is_created_from_the_page(browser: Browser) -> None:
 
 
 def test_trees_are_the_first_thing_on_the_page(browser: Browser) -> None:
-    """#200: a tree is what every other collection is in service of, and it was
-    the LAST card, behind a disclosure — an operator looking for "how do I make
-    a tree" found four screens of model JSON instead."""
+    """A tree is what every other collection is in service of, so it is not
+    the LAST card behind a disclosure — an operator looking for "how do I make
+    a tree" must not find four screens of model JSON instead."""
     browser.sign_in()
 
     page = browser.config()
@@ -780,7 +780,7 @@ def test_a_new_tree_appears_in_the_switcher(browser: Browser) -> None:
 def test_the_delete_warning_is_shown_before_the_deletion(
     browser: Browser,
 ) -> None:
-    """`before_delete` says what removing a tree's config ARMS (#167).
+    """`before_delete` says what removing a tree's config ARMS.
 
     An operator has to read that beside the button, not in the receipt — by
     then the next maintain is already unscoped.
@@ -831,9 +831,9 @@ def test_the_chosen_kind_decides_which_fields_are_offered(
 def test_a_field_reads_by_its_label_and_help_not_its_config_path(
     browser: Browser,
 ) -> None:
-    """#210: labels were raw config paths — `auth.method`, `filter.only` — and
-    no field said what it did. Both now come from the model's own field, with
-    the path kept, secondary, for the CLI and the JSON view."""
+    """Labels are not raw config paths like `auth.method` or `filter.only`,
+    and every field says what it does. Both come from the model's own field,
+    with the path kept, secondary, for the CLI and the JSON view."""
     browser.sign_in()
 
     page = browser.config(add="sources", variant="git")
@@ -918,7 +918,7 @@ def _a_topic_in(browser: Browser, tree: str) -> int:
 def _brief_written_by(
     browser: Browser, node: int, prompt: str, template: str
 ) -> None:
-    """A brief carrying its own provenance — which is what goes stale (#064)."""
+    """A brief carrying its own provenance — which is what goes stale."""
     conn = browser.conn
     with conn:  # type: ignore[attr-defined]
         briefs.upsert(
@@ -981,9 +981,9 @@ def test_each_collection_is_masked_by_its_OWN_declared_path(
     Masking every row with ONE collection's descriptor would leave the page
     looking right for sources — the first collection — while leaking every
     other collection's credential. Asserted on the JSON view because that is
-    where a credential is rendered at all now: the form view lists names and
+    where a credential is rendered at all: the form view lists names and
     opens one item at a time, so a secret only reaches the page when somebody
-    asks to edit the thing holding it (#200).
+    asks to edit the thing holding it.
     """
     key = placeholder("connection-key")
     secret = browser.cipher.encrypt(key)
@@ -1019,7 +1019,7 @@ def test_a_credential_is_not_on_the_page_until_it_is_opened(
     browser: Browser,
 ) -> None:
     """The landing view lists names and what each points at. A collection of
-    thirty sources used to print thirty configs, masked but all of them."""
+    thirty sources does not print thirty configs, masked but all of them."""
     browser.sign_in()
 
     listing = browser.config(section="sources")
@@ -1040,8 +1040,8 @@ def test_an_empty_collection_says_so(browser: Browser) -> None:
 def test_delete_shows_what_it_would_strand_before_confirming(
     browser: Browser,
 ) -> None:
-    """#210: delete was a checkbox under every row, with nothing said about
-    what it took with it. It is now a row action that leads here first — and
+    """Delete is not a checkbox under every row that says nothing about what
+    it takes with it. It is a row action that leads here first — and
     the count is of the briefs that template actually wrote."""
     browser.sign_in()
     browser.item(
@@ -1133,13 +1133,13 @@ def test_environment_values_are_shown_read_only(
     )
 
 
-# --------------------------------------------------- preview on a topic (#431)
+# --------------------------------------------------------- preview on a topic
 WRITTEN = "A rewritten brief in the new style, naming what the topic holds."
 CURRENT = "What this topic says about the code it groups together."
 
 
 class _Model(BaseHTTPRequestHandler):
-    """An openai-shaped completion API on a real socket (#108)."""
+    """An openai-shaped completion API on a real socket."""
 
     status = 200
     seen: list[dict] = []

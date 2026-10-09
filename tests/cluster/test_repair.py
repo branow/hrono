@@ -1,4 +1,4 @@
-"""T38: local cluster repairs — split, migrate, dissolve."""
+"""Local cluster repairs — split, migrate, dissolve."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -115,7 +115,7 @@ def test_split_breaks_an_oversized_cluster_into_children(db: Database) -> None:
         for child in children:
             n = cluster_store.member_count(conn, child)
             assert 5 <= n <= 20
-            # new nodes carry a #068 signature so a rebuild can match them
+            # new nodes carry a content signature so a rebuild can match them
             sig = conn.execute(
                 "SELECT signature FROM nodes WHERE id = ?", (child,)
             ).fetchone()["signature"]
@@ -137,7 +137,7 @@ def test_split_leaves_a_within_cap_cluster_alone(db: Database) -> None:
 def test_split_re_anchors_a_pin_to_the_child_that_inherits_it(
     db: Database,
 ) -> None:
-    """#162: a divided topic is not a vanished one.
+    """A divided topic is not a vanished one.
 
     `_restore_pinned` follows a dead anchor's surviving COMPANY to the node
     that inherited it — but a split moves the company into the children too,
@@ -269,8 +269,8 @@ def _forced(conn: object, node_id: int, section_id: int) -> bool:
 def test_a_forced_pioneer_leaves_once_its_real_siblings_form(
     db: Database,
 ) -> None:
-    # #113 / F29: `docs/unrelated-cooking-notes.md` force-assigned at 0.281 into
-    # a source-code topic. One alien member in seven is a rate of 0.14 — under
+    # `docs/unrelated-cooking-notes.md` force-assigned at 0.281 into a
+    # source-code topic. One alien member in seven is a rate of 0.14 — under
     # MISFIT_THRESHOLD — so the rate alone never triggers the repair that frees
     # it. The flag does.
     with db.connect() as conn, conn:
@@ -329,7 +329,7 @@ def test_a_forced_member_with_nowhere_better_stays_put(db: Database) -> None:
 
 
 def test_repair_reports_what_it_did(db: Database) -> None:
-    # #133: "succeeded" does not say whether a cluster was dissolved, a pioneer
+    # "succeeded" does not say whether a cluster was dissolved, a pioneer
     # freed, or nothing needed doing at all.
     with db.connect() as conn, conn:
         members = [
@@ -359,7 +359,7 @@ def _nodes(db: Database):
 
 
 def test_freed_counts_pioneers_not_migrations(db: Database) -> None:
-    # #133: `freed` is this ticket's headline number — a pioneer #113 released.
+    # `freed` is the headline number — a force-assigned pioneer released.
     # It must be able to DISAGREE with `migrated`, or it is just a second name
     # for the same count and an operator reading "freed: 7" would believe seven
     # alien members were revisited when the true number is one.
@@ -395,10 +395,10 @@ def test_freed_counts_pioneers_not_migrations(db: Database) -> None:
 
 
 def test_a_split_leaves_both_halves_WHERE_THE_TOPIC_WAS(db: Database) -> None:
-    """#200: the halves were created and the original retired, and nothing
-    attached them — so a topic under the root became two nodes beside the
-    tree. On the map: two circles with no line to anything, and a root whose
-    brief silently stopped covering a seventh of the corpus."""
+    """The halves must be attached where the original was: otherwise a topic
+    under the root becomes two nodes beside the tree. On the map: two circles
+    with no line to anything, and a root whose brief silently stops covering
+    part of the corpus."""
     with db.connect() as conn, conn:
         sections = [
             add_section(conn, f"a{i}\n".encode(), unit(0)) for i in range(16)
@@ -437,10 +437,10 @@ def test_an_emptied_leaf_is_dissolved_even_with_no_centroid(
 ) -> None:
     """A leaf whose members are gone must not keep serving its brief.
 
-    The op used to iterate ``node_centroids``, which skips a node with no
-    vectors — so a leaf emptied by a cascade or a migration was invisible to
-    the one repair (dissolve) it needed, and its brief and node:// passages
-    kept answering recall for ever.
+    The op must not iterate ``node_centroids``, which skips a node with no
+    vectors — a leaf emptied by a cascade or a migration would be invisible to
+    the one repair (dissolve) it needs, and its brief and node:// passages
+    would keep answering recall for ever.
     """
     with db.connect() as conn, conn:
         a = add_section(conn, b"alpha body", unit(0))
@@ -493,7 +493,7 @@ def test_a_dissolve_spares_a_leaf_holding_a_pinned_member(
 ) -> None:
     # a one-member topic a human pinned a chunk into is the operator's
     # decision, and dissolving it re-places the chunk by machine judgement —
-    # the revert pins exist to prevent (#154).
+    # the revert pins exist to prevent.
     with db.connect() as conn, conn:
         a = add_section(conn, b"alpha body", unit(0))
         b = add_section(conn, b"beta body", unit(0))
@@ -515,7 +515,8 @@ def test_split_deals_a_vectorless_member_into_the_biggest_child(
     db: Database,
 ) -> None:
     # a member with no vector cannot be judged by the cores, but dropping it
-    # broke the #086 invariant: it ended up in no cluster and not pending.
+    # would break the pool invariant: it would end up in no cluster and not
+    # pending.
     with db.connect() as conn, conn:
         left = [
             add_section(conn, f"left {i}".encode(), unit(0)) for i in range(4)

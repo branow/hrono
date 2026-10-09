@@ -1,13 +1,13 @@
-"""The ``hrono sources|connections|models|prompts`` command groups (#138).
+"""The ``hrono sources|connections|models|prompts`` command groups.
 
 One group per registry collection, all built from the SAME factory: a
 collection is only a name here, exactly as it is only a descriptor on the
-server. Registering a source used to mean hand-written curl, which is not a
+server. Registering a source must not need hand-written curl, which is not a
 product surface — it is the absence of one.
 
 ``set`` reads its config as JSON from a file or stdin and PUTs it, so a config
 is declarative: say what it IS and get that, whether or not it was there before
-(#138's PUT-creates half), with a budget long enough for the validation the
+(the server's PUT creates), with a budget long enough for the validation the
 server runs first, and a timeout that names the command which shows whether the
 write landed. ``rm`` deletes, except for a seeded default, which the server
 resets rather than removes.
@@ -29,9 +29,9 @@ from hrono.client.http import from_profile
 
 # ``set`` is not a CRUD write: the server validates what it is given before
 # storing it — a connection against its provider, a local embedding model by
-# LOADING ITS WEIGHTS (13.3s cold where #168 measured it, more on a slower disk
-# or a larger model). The client's 10s default was chosen for reads and fell
-# under that, so a write that landed reported a timeout (#199). The same
+# LOADING ITS WEIGHTS (13.3s measured cold, more on a slower disk or a larger
+# model). The client's 10s default is for reads and falls under that, so a
+# write that landed would report a timeout. The same
 # budget recall's cold path has, for the same cost.
 WRITE_TIMEOUT = 120.0
 
@@ -139,7 +139,7 @@ def build_app(collection: str) -> typer.Typer:
         note = result.get("note") if isinstance(result, dict) else None
         if note:
             # a collection may have a consequence worth hearing at the moment
-            # of the delete rather than at the moment it takes effect (#167)
+            # of the delete rather than at the moment it takes effect
             typer.echo(str(note))
 
     return group

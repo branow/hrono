@@ -1,13 +1,13 @@
 """What every API-ONLY source type shares: pull pages, then read them back.
 
-Confluence (#149) and Notion (#150) have nothing to clone. Their syncer PULLS
+Confluence and Notion have nothing to clone. Their syncer PULLS
 each page and materializes it in the source's cache; their reader reads those
-files back. That is not a workaround for the #143 contract — the cache is
+files back. That is not a workaround for the reader contract — the cache is
 "where this source's current content lives", and a pulled page is exactly
 that. Materializing also means the diff compares bytes hrono actually holds
 rather than re-asking the provider twice per update.
 
-A page carries its OWN version (#147's ``Unit.version``): a space of four
+A page carries its OWN version (``Unit.version``): a space of four
 hundred pages where one was edited must re-ingest one page, not four hundred.
 The source's own version is a digest over the whole page -> version map, so it
 moves when anything in scope moves.

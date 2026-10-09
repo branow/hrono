@@ -1,8 +1,8 @@
--- Re-key the incubator pool from CONTENT HASH to SECTION (#095). Membership is
+-- Re-key the incubator pool from CONTENT HASH to SECTION. Membership is
 -- per section (`node_members.section_id`), so a hash-keyed pool is coarser than
 -- the thing it is the complement of: two sections with identical bodies at
 -- different paths share one content hash but get DIFFERENT combined vectors
--- (the #039 path blend, ALPHA 0.5), so one can clear TAU and join a cluster
+-- (the path blend, ALPHA 0.5), so one can clear TAU and join a cluster
 -- while its twin parks. One row then cannot represent them -- it claims both
 -- are homeless, is retired when either is homed (stranding the twin in no node
 -- AND no pool), and force-assigns both when either ages out (putting the homed

@@ -91,7 +91,7 @@ rather than merely tolerated.
   write to the stored model config — asserted by the test. No stop sequence: the
   contract has no field for one, and adding it would be speculative here.
   (Separately: `src/hrono/llm/client.py` is currently unreadable through the
-  tooling — a repo-side canary hook flags an env-assignment pattern in it — so
+  tooling — a local secret-scanning hook flags an env-assignment pattern in it — so
   I derived the contract by introspection. Worth knowing before a ticket needs
   to EDIT that file.)
 

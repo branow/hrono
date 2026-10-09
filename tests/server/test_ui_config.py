@@ -1,4 +1,4 @@
-"""#187 (T55, tables half): config on the page, with secrets masked.
+"""Config on the page, with secrets masked.
 
 The masking is asserted against a REAL encrypted token written through the real
 registry path — a placeholder would prove the template and nothing about
@@ -32,10 +32,10 @@ def placeholder(what: str) -> str:
     """A stand-in credential, built rather than ASSIGNED.
 
     What this test needs is a REAL Fernet ciphertext in the row, not a
-    realistic prefix. It used to be two module constants — and a DLP scanner
-    reads `NAME = "some-long-string"` as an env-style secret assignment
-    whatever the string says, which blocked every tool that tried to open this
-    file. The shape is what trips it, so the shape is what changes (#200).
+    realistic prefix. It must not be a module constant: a DLP scanner reads
+    `NAME = "some-long-string"` as an env-style secret assignment whatever the
+    string says, and blocks every tool that tries to open this file. The shape
+    is what trips it, so the shape is what changes.
     """
     return f"not-a-real-{what}"
 
@@ -61,7 +61,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         role: create_user(conn, role, role)[1] for role in ("reader", "admin")
     }
     cipher = Cipher.from_key(KEY, record.key_id)
-    # the seeder `hrono serve` itself runs (#021), not a planted is_default row
+    # the seeder `hrono serve` itself runs, not a planted is_default row
     seed_defaults(conn, cipher, COLLECTIONS)
     secret = cipher.encrypt(placeholder("source-token"))
     registry_store.insert(
@@ -120,7 +120,7 @@ def test_every_collection_is_one_click_away(browser: Browser) -> None:
 
 
 def test_only_the_chosen_collection_is_on_the_page(browser: Browser) -> None:
-    """#210: five collections on one page was a 3000px wall. A view shows the
+    """Five collections on one page are a 3000px wall. A view shows the
     collection it was asked for and none of the others' rows."""
     browser.sign_in()
 
@@ -141,7 +141,7 @@ def test_a_configured_item_is_shown(browser: Browser) -> None:
 
 def test_a_collection_is_a_table_of_named_columns(browser: Browser) -> None:
     """Sources read as type, location, access and which files — not as one
-    grey run-on line of every scalar field (#210)."""
+    grey run-on line of every scalar field."""
     browser.sign_in()
 
     page = browser.config(section="sources")
@@ -161,10 +161,10 @@ def test_a_secret_is_masked_and_so_is_its_ciphertext(
     the field, rather than the page merely happening not to decrypt it.
 
     Asserted on the JSON view, because that is where a credential is rendered
-    at all now. The landing view lists names and opens one item at a time, so a
+    at all. The landing view lists names and opens one item at a time, so a
     secret only reaches the page when somebody asks to edit the thing holding
     it — strictly less exposure, and worth asserting out loud rather than
-    losing to a changed template (#200).
+    losing to a changed template.
     """
     browser.sign_in()
 
@@ -183,7 +183,7 @@ def test_a_secret_is_masked_and_so_is_its_ciphertext(
 
 
 def test_a_seeded_default_is_marked(browser: Browser) -> None:
-    # prompts are seeded (#021); saying which are defaults is how an operator
+    # prompts are seeded; saying which are defaults is how an operator
     # knows what they have actually changed
     browser.sign_in()
 
@@ -234,8 +234,8 @@ def test_the_page_needs_a_login(browser: Browser) -> None:
 
 
 def test_trees_are_listed_FIRST(browser: Browser) -> None:
-    """#200: a tree is what every other collection is in service of, and it was
-    the last card on the page, behind a disclosure."""
+    """A tree is what every other collection is in service of, so it comes
+    first, not last behind a disclosure."""
     browser.sign_in()
 
     page = browser.config()

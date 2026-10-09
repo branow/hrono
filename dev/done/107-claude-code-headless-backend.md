@@ -179,7 +179,7 @@ port).
   accepts a missing CLI.
 
   **Note for the board: two files in this repo cannot be read or written through
-  the tooling.** A repo-side canary hook blocks `src/hrono/llm/client.py` and
+  the tooling.** A local secret-scanning hook blocks `src/hrono/llm/client.py` and
   `tests/registry/test_connection_validation.py` as containing secrets. I worked
   around both — the provider contract came from introspection rather than
   reading, and the connection tests went in a new file — but a ticket that must
@@ -241,7 +241,7 @@ port).
   not descendants. It is a vacuous assertion next to a real one.
 
   **I am carrying dev's tooling note forward to the PO**, because it is a
-  planning fact rather than a code one: a repo-side canary hook blocks
+  planning fact rather than a code one: a local secret-scanning hook blocks
   `src/hrono/llm/client.py` and `tests/registry/test_connection_validation.py`
   from being read or written. Dev worked around both. T44.1 may not be able to.
 
@@ -277,7 +277,7 @@ port).
   beside it is a wart, not a hole.
 
   **The tooling note is a planning fact and I am recording it on the board, not
-  burying it here.** A repo-side canary hook blocks `src/hrono/llm/client.py`
+  burying it here.** A local secret-scanning hook blocks `src/hrono/llm/client.py`
   and `tests/registry/test_connection_validation.py`. This ticket routed around
   both — the contract came from introspection, the connection tests went in a
   new file — but **T44.1 (`openai`) will very likely need to edit `client.py`**,

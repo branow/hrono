@@ -1,4 +1,4 @@
-"""T34 op: `update` applies a change batch incrementally over a built tree."""
+"""`update` applies a change batch incrementally over a built tree."""
 
 import json
 import subprocess
@@ -139,7 +139,7 @@ def register(conn: object, url: str) -> None:
 
 
 def run_update(db: Database, tmp_path: Path) -> FakeCompletion:
-    """Drive `update` the way the worker does; #122 made it an LLM caller."""
+    """Drive `update` the way the worker does; it is an LLM caller."""
     client = FakeCompletion()
     update(
         _job("update"),
@@ -453,9 +453,9 @@ def test_n_update_runs_advance_the_batch_counter_by_exactly_n(
 def test_a_run_over_two_changed_sources_bumps_the_counter_once(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # the defect: _next_batch lived in _update_source, so a run over three
-    # changed sources counted three batches and aged parked chunks that much
-    # faster than MAX_AGE intends (#099).
+    # the batch counter must advance once per run, not once per source: a run
+    # over three changed sources counting three batches would age parked
+    # chunks that much faster than MAX_AGE intends.
     db, origin = built
     second = tmp_path / "second-repo"
     add_source(db, "second", make_repo(second, files=4))
@@ -572,9 +572,9 @@ def _signatures(db: Database) -> dict[int, str]:
 def test_a_pure_rename_keeps_the_section_in_its_node(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # F27: `git mv` of byte-identical content ejected the file from its cluster
-    # and parked it — ALPHA 0.5 makes the path half the blended vector's norm,
-    # so a rename alone can drop a working member below TAU.
+    # `git mv` of byte-identical content must not eject the file from its
+    # cluster and park it — ALPHA 0.5 makes the path half the blended
+    # vector's norm, so a rename alone can drop a working member below TAU.
     db, origin = built
     node_before, sim_before = _node_of(db, "f1.txt")
     assert node_before is not None
@@ -624,7 +624,7 @@ def test_renaming_a_parked_chunk_keeps_the_wait_it_has_served(
 ) -> None:
     # a parked chunk has no membership to preserve, so it takes the placement
     # rule again; if it parks once more it must keep its ORIGINAL batch, or a
-    # rename would postpone ageing for ever and strand it (#095's invariant).
+    # rename would postpone ageing for ever and strand it.
     db, origin = built
     add_alien(origin, "zz.txt")
     update(
@@ -699,11 +699,11 @@ def planted(model_id: str):
 def test_a_leaf_update_drained_in_is_healed_by_the_next_settle(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # #114's residual, driven rather than argued — and #122 SHORTENED it.
-    # `update` still writes no brief, so a drained leaf is unreachable from
-    # root.md the moment it is born. But update now condenses what it ingests,
-    # so the next settle can brief that leaf, which gives it the brief vector
-    # #114's rule places it by. The bound used to be "the next FULL PASS".
+    # attach-by-proximity's residual, driven rather than argued. `update`
+    # writes no brief, so a drained leaf is unreachable from root.md the
+    # moment it is born. But update condenses what it ingests, so the next
+    # settle can brief that leaf, which gives it the brief vector the attach
+    # places it by: the gap lasts until the next settle, not a full pass.
     db, origin = built
     before = _leaf_ids(db)
     for i in range(14):
@@ -719,13 +719,13 @@ def test_a_leaf_update_drained_in_is_healed_by_the_next_settle(
     emitted = set(_leaf_ids(db)) - set(before)
     assert emitted  # the drain turned the pool into a new topic
     assert _nodes_holding(db, "alien/") & emitted  # the chunks live there
-    assert emitted.isdisjoint(_briefed(db))  # update still never briefs
+    assert emitted.isdisjoint(_briefed(db))  # update never briefs
     assert emitted.isdisjoint(_parented(db))  # ... so nothing to place it by
     assert_pool_invariant(db, "default", "emb")
-    assert _condensed(db, "alien/")  # but #122 DID condense what it ingested
+    assert _condensed(db, "alien/")  # but update DID condense what it ingested
 
     # so a settle now heals it: the condensations are there, so the leaf briefs,
-    # so it has a brief vector, so #114's attach can parent it.
+    # so it has a brief vector, so attach-by-proximity can parent it.
     settle(
         _job("settle"),
         job_context(db, tmp_path),
@@ -825,8 +825,9 @@ def _uncovered_members(db: Database) -> int:
 def test_an_update_leaves_every_member_with_a_coordinate(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # F28: incremental placement decides by dot product and produces no UMAP
-    # coordinate, so ONE update was enough to break `stored_coords`' coverage.
+    # incremental placement decides by dot product and produces no UMAP
+    # coordinate, so without a fill ONE update would break `stored_coords`'
+    # coverage.
     db, origin = built
     assert _uncovered_members(db) == 0  # the full build covers everything
 
@@ -840,7 +841,7 @@ def test_a_rebuild_after_an_update_warm_inits(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
     # and the consequence that matters: settle only runs BECAUSE churn
-    # accumulated, and churn is exactly what used to destroy the warm path.
+    # accumulated, and churn must not destroy the warm path.
     from hrono.cluster import op as cluster_op
 
     db, origin = built
@@ -876,9 +877,9 @@ def _uncondensed_members(db: Database) -> list[str]:
 def test_update_condenses_what_it_ingests(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # #122: `condense` used to have one caller, `maintain`, so a section an
-    # update brought in reached the tree unsummarised until a full build — and
-    # a brief reduces over condensations while its citations did not.
+    # update must condense, not leave it to `maintain`: otherwise a section
+    # an update brought in reaches the tree unsummarised until a full build —
+    # and a brief reduces over condensations while its citations do not.
     db, origin = built
     assert _uncondensed_members(db) == []
 
@@ -896,7 +897,7 @@ def test_update_condenses_what_it_ingests(
 def test_a_second_update_over_unchanged_content_condenses_nothing(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # the #058 content-hash cache is what keeps this proportional to the change.
+    # the content-hash cache is what keeps this proportional to the change.
     db, origin = built
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
     first = run_update(db, tmp_path)
@@ -931,9 +932,9 @@ _TALKED_BACK = "Could you paste the file you would like me to condense?"
 def test_an_update_over_unchanged_content_redoes_a_talked_back_condensation(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # E001: `unusable-condensations` promises the next sync redoes these, and
-    # the changed-sources guard meant a sync over an unchanged corpus never
-    # ran condense at all — so on a steady tree the promise was never kept.
+    # `unusable-condensations` promises the next sync redoes these, so condense
+    # must run even when no source changed — or on a steady tree the promise
+    # is never kept.
     db, _ = built
     with db.connect() as conn, conn:
         model = str(resolve_text_model(conn, {}, "condense")["name"])
@@ -967,7 +968,7 @@ class Refusing(FakeCompletion):
 
 
 def _talk_back_on_f4(db: Database) -> tuple[str, str]:
-    """Store a talk-back as f4's condensation, as a run before #221 did."""
+    """Store a talk-back as f4's condensation, as an older run could."""
     with db.connect() as conn, conn:
         model = str(resolve_text_model(conn, {}, "condense")["name"])
         digest = conn.execute(
@@ -994,8 +995,8 @@ def _refusing_update(db: Database, tmp_path: Path) -> Refusing:
 def test_a_refused_redo_is_not_paid_again_on_an_unchanged_sync(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # E015: a refusal is never cached, so the talk-back stayed and every sync
-    # of a steady tree paid two calls to be refused again, forever
+    # a refusal is never cached, so without a guard the talk-back stays and
+    # every sync of a steady tree pays two calls to be refused again, forever
     db, _ = built
     model, digest = _talk_back_on_f4(db)
 
@@ -1090,9 +1091,9 @@ def test_a_changed_model_or_prompt_retries_a_refusal(
 def test_an_update_with_nothing_to_do_needs_no_text_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # #122's condense stage resolves the text model before it looks at what is
-    # pending, so an unguarded call made a no-op run fail with "no text model
-    # available" — an error naming a stage the user never asked for.
+    # the condense stage resolves the text model before it looks at what is
+    # pending, so an unguarded call would make a no-op run fail with "no text
+    # model available" — an error naming a stage the user never asked for.
     monkeypatch.chdir(tmp_path)
     database = Database.at(tmp_path / "bare.db")
     try:
@@ -1125,11 +1126,11 @@ def test_an_update_with_nothing_to_do_needs_no_text_model(
 def test_update_ingests_only_the_sources_its_tree_declares(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    """#054: the incremental door had the same hole as the build.
+    """The incremental door is scoped to the job's tree, like the build.
 
-    `update` iterated the WHOLE source registry regardless of the job's tree,
-    so `hrono tree sync beta` pulled another tree's sources into beta even
-    after the cluster build learned to scope itself.
+    `update` must not iterate the WHOLE source registry regardless of the
+    job's tree, or `hrono tree sync beta` pulls another tree's sources into
+    beta.
     """
     db, origin = built
     second = tmp_path / "second-repo"
@@ -1171,12 +1172,13 @@ def _member_of(db: Database, section_id: int) -> int | None:
 def test_a_membership_pin_survives_an_edit_to_the_pinned_file(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    """#154's promise through the ingest door.
+    """A membership pin holds through the ingest door.
 
     Reconcile drops a changed file's sections and the 0030 trigger deletes
-    their pins with them, so until this fix ANY edit to a pinned file —
-    including edits that left the pinned section's bytes untouched — silently
-    released the operator's hold and let placement move the chunk.
+    their pins with them, so unless the pin is carried over ANY edit to a
+    pinned file — including edits that leave the pinned section's bytes
+    untouched — silently releases the operator's hold and lets placement
+    move the chunk.
     """
     from hrono import pins
 
@@ -1237,11 +1239,12 @@ def test_a_membership_pin_survives_a_full_resplit(
 def test_update_rescues_a_section_an_earlier_run_left_homeless(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    """The crash-shaped hole (#085's two-commit window).
+    """The crash-shaped hole: the window between update's two commits.
 
-    An update that died between its reconcile commit and its placement left
-    sections in no node and no pool, and the next diff saw stored == current —
-    nothing ever placed them again short of a full maintain.
+    An update that dies between its reconcile commit and its placement leaves
+    sections in no node and no pool, and the next diff sees stored == current
+    — so unless something looks for them, nothing places them again short of a
+    full maintain.
     """
     db, _origin = built
     section = _section_ids(db, "f2.txt")[0]

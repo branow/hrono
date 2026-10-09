@@ -1,9 +1,9 @@
-"""The usage ledger (#201): one row per model call, written at the one seam.
+"""The usage ledger: one row per model call, written at the one seam.
 
-Tokens used to be recorded only on what a call PRODUCED — a condensation row, a
-brief row — so a call that failed, a call that was retried, and every judge vote
-left nothing behind, and no run could say what it had cost. This records the
-CALL instead, whatever became of it, against the job that made it and the run
+Tokens recorded only on what a call PRODUCED — a condensation row, a brief row
+— leave nothing behind for a call that failed, a call that was retried, or a
+judge vote, and no run could say what it had cost. So this records the CALL,
+whatever became of it, against the job that made it and the run
 a person started.
 
 Both halves of the system come through here: ``Ledgered`` wraps whatever

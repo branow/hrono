@@ -4,8 +4,8 @@ The wipe only ever touches the resolved hrono database path, its ``-wal`` /
 ``-shm`` sidecars, its ``.lock`` file and the synced-source cache beside it, and
 refuses any path that is not the hrono database file, so it can never remove an
 arbitrary file. The cache goes because it is ingested content and the command
-says it destroys ingested content (#098, F32): leaving 10 MB of clones behind
-meant the next "fresh start" diffed against orphaned trees. Deleting the
+says it destroys ingested content: leaving 10 MB of clones behind would
+make the next "fresh start" diff against orphaned trees. Deleting the
 database lets the next ``serve`` re-apply migrations onto a fresh file and
 re-bootstrap a new admin token. Nothing here prompts or prints; the CLI
 boundary owns confirmation.
@@ -18,13 +18,13 @@ one:
   directory the guard above proves; a link points outside that bound, and
   hrono cannot know what else lives at the other end. Unlinking instead would
   leave the clones on disk while the command claims to have destroyed ingested
-  content — the very claim F32 is about — so this refuses and says what to do.
+  content, so this refuses and says what to do.
 - any ``OSError`` while removing (permissions, a busy file, a full disk) stops
   the wipe and is raised as ``ResetIncomplete`` carrying what HAD been removed,
   because a half-done destructive command is exactly when the operator needs
   that list.
 
-THE SYMLINK GUARD COVERS THE CACHE ROOT, NOT THE TREE BENEATH IT (#119), and
+THE SYMLINK GUARD COVERS THE CACHE ROOT, NOT THE TREE BENEATH IT, and
 that is deliberate. ``_remove`` additionally unlinks rather than recurses into
 any symlinked directory, so even a swap between the refusal check and the delete
 loop cannot reach outside the bound. What it does NOT do is scan the cache for

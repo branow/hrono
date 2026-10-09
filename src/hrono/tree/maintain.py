@@ -1,23 +1,22 @@
-"""The ``maintain`` op (T24): run the whole pipeline in order over a tree.
+"""The ``maintain`` op: run the whole pipeline in order over a tree.
 
-One easy-button that drives the existing ops in dependency order — sync (#025)
--> split (#032) -> embed (#035) -> condense (#058) -> cluster (#040) -> brief
-(#059) -> recurse-to-root (#062) — so a fresh tree builds all the way to a
-single root. Stages run sequentially on the current jobs framework (no #051
-DAG): the maintain job runs each op in turn, and a stage that raises fails the
-maintain leaf, leaving nothing half-applied beyond the committed stages.
+One easy-button that drives the existing ops in dependency order — sync
+-> split -> embed -> condense -> cluster -> brief
+ -> recurse-to-root — so a fresh tree builds all the way to a
+single root. Stages run sequentially on the current jobs framework (no DAG
+scheduler): the maintain job runs each op in turn, and a stage that raises fails
+the maintain leaf, leaving nothing half-applied beyond the committed stages.
 
-Incremental only where M4 allows it: embed (#035) and condense (#058) are
-content-hash caches, so a second maintain re-embeds and re-condenses NOTHING.
-The cluster/brief/brief-upper layers full-rebuild each run — ``cluster``
-recreates nodes with fresh ids and ``briefs.node_id ON DELETE CASCADE`` wipes
-the briefs — so the brief layer is not yet incremental; stable-id incremental
-placement is M7 (#068), out of scope here.
+Embed and condense are content-hash caches, so a second maintain re-embeds and
+re-condenses NOTHING. The cluster layer re-clusters every run, but
+``replace_tree`` keeps the id — and so the brief — of every cluster whose
+content is unchanged. Incremental placement is the ``update`` op's job.
 
 The seams (``encoder_for``, ``client``, ``build``) thread the injectable
 backends through so the automated gate drives the real op chain with a fake
 embedder + fake LLM; production passes none and each op uses its real default.
-Driving it against a real embedding model + LLM key + source repo is manual qa.
+Driving it against a real embedding model + LLM key + source repo is a manual
+check.
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ from hrono.tree import changes
 from hrono.tree.settle import anchor_members, restore_pinned
 
 # The roles this chain will ask for, in the order it asks for them — the same
-# tuple Settings checks before anyone starts a build (#210).
+# tuple Settings checks before anyone starts a build.
 _ROLES = BUILD_ROLES
 
 
@@ -77,7 +76,7 @@ def maintain(
 ) -> Mapping[str, object]:
     """Build a tree end to end: ingest, embed, condense, cluster, brief.
 
-    Every stage is timed and its counts kept (#213), and a failing one is
+    Every stage is timed and its counts kept, and a failing one is
     reported by name with the item it was on and the stages before it.
     """
     tree = job.tree or DEFAULT_TREE
@@ -144,7 +143,7 @@ def maintain(
             build=build,
         ),
     )
-    # brief + build-tree wrote node:// brief passages (#071) after the first
+    # brief + build-tree wrote node:// brief passages after the first
     # embed; vectorise them so recall's vector leg covers briefs too.
     run.run(
         "embed",

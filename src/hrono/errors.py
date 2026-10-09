@@ -13,7 +13,7 @@ from __future__ import annotations
 
 
 class DomainError(Exception):
-    """A failure inside hrono, carrying its own kebab-case ``code`` (#145).
+    """A failure inside hrono, carrying its own kebab-case ``code``.
 
     These live in the package that raises them — ``SyncError`` in ``ingest``,
     ``ClusterError`` in ``cluster`` — and know nothing about transport. This
@@ -47,7 +47,7 @@ class AppError(Exception):
         self.details = details
         if code is not None:
             # a per-instance override, for a boundary relaying a DomainError's
-            # own code through a generic AppError class (#145)
+            # own code through a generic AppError class
             self.code = code
 
 
@@ -109,10 +109,10 @@ def cli_message(error: AppError) -> str:
 
 
 def as_app_error(error: BaseException) -> AppError:
-    """Any exception as an ``AppError``, so a failure has a CODE (#109).
+    """Any exception as an ``AppError``, so a failure has a CODE.
 
     An ``AppError`` already carries one, and a ``DomainError`` carries the one
-    its own class declares (#145). Anything else raised from hrono's own code
+    its own class declares. Anything else raised from hrono's own code
     keeps its message under ``internal-error`` — it is hrono speaking,
     already written for a reader, and keeps its message. A FOREIGN exception is
     the one whose wording must not become hrono's answer: sqlite's
@@ -121,7 +121,7 @@ def as_app_error(error: BaseException) -> AppError:
     keep only their type, and the wording reaches the log instead.
 
     Every unmapped failure is ``internal-error``. Giving each domain error its
-    own code is the separate mapping layer #053 exists to design; this is the
+    own code is a separate mapping layer's job; this is the
     boundary that guarantees there is always a code to begin with.
     """
     if isinstance(error, AppError):

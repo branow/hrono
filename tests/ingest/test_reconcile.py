@@ -1,4 +1,4 @@
-"""T34 reconcile: file diff -> section-store mutation + section deltas."""
+"""Reconcile: file diff -> section-store mutation + section deltas."""
 
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -145,7 +145,7 @@ def test_a_move_that_re_splits_the_file_is_a_change_not_a_move(
     # placement keeps a `moved` section in its node untouched, which is only
     # sound because a move means identical CONTENT. A rename that changes the
     # extension re-splits under a different budget, so the sections that come
-    # out are new content and must take the sticky re-check instead (#100).
+    # out are new content and must take the sticky re-check instead.
     body = "".join(
         f'  {{"i": {i}, "text": "padding value"}},\n' for i in range(160)
     )

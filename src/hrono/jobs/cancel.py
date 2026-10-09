@@ -1,10 +1,10 @@
-"""Stopping a run that is already going (T57.2, #173).
+"""Stopping a run that is already going.
 
 COOPERATIVE. A pending job is stopped outright. A running one is SIGNALED: its
 row flips to ``canceled``, which is the predicate ``pool.running`` polls
 between LLM calls, so a long op halts at its next checkpoint — but the thread
-is never killed (#092: a transaction interrupted halfway is how this database
-gets corrupted), so the step in flight still finishes and its writes are kept.
+is never killed (a transaction interrupted halfway is how this database gets
+corrupted), so the step in flight still finishes and its writes are kept.
 
 The response says exactly that: a cancel reports how many jobs it STOPPED and
 how many are still winding down. An operator who cancels a fan-out over forty
@@ -39,7 +39,7 @@ def cancel(conn: sqlite3.Connection, job_id: str) -> Cancellation:
     """Stop what can be stopped under ``job_id``; report the rest.
 
     A parent cancels its CHILDREN — they are the units of work, and the parent
-    row is not one. Its own status is derived from them (#172) and finalized
+    row is not one. Its own status is derived from them and finalized
     once the last of them ends.
 
     A PENDING job is stopped outright. A RUNNING one is flipped too — that is
@@ -47,7 +47,7 @@ def cancel(conn: sqlite3.Connection, job_id: str) -> Cancellation:
     calls, so a long op halts at its next checkpoint instead of running to the
     end of a multi-minute chain nobody wants anymore. Its worker thread still
     finishes the step it is on (killing a thread mid-transaction is how a
-    database corrupts, #092), which is why the report counts it as ``running``:
+    database corrupts), which is why the report counts it as ``running``:
     told to stop, not yet stopped. The worker's terminal write is guarded on
     ``status = 'running'``, so the flip is never overwritten by the outcome.
     """

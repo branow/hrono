@@ -2,7 +2,7 @@
 
 The server mounts a router per collection and seeds each collection's defaults
 from this single tuple, so adding a collection is one import here -- and one
-module in this folder beside it (#056). The package is named for what it holds,
+module in this folder beside it. The package is named for what it holds,
 so `from hrono.registry.collections import COLLECTIONS` reads the same as when
 this was a flat module; absolute imports mean the stdlib `collections` is still
 the stdlib everywhere, including inside these files.

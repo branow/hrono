@@ -80,7 +80,7 @@ every later step.
    `uv run hrono serve` on a free port against a scratch database under
    `$WT/.scratch/`, hit the endpoint, run the CLI. Web surface means a real
    browser: `uv run --no-project --with playwright==1.56.0 python <script>`.
-   Screenshots go in `$BOARD/evidence/<epic>/`.
+   Screenshots go in `$BOARD/evidence/<epic>/`, which stays local (untracked).
 7. **Commit** on `epic/<epic>`, one commit per ticket, staging paths
    explicitly. Conventional Commit: `feat`/`fix`, lowercase first word, one
    sentence of what and why, no body, no attribution.

@@ -1,7 +1,7 @@
 """The clustering recipe, scaled to the point count.
 
-`how-hrono-works.md` requires the SAME UMAP -> HDBSCAN -> attachment pipeline at
-every level, "with dimensions and ``min_cluster_size`` scaled to the point
+`docs/architecture.md` requires the SAME UMAP -> HDBSCAN -> attachment pipeline
+at every level, "with dimensions and ``min_cluster_size`` scaled to the point
 count (e.g. UMAP-10, ``min_cluster_size=3`` at tens of topics)" — the settled
 leaf recipe (UMAP-25, ``min_cluster_size=5``) describes the thousands of
 sections at the bottom, not the handful of briefs near the root.
@@ -19,7 +19,7 @@ drops to the spec's smaller one rather than to unscaled parameters.
 Below the smallest rung there is no honest reduction left — that level cannot be
 clustered. That is a ``TooFewPoints``, the one clustering failure a caller may
 answer by collecting: ``build-tree`` reads it as "the current top is the root"
-and the ``cluster`` op as "then the corpus is one topic" (#112). It is a
+and the ``cluster`` op as "then the corpus is one topic". It is a
 distinct type precisely so neither of them catches a BROKEN backend by mistake.
 """
 

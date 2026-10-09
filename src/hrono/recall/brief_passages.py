@@ -1,30 +1,30 @@
 """Put a written brief into the shared passage store, addressed ``node://``.
 
-Every brief is markdown, so it goes through the SAME splitter (#029/#030) and
+Every brief is markdown, so it goes through the SAME splitter and
 the SAME passage store as source content, tagged ``source_type='node'`` and
 addressed
 
     node://hrono/nodes/<id>/<slug>@<member-signature>
 
 — the topic's title slug (from the brief's first line) gives the path-blend
-semantics to match, and the member-set signature (#064) is the opaque version,
+semantics to match, and the member-set signature is the opaque version,
 so a brief whose signature changed replaces its ``@<oldsig>`` passages. Brief
-passages are content-addressed like source passages, so the #035 embed op
-vectorises them and the #070 FTS index covers them with no extra wiring; recall
-(#072-075) unions source and ``node`` passages and labels each by source_type.
+passages are content-addressed like source passages, so the embed op
+vectorises them and the FTS index covers them with no extra wiring; recall
+unions source and ``node`` passages and labels each by source_type.
 
-MEASURED, and the premise holds (#135). A brief competes on score like any
-other passage, and for the questions it is FOR it wins: on the QA corpus "give
-me an overview of the architecture" returns five hits, all summaries; "what does
-this project do overall" and "what are the main components of this codebase"
-both put a summary in the TOP slot. For a SPECIFIC question — the signer, uuid
-v7, chalk's colour levels — source passages take the whole window, which is the
-right answer: a question about one function is best answered by that function.
+MEASURED, and the premise holds. A brief competes on score like any other
+passage, and for the questions it is FOR it wins: on a ~120-section test corpus
+"give me an overview of the architecture" returns five hits, all summaries;
+"what does this project do overall" and "what are the main components of this
+codebase" both put a summary in the TOP slot. For a SPECIFIC question — the
+signer, uuid v7, chalk's colour levels — source passages take the whole window,
+which is the right answer: a question about one function is best answered by
+that function.
 
-That is worth writing down because a measurement over 22 questions once found a
-brief clearing the vector floor exactly ONCE, which read as "the summary layer
-never competes". Every one of those 22 was a specific question. The layer was
-doing its job; the question set could not see it.
+So judge the layer with general questions too: over 22 SPECIFIC questions a
+brief clears the vector floor exactly ONCE, which reads as "the summary layer
+never competes". The layer is doing its job; such a question set cannot see it.
 
 A per-node ``source`` key (``node-<id>``) scopes the replace: clearing it drops
 the node's old brief section (passages cascade) and FTS rows before re-storing.

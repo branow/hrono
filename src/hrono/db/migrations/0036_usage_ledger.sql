@@ -1,9 +1,9 @@
--- Every model call, recorded against the run that made it (#201).
+-- Every model call, recorded against the run that made it.
 --
--- Tokens were stored only on what a call PRODUCED — a condensation, a brief —
--- so a call that failed, was retried, or was a judge vote left no trace, and a
--- run could not say what it had spent. One row per call is the record every
--- roll-up reads (#202, #203): store per call, show any sum.
+-- Tokens on what a call PRODUCED — a condensation, a brief — leave no trace
+-- of a call that failed, was retried, or was a judge vote, so a run could not
+-- say what it had spent. One row per call is the record every roll-up reads:
+-- store per call, show any sum.
 --
 -- `run_id` and `started_by` are resolved when the row is written, from the
 -- job's ROOT, so a fan-out leaf's calls add up under the run a person started.

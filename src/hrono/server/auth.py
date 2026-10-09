@@ -19,7 +19,7 @@ from hrono.errors import Forbidden, Unauthorized
 _ROLE_RANK = {"reader": 0, "writer": 1, "admin": 2}
 
 # The dashboard is a browser, which cannot set an Authorization header on a
-# plain navigation — so it carries the SAME api token in a cookie (#180). One
+# plain navigation — so it carries the SAME api token in a cookie. One
 # authentication path, two carriers: a second path is how "roles enforced
 # server-side from day one" quietly stops being true.
 #

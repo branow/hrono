@@ -1,4 +1,4 @@
-"""Finding things on the map without walking it (E011, #208).
+"""Finding things on the map without walking it.
 
 The map is one way in, and a person who knows a word, a file or a topic's
 shape should not have to expand circles to reach it. Three reads over what the
@@ -6,8 +6,8 @@ tree already stores, none of them a second index:
 
 - ``search`` asks the FTS5 index recall keeps (``passages_fts``) — which holds
   every section's path and text AND every brief, because a brief is stored as
-  passages too (#070) — plus the names a person gave topics, which are not in
-  it. Words, not meaning: a question belongs to Ask.
+  passages too — plus the names a person gave topics, which are not in it.
+  Words, not meaning: a question belongs to Ask.
 - ``outline`` is the tree as a nested list, the same topics the map draws with
   the same names and the same health rule, for the people who read lists and
   for a tree too big to draw.

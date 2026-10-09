@@ -1,4 +1,4 @@
-"""#150: a notion source ingests the pages shared with its integration.
+"""A notion source ingests the pages shared with its integration.
 
 Notion's difference from confluence is structural: there is no document to
 fetch, only a tree of blocks, so the renderer is where the content is won or

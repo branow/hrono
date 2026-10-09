@@ -1,4 +1,4 @@
-"""E018: a topic's name is its subject, not the clause announcing the brief."""
+"""A topic's name is its subject, not the clause announcing the brief."""
 
 import pytest
 

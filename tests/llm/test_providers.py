@@ -1,4 +1,4 @@
-"""T44: a model's connection decides its completion client — map, not branch."""
+"""A model's connection decides its completion client — map, not branch."""
 
 import json
 from dataclasses import replace
@@ -53,11 +53,11 @@ def test_a_claude_code_connection_resolves_to_the_cli_client(
 def test_the_cli_client_runs_in_the_contexts_own_directory(
     db: Database, tmp_path: Path
 ) -> None:
-    # anchored on the database like every other data path (#098), never the
+    # anchored on the database like every other data path, never the
     # server's cwd — the CLI would otherwise read that project's memory.
-    # #136: assert the PROPERTY, not the path. The earlier version compared
-    # `cli_dir()` to itself and checked a parent that holds however it is
-    # computed, so `cli_dir()` returning the clone cache passed both.
+    # assert the PROPERTY, not the path: comparing `cli_dir()` to itself, or
+    # checking a parent that holds however it is computed, would pass even
+    # with `cli_dir()` returning the clone cache.
     context = job_context(db, tmp_path)
     client = client_for(context, _model("cli"), "brief").inner
     cli_dir = client._workdir  # noqa: SLF001
@@ -105,8 +105,7 @@ def test_an_unsupported_provider_is_one_llm_error(
     db: Database, tmp_path: Path
 ) -> None:
     # a provider hrono does not serve must be told at RESOLVE time, not left
-    # to fail at call time. `openai` was this test's example until #151 made
-    # it real; the point is the table, so any absent name does.
+    # to fail at call time. The point is the table, so any absent name does.
     with db.connect() as conn, conn:
         _connection(conn, "future", "gemini")
 

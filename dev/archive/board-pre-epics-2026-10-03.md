@@ -923,7 +923,7 @@ public repos (see `.e2e/RUN-LOG.md` and `.e2e/FINDINGS.md` for evidence).
   worktree-per-ticket: separate worktrees make both the false-gate AND the
   reset-work-loss failure modes structurally impossible. Do NOT run `git reset
   --hard` on the shared tree while any dev has uncommitted WIP.
-- Backlog source of truth: `/Users/orest/repos/rad/hrono/build-order.md`.
+- Backlog source of truth: the design record's `build-order.md`.
 
 ## PO backlog triage, 2026-09-21
 

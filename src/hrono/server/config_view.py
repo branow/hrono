@@ -1,10 +1,10 @@
-"""The config page's tables: every registry collection, secrets masked (#187).
+"""The config page's tables: every registry collection, secrets masked.
 
 Each collection is read as a TABLE with columns named for what an operator
-tells its rows apart by (#210): models by role, connection and upstream model,
+tells its rows apart by: models by role, connection and upstream model,
 sources by type, location and which files. A run-on line of every scalar field
-("kind text, connection cc, model sonnet, role brief") was the earlier answer,
-and it read as config rather than as a list.
+("kind text, connection cc, model sonnet, role brief") reads as config rather
+than as a list.
 
 Kept out of the route so the pairing that matters — each row masked by ITS OWN
 collection's descriptor — is testable. Today every declared secret path happens
@@ -66,7 +66,7 @@ class Table:
 
         What an operator edits when they want to add a model rather than
         change one: the list is the thing, and `engine.sync_items` writes what
-        differs and removes what is gone (#200).
+        differs and removes what is gone.
         """
         return json.dumps([row.data for row in self.rows], indent=2)
 

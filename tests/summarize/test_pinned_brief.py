@@ -1,4 +1,4 @@
-"""#154: a pinned brief is the operator's, and the pipeline leaves it alone.
+"""A pinned brief is the operator's, and the pipeline leaves it alone.
 
 The spec's whole reason for pins: "Without this, a manual fix gets silently
 reverted on the next update." So the test that matters is not "the pin is
@@ -125,7 +125,7 @@ def test_a_pin_makes_no_llm_call_at_all(
         pins.pin(conn, pins.BRIEF, held)
 
     # the default text passes the shape gate; a reply that fails it is retried
-    # once (#103), which would make the call count say nothing about pins.
+    # once, which would make the call count say nothing about pins.
     completion = FakeCompletion()
     brief(job(), context, client=completion)
 

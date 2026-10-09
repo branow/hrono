@@ -1,4 +1,4 @@
-"""Tree-level operations: the whole-pipeline ``maintain`` easy-button (T24).
+"""Tree-level operations: the whole-pipeline ``maintain`` easy-button.
 
 ``maintain`` runs the existing ops in dependency order over a tree — sync ->
 split -> embed -> condense -> cluster -> brief -> recurse-to-root — so one

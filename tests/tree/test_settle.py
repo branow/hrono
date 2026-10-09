@@ -1,4 +1,4 @@
-"""T39: settle — churn/misfit trigger + warm reconcile near-no-op."""
+"""Settle — churn/misfit trigger + warm reconcile near-no-op."""
 
 import json
 import subprocess
@@ -265,7 +265,8 @@ def test_settle_over_unchanged_corpus_is_near_no_op(
         encoder_for=fake_encoder,
         client=counter,
     )
-    # warm rebuild reproduces the layout: #068 keeps ids, #064 skips every brief
+    # warm rebuild reproduces the layout: ids are stable, brief freshness
+    # skips every brief
     assert counter.calls == 0
     assert _node_ids(built) == ids_before
 
@@ -299,7 +300,7 @@ def test_untriggered_settle_leaves_the_counter(
 
 
 def _park_a_member(db: Database) -> int:
-    """Park a chunk that a rebuild will home — the #095 'both' violation."""
+    """Park a chunk that a rebuild will home: both parked and a member."""
     with db.connect() as conn, conn:
         row = conn.execute(
             "SELECT section_id FROM node_members LIMIT 1"
@@ -412,11 +413,11 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed_and_reachable(
     built: Database,
     tmp_path: Path,
 ) -> None:
-    # the drain runs BEFORE the brief pass, so a leaf it emits is summarised in
-    # the same settle; #114 then attaches it to its nearest parent, because
-    # root.md's children are rendered from parent EDGES — without one the topic
-    # is written to the export and unreachable in it. Pinned so settle's
-    # docstring and the code cannot drift apart again.
+    # the drain runs BEFORE the brief pass, so a leaf it emits is summarised
+    # in the same settle; attach-by-proximity then gives it its nearest
+    # parent, because root.md's children are rendered from parent EDGES —
+    # without one the topic is written to the export and unreachable in it.
+    # Pinned so settle's docstring and the code cannot drift apart.
     before = _leaf_ids(built)
     _park_unembedded(built, 14)
     settle(
@@ -430,7 +431,7 @@ def test_a_leaf_node_the_settle_drain_emits_is_briefed_and_reachable(
     emitted = set(_leaf_ids(built)) - set(before)
     assert emitted  # the drain reduced the pool into real clusters
     assert emitted <= _briefed(built)
-    assert emitted <= _parented(built)  # #114: an edge, so root.md links it
+    assert emitted <= _parented(built)  # an edge, so root.md links it
 
     files = _export(built)
     for node_id in emitted:
@@ -475,7 +476,7 @@ def _members(database: Database) -> dict[int, int]:
 def test_settle_returns_a_pinned_member_to_its_anchor(
     built: Database, tmp_path: Path
 ) -> None:
-    """#155: the rebuild rewrites every membership, so the pin restores it.
+    """The rebuild rewrites every membership, so the pin restores it.
 
     `settle` re-clusters the whole leaf level — `replace_tree` writes every
     `node_members` row fresh — so honouring a pin here cannot mean "do not
@@ -510,10 +511,11 @@ def test_settle_returns_a_pinned_member_to_its_anchor(
         client=FakeCompletion(),
     )
 
-    # assert the PROPERTY, not the id (#136): the hand-move changed the
-    # anchor's content, so #068 may retire that node and give the topic a new
-    # id. What must hold is that the chunk is still with the neighbours the
-    # operator put it among, and did not drift back to where it came from.
+    # assert the PROPERTY, not the id: the hand-move changed the anchor's
+    # content, so the content-signature id reuse may retire that node and
+    # give the topic a new id. What must hold is that the chunk is still with
+    # the neighbours the operator put it among, and did not drift back to
+    # where it came from.
     after = _members(built)
     landed = after[section]
     assert {sec for sec, node in after.items() if node == landed} >= company
@@ -525,11 +527,11 @@ def test_settle_returns_a_pinned_member_to_its_anchor(
 def test_a_pin_survives_a_hand_split_of_the_topic_it_names(
     built: Database, tmp_path: Path
 ) -> None:
-    """#162: the AC of the ticket, driven end to end.
+    """A membership pin survives a hand split of its anchor, end to end.
 
     A split retires the anchor AND scatters the company `_restore_pinned`
-    would otherwise follow, so before the re-anchor this settle reported the
-    pin RELEASED — the operator's correction dropped by their own later
+    would otherwise follow, so without the re-anchor this settle would report
+    the pin RELEASED — the operator's correction dropped by their own later
     division of the same topic.
     """
     placed = _members(built)
@@ -542,8 +544,8 @@ def test_a_pin_survives_a_hand_split_of_the_topic_it_names(
         )
         model = str(resolve_embedding_model(conn, {})["name"])
         # the seam, because the subject here is the PIN and not the recipe:
-        # the built corpus is smaller than the clustering floor, and #159's
-        # server tests already drive the real UMAP -> HDBSCAN split.
+        # the built corpus is smaller than the clustering floor, and the
+        # server's split tests already drive the real UMAP -> HDBSCAN split.
         children = repair.split(
             conn,
             TREE,

@@ -1,12 +1,12 @@
 """The git syncer: clone or pull a repo and pin its commit as the version.
 
 First run clones into the cache path the caller chose — that root hangs off the
-database file, never the working directory (#098); later runs fetch and hard-
+database file, never the working directory; later runs fetch and hard-
 reset to the remote's current bytes. The version is the resolved commit SHA —
 content-addressed, so it is the same whether the repo was fetched over SSH or
-HTTPS (fetch-method-independent identity, per the design sketch).
+HTTPS (fetch-method-independent identity).
 
-Moved out of the ``sync`` op unchanged (#142): clone/pull is git's transport,
+It lives apart from the ``sync`` op because clone/pull is git's transport,
 not the abstraction every source type shares.
 """
 

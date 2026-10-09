@@ -1,4 +1,4 @@
-"""#137: one op brings a tree up to date, in the order the stages require."""
+"""One op brings a tree up to date, in the order the stages require."""
 
 import json
 from collections.abc import Iterator
@@ -142,7 +142,7 @@ def test_a_changed_file_leaves_the_tree_up_to_date(
     _run(db, tmp_path, Judge())
 
     after = _upper_briefs(db)
-    assert _uncondensed(db) == 0  # #122's invariant: nothing unsummarised
+    assert _uncondensed(db) == 0  # nothing unsummarised
     # propagate MARKS ONLY — it is brief-upper that repairs what it marked. If
     # that stage never runs the chain leaves ancestors known to be wrong,
     # flagged as wrong, and still serving their old text.
@@ -160,13 +160,13 @@ def test_a_changed_file_leaves_the_tree_up_to_date(
 def test_the_result_says_what_the_run_did(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # one verb over six stages is a black box unless it reports (#132).
+    # one verb over six stages is a black box unless it reports.
     db, origin = built
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
 
     outcome = _run(db, tmp_path, Judge())
 
-    # every stage that makes a judgement contributes its counts (#133)
+    # every stage that makes a judgement contributes its counts
     assert set(outcome) == {
         "changed",
         "forced",
@@ -179,12 +179,12 @@ def test_the_result_says_what_the_run_did(
         "above_baseline",
         "repaired",
         # what the stages AFTER repair put back: a split retires a topic and
-        # makes two in its place, and until #200 nothing briefed or re-parented
-        # them — the run ended leaving them beside the tree, under no root
+        # makes two in its place, and unless the run briefs and re-parents
+        # them they are left beside the tree, under no root
         "adopted",
         "settle_due",
         "incomplete",
-        # what the run did to the map, and each stage with its time (#213)
+        # what the run did to the map, and each stage with its time
         "tree",
         "stages",
     }
@@ -362,8 +362,8 @@ def test_repair_is_reached(
 def test_a_declining_judge_makes_the_run_incomplete(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # #105 made a whole-panel abstention reachable, and #132 made it reportable.
-    # One verb over six stages must say when it did less than it was asked.
+    # a whole-panel abstention is reachable and must be reported. One verb
+    # over six stages must say when it did less than it was asked.
     db, origin = built
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
 
@@ -404,7 +404,7 @@ def test_repair_acts_on_what_it_finds(
 def test_a_run_over_an_unchanged_corpus_says_nothing_changed(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # #133: "succeeded" is not an answer to "did anything happen?".
+    # "succeeded" is not an answer to "did anything happen?".
     db, _origin = built
 
     outcome = _run(db, tmp_path, Judge())
@@ -416,8 +416,8 @@ def test_a_forced_assignment_is_counted(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
     # a force-assign is the system deciding that an alien member is better than
-    # an unreachable one (#086 T35.3) — a real judgement call, and until #133 a
-    # silent one.
+    # an unreachable one — a real judgement call, so it must not be a silent
+    # one.
     db, origin = built
     edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
     with db.connect() as conn, conn:
@@ -451,12 +451,11 @@ def _top(db: Database) -> tuple[int, int]:
 def test_sync_briefs_stale_uppers_above_level_one(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    """#137's hole two floors up.
+    """Sync rewrites a stale brief two floors up, not only at level 1.
 
-    The chain called ``brief_upper`` bare, and the op's scope defaults to
-    level 1 — so a stale or missing brief at level 2 or above (the root's
-    included) was marked by propagate and then never rewritten by any sync;
-    only a full maintain passed explicit levels.
+    The op's scope defaults to level 1, so a chain calling ``brief_upper``
+    bare would leave a stale or missing brief at level 2 or above (the
+    root's included) marked by propagate and never rewritten by any sync.
     """
     db, _origin = built
     top_level, old_top = _top(db)
@@ -488,9 +487,9 @@ def test_sync_adopts_a_leaf_even_when_repair_did_nothing(
 ) -> None:
     """A drain-emitted leaf must not wait for a settle to become reachable.
 
-    The closing stages used to run only "when repair changed anything" — and
-    the gate read ``repaired["pinned"]``, so on a pin-free steady tree a leaf
-    the drain emitted stayed under no parent, written to the export but
+    The closing stages must run whether or not repair changed anything:
+    gated on ``repaired["pinned"]``, a pin-free steady tree would leave a
+    leaf the drain emitted under no parent, written to the export but
     unreachable from root.md, until the next settle or maintain.
     """
     from hrono.ingest.identity import Address, content_hash

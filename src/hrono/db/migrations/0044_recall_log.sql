@@ -1,4 +1,4 @@
--- E042: every API recall leaves a row, so an admin can see whether agents use
+-- Every API recall leaves a row, so an admin can see whether agents use
 -- the tree and what they ask. The panel's Ask page does not write here: it is
 -- a curator, not an agent. `confident` is 0 when recall refused (no hit
 -- cleared the floor); `top_score` is the best hit's score, NULL on a refusal.

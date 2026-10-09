@@ -2,7 +2,7 @@
 
 Clustering correctness is not what a normal unit test checks, so this harness
 plants K well-separated groups (plus genuine noise points) in synthetic combined
-vectors under a FIXED seed, runs the real #040 build, and scores the recovered
+vectors under a FIXED seed, runs the real build, and scores the recovered
 labels against the planted ones with the adjusted Rand index. A correct recipe
 clears ``RECOVERY_THRESHOLD`` comfortably (ARI ~1.0 on the canonical fixture); a
 recipe whose baked constants are perturbed (no UMAP, wrong ``min_cluster_size``)

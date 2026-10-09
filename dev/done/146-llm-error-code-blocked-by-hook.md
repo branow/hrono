@@ -8,7 +8,7 @@ depends_on: [145]
 
 ## Context
 #145 gave every domain failure its own code except one. `LLMError` is defined
-in `src/hrono/llm/client.py`, and this environment's sensitive-canary hook
+in `src/hrono/llm/client.py`, and this environment's secret-scanning hook
 blocks every tool from reading or writing that file: it matches the token
 `max_tokens = ...` as an env-style secret assignment. The finding is a
 confirmed false positive — the file holds no credential; it was checked
@@ -33,14 +33,14 @@ forces to load.
 - [x] `ruff format`, `ruff check --fix`, `pytest` clean.
 
 ## Blocked on
-The operator prefixing one message with `[allow-secret]` (or adding
+The operator prefixing one message with the hook's override tag (or adding
 `max_tokens` to the hook's allowlist, which is the better fix — the pattern
 will keep firing on that file).
 
 ## Review log
 - 2026-09-23 dev: filed from #145, which covered every other domain error.
 
-- 2026-09-23 dev: unblocked by the operator's `[allow-secret]`. `LLMError`
+- 2026-09-23 dev: unblocked by the operator's override tag. `LLMError`
   inherits `DomainError` with `code = "llm-error"`, and the parametrised case
   list plus the uniqueness walk in `tests/jobs/test_domain_codes.py` cover it
   like every other domain error. Mutations: the code removed -> 1 fails; the
@@ -54,7 +54,7 @@ will keep firing on that file).
   genuinely foreign exception, which is the #109 rule.
 
 - 2026-09-23 po: CLOSED, and #145's series with it. Note for the operator, not
-  a ticket: the canary rule that blocked this file matches `max_tokens = 4096`
+  a ticket: the secret-scanning rule that blocked this file matches `max_tokens = 4096`
   as an env-style secret assignment. It will fire again on every edit to
-  `llm/client.py`. Allowlisting that identifier in `plexus-rules.json` is the
+  `llm/client.py`. Allowlisting that identifier in the hook's local allowlist is the
   fix; nothing in this repo needs changing for it.

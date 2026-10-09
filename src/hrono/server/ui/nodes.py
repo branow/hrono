@@ -1,7 +1,7 @@
 """One topic: what it says, and everything a hand can do to it.
 
-The page (#182) and the writes (#188 edit, #189 surgery) live together because
-the forms and what they post to are one subject. Every write is admin-gated,
+The page and the writes (edit and surgery) live together because the forms
+and what they post to are one subject. Every write is admin-gated,
 which is the floor the API's own edit routes use — a page that took a writer
 would be a second, weaker authorization for the same operation.
 """
@@ -167,7 +167,7 @@ def _candidates(
 
     Each one arrives the way the map names it — where its sections live, what
     it holds, what it says — because "topic 2, topic 3, topic 4" is a list of
-    row ids, and nobody merges into a row id (#199).
+    row ids, and nobody merges into a row id.
     """
 
     def at(wanted: int) -> list[dict[str, object]]:
@@ -248,7 +248,7 @@ async def merge_from_the_page(
 
     The topic the operator was looking at may be the one that goes, so where
     they end up is computed rather than assumed: `edits.merge` returns the
-    survivor, and the lowest id wins (#158).
+    survivor, and the lowest id wins.
     """
     fields = await _fields(request)
     partner = fields.get("with", "")
@@ -626,8 +626,8 @@ def _provenance(
 ) -> dict[str, object] | None:
     """Who wrote this brief, from what, at what cost, and whether it holds.
 
-    The freshness columns are the whole incremental mechanism (#064, #191), and
-    an operator looking at a brief they distrust wants exactly them: the model
+    The freshness columns are the whole incremental mechanism, and an
+    operator looking at a brief they distrust wants exactly them: the model
     and the prompt that wrote it, and whether the members it was written over
     are still the members it has.
     """
@@ -771,7 +771,7 @@ def _members(
             "m.forced AS forced, c.body AS body, "
             # the MIDDLE of the pipeline: what the topic's brief was actually
             # reduced from — the condensation by the model the brief RECORDED,
-            # so a section condensed by two models is still one row (#197)
+            # so a section condensed by two models is still one row
             "d.text AS condensed, d.model_name AS condensed_by "
             "FROM node_members m JOIN sections s ON s.id = m.section_id "
             "LEFT JOIN contents c ON c.content_hash = s.content_hash "
@@ -849,8 +849,8 @@ def _member(row: object, where: str, first: int) -> dict[str, object]:
 
     Thirty-five rows opening with the same twenty characters are thirty-five
     rows nobody scans, so the shared directory is set apart from the part that
-    tells them apart (#198), and what tells two sections of one file apart —
-    where each starts and how far it runs — is beside it (#214).
+    tells them apart, and what tells two sections of one file apart —
+    where each starts and how far it runs — is beside it.
     """
     path = str(row["path"])  # type: ignore[index]
     shared = f"{where}/" if where and path.startswith(f"{where}/") else ""
@@ -901,22 +901,20 @@ def _condensation(row: object) -> dict[str, object] | None:
         "text": str(text),
         "by": str(row["condensed_by"]),  # type: ignore[index]
     }
-    # The GOTCHA lines used to be lifted out and printed above the text as
-    # warning callouts. The text that follows is three paragraphs long and
-    # OPENS with the same lines, so the page said each hazard twice and put
-    # the duplicate first — the reader met the ending before the beginning
-    # (#200). A hazard that is already the first thing in the condensation
-    # does not need lifting out of it.
+    # The GOTCHA lines are not lifted out and printed above the text as
+    # warning callouts: the text OPENS with the same lines, so the page would
+    # say each hazard twice and put the duplicate first. A hazard that is
+    # already the first thing in the condensation does not need lifting out.
 
 
 def _content(body: object) -> dict[str, object]:
     """What a section actually says — the WHOLE of it.
 
-    It used to stop at 4,000 characters and say how many it was holding back.
-    But a section is already the unit the splitter chose precisely because it
-    is a readable amount of one file, the pane it lands in is a scrolling box
-    inside a `<details>` nobody opens by accident, and the one thing a reader
-    opens a section FOR is the part the cut removed (#200).
+    It is not cut at a character limit: a section is already the unit the
+    splitter chose precisely because it is a readable amount of one file, the
+    pane it lands in is a scrolling box inside a `<details>` nobody opens by
+    accident, and the one thing a reader opens a section FOR is the part a cut
+    would remove.
     """
     if body is None:
         return {"text": "", "total": 0, "missing": True}

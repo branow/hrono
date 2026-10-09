@@ -1,4 +1,4 @@
-"""T27: weighted RRF fusion of the two recall legs."""
+"""Weighted RRF fusion of the two recall legs."""
 
 from hrono.recall.fusion import (
     CAP,
@@ -13,7 +13,7 @@ from hrono.recall.fusion import (
 
 def test_constants_are_baked() -> None:
     assert (K, VECTOR_WEIGHT, KEYWORD_WEIGHT, CAP) == (60, 0.7, 0.3, 10)
-    assert MAX_DOCUMENT_SHARE == 0.4  # 4 of 10, PO ruling on #126
+    assert MAX_DOCUMENT_SHARE == 0.4  # 4 of 10
 
 
 def test_a_both_leg_passage_outranks_an_equal_single_leg_one() -> None:
@@ -58,8 +58,8 @@ def test_weights_compose_by_rank() -> None:
 def test_a_dominant_document_is_held_to_its_share_while_others_qualify() -> (
     None
 ):
-    # #126: one document used to be able to fill all ten slots. It may still —
-    # but only once nobody else wants one.
+    # one document may fill all ten slots, but only once nobody else wants
+    # one.
     hits = [(i, 1.0 - i / 100) for i in range(1, 13)]
     documents = {i: ("hog" if i <= 9 else f"other-{i}") for i in range(1, 13)}
 
@@ -130,7 +130,7 @@ def test_without_documents_the_window_is_pure_score_order() -> None:
 
 
 def test_one_empty_leg_is_ranked_by_the_other_alone() -> None:
-    # #140: the keyword leg has never qualified a passage on the QA corpus, so
+    # the keyword leg qualified no passage on a ~120-section test corpus, so
     # this is not an edge case — it is every query we have measured. The fusion
     # must rank cleanly from one leg, and the weighting must not scale the
     # surviving scores into meaninglessness.

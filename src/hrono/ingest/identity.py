@@ -1,7 +1,7 @@
 """Three identities every section/passage needs before it can be stored.
 
-Pure functions over the split output (#029 tree + #030 pieces) and the source
-metadata, with no DB and no network:
+Pure functions over the split output (structure tree + packed pieces) and the
+source metadata, with no DB and no network:
 
 - **Address** — a fragment-free URI assembled from four stored parts
   (``source_type``, ``instance``, ``path``, ``version``) and rendered
@@ -14,8 +14,8 @@ metadata, with no DB and no network:
   byte-chop ``raw`` parts included), rendered to a compact ``sp:`` URI by
   ``sp_render``.
 
-The packer (#030) carries only byte ranges, so structure paths are reconstructed
-here from the #029 tree and a piece's byte range — equivalent to threading a
+The packer carries only byte ranges, so structure paths are reconstructed here
+from the structure tree and a piece's byte range — equivalent to threading a
 trail through the packer, and it keeps the packer pure.
 """
 

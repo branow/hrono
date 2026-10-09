@@ -1,31 +1,32 @@
-"""The ``brief`` job op: the T21 reduce stage over bottom-level nodes.
+"""The ``brief`` job op: the reduce stage over bottom-level nodes.
 
-Turns each bottom-level topic (#040 node) into a stored brief by rendering the
-seeded ``brief``-role prompt over its member sections' condensations (#058) via
-one #057 completion call, then appending the member reference URIs MECHANICALLY
-from node membership — the LLM never writes a reference. Each brief records
-provenance (model, prompt name + template hash, token usage) that #064 freshness
-and the cost API read back.
+Turns each bottom-level topic (a level-0 node) into a stored brief by rendering
+the seeded ``brief``-role prompt over its member sections' condensations via one
+completion call, then appending the member reference URIs MECHANICALLY from node
+membership — the LLM never writes a reference. Each brief records provenance
+(model, prompt name + template hash, token usage) that brief freshness and the
+cost API read back.
 
-The member URIs are stored BESIDE the text, not inside it (#102): #071 splits a
-brief into node:// passages, and a path list is lexically dense enough to
-outrank real prose for a keyword-ish question — one QA query got five slices of
-a URI list as its best "summary" hits. The export renderer re-attaches them, so
-the map still shows every reference; only the indexed passages change.
+The member URIs are stored BESIDE the text, not inside it: recall splits a brief
+into node:// passages, and a path list is lexically dense enough to outrank real
+prose for a keyword-ish question — one test query got five slices of a URI list
+as its best "summary" hits. The export renderer re-attaches them, so the map
+still shows every reference; only the indexed passages change.
 
 A reply that is not a summary at all — a question back to the caller, an
-assistant refusal — is retried ONCE and then stored WITH a flag (#103): the
+assistant refusal — is retried ONCE and then stored WITH a flag: the
 faithfulness gate cannot catch it, because a non-answer invents nothing, and
 dropping the node would cost the map a whole topic.
 
 A node whose brief is FRESH is skipped — ``stale_or_missing`` compares the
-member signature, prompt hash and model fingerprint (#064) — so a re-run over
+member signature, prompt hash and model fingerprint — so a re-run over
 unchanged nodes makes zero LLM calls.
-Lock discipline mirrors #058/#035: gather the nodes and their condensations
-UNDER the #008 lock, release it, make each LLM call OUTSIDE the lock, re-acquire
-only to persist that node — so a failing node fails its leaf cleanly and an
-idempotent re-run fills only the gaps. One node's call tells another's nothing,
-so they run in ``pool.mapped``'s bounded pool; only the persist is serial.
+Lock discipline mirrors ``condense`` and ``embed``: gather the nodes and their
+condensations UNDER the database lock, release it, make each LLM call OUTSIDE
+the lock, re-acquire only to persist that node — so a failing node fails its
+leaf cleanly and an idempotent re-run fills only the gaps. One node's call tells
+another's nothing, so they run in ``pool.mapped``'s bounded pool; only the
+persist is serial.
 """
 
 from __future__ import annotations
@@ -81,7 +82,7 @@ def brief(
         held = len(pins.pinned(conn, pins.BRIEF))
         model = resolve_text_model(conn, job.scope, "brief")
         model_name = str(model["name"])
-        # the condensations were written by the CONDENSE model (#067): reading
+        # the condensations were written by the CONDENSE model: reading
         # them under this op's own name finds none the moment the two differ,
         # and briefs nothing without saying so.
         source_model = producer_model_name(conn, job.scope, "condense")
@@ -157,7 +158,7 @@ def brief(
     )
     # what a pin HELD is as much the run's outcome as what it wrote: an
     # operator who sees "briefed 0" needs to know whether there was nothing to
-    # do or whether they froze it themselves (#154).
+    # do or whether they froze it themselves.
     outcome: dict[str, object] = {
         "briefed": len(briefed),
         "skipped_pinned": held,
@@ -174,7 +175,7 @@ def brief(
 
 
 def _uncondensed(dropped: int) -> str:
-    """#122: a member that contributed nothing is a flag, never a silence."""
+    """A member that contributed nothing is a flag, never a silence."""
     if dropped == 0:
         return ""
     return f"{dropped} member section(s) had no condensation to reduce"

@@ -1,4 +1,4 @@
-"""T25.3: a written brief lands in the passage store as node:// passages."""
+"""A written brief lands in the passage store as node:// passages."""
 
 import json
 from collections.abc import Iterator

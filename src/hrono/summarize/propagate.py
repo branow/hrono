@@ -1,24 +1,25 @@
-"""The ``propagate`` op (#087, T36): climb a changed topic up the tree.
+"""The ``propagate`` op: climb a changed topic up the tree.
 
-The last piece of the incremental promise. After ``update`` (#085) re-places
-changed chunks and dirties LEAF briefs, the upper levels are stale-blind: #068's
-upper signature is its child NODE IDS, and a sticky-placed leaf keeps its id, so
-a parent whose child's BRIEF changed looks fresh. ``propagate`` closes that —
+The last piece of the incremental promise. After ``update`` re-places changed
+chunks and dirties LEAF briefs, the upper levels are stale-blind: an upper
+node's signature is its child NODE IDS, and a sticky-placed leaf keeps its id,
+so a parent whose child's BRIEF changed looks fresh. ``propagate`` closes that —
 for each leaf whose membership changed it judges the new content against the
-stored brief (best-of-3, judge role via #057, OUTSIDE the #008 lock), and on a
+stored brief (best-of-3, judge role, OUTSIDE the database lock), and on a
 material verdict marks ancestor briefs stale up the path (bounded by D_MAX),
-bumping a per-tree drift counter that feeds the settle trigger (T39).
+bumping a per-tree drift counter that feeds the settle trigger.
 
-IDEMPOTENT PER MEMBER SET (#110): a judged leaf records the signature it was
+IDEMPOTENT PER MEMBER SET: a judged leaf records the signature it was
 judged against, so a reclaimed re-run of the same job re-issues no completions,
 writes no second audit row and bumps no drift — while a leaf whose membership
 genuinely changes afterwards is selected again. The drift bump needs no second
 guard of its own: ``_bump_drift`` is reachable only through that selection.
 
 MARKS ONLY: it never regenerates a brief. A later ``brief``/``brief-upper`` pass
-regenerates exactly the marked-stale ancestors (selectively, via #064). Every
-judged topic and every propagate/skip decision is written to ``update_log`` —
-the audit trail the dashboard reads. Constants are baked (D_MAX 5, best-of-3).
+regenerates exactly the marked-stale ancestors (selectively, via brief
+freshness). Every judged topic and every propagate/skip decision is written to
+``update_log`` — the audit trail the dashboard reads. Constants are baked
+(D_MAX 5, best-of-3).
 """
 
 from __future__ import annotations
@@ -56,7 +57,7 @@ class _Topic:
     node_id: int
     source: str  # the leaf's new content (member condensations)
     summary: str  # its stored brief text
-    signature: str  # the member set being judged (#110's re-run marker)
+    signature: str  # the member set being judged (the re-run marker)
 
 
 def propagate(
@@ -71,7 +72,7 @@ def propagate(
         model = resolve_text_model(conn, job.scope, "judge")
         _prompt_name, template = resolve_prompt(conn, "judge")
         # the judge reads what CONDENSE produced, not what the judge model is
-        # called (#067) — the same producer rule `brief` follows.
+        # called — the same producer rule `brief` follows.
         topics = _changed_leaves(
             conn, tree, producer_model_name(conn, job.scope, "condense")
         )
@@ -95,7 +96,7 @@ def _outcome(
     verdicts: Sequence[str | None],
     spent: Sequence[tuple[int, int]] = (),
 ) -> Mapping[str, object]:
-    """What this run did, for the operator rather than the audit table (#132).
+    """What this run did, for the operator rather than the audit table.
 
     ``abstained`` is the count that matters: those topics CHANGED and were not
     judged, so their ancestors were correctly left unmarked and a stale brief
@@ -130,7 +131,7 @@ def _changed_leaves(
         if signature == brief["member_signature"]:
             continue
         if signature == brief["judged_signature"]:
-            continue  # already judged at this exact member set (#110)
+            continue  # already judged at this exact member set
         source = "\n\n".join(
             briefs.member_condensations(conn, node_id, model_name)
         )
@@ -172,8 +173,8 @@ def _vote(
 
     ``spent`` collects what each attempt cost, retries and abstentions
     included — this op issues BEST_OF votes per changed leaf and re-asks on a
-    bad reply, so it is the most expensive stage in a run and reported nothing
-    at all until #179.
+    bad reply, so it is the most expensive stage in a run and must report what
+    it spends.
     """
     for _ in range(1 + _RETRIES):
         result = completion.complete(request)
@@ -187,8 +188,8 @@ def _vote(
 def _verdict(text: str) -> str | None:
     """The reply's LEADING word, if it is a verdict at all.
 
-    The prompt asks for one word and the model answers in prose half the time
-    (F33). Substring matching over prose reads the prompt's own vocabulary back:
+    The prompt asks for one word and the model answers in prose half the time.
+    Substring matching over prose reads the prompt's own vocabulary back:
     "none - not a major change" scores major. The first word is the answer; the
     rest is explanation.
     """

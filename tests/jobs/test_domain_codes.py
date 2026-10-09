@@ -1,8 +1,8 @@
-"""#145: a domain error records ITS code, not everyone's code.
+"""A domain error records ITS code, not everyone's code.
 
-#109 guaranteed every failure has a code. This is the half that makes the code
-worth reading: a client can tell a source that would not sync from a model that
-would not load, without parsing a sentence.
+The error envelope guarantees every failure has a code. This is the half that
+makes the code worth reading: a client can tell a source that would not sync
+from a model that would not load, without parsing a sentence.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def test_a_job_records_the_failures_own_code(
 
 
 def test_a_foreign_exception_is_still_opaque(db: Database) -> None:
-    # the #109 rule holds: a driver's wording is not hrono's answer, and its
+    # the envelope rule holds: a driver's wording is not hrono's answer, and its
     # code is the generic one precisely because we cannot vouch for it.
     row = _run(db, sqlite3.IntegrityError("poisoned mid-transaction"))
 

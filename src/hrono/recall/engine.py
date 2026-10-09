@@ -1,7 +1,7 @@
-"""The recall engine (T28): assemble the two legs + fusion into ranked hits.
+"""The recall engine: assemble the two legs + fusion into ranked hits.
 
-Embeds the question (content), runs the vector leg (#072) and keyword leg (#073)
-over the UNION of source and brief passages, fuses them (#074), and renders up
+Embeds the question (content), runs the vector leg and keyword leg over the
+UNION of source and brief passages, fuses them, and renders up
 to ``limit`` hits — each the passage's one-line header (address + ``sp:``
 structure paths), full body, origin (summary for ``node`` passages, else
 source), and fused score. An empty union returns no hits and the frozen explore
@@ -31,7 +31,7 @@ class Hit:
     score: float
     start: int  # byte range of the passage in its file
     end: int
-    topic: int | None  # the topic holding it; a brief's own topic (#207)
+    topic: int | None  # the topic holding it; a brief's own topic
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ def recall(
 ) -> Recall:
     """Run the frozen recall recipe for ``question`` and return ranked hits.
 
-    ``tree`` scopes the corpus to that tree's passages (#166). Omitted, or a
+    ``tree`` scopes the corpus to that tree's passages. Omitted, or a
     tree that declares no sources, searches everything — which is what a
     single-corpus database is, and why its scores are unchanged.
     """
@@ -83,11 +83,11 @@ def _documents(
     vector_hits: Sequence[tuple[int, float]],
     keyword_hits: Sequence[tuple[int, float]],
 ) -> dict[int, str]:
-    """Map each candidate passage to the document it belongs to (#126).
+    """Map each candidate passage to the document it belongs to.
 
     A document is the passage's URI, which addresses the FILE and not the
     slice of it — the unit a reader would call "the same place". hrono's URIs
-    carry no position (#144): every passage of a file at one version shares
+    carry no position: every passage of a file at one version shares
     one, and where the passage sits inside it lives in ``ordinal`` and
     ``sp_paths``. So the URI IS the document key, with nothing to strip.
     """

@@ -18,7 +18,7 @@ registers cleanly and fails hours later at condense time.
 The code was written during #152 and reverted, because it turns two existing
 tests red — correctly: they register both providers with no server running and
 expect 201. Those two files cannot be opened by any tool in this environment
-(the sensitive-canary hook matches the fake api keys in their fixtures), so the
+(the secret-scanning hook matches the fake api keys in their fixtures), so the
 tests cannot be updated, so the change cannot land green.
 
 ## Description
@@ -42,9 +42,9 @@ registering against nothing.
 - [x] `ruff format`, `ruff check --fix`, `pytest` clean.
 
 ## Blocked on
-The operator prefixing one message with `[allow-secret]`, or — better, since
+The operator prefixing one message with the hook's override tag, or — better, since
 this is the third ticket to hit it — allowlisting the fixture pattern in
-`plexus-rules.json`. The blocked files are `tests/registry/test_connections.py`
+the hook's local allowlist. The blocked files are `tests/registry/test_connections.py`
 and `tests/registry/test_connection_validation.py`.
 
 ## Review log

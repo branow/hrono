@@ -1,9 +1,9 @@
-"""What needs attention in a tree, and where to go and see it (T52, #185).
+"""What needs attention in a tree, and where to go and see it.
 
-Every item here is a state some earlier ticket learned to DETECT and nothing
-ever learned to SHOW. A stale brief is a topic recall cannot answer from; a
+Every item here is a state hrono already DETECTS; this is where it is SHOWN. A
+stale brief is a topic recall cannot answer from; a
 parked section is content the map does not contain; an unparented topic is a
-subtree missing from the export — the defect that shipped twice (#124, #163).
+subtree missing from the export, which nothing else would reveal.
 
 A zero is reported, never hidden. "Nothing needs attention" is the answer an
 operator most wants from this page, and a blank page cannot give it.
@@ -86,8 +86,8 @@ def _unreachable(conn: sqlite3.Connection, tree: str) -> Item:
 
 def unanswerable(conn: sqlite3.Connection, tree: str) -> list[int]:
     """Topics recall cannot answer from: no brief, a stale one, or a reply
-    that is not a brief at all (#217) — a pinned brief is a person's, and
-    counts as written. The one rule the Health page and the outline share."""
+    that is not a brief at all — a pinned brief is a person's, and counts
+    as written. The one rule the Health page and the outline share."""
     held = pins.pinned(conn, pins.BRIEF)
     rows = conn.execute(
         "SELECT n.id AS id, b.node_id AS has, b.stale AS stale, "

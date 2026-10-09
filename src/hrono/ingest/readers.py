@@ -1,4 +1,4 @@
-"""The reader table: one entry per source type (#143, T40).
+"""The reader table: one entry per source type.
 
 The contract itself lives in ``hrono.ingest``; this is only the map from a
 source's ``type`` to the reader that answers it, in the same shape as the op,
@@ -51,7 +51,7 @@ def resolve(config: dict[str, object], cache: Path) -> tuple[Reader, str, str]:
     ONE answer to "how is this source read, and how are its pieces addressed",
     because there are two callers — the full split and the incremental update —
     and a source addressed one way by one and another way by the other would
-    make every unit look changed on the next diff (#147).
+    make every unit look changed on the next diff.
     """
     source_type = str(config["type"])
     reader = READERS.get(source_type)

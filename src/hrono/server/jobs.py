@@ -1,12 +1,11 @@
 """Jobs routes: read any job (reader+), and the admin-only service door.
 
-``POST /jobs`` enqueues ANY registered op. It exists because the September QA
-run had to insert job rows into SQLite by hand to find out why a tree was stuck
-— that gap is real. It is deliberately not pretty, and deliberately has no CLI
-command (#139): the lifecycle stages must run in one order, and running them out
-of order leaves a map that looks right and is quietly wrong (#122, #137). A user
-runs ``hrono tree sync``; an operator debugging a stuck tree reaches for curl
-and should feel that they have.
+``POST /jobs`` enqueues ANY registered op, so finding out why a tree is stuck
+never means inserting job rows into SQLite by hand. It is deliberately not
+pretty, and deliberately has no CLI command: the lifecycle stages must run in
+one order, and running them out of order leaves a map that looks right and is
+quietly wrong. A user runs ``hrono tree sync``; an operator debugging a stuck
+tree reaches for curl and should feel that they have.
 
 ADMIN, not writer, for the same reason: this can run an expensive or destructive
 stage out of sequence, and the role should say so.
@@ -49,7 +48,7 @@ class JobRequest(BaseModel):
 
 
 def _error(job: Job) -> dict[str, object] | None:
-    """A failure in the SAME envelope every other surface answers in (#109)."""
+    """A failure in the SAME envelope every other surface answers in."""
     if job.error is None and job.error_code is None:
         return None
     return {
@@ -80,7 +79,7 @@ def _job(
     }
     if rolled is not None:
         answer["progress"] = {"done": rolled.done, "total": rolled.total}
-    # a leaf's own tokens; a parent's are its children's, summed (#179)
+    # a leaf's own tokens; a parent's are its children's, summed
     cost = spent if rolled is not None else total_spend([job.result])
     if cost is not None:
         answer["cost"] = cost
@@ -88,7 +87,7 @@ def _job(
 
 
 def _rolled(conn: sqlite3.Connection, job_id: str) -> Rollup | None:
-    """A parent's children as one answer; None for a leaf (T57.1).
+    """A parent's children as one answer; None for a leaf.
 
     The parent's OWN status row is not consulted: the work is in the children,
     and a parent row that says `running` while every child has finished is the
@@ -104,7 +103,7 @@ def run_job(body: JobRequest, request: Request, user: Admin) -> dict[str, str]:
     **Stages run out of order can leave a tree that looks fine and is wrong.**
     `propagate` before `update` judges content that has not arrived; `brief`
     before `propagate` silently prevents any ancestor from ever being marked
-    stale (#137). Use ``POST /trees/{name}/sync`` unless you are debugging.
+    stale. Use ``POST /trees/{name}/sync`` unless you are debugging.
     """
     if body.op not in OPS:
         raise BadRequest(
@@ -114,9 +113,7 @@ def run_job(body: JobRequest, request: Request, user: Admin) -> dict[str, str]:
     database = request.app.state.db
     if fans_out(body.op, body.scope):
         # a source-scoped op over every source is a job PER SOURCE, under one
-        # parent that reports what they add up to (#172). Until #175 this
-        # machinery existed and nothing called it, so every such request ran as
-        # one opaque job.
+        # parent that reports what they add up to, rather than one opaque job.
         return {
             "job_id": fan_out(
                 database,
@@ -153,7 +150,7 @@ def get_job(job_id: str, request: Request, _: Reader) -> dict[str, object]:
         children = store.children(conn, job_id)
         rolled = rollup([str(child["status"]) for child in children])
         spent = total_spend([to_job(child).result for child in children])
-        # every model call this run made, its children's included (#202)
+        # every model call this run made, its children's included
         return {**_job(row, rolled, spent), "usage": for_jobs(conn, job_id)}
 
 

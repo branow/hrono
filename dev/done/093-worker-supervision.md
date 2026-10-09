@@ -230,7 +230,7 @@ Ops must stay idempotent for this to hold; call that out in the ticket tests.
   `test_a_running_job_is_not_reclaimed_while_its_worker_beats`; a no-op
   `store.reclaim` fails the other three. Six tests, six earned places.
   *Methodology note for future reviews:* the venv's editable install pins
-  `hrono` to `/Users/orest/repos/hrono/src`, so mutating a worktree's `src/`
+  `hrono` to `<repo>/src`, so mutating a worktree's `src/`
   and running the repo venv's pytest silently tests the UNMUTATED main source
   and every mutant appears to survive. My first pass hit this. Run worktree
   mutations with `PYTHONPATH=<worktree>/src` and assert

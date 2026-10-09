@@ -1,4 +1,4 @@
--- E019: a brief is gated against the condensations of the model its job's
+-- A brief is gated against the condensations of the model its job's
 -- scope named, and read back later with no job in sight. `source_model` is
 -- that condense model, recorded with the brief, so the read-time material is
 -- exactly what the brief was written from.

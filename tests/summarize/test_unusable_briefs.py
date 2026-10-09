@@ -1,4 +1,4 @@
-"""#217: a reply that is not a brief never stands, and only it is rewritten."""
+"""A reply that is not a brief never stands, and only it is rewritten."""
 
 import json
 from collections.abc import Iterator
@@ -105,7 +105,7 @@ def test_the_next_run_rewrites_only_the_reply_that_was_not_a_brief(
 def test_a_brief_stored_before_the_rule_is_caught_by_it(
     written: Database,
 ) -> None:
-    # what the gate wrote before #217: the chatter, with no flag beside it
+    # what an older gate wrote: the chatter, with no flag beside it
     with written.write() as conn:
         good = next(n for n, (_, flag, _) in _rows(written).items() if not flag)
         row = briefs.get(conn, good)
@@ -147,7 +147,7 @@ def test_the_stored_non_briefs_are_listed(written: Database) -> None:
 
 
 def _default_prompts(conn: object) -> None:
-    """The seeded brief prompts, the ones ~/hrono-demo's echo repeated."""
+    """The seeded brief prompts, the ones the echoed brief repeats."""
     for name in ECHOED:
         registry_store.replace(
             conn,  # type: ignore[arg-type]
@@ -162,7 +162,7 @@ def _default_prompts(conn: object) -> None:
 
 
 class Echoing:
-    """Answers every brief with the demo tree's echo of its prompt."""
+    """Answers every brief with an echo of its prompt."""
 
     def __init__(self) -> None:
         self.calls = 0
@@ -189,8 +189,8 @@ def test_an_echo_of_the_prompt_is_retried_and_stored_flagged(
 
 @pytest.fixture
 def echoed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """A built tree holding one level-0 brief that is ~/hrono-demo's echo,
-    stored with no flag, as it was there."""
+    """A built tree holding one level-0 brief that echoes its prompt, stored
+    with no flag, as an older gate left it."""
     monkeypatch.chdir(tmp_path)
     url = make_repo(tmp_path / "src-repo", files=9)
     database = Database.at(tmp_path / "hrono.db")

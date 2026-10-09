@@ -1,7 +1,7 @@
-"""Which encoder an embedding model resolves to (#151, T44.1).
+"""Which encoder an embedding model resolves to.
 
-A model with NO connection loads in process, which is what every model did
-before this; a model WITH one is reached over HTTP, and its provider says how.
+A model with NO connection loads in process; a model WITH one is reached over
+HTTP, and its provider says how.
 The decision is the same one the completion side makes (`providers.client_for`)
 and reads the same field, so a connection means the same thing to both halves
 of the system.
@@ -47,7 +47,7 @@ def encoder_for_model(
 ) -> Encoder:
     """Build the encoder this model asks for: in process, or over HTTP.
 
-    Either way each batch it embeds is recorded in the usage ledger (#201).
+    Either way each batch it embeds is recorded in the usage ledger.
     """
     if config.get("connection") is None:
         encode = local(str(config["model"]))  # type: ignore[operator]

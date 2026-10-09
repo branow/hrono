@@ -1,4 +1,4 @@
-"""The ``confluence`` source type: the pages of its scoped spaces (T42).
+"""The ``confluence`` source type: the pages of its scoped spaces.
 
 The first type with no git anywhere in it. What is confluence's and nothing
 else's is here — the scope selectors, the two endpoints, basic auth, and the
@@ -8,13 +8,13 @@ are ``pages``', shared with notion.
 Three decisions worth stating, because they are not free choices:
 
 - a page's unit path is ``space-<KEY>/page-<ID>.html``. The splitters pick a
-  grammar by EXTENSION (#143), and what confluence returns is storage-format
+  grammar by EXTENSION, and what confluence returns is storage-format
   XHTML, so that is what it is called and what is stored. No conversion is
   hidden inside the reader: what hrono ingests is what the provider sent.
 - a page's version is its ``version.number``, carried per unit, so editing one
   page does not re-ingest its space.
 - the address is ``confluence://<site host>/space-<KEY>/page-<ID>.html@<n>``,
-  which is the design sketch's identity with #144's fragment removed.
+  which is hrono's fragment-free identity scheme.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def pages(
 ) -> Iterator[Page]:
     """Every page the scope selects, deduplicated by id.
 
-    Scopes are UNIONED (implementation-notes), so the same page reached through
+    Scopes are UNIONED (``docs/api.md``), so the same page reached through
     both a space selector and a page selector is pulled once.
     """
     getter = fetch if fetch is not None else get_json

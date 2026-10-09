@@ -1,10 +1,9 @@
-"""A registry collection as a FORM, derived from its own pydantic model (#200).
+"""A registry collection as a FORM, derived from its own pydantic model.
 
-Settings used to be five textareas of JSON. That is the right surface for the
-API and the wrong one for a person: adding a model meant knowing the schema by
-heart, every typo came back as a validation error after the fact, and the one
-thing an operator wanted to do most — add a second model, drop one — read as
-editing a wall of braces.
+Raw JSON is the right surface for the API and the wrong one for a person:
+adding a model means knowing the schema by heart, every typo comes back as a
+validation error after the fact, and the one thing an operator wants to do
+most — add a second model, drop one — reads as editing a wall of braces.
 
 So each collection is rendered as fields. The fields are not written out here:
 they are READ OFF the collection's pydantic model, which is the same model the
@@ -20,11 +19,11 @@ Two shapes exist in the registry and both are handled here:
   the discriminator (``type``, ``provider``) choosing between them
 
 A union is a two-step add: pick the variant, then fill its fields. There is no
-JavaScript on this dashboard, so the alternative was rendering every variant at
+JavaScript on this dashboard, so the alternative is rendering every variant at
 once and reading back the one the operator meant — five near-identical forms
 stacked on a page, four of them wrong.
 
-**Labels and help come from the model too (#210).** Every field declares a
+**Labels and help come from the model too.** Every field declares a
 `title` (the label a person reads), a `description` (one line of help) and,
 where a value has a shape worth showing, `examples` — on the pydantic field
 itself, so the API's validation and the form cannot drift. The raw config path
@@ -378,10 +377,10 @@ def _read(field: Field, posted: Mapping[str, Sequence[str]]) -> object | None:
     raw = _first(posted, field.input_name).strip()
     if not raw:
         # A blank field is an ABSENT one, required or not. Sending `""` through
-        # for a required field looked like the way to get the error attributed
-        # to that field — but `url: str` accepts an empty string, so a source
-        # with no url validated, saved, and failed later at the reach check
-        # with a message about git rather than about the empty box (#200).
+        # for a required field must not be the way to attribute the error to
+        # that field: `url: str` accepts an empty string, so a source with no
+        # url would validate, save, and fail later at the reach check with a
+        # message about git rather than about the empty box.
         # Omitted, pydantic says "Field required" against the field itself.
         return None
     if field.kind == "secret" and raw == MASK:

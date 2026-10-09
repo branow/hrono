@@ -1,7 +1,8 @@
-"""E014: the map on a tree people actually build, not on nine topics.
+"""The map on a tree people actually build, not on nine topics.
 
-On 132 topics with both overlays on, the arcs were a solid band, the names all
-read "Handles assorted mat...", and the drawing ran off the window. The tree
+On 132 topics with both overlays on, a map drawn for nine turns the arcs into a
+solid band, every name reads "Handles assorted mat...", and the drawing runs
+off the window. The tree
 here is the same shape: a root over twelve topics over ten leaves each, every
 brief opening with the same words as a weak model writes them.
 """

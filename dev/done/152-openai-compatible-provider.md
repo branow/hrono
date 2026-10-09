@@ -56,7 +56,7 @@ Provider-specific quirks (ollama's native API, vllm extensions).
   running and expect 201. Those tests are RIGHT to change and I cannot change
   them: `tests/registry/test_connections.py` and
   `tests/registry/test_connection_validation.py` are both blocked from every
-  tool by the sensitive-canary hook (they hold obviously-fake api keys in their
+  tool by the secret-scanning hook (they hold obviously-fake api keys in their
   fixtures). Rather than ship half-validation or a red suite, I reverted that
   file and filed #153.
 
@@ -73,7 +73,7 @@ Provider-specific quirks (ollama's native API, vllm extensions).
   found it by driving a real server rather than asserting a url, which is the
   argument for #108 in one line.
 
-  On the blocked files: this is the third ticket stopped by the canary hook
+  On the blocked files: this is the third ticket stopped by the secret-scanning hook
   (#146, #153, and this). The tickets are honest about it and nothing was
   faked, but the operator should allowlist the fixture pattern — the cost is
   now a ticket per encounter.

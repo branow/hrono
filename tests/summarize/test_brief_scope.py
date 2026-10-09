@@ -1,4 +1,4 @@
-"""E009 (#218): a job scoped to ONE topic rewrites that topic and no other.
+"""A job scoped to ONE topic rewrites that topic and no other.
 
 The control is the unscoped run over the same two stale topics: it rewrites
 both, so the scoped run's single rewrite is the scope and not a gate that

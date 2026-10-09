@@ -94,8 +94,8 @@ def _probe_table(database: Database) -> None:
 def test_a_failed_block_leaves_the_next_caller_a_clean_connection(
     tmp_path: Path,
 ) -> None:
-    """F23: an op that raised left the shared connection in a transaction,
-    after which every write returned 'database is locked' for ever."""
+    """An op that raises must not leave the shared connection in a
+    transaction, or every later write returns 'database is locked'."""
     database = Database.at(tmp_path / "hrono.db")
     _probe_table(database)
 
@@ -114,7 +114,7 @@ def test_a_failed_block_leaves_the_next_caller_a_clean_connection(
 
 
 def test_a_foreign_commit_is_visible_to_the_next_read(tmp_path: Path) -> None:
-    """F23: a committed row stayed invisible to the server for 20 minutes."""
+    """A row another process committed is visible to the next read."""
     db = tmp_path / "hrono.db"
     database = Database.at(db)
     _probe_table(database)
@@ -143,7 +143,7 @@ def test_a_foreign_commit_is_visible_to_the_next_read(tmp_path: Path) -> None:
 def test_a_write_waits_out_another_writer_instead_of_failing(
     tmp_path: Path,
 ) -> None:
-    """F13: an 11-minute job died the instant another process wrote a row."""
+    """A long job must not die the instant another process writes a row."""
     db = tmp_path / "hrono.db"
     database = Database.at(db)
     _probe_table(database)
@@ -203,7 +203,7 @@ def test_an_unavailable_database_raises_a_mapped_app_error(
 def test_a_long_write_does_not_wedge_or_stale_the_other_connections(
     tmp_path: Path,
 ) -> None:
-    """F23 end to end: a writer in flight must not freeze readers' snapshots."""
+    """End to end: a writer in flight must not freeze readers' snapshots."""
     db = tmp_path / "hrono.db"
     database = Database.at(db)
     _probe_table(database)

@@ -1,7 +1,7 @@
-"""What has run and what is running (#181, T53).
+"""What has run and what is running.
 
-A parent's status and progress are DERIVED from its children at read time
-(#172), so nothing here stores a number that can go stale.
+A parent's status and progress are DERIVED from its children at read time,
+so nothing here stores a number that can go stale.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ MEANS = {
 # The order an operator meets the stages in, so the list of things they may run
 # reads as the pipeline rather than as `sorted(OPS)`. Anything registered and
 # not named here still appears, after these — a new op is runnable the day it
-# exists, which is the whole point of driving this off `OPS` (#200).
+# exists, which is the whole point of driving this off `OPS`.
 ORDER = (
     "sync-tree",
     "maintain",
@@ -186,9 +186,9 @@ def _page_url(tree: str, status: str, op: str, page: int) -> str:
 def _runnable() -> list[dict[str, object]]:
     """Every registered op, in pipeline order, with what it does and takes.
 
-    Read off `OPS` rather than listed by hand: the dashboard offering a subset
-    of what the tool can do was the gap — one `sync` button over sixteen ops,
-    so regenerating just the condensations meant reaching for the API (#200).
+    Read off `OPS` rather than listed by hand, so the dashboard never offers a
+    subset of what the tool can do: with one `sync` button over sixteen ops,
+    regenerating just the condensations would mean reaching for the API.
     """
     known = {name: index for index, name in enumerate(ORDER)}
     return [
@@ -210,8 +210,8 @@ def render_job(
 ) -> dict[str, object]:
     """One run, as the page needs it: derived status, progress, spend, kids.
 
-    The same derivations the API serves (#172, #179) rather than a second set
-    for the page — a dashboard that computes its own status is a dashboard that
+    The same derivations the API serves rather than a second set for the
+    page — a dashboard that computes its own status is a dashboard that
     disagrees with `hrono jobs get`. ``since`` is when calls began to be
     recorded (`recorded_since`), read once by the caller, not once per row.
     """
@@ -333,7 +333,7 @@ def one_run(
 
     The list cannot be the whole surface: a row has to fit in a column, so the
     detail that answers "what is it doing right now" and "what exactly did each
-    piece find" had nowhere to be (#200). This is where a run on the front page
+    piece find" needs a page of its own. This is where a run on the front page
     and a run in the list both link to.
     """
     with request.app.state.db.connect() as conn:
@@ -400,12 +400,12 @@ async def run_from_the_page(
 def cancel_from_the_page(
     job_id: str, request: Request, user: Admin, tree: str = ""
 ) -> Response:
-    """Cancel from the page, and say what could not be stopped (#173).
+    """Cancel from the page, and say what could not be stopped.
 
     Admin, exactly as ``POST /jobs/{id}/cancel`` requires: stopping someone
     else's run is an operator decision, and a page must never accept a weaker
     role than the API does for the same operation (the rule this module's
-    package docstring states and this route broke).
+    package docstring states).
     """
     with request.app.state.db.write() as conn:
         if job_store.get(conn, job_id) is None:
@@ -428,7 +428,7 @@ def retry_from_the_page(
 
     Nothing already paid for is paid for twice: condensations and vectors are
     cached by content, so the retry spends only on what failed or was never
-    reached (#213). The role is the one that could have started it.
+    reached. The role is the one that could have started it.
     """
     database = request.app.state.db
     with database.connect() as conn:

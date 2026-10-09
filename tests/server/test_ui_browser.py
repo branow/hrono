@@ -1,9 +1,8 @@
-"""#215: the shell as a browser draws it.
+"""The shell as a browser draws it.
 
 Overflow and overlap are properties of laid-out pixels, so these load every
 route in a real Chromium against the production app and measure. A test over
-the HTML cannot fail on a 4px scrollbar, which is how every page shipped with
-one.
+the HTML cannot fail on a 4px scrollbar.
 """
 
 from __future__ import annotations
@@ -361,7 +360,7 @@ def test_the_first_sync_of_an_empty_tree_moves_without_a_reload(
 def test_the_guides_model_table_keeps_each_name_on_one_line(
     fresh_page: object, fresh: Live, width: int
 ) -> None:
-    """#216: the upstream model name wrapped onto its own line under the role.
+    """The upstream model name must not wrap onto its own line under the role.
 
     Each cell of the role and model columns has to lay out as ONE line of
     text, at the widest and the narrowest the dashboard is read at, with the

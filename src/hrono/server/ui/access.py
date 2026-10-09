@@ -1,8 +1,8 @@
-"""The Access page (#209): who may use this server, and as what.
+"""The Access page: who may use this server, and as what.
 
 Admin only, at the page and at every route behind it. A page that let a writer
 reach these would be a second, weaker authorization for what `/users` already
-refuses them (#180).
+refuses them.
 
 The rules live in `hrono.auth.users`, the same functions the API calls, so the
 last-admin refusal holds here because it holds there: this module draws forms
@@ -121,7 +121,7 @@ async def remove(request: Request, user: Admin, name: str) -> Response:
 
 @router.post("/ui/access/rotate-key")
 async def rotate_key(request: Request, user: Admin) -> Response:
-    """Re-encrypt every stored secret under a new master key (#177)."""
+    """Re-encrypt every stored secret under a new master key."""
     form = await _fields(request)
     if not form.get("confirm"):
         return _refused(

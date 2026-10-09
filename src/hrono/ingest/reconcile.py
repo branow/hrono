@@ -1,6 +1,6 @@
-"""Apply a file-level diff to the section store, section by section (#085, T34).
+"""Apply a file-level diff to the section store, section by section.
 
-The bridge between #083's file diff and the #085 placement rule: it mutates only
+The bridge between the file diff and the placement rule: it mutates only
 the sections of the changed files (untouched files keep their sections and their
 cluster membership untouched) and returns the section-level deltas the placement
 rule consumes — each carrying the PRIOR cluster of the chunk it replaces so the
@@ -10,7 +10,7 @@ then by ordinal for the genuinely edited slots; an old section left unmatched is
 a deletion.
 
 The bytes of a changed unit come from ``fetch``, the source reader's
-by-path lookup (#143), so this path is no more filesystem-bound than the full
+by-path lookup, so this path is no more filesystem-bound than the full
 split is.
 
 A changed/deleted/moved file's old sections are dropped (their memberships
@@ -19,7 +19,7 @@ by content hash, so a moved file's content is reused and never re-embedded.
 Each delta therefore carries the membership its predecessor HAD — node,
 similarity, forced flag, and the incubator batch if it was parked — because
 once the old row is gone that is the only record of it, and a rename has to be
-re-attached on exactly those terms (#100).
+re-attached on exactly those terms.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ def _carry_pins(
     old: Sequence[_Old],
     deltas: Sequence[SectionDelta],
 ) -> None:
-    """Re-pin each held section onto the section that replaced it (#154).
+    """Re-pin each held section onto the section that replaced it.
 
     The pins trigger (0030) deleted the old row's pin with the row, so the
     operator's hold exists only in ``old`` now. A delta that matched a pinned
@@ -169,7 +169,7 @@ def _match(
     """Pair new sections with the ones they replace, hash first then ordinal.
 
     A ``moved`` file's bytes are identical by definition, so its sections pair
-    by CONTENT HASH — which is what lets placement keep them in place (#100).
+    by CONTENT HASH — which is what lets placement keep them in place.
     The exception is a rename that changes the extension: the file then splits
     under a different grammar, so a section pairs by ordinal instead and is a
     genuine ``changed`` for placement, not a move.

@@ -1,4 +1,4 @@
-"""#159: an operator divides a topic they can see is really two.
+"""An operator divides a topic they can see is really two.
 
 `repair.split` already IS the scoped mini-pipeline; what is new is that a human
 can ask for it, and that the size rule which governs the automatic repair does
@@ -75,7 +75,7 @@ def harness(tmp_path: Path) -> Iterator[tuple[Harness, int, list[int]]]:
         "t",
     )
     with conn:
-        # the clustering ladder floors at 12 points (#094) and a manual
+        # the clustering ladder floors at 12 points and a manual
         # split runs that same real recipe, so a divisible topic has at
         # least that many members.
         left = [_section(conn, f"l{i}.md", [1.0, 0.01 * i]) for i in range(8)]
@@ -168,7 +168,7 @@ def test_a_topic_below_the_ladders_floor_says_so(
     harness: tuple[Harness, int, list[int]], held: int
 ) -> None:
     # below the recipe's floor there is no honest reduction to run, so there
-    # is nothing to divide BY (#094). The message has to say that rather than
+    # is nothing to divide BY. The message has to say that rather than
     # "does not divide", which would send an operator looking for a boundary
     # -- and a topic of ONE says it just as much as a topic of four.
     h, _node, _sections = harness

@@ -1,4 +1,4 @@
-"""Where a git source's remote is NOW, without reading a byte of it (#215).
+"""Where a git source's remote is NOW, without reading a byte of it.
 
 `git ls-remote <url> HEAD` asks the remote for the commit its default branch
 points at and nothing else — no clone, no fetch, no content. Set beside the

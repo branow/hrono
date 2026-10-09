@@ -1,4 +1,4 @@
-"""#098: every data location hangs off the database file, not the cwd."""
+"""Every data location hangs off the database file, not the cwd."""
 
 from pathlib import Path
 
@@ -35,7 +35,7 @@ def test_a_resolved_path_survives_a_later_chdir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # the anchor is read once at startup: resolving it there is what stops a
-    # later working directory from moving the database or its cache (F25).
+    # later working directory from moving the database or its cache.
     monkeypatch.delenv(ENV_DB, raising=False)
     monkeypatch.chdir(tmp_path)
     before = database_path()

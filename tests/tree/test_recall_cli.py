@@ -1,4 +1,4 @@
-"""T28: the `hrono recall` CLI over the #010 client."""
+"""The `hrono recall` CLI over the HTTP client."""
 
 import pytest
 from typer.testing import CliRunner
@@ -19,7 +19,7 @@ class FakeClient:
         self, path: str, body: dict, *, timeout: float | None = None
     ) -> object:
         # mirrors the real `Client.post`, keyword included: a stub whose
-        # signature drifts from production stops testing the caller (#144)
+        # signature drifts from production stops testing the caller
         self.calls.append((path, body))
         self.timeouts.append(timeout)
         return self.payload
@@ -78,11 +78,11 @@ def test_recall_no_profile_is_a_clean_error(
 def test_recall_asks_for_more_than_the_registry_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#168: 10s was the registry-CRUD default and a cold recall exceeds it.
+    """Recall must not use the 10s registry-CRUD timeout: a cold one exceeds it.
 
     A warm server answers in milliseconds; a cold one reads the model's weights
-    first, which measured 13.3s -- just over the default the CLI had inherited,
-    so the read door failed and reported the server unreachable.
+    first, which measured 13.3s -- just over that default, so the read door
+    would fail and report the server unreachable.
     """
     fake = FakeClient({"hits": [], "message": "nothing"})
     monkeypatch.setattr("hrono.cli.from_profile", lambda: fake)

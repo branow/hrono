@@ -13,7 +13,7 @@ from hrono.registry.descriptor import ValidationContext, ValidationFailed
 from hrono.registry.validation.model_validation import validate_model
 
 KEY = Fernet.generate_key()
-# built, not written: a literal here blocks every tool (#153)
+# built, not written: a literal here trips secret scanners
 API_KEY = "not-a-key-" + "x" * 8
 
 
@@ -130,7 +130,7 @@ def test_text_without_connection_is_rejected(tmp_path: Path) -> None:
 
 
 def test_a_local_endpoint_is_probed_at_its_own_root(tmp_path: Path) -> None:
-    """The defect a live drive caught (#153): a working local server refused.
+    """A working local server must not be refused.
 
     `endpoint` may already name the `/v1` root — ollama's own docs give one —
     and appending another probed `/v1/v1/chat/completions`, which every such

@@ -1,9 +1,9 @@
-"""#173 (T57.2): stopping a run that is already going.
+"""Stopping a run that is already going.
 
 Every test here reaches the cancel through the API, and the fan-out it cancels
-is created through the API too — `POST /jobs` with a scope over many sources
-(#175). Planting the parent with `store.create_fanout` would prove the canceller
-and say nothing about whether an operator can reach any of it (#176).
+is created through the API too — `POST /jobs` with a scope over many sources.
+Planting the parent with `store.create_fanout` would prove the canceller and
+say nothing about whether an operator can reach any of it.
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def test_cancelling_a_parent_stops_its_pending_children(
 
 
 def test_the_parent_then_reads_as_canceled(harness: Harness) -> None:
-    # the derived answer (#172) and the stored row now AGREE: once the last
+    # the derived answer and the stored row AGREE: once the last
     # child is terminal the parent is finalized, because a parent left
     # 'pending' forever sat in the claim scan and the status filters for the
     # life of the database.
@@ -139,10 +139,10 @@ def test_a_running_child_is_signaled_and_reported(
 ) -> None:
     """The honest half: a handler cannot be interrupted mid-transaction.
 
-    #092 is why killing the thread is not on the table — but the ROW flips to
-    canceled, which is the stop signal ``pool.running`` polls between calls,
-    and ``running: 1`` in the response means "told to stop, finishing its
-    step". The worker's terminal write is guarded on status = 'running', so
+    A thread inside a SQLite transaction cannot be killed safely — but the ROW
+    flips to canceled, which is the stop signal ``pool.running`` polls between
+    calls, and ``running: 1`` in the response means "told to stop, finishing
+    its step". The worker's terminal write is guarded on status = 'running', so
     the signal is never overwritten by the step's outcome.
     """
     parent = harness.fan_out()
@@ -204,7 +204,7 @@ def test_cancelling_a_standalone_job_stops_it(harness: Harness) -> None:
 def test_cancelling_one_run_leaves_another_alone(harness: Harness) -> None:
     # a fixture with ONE parent cannot show this: cancelling everything
     # pending and cancelling the target's own children look identical when
-    # there is nothing else in the queue (qa, 2026-09-26).
+    # there is nothing else in the queue.
     mine = harness.fan_out()
     theirs = harness.fan_out()
 

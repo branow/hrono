@@ -33,7 +33,7 @@ if child.end - start >= limit:
 threshold is `MIN_GROUP = 100` and the 800 B budget only bounds descending and
 chopping. Every sibling group is cut as soon as it crosses 100 bytes.
 
-The settled recipe disagrees: `rad/hrono/app/structure-split.ipynb:pack_node`
+The settled recipe disagrees: `docs/research/prototype/structure-split.ipynb:pack_node`
 has **no min-group flush** — it flushes only when a group would bust the budget
 — and its measured output is `57 paragraphs, sizes [122, 195, ..., 799, 800,
 835]`, a median in the 600s. The prose in `how-hrono-works.md` ("a sibling group
@@ -64,7 +64,7 @@ Work:
 
 Restore the prototype's behaviour: **remove the unconditional min-group flush**.
 `_pack` should flush only when adding the next child would bust the budget,
-which is what `rad/hrono/app/structure-split.ipynb:pack_node` does and what
+which is what `docs/research/prototype/structure-split.ipynb:pack_node` does and what
 produced the measured `[122, 195, ..., 799, 800, 835]` distribution.
 
 If the "a decent structural unit stands alone" intent in `how-hrono-works.md` is

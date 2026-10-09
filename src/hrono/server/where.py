@@ -1,4 +1,4 @@
-"""What a topic is ABOUT, taken from the files it holds (#198, #199).
+"""What a topic is ABOUT, taken from the files it holds.
 
 A brief-derived name is only as good as the model that wrote one. On a tree
 summarised by a weak model every topic is called "This group covers State,
@@ -10,16 +10,16 @@ So each topic is labelled by the deepest directory that holds MOST of its
 sections — not the strict common prefix, which collapses to ``src/hrono`` for
 half a repository and distinguishes nothing.
 
-A topic that genuinely straddles the tree used to be named by the two SHALLOW
-roots it spanned, which put ``src + tests`` on the root and on the largest
-topic — the two a person looks at first, both told nothing (#199). A straddle
-is now named by descending INTO each of those two roots as far as each one is
-itself dominated, so it reads ``src/hrono + tests``; the shares that make it a
-straddle are carried alongside, for the tooltip and the map's panel.
+A topic that genuinely straddles the tree is not named by the two SHALLOW roots
+it spans, because that puts ``src + tests`` on the root and on the largest topic
+— the two a person looks at first, both telling nothing. A straddle is named by
+descending INTO each of those two roots as far as each one is itself dominated,
+so it reads ``src/hrono + tests``; the shares that make it a straddle are
+carried alongside, for the tooltip and the map's panel.
 
 The one root of the tree spans everything by construction, so no directory
-dominates it. It used to say so — "whole tree" — which is true and useless: it
-is the first label anyone reads and it named nothing. What the root actually
+dominates it. Saying so — "whole tree" — is true and useless: it is the first
+label anyone reads and it names nothing. What the root actually
 is, is the SOURCES it was built from, which are named by the operator and are
 the one label on the map that needs no explaining: a tree ingested from the
 ``click`` repository has ``click`` on top.
@@ -142,8 +142,8 @@ def _crown(
     """The one topic nothing points at, or None when there is not exactly one.
 
     The source label is only honest about a single crown. A tree mid-repair
-    has several tops (#124, #163), and naming each of them after the whole
-    corpus would describe a broken shape as a whole one.
+    has several tops, and naming each of them after the whole corpus would
+    describe a broken shape as a whole one.
     """
     parented = {child for kids in children.values() for child in kids}
     tops = [node for node in _bottom_up(conn, tree) if node not in parented]
@@ -171,8 +171,7 @@ def _place(dirs: list[tuple[str, ...]], crown: str | None) -> Where:
     The root is only labelled by its sources when no directory dominates it —
     a tree that is all of ``src/hrono`` is better described by that than by
     the name of the repository it came out of. What it must never fall back to
-    is the straddle, which on the root is two arbitrary halves of itself and
-    is the #199 regression.
+    is the straddle, which on the root is two arbitrary halves of itself.
     """
     deepest = _dominant(dirs)
     if deepest:
@@ -205,7 +204,7 @@ def _dominant(dirs: list[tuple[str, ...]]) -> tuple[str, ...]:
 def _straddled(dirs: list[tuple[str, ...]]) -> Where:
     """No directory holds it: name the two strongest, each at its own depth.
 
-    Naming the two top-level roots put ``src + tests`` on half the map (#199).
+    Naming the two top-level roots puts ``src + tests`` on half the map.
     A root is the least telling segment of a path, and it is telling precisely
     because the directory UNDER it usually is dominated even when the topic as
     a whole is not — so each side is descended on its own sections.

@@ -53,7 +53,7 @@ class Reclaiming:
     """Takes its own job out of ``running`` the way a lost worker's does.
 
     ``store.reclaim`` is what the worker's heartbeat sweep calls on a job whose
-    holder stopped stamping it (#111) — a production writer, so this test does
+    holder stopped stamping it — a production writer, so this test does
     not construct the state it then asserts on. It is also the shape a stop
     takes: the op's guard is "my row no longer says running", whoever wrote it.
     """
@@ -271,13 +271,13 @@ def test_runs_as_a_job_through_the_worker(
         calls = conn.execute(
             "SELECT job_id, run_id, role, ok FROM llm_calls"
         ).fetchall()
-    # the worker names the job it runs, so each call is booked to it (#201)
+    # the worker names the job it runs, so each call is booked to it
     assert [tuple(c) for c in calls] == [("cj", "cj", "condense", 1)] * 2
 
 
 def test_the_run_reports_what_it_condensed_and_spent(db: Database) -> None:
-    # condense returned NO outcome at all until #179 -- the most expensive
-    # stage of a first build was the one nobody could account for.
+    # condense must report an outcome: it is the most expensive stage of a
+    # first build, and without one nobody could account for it.
     outcome = condense(job(), JobContext(db), client=FakeCompletion())
 
     assert outcome["condensed"] > 0
@@ -341,7 +341,7 @@ def test_pending_finds_every_section_of_a_corpus_past_the_variable_limit(
     db: Database,
 ) -> None:
     # SQLite refuses a statement binding more than 32,766 parameters; one per
-    # pending hash meant a first build this large could not condense (E001)
+    # pending hash meant a first build this large could not condense
     beyond = 32_800
     with db.connect() as conn, conn:
         for i in range(beyond):

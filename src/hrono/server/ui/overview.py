@@ -1,4 +1,4 @@
-"""The dashboard's front page, and the one button on it (#180, #215).
+"""The dashboard's front page, and the one button on it.
 
 The page answers four questions before it offers anything to do about them —
 is the tree up to date with its sources, is anything running, does anything
@@ -96,7 +96,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "behind": sum(1 for one in sources if one["state"] == "behind"),
             "sources": len(sources),
             # a control a reader cannot use is not shown AND not accepted: a
-            # button nobody can see is not a permission (#180)
+            # button nobody can see is not a permission
             "can_write": user.role in {"writer", "admin"},
         },
     )
@@ -127,7 +127,7 @@ def _recent(conn: sqlite3.Connection, tree: str) -> list[dict[str, object]]:
     """The last few top-level runs, newest first, as the runs page reads them.
 
     The same derivation the runs page uses (`render_job`), so home and Runs
-    cannot give two answers about one run (#172).
+    cannot give two answers about one run.
     """
     since = recorded_since(conn)
     return [

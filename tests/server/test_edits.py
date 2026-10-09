@@ -1,4 +1,4 @@
-"""#156: rename a topic, write its brief by hand, hand it back.
+"""Rename a topic, write its brief by hand, hand it back.
 
 The three edits that make pins visible. What each test checks is not that the
 endpoint answered 200 — it is that the PIPELINE then behaves differently,
@@ -126,7 +126,7 @@ def test_an_overridden_brief_is_stored_indexed_and_pinned(
     assert str(briefs.get(h.conn, node)["text"]) == HAND
     assert pins.is_pinned(h.conn, pins.BRIEF, node) is True
     # recall must answer from the operator's words, so the node:// passages
-    # are rebuilt too (#071) — not only the stored row.
+    # are rebuilt too — not only the stored row.
     indexed = h.conn.execute(
         "SELECT COUNT(*) FROM passages_fts WHERE source = ?",
         (f"node-{node}",),

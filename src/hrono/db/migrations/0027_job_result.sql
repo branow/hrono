@@ -1,13 +1,12 @@
--- An op could decline part of its work and still report `succeeded` (#132).
+-- An op could decline part of its work and still report `succeeded`.
 --
--- #105 made a judge panel that cannot parse its replies ABSTAIN rather than
--- fake a verdict — the right call, since a false `none` silently suppresses a
--- real cascade. But the abstention was recorded only in `update_log`, which has
--- two writers and no readers, and op handlers returned None, so a job row
--- carried a status and an error string and nothing else. End to end: hrono
--- could decline to judge a changed topic, correctly leave its ancestors
--- unmarked, finish as `succeeded`, and no operator could learn that a stale
--- brief was still being served as current.
+-- A judge panel that cannot parse its replies ABSTAINS rather than fake a
+-- verdict — the right call, since a false `none` silently suppresses a real
+-- cascade. But `update_log`, which records the abstention, has two writers and
+-- no readers, and a job row with only a status and an error string cannot carry
+-- it. Without this column hrono could decline to judge a changed topic,
+-- correctly leave its ancestors unmarked, finish as `succeeded`, and no
+-- operator could learn that a stale brief was still being served as current.
 --
 -- `result` is that outcome: a JSON object of COUNTS (never prose), written when
 -- the job finishes, null for an op with nothing to say.

@@ -1,4 +1,4 @@
-"""A composite op's stages, recorded as they run (#213).
+"""A composite op's stages, recorded as they run.
 
 ``maintain`` and ``sync-tree`` run a dozen stages in-process, and until this
 recorded nothing: a six-minute successful ``maintain`` showed "It reported

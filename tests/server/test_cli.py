@@ -166,7 +166,7 @@ def test_a_second_serve_on_the_same_database_is_refused(
 def test_serve_db_flag_anchors_the_database_and_its_cache(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # F6/F25: without --db the location was "whatever cwd the operator was in".
+    # without --db the location must not be "whatever cwd the operator is in".
     monkeypatch.delenv("HRONO_MASTER_KEY", raising=False)
     monkeypatch.delenv(ENV_DB, raising=False)
     elsewhere = tmp_path / "elsewhere"

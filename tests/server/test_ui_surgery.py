@@ -1,4 +1,4 @@
-"""#189 (T56, migrate half): structure surgery from the topic page.
+"""Structure surgery from the topic page.
 
 Everything here moves structure, so every assertion reads the STORE after the
 click, not the page that reports it. The page is how an operator asks; whether
@@ -143,7 +143,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         # The worker polls the SAME adopted connection this fixture writes
         # through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         browser = Browser(client, tokens, conn)
@@ -203,7 +203,7 @@ def test_the_merge_choices_are_exactly_the_same_level(
 def test_a_candidate_topic_says_what_it_holds_and_links_to_it(
     browser: Browser,
 ) -> None:
-    """#199: "topic 2, topic 3" is a list of row ids; nobody merges into one.
+    """Listing "topic 2, topic 3" is listing row ids; nobody merges into one.
 
     A picker has to answer "what IS that topic" where it is asked, and let
     an operator go and look before they fold two topics together.
@@ -267,7 +267,7 @@ def test_a_reparent_that_would_detach_a_subtree_is_refused(
 def test_a_merge_folds_the_topics_and_lands_on_the_survivor(
     browser: Browser,
 ) -> None:
-    """The topic the operator was on may be the one that goes (#158)."""
+    """The topic the operator was on may be the one that goes."""
     a, b, _ = browser.leaves
     browser.sign_in()
     before = browser.members_of(a) | browser.members_of(b)
@@ -293,7 +293,7 @@ def test_a_merge_without_the_tick_changes_nothing(browser: Browser) -> None:
 def test_a_dissolve_retires_the_topic_and_loses_no_chunk(
     browser: Browser,
 ) -> None:
-    """Re-placed or parked, never dropped: the #086 invariant.
+    """Re-placed or parked, never dropped: the no-lost-chunk invariant.
 
     `repair.retire` offers each member to the placement rule and parks the
     ones it declines. Asserting they land in a sibling would assert the
@@ -334,7 +334,7 @@ def test_a_dissolve_without_the_tick_changes_nothing(
 def test_dissolving_the_only_topic_at_its_level_is_refused(
     browser: Browser,
 ) -> None:
-    """#163: it would detach its children from the root, silently."""
+    """It would detach its children from the root, silently."""
     left, right = browser.uppers
     browser.sign_in()
     browser.post(f"nodes/{right}/dissolve", confirm="yes")  # now left is alone
@@ -362,7 +362,7 @@ def test_a_chunk_moves_to_another_topic_and_is_pinned(
 
 
 def test_a_move_that_empties_a_topic_says_so(browser: Browser) -> None:
-    """#165: the operator holding the context is the one who can act on it."""
+    """The operator holding the context is the one who can act on it."""
     _, b, c = browser.leaves
     browser.sign_in()
     chunk = min(browser.members_of(b))
@@ -401,7 +401,7 @@ def test_a_writer_sees_no_surgery(browser: Browser) -> None:
 def test_every_surgery_route_refuses_a_writer(browser: Browser) -> None:
     """One table, every route: a door left ajar is one nobody listed.
 
-    The floor is admin because the API's is (#188). Hiding the control is
+    The floor is admin because the API's is. Hiding the control is
     courtesy; each route's own dependency is the permission, and "each" has to
     mean each.
     """
@@ -446,7 +446,7 @@ def test_without_an_embedding_model_a_dissolve_says_so(
 def divisible(tmp_path: Path) -> Iterator[tuple[Browser, int]]:
     """One topic that is really two, with enough points for the real recipe.
 
-    The clustering ladder floors at 12 points (#094) and a manual split runs
+    The clustering ladder floors at 12 points and a manual split runs
     that same recipe, so a divisible topic has at least that many members.
     """
     conn = open_database(tmp_path / "hrono.db")
@@ -466,7 +466,7 @@ def divisible(tmp_path: Path) -> Iterator[tuple[Browser, int]]:
         # The worker polls the SAME adopted connection this fixture writes
         # through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         yield Browser(client, tokens, conn), node
@@ -503,7 +503,7 @@ def test_a_split_without_the_tick_changes_nothing(
 
 def test_a_split_too_small_to_divide_says_so(browser: Browser) -> None:
     """The ladder's floor is not a budget: below it there is nothing to
-    divide BY, and the domain says that in its own words (#094)."""
+    divide BY, and the domain says that in its own words."""
     a, _, _ = browser.leaves
     browser.sign_in()
 

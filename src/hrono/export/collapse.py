@@ -1,4 +1,4 @@
-"""Collapse the deep stored tree to <= N agent-facing levels (T29, #204).
+"""Collapse the deep stored tree to <= N agent-facing levels.
 
 Pure and deterministic (no LLM, no I/O): given the stored tree (each node's
 level, the node->child-node edges, and each leaf node's sections) and a target
@@ -9,7 +9,7 @@ sections), and re-parent across the skipped levels so each kept node's agent
 children are its descendants at the next kept level. A tree already within N
 levels is returned as-is (no padding).
 
-WHICH levels survive is a trade of depth for width (#204). Skipping a level
+WHICH levels survive is a trade of depth for width. Skipping a level
 moves its children onto the page above, and the arithmetic of even spacing
 says nothing about how many: one kept topic could list hundreds of children,
 and a page an agent cannot scan costs as much as a hop too many. So every
@@ -23,10 +23,10 @@ bytes at the most; 40 of them are 10 KB, the size of one SECTION — the
 traversal unit the whole design is sized on (`ingest.split.constants`). So an
 index page costs an agent no more to read than one section does. The renderer
 adds a line of up to three section links to each entry of a page below the
-root (about 150 bytes each, E022), and only as many per entry as keep the page
+root (about 150 bytes each), and only as many per entry as keep the page
 within that one SECTION: a page at full WIDTH carries none. The root carries
-none at all (E027). When no selection fits, the hop limit holds
-and the shape says so: ``Shape.within_budget`` is False.
+none at all. When no selection fits, the hop limit holds and the
+shape says so: ``Shape.within_budget`` is False.
 
 A stored edge that JUMPS a level (an orphan attached straight to a higher
 topic) is followed, not dropped: a child below the level being collected is
@@ -109,7 +109,7 @@ def collapse(stored: StoredTree, levels: int) -> ExportTree:
 
 @dataclass(frozen=True)
 class Shape:
-    """What an export looks like to the agent that reads it (#204)."""
+    """What an export looks like to the agent that reads it."""
 
     levels: int
     pages_per_level: tuple[int, ...]  # index pages, root level first
@@ -150,7 +150,7 @@ def _narrowest(stored: StoredTree, levels: int) -> list[int]:
     when ``low`` is the next level kept. So this is a shortest-path problem,
     solved in two passes over (level, levels kept so far) rather than by
     scoring every combination, which grows exponentially with the hop limit
-    (qa measured ~15 minutes for 12 hops on a 30-level tree):
+    (measured: ~15 minutes for 12 hops on a 30-level tree):
 
     1. the smallest possible WIDEST page, by a min-max pass;
     2. among the chains that achieve it, the one with the fewest entries in

@@ -5,7 +5,7 @@ already baked in by the op), the provenance the cost API reads back (model,
 prompt name + template hash, token usage), the member-set signature it was
 written against, and its timestamp. ``stale_or_missing`` drives incremental
 regeneration: a node needs a brief when it has none, or when its members or its
-prompt/model have changed since the brief was written (T23.2). The gather
+prompt/model have changed since the brief was written. The gather
 helpers join node membership to the sections' condensations (the LLM input) and
 to the section URIs (the mechanical references).
 """
@@ -28,7 +28,7 @@ def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
 
     Leaf members sign over their sections' CONTENT HASHES, not section ids, so
     the signature survives a re-split that re-mints section ids for unchanged
-    content (#068) — this is what lets #064's brief skip actually fire through a
+    content — this is what lets the fresh-brief skip actually fire through a
     rebuild. Upper members sign over their child node ids (stable once the level
     below is). Tokens are prefixed so a content hash and node id never collide.
     """
@@ -66,13 +66,13 @@ def _is_fresh(
 ) -> bool:
     """Whether a brief still stands. The ONE place freshness is decided.
 
-    The fingerprint (#191) is what the model NAME could not say: repointing
+    The fingerprint is what the model NAME cannot say: repointing
     `sonnet` at another upstream model leaves the name identical and every
     word different. A brief written before the column existed carries NULL,
     and NULL is not staleness — see `0034_brief_model_fingerprint.sql`.
 
     A brief that was written, retried and stored flagged is not re-paid while
-    nothing it was written from changes (E019): the member signature, prompt
+    nothing it was written from changes: the member signature, prompt
     hash and model checks below are the "until" — it stays listed, and it is
     rewritten once one of them moves.
     """
@@ -95,7 +95,7 @@ def _rewritable(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
 
     A stored ``echoes-the-prompt`` flag the gate STILL raises is settled: the
     model was asked twice and echoed twice, and the same members, prompt and
-    model will echo again (E019). A talk-back (#217) is retried, and so is a
+    model will echo again. A talk-back is retried, and so is a
     flag the gate would no longer raise.
     """
     if not unusable(conn, row):
@@ -112,7 +112,7 @@ KEEP_VERSIONS = 5
 
 # The template of the prompt a brief was written with, as a column: a query
 # over ``briefs b`` selects ``{TEMPLATE} AS template`` and hands it to
-# ``refusal``, which cannot tell an echo of the prompt without it (E015).
+# ``refusal``, which cannot tell an echo of the prompt without it.
 TEMPLATE = (
     "(SELECT json_extract(p.config, '$.template') FROM registry p "
     "WHERE p.collection = 'prompts' AND p.name = b.prompt_name)"
@@ -120,13 +120,13 @@ TEMPLATE = (
 
 
 def unusable(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
-    """Why a stored brief is not a brief, or "" when it is one (#217).
+    """Why a stored brief is not a brief, or "" when it is one.
 
     The flag stored when it was written, or the CURRENT gate's verdict on its
     text — so a brief stored before a rule existed is caught by it too, and
     one that is not a brief is never fresh: the next brief pass rewrites it,
     and only it. A settled ``echoes-the-prompt`` is the exception: it is listed
-    but stays until its members, prompt or model change (E019).
+    but stays until its members, prompt or model change.
     """
     return refusal(
         conn, row["node_id"], row["flagged"], row["text"], row["template"]
@@ -143,7 +143,7 @@ def refusal(
     """``unusable`` over the columns, for a caller holding just those.
 
     A node's material is read only for a text that echoes the prompt without
-    it (E019): that is rare, and a page of nodes must not read the corpus.
+    it: that is rare, and a page of nodes must not read the corpus.
     """
     words = str(text or "")
     return (
@@ -164,7 +164,7 @@ def _echo(
 def material(conn: sqlite3.Connection, node_id: int) -> str:
     """What a node's brief was written from: its member condensations by the
     condense model, or its child briefs. The words a brief may share with its
-    prompt (E019).
+    prompt.
 
     Exactly the reduce input ``brief`` gates against: a condensation a
     previous condense model left in the cache is not part of it, or a settled
@@ -194,7 +194,7 @@ def condense_model(conn: sqlite3.Connection, node_id: int) -> str:
 def unusable_in(
     conn: sqlite3.Connection, tree: str
 ) -> tuple[tuple[int, int, str, str], ...]:
-    """Every stored brief in ``tree`` that is not a brief (#217).
+    """Every stored brief in ``tree`` that is not a brief.
 
     (node id, level, why, text), top level first. A pinned brief is a
     person's and is left out: its words are not a model's reply.
@@ -233,8 +233,8 @@ def stale_or_missing(
     member set changed, or the resolved prompt template hash / model no longer
     match the provenance it was written with.
 
-    A node whose brief is PINNED needs no work whatever its signature says
-    (#154): the text is the operator's, and re-briefing it is the silent
+    A node whose brief is PINNED needs no work whatever its signature says:
+    the text is the operator's, and re-briefing it is the silent
     revert the pin exists to prevent. Held back here, at selection, so no
     caller can forget — and so the LLM call is never made in the first place.
     """
@@ -299,7 +299,7 @@ def stale_why(conn: sqlite3.Connection, node_id: int) -> str:
 def settled(conn: sqlite3.Connection, node_id: int) -> bool:
     """Whether a topic's brief is unusable yet no rewrite will change it.
 
-    A settled echo (E019): the next sync and a scoped rewrite both leave it
+    A settled echo: the next sync and a scoped rewrite both leave it
     until its members, prompt or model change, so only a person can fix it.
     The prompt and model are not resolved here (see `stale_why`): a page that
     lists the topic reads a moved one as settled until the next sync rewrites.
@@ -373,10 +373,10 @@ def level_briefs(
 class ReduceInput:
     """What a node's brief is written from, and what it may therefore cite.
 
-    ``texts`` and ``uris`` come from the SAME rows by construction (#122). They
-    used to be two queries and the reference list did not join ``condensations``
-    — so a member with no condensation was silently dropped from the LLM input
-    while still being cited, and the brief claimed provenance it did not have.
+    ``texts`` and ``uris`` come from the SAME rows by construction. As two
+    queries, with a reference list that does not join ``condensations``, a
+    member with no condensation is silently dropped from the LLM input while
+    still being cited, and the brief claims provenance it does not have.
     ``dropped`` is how many members contributed nothing, which is the node's
     flag, not a silence.
     """
@@ -463,17 +463,17 @@ def upsert(
 
     A brief this replaces is first copied to ``brief_versions`` with ``reason``
     ('regen', or 'rewrite' for a hand edit), and only the newest
-    ``KEEP_VERSIONS`` are kept (E033); a first write, or one that leaves the
-    text unchanged, copies nothing (E035).
+    ``KEEP_VERSIONS`` are kept; a first write, or one that leaves the
+    text unchanged, copies nothing.
 
-    ``unfaithful`` is the faithfulness gate's JSON verdict (#063); default '[]'
+    ``unfaithful`` is the faithfulness gate's JSON verdict; default '[]'
     keeps callers that do not run the gate unchanged. ``flagged`` is the shape
-    guard's reason (#103) — empty when the reply looked like a brief.
+    guard's reason — empty when the reply looked like a brief.
     ``members`` is the JSON list of member URIs (or child node ids) the brief
-    covers: data ABOUT the brief, kept out of its text so #071's passages carry
-    prose only (#102), and re-attached by the export renderer.
+    covers: data ABOUT the brief, kept out of its text so its recall passages
+    carry prose only, and re-attached by the export renderer.
     ``source_model`` is the condense model whose condensations it was written
-    from, so the echo gate reads the same material later (E019).
+    from, so the echo gate reads the same material later.
     """
     _keep_replaced(conn, node_id, text, reason)
     conn.execute(
@@ -535,7 +535,7 @@ def kept_version(
     """The newest kept version of a node's brief with this text, if any.
 
     The whole record, so a restored brief is the one that was replaced and
-    not a lookalike that counts as fresh without its members (E036).
+    not a lookalike that counts as fresh without its members.
     """
     return conn.execute(
         "SELECT model_name, prompt_name, prompt_hash, input_tokens, "
@@ -547,7 +547,7 @@ def kept_version(
 
 
 def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
-    """Return a node's kept previous briefs, newest first (E033)."""
+    """Return a node's kept previous briefs, newest first."""
     return conn.execute(
         "SELECT text, model_name, written_at, replaced_at, reason "
         "FROM brief_versions WHERE node_id = ? ORDER BY id DESC",
@@ -567,19 +567,19 @@ def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
 
 
 def mark_stale(conn: sqlite3.Connection, node_id: int) -> None:
-    """Flag a node's brief for regeneration without touching its members (#087).
+    """Flag a node's brief for regeneration without touching its members.
 
-    A sticky-placed leaf keeps its id so #068's ancestor signature is unchanged;
+    A sticky-placed leaf keeps its id so its ancestor's signature is unchanged;
     propagate sets this so the next brief pass regenerates the ancestor anyway.
     """
     conn.execute("UPDATE briefs SET stale = 1 WHERE node_id = ?", (node_id,))
 
 
 def mark_judged(conn: sqlite3.Connection, node_id: int, signature: str) -> None:
-    """Record the member set propagate judged this brief against (#110).
+    """Record the member set propagate judged this brief against.
 
-    Separate from ``member_signature`` on purpose: that one drives #064's
-    re-brief skip, and a judged marker written there would suppress a genuine
+    Separate from ``member_signature`` on purpose: that one drives the
+    fresh-brief skip, and a judged marker written there would suppress a genuine
     regeneration. A re-brief clears this (``upsert`` does not list the column),
     because a new brief has not been judged.
     """

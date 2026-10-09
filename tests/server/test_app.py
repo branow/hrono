@@ -80,7 +80,7 @@ def test_unknown_route_is_not_found(client: TestClient) -> None:
 def test_health_is_degraded_when_only_the_reclaimer_is_dead(
     client: TestClient,
 ) -> None:
-    # #111: the supervisor still runs, so `is_alive()` says alive; the thread
+    # the supervisor still runs, so `is_alive()` says alive; the thread
     # that requeues stranded jobs is gone, and /health must not paper over it.
     worker = client.app.state.worker  # type: ignore[attr-defined]
     worker._beat_thread = threading.Thread(target=lambda: None)

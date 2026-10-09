@@ -1,7 +1,7 @@
 -- Bottom-level topics (nodes) built by the `cluster` op: groups of related
--- sections that the brief step (M4) summarises and the tree is built from. A
+-- sections that the brief step summarises and the tree is built from. A
 -- node belongs to a named tree (the topic hierarchy over a corpus) at a level
--- (0 = leaf, sections); upper levels (M4) reuse the same table. `label` is the
+-- (0 = leaf, sections); upper levels reuse the same table. `label` is the
 -- HDBSCAN cluster label within the build, kept for traceability.
 
 CREATE TABLE nodes (
@@ -31,7 +31,7 @@ CREATE TABLE node_members (
 CREATE INDEX node_members_section ON node_members (section_id);
 
 -- The reduced UMAP coordinate per section for a tree (a float32 blob), kept for
--- warm-init on a later rebuild (#T39 incremental settle) and the dashboard
+-- warm-init on a later rebuild (incremental settle) and the dashboard
 -- graph. One coordinate per (tree, section).
 CREATE TABLE section_coords (
     tree       TEXT NOT NULL,

@@ -1,10 +1,10 @@
-"""#166: recall answers from the tree it was asked, and not the one beside it.
+"""Recall answers from the tree it was asked, and not the one beside it.
 
 Sized like `test_engine`'s corpus and for the same reason: the vector leg
 z-scores over its own distribution, so max z ~ sqrt(N-1) and under ~13 passages
 it can never fire. A two-tree test therefore needs a real corpus PER TREE --
-which is why the defect could not be shown with a fixture small enough to read
-in one screen, and why qa filed it from the legs' queries rather than a leak.
+which is why a cross-tree leak cannot be shown with a fixture small enough to
+read in one screen.
 """
 
 from __future__ import annotations
@@ -176,7 +176,7 @@ def two_trees(tmp_path: object) -> Iterator[tuple[Database, Answers]]:
             )
         # an answer in EACH tree, alike enough that one query matches both:
         # without that, "alpha returned no beta hit" would also be true of an
-        # alpha that returned nothing at all (#136).
+        # alpha that returned nothing at all.
         mine = _corpus(conn, "alpha-src", ALPHA_ANSWER)
         theirs = _corpus(
             conn, "beta-src", BETA_ANSWER, size=28, filler=3, mention=True
@@ -251,7 +251,7 @@ def test_a_brief_passage_belongs_to_its_node_s_tree(
 ) -> None:
     """A brief has no source of its own, so it needs the other join.
 
-    Its ``source`` is the synthetic ``node-<id>`` (#071), which matches no
+    Its ``source`` is the synthetic ``node-<id>``, which matches no
     registered source -- so a scope built only from `sections.source` would
     drop every brief from every tree, and recall would quietly stop answering
     from the summaries the whole upper tree exists to produce.

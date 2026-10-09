@@ -1,26 +1,26 @@
-"""The ``settle`` op (#091, T39): the rare warm reconcile that re-tidies drift.
+"""The ``settle`` op: the rare warm reconcile that re-tidies drift.
 
-The last M7 piece. Incremental placement (#085) drifts the stored clusters over
+Incremental placement drifts the stored clusters over
 many batches; ``settle`` periodically does a full WARM rebuild to re-tidy them,
 applying only the membership delta so briefs mostly survive. It is a maintenance
 pass, NOT an update path — triggered, not run every batch.
 
-Trigger (T39.1): the accumulated per-tree drift (#087's counter) crossing
-CHURN_THRESHOLD, OR a misfit backstop — the #089 global misfit rate above ~2x
-the post-build baseline (the settled RECONCILE trigger) even when churn is low.
-The counter resets after a settle; the baseline is the post-build reference and
-is NOT reset.
+Trigger: the accumulated per-tree drift counter crossing CHURN_THRESHOLD, OR a
+misfit backstop — the monitor's global misfit rate above ~2x the post-build
+baseline (the settled RECONCILE trigger) even when churn is low. The counter
+resets after a settle; the baseline is the post-build reference and is NOT
+reset.
 
 The rebuild reuses settled ops: ``cluster`` warm-starts UMAP from the stored
-coords (#040's ``init`` seam) and ``replace_tree`` applies the membership diff
-while #068's signature reconcile keeps unchanged nodes' ids and briefs;
-``brief`` and ``build_tree`` then re-brief ONLY the membership-changed nodes
-(via #064). So a settle over an unchanged corpus is a near-no-op — the warm
-start reproduces the layout, ~0 delta, ~0 re-briefs. Heavy compute runs inside
-those ops, off the #008 lock. Manual-edit pins (M9) would be honoured as fixed
-here; none exist yet.
+coords (the cluster build's ``init`` seam) and ``replace_tree`` applies the
+membership diff while its signature reconcile keeps unchanged nodes' ids and
+briefs; ``brief`` and ``build_tree`` then re-brief ONLY the membership-changed
+nodes (via brief freshness). So a settle over an unchanged corpus is a
+near-no-op — the warm start reproduces the layout, ~0 delta, ~0 re-briefs. Heavy
+compute runs inside those ops, off the write lock. Manual-edit pins are
+honoured: a pinned section is restored to its anchor after the rebuild.
 
-A reconcile is also the natural moment to re-home strays (#095): the rebuild
+A reconcile is also the natural moment to re-home strays: the rebuild
 itself re-clusters every parked chunk and ``cluster`` sweeps the pool rows it
 obsoletes, and a ``drain`` clears any residue the rebuild could not reach. Its
 place in the chain is fixed by what it needs and what it produces — AFTER the
@@ -29,10 +29,10 @@ leaf node the drain emits is briefed in this same settle rather than left blank
 until the next trigger. ``build_tree`` then attaches it: the recursion itself
 cannot see a leaf born after it (it starts at the highest briefed level, which
 is already the root), so the leaf is placed under its nearest parent afterwards
-and that parent is re-briefed (#114). Without that edge the topic is written to
+and that parent is re-briefed. Without that edge the topic is written to
 the export but unreachable from ``root.md``, whose child listing is rendered
 from parent edges. The closing embed then vectorises the node:// brief passages,
-as ``maintain`` does, and the drain runs its own mini-pipeline off the #008
+as ``maintain`` does, and the drain runs its own mini-pipeline off the write
 lock, like every other heavy step here.
 """
 
@@ -111,15 +111,15 @@ def anchor_members(
     """Each section pinned IN THIS TREE: its anchor plus the anchor's company.
 
     The other members are what makes the anchor findable afterwards. A node is
-    identified by the content of its members (#068), and a hand-move changes
+    identified by the content of its members, and a hand-move changes
     that content — so the very act the pin protects is what can retire the node
     the pin names. Its company survives the rebuild even when its id does not.
 
     Pins are global rows (0030 has no tree column), so the anchor's TREE is the
     scope test: a pin anchored in another tree is another tree's constraint,
-    and reading it here used to make this tree's settle release it — the anchor
-    was never in this tree's ``live`` set, so ``restore_pinned`` unpinned what
-    a human placed somewhere this run had no business touching.
+    and must not be read here: the anchor is never in this tree's ``live``
+    set, so ``restore_pinned`` would unpin what a human placed somewhere this
+    run has no business touching.
     """
     out: dict[int, tuple[int, tuple[int, ...]]] = {}
     for section_id, anchor in pins.anchors(conn, pins.MEMBERSHIP).items():

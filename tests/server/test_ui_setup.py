@@ -1,4 +1,4 @@
-"""#219: from an empty install to a built tree, in the browser.
+"""From an empty install to a built tree, in the browser.
 
 The server is the production app over a database file it owns, so its cache
 root, its seeded prompts and its worker are the real ones (the worker is

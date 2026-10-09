@@ -1,18 +1,19 @@
-"""The ``brief-upper`` op: pure-abstraction briefs for upper nodes (T22.2).
+"""The ``brief-upper`` op: pure-abstraction briefs for upper nodes.
 
 Above the leaf level a node summarises its CHILD BRIEFS, not source sections —
-there is no condense stage above level 1 (summarization-experiments: "summarize
-the summaries works"). This op writes the brief for each node at an upper level
+there is no condense stage above level 1 (docs/summarization.md: "summarize the
+summaries works"). This op writes the brief for each node at an upper level
 (scope ``level``, default 1 — the first node-of-nodes level) from its children's
 briefs, using the compact seeded ``brief-upper``-role prompt. Provenance,
-mechanical references, staleness skip (#064), and outside-the-lock discipline
-match #059 — including the bounded ``pool.mapped`` the calls run in, with the
+mechanical references, staleness skip, and outside-the-lock discipline match
+``brief`` — including the bounded ``pool.mapped`` the calls run in, with the
 persist serial on this thread; only the input (child briefs) and the prompt
 differ.
 
-Child briefs are injected at ``{content}`` — the token #066 requires a
-``brief-upper`` template to contain and the seeded default uses. References are
-the child node ids, appended in code from membership, never LLM-written.
+Child briefs are injected at ``{content}`` — the token prompt validation
+requires a ``brief-upper`` template to contain and the seeded default uses.
+References are the child node ids, appended in code from membership, never
+LLM-written.
 """
 
 from __future__ import annotations

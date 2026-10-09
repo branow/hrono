@@ -1,6 +1,6 @@
 """What every DISCOVERY source type shares: clone the repos, read them back.
 
-A discovery source (#147 github-user, #148 bitbucket-workspace) differs from
+A discovery source (``github-user``, ``bitbucket-workspace``) differs from
 its siblings in exactly one place — how the provider is asked what repos
 exist. Everything after that answer is identical and lives here: the name
 globs, cloning each repo through the git syncer, recording the repo -> commit

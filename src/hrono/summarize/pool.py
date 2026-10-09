@@ -6,10 +6,10 @@ end to end, idle for almost all of it. The calls are independent by
 construction — a condensation is keyed by its section's CONTENT HASH and a
 brief by its node — so nothing but the shape of the loop made them serial.
 
-What stays serial is the WRITE. The ops already follow #035/#040: the lock is
-taken only for the short persist AFTER a call returns, so the calls move into a
-``ThreadPoolExecutor`` and the persist stays on the CALLING thread, one at a
-time, in SUBMISSION order. Two threads are therefore never both inside
+What stays serial is the WRITE. The ops already follow one lock discipline: the
+lock is taken only for the short persist AFTER a call returns, so the calls move
+into a ``ThreadPoolExecutor`` and the persist stays on the CALLING thread, one
+at a time, in SUBMISSION order. Two threads are therefore never both inside
 ``Database.write``, and the op's counts and token totals do not depend on which
 call happened to finish first.
 
@@ -20,7 +20,7 @@ Three properties of the serial loop are kept deliberately:
   pool has drained, so an idempotent re-run still fills only the gaps.
 - a failure stops the op launching MORE calls, and so does a job that no longer
   reads ``running``: ``proceed`` is consulted before every submission, which is
-  what keeps a stop from having to wait out all 421 calls (#173).
+  what keeps a stop from having to wait out all 421 calls.
 - nothing is submitted speculatively. At most ``workers`` calls are in flight,
   so an op that stops launching has at most that many left to pay for.
 
@@ -72,7 +72,7 @@ def mapped[Item, Made](
     item; ``persist`` runs on this thread, in submission order, and is the only
     place a transaction is opened. Returns what was persisted, in that same
     order, so a caller's counts and sums are independent of completion order.
-    ``named`` says what an item is, and a failure is noted with it (#213), so
+    ``named`` says what an item is, and a failure is noted with it, so
     the run that died can say which section or topic it was on.
     """
     queued = list(items)

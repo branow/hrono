@@ -77,10 +77,10 @@ def test_validation_hook_rejection_is_400(
 def test_a_put_that_creates_still_runs_the_validation_hook(
     client: tuple[TestClient, dict[str, str]],
 ) -> None:
-    # #138 made PUT the CREATE path, and `hrono <collection> set` uses it — so
-    # this is now the path a user actually types to register a source. The hook
-    # is what checks a connection's credential and a source's reachability
-    # (#107); skipping it here would accept an unreachable source silently and
+    # PUT is the CREATE path, and `hrono <collection> set` uses it — so this
+    # is the path a user actually types to register a source. The hook is
+    # what checks a connection's credential and a source's reachability;
+    # skipping it here would accept an unreachable source silently and
     # surface the failure hours later at sync time.
     opened, admin = client
 

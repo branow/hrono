@@ -1,4 +1,4 @@
-"""E018: a brief's facts link to the section pages that state them."""
+"""A brief's facts link to the section pages that state them."""
 
 import time
 
@@ -110,8 +110,8 @@ def test_a_subtree_filter_offers_only_its_own_sections() -> None:
 
 
 def test_a_big_corpus_is_cited_quickly() -> None:
-    # qa: a fact was searched for in every section on every line of every node,
-    # 8 s on 268 sections; a fact is now looked up once. Measured here: 0.03 s.
+    # a fact is looked up once, not searched for in every section on every
+    # line of every node (8 s on 268 sections). Measured here: 0.03 s.
     pages = {
         f"s{n}.md": " ".join(
             f"HRONO_SET_{n} v{k}.{n} `call_{k}`" for k in range(80)

@@ -1,17 +1,17 @@
 """Decide which files from a synced source cache are ingestable.
 
-Pure classification over the synced tree (#025): glob rules, then a size gate,
+Pure classification over the synced tree: glob rules, then a size gate,
 then a null-byte sniff for anything no glob caught — plus skipping ``.git``,
 symlinks (which could escape the cache), and non-regular files. No file content
 is read beyond the size stat and the sniff.
 
 The glob rules are four layers, applied in this order, because ingesting a file
 is not free — each one costs an embedding and a condense call immediately, while
-its value to an agent reading the map is occasional (#104, F4/F5):
+its value to an agent reading the map is occasional:
 
 - the caller's ``only`` is a true WHITELIST and is applied FIRST. Absent (the
   normal case) it decides nothing and the other three layers behave exactly as
-  they always have; present, a path matching none of its patterns is gone
+  described below; present, a path matching none of its patterns is gone
   before ``exclude``, the baked list or ``include`` is even consulted. This is
   how a source is scoped to PART of a repository — a monorepo where only one
   package is wanted — which nothing else here can express, and whose absence
@@ -26,15 +26,14 @@ its value to an agent reading the map is occasional (#104, F4/F5):
 
 ``replace_defaults: true`` drops the baked groups entirely — the escape hatch
 for a caller who wants to own the list. The size, symlink and binary gates are
-not patterns and are never dropped. A zero-byte file is skipped here (#099's
-first half): it carries no content by definition, so admitting it only makes
+not patterns and are never dropped. A zero-byte file is skipped
+here: it carries no content by definition, so admitting it only makes
 every ``diff`` report it as new for ever.
 
 CASE: the baked ignore list matches a LOWERCASED path; the caller's own
 ``only``, ``exclude`` and ``include`` match literally. That asymmetry is
-deliberate and
-stays (#118). The baked list is a safety net and must be case-insensitive, or
-``LOGO.SVG`` walks straight past the asset rule and F5 reopens. The caller's
+deliberate. The baked list is a safety net and must be case-insensitive, or
+``LOGO.SVG`` walks straight past the asset rule. The caller's
 globs are their instructions, and every ordinary glob tool treats those
 literally — making them case-insensitive would silently widen an ``exclude``
 beyond what was written. Unifying breaks something in either direction, so the
@@ -100,7 +99,7 @@ def survey(
 ) -> tuple[Seen, ...]:
     """Every regular file of ``cache``, sorted, each with its verdict.
 
-    The ONE place the filter decides (#026): ``ingestable`` is this with the
+    The ONE place the filter decides: ``ingestable`` is this with the
     refused ones dropped, so a preview of what a source would ingest cannot
     drift from what ingest reads.
     """

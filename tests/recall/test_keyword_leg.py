@@ -1,4 +1,4 @@
-"""T26.2: keyword leg qualifies only at BM25 z>=6.0 WITH vector support>=3.0."""
+"""The keyword leg qualifies only at BM25 z>=6.0 WITH vector support>=3.0."""
 
 from collections.abc import Iterator
 

@@ -2,7 +2,7 @@
 
 Changing a brief prompt makes every brief it wrote stale, and the re-brief
 that follows costs the whole tree. This op lets a curator see one topic's
-brief under the edited template first (#431), beside the brief it would
+brief under the edited template first, beside the brief it would
 replace.
 
 It is the real thing run on one topic and stored nowhere: the same model the

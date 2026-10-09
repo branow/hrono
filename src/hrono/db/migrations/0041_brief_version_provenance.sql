@@ -1,7 +1,7 @@
--- E036: an undone hand rewrite puts back the brief it replaced, and that brief
--- was written by a model from a prompt at a cost. `brief_versions` kept only
--- the text and the model, so the restored brief had to claim 'hand-edited'.
--- The whole record is kept too: prompt, tokens, members, source model,
+-- An undone hand rewrite puts back the brief it replaced, and that brief was
+-- written by a model from a prompt at a cost. With only the text and the
+-- model, the restored brief would have to claim 'hand-edited', so the whole
+-- record is kept too: prompt, tokens, members, source model,
 -- fingerprint, member signature and the gates' verdicts. Rows kept before this
 -- migration read as unknown ('' and 0), and an empty signature never matches,
 -- so a hand-back re-briefs them.

@@ -1,4 +1,4 @@
--- The misfit health signal (#089, T37) that repair (T38) and settle (T39) read.
+-- The misfit health signal that repair and settle read.
 -- A chunk is a MISFIT when some other cluster's centroid is nearer than its own;
 -- `misfit` stores the per-cluster count so a batch re-checks only its dirty
 -- clusters (plus a bounded sample) and the global rate aggregates stored rows

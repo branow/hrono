@@ -1,4 +1,4 @@
-"""Finding things: search, the outline and the file lookup (E011, #208).
+"""Finding things: search, the outline and the file lookup.
 
 Three pages, one question — where is it — so one module and one sub-navigation.
 The reads are `server/find.py`'s; this only asks them and renders. All three

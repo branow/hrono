@@ -1,29 +1,29 @@
-"""The incubator / pending pool (#086, T35): where sub-TAU chunks wait.
+"""The incubator / pending pool: where sub-TAU chunks wait.
 
-The incremental ``update`` (#085) parks a chunk that fits no existing cluster
+The incremental ``update`` parks a chunk that fits no existing cluster
 here, BY SECTION — the same key membership uses, so the pool is exactly the
 complement of the tree and identical bodies at different paths park
-independently (#095). When the pool reaches what the clusterer can actually
+independently. When the pool reaches what the clusterer can actually
 reduce (``recipe.MIN_POINTS`` — a pool the mini-pipeline cannot reduce is not a
 drainable pool) it DRAINS via the scoped mini-pipeline (UMAP -> HDBSCAN leaf
 over the pool only, deterministic): only density-core clusters emit as new leaf
 nodes; residual noise is force-assigned to the nearest EXISTING cluster ignoring
 TAU (a chunk outside the tree is unfindable — worse than one alien member),
-carrying a ``forced`` flag so the misfit monitor (T37) re-checks it. Aging
+carrying a ``forced`` flag so the misfit monitor re-checks it. Aging
 force-assigns a chunk that has waited too many batches while the pool stayed too
 small. Constants are baked.
 
-The pool is DRIVEN, not self-draining (#095): ``update`` ages then drains at the
-end of every batch's placement, ``settle`` drains after its warm reconcile, and
-a full rebuild (``cluster``) homes every section by construction, so ``sweep``
-retires the pool rows it has just made obsolete. Together these keep the #086
+The pool is DRIVEN, not self-draining: ``update`` ages then drains at the end of
+every batch's placement, ``settle`` drains after its warm reconcile, and a full
+rebuild (``cluster``) homes every section by construction, so ``sweep`` retires
+the pool rows it has just made obsolete. Together these keep the one-home
 invariant true: a chunk is in exactly one cluster OR pending, never both, never
 neither — and never pending for more than ``MAX_AGE`` batches once it is
 PLACEABLE (see ``_force_assign`` for that bound). Every drain and age outcome is
 written to ``update_log`` in propagate's shape, so the pool has an auditable
 history.
 
-Lock discipline follows the ops (#035/#040): ``drain`` takes a ``Database``, not
+Lock discipline follows the ops: ``drain`` takes a ``Database``, not
 a connection, because its mini-pipeline is real UMAP -> HDBSCAN — it reads the
 pool under the read door, reduces it off the lock, and re-acquires to persist.
 Everything else here is a handful of dot products and runs in its caller's
@@ -43,11 +43,11 @@ from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.db.update_log import record
 
-# A "batch" is ONE `update` RUN over the tree, not one changed source in it
-# (#099): the run allocates a single `tree_batch.batch` and every source it
+# A "batch" is ONE `update` RUN over the tree, not one changed source in it:
+# the run allocates a single `tree_batch.batch` and every source it
 # touches stamps parked chunks with that number, so the wait below is measured
 # in runs. `park` keeps the batch a chunk was FIRST parked at
-# (ON CONFLICT DO NOTHING, #095), and a chunk that joins a node is unparked, so
+# (ON CONFLICT DO NOTHING), and a chunk that joins a node is unparked, so
 # the clock only ever runs while the chunk is genuinely homeless.
 MAX_AGE = 5  # update runs a chunk may wait while the pool stays too small
 
@@ -171,12 +171,12 @@ def _still_pending(
     tree: str,
     grouped: Mapping[int, Sequence[tuple[int, str, str]]],
 ) -> frozenset[int]:
-    """Of the sections this drain computed over, which are STILL parked (#115).
+    """Of the sections this drain computed over, which are STILL parked.
 
     The pool is read under the read door and the clustering runs off the lock,
     so the write block is acting on a SNAPSHOT. Trusting it writes a second
-    level-0 membership for any section that found a home in between — the "is
-    in 2 nodes" half of the #086 invariant, in a tree nobody has touched since.
+    level-0 membership for any section that found a home in between — the "is in
+    2 nodes" half of the one-home invariant, in a tree nobody has touched since.
 
     Unreachable while one process owns the database and the worker runs one job
     at a time, which is why this is a re-check rather than a lock: it costs one
@@ -208,7 +208,7 @@ def age(
 
     Only runs while the pool cannot drain — a drainable pool takes the drain
     path instead, which re-homes every chunk anyway. The gate is the DRAINABLE
-    size (#094's ``MIN_POINTS``, counted over chunks that actually have a
+    size (the ladder's ``MIN_POINTS``, counted over chunks that actually have a
     vector), not the raw row count, so a pool the mini-pipeline can never reduce
     still ages out instead of waiting forever.
     """
@@ -232,8 +232,8 @@ def sweep(conn: sqlite3.Connection, tree: str) -> int:
     """Retire pool rows for sections a full rebuild has already homed.
 
     ``cluster`` re-clusters every embedded section, so after a rebuild a parked
-    chunk is a member again while its pool row still claims it is homeless —
-    "in a cluster AND pending", the other half of the #086 invariant. Retires
+    chunk is a member again while its pool row still claims it is homeless — "in
+    a cluster AND pending", the other half of the one-home invariant. Retires
     per SECTION, so a twin the rebuild could not see keeps its row. Returns how
     many rows were retired.
     """
@@ -274,7 +274,7 @@ def _force_assign(
 
     Returns None when the chunk is UNPLACEABLE — no combined vector (its model
     never embedded it) or no existing cluster to fall back on (a tree with no
-    level-0 node, #112) — and leaves it parked, since forcing it somewhere is
+    level-0 node) — and leaves it parked, since forcing it somewhere is
     not an option that exists. That is the standing bound on "nothing waits
     forever": ageing rescues every chunk the tree can actually accept.
     """

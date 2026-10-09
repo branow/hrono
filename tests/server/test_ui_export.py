@@ -1,4 +1,4 @@
-"""#205: the Export page — the shape, the pages, the archive, for any role."""
+"""The Export page — the shape, the pages, the archive, for any role."""
 
 import io
 import re

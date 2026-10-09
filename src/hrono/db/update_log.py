@@ -1,11 +1,10 @@
 """The shared ``update_log`` audit trail: one row per lifecycle decision.
 
-Introduced by the propagate cascade (#087) and written by the incubator too
-(#095), so the single writer lives here rather than being re-implemented per
-domain: the dashboard reads one table with one shape whatever produced the row.
-``verdict`` says what was decided, ``action`` what was done with it, and
-``climbed_to`` is the cascade's stop node (null for anything that does not
-climb).
+Written by both the propagate cascade and the incubator, so the single writer
+lives here rather than being re-implemented per domain: the dashboard reads one
+table with one shape whatever produced the row. ``verdict`` says what was
+decided, ``action`` what was done with it, and ``climbed_to`` is the cascade's
+stop node (null for anything that does not climb).
 """
 
 from __future__ import annotations

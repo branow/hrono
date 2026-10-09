@@ -1,10 +1,9 @@
-"""#197: the vocabulary had nowhere to live.
+"""The Guide page: the dashboard's vocabulary, in the dashboard.
 
 Every other page runs to a tight prose budget — a hint beside the thing, never
 a paragraph above it. That rule only works if the explanation has somewhere to
-BE, and it had nowhere: the words were defined in a spec outside the repository
-and in a gitignored working file, so a person looking at the map could not find
-out what a topic was without asking someone.
+BE, inside the product, so a person looking at the map can find out what a
+topic is without asking someone.
 """
 
 from __future__ import annotations
@@ -173,7 +172,7 @@ def _said(html: str) -> str:
 def test_every_number_on_the_page_is_the_constant_behind_it(
     browser: Browser, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#216: a number typed into the page is a number that goes stale.
+    """A number typed into the page is a number that goes stale.
 
     Every figure the page quotes is moved to a value nobody would type, and
     the page must follow it. A literal left in the template shows up as the

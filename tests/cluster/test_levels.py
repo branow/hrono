@@ -255,9 +255,9 @@ def _group_of_parent(db: Database, parent: int, groups: dict[int, str]) -> str:
 def test_a_late_leaf_is_attached_to_the_nearest_parent(
     seeded: tuple[Database, dict[int, str]],
 ) -> None:
-    # #114: a leaf the incubator emitted after build_tree recursed has no
-    # parent, so root.md — whose children are rendered from parent edges —
-    # never links it. It joins the topic its BRIEF is nearest to.
+    # attach-by-proximity: a leaf the incubator emitted after build_tree
+    # recursed has no parent, so root.md — whose children are rendered from
+    # parent edges — never links it. It joins the topic its BRIEF is nearest to.
     db, groups = seeded
     encoder = fake_encoder_for([])
     cluster_briefs(job(), JobContext(db), encoder_for=encoder)
@@ -276,8 +276,8 @@ def test_a_late_leaf_is_attached_to_the_nearest_parent(
             "SELECT attached FROM node_children WHERE child_id = ?", (late,)
         ).fetchone()
     # a confident placement is NOT "attached by proximity" (0009_nodes.sql),
-    # and #114 records its similarity anyway — node_children keeps the score on
-    # every row, unlike node_members.
+    # and attaching records its similarity anyway — node_children keeps the
+    # score on every row, unlike node_members.
     assert int(row["attached"]) == 0
 
 
@@ -322,9 +322,10 @@ def test_a_leaf_that_fits_nowhere_is_still_attached(
 def test_attaching_refreshes_the_parents_signature_and_staleness(
     seeded: tuple[Database, dict[int, str]],
 ) -> None:
-    # the parent gained a child, so #068 must still match it to itself at the
-    # next rebuild and #064 must see its brief as stale — a parent brief that
-    # omits the topic underneath it is this ticket's harm one level up.
+    # the parent gained a child, so the content signature must still match it
+    # to itself at the next rebuild and brief freshness must see its brief as
+    # stale — a parent brief that omits the topic underneath it is the
+    # unreachable-leaf harm one level up.
     db, _ = seeded
     encoder = fake_encoder_for([])
     cluster_briefs(job(), JobContext(db), encoder_for=encoder)
@@ -462,11 +463,12 @@ def db(tmp_path: object) -> Iterator[Database]:
 def _mis_attached(
     db: Database, with_a_better_home: bool
 ) -> tuple[int, int, int | None]:
-    """#114's real shape: a gamma leaf attached under the alpha parent.
+    """Attach-by-proximity's real shape: a gamma leaf under the alpha parent.
 
     The attach went to the NEAREST parent and the centroid then absorbed it, so
     `own` (0.45) beats every `best_other` — the level-0 rule is blind to it,
-    which is the whole point of #123. Returns (alpha parent, stray, gamma home).
+    which is why upper-level misfits are reviewed. Returns (alpha parent,
+    stray, gamma home).
     """
     with db.connect() as conn, conn:
         alpha = _parent(conn, [_leaf(conn, "alpha", i) for i in range(2)])
@@ -486,10 +488,10 @@ def _mis_attached(
 def test_a_below_tau_attached_child_is_a_misfit_of_its_parent(
     db: Database,
 ) -> None:
-    # #123: #114 attaches an orphan to its NEAREST parent and the parent's
-    # centroid then absorbs it, so `best_other > own` can never fire for the
-    # placements this exists to review — exactly as a force-assigned member is
-    # invisible to the level-0 rule (#113).
+    # attach-by-proximity puts an orphan under its NEAREST parent and the
+    # parent's centroid then absorbs it, so `best_other > own` can never fire
+    # for the placements this exists to review — exactly as a force-assigned
+    # member is invisible to the level-0 rule.
     alpha, _stray, _home = _mis_attached(db, with_a_better_home=False)
 
     with db.connect() as conn:
@@ -578,9 +580,9 @@ def test_a_child_with_nowhere_better_keeps_its_place_and_its_flag(
 
 def test_a_move_restales_both_parents_briefs(db: Database) -> None:
     # a parent's brief is written over its CHILDREN, so both the parent that
-    # lost one and the parent that gained one must re-brief (#064 reads the
-    # child-id signature). That is the harm #123 exists to stop: a badly
-    # attached child pollutes its parent's brief content.
+    # lost one and the parent that gained one must re-brief (brief freshness
+    # reads the child-id signature). That is the harm re-parenting exists to
+    # stop: a badly attached child pollutes its parent's brief content.
     alpha, stray, home = _mis_attached(db, with_a_better_home=True)
     with db.connect() as conn:
         before = {
@@ -652,9 +654,9 @@ def test_the_monitor_op_stores_the_upper_level_count(db: Database) -> None:
 
 
 def test_the_repair_op_frees_a_mis_attached_child(db: Database) -> None:
-    # criterion 2 driven through the op: one badly attached child in three is a
-    # rate of 0.33 here, but the trigger must not depend on the rate — #114
-    # attaches to the NEAREST parent, so a larger parent hides it entirely.
+    # driven through the op: one badly attached child in three is a rate of
+    # 0.33 here, but the trigger must not depend on the rate — attaching goes
+    # to the NEAREST parent, so a larger parent hides it entirely.
     alpha, stray, home = _mis_attached(db, with_a_better_home=True)
 
     repair.repair(_repair_job(), JobContext(db))
@@ -684,9 +686,9 @@ def _childless_upper(conn: object, level: int, count: int) -> list[int]:
 def test_orphans_collect_one_level_up_when_every_parent_is_childless(
     db: Database,
 ) -> None:
-    # #124: #114 handles ONE childless parent. With several there is no
-    # centroid to place by and no single node to collect under, and the driven
-    # result was the whole corpus written to the export and linked from
+    # attach-by-proximity handles ONE childless parent. With several there is
+    # no centroid to place by and no single node to collect under, and without
+    # collection the whole corpus is written to the export and linked from
     # nothing. A level whose every node lost its children carries no
     # information; the node above it does.
     with db.connect() as conn, conn:
@@ -719,7 +721,7 @@ def test_orphans_collect_one_level_up_when_every_parent_is_childless(
 def test_the_ancestor_search_skips_a_level_that_offers_a_choice(
     db: Database,
 ) -> None:
-    # #124: collecting orphans is only safe under a node that is the ONLY
+    # collecting orphans is only safe under a node that is the ONLY
     # candidate. A level holding several is a choice, and picking one of them
     # arbitrarily buries the orphans under a topic nothing says they belong to.
     with db.connect() as conn, conn:
@@ -730,8 +732,8 @@ def test_the_ancestor_search_skips_a_level_that_offers_a_choice(
 
 
 def test_repair_reports_the_children_it_reparented(db: Database) -> None:
-    # #133: `reparented` is `freed` one level up — a child #123 moved out of a
-    # parent it was attached below TAU into. Without a value assertion the
+    # `reparented` is `freed` one level up — a child moved out of a parent it
+    # was attached below TAU into. Without a value assertion the
     # count could be pinned at zero and the operator would never learn that the
     # map's shape changed underneath them.
     _alpha, _stray, _home = _mis_attached(db, with_a_better_home=True)
@@ -742,7 +744,7 @@ def test_repair_reports_the_children_it_reparented(db: Database) -> None:
 
 
 def test_a_pinned_child_keeps_the_parent_a_human_chose(db: Database) -> None:
-    """#155: the upper-level twin of a pinned membership.
+    """The upper-level twin of a pinned membership.
 
     The same corpus as the migrate test above, which moves the child — so the
     pin is what makes the difference here, not an absent better home.
@@ -771,7 +773,7 @@ def test_a_pinned_child_keeps_the_parent_a_human_chose(db: Database) -> None:
 def test_an_orphan_above_level_zero_is_collected(
     seeded: tuple[Database, dict[int, str]],
 ) -> None:
-    """#163: the collector stopped at level 0 and the guard looked there too.
+    """The collector and its guard look above level 0, not only at it.
 
     An upper orphan hides from a leaf-level check by construction: its OWN
     children are parented -- to it -- so `unparented(level 0)` is empty and the
@@ -793,7 +795,7 @@ def test_an_orphan_above_level_zero_is_collected(
         ]
         assert len(parents) >= 2
         orphan = parents[0]
-        # what a rejected or failed brief looks like to the level above (#121):
+        # what a rejected or failed brief looks like to the level above:
         # `cluster_briefs` groups only the nodes that HAVE briefs, so this one
         # is simply absent from the grouping and never gains a parent.
         conn.execute("DELETE FROM node_children WHERE child_id = ?", (orphan,))
@@ -857,9 +859,9 @@ def structureless_encoder_for(texts: list[str]):
 
 
 def test_a_level_with_no_density_becomes_one_parent(tmp_path: object) -> None:
-    # E003 / #198: the run that failed was this op, over a level the real
-    # clusterer labelled entirely noise. It now forms one parent holding every
-    # node — which build_tree then reads as the root — instead of failing.
+    # a level the real clusterer labels entirely noise must not fail this op:
+    # it forms one parent holding every node — which build_tree then reads as
+    # the root.
     database = Database.at(tmp_path / "hrono.db")  # type: ignore[operator]
     with database.connect() as conn, conn:
         register_embedding_model(conn, dims=STRUCTURELESS_DIMS)

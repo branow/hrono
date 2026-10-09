@@ -1,8 +1,8 @@
-"""#180 (T49): the dashboard shell — server-rendered, logged in, role-gated.
+"""The dashboard shell — server-rendered, logged in, role-gated.
 
 Every test drives the browser's own path: a real GET, a real form POST, real
 cookies. The API's auth tests cover the header carrier; these cover the cookie
-one, and the point of the ticket is that they are the SAME check underneath.
+one, and the point is that they are the SAME check underneath.
 """
 
 from __future__ import annotations
@@ -146,9 +146,9 @@ def test_the_switcher_lists_declared_trees(browser: Browser) -> None:
 
     body = browser.page("/ui").text  # type: ignore[attr-defined]
 
-    # each tree is offered as a link that LEADS there — the switcher used to
-    # be a <select> whose options were values on a form, so asserting the
-    # name appeared said nothing about whether you could reach it
+    # each tree is offered as a link that LEADS there: for a <select> whose
+    # options are values on a form, asserting the name appears says nothing
+    # about whether you can reach it
     for name in ("alpha", "beta"):
         assert f'href="/ui?tree={name}"' in body
     assert browser.page("/ui?tree=alpha").status_code == 200  # type: ignore[attr-defined]
@@ -157,7 +157,7 @@ def test_the_switcher_lists_declared_trees(browser: Browser) -> None:
 def test_an_undeclared_database_still_offers_default(
     browser: Browser,
 ) -> None:
-    # a database nobody has partitioned still has exactly one tree (#054)
+    # a database nobody has partitioned still has exactly one tree
     browser.sign_in()
 
     assert 'href="/ui?tree=default"' in browser.page("/ui").text  # type: ignore[attr-defined]
@@ -179,7 +179,7 @@ def test_the_shell_reports_what_the_chosen_tree_holds(
 
 
 def test_the_write_button_actually_starts_a_sync(browser: Browser) -> None:
-    # a control that renders and 404s is worse than no control (qa, 2026-09-27)
+    # a control that renders and 404s is worse than no control
     browser.sign_in("writer")
 
     answer = browser.client.post(
@@ -210,7 +210,7 @@ def test_a_reader_posting_it_anyway_is_refused(browser: Browser) -> None:
 
 
 def test_every_page_carries_an_icon(browser: Browser) -> None:
-    """#197: without one the browser asks for /favicon.ico, gets a 404 on
+    """Without one the browser asks for /favicon.ico, gets a 404 on
     every page load, and shows a broken icon in the tab."""
     browser.sign_in()
 
@@ -222,7 +222,7 @@ def test_every_page_carries_an_icon(browser: Browser) -> None:
 def test_switching_tree_keeps_you_on_the_page_you_are_on(
     browser: Browser,
 ) -> None:
-    """It used to bounce you to the overview whatever you were looking at.
+    """Switching must not bounce you to the overview whatever you are on.
 
     Every view but one is the same question asked of a different tree, so it
     should stay put.
@@ -274,11 +274,11 @@ def _without_style(page: str) -> str:
 def test_a_hint_is_drawn_by_the_page_not_by_the_browser(
     browser: Browser,
 ) -> None:
-    """#197: the marks were `title=` attributes.
+    """The marks are not `title=` attributes.
 
     A native tooltip waits about a second and then renders as an operating
-    system tooltip — long enough that a person decides the mark does nothing,
-    which is exactly what happened. The page draws its own now.
+    system tooltip — long enough that a person decides the mark does nothing.
+    The page draws its own.
     """
     browser.sign_in()
 
@@ -340,7 +340,7 @@ def test_the_page_carries_the_rule_that_draws_a_hint(
 def test_the_theme_choice_survives_without_javascript(
     browser: Browser,
 ) -> None:
-    """#197: a light/dark toggle, and it is a form.
+    """A light/dark toggle, and it is a form.
 
     The server writes the `<html>` tag, so the server is what has to know —
     a toggle that needed a script would be the one control on this dashboard

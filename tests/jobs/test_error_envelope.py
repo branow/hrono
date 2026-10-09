@@ -1,9 +1,9 @@
-"""#109: a job's failure carries a CODE, not the driver's wording.
+"""A job's failure carries a CODE, not the driver's wording.
 
-092 mapped *busy* driver errors onto `Unavailable`; every other driver error
-still reached the record as `str(exc)`. The reproduction in the ticket is here
-verbatim — a `BEFORE INSERT` trigger raising `RAISE(ABORT, ...)` inside an op —
-and it must not put sqlite's phrasing in hrono's mouth.
+*Busy* driver errors map onto `Unavailable`; every other driver error must not
+reach the record as `str(exc)`. The reproduction here — a `BEFORE INSERT`
+trigger raising `RAISE(ABORT, ...)` inside an op — must not put sqlite's
+phrasing in hrono's mouth.
 """
 
 import json
@@ -43,7 +43,7 @@ def _wait(db: Database, job_id: str, timeout: float = 5.0) -> sqlite3.Row:
 
 
 def _driver_error(job: Job, context: JobContext) -> None:
-    """The ticket's reproduction: sqlite aborts mid-op, in its own words."""
+    """The reproduction: sqlite aborts mid-op, in its own words."""
     with context.database.write() as conn:
         conn.execute(
             "CREATE TRIGGER IF NOT EXISTS poison BEFORE INSERT ON node_members "
@@ -88,7 +88,7 @@ def test_a_driver_error_is_recorded_as_a_code_not_sqlites_wording(
 
     assert row["status"] == "failed"
     assert row["error_code"] == "internal-error"
-    # the wording the ticket caught being served as hrono's answer
+    # the driver's wording, which must not be served as hrono's answer
     assert POISON not in (row["error"] or "")
     assert POISON not in json.dumps(row["error_details"])
     assert row["error"] == "the job failed"
@@ -99,8 +99,8 @@ def test_the_drivers_wording_reaches_the_log_and_only_the_log(
     db: Database, caplog: pytest.LogCaptureFixture
 ) -> None:
     # hiding the wording from the client must not hide it from the operator:
-    # before #109 `str(exc)` was at least ON the record, so a log line is what
-    # keeps the failure diagnosable at all. It also proves the trigger really
+    # `str(exc)` is not on the record, so a log line is what keeps the
+    # failure diagnosable at all. It also proves the trigger really
     # fired — a fixture that failed on some other constraint would satisfy
     # every "the wording is absent" assertion below while testing nothing.
     with caplog.at_level("ERROR", logger="hrono.worker"):
@@ -137,7 +137,7 @@ def test_hronos_own_wording_survives(db: Database) -> None:
 
     row = _run(db, "ours", op)
 
-    assert row["error_code"] == "sync-error"  # its own code (#145)
+    assert row["error_code"] == "sync-error"  # its own code
     assert row["error"] == "no text model is registered for this tree"
     assert json.loads(row["error_details"]) == {"type": "SyncError"}
 

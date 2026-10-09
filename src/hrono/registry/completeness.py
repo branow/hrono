@@ -1,7 +1,7 @@
 """What the registry still lacks for a build to run, said before one is tried.
 
-Settings listed config and never said whether it was enough (#210): a role with
-no model, or a model whose connection had been deleted, surfaced as a failed
+Listing config does not say whether it is enough: a role with no model, or a
+model whose connection has been deleted, would otherwise surface as a failed
 run minutes after it started. Every check here asks the SAME resolver the
 stages ask (`resolve_text_model`, `resolve_embedding_model`, `resolve_prompt`),
 so the page reports exactly the refusal the run would have met — including

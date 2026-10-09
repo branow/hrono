@@ -1,9 +1,8 @@
-"""#175: a source-scoped op over every source really does fan out.
+"""A source-scoped op over every source really does fan out.
 
-`fan_out` was called from TESTS ONLY — the machinery existed, its own tests
-passed, and no request could reach it. So these tests go through the API and
-read the parent back; none of them calls `fan_out` itself, because doing that
-is how nobody noticed.
+Machinery whose own tests pass can still be unreachable from any request, so
+these tests go through the API and read the parent back; none of them calls
+`fan_out` itself, because doing that would hide exactly that gap.
 """
 
 from __future__ import annotations
@@ -91,8 +90,8 @@ def test_a_source_scoped_op_over_all_sources_fans_out(
 
 
 def test_the_parent_answers_for_them(harness: Harness) -> None:
-    # the point of fanning out: #172's aggregation now has something to
-    # aggregate, which it did not before this ticket.
+    # the point of fanning out: the parent's rollup has children to
+    # aggregate.
     job_id = harness.run({"op": "sync", "scope": {"type": "all"}})
 
     answer = harness.job(job_id)

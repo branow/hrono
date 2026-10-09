@@ -5,13 +5,12 @@ Every collection shares this engine; behaviour differences live in the
 per-collection branch here. Secrets are encrypted at rest via the request's
 active key and masked on the way out, so plaintext is write-only.
 
-``PUT`` CREATES OR REPLACES, idempotently (#138). The spec and ``CLAUDE.md``
-both say "config is data you PUT", and this engine used to 404 a PUT to a name
-that did not exist yet — so registering a source meant knowing whether it was
-already there and choosing POST or PUT accordingly. A configuration write should
-be declarative: say what the config IS, get that, whether or not it was there
-before. POST keeps its create-only meaning (409 on conflict) for a caller that
-wants to be told.
+``PUT`` CREATES OR REPLACES, idempotently, because config is data you PUT: a
+PUT that 404s on a missing name would make registering a source mean knowing
+whether it was already there and choosing POST or PUT accordingly. A
+configuration write should be declarative: say what the config IS, get
+that, whether or not it was there before. POST keeps its create-only meaning
+(409 on conflict) for a caller that wants to be told.
 """
 
 from __future__ import annotations
@@ -80,10 +79,10 @@ def build_router(descriptor: Descriptor) -> APIRouter:
 
 
 # The four operations are module-level rather than closures over the router so
-# the dashboard can reach the SAME write path the API takes (#199). A settings
-# page that re-validated a config in its own handler would be a second rule for
-# what a valid config is, and the two would drift — the defect this codebase
-# keeps writing tickets about. The routes above are now thin adapters.
+# the dashboard can reach the SAME write path the API takes. A settings page
+# that re-validated a config in its own handler would be a second rule for what
+# a valid config is, and the two would drift. The routes above are thin
+# adapters.
 
 
 def list_items(
@@ -113,7 +112,7 @@ def create_item(
     try:
         with request.app.state.db.write() as conn:
             # encrypted UNDER the write lock: a rotation commits under it, so
-            # a secret sealed before the lock could land on the old key (E021)
+            # a secret sealed before the lock could land on the old key
             stored, key_id = encrypt(config, descriptor, _cipher(request))
             payload = json.dumps(stored)
             store.insert(
@@ -147,7 +146,7 @@ def replace_item(
     if dry_run:
         # validated and hooked, then NOTHING written: a preview of an edit
         # that would be rejected is a rejection, not an impact report
-        # (T58). One implementation, in the engine, so every collection
+        # One implementation, in the engine, so every collection
         # has the safety rather than the ones someone remembered.
         with request.app.state.db.connect() as conn:
             return impact.as_json(
@@ -166,7 +165,7 @@ def replace_item(
             now,
             content_hash(payload),
         )
-        if not existed:  # PUT CREATES (#138 F2): config is data you PUT
+        if not existed:  # PUT CREATES: config is data you PUT
             store.insert(
                 conn,
                 collection,
@@ -270,7 +269,7 @@ def _normal(
     field present at its default. A stored row written before a field existed
     does not carry it, so comparing the two raw said "changed" about a config
     nobody had touched, and a save of an unmodified document rewrote the whole
-    collection and restaled its briefs (#200).
+    collection and restaled its briefs.
 
     A row that no longer validates compares as different, which is correct: it
     is exactly a row the next save should replace.

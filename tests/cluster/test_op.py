@@ -293,11 +293,11 @@ def shrinkable(tmp_path: object) -> Iterator[Database]:
 
 
 def test_rebuild_across_a_rung_keeps_clustering(shrinkable: Database) -> None:
-    # #094: stored coords carry the width of the build that wrote them, and
+    # stored coords carry the width of the build that wrote them, and
     # `maintain`/`settle` warm-init every rebuild from them. A corpus that
     # shrinks across the ladder's boundary therefore offers a 25-wide init to
-    # a build the recipe reduces to 10 — which used to fail, and to keep
-    # failing forever since the stale coords were never rewritten.
+    # a build the recipe reduces to 10 — which must not fail, or it fails
+    # forever, since the stale coords are never rewritten.
     context = JobContext(shrinkable)
     cluster_op.cluster(cluster_job(), context, build=build_clusters)
     assert coord_widths(shrinkable) == {recipe_for(40).n_components}
@@ -331,7 +331,7 @@ def database_status(conn: object, job_id: str) -> str | None:
 
 
 def test_a_collected_build_says_it_collected(tmp_path: object) -> None:
-    # #133: a one-topic tree is a legitimate answer for a small corpus and a
+    # a one-topic tree is a legitimate answer for a small corpus and a
     # surprising one for a large one. From outside they look identical unless
     # the run says which happened.
     database = Database.at(tmp_path / "small.db")
@@ -353,9 +353,9 @@ def test_a_collected_build_says_it_collected(tmp_path: object) -> None:
 
 
 def test_an_all_noise_build_says_it_collected(tmp_path: object) -> None:
-    # E003 round 2: a corpus the real clusterer labels entirely noise becomes
-    # one topic, and the run must say so, or a large corpus folded into one
-    # topic reads exactly like one that clustered (#133).
+    # a corpus the real clusterer labels entirely noise becomes one topic,
+    # and the run must say so, or a large corpus folded into one topic reads
+    # exactly like one that clustered.
     database = Database.at(tmp_path / "noise.db")
     bodies = structureless(30)
     paths = structureless(30, seed=3)
@@ -459,11 +459,11 @@ def _tree_sections(db: Database, tree: str) -> set[int]:
 def test_two_trees_over_disjoint_sources_do_not_mix(
     two_sources: Database,
 ) -> None:
-    """#054: a named tree is a map over ITS sources, not over everything.
+    """A named tree is a map over ITS sources, not over everything.
 
-    Before this, `hrono tree maintain alpha` then `maintain beta` produced two
-    trees of identical contents and every section belonged to both -- the
-    command took a name, echoed it back, and ignored it.
+    `hrono tree maintain alpha` then `maintain beta` must not produce two
+    trees of identical contents with every section in both -- a command that
+    takes a name must not echo it back and ignore it.
     """
     with two_sources.connect() as conn, conn:
         _declare_tree(conn, "alpha", ["alpha-src"])

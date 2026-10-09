@@ -1,4 +1,4 @@
-"""#213: a run says what it did, what failed and where, and can be retried."""
+"""A run says what it did, what failed and where, and can be retried."""
 
 import json
 import sqlite3
@@ -235,7 +235,7 @@ class Refusing(Writing):
 
 
 def _store_talk_back(database: Database, *paths: str) -> None:
-    """What a run before #221 cached for these sections: the model talking."""
+    """Cache a talked-back condensation for these sections."""
     with database.write() as conn:
         for path in paths:
             digest = conn.execute(
@@ -268,8 +268,8 @@ def _update_stage(database: Database, job_id: str) -> dict[str, object]:
 def test_an_unchanged_sync_shows_what_its_condense_step_did(
     repo: Path, panel: Panel
 ) -> None:
-    # E015: the update stage said only `changed: false` while it spent model
-    # calls redoing talked-back condensations; the spend was invisible
+    # the update stage must not say only `changed: false` while it spends
+    # model calls redoing talked-back condensations; the spend is shown
     database, _ = _run(repo, client=Writing(), build=fake_build)
     _store_talk_back(database, "f4.txt", "f5.txt")
     database.close()

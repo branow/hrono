@@ -1,10 +1,10 @@
-"""What a run actually DID, as sentences a person can act on (#200).
+"""What a run actually DID, as sentences a person can act on.
 
-Every op returns a result dict, and until now nothing rendered it. The Runs
-page showed a green `succeeded` and a token count — so a sync that split two
-topics, judged nothing, and left the tree one `settle` short of finished
-reported exactly as much as a sync that did nothing at all. The operator came
-back to a map with two new topics on it and no way to find out why.
+Every op returns a result dict, and this renders it. A green `succeeded` and
+a token count alone would report a sync that split two topics, judged
+nothing, and left the tree one `settle` short of finished exactly as a sync
+that did nothing at all, leaving the operator with two new topics on the map
+and no way to find out why.
 
 Three things are read out of one result, and they are different questions:
 
@@ -15,7 +15,7 @@ Three things are read out of one result, and they are different questions:
   actions, kept even when they are zero: a misfit rate of 0 is an answer.
 - **what to do next** — the whole reason this module is not a `pre` tag. A
   result carries `settle_due`, `above_baseline` and `incomplete`, each meaning
-  "this run finished and the tree still needs something". Nothing said so.
+  "this run finished and the tree still needs something".
 
 The vocabulary is DATA, keyed by the field name the ops already emit. A new op
 reporting `reparented` gets a sentence by adding a row here, and an op

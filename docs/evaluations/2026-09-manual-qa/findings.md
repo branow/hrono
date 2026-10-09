@@ -15,7 +15,7 @@ Evidence paths are relative to `.e2e/`.
 | F6 | minor | ops | `serve` has no db-path flag; the database is always `./.hrono/hrono.db` |
 | F7 | major | split | passages are packed to ~100 B, not the 800 B design budget (median 135 B) |
 | F8 | minor | split | byte-chop cuts mid-token, producing meaningless passages like `'tColor = '` (9 B) |
-| F9 | major | api | the whole M7 lifecycle (`update`, `propagate`, `monitor`, `repair`, `settle`) has no HTTP or CLI trigger |
+| F9 | major | api | the whole update lifecycle (`update`, `propagate`, `monitor`, `repair`, `settle`) has no HTTP or CLI trigger |
 | F10 | minor | cli | no CLI for `sources`/`connections`/`models`/`prompts`/`jobs` — config is curl-only |
 | F11 | minor | api | query-param validation returns FastAPI's raw `{"detail":[...]}`, bypassing the `{error:{code,message,details}}` envelope |
 | F12 | minor | recall | the z-score floor leaks hits for some off-topic questions instead of the explore message |
@@ -42,7 +42,7 @@ This is what forced the harness in `scripts/claude_code_proxy.py` for this run.
 
 ## F2 — `PUT` cannot create a registry entry (minor)
 
-`CLAUDE.md` and `implementation-notes.md` both say "config is data you PUT".
+`CLAUDE.md` and `docs/api.md` both said "config is data you PUT".
 The engine (`src/hrono/registry/engine.py`) maps `POST /{collection}` to create
 and `PUT /{collection}/{name}` to replace-only:
 
@@ -131,11 +131,11 @@ threshold becomes `MIN_GROUP = 100` and the 800 B budget only ever acts as an
 upper bound for descending and chopping. Every group of siblings is cut as soon
 as it crosses 100 bytes.
 
-The settled recipe disagrees. `/Users/orest/repos/rad/hrono/app/structure-split.ipynb`
+The settled recipe disagrees. `docs/research/prototype/structure-split.ipynb`
 `pack_node` has **no min-group flush at all** — it flushes only when a group
 would bust the budget — and its measured output is
 `57 paragraphs, sizes [122, 195, ..., 799, 800, 835]`, i.e. a median in the
-600s. The prose in `how-hrono-works.md` ("a sibling group is flushed once it
+600s. The prose in `docs/architecture.md` ("a sibling group is flushed once it
 reaches 100 bytes, so a decent structural unit stands alone") was implemented
 as an unconditional flush, which is not what the prototype does.
 
@@ -190,7 +190,7 @@ either, and `incubator.drain` / `incubator.age` have no production caller at
 all (`grep -rn "incubator\." src/` -> only `placement.py` calling `park`).
 
 This run had to insert job rows directly into the database
-(`scripts/enqueue.py`) to exercise any of M7.
+(`scripts/enqueue.py`) to exercise any of the update lifecycle.
 
 ## F10 — no CLI for config or jobs (minor)
 
@@ -349,11 +349,11 @@ absolute path:
 ```
 out / p         = /benchmark-js-97.md
 (out/p).resolve = /benchmark-js-97.md
-base            = /Users/orest/repos/hrono/.e2e/exports/attempt1
+base            = <repo>/.e2e/exports/attempt1
 escapes base?   True
 ```
 
-so the (correct) traversal guard added in #081 refuses the first entry and the
+so the (correct) path-traversal guard in the export refuses the first entry and the
 command aborts having written nothing. T32 is broken end to end for any tree
 whose root carries sections directly. Two separate defects: the renderer must
 not emit absolute paths, and `_materialize` should reject/normalise a leading
@@ -456,8 +456,8 @@ $ ./scripts/api.sh POST /sources '{"name":"probe-after-stale",...}'
 `logs/02-serve.log:168-188`:
 
 ```
-File "/Users/orest/repos/hrono/src/hrono/registry/engine.py", line 52, in create_item
-File "/Users/orest/repos/hrono/src/hrono/registry/store.py", line 30, in insert
+File "<repo>/src/hrono/registry/engine.py", line 52, in create_item
+File "<repo>/src/hrono/registry/store.py", line 30, in insert
 sqlite3.OperationalError: database is locked
 ```
 
@@ -525,7 +525,7 @@ $ python scripts/enqueue.py ... noop     -> job_d3371de2...
 `propagate` is stranded `running` for ever (nothing reclaims a job whose worker
 died), the new `noop` is never claimed, and the API keeps answering reads. The
 run had to abandon the queue entirely and drive ops in-process
-(`scripts/drive_op.py`) to finish the M7 scenarios.
+(`scripts/drive_op.py`) to finish the update-lifecycle scenarios.
 
 Needed: guard `_finish` and `_claim`, restart the thread on failure (or run the
 loop under a supervisor), log any unhandled worker exception, and reclaim jobs
@@ -694,7 +694,7 @@ mechanical reference list the `brief` op appends, not the summary text:
 ```
 
 `summarize/brief.py` bakes member URIs into `text` via `_references(uris)`, and
-`#071` then splits the whole brief — footer included — into `node://` passages
+brief passage splitting then cuts the whole brief — footer included — into `node://` passages
 that go into both the vector index and FTS. The footer is a wall of paths, so it
 matches any query whose words appear in a filename (here "color" via
 `supports-color`), and it scores well because a path list is lexically dense.
@@ -846,7 +846,7 @@ Consequences, all confirmed:
 
 - there is no root, so `GET /trees/default/export` returns
   `404 {"error":{"code":"not-found","message":"tree not built: default"}}` —
-  the M6 MVP deliverable is unreachable for this corpus
+  the exported tree, the core deliverable, is unreachable for this corpus
 - `hrono tree export` therefore cannot produce anything
 - `maintain` reports `failed`, so the second `embed` pass for brief passages
   (the last line of the op) never runs either
@@ -870,7 +870,7 @@ then calls the UMAP recipe, which needs 27 (F15). Every drain of a pool holding
 small numbers of chunks until siblings arrive, this is the common case, not the
 edge case.
 
-## F18 — no test exercises the real clustering recipe at small N (note, QA gap)
+## F18 — no test exercises the real clustering recipe at small N (note, test gap)
 
 Every affected path is tested only through an injected seam:
 `tests/summarize/test_build_tree.py:156` passes `build=build`,

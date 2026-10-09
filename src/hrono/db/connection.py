@@ -26,7 +26,7 @@ def connect(path: Path, *, extensions: bool = True) -> sqlite3.Connection:
     Transactions are ``IMMEDIATE``: a read runs outside any transaction, so it
     always sees the newest commit and can never pin a WAL snapshot, and a write
     takes the write lock up front instead of discovering a conflict on upgrade
-    (the SQLITE_BUSY that wedged the server in F13/F23).
+    (a mid-transaction SQLITE_BUSY that can wedge the server).
 
     ``check_same_thread`` is disabled because a connection may be borrowed by
     whichever thread asked for it; ``Database`` hands one connection to one

@@ -1,4 +1,4 @@
-"""#210: every registry field carries a human label and one line of help.
+"""Every registry field carries a human label and one line of help.
 
 The settings form reads both off the collection's own pydantic model, so the
 API's validation and the page cannot drift. A field added without them would

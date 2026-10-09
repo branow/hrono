@@ -1,4 +1,4 @@
-"""``hrono usage``: what the model calls cost, as a table (#202).
+"""``hrono usage``: what the model calls cost, as a table.
 
 The same roll-ups as ``GET /usage``, printed for a person: one row per group,
 tokens by kind, model time, and the two kinds of money in separate

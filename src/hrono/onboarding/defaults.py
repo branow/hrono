@@ -1,4 +1,4 @@
-"""What a first install registers, per provider (#219).
+"""What a first install registers, per provider.
 
 One text model per writing role, because a role resolves to exactly one model:
 the cheap one condenses (it runs once per section) and the stronger one writes

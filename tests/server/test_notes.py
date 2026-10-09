@@ -1,4 +1,4 @@
-"""#157: a human note, and the agent reading the tree sees it.
+"""A human note, and the agent reading the tree sees it.
 
 The spec's reason for this feature is the export, not the dashboard: "a human
 'deprecated, use X' annotation flows into the rendered tree so the traversing

@@ -1,75 +1,74 @@
-"""The incremental ``update`` op (#085, T34): apply a change batch, no rebuild.
+"""The incremental ``update`` op: apply a change batch, no rebuild.
 
 hrono's differentiator in its efficient form. Where ``maintain`` full-rebuilds
-the cluster level each run (keeping stable ids via #068), ``update`` touches
-only the delta: per source it syncs, classifies the file diff (#083), reconciles
-just the changed files' sections (#085 reconcile), embeds the new content (the
-#035 content-hash cache re-embeds nothing unchanged), then applies the
-placement rule against the PRE-BATCH cluster centroids (#085 placement).
-UMAP/HDBSCAN never run, so untouched chunks never move: churn = changed content.
+the cluster level each run (keeping stable ids via the signature reconcile),
+``update`` touches only the delta: per source it syncs, classifies the file
+diff, reconciles just the changed files' sections, embeds the new content (the
+content-hash cache re-embeds nothing unchanged), then applies the placement rule
+against the PRE-BATCH cluster centroids. UMAP/HDBSCAN never run, so untouched
+chunks never move: churn = changed content.
 
-Placement is also the batch's pool pass (#095): whatever it parks in the
-incubator (#086) is immediately aged — anything past ``MAX_AGE`` batches is
+Placement is also the batch's pool pass: whatever it parks in the
+incubator is immediately aged — anything past ``MAX_AGE`` batches is
 force-assigned — and then drained, so a chunk is never pending for longer than
 the pool can justify. Age runs first: the drain re-homes the whole pool anyway,
 so ageing after it would only re-decide chunks the drain already placed.
 
 A leaf the drain emits here is NOT parented, and not briefed either: both need
 the brief pass this op deliberately does not run (``update`` makes no LLM calls
-at all). #114's attach places a leaf by its BRIEF vector, so there is nothing to
-place until something briefs it — ``sync-tree``'s closing ``adopt`` stage does
-exactly that in the same run (brief, attach, re-brief the parent), so a leaf
-born here is reachable by the time the sync that made it returns. Only a bare
-``update`` job leaves it for the next sync, settle or maintain. Briefing inside
-``update`` is the same question #122 asks about condensing, and belongs there.
+at all). Attach-by-proximity places a leaf by its BRIEF vector, so there is
+nothing to place until something briefs it — ``sync-tree``'s closing ``adopt``
+stage does exactly that in the same run (brief, attach, re-brief the parent), so
+a leaf born here is reachable by the time the sync that made it returns. Only a
+bare ``update`` job leaves it for the next sync, settle or maintain. Briefing
+inside ``update`` is the same question the sync chain answers for condensing,
+and belongs there.
 
-CONDENSES WHAT IT INGESTS (#122). ``condense`` used to have exactly one caller,
-``maintain``, so every section an incremental update brought in reached the tree
-with no condensation until somebody ran a full build — and a brief reduces over
-condensations while its reference list did not, so the brief cited sources it
-had never read. Condensing here costs one call per genuinely NEW section
-(``condense`` is a content-hash cache, #058) and nothing for unchanged content,
-so it is proportional to the change and the incremental promise holds. It runs
-once per RUN, after every source has been reconciled, and only when a source
-actually reported changes. That guard is not an optimization: ``condense``
-resolves the text model BEFORE it looks at what is pending, so an unguarded call
-made `hrono update` fail with "no text model available" on a fresh install with
-no sources and nothing to do — an error naming a stage the user never asked for,
-from a run that should have been a no-op. The cost is that a corpus carrying OLD
-gaps heals them on the next run WITH changes rather than on any run at all,
-which is a wait, not a hole.
+CONDENSES WHAT IT INGESTS. Were ``maintain`` its only caller, every section an
+incremental update brought in would reach the tree with no condensation until
+somebody ran a full build — and a brief reduces over condensations while its
+reference list does not, so the brief would cite sources it had never read.
+Condensing here costs one call per genuinely NEW section (``condense`` is a
+content-hash cache) and nothing for unchanged content, so it is proportional to
+the change and the incremental promise holds. It runs once per RUN, after every
+source has been reconciled, and only when a source actually reported changes.
+That guard is not an optimization: ``condense`` resolves the text model BEFORE
+it looks at what is pending, so an unguarded call makes `hrono update` fail with
+"no text model available" on a fresh install with no sources and nothing to do —
+an error naming a stage the user never asked for, from a run that should have
+been a no-op. The cost is that a corpus carrying OLD gaps heals them on the next
+run WITH changes rather than on any run at all, which is a wait, not a hole.
 
-The one exception is a stored condensation that is the model TALKING BACK
-(#221): ``unusable-condensations`` promises the next sync re-condenses exactly
+The one exception is a stored condensation that is the model TALKING BACK:
+``unusable-condensations`` promises the next sync re-condenses exactly
 those, and on an unchanged corpus — the usual state of a tree an operator is
-asking that of — the guard above meant no sync ever did (E001's e2e). So the
+asking that of — the guard above alone means no sync ever does. So the
 stage also runs when the condense model has one; with no condense model there
 is nothing stored under it to redo, and the no-op run still asks for nothing.
 A talk-back the model has already refused to redo for the same model and
-prompt does not count (E015): it stays listed, and the next try waits for its
+prompt does not count: it stays listed, and the next try waits for its
 body, the model or the prompt to change, rather than costing two calls on
 every sync of a steady tree.
 
-Accepting LLM calls inside ``update`` is the decision this ticket made: the
+Accepting LLM calls inside ``update`` is deliberate: the
 promise is that work is proportional to the change, not that the op is free —
 and the alternative left a leaf with no condensation, therefore no brief,
-therefore no brief vector, therefore no parent (#114).
+therefore no brief vector, therefore no parent.
 
-ONE BATCH NUMBER PER RUN, not per source (#099). ``tree_batch.batch`` is the
-clock incubator ageing measures against (``current_batch - parked_at >
-MAX_AGE``), so counting a run over three changed sources as three batches ages
-parked chunks three times too fast — and a force-assigned member is never
-revisited today (#113), which makes premature forcing permanent. The number is
+ONE BATCH NUMBER PER RUN, not per source. ``tree_batch.batch`` is the clock
+incubator ageing measures against (``current_batch - parked_at > MAX_AGE``), so
+counting a run over three changed sources as three batches ages parked chunks
+three times too fast — and premature forcing is hard to undo. The number is
 allocated LAZILY, by the first source that actually has changes, so a run over
-an unchanged corpus leaves the counter alone; every later source in the same
-run reuses it. A RETRIED run — #093 reclaims a job stranded by a dead worker —
+an unchanged corpus leaves the counter alone; every later source in the same run
+reuses it. A RETRIED run — the worker reclaims a job stranded by a dead worker —
 is a fresh run and allocates another batch: a retry genuinely is another pass
 over the corpus, and per-job allocation state would be real machinery for
 semantics that already read correctly, bounded at one extra tick against a
 MAX_AGE tolerance of 5.
 
 Lock discipline like the other ops: the diff + centroid snapshot + section
-reconcile run under one #008 write lock (so the centroids are consistently
+reconcile run under one write lock (so the centroids are consistently
 pre-batch), embed runs its heavy compute under its own lock, then placement
 re-acquires to persist placement and ageing (dot products only). The drain owns
 its own locks — its mini-pipeline is real UMAP -> HDBSCAN, so it runs outside
@@ -131,9 +130,9 @@ def update(
 
 
 def _talked_back(context: JobContext) -> bool:
-    """Is there a reply that talked back (#221) this request may still redo?
+    """Is there a reply that talked back this request may still redo?
 
-    One already refused for the same model and prompt is not (E015): a sync
+    One already refused for the same model and prompt is not: a sync
     over an unchanged corpus would otherwise pay two calls for it every time.
     """
     with context.database.connect() as conn:
@@ -154,15 +153,16 @@ def _outcome(
     rescued: int,
     deferred: int,
 ) -> Mapping[str, object]:
-    """What this run changed, for the operator rather than the log (#133).
+    """What this run changed, for the operator rather than the log.
 
     ``forced`` is the count that matters: a force-assign is the system deciding
-    that an alien member is better than an unreachable one (#086 T35.3) — a real
-    judgement call, and until now a silent one. ``parked`` is its counterpart,
+    that an alien member is better than an unreachable one — a real
+    judgement call, and must not be a silent one. ``parked`` is its counterpart,
     chunks still waiting outside the tree. ``condense`` is what the condense
-    step did and spent, present when it ran: a sync over an unchanged tree
-    that redid talked-back condensations said ``changed: false`` and nothing
-    else, and its calls showed only in the run's usage (#179, E015).
+    step did and spent, present when it ran: without it, a sync over an
+    unchanged tree that redid talked-back condensations would say
+    ``changed: false`` and nothing else, its calls showing only in the run's
+    usage.
     """
     spent: dict[str, object] = (
         {} if condensed is None else {"condense": dict(condensed)}
@@ -246,11 +246,11 @@ def _drain(context: JobContext, tree: str, model_name: str) -> int:
     """Drain the pool, deferring (not failing) a degenerate one.
 
     ``drain``'s mini-pipeline raises ``ClusterError`` on input UMAP cannot
-    reduce — tied or identical vectors (#198). That used to propagate out of
-    ``update`` AFTER placement and ageing had committed, failing the whole sync
-    at a stage that had already done its work, on every later run too, since
-    the pool stayed exactly as degenerate. A pool that cannot drain is a pool
-    that waits: ageing force-assigns anything past ``MAX_AGE``, so deferral is
+    reduce — tied or identical vectors. It must not propagate out of ``update``:
+    placement and ageing have already committed, so it would fail the whole sync
+    at a stage that had already done its work, on every later run too, since the
+    pool stays exactly as degenerate. A pool that cannot drain is a pool that
+    waits: ageing force-assigns anything past ``MAX_AGE``, so deferral is
     bounded, and the outcome says it happened.
     """
     try:

@@ -100,7 +100,7 @@ def ready_encoder_for(
 ) -> Encoder | None:
     """The encoder if it is ALREADY loaded; otherwise None, loading started.
 
-    For a caller with a user waiting (#169). ``cached_encoder_for`` holds its
+    For a caller with a user waiting. ``cached_encoder_for`` holds its
     lock across the load, so a request arriving mid-load waits for the whole of
     it — correct for an op, which has nobody waiting and should not read a
     second copy of the weights, and wrong for a question, which would spend its
@@ -172,7 +172,7 @@ def cached_encoder_for(
     The weights are identical for every question and cost SECONDS to read from
     disk, so a caller that encodes once per request pays that over and over:
     `hrono recall` measured 11.9s then 7.7s against a 10s client timeout, and
-    the CLI reported the product's read door as an unreachable server (#168).
+    the CLI reported the product's read door as an unreachable server.
 
     A long-lived process wants this; a one-shot op does not care either way. The
     lock is held across the load so a second caller arriving mid-load WAITS for

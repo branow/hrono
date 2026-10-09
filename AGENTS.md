@@ -22,23 +22,22 @@ so is the web dashboard at `/ui`.
   before writing code; it is not auto-loaded). `GLOSSARY.md`: the words the
   dashboard may use. `REQUIREMENTS.md`: the product requirements the dev loop
   works toward.
-- `docs/design/`: the design record hrono was built from. Start with
-  `INDEX.md`, then `context.md`. The settled decisions:
-  - `implementation-notes.md`: the REST API and CLI.
-  - `design-sketch-v1.md`: the architecture.
-  - `clustering-lifecycle.md`: the cluster operating rules and baked
-    constants.
-  - `summarization-experiments.md`: the summarization recipe.
-  - `build-order.md`: the original ticket plan (M0–M11, all done).
-  - `prototype/`: the research notebooks with their outputs. Mine them for
-    recipes, but do not port their structure.
+- `docs/README.md`: the documentation index. The settled decisions:
+  - `docs/architecture.md`: how hrono works, end to end.
+  - `docs/api.md`: the REST API and CLI.
+  - `docs/clustering.md`: the cluster operating rules and baked constants.
+  - `docs/summarization.md`: the summarization recipe.
+  - `docs/dashboard.md`: the dashboard, page by page.
+  - `docs/research/`: prior art, experiments and the research notebooks
+    (`prototype/`). Mine them for recipes, but do not port their structure.
 - `docs/evaluations/`: every real run of hrono, with its log, findings and
   metrics. Add a folder per evaluation (`<YYYY-MM>-<corpus>/`) and keep it
   up to date as the run goes.
 - `dev/`: the development process, as the epic board. Status is the folder a
   ticket file sits in: `backlog/` -> `todo/` -> `in-progress/` ->
-  `verifying/` -> `po-review/` -> `done/`. Also here: `archive/`, `evidence/`
-  per epic, and `board.md`, the PO's index.
+  `verifying/` -> `po-review/` -> `done/`. Also here: `archive/` and
+  `board.md`, the board's index. `dev/evidence/` holds per-epic evidence and
+  is local-only (git-ignored).
 - `.claude/autodev/` holds the PO, dev and qa role instructions.
   `.claude/workflows/autodev.js` is the workflow that runs the loop over the
   board.
@@ -47,19 +46,13 @@ so is the web dashboard at `/ui`.
 
 New work comes from the user, from `REQUIREMENTS.md` and from
 `dev/backlog/`. Each change is implemented **and tested**
-before the next starts. Commit straight to `main`.
+before the next starts. Maintainers commit straight to `main`; outside
+contributors open a pull request.
 
 **Before finishing any code change, run, in order:** `uv run ruff format .`,
 then `uv run ruff check --fix .`, then `uv run pytest -n auto`. Ruff's
 formatter is authoritative; do not hand-format or fight its output. All three
 must be clean before the work is done.
-
-When the change has its own skill, load it before writing code:
-- `engineering:developer` for writing or structuring code.
-- `engineering:qa` for tests.
-- `engineering:security` for secrets, auth, input safety and dependencies.
-- `engineering:release` for commits and CI.
-- `coding-principles` for general code philosophy.
 
 ## Tech stack
 
@@ -72,8 +65,9 @@ When the change has its own skill, load it before writing code:
 - ML in-process (extras `embed` and `cluster`): **sentence-transformers**,
   **tree-sitter** + **tree-sitter-language-pack**, **umap-learn** +
   **hdbscan**.
-- LLM providers: **anthropic**, **openai** (and compatible), and the
-  **claude** CLI (`claude-code`, billed to a Claude subscription).
+- LLM providers: `anthropic` (the **anthropic** SDK), `openai` and
+  `openai-compatible` (over httpx), and `claude-code` (the **claude** CLI,
+  billed to a Claude subscription).
 - Dashboard: server-rendered Jinja at `/ui`, no frontend build.
 - Tests: **pytest** (+ xdist, Playwright for layout). Lint and format:
   **ruff**, line length 80.

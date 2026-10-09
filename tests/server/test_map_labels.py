@@ -1,4 +1,4 @@
-"""#212: names you can tell apart, and no word on the map over another."""
+"""Names you can tell apart, and no word on the map over another."""
 
 import itertools
 import sqlite3

@@ -1,4 +1,4 @@
-"""Where an openai-shaped server's API root actually is (#152, #153).
+"""Where an openai-shaped server's API root actually is.
 
 Both spellings are in the wild and both are right: ollama's own documentation
 gives ``http://localhost:11434/v1`` while a proxy is usually configured as a

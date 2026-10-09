@@ -1,4 +1,4 @@
-"""T44.2: a `claude-code` connection validates against the CLI, not a key."""
+"""A `claude-code` connection validates against the CLI, not a key."""
 
 from pathlib import Path
 
@@ -22,7 +22,7 @@ def test_a_present_cli_validates() -> None:
 
 
 def test_a_missing_cli_is_rejected_at_write_time() -> None:
-    # #107: there is no key to check — it bills through the operator's own
+    # there is no key to check — it bills through the operator's own
     # login — so what must hold at WRITE time is that the binary runs. Without
     # this the failure surfaces hours later at condense time, on a job the user
     # has already paid to reach.
@@ -33,7 +33,7 @@ def test_a_missing_cli_is_rejected_at_write_time() -> None:
 def test_the_real_probe_reports_a_missing_binary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # #108: the probe seam proves the wiring and cannot prove the probe works.
+    # the probe seam proves the wiring and cannot prove the probe works.
     # This drives the REAL subprocess probe against an empty PATH — no CLI to
     # find, no cost, and the OSError path exercised for real.
     monkeypatch.setenv("PATH", str(tmp_path))

@@ -1,14 +1,14 @@
 """Ingest: bring a source's current content into the cache and read it.
 
 The CONTRACT every source type implements lives here, at the root of the
-package, so a per-type module (#142's syncers, #143's readers) and the ops that
+package, so a per-type module (the syncers, the readers) and the ops that
 call them can share it without importing each other. ``SyncError`` sits here
 for the reason ``ClusterError`` sits in ``cluster/__init__``.
 
 What ``split`` needs from a source is not files: it is a sequence of
 addressable UNITS, each with an identity inside the source and the bytes to
 split. Git's units are the ingestable files of its working tree; a discovery
-source's are the files of every repo it found (#147); a wiki's would be its
+source's are the files of every repo it found; a wiki's would be its
 pages.
 
 Two rules the contract carries, because hrono's identity scheme depends on
@@ -51,7 +51,7 @@ class Unit:
     """One addressable piece of a source: its identity and its bytes.
 
     ``version`` overrides the source's own, for a source whose pieces move
-    independently (#147): a discovery source holds many repos, and a repo that
+    independently: a discovery source holds many repos, and a repo that
     did not change must not be re-ingested because a sibling did.
     """
 
@@ -70,7 +70,7 @@ class Reader:
     because only the reader knows the shape of its own config. It is given the
     CACHE as well, because some identities are not in the config at all: a
     notion integration's workspace is a property of the token, learned at sync
-    time and recorded there (#150).
+    time and recorded there.
 
     ``units`` enumerates the whole source, which a full split and the diff's
     current side both need; ``unit`` fetches ONE by path, which is
@@ -80,7 +80,7 @@ class Reader:
     ``addresses_as`` is the source type a unit's URI carries, when that is not
     the source's own: a ``github-user`` source's files are git content that was
     merely FOUND through the provider API, and the spec is explicit that
-    discovery is never a piece's address (#147). Left None, a unit is addressed
+    discovery is never a piece's address. Left None, a unit is addressed
     as the type that produced it.
     """
 

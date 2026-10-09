@@ -1,9 +1,8 @@
-"""The ``prompts`` collection: prompt templates typed by pipeline role (T10.1).
+"""The ``prompts`` collection: prompt templates typed by pipeline role.
 
-Fourth and final M1 collection — secretless, again a descriptor plus a pydantic
-model on the #012 base. Default seeding and the default-reset-on-delete
-semantics are the follow-on (#021); the validation hook is a no-op stub #021 may
-fill for template sanity.
+Secretless: a descriptor plus a pydantic model on the generic registry engine.
+Each role has a seeded default, which a delete resets rather than removes; the
+validation hook refuses a template missing its role's placeholders.
 """
 
 from __future__ import annotations
@@ -40,8 +39,7 @@ class Prompt(BaseModel):
 # The placeholder each role's op injects the body at, so a stored template that
 # drops it can never silently no-op the ``template.replace`` the summarize ops
 # do. Data-driven (role -> required tokens), not a per-role branch. ``judge``
-# was deferred until its op settled its tokens; #087 propagate did — it injects
-# {source} and {summary} — so the guard now enforces them (#088).
+# is the propagate cascade's prompt, which injects {source} and {summary}.
 _REQUIRED_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
     "condense": ("{content}",),
     "brief": ("{content}",),

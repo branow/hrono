@@ -1,7 +1,7 @@
-"""The incremental placement rule (#085, T34): place only the changed chunks.
+"""The incremental placement rule: place only the changed chunks.
 
 The differentiator's efficient form. Given the section-level deltas of a change
-batch (from #083's diff, reconciled into the store) and a snapshot of the
+batch (from the source diff, reconciled into the store) and a snapshot of the
 PRE-BATCH cluster centroids, decide each changed chunk's cluster by a
 deterministic dot product — never re-running UMAP/HDBSCAN, so untouched chunks
 cannot move and churn equals changed content exactly:
@@ -9,20 +9,21 @@ cannot move and churn equals changed content exactly:
 - deleted -> its membership is already gone (reconcile cascade); the vacated
   cluster is dissolved if it drops below two members (each survivor re-placed).
 - changed -> STICKY RE-CHECK vs its own PRE-BATCH centroid: >= TAU it stays put
-  (only its brief goes stale via #064), else it re-enters the placement rule.
+  (only its brief goes stale via brief freshness), else it re-enters the
+  placement rule.
 - moved -> IN PLACE: the content is byte-identical (that is what makes it a
-  move, #083), so the topic did not change and the section keeps the node,
-  similarity and forced flag its predecessor had. Re-scoring it instead ejected
-  working members: with ALPHA 0.5 the path is half the blended vector's norm, so
-  a rename alone can drop a section under TAU and park it (#100, F27). A move
-  that lands on a new EXTENSION splits differently, so those sections arrive as
+  move), so the topic did not change and the section keeps the node, similarity
+  and forced flag its predecessor had. It must not be re-scored, because that
+  ejects working members: with ALPHA 0.5 the path is half the blended vector's
+  norm, so a rename alone can drop a section under TAU and park it. A move that
+  lands on a new EXTENSION splits differently, so those sections arrive as
   ``changed`` and take the sticky path. Content is never re-embedded either way.
 - new -> placement rule: best similarity vs cluster CENTROIDS; >= TAU joins that
-  cluster, otherwise it parks in the incubator (#086).
+  cluster, otherwise it parks in the incubator.
 
 Constants are baked (TAU 0.70). Every decision is a dot product; a cluster whose
-membership changed has its brief regenerate through the existing #064 signature
-path. Reused for dissolve-survivor and sub-TAU re-placement alike.
+membership changed has its brief regenerate through the existing brief-freshness
+signature path. Reused for dissolve-survivor and sub-TAU re-placement alike.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ class SectionDelta:
     prior_similarity: float | None = None  # the assignment as it was recorded
     prior_forced: bool = False  # ... including whether it was force-assigned
     prior_batch: int | None = None  # the batch it was parked at, if pending
-    pinned_anchor: int | None = None  # where a human holds it (#154)
+    pinned_anchor: int | None = None  # where a human holds it
 
 
 @dataclass(frozen=True)
@@ -125,7 +126,7 @@ def _apply(state: _Batch, delta: SectionDelta) -> None:
 def _held(state: _Batch, delta: SectionDelta) -> bool:
     """Place a pinned chunk where the human holds it, whatever its score.
 
-    A pin is a HARD constraint (#154): the sticky re-check and the placement
+    A pin is a HARD constraint: the sticky re-check and the placement
     rule are the machine's judgement, and this chunk is exempt from both. The
     anchor can be gone — the node was dissolved or split since — and then the
     hold has nothing to name, so it is released and the chunk takes the normal
@@ -225,10 +226,10 @@ def assign_or_park(
     model_name: str,
     batch: int,
 ) -> str:
-    """Join one chunk to its best centroid >= TAU, else park it (#086).
+    """Join one chunk to its best centroid >= TAU, else park it.
 
-    The shared placement primitive: the incremental rule (#085) and repair's
-    dissolve/re-place (#090) both route a homeless chunk through here. A join
+    The shared placement primitive: the incremental rule and repair's
+    dissolve/re-place both route a homeless chunk through here. A join
     also unparks, so a chunk that finds a home on a later pass cannot be left
     clustered AND pending.
     """
@@ -253,7 +254,7 @@ def _dissolve_sweep(state: _Batch) -> None:
             continue
         survivors = store.node_member_rows(state.conn, node_id)
         if any(section_id in held for section_id, _, _ in survivors):
-            continue  # a human holds a member here; the topic stays (#154)
+            continue  # a human holds a member here; the topic stays
         store.delete_node(state.conn, node_id)
         state.working.pop(node_id, None)
         state.dissolved += 1

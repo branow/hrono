@@ -29,8 +29,8 @@ slow tests without a real-backend reason).
 
 What is left to build comes from `$REPO/REQUIREMENTS.md` (each open line points
 at its epic) and from `$BOARD/backlog/` (what dev and qa found on the way).
-Settled decisions live in `CONTRIBUTING.md` and the spec at
-`docs/design/` (`INDEX.md` first). Never contradict them; flag
+Settled decisions live in `CONTRIBUTING.md` and the spec in
+`docs/` (`docs/README.md` first). Never contradict them; flag
 a conflict as a question instead.
 
 ## The board
@@ -47,7 +47,7 @@ verifying/    qa is gating it
 po-review/    waiting for you (review, ruling, or needs-user)
 done/         merged to main
 archive/      old one-ticket files you have folded into an epic
-evidence/     screenshots and measurements, by epic id
+evidence/     screenshots and measurements, by epic id (local, untracked)
 board.md      your index — only you write it
 ```
 

@@ -1,4 +1,4 @@
-"""The first run, as a path a person can follow without a terminal (#219).
+"""The first run, as a path a person can follow without a terminal.
 
 A fresh install has nothing registered. What it needs to reach a built tree is
 a connection, models, a source and a build; this package holds what that path

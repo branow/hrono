@@ -1,20 +1,20 @@
-"""Recall's keyword leg (T26.2): BM25 z-scored, gated by vector support.
+"""Recall's keyword leg: BM25 z-scored, gated by vector support.
 
 BM25 alone is dangerous — its background distribution is stopword matches, so
 meaningless text can score high — so a keyword hit NEVER qualifies alone. The
-frozen recipe (how-hrono-works.md): query the FTS5 index (#070) with the
-question's terms OR-ed, z-score BM25 over the MATCHED set, and qualify a passage
-only at keyword z >= 6.0 AND its vector-leg z (#072) >= 3.0. Both constants are
+frozen recipe (docs/architecture.md): query the FTS5 index with the question's
+terms OR-ed, z-score BM25 over the MATCHED set, and qualify a passage only at
+keyword z >= 6.0 AND its vector-leg z >= 3.0. Both constants are
 baked.
 
 The raw question is never passed to FTS5 MATCH (that raises on FTS5 operators or
 unbalanced quotes) — it is tokenised into bare CONTENT terms (function words
-dropped, #102), each quoted as a phrase and OR-ed, so an empty, all-punctuation
+dropped), each quoted as a phrase and OR-ed, so an empty, all-punctuation
 or all-stopword query yields no matches, not a crash.
 BM25 is negative (more negative = better), so relevance is ``-bm25`` and higher
 relevance means a higher z.
 
-IT CORROBORATES; IT DOES NOT RETRIEVE — measured, on the QA corpus (#140).
+IT CORROBORATES; IT DOES NOT RETRIEVE — measured on a ~120-section test corpus.
 ``search`` has never qualified a single passage, on any question tried, and
 there are two independent reasons:
 
@@ -28,13 +28,13 @@ there are two independent reasons:
    almost none.
 
 ``scores`` is a different matter and is LOAD-BEARING: the vector leg reads this
-z-map for corroboration (#102), and #134 measured that weakening it takes the
-eleven absent questions from 1 answered to 5, 6 or 8. So this module earns its
-place entirely through ``scores`` and the FTS index behind it.
+z-map for corroboration, and a sweep of the floors measured that weakening it
+takes the eleven absent questions from 1 answered to 5, 6 or 8. So this module
+earns its place entirely through ``scores`` and the FTS index behind it.
 
 The constants are left where they are deliberately: nothing measured says a
-different floor retrieves anything worth having, and #134's rule is to adopt no
-change that does not pay for itself against both suites.
+different floor retrieves anything worth having, and the sweep's rule is to
+adopt no change that does not pay for itself against both suites.
 """
 
 from __future__ import annotations
@@ -50,11 +50,11 @@ VECTOR_SUPPORT = 3.0
 _TERM = re.compile(r"[A-Za-z0-9]+")
 
 # Dropped from the MATCH expression, never from the passage text: BM25's
-# background is stopword matches (#073's own warning), and a question that
-# overlaps a passage only on "how to a the" is not evidence about it — which is
-# exactly how an absent question borrowed corroboration from a passage it had
-# nothing to do with (#102). Function words only: nothing domain-specific, so
-# the list needs no re-derivation for a different corpus.
+# background is stopword matches, and a question that overlaps a passage only on
+# "how to a the" is not evidence about it — which is exactly how an absent
+# question borrows corroboration from a passage it has nothing to do with.
+# Function words only: nothing domain-specific, so the list needs no
+# re-derivation for a different corpus.
 _STOPWORDS = frozenset(
     (
         "a",
@@ -144,10 +144,10 @@ def scores(
 ) -> dict[int, float]:
     """Return the keyword z of every passage the query MATCHED at all.
 
-    Below the leg's own 6.0 floor this is not a hit — it is lexical SUPPORT,
-    the mirror of the vector z #073 already requires before a keyword hit
-    counts. #102 uses it the other way round: a vector hit no term of the
-    question corroborates has to clear a higher bar.
+    Below the leg's own 6.0 floor this is not a hit — it is lexical SUPPORT, the
+    mirror of the vector z this leg already requires before a keyword hit
+    counts. The vector leg uses it the other way round: a vector hit no term of
+    the question corroborates has to clear a higher bar.
     """
     match = _match_expr(query)
     if match is None:
@@ -158,7 +158,7 @@ def scores(
 def _in_scope(
     hits: tuple[tuple[int, float], ...], scope: frozenset[int] | None
 ) -> tuple[tuple[int, float], ...]:
-    """Drop hits from other trees before the z, never after (#166)."""
+    """Drop hits from other trees before the z, never after."""
     if scope is None:
         return hits
     return tuple(hit for hit in hits if hit[0] in scope)
@@ -174,7 +174,7 @@ def _z(hits: tuple[tuple[int, float], ...]) -> dict[int, float]:
     if std == 0.0:
         # every match is equally relevant (often a single one): they are all
         # supported, none stands out. Zero is the average, which clears
-        # #102's support bar and never the leg's own 6.0 floor.
+        # the vector leg's support bar and never the leg's own 6.0 floor.
         return {pid: 0.0 for pid, _ in relevance}
     return {pid: (rel - mean) / std for pid, rel in relevance}
 

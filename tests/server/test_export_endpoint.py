@@ -1,4 +1,4 @@
-"""T31: the GET export endpoint over collapse (#078) + render (#079)."""
+"""The GET export endpoint over collapse + render."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -164,8 +164,8 @@ def test_every_manifest_path_is_relative(harness: Harness) -> None:
 def test_a_root_carrying_sections_serves_relative_paths(
     tmp_path: Path,
 ) -> None:
-    # F19 end to end: the root's own sections were served as "/<name>.md", so
-    # `hrono tree export` refused the first entry and wrote nothing at all.
+    # the root's own sections must not be served as "/<name>.md", or
+    # `hrono tree export` refuses the first entry and writes nothing at all.
     conn = open_database(tmp_path / "flat.db")
     reconcile(conn, KEY)
     token = create_user(conn, "reader", "reader")[1]
@@ -196,8 +196,8 @@ def test_a_root_carrying_sections_serves_relative_paths(
 def test_a_tree_that_is_not_built_to_one_root_fails_loudly(
     tmp_path: Path,
 ) -> None:
-    # F20: seven parentless nodes rendered ONE /brief.md and silently dropped
-    # six briefs. A forest is not a shape to render; it is a broken build.
+    # seven parentless nodes would render ONE /brief.md and silently drop six
+    # briefs. A forest is not a shape to render; it is a broken build.
     conn = open_database(tmp_path / "forest.db")
     reconcile(conn, KEY)
     token = create_user(conn, "reader", "reader")[1]
@@ -225,7 +225,7 @@ def test_a_tree_that_is_not_built_to_one_root_fails_loudly(
 
 
 def test_export_during_a_build_is_409_not_500(harness: Harness) -> None:
-    # #116: the 500 path logs at error level with a traceback, so a transient
+    # the 500 path logs at error level with a traceback, so a transient
     # mid-build read pages an operator for a tree that is simply not ready.
     conn = harness.conn
     for _ in range(2):

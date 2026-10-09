@@ -47,8 +47,8 @@ def test_size_cap_drops_oversize_files(tmp_path: Path) -> None:
 
 
 def test_custom_exclude_extends_the_defaults(tmp_path: Path) -> None:
-    # F4: a source that excludes one directory of its own used to LOSE
-    # node_modules and lockfile protection, silently, at LLM cost.
+    # a source that excludes one directory of its own must not LOSE
+    # node_modules and lockfile protection, which would cost LLM spend silently.
     tree(tmp_path)
     (tmp_path / "b.py").write_text("x")
     kept = ingestable(tmp_path, {"exclude": ["**/b.py"]})
@@ -114,7 +114,7 @@ def assets(root: Path) -> None:
 def test_assets_and_generated_code_are_ignored_by_default(
     tmp_path: Path,
 ) -> None:
-    # F5: 12 of 92 sections in the QA run were SVG path data, 13% of the
+    # on a 92-section corpus 12 sections were SVG path data, 13% of the
     # corpus AND of the condense spend, and they clustered into a junk topic.
     assets(tmp_path)
     kept = ingestable(tmp_path, None)
@@ -190,9 +190,10 @@ def _lockfile_tree(root: "Path") -> None:
 
 
 def test_lockfiles_are_not_ingested_by_default(tmp_path: Path) -> None:
-    # #118: `**/*.lock` alone missed npm's DEFAULT lockfile — typically the
+    # `**/*.lock` alone misses npm's DEFAULT lockfile — typically the
     # largest file in a JS repo and pure resolved-dependency metadata, i.e.
-    # exactly the per-section embed and condense cost #104 exists to avoid.
+    # exactly the per-section embed and condense cost the default excludes
+    # exist to avoid.
     _lockfile_tree(tmp_path)
 
     kept = ingestable(tmp_path, None)
@@ -227,9 +228,9 @@ def test_an_explicit_include_re_admits_a_lockfile(tmp_path: Path) -> None:
 def test_only_is_a_whitelist_applied_before_every_other_layer(
     tmp_path: Path,
 ) -> None:
-    # the layer that was missing: pointing hrono at a monorepo ingested all of
-    # it, because `include` RE-ADMITS what the baked groups caught and is no
-    # whitelist. Each of the three later layers would have kept a file here.
+    # without `only`, pointing hrono at a monorepo ingests all of it, because
+    # `include` RE-ADMITS what the baked groups caught and is no whitelist.
+    # Each of the three later layers would have kept a file here.
     tree(tmp_path)
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "wanted.py").write_text("keep me\n")
@@ -275,7 +276,7 @@ def test_only_never_re_admits_what_the_baked_list_catches(
 
 
 def test_only_matches_the_callers_globs_literally(tmp_path: Path) -> None:
-    # #118's case rule: the baked list is lowercased, the caller's globs are
+    # the case rule: the baked list is lowercased, the caller's globs are
     # not — and `only` is the caller's.
     (tmp_path / "Pkg").mkdir()
     (tmp_path / "Pkg" / "a.py").write_text("x\n")
@@ -287,10 +288,10 @@ def test_only_matches_the_callers_globs_literally(tmp_path: Path) -> None:
 def test_the_config_model_and_the_matcher_agree_on_the_field_name(
     tmp_path: Path,
 ) -> None:
-    # the ticket IS the name. `include` already means "re-admit what the baked
-    # groups caught", so the whitelist had to be a NEW field — and a model that
+    # the name is the contract. `include` already means "re-admit what the
+    # baked groups caught", so the whitelist is a NEW field — and a model that
     # spells it differently from the matcher validates a config the matcher
-    # then silently ignores, which is the failure that cost the money.
+    # then silently ignores, at full ingest cost.
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "a.py").write_text("x\n")
     (tmp_path / "other.py").write_text("y\n")

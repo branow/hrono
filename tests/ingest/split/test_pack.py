@@ -110,9 +110,9 @@ def test_budgets_are_hard_maxima_apart_from_crumb_overshoot() -> None:
 
 
 def test_passages_fill_the_budget_instead_of_stopping_at_a_crumb() -> None:
-    # F7: the packer used to flush a group at MIN_GROUP (100 B), capping
-    # passages at a tenth of their budget — a real corpus packed to a 152 B
-    # median with 68% under 200 B. A group is now flushed by the BUDGET alone.
+    # a group is flushed by the BUDGET alone, never at MIN_GROUP (100 B):
+    # flushing there caps passages at a tenth of their budget — a real corpus
+    # packed that way has a 152 B median with 68% under 200 B.
     for name, raw in (("code.py", CODE), ("doc.md", PROSE)):
         sizes = sorted(
             p.end - p.start for p in _passages(split(Path(name), raw))
@@ -146,7 +146,7 @@ def test_byte_chop_splits_an_atomic_span_into_marked_raw_parts() -> None:
 
 
 def test_byte_chop_survives_crumbs_flanking_an_atomic_span() -> None:
-    # the minified shape the ticket targets: tiny tokens around a huge atomic
+    # the minified shape: tiny tokens around a huge atomic
     # span (var / x / = / ; are sub-MIN_PARA crumbs that merge, and must not
     # swallow the byte-chop of the 30 KB blob between them).
     raw = b"var x=" + b"a" * 30000 + b";\n"
@@ -187,8 +187,8 @@ UNBROKEN = b"q" * 1805
 
 
 def test_a_chop_cuts_at_whitespace_not_mid_token() -> None:
-    # F8: the smallest passage in the QA corpus was b'tColor = ', a fragment of
-    # an identifier, because _chop sliced raw byte offsets with no backoff.
+    # _chop must back off to whitespace: slicing raw byte offsets yields
+    # passages like b'tColor = ', a fragment of an identifier.
     passages = _passages(split(Path("blob.txt"), TABBED))
     assert len(passages) == 2
     assert all(p.part is not None for p in passages)  # really the chop path

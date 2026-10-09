@@ -1,5 +1,5 @@
 -- A hand-edit pins what it touched, and the pipeline treats a pin as a hard
--- constraint (#154, T45). Without this a manual fix is silently reverted on
+-- constraint. Without this a manual fix is silently reverted on
 -- the next update, which is worse than not offering the edit at all.
 --
 -- One TABLE rather than a flag per table: `kind` says what is held — a brief,

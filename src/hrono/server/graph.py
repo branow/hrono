@@ -1,24 +1,24 @@
-"""Laying a tree out for the page (T50.1/.2, #183, #198, #199).
+"""Laying a tree out for the page.
 
 Arithmetic, not a library. A hierarchy drawn level by level is positions and
 line segments, and SVG is markup — so the graph is rendered by the same Jinja
 that renders everything else, with no JS dependency to vendor, review and pin.
 
 The layout is a TOP-DOWN TREE of BLOCKS: the root sits at the top and its
-children hang below it, SIDE BY SIDE, however many there are. It was a
-left-to-right dendrogram until #198 — the shape a file explorer has, which
-nobody reads as a tree — and then a shape that WRAPPED a wide family onto
-further rows to keep the whole map inside one window. Wrapping buys that width
-by putting a topic's right-hand subtree underneath its left-hand one, and two
-subtrees stacked read as one over the other rather than as siblings (#199). So
+children hang below it, SIDE BY SIDE, however many there are. It is not a
+left-to-right dendrogram — the shape a file explorer has, which nobody reads
+as a tree — and it does not WRAP a wide family onto further rows to keep the
+whole map inside one window. Wrapping buys that width by putting a topic's
+right-hand subtree underneath its left-hand one, and two subtrees stacked read
+as one over the other rather than as siblings. So
 siblings stay on one level and the canvas gets as wide as the tree needs; the
 page makes it a board the reader moves around instead.
 
 Each topic is labelled by its NAME (`hrono.naming`, the rule the export and
 every other page use), with where its sections live (`server/where.py`) on the
-line beneath (#212). Where-it-lives was the label until then, and the review
-tree had four siblings called ``src/click`` — the one thing siblings share. A
-title two siblings share carries the topic's number, so no two read alike.
+line beneath. Where-it-lives is not the label, because siblings often share
+it: a tree can have four siblings called ``src/click``. A title two siblings
+share carries the topic's number, so no two read alike.
 
 The expand state is a QUERY PARAMETER rather than client state, which is what
 makes every view of the graph a URL: bookmarkable, shareable, and testable as
@@ -96,7 +96,7 @@ class Graph:
     children sit on, and down into each of them.
 
     ``home`` is where the reader should be looking when the page opens. The
-    canvas is now as wide as the tree, so its left edge is an arbitrary place
+    canvas is as wide as the tree, so its left edge is an arbitrary place
     to start and the root is the only non-arbitrary one.
     """
 
@@ -171,7 +171,7 @@ def _roots(
     """The topics nothing points at — normally one, but never assume it.
 
     A tree mid-repair can have more than one, and drawing only the first would
-    hide exactly the state an operator opened the graph to find (#124, #163).
+    hide exactly the state an operator opened the graph to find.
     """
     parented = {child for kids in children.values() for child in kids}
     return [node for node in rows if node not in parented]
@@ -234,7 +234,7 @@ def _lay_out(
 ) -> Graph:
     """A block per topic: its own cell, then its children in ONE row beneath.
 
-    A wide family makes a wide canvas, which is the trade #199 chose: a reader
+    A wide family makes a wide canvas, which is the trade made here: a reader
     can pan a wide tree, and cannot read a subtree that was folded underneath
     its sibling.
     """
@@ -489,7 +489,7 @@ def _holds(row: sqlite3.Row) -> int:
     """What a topic contains: sections at the leaves, topics above them.
 
     One number for two kinds, because the question the size answers is "how
-    much is under here", and an upper node's members are always zero (#163).
+    much is under here", and an upper node's members are always zero.
     """
     return int(row["members"]) or int(row["kids"])
 

@@ -1,4 +1,4 @@
-"""#204: compaction trades depth for width and says what it got."""
+"""Compaction trades depth for width and says what it got."""
 
 import time
 
@@ -202,8 +202,8 @@ def broad_deep_tree() -> StoredTree:
 
 @pytest.mark.parametrize("limit", [4, 8, 12, 25])
 def test_any_hop_limit_compacts_a_big_deep_tree_quickly(limit: int) -> None:
-    # every combination of kept levels took ~15 minutes at 12 hops on a
-    # 30-level tree (qa); the choice is a shortest path now. Measured on this
+    # the choice is a shortest path, not every combination of kept levels
+    # (~15 minutes at 12 hops on a 30-level tree). Measured on this
     # tree: 4 hops 0.10 s, 8 hops 0.32 s, 12 hops 0.11 s, 25 hops 0.09 s.
     stored = broad_deep_tree()
 

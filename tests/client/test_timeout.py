@@ -1,8 +1,8 @@
-"""#168: a slow server is not a missing one.
+"""A slow server is not a missing one.
 
-`Unreachable` covered "connection refused / DNS / timeout" in one message, so
-`hrono recall` against a server that was working and merely slow told the user
-"Cannot reach hrono server" — sending them to check a process that was fine.
+A timeout must not read as "Cannot reach hrono server": that sends the user to
+check a process that is working and merely slow, so `TimedOut` is its own
+error, apart from `Unreachable` (connection refused, DNS).
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def test_a_per_request_budget_overrides_the_client_default() -> None:
 
 
 def test_a_write_budget_reaches_the_request() -> None:
-    # #199: the per-request budget must be on the wire, injected client or not.
+    # the per-request budget must be on the wire, injected client or not.
     seen: list[float | None] = []
 
     def record(request: httpx.Request) -> httpx.Response:

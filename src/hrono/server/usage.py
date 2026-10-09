@@ -1,4 +1,4 @@
-"""``GET /usage``: the ledger rolled up, for any signed-in role (#202)."""
+"""``GET /usage``: the ledger rolled up, for any signed-in role."""
 
 from __future__ import annotations
 

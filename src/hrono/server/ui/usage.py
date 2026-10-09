@@ -1,4 +1,4 @@
-"""What was spent: one page for every role, over the ledger's roll-ups (#203).
+"""What was spent: one page for every role, over the ledger's roll-ups.
 
 Everything here is a READ of `hrono.usage.rollup` — the same figures `GET
 /usage` and `hrono usage` give — worded by `spend.describe`. A page that did

@@ -1,8 +1,8 @@
-"""Link a brief's concrete facts to the section pages that settle them (E018).
+"""Link a brief's concrete facts to the section pages that settle them.
 
 A brief states TAU 0.70, an env var, a size — and the agent that reads it
 cannot name the file that says so, so it cites the brief, which cannot be
-checked (E004: 10 of 12 walk-only failures were a right answer citing
+checked (measured: 10 of 12 walk-only failures were a right answer citing
 ``root.md``). The brief is stored as the model wrote it; the export puts the
 link back in code, from the member sections the renderer already holds, so no
 link is ever written by the model and none can point at a page that is not
@@ -36,7 +36,7 @@ class FactIndex:
 
     A render cites every brief line of every node, and the same fact recurs up
     the tree; scanning every section for it each time made a 268-file export
-    take eight seconds (E018 qa). Each section is split into words once, a fact
+    take eight seconds. Each section is split into words once, a fact
     that is a single word is a dictionary lookup, and the answer is for the
     whole corpus, so a node's own subtree is a filter over it.
     """

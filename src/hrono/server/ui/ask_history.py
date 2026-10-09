@@ -1,4 +1,4 @@
-"""What the Ask page remembers about a question, and the change since (#401).
+"""What the Ask page remembers about a question, and the change since.
 
 The history is one cookie, so it is the browser's to send and is input: an
 entry that does not parse is dropped, a cookie over ``MAX_COOKIE`` is ignored

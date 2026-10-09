@@ -1,10 +1,10 @@
-"""#143: split and the diff read UNITS, not files.
+"""Split and the diff read UNITS, not files.
 
 The seam's whole claim is that a source type is a table entry. These drive the
 ops over a reader that has no filesystem behind it at all — its units are held
 in memory, as a wiki's would be behind an API — and check that what comes out
 still obeys hrono's identity rules: the URI scheme, and a section that
-reassembles byte-identically from its passages (#029).
+reassembles byte-identically from its passages.
 """
 
 from __future__ import annotations
@@ -122,8 +122,8 @@ def test_split_ingests_a_source_with_no_files_behind_it(
             ).fetchall()
         ]
     # a passage addresses the same resource as its section — position is data,
-    # not identity (#031). (The spec's `#chunk-n` fragment is not emitted by
-    # any source type today; see the backlog note filed with this ticket.)
+    # not identity. (The spec's `#chunk-n` fragment is not emitted by any
+    # source type.)
     assert passages
     assert all(u.startswith(f"wiki://{SITE}/spaces/ENG/") for u in passages)
 
@@ -131,8 +131,8 @@ def test_split_ingests_a_source_with_no_files_behind_it(
 def test_a_section_still_reassembles_from_its_passages(
     wiki: tuple[Database, JobContext, dict],
 ) -> None:
-    # #029's rule holds whatever the source is: the passages of a section tile
-    # its bytes exactly, which is what lets recall inject a passage and the
+    # the tiling rule holds whatever the source is: the passages of a section
+    # tile its bytes exactly, which is what lets recall inject a passage and the
     # tree reason over a section.
     database, context, _pages = wiki
 
@@ -188,8 +188,8 @@ def test_a_type_with_no_reader_fails_by_name(
     with database.connect() as conn, conn:
         conn.execute(
             "UPDATE registry SET config = ? WHERE name = 'docs'",
-            # an unregistered type on purpose: `notion` became real in
-            # #150, and every named type eventually does.
+            # an unregistered type on purpose: a type named here could become
+            # real, as `notion` did.
             (json.dumps({"name": "docs", "type": "sharepoint"}),),
         )
 

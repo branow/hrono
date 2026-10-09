@@ -1,4 +1,4 @@
-"""#102's data step: the member footer moves out of the brief text."""
+"""The backfill data step: the member footer moves out of the brief text."""
 
 import json
 from collections.abc import Iterator
@@ -151,4 +151,4 @@ def test_the_step_is_registered_for_the_migration_that_needs_it() -> None:
 
     versions = {m.version for m in packaged()}
     assert set(STEPS) <= versions  # no step for a migration that does not exist
-    assert STEPS  # ... and the one this ticket added is still wired
+    assert STEPS  # ... and the footer step is still wired

@@ -1,6 +1,6 @@
 """Build a ``JobContext`` the way the server does, anchored on the database.
 
-The worker resolves the cache root from the database path at startup (#098) and
+The worker resolves the cache root from the database path at startup and
 hands it to every op; tests that drive an ingest op need the same anchor, so
 they build their context here instead of relying on the process working
 directory.

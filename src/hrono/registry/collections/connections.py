@@ -1,9 +1,8 @@
-"""The ``connections`` collection: provider credentials (T8.1).
+"""The ``connections`` collection: provider credentials.
 
-A second registry instance proving the base generalizes: this is a descriptor
-plus a provider-discriminated model, wired through #012's engine with no engine
-change. Provider reachability validation is the follow-on (#016); the hook seam
-is a no-op here.
+A descriptor plus a provider-discriminated model, wired through the generic
+registry engine with no engine change. The validation hook checks the
+provider is reachable and the credential authenticates.
 
 WHICH PROVIDER TO REGISTER, and when. This is where that decision is made, so
 the numbers live here rather than only in the driver that measured them:

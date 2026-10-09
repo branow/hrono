@@ -1,8 +1,8 @@
-"""Roll the usage ledger up into the answers a person asks of it (#202).
+"""Roll the usage ledger up into the answers a person asks of it.
 
 What did this run cost, which model is the expensive one, who started the runs
 that cost the most, how many hours has a model been working. Every answer is a
-GROUP of ledger rows (#201) with the same shape: calls, tokens by kind, model
+GROUP of ledger rows with the same shape: calls, tokens by kind, model
 time, and cost.
 
 Cost keeps two kinds of money apart and never adds them. A provider billed per

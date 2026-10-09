@@ -1,9 +1,9 @@
-"""#197: every collection took `name: str`, so an EMPTY name was valid.
+"""Every collection refuses an EMPTY name.
 
-Found by creating a tree from the new settings page with the field blank: it
-was accepted, and the switcher grew an entry nobody could select, address or
-delete. The hole was never the UI's — the API had it too, in all five
-collections, because each one declared its own unconstrained `name`.
+A tree created from the settings page with the field blank would otherwise be
+accepted, and the switcher would grow an entry nobody could select, address or
+delete. The rule belongs to the API, not the UI: all five collections share
+one constrained `name` rather than each declaring an unconstrained one.
 """
 
 from __future__ import annotations

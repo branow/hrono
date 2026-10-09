@@ -1,4 +1,4 @@
-"""One HTTP GET/POST for every API-backed source type (#148, T41-T43).
+"""One HTTP GET/POST for every API-backed source type.
 
 Discovery and page sources all need the same three things from a provider
 call: a status, a parsed body, and a transport failure that arrives as a
@@ -45,7 +45,7 @@ def _send(
         )
     except httpx.HTTPError as exc:
         # the type, never the text: a url with userinfo in it would otherwise
-        # reach a job record through the message (#109)
+        # reach a job record through the message
         raise SyncError(
             f"cannot reach the provider: {type(exc).__name__}"
         ) from exc

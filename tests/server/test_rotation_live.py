@@ -1,4 +1,4 @@
-"""E021: a rotation moves the RUNNING server onto the new key.
+"""A rotation moves the RUNNING server onto the new key.
 
 Every test saves a secret through the endpoint AFTER rotating and then reopens
 the database on the new key, the way a restart does: a secret left on the old

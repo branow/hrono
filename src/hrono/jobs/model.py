@@ -2,11 +2,11 @@
 
 Every slow operation runs as a job. This is storage-facing only — the worker
 that executes jobs and the ops themselves land later. The parent-only
-``partial`` status is derived at read time (T57), never stored, so it is absent
-from ``JobStatus`` here. ``result`` is what the op DID (#132) — counts, never
+``partial`` status is derived at read time, never stored, so it is absent
+from ``JobStatus`` here. ``result`` is what the op DID — counts, never
 prose — and is deliberately not a status: status is the state machine the
 worker and the filters branch on, and a job that succeeded incompletely is
-still a job that succeeded. The one exception is `brief-preview` (#431), whose
+still a job that succeeded. The one exception is `brief-preview`, whose
 result carries the text it wrote: the preview is that text, and it has no
 place that is not the tree.
 """
@@ -39,10 +39,10 @@ class Job:
     error: str | None
     created_at: str
     updated_at: str
-    result: dict[str, object] | None = None  # what the op did (#132)
-    error_code: str | None = None  # kebab-case, the envelope's (#109)
+    result: dict[str, object] | None = None  # what the op did
+    error_code: str | None = None  # kebab-case, the envelope's
     error_details: dict[str, object] | None = None
-    started_by: str | None = None  # the user who started the run (#201)
+    started_by: str | None = None  # the user who started the run
 
 
 def serialize_scope(scope: dict[str, object]) -> str:
@@ -56,7 +56,7 @@ def deserialize_scope(text: str) -> dict[str, object]:
 
 
 def serialize_result(result: Mapping[str, object] | None) -> str | None:
-    """Serialize an op's outcome counts to the text stored on the row (#132)."""
+    """Serialize an op's outcome counts to the text stored on the row."""
     return None if result is None else json.dumps(dict(result))
 
 

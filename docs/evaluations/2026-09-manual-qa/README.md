@@ -1,7 +1,7 @@
 # Evaluation: end-to-end manual QA (September 2026)
 
 The first time hrono was driven end to end by hand, on 2026-09-03, against a
-few small real repositories, once milestones M0–M7 were in place. Every stage
+few small real repositories, once ingest, clustering, briefs, recall and the update lifecycle were in place. Every stage
 was run through the server and the API, and each failure was recorded as a
 numbered finding. These findings are the F-numbers that commits and
 `CONTRIBUTING.md` cite (F5, F21, ...).

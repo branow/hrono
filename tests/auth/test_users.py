@@ -160,8 +160,8 @@ def test_a_token_rotation_moves_modified_at_and_leaves_created_at(
 ) -> None:
     """The audit this column exists for: when was this credential last rotated.
 
-    Before #042 a rotation changed only the hash, so a token issued two years
-    ago and never touched looked exactly like one rotated this morning.
+    A rotation must move more than the hash, or a token issued two years ago
+    and never touched looks exactly like one rotated this morning.
     """
     made, _ = create_user(conn, "alice", "admin")
 

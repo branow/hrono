@@ -1,4 +1,4 @@
-"""A ledger group, worded for the page (#201, #202).
+"""A ledger group, worded for the page.
 
 One reading of a roll-up for every page that shows spend — Home, a run, the
 Usage page — so the three cannot word one run's cost three ways. Two kinds of

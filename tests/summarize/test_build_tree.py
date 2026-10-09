@@ -54,7 +54,7 @@ def make_build(labels_of: Callable[[int], list[int]]):
 
 
 def raising_build(vectors: object, *, init: object = None) -> ClusterResult:
-    """The LADDER declining to reduce — a stop, not a failure (#112, #131)."""
+    """The LADDER declining to reduce — a stop, not a failure."""
     raise TooFewPoints("too sparse")
 
 
@@ -198,7 +198,7 @@ def test_recurses_to_a_single_root(db: Database) -> None:
 
 
 def _top_is_single_root(db: Database) -> None:
-    """Every build must end with exactly one node at the top level (#082)."""
+    """Every build must end with exactly one node at the top level."""
     levels = _levels(db)
     top = max(levels)
     assert levels[top] == 1
@@ -256,8 +256,8 @@ def test_depth_is_capped_at_d_max_then_a_root_collects_the_top(
 
 
 def test_multi_top_export_is_complete_no_orphans(db: Database) -> None:
-    # the #082 defect: a multi-top stored tree orphaned sibling top nodes in
-    # export. With the collect-root fix, export sees one root and reaches all.
+    # a multi-top stored tree would orphan sibling top nodes in export. With
+    # the collected root, export sees one root and reaches all.
     from hrono.export.collapse import collapse
     from hrono.export.render import render
     from hrono.export.store import load
@@ -289,8 +289,8 @@ def test_idempotent_second_run_adds_nothing(db: Database) -> None:
 
 
 def test_real_recipe_over_a_tiny_level_declares_a_root(db: Database) -> None:
-    # #094 end to end with the REAL clusterer (no build seam): 7 briefs are
-    # below what UMAP can reduce, so cluster-briefs raises ClusterError,
+    # the ladder end to end with the REAL clusterer (no build seam): 7 briefs
+    # are below what UMAP can reduce, so cluster-briefs raises ClusterError,
     # recursion stops, and the 7 topics are collected under one root.
     with db.connect() as conn, conn:
         register(conn)
@@ -309,7 +309,7 @@ def test_real_recipe_over_a_tiny_level_declares_a_root(db: Database) -> None:
 def test_a_broken_clusterer_fails_the_build_it_does_not_truncate(
     db: Database,
 ) -> None:
-    # #131: the same defect #112 closed one level down. `build_clusters` raises
+    # the declining-ladder rule one level down. `build_clusters` raises
     # ClusterError when the reduction fails, when the clusterer fails and
     # when the backend is missing — none of which mean
     # "the current top is the root". A tree that stops early and reports success
@@ -330,7 +330,7 @@ def test_a_broken_clusterer_fails_the_build_it_does_not_truncate(
 
 def test_the_ladder_declining_still_stops_the_climb(db: Database) -> None:
     # the behaviour that must NOT change: a level too sparse to reduce means
-    # the current top is the root, and #112's type is what says so.
+    # the current top is the root, and `TooFewPoints` is what says so.
     with db.connect() as conn, conn:
         register(conn)
         seed_leaves(conn, 12)
@@ -346,16 +346,15 @@ def test_the_ladder_declining_still_stops_the_climb(db: Database) -> None:
 def test_build_tree_refuses_to_report_success_over_an_unreachable_map(
     db: Database,
 ) -> None:
-    # #124: the half that matters. `root.md`'s children are rendered from
-    # parent EDGES, so an unparented level-0 node is written to the export and
-    # unreachable in it. Reporting success over that map is the shape F16, F20
-    # and F29 all share.
+    # `root.md`'s children are rendered from parent EDGES, so an unparented
+    # level-0 node is written to the export and unreachable in it. A build
+    # must not report success over that map.
     #
     # Tested on the guard DIRECTLY, and deliberately: every route that produces
-    # the state has been closed as it was found (#114, #124's collect), so the
+    # the state is closed (attach-by-proximity, the root collect), so the
     # normal flow repairs anything plantable here. This guard exists for the
     # routes nobody has thought of yet, which is exactly the kind a front-door
-    # test cannot reach — the same reasoning as #119's `_remove`.
+    # test cannot reach.
     with db.connect() as conn, conn:
         register(conn)
         seed_leaves(conn, 3)
@@ -369,7 +368,7 @@ def test_build_tree_refuses_to_report_success_over_an_unreachable_map(
 
 
 def test_the_guard_sees_an_orphan_above_the_leaves(db: Database) -> None:
-    """#163: a detached SUBTREE passed this guard, and it is the worse case.
+    """A detached SUBTREE must fail this guard, and it is the worse case.
 
     The orphan is an upper node, so its own children are parented — to it — and
     `unparented(level 0)` is empty. Checking only the leaves read a map with a
@@ -411,7 +410,7 @@ def test_the_guard_sees_an_orphan_above_the_leaves(db: Database) -> None:
 
 
 def test_the_build_sweeps_every_level_for_orphans(db: Database) -> None:
-    """#163: the wiring, not the function.
+    """The wiring, not the function.
 
     `attach_orphans(level=1)` is tested where it lives, and proving a function
     is not proving that anything calls it — the sweep here ran `range(1)` for
@@ -510,7 +509,7 @@ def _leaf_ids(conn: object) -> list[int]:
 
 
 def test_a_one_topic_tree_is_not_an_orphan(db: Database) -> None:
-    # #112: a corpus too small to cluster builds ONE level-0 node, which IS the
+    # a corpus too small to cluster builds ONE level-0 node, which IS the
     # root. It has no parent because there is nothing above it, and the guard
     # must not read that as an unreachable map.
     with db.connect() as conn, conn:

@@ -1,8 +1,8 @@
 """Condense several sections in ONE call, and split the reply back apart.
 
 Through ``claude-code`` every call carries the CLI's own harness prompt, about
-19k cached tokens and several seconds that no prompt can remove (#107). One
-section per call paid that overhead 421 times on a 421-section build; a pack of
+19k cached tokens and several seconds that no prompt can remove. One
+section per call pays that overhead 421 times on a 421-section build; a pack of
 ``PACK_ITEMS`` pays it once per pack, and the pool still runs packs side by
 side.
 
@@ -13,15 +13,15 @@ NONCE, so a section that itself contains ``</result>`` (an XML file, a doc
 about this very format) cannot close a result early.
 
 A section whose result is missing, or talks back to the caller, is condensed
-again ALONE through ``shape.answer`` — the path every section took before
-packing — so a pack can only ever save calls, never lose a condensation or
-change what a refusal means (E015). A pack whose CALL fails is answered the
-same way, one section at a time: a pack is more likely than any one of its
-sections to run the model out of room, and one bad pack stopped an
-8505-section build 1484 sections in. A section the model cannot finish even
-alone is recorded as refused (``unfinished``), because that is a property of
-its content and a re-run would pay to fail on it again; any other failure of
-a single call still stops the op.
+again ALONE through ``shape.answer`` — the unpacked single-section path — so a
+pack can only ever save calls, never lose a condensation or change what a
+refusal means. A pack whose CALL fails is answered the same way, one section at
+a time: a pack is more likely than any one of its sections to run the model out
+of room, and one bad pack must not stop a build (one stopped an 8505-section
+build 1484 sections in). A section the model cannot finish even alone is
+recorded as refused (``unfinished``), because that is a property of its content
+and a re-run would pay to fail on it again; any other failure of a single call
+still stops the op.
 """
 
 from __future__ import annotations

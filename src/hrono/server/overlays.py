@@ -1,4 +1,4 @@
-"""Non-tree edges on the graph: pull, proximity, propagation (T50.3, #184).
+"""Non-tree edges on the graph: pull, proximity, propagation.
 
 The hierarchy is the one relationship the tree already makes obvious. These are
 the three that explain why it is WRONG: chunks that belong next door, two
@@ -6,7 +6,7 @@ siblings that are really one topic, and the path a change climbed.
 
 Opt-in per URL and computed over the VISIBLE topics only. Two of the three need
 centroids, a centroid costs every member vector it is made of, and the default
-graph (#183) stays as fast as it was.
+graph pays for none of it.
 
 The pull comparison is NOT made here: it is `monitor.verdicts`, the same rule
 the stored misfit count is made of, so the drawn edge and the number cannot

@@ -1,12 +1,12 @@
 """Where hrono's on-disk data lives — every location anchored on the database.
 
-The database file is the anchor, not the process working directory (#098, F25):
+The database file is the anchor, not the process working directory:
 the synced source clones live in ``<db parent>/cache/sources``, so two processes
 started from different directories against the same ``--db`` read and write ONE
-cache. Before this, the cache root was a module constant resolved against cwd,
-so a server started in one directory and an op driver started in another kept
-two divergent clone sets for the same database — and diffing the database
-against the stale one invented changes, including a reversed rename.
+cache. A cache root resolved against cwd would let a server started in one
+directory and an op driver started in another keep two divergent clone sets
+for the same database — and diffing the database against the stale one invents
+changes, including a reversed rename.
 
 The resolved path is absolute: it is read once at startup and then passed
 around, so nothing downstream can re-resolve it against a different cwd.
@@ -36,14 +36,14 @@ def cache_root(db_path: Path) -> Path:
 
 
 def cli_workdir(db_path: Path) -> Path:
-    """Where a subprocess LLM backend runs, anchored on the database (#107).
+    """Where a subprocess LLM backend runs, anchored on the database.
 
     The Claude Code CLI reads the project memory of whatever directory it is
     started in. Run from inside a repo carrying a ``CLAUDE.md`` it answers as
-    that project's agent — measured during the QA run, a probe of
-    ``def add(a,b): return a+b`` came back "Ready to implement T1 (SQLite
-    connection + migration runner)". So the CLI gets a directory hrono owns and
-    keeps empty, next to the cache, never the server's cwd.
+    that project's agent — a probe of ``def add(a,b): return a+b`` run from a
+    repo came back "Ready to implement" that repo's next task. So the CLI gets
+    a directory hrono owns and keeps empty, next to the cache, never the
+    server's cwd.
     """
     return db_path.parent / "cache" / "cli"
 

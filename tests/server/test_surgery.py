@@ -1,4 +1,4 @@
-"""Surgery on the tree by hand: #158's node operations and #160's section move.
+"""Surgery on the tree by hand: node operations and the section move.
 
 Several of these already existed as pipeline primitives; what is new is the
 operator's hand on them, the pin that keeps the result, and the refusals that
@@ -264,7 +264,7 @@ def test_merge_folds_members_into_the_lowest_id(
 def test_merge_leaves_no_orphaned_brief_or_passage(
     harness: tuple[Harness, dict],
 ) -> None:
-    # #125: a retired node's summary must not outlive it, and a merge retires
+    # a retired node's summary must not outlive it, and a merge retires
     # nodes the same way a rebuild does.
     h, ids = harness
     gone = max(ids["first"], ids["second"])
@@ -390,7 +390,7 @@ def test_dissolve_reports_a_member_it_could_not_place(
     harness: tuple[Harness, dict],
 ) -> None:
     # a member whose best topic scores below TAU is PARKED, not placed, and
-    # "2 members replaced" would have said it found them homes (#133).
+    # "2 members replaced" would say it found them homes.
     h, ids = harness
 
     # delta finds a home: `third` is the same subject, well above TAU
@@ -422,9 +422,9 @@ def _children(h: Harness, node: int) -> set[int]:
 def test_merging_upper_topics_carries_every_child_of_both(
     harness: tuple[Harness, dict],
 ) -> None:
-    # an upper topic's content is its CHILDREN. #158 refused this rather than
-    # guess; #163 is the rule: they come with it, or the loser's child edges
-    # cascade away and a whole subtree leaves the root and the export.
+    # an upper topic's content is its CHILDREN, so they come with it, or the
+    # loser's child edges cascade away and a whole subtree leaves the root
+    # and the export.
     h, ids = harness
     survivor = min(ids["parent"], ids["other_parent"])
     gone = max(ids["parent"], ids["other_parent"])
@@ -456,7 +456,7 @@ def test_merging_upper_topics_carries_every_child_of_both(
 
 def test_a_merge_folds_more_than_two(harness: tuple[Harness, dict]) -> None:
     # the AC says "retires the OTHERS", and every other merge test here folds
-    # exactly one, so the loop over the losers was unguarded (#158 po review).
+    # exactly one, so the loop over the losers needs its own test.
     h, ids = harness
     three = [ids["first"], ids["second"], ids["third"]]
     survivor = min(three)
@@ -524,8 +524,8 @@ def test_dissolving_the_only_topic_at_its_level_is_refused(
     harness: tuple[Harness, dict],
 ) -> None:
     # with no sibling left there is nowhere for the children to go, and doing
-    # it anyway would detach them from the root -- which is the harm #163
-    # exists to close, not a thing to do on request.
+    # it anyway would detach them from the root -- which is the harm carrying
+    # the children exists to close, not a thing to do on request.
     h, ids = harness
     h.client.post(
         f"/trees/{TREE}/nodes/{ids['other_parent']}/dissolve",
@@ -856,9 +856,9 @@ def test_a_section_move_is_admin_only(harness: tuple[Harness, dict]) -> None:
 def test_a_move_that_empties_a_topic_says_so(
     harness: tuple[Harness, dict],
 ) -> None:
-    # the pipeline retires an empty topic on its next repair and #125's trigger
-    # takes the summary with it -- but the operator holding the context only
-    # gets to act on it if anyone tells them (#165).
+    # the pipeline retires an empty topic on its next repair and the retire
+    # trigger takes the summary with it -- but the operator holding the
+    # context only gets to act on it if anyone tells them.
     h, ids = harness
 
     response = h.client.post(
@@ -876,7 +876,7 @@ def test_a_move_that_empties_a_topic_says_so(
 def test_a_chunk_from_the_pool_empties_nothing(
     harness: tuple[Harness, dict],
 ) -> None:
-    # a parked chunk came from NO topic (#164), so there is none to empty. The
+    # a parked chunk came from NO topic, so there is none to empty. The
     # note is built from `from_node`, and without this the operator would be
     # told "topic None is now empty".
     h, ids = harness
@@ -897,7 +897,7 @@ def test_a_chunk_from_the_pool_empties_nothing(
 def test_a_move_that_leaves_a_topic_standing_is_quiet(
     harness: tuple[Harness, dict],
 ) -> None:
-    # a note every time is noise that teaches people to skip notes (#167)
+    # a note every time is noise that teaches people to skip notes
     h, ids = harness
     h.client.post(
         f"/trees/{TREE}/sections/{ids['beta']}/move",
@@ -926,7 +926,7 @@ def test_the_emptied_topic_stops_answering_once_dissolved(
     """The loop the note points at, closed end to end.
 
     The note tells the operator the topic still answers recall from its
-    summary. Dissolving it is what stops that, and #125's trigger is what
+    summary. Dissolving it is what stops that, and the retire trigger is what
     makes dissolving enough — the `node://` passages go with the node.
     """
     h, ids = harness

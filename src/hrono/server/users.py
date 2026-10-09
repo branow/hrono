@@ -75,9 +75,9 @@ class RotateKey(BaseModel):
 def rotate_master_key(
     body: RotateKey, request: Request, _: Admin
 ) -> dict[str, object]:
-    """Re-encrypt every secret under a new master key (#177).
+    """Re-encrypt every secret under a new master key.
 
-    Synchronous and not the queued job the spec describes, deliberately: a
+    Synchronous rather than a queued job, deliberately: a
     job's ``scope`` is persisted, and the inputs here are two master keys. The
     secret-bearing rows are registry config — tens of them, not millions.
 

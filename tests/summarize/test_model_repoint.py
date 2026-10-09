@@ -1,4 +1,4 @@
-"""#191: repointing a model at another upstream model invalidates its briefs.
+"""Repointing a model at another upstream model invalidates its briefs.
 
 End to end through the `brief` op, not through the preview: the claim is that
 the NEXT RUN rewrites exactly the briefs the repoint changed, and a preview
@@ -149,7 +149,7 @@ def test_the_connection_is_not_part_of_the_fingerprint(db: Database) -> None:
 
 
 def test_briefs_still_agree_with_the_preview(db: Database) -> None:
-    """The count #190 shows and the work #191 does are the same set.
+    """The count the dry run shows and the work the repoint causes agree.
 
     They come from `stale_or_missing`, so this is a guard on that staying
     true rather than on two implementations happening to agree today.

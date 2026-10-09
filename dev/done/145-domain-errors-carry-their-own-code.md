@@ -64,11 +64,11 @@ Give them a code and let the boundary read it:
   Status stays 500 throughout.
 
   ONE ERROR IS NOT COVERED: `LLMError` lives in `src/hrono/llm/client.py`,
-  which this environment's sensitive-canary hook blocks every tool from reading
+  which this environment's secret-scanning hook blocks every tool from reading
   or editing (it matches `max_tokens = ...` as an env-style secret assignment —
   a false positive confirmed earlier this session). `LLMError` therefore still
   reports `internal-error`. Filed as #146; it needs the operator to prefix one
-  message with `[allow-secret]`, and is two lines once unblocked.
+  message with the hook's override tag, and is two lines once unblocked.
 
   Mutations run, all killed:
   - the `DomainError` branch removed from `as_app_error` -> 7 fail.

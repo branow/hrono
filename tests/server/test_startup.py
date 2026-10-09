@@ -102,8 +102,8 @@ def test_startup_refuses_a_wrong_master_key(tmp_path: Path) -> None:
 
 
 def test_startup_requeues_and_runs_a_job_left_running(tmp_path: Path) -> None:
-    """F24: a job whose worker died stayed `running` for ever, and the jobs
-    enqueued after it were never claimed."""
+    """A job whose worker died must not stay `running` for ever, or the jobs
+    enqueued after it are never claimed."""
     path = tmp_path / "hrono.db"
     conn = open_database(path)
     stamp = datetime.now(UTC).isoformat()
@@ -130,11 +130,11 @@ def test_startup_requeues_and_runs_a_job_left_running(tmp_path: Path) -> None:
 def test_an_injected_connection_app_has_no_cache_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # #119/#098: the last route by which a cwd-relative cache could reach a
+    # the last route by which a cwd-relative cache could reach a
     # worker. An app built from an injected connection does not own a database
     # PATH, so it must hand its ops no cache root at all rather than resolve
-    # one against the working directory — F25 was two divergent clone sets for
-    # one database, and a diff that invented a reversed rename.
+    # one against the working directory — that gives two divergent clone sets
+    # for one database, and a diff that invents a reversed rename.
     monkeypatch.chdir(tmp_path)
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)

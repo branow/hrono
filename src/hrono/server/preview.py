@@ -1,4 +1,4 @@
-"""What the settings page shows of a prompt preview (#431).
+"""What the settings page shows of a prompt preview.
 
 The preview itself is the `brief-preview` job (`summarize/brief_preview.py`).
 This is the page's two reads of it: which topics may be previewed on, and one

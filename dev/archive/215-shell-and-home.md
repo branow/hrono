@@ -22,7 +22,7 @@ Home. Answer, in order: is the tree up to date (per source: last read, the commi
 Add a regression test that loads every UI route at 1440px and 800px in a real browser and fails on horizontal overflow — the defect is otherwise guaranteed to return.
 
 ## Findings from the UI review (2026-10-03)
-Seen by driving the dashboard in headless Chromium against a copy of the `~/hrono-click` database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
+Seen by driving the dashboard in headless Chromium against a copy of the local test database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
 
 - **A** Every page is 4px wider than the window at 1440px, so a horizontal scrollbar is always there; the home page is 22px too wide at 800px. Screenshot: `admin-overview-1440-light.png`, `admin-overview-800-light.png`.
 - **A** A hint bubble opens on top of the thing it explains: the "topics" hint covers the figure 8. Screenshot: `s-overview-tip.png`.
