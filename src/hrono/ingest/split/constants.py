@@ -86,6 +86,11 @@ DEFAULT_IGNORE: dict[str, tuple[str, ...]] = {
         "**/node_modules/**",
         "**/vendor/**",
         "**/third_party/**",
+        # bower installs here; a generated SchemaSpy site ships its own copy
+        # as `bower/` — 626 sections of jquery, jquery-ui, codemirror and
+        # bootstrap across two BC Registries repos, read into the root brief
+        "**/bower_components/**",
+        "**/bower/**",
     ),
     # exact NAMES, never prefixes: a real file called
     # `package-lock.example.json` is documentation, not a lockfile (#118).

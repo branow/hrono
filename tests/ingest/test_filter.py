@@ -103,6 +103,9 @@ def assets(root: Path) -> None:
     (root / "bundle.js.map").write_text("{}")
     (root / "vendor").mkdir()
     (root / "vendor" / "dep.go").write_text("package dep\n")
+    for bower in ("bower", "bower_components"):
+        (root / "schema" / bower / "jquery").mkdir(parents=True)
+        (root / "schema" / bower / "jquery" / "jquery.js").write_text("$\n")
     (root / "api_pb2.py").write_text("# generated\n")
     (root / "client.generated.ts").write_text("// generated\n")
     (root / "main.py").write_text("print(1)\n")
