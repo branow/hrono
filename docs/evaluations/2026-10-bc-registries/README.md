@@ -56,20 +56,31 @@ identifiers, 44% bot commits on the frontend) and Helsinki Linked Events
 
 ## Setup
 
-All of it is outside the repository, in `<workspace>/`, with `scripts/` copied
-to `<workspace>/bin/`:
+All of it is outside the repository, in one workspace folder
+(`~/hrono-eval` on the machine that ran it; about 1.8 GB after stage 1,
+none of it committed), with `scripts/` copied to `bin/`:
 
-- `upstream/<repo>`: full clones from GitHub.
-- `mirror/<repo>.git`: bare repositories that hrono's git sources point at.
-  A git source fetches its remote's HEAD and has no ref option, so
+| Path | Size | What it is |
+|---|---|---|
+| `upstream/<repo>` | 282 MB | Full clones of the four repositories from GitHub. |
+| `mirror/<repo>.git` | <1 MB | Bare repositories the git sources point at (see below). |
+| `db/hrono.db` | 432 MB | The live database: tree `bcreg` after sync 0. |
+| `db/after-sync0.db` | 437 MB | A `.backup` of the state exported as `data/01-cold-build-and-sync0`. |
+| `db/snapshot-build1.db` | 431 MB | A `.backup` after the cold build, before sync 0. |
+| `db/cache/` | 246 MB | Source clones and the CLI work dir; rebuilt by a sync. |
+| `hrono.key` | | The master key for all three databases. |
+| `home/`, `token` | | CLI profile `eval` and its admin token, used through `scripts/h`. |
+| `*.start`, `*.end`, `serve*.log` | | Timestamps and server logs of each run. |
+
+- A git source fetches its remote's HEAD and has no ref option, so
   `scripts/pin.sh <date>` force-pushes the last first-parent commit before
   that date to each mirror's `main`. That is how history gets replayed.
-- `db/hrono.db`: the server's database (about 1.1 GB after stage 1, not
-  committed). `db/after-sync0.db` is a consistent `.backup` of the state
-  exported as `data/01-cold-build-and-sync0`.
+- The sources point at `mirror/` by absolute path, so a copied database
+  can be browsed and queried elsewhere but syncs only where the mirrors are.
+- The snapshots are kept to rerun a stage from a known state; the next
+  stages start from `db/hrono.db`.
 - One server, `hrono serve --port 8787`, started with
   `HRONO_LLM_CONCURRENCY=8` (4 for the first 15 minutes) under `nohup`.
-- CLI profile `eval` in `<workspace>/home`, used through `scripts/h`.
 
 Registered configuration:
 
