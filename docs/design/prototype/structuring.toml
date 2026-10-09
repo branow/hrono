@@ -1,0 +1,20 @@
+# hrono structure-aware splitting config — the knobs of structuring.py.
+# (paragraphing.toml is the RETIRED config of the rejected recursive-delimiter
+# approach, kept as research history; this file configures the settled
+# structure-aware recipe from structure-split.ipynb / storage-v2.ipynb.)
+#
+# All numbers are first-generation: chosen by eyeball review, not yet
+# empirically derived like chunking.toml's chunk_size_kb was. Revisit with
+# retrieval-quality evidence (rag-retrieval.ipynb) — especially min_group,
+# which most shapes granularity (data files may want a higher floor).
+
+[budgets]
+paragraph_bytes = 800    # ≈ 200 tokens; hard paragraph budget (crumb-merge may overshoot)
+chunk_bytes     = 10240  # chunk budget: greedy fill (traversal wants big context)
+min_para        = 64     # smaller spans merge into the preceding paragraph
+min_group       = 100    # a span this big may stand alone; grouping only rescues smaller
+
+[delimiters]
+# synthetic-structure cascade for spans without parser structure, in order
+cascade = ["\n\n", "\n", ". ", ",", " "]
+names   = ["blank-line", "line", "sentence", "comma", "word"]

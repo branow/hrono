@@ -9,7 +9,8 @@ sections at the bottom, not the handful of briefs near the root.
 The scaling is data: a ladder of rungs, each with the point count it needs.
 UMAP's spectral init asks for ``n_components + 1`` eigenvectors of an N-point
 graph, so a rung is only usable at ``N >= n_components + 2`` (measured:
-UMAP-25 fails at N = 26 and works at N = 27, `.e2e/artifacts/umap-threshold.md`)
+UMAP-25 fails at N = 26 and works at N = 27,
+`docs/evaluations/2026-09-manual-qa/reports/umap-threshold.md`)
 and ``n_neighbors`` must stay below N as well. Each rung therefore applies from
 its own floor up, and the largest rung the point count can serve wins: the
 settled recipe keeps running wherever it is valid, and a level too small for it

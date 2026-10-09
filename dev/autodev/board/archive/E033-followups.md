@@ -1,0 +1,9 @@
+# E033 followups (qa round 1, af52fd4)
+
+- The diff drops the `@@` hunk headers, so with `n=1` context the skipped lines of a long brief vanish silently and the full old text cannot be copied back from the page; show a separator (e.g. a faint `…` line) between hunks, or offer the full old text behind a Details — src/hrono/server/ui/nodes.py:418-428.
+- Each entry reads "rewritten by hand, written by model-1": the reason describes what replaced the version, the author describes who wrote it, on one line with no cue; reword e.g. "by model-1, replaced by a hand rewrite" — src/hrono/server/templates/node.html:364 and src/hrono/server/ui/nodes.py:414-420.
+- Saving a brief unchanged (or a regen returning identical text) keeps a version with an empty diff, which shows as a blank block and pushes a real version out of the five; skip the copy in `_keep_replaced` when the new text equals the stored one — src/hrono/summarize/briefs.py:503.
+- `written_at` is stored but never shown; the page's "when" is the replacement time. Either show both or drop the column — src/hrono/server/ui/nodes.py:413.
+- The `.diff-*` rules were inserted between `.chip.ok` and `.chip.warn`, splitting the chip block; move them after the chip rules — src/hrono/server/templates/base.html:371.
+- (po, user-facing, medium) A version that was itself a hand rewrite renders "rewritten by hand, written by by hand": `who` is "by hand" and the template prefixes "written by". Two hand rewrites in a row hit it; qa's run had none. Fix with the reword above and a test of two hand rewrites — src/hrono/server/ui/nodes.py:417-419, templates/node.html:364.
+- (po) Diff lines keep their `+`/`-`/space prefix in the text, so copying an old version back off the page carries the markers; render the marker via CSS or a separate span — src/hrono/server/ui/nodes.py:424.

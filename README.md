@@ -340,10 +340,10 @@ the placeholder `YOUR_TOKEN`, never yours; mint one on the Access page.
 ## Evaluating the export
 
 Whether an agent finds things in an export faster than in the raw repository
-is measured, not assumed: `.e2e/eval/` runs headless Claude Code over exports
+is measured, not assumed: `dev/eval/` runs headless Claude Code over exports
 at several hop limits and over the raw checkout, asks the same questions with
 known answers, and reports reads, tokens, time and correctness side by side.
-It costs money, so it is run by hand; [its README](.e2e/eval/README.md) says
+It costs money, so it is run by hand; [its README](dev/eval/README.md) says
 how.
 
 ## CI

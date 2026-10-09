@@ -72,12 +72,23 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 80
 src = ["src", "tests"]
+# records kept as they were written: the research prototype, the 2026-09 QA
+# harness and the first autodev loop are evidence, not code we maintain
+extend-exclude = [
+    "docs/design/prototype",
+    "docs/evaluations/2026-09-manual-qa/scripts",
+    "dev/autodev/archive",
+    "dev/autodev/board/evidence",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.format]
 docstring-code-format = true
+# the code in a document is quoted as it was: a finding, a board ticket, a
+# design note; the formatter must not rewrite the evidence it cites
+exclude = ["*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

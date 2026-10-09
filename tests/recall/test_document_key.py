@@ -2,7 +2,8 @@
 
 `_documents` used to `split("#")` the URI, on the belief that a passage
 addressed `...#chunk-3@v1`. Nothing has ever emitted that fragment: named
-fragments were considered and rejected for hrono (`rad/hrono/context.md`) since
+fragments were considered and rejected for hrono (`docs/design/context.md`)
+since
 `@version` already changes every URI on any edit, and where a passage sits
 lives in `ordinal` and `sp_paths`. The strip was therefore a no-op that only
 looked like the rule it named — and would have gone on looking right if a
