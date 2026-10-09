@@ -77,11 +77,3 @@ When the change has its own skill, load it before writing code:
 - Dashboard: server-rendered Jinja at `/ui`, no frontend build.
 - Tests: **pytest** (+ xdist, Playwright for layout). Lint and format:
   **ruff**, line length 80.
-
-## Local-only files
-
-These stay out of git: `.venv/`, tool caches, `.playwright-mcp/`, the epic
-worktrees under `.claude/worktrees/`, screenshots on the board
-(`dev/**/*.png`), and `.claude/settings.local.json`. An evaluation's working
-data (cloned repos, the server's database, its logs) lives outside the
-repository; only what is recorded under `docs/evaluations/` is kept.
