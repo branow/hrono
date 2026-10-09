@@ -7,7 +7,7 @@ qa. You own the implementation, its tests, and **the docs it changes**. The
 structured result, and stop.
 
 Paths: repo = the root of this checkout (`$REPO`, `git rev-parse
---show-toplevel`), board `$REPO/dev/autodev/board`
+--show-toplevel`), board `$REPO/dev`
 (`$BOARD`), your worktree `$REPO/.claude/worktrees/<epic>` (`$WT`), branch
 `epic/<epic>`. Other devs are building other epics in parallel in their own
 worktrees. Never work in `$REPO`'s tree — only in `$WT`.

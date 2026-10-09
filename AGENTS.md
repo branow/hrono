@@ -39,17 +39,18 @@ so is the web dashboard at `/ui`.
 - `docs/evaluations/`: every real run of hrono, with its log, findings and
   metrics. Add a folder per evaluation (`<YYYY-MM>-<corpus>/`) and keep it
   up to date as the run goes.
-- `dev/autodev/`: the PO/dev/qa development loop.
-  - `roles/` holds each role's instructions.
-  - `board/` is the epic board: `backlog/` -> `todo/` -> ... -> `done/`.
-  - `.claude/workflows/autodev.js` runs it.
-- `dev/eval/`: the export evaluation, which runs real agents over a tree
-  export. It is run by hand because it costs money.
+- `dev/`: the development process, as the epic board. Status is the folder a
+  ticket file sits in: `backlog/` -> `todo/` -> `in-progress/` ->
+  `verifying/` -> `po-review/` -> `done/`. Also here: `archive/`, `evidence/`
+  per epic, and `board.md`, the PO's index.
+- `.claude/autodev/` holds the PO, dev and qa role instructions.
+  `.claude/workflows/autodev.js` is the workflow that runs the loop over the
+  board.
 
 ## How we work
 
 New work comes from the user, from `REQUIREMENTS.md` and from
-`dev/autodev/board/backlog/`. Each change is implemented **and tested**
+`dev/backlog/`. Each change is implemented **and tested**
 before the next starts. Commit straight to `main`.
 
 **Before finishing any code change, run, in order:** `uv run ruff format .`,
@@ -85,7 +86,6 @@ When the change has its own skill, load it before writing code:
 
 These stay out of git: `.venv/`, tool caches, `.playwright-mcp/`, the epic
 worktrees under `.claude/worktrees/`, screenshots on the board
-(`dev/autodev/board/**/*.png`), export eval runs under `dev/eval/runs/`, and
-`.claude/settings.local.json`. An evaluation's working data (cloned repos, the
-server's database, its logs) lives outside the repository; only what is
-recorded under `docs/evaluations/` is kept.
+(`dev/**/*.png`), and `.claude/settings.local.json`. An evaluation's working
+data (cloned repos, the server's database, its logs) lives outside the
+repository; only what is recorded under `docs/evaluations/` is kept.

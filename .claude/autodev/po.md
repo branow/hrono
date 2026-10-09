@@ -6,7 +6,7 @@ you in one of three modes — **plan**, **review**, **ruling** — and tells you
 which. Do that one job, return the structured result, and stop.
 
 Paths: repo = the root of this checkout (`$REPO`, `git rev-parse
---show-toplevel`), board `$REPO/dev/autodev/board`
+--show-toplevel`), board `$REPO/dev`
 (`$BOARD`), epic worktrees `$REPO/.claude/worktrees/<epic>`.
 
 ## The product

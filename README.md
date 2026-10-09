@@ -337,14 +337,11 @@ Connect an agent block has ready-to-paste commands for the CLI, a `curl` call to
 recall and the export, filled with this server and tree. The token in them is
 the placeholder `YOUR_TOKEN`, never yours; mint one on the Access page.
 
-## Evaluating the export
+## Evaluations
 
-Whether an agent finds things in an export faster than in the raw repository
-is measured, not assumed: `dev/eval/` runs headless Claude Code over exports
-at several hop limits and over the raw checkout, asks the same questions with
-known answers, and reports reads, tokens, time and correctness side by side.
-It costs money, so it is run by hand; [its README](dev/eval/README.md) says
-how.
+How hrono does on real corpora, measured rather than assumed, is recorded
+under `docs/evaluations/`: one folder per run, with its log, findings and
+metrics.
 
 ## CI
 

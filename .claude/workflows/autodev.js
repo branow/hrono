@@ -32,7 +32,7 @@ const settings = {
 }
 
 // relative to the repository root, where every role's session starts
-const prompts = 'dev/autodev/roles'
+const prompts = '.claude/autodev'
 
 /**
  * Keeps up to `parallel` epics moving until the PO starts nothing new and

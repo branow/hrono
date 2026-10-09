@@ -73,12 +73,11 @@ build-backend = "uv_build"
 line-length = 80
 src = ["src", "tests"]
 # records kept as they were written: the research prototype, the 2026-09 QA
-# harness and the first autodev loop are evidence, not code we maintain
+# harness and the board's evidence are evidence, not code we maintain
 extend-exclude = [
     "docs/design/prototype",
     "docs/evaluations/2026-09-manual-qa/scripts",
-    "dev/autodev/archive",
-    "dev/autodev/board/evidence",
+    "dev/evidence",
 ]
 
 [tool.ruff.lint]
