@@ -1,0 +1,31 @@
+# hrono embedding config — which model turns a chunk into a vector.
+#
+# `name` is any Hugging Face model id usable with sentence-transformers:
+# downloaded automatically on first use (cached in ~/.cache/huggingface),
+# then loaded from disk — so swapping models is editing this one string.
+# Every model exposes the same encode(texts) -> vectors call; what differs
+# is the vector space itself, so vectors from different models must never
+# be mixed. The embeddings table stores the model name next to each vector,
+# and a model swap re-embeds instead of silently comparing across spaces.
+#
+# Qwen3-Embedding-0.6B: multilingual + code-aware, 32k-token input (our
+# largest chunks are ~2.5k tokens — no truncation), 1024-dim vectors,
+# Apache 2.0, small enough for a laptop.
+#
+# batch_size — worst-case RAM math (recalculate when swapping models):
+#   fixed:  params × 4 bytes (float32 weights, paid even at batch 1)
+#           0.6B × 4B ≈ 2.4 GB
+#   per chunk: scratch space while a chunk flows through the layers —
+#           scales with token count × hidden size × live layers, PLUS
+#           attention memory that grows with token count SQUARED when
+#           the backend doesn't use a memory-efficient attention kernel.
+#   MEASURED (this machine, Apple MPS backend): batch 32 with ~2,500-token
+#   chunks OOM'd at the 18 GB GPU-pool ceiling on the FIRST batch — i.e.
+#   real per-chunk cost was ~500 MB+, not the ~150 MB the linear estimate
+#   gave. The squared attention term dominates for big chunks. Lesson:
+#   the formula gives the floor, the empirical check gives the truth —
+#   raise from 8 only while watching memory, halve on any OOM.
+
+[model]
+name = "Qwen/Qwen3-Embedding-0.6B"
+batch_size = 8

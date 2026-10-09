@@ -1,0 +1,27 @@
+# hrono resource config — research prototype
+
+[[sources.git]]
+url = "https://github.com/octocat/Hello-World.git"
+auth = "none"
+
+[[sources.git]]
+url = "https://github.com/octocat/Spoon-Knife.git"
+auth = "none"
+
+[[sources.git]]
+url = "https://github.com/branow/webphone.git"
+auth = "none"
+
+[[sources.git]]
+url = "git@github.com:branow/football-match-mvc.git"
+auth = "ssh"
+
+
+# example of an authenticated source (not cloned unless you fill in real values):
+# [[sources.git]]
+# url = "git@github.com:acme-corp/payments-service.git"
+# auth = "ssh"
+#
+# [[sources.git]]
+# url = "https://github.com/acme-corp/docs-repo.git"
+# auth = "env:GITHUB_TOKEN"

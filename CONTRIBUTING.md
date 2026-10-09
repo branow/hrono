@@ -5,17 +5,15 @@ cost at least one round, and each keeps the ticket number that taught it —
 those citations are the evidence. A rule whose reason is lost gets deleted by
 the next person who finds it inconvenient.
 
-The day-to-day working state (current ticket, local paths, the throwaway
-prototype) lives in `CLAUDE.md`, which is deliberately not committed. This file
-is the part that outlives one machine. Files cited by bare name below
-(`rad/hrono/context.md`, `clustering-lifecycle.md`, the experiment notes) are
-the project's design workspace, outside this repository — the citation names
-the evidence, not a path a clone can open.
+Where things live, and how an agent works here, is in `AGENTS.md`. Design
+files cited by bare name below (`context.md`, `clustering-lifecycle.md`, the
+experiment notes) are in `docs/design/`, and F-numbered findings are in
+`docs/evaluations/`.
 
 ## Design decisions, settled
 
 - API: field keys `snake_case`, enum/type values `kebab-case`. Config is data you PUT; work is a job you POST — writing config never triggers work.
-- URIs are fragment-free resource addresses, canonical `<source-type>://<instance>/<path>@<version>` — no `#chunk-n`: named fragments were considered and rejected (`rad/hrono/context.md`), because `@version` already changes every URI on any edit. Position is data, not identity: it lives in a piece's `ordinal` and `sp_paths`. `hash` (raw byte range, SHA-256) is the dedup/embed-once key (#144).
+- URIs are fragment-free resource addresses, canonical `<source-type>://<instance>/<path>@<version>` — no `#chunk-n`: named fragments were considered and rejected (`docs/design/context.md`), because `@version` already changes every URI on any edit. Position is data, not identity: it lives in a piece's `ordinal` and `sp_paths`. `hash` (raw byte range, SHA-256) is the dedup/embed-once key (#144).
 - Two leaf granularities: **sections** (~10 KB, cluster/traversal unit) and **passages** (~800 B, recall injection unit); a section reassembles byte-identically from its passages.
 - A registry field declares its own label and help ON the pydantic field — `title`, a one-line `description`, `examples` where a value has a shape worth showing, and `json_schema_extra={"group": ...}` for its form section. The settings form reads them from there, so the API's validation and the page cannot drift, and `tests/registry/test_field_docs.py` fails on a field without them (#210).
 - Every word a person reads on the dashboard is one the glossary uses: `tests/server/test_ui_vocabulary.py` reads every route and fails on any word listed under "Words we do not use" in `GLOSSARY.md`, so adding a word there bans it. A number the Guide quotes comes from the constant behind it, and `tests/server/test_ui_guide.py` moves each constant to see the page follow (#216).

@@ -43,7 +43,7 @@ def _jobs(conn: sqlite3.Connection, out: Path) -> None:
     ).fetchall()
     jobs = [
         {
-            **{k: row[k] for k in row.keys() if k not in ("result",)},
+            **{k: row[k] for k in row.keys() if k != "result"},  # noqa: SIM118
             "error_details": _json(row["error_details"]),
             "result": _json(row["result"]),
         }

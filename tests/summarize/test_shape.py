@@ -173,8 +173,9 @@ QUOTED_QUESTIONS = [
 
 
 def test_the_real_f21_brief_is_still_rejected() -> None:
-    # the true positive, from the actual stored text in .e2e/run rather than a
-    # lookalike: the map's first topic was the model talking back.
+    # the true positive, from the actual stored text of the 2026-09 manual QA
+    # run rather than a lookalike: the map's first topic was the model talking
+    # back.
     assert unusable(F21) == "asks-the-caller"
 
 
@@ -212,8 +213,8 @@ def test_a_footer_cannot_hide_an_interrogating_question() -> None:
     # stored briefs carried a URI footer before #102 moved it out of the text,
     # and the sentence splitter cuts a URI at every dot — so the fragments look
     # like prose and the question stops being "last". Measured: with the tail
-    # dropped by LINE, the `.e2e/run` corpus rejects exactly F21 again, which is
-    # what the PO recorded before this change.
+    # dropped by LINE, the 2026-09 manual QA corpus rejects exactly F21 again,
+    # which is what the PO recorded before this change.
     with_footer = (
         F21 + "\n\nReferences:\n- git:///repos/chalk/media/logo.svg@661317e\n"
         "- git:///repos/itsdangerous/docs/_static/name.svg@672971d\n"

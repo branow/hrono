@@ -1,6 +1,6 @@
 """The export evaluation's grading, without an agent (E004).
 
-The runner lives under ``.e2e/eval/`` because running it costs money; what it
+The runner lives under ``dev/eval/`` because running it costs money; what it
 concludes from a transcript is plain code and is pinned here. The agent
 sessions themselves are run by hand.
 """
@@ -19,7 +19,7 @@ import pytest
 from hrono.db.database import Database
 from tests.export.test_render import _files, db  # noqa: F401 - fixture
 
-_RUNNER = Path(__file__).parents[2] / ".e2e" / "eval" / "run.py"
+_RUNNER = Path(__file__).parents[2] / "dev" / "eval" / "run.py"
 _spec = importlib.util.spec_from_file_location("export_eval", _RUNNER)
 assert _spec is not None and _spec.loader is not None
 run = importlib.util.module_from_spec(_spec)

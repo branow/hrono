@@ -1,0 +1,54 @@
+# hrono file filter — decides which files in a cloned source are even
+# candidates for chunking. Runs before chunking.toml is consulted.
+
+[limits]
+max_size_mb = 2  # files larger than this aren't worth summarizing (generated bundles/data dumps)
+
+[exclude]
+# glob patterns (Path.full_match style: * within a segment, ** across any
+# number of segments), matched against each file's path relative to the
+# source root. Any match excludes the file. One list instead of separate
+# dir/filename/extension buckets, since they're all just patterns.
+patterns = [
+    # vendored / generated directories
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/target/**",
+    "**/vendor/**",
+    "**/__pycache__/**",
+    "**/.venv/**",
+    "**/.tox/**",
+    "**/coverage/**",
+    "**/.next/**",
+    "**/.cache/**",
+
+    # machine-generated lockfiles, not source
+    "**/package-lock.json",
+    "**/yarn.lock",
+    "**/pnpm-lock.yaml",
+    "**/uv.lock",
+    "**/poetry.lock",
+    "**/Cargo.lock",
+    "**/Gemfile.lock",
+    "**/composer.lock",
+
+    # binary / media / archive / compiled — not meaningfully summarizable as text
+    "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.bmp", "**/*.ico", "**/*.webp",
+    "**/*.mp3", "**/*.mp4", "**/*.mov", "**/*.avi", "**/*.wav", "**/*.flac",
+    "**/*.zip", "**/*.tar", "**/*.gz", "**/*.tgz", "**/*.bz2", "**/*.7z", "**/*.rar", "**/*.jar", "**/*.war",
+    "**/*.class", "**/*.pyc", "**/*.pyo", "**/*.so", "**/*.dll", "**/*.dylib", "**/*.exe", "**/*.o", "**/*.a",
+    "**/*.bin", "**/*.wasm",
+    "**/*.woff", "**/*.woff2", "**/*.ttf", "**/*.eot", "**/*.otf",
+    # documents better handled by a dedicated extractor later, not raw text chunking
+    "**/*.pdf", "**/*.doc", "**/*.docx", "**/*.xls", "**/*.xlsx", "**/*.ppt", "**/*.pptx",
+]
+
+# fallback for files whose extension isn't covered by a pattern above (e.g. no
+# extension, or an unusual one): read the first few KB and exclude the file if
+# a null byte (0x00) turns up. Null bytes essentially never occur in real text
+# but are near-universal in binary formats — same heuristic git itself uses to
+# decide "is this file binary" for diffing.
+[sniff]
+enabled = true

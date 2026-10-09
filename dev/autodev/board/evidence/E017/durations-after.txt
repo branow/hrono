@@ -1,0 +1,45 @@
+after (epic/E017, -n auto, 8 cores, machine load average ~25 from other workers running tests):
+tests/client/test_http.py::test_live_round_trip_against_a_real_app
+tests/client/test_http.py::test_live_round_trip_against_a_real_app
+35.29s call     tests/cluster/test_build.py::test_recovers_planted_groups_with_full_coverage@umap
+33.66s call     tests/tree/test_settle.py::test_settle_drains_chunks_its_own_embed_pass_made_placeable@umap-tree
+3.37s call     tests/tree/test_update.py::test_ageing_measures_runs_not_changed_sources@umap-tree
+2.78s call     tests/summarize/test_condense.py::test_pending_finds_every_section_of_a_corpus_past_the_variable_limit
+2.41s call     tests/tree/test_update.py::test_update_parks_an_alien_chunk_then_ages_it_in@umap-tree
+2.03s call     tests/jobs/test_events.py::test_the_stream_follows_a_job_to_its_end
+1.90s call     tests/server/test_runs_explained.py::test_the_runs_list_reads_one_page_of_a_long_history
+1.87s call     tests/tree/test_update.py::test_update_drains_a_full_pool_in_the_same_batch@umap-tree
+1.61s call     tests/tree/test_update.py::test_n_update_runs_advance_the_batch_counter_by_exactly_n@umap-tree
+1.57s call     tests/tree/test_update.py::test_update_parks_only_the_twin_that_fits_nowhere@umap-tree
+1.07s call     tests/server/test_runs_explained.py::test_an_unchanged_rerun_reads_nothing_to_do
+1.00s setup    tests/summarize/test_unusable_condensations.py::test_the_stored_non_condensations_are_listed
+0.96s setup    tests/summarize/test_unusable_condensations.py::test_the_listing_binds_no_parameter_per_condensation
+0.95s call     tests/summarize/test_propagate.py::test_marked_ancestor_regenerates_only_the_path
+0.94s call     tests/server/test_runs_explained.py::test_a_rerun_after_an_edit_reports_only_the_edit
+0.94s setup    tests/summarize/test_unusable_condensations.py::test_a_stored_non_condensation_is_redone_and_its_readers_go_stale
+0.91s call     tests/server/test_runs_explained.py::test_a_first_build_reports_what_sync_split_and_embed_did
+0.90s call     tests/summarize/test_build_tree.py::test_depth_is_capped_at_d_max_then_a_root_collects_the_top
+0.85s call     tests/tree/test_update.py::test_a_run_over_two_changed_sources_bumps_the_counter_once@umap-tree
+0.84s call     tests/tree/test_update.py::test_a_leaf_update_drained_in_is_healed_by_the_next_settle@umap-tree
+0.80s setup    tests/tree/test_sync_chain.py::test_maintain_is_untouched
+0.79s setup    tests/server/test_ui_graph.py::test_a_root_over_several_sources_is_counted_rather_than_listed
+0.75s call     tests/server/test_ui_graph.py::test_more_than_one_root_is_drawn
+0.74s setup    tests/server/test_ui_ask.py::test_a_brief_passage_names_its_own_topic
+0.74s setup    tests/server/test_ui_ask.py::test_the_history_keeps_only_the_newest_few
+0.74s setup    tests/server/test_ui_ask.py::test_each_passage_is_labelled_as_what_it_is
+0.73s call     tests/server/test_ui_config.py::test_every_collection_is_listed
+0.73s setup    tests/server/test_ui_ask.py::test_a_long_history_cookie_is_read_only_as_far_as_the_cap
+0.73s setup    tests/tree/test_sync_chain.py::test_a_changed_file_leaves_the_tree_up_to_date
+0.72s setup    tests/tree/test_sync_chain.py::test_the_result_says_what_the_run_did
+0.70s setup    tests/tree/test_sync_chain.py::test_repair_is_reached
+0.69s setup    tests/server/test_runs_explained.py::test_a_failed_run_never_says_it_had_nothing_to_change
+0.69s setup    tests/server/test_ui_ask.py::test_the_url_reproduces_the_answer
+0.69s setup    tests/tree/test_sync_chain.py::test_repair_acts_on_what_it_finds
+0.68s setup    tests/server/test_ui_ask.py::test_a_reader_gets_passages_with_source_score_and_topic
+0.68s setup    tests/server/test_ui_graph.py::test_no_label_is_cut_by_either_edge_of_the_canvas
+0.67s setup    tests/server/test_ui_ask.py::test_a_backend_that_cannot_embed_says_what_to_do[missing]
+0.65s call     tests/cluster/test_known_groups.py::test_clustering_is_deterministic_under_the_fixed_seed@umap
+0.65s setup    tests/server/test_ui_graph.py::test_a_closed_root_draws_only_itself
+0.65s setup    tests/tree/test_sync_chain.py::test_propagate_runs_before_the_leaf_is_re_briefed
+1707 passed, 4 skipped, 68 warnings in 66.37s (0:01:06)
+real 66.65

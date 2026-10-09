@@ -1,0 +1,25 @@
+# hrono paragraphing config — splitting CHUNKS into PARAGRAPHS (the RAG-injection
+# granularity: ~100-200 tokens, vs 2-3k-token chunks for direct tree traversal).
+#
+# First iteration: identical recursive-delimiter settings as chunking.toml, only
+# the size target shrinks (sizes here are a starting guess for eyeball review in
+# paragraph-split.ipynb, NOT empirically derived like chunking.toml's — that
+# derivation happens after we've seen real split output and settled the approach).
+# paragraph_size_kb is characters/1024, same convention as chunk_size_kb.
+# 0.75 KB ≈ 768 chars ≈ 150-200 tokens.
+#
+# Same no-overlap reasoning as chunking.toml. Known suspicion going in: at this
+# granularity "\n\n" then "\n" may be too crude for code (a paragraph that cuts a
+# function in half is a bad RAG unit) — this config exists to make that visible.
+
+[categories.code]
+paragraph_size_kb = 0.75
+separators = ["\n\n", "\n", " ", ""]
+
+[categories.docs]
+paragraph_size_kb = 0.75
+separators = ["\n## ", "\n### ", "\n\n", "\n", " ", ""]
+
+[categories.data]
+paragraph_size_kb = 0.5
+separators = ["\n", ",", " ", ""]

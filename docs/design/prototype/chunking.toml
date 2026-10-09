@@ -1,0 +1,67 @@
+# hrono chunking config — recursive/hierarchical delimiter splitting
+# (LangChain RecursiveCharacterTextSplitter style, per design-sketch-v1.md).
+# chunk_size_kb is characters/1024, not a byte-accurate KB: separators split on
+# text structure, so char count is what the splitter actually walks. Values
+# below come from repo-analysis.ipynb — chunk_size_kb is the log-scale Kneedle
+# knee point.
+#
+# No chunk_overlap: the splitter only ever cuts between two whole pieces
+# (never truncates one), and every piece is the product of a real separator
+# except when a single token doesn't shrink below chunk_size_kb even after
+# splitting on spaces (e.g. a giant unbroken blob) — the only case with no
+# separator to land on. That case doesn't need a copied-bytes overlap either;
+# it needs correct reassembly of the raw-char pieces, which is a splitter
+# fix (see research.ipynb), not a config number.
+
+[default]
+category = "docs"  # extension not listed below falls back to this category
+
+[categories.code]
+chunk_size_kb = 10
+separators = ["\n\n", "\n", " ", ""]
+
+[categories.docs]
+chunk_size_kb = 10
+separators = ["\n## ", "\n### ", "\n\n", "\n", " ", ""]
+
+[categories.data]
+chunk_size_kb = 2
+separators = ["\n", ",", " ", ""]
+
+[extensions]
+# code
+".py"    = "code"
+".java"  = "code"
+".kt"    = "code"
+".js"    = "code"
+".jsx"   = "code"
+".ts"    = "code"
+".tsx"   = "code"
+".go"    = "code"
+".rb"    = "code"
+".rs"    = "code"
+".c"     = "code"
+".h"     = "code"
+".cpp"   = "code"
+".hpp"   = "code"
+".cs"    = "code"
+".php"   = "code"
+".sh"    = "code"
+".sql"   = "code"
+
+# docs / prose
+".md"    = "docs"
+".mdx"   = "docs"
+".rst"   = "docs"
+".txt"   = "docs"
+".html"  = "docs"
+
+# structured data / config
+".json"  = "data"
+".yaml"  = "data"
+".yml"   = "data"
+".toml"  = "data"
+".xml"   = "data"
+".csv"   = "data"
+".ini"   = "data"
+".cfg"   = "data"

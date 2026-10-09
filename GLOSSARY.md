@@ -1,9 +1,8 @@
 # Glossary
 
 The words hrono uses, and the ones it deliberately does not. Settled from
-the design notes (`how-hrono-works.md` and the summarization experiments,
-which live in the project's design workspace, outside this repository); this
-file is the copy a clone can actually read.
+the design notes (`docs/design/how-hrono-works.md` and the summarization
+experiments in the same folder).
 
 Several of these were renamed during development and the old names are still
 findable in early design notes. Where that happened the superseded word is

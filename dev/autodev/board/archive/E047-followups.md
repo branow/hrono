@@ -1,0 +1,2 @@
+- Commit acb2c81 carries a body with a Co-Authored-By trailer, which CONTRIBUTING's one-sentence, no-attribution commit rule forbids (git log acb2c81). Fix: drop the trailer if it is reworded at merge; stop adding it in dev commits.
+- po review: README.md:105-106 still implies the per-day count and call total are unbounded (only "the share" is said to be 30 days) and the rewrapped line runs ~93 chars; fix: "over the last 30 days, a count per day and the share it was not confident about", rewrap to 80.
