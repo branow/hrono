@@ -1,0 +1,8 @@
+MODEL        CALLS FAILED      INPUT     OUTPUT  CACHE-READ CACHE-WRITE MODEL-TIME    METERED SUBSCRIPTION*
+condense     1,240     19     12,505  3,219,230  15,085,059  15,112,221     11.13h          -        $36.51
+brief          635      8      1,254  1,292,614   6,566,372   5,464,887      2.96h          -        $27.90
+brief-upper     60      0        120    224,756     606,875   2,588,108      26.7m          -         $8.84
+judge           22      0        220     50,011     352,405      64,707       9.0m          -       $0.3664
+emb          2,208      0          0          0           0           0       6.5m          -             -
+
+* calls billed by subscription (claude-code): the API-equivalent price, an estimate, not money spent.

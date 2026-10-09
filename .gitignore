@@ -17,6 +17,10 @@
 !/src/**
 !/tests/**
 
+# Docs, including evaluation records: what a real run measured is evidence
+# the next change is judged against, so it outlives one working copy (#171).
+!/docs/**
+
 # CI. Deny-by-default means the workflow needs saying out loud or git never
 # sees it, and a workflow git cannot see never runs (#171 hit this with
 # CONTRIBUTING.md).

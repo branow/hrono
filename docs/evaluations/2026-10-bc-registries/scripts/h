@@ -1,0 +1,3 @@
+#!/bin/sh
+# hrono CLI against the eval server, with its own profile home.
+HRONO_HOME="${HRONO_EVAL:-$HOME/hrono-eval}/home" exec uv run -q --project /Users/orest/repos/hrono hrono "$@"

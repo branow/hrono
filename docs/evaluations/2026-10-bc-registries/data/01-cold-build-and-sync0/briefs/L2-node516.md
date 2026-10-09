@@ -1,0 +1,282 @@
+<!-- level 2, node 516, children [492, 496, 497, 498, 499, 501, 502, 503, 506, 508, 509, 510, 512] -->
+
+# Parent brief: BC Registries (bcgov) code, specs, deployment and tooling notes, plus a bundled-JS dump
+
+The notes below are condensed and mostly truncated or repeated. Module IDs, template variables and snippet fragments are not stable identifiers, so verify against full sources. Headings give routing signal.
+
+## 1. Bundled JavaScript dependency stacks (Browserify/webpack)
+This is minified, often truncated output. Edit the source and rebuild, not the bundle.
+- **Node core polyfills:**
+  - Streams (`readable-stream`) and EventEmitter. EventEmitter's `objectKeysPolyfill` has a bug (returns `k`).
+  - `buffer`, `safe-buffer`, `base64-js`, `ieee754`, StringDecoder, `util`, `process`, `url`, `querystring`, `punycode`.
+  - UMD wrappers for aws4, lodash, chai, loupe, oauth1, Papa and faker.
+- **Crypto:**
+  - CryptoJS: MD5, SHA family, AES, DES, PBKDF2 (1 iteration default), RC4. Load order matters.
+  - Browserify crypto polyfills: AES/GCM, RSA, DH, ECDH, asn1.js, aws4. `bn.js` (26-bit words) and `elliptic` (secp256k1, ed25519 and others).
+  - Flagged bugs: the AES `scrubVec` infinite loop, a non-constant-time `xorTest`, and the `credentialsCache` with no TTL.
+- **HTML/XML:** Cheerio rc.6, parse5, htmlparser2, `entities`, css-what, css-select, nth-check, domutils, dom-serializer, sax, xml2js and xmlbuilder.
+- **Validation and data:**
+  - Ajv draft-07 (code generation through `new Function`).
+  - Chai 4.3.3, and a Postman `pm` to k6 shim (`jsonPath` uses `eval`).
+  - Faker.js with Postman dynamic variables. Locale data defects: Spanish typos, an invalid Dutch postcode format, outdated German country names.
+  - Lodash 4.17.21, Papa Parse 5.3.2, `oauth-1.0a` (typo `parameter_seperator`) and `LruCache`.
+- **Stray items:**
+  - The `options.raw.language` setting (`json` ×20, `text` ×4).
+  - HTML spacer and footer snippets.
+  - An Alembic migration `dede70a6df1e` (`authorizations_view`, `WHERE m.status = 1`).
+  - A k6 `@apideck/postman-to-k6` manifest.
+  - A Nightwatch `elementCount` assertion.
+  - An `xml2Json` wrapper.
+- **Security hotspots:** `new Function`/`eval`, MD5/RC4/1-iteration PBKDF2, the `should` prototype modification, and the non-constant-time GCM tag comparison.
+
+## 2. SchemaSpy 6.0.0 documentation site (generated 2019-06-06)
+- **Site:** Static docs for PostgreSQL 11.2 on AdminLTE 2.x and Bootstrap 3.3.5. The `public` schema has 14 tables, 0 views and 0 routines, with 1 anomaly (`alembic_version`, a single-column table).
+- **Page scaffold:**
+  - Head: Bootstrap, Font Awesome, DataTables, CodeMirror, AdminLTE, Salvattore, `schemaSpy.css`.
+  - Top navbar: Tables, Columns, Constraints, Relationships, Orphan Tables, Anomalies, Routines.
+  - Footer with GitHub and StackOverflow links.
+- **Closing script block:**
+  - Order: jQuery 2.2.3, jQuery UI, Bootstrap, DataTables (net, `net-bs`, buttons, `buttons-bs`, html5, print, colVis), SheetJS xlsx, pdfmake plus `vfs_fonts.js`, SlimScroll, FastClick, AdminLTE `app.min.js`, Salvattore, AnchorJS, CodeMirror then `codemirror/sql.js`.
+  - Local scripts: a page-specific one (`table.js`, `column.js`, `constraint.js`, `main.js` or `routines.js`), then `schemaSpy.js` last.
+  - Load-order rules: DataTables buttons need `dataTables.net` first, `sql.js` follows `codemirror.js`, and pdfmake needs `vfs_fonts.js`.
+- **Fonts:** Indie Flower and Source Sans Pro v10 under the SIL OFL v1.1. BCSans is self-hosted from minio, and all its faces are declared `font-weight: normal`.
+- **Cautions:**
+  - The stack is end-of-life (bower, jQuery 2.2.3, Bootstrap 3.3.5, IE8 shims).
+  - Relative `../bower/` paths are fragile.
+  - `user-scalable=no` blocks zoom.
+  - Markup invalidities: `</br>` and a duplicate id.
+  - JS bugs: hardcoded column indexes, `eval()` for draggable, and a broken `$.fn.digits`.
+  - Display quirks: `'null'` shown as a string default, float8 shown as "17,17", and timestamps as "29,6".
+  - Generated output shouldn't be hand-edited.
+
+## 3. Database schemas (from SchemaSpy/DOT/XML fragments)
+- **Auth/org schema (12 tables):**
+  - Hub: `org` (FKs to `user`, `contact`, `org_type`, `org_status`, `payment_type`).
+  - Other tables: `user` (unique `keycloak_guid`), `entity` (`business_identifier`, `pass_code`), `contact`, `membership`, `affiliation`, `contact_link` (four nullable FKs).
+  - Lookups: `org_type`, `org_status`, `payment_type`, `membership_type`.
+  - Migration `e7c262b6f986` adds the STAFF and SBC_STAFF org types.
+- **Payments/fee schema (14–15 tables):**
+  - `fee_schedule` (FKs to `filing_type`, `corp_type`, `fee_code`).
+  - Billing chain: `payment_account` → `invoice` → `payment_line_item` and `receipt`.
+  - `payment` and `payment_transaction` (uuid PK).
+  - Lookups: `status_code`, `payment_method`, `payment_system`.
+  - Migration `v824f5ef280c6` inserts product code `CA_SEARCH`.
+- **Older users/actions schema:**
+  - `users` (user_id PK), `user_type`, `action`, `action_log`.
+  - `affiliation`, `affiliation_business` and `affiliation_status`.
+  - It is separate from the auth schema's `user` table.
+- **Cautions:**
+  - All FKs are restrict-delete, so deletes must run in dependency order.
+  - Row counts are mostly 0, so these are dev or schema-only snapshots.
+  - Money is stored as float8.
+  - `users.passwd` and `entity.pass_code` are probably plaintext.
+  - Possible type mismatches: `action_log.action_code` vs `action.action_code`.
+  - Redundant duplicate indexes.
+  - Arrows look reversed because of `dir=back` and `rankdir=RL`. The crow's-foot end is the FK child.
+  - Many diagrams are truncated.
+
+## 4. CI/CD (GitHub Actions, Makefiles, Jenkins, cron)
+- **Repos:** lear, sbc-auth, sbc-pay and bcregistry-sre.
+- **CI template:**
+  - Trigger: `pull_request` (assigned/synchronize) with path filters.
+  - Jobs: `setup-job` no-op gate, linting (`make pylint`, `make flake8`), testing (`make test` plus Codecov) and `build-check`.
+  - Runner `ubuntu-20.04`. Postgres 12 service. Python 3.8, 3.9.19 or 3.12. Node 20.5.1.
+  - Variants use NATS queue services, Keycloak/Docker-mock API tests, pay tests with a mock CFS, and scheduled jobs.
+- **CD:**
+  - OpenShift: `<svc>-cd-by-push` (dev) and `-by-dispatch` (dev/test/prod). `oc login` → `make cd` → `oc rollout status` → a failure-only Rocket.Chat notification.
+  - GCP: reusable workflows in `bcregistry-sre@main` (`cloud-run-service-cd`, `cloud-run-job-cd`, `backend-cd`, `backend-job-cd`, `ui-cd-node20`, `oas-ci`). Auto-deploy triggers on `feature-legal-name` and `feature-gcp` only.
+- **Makefiles:**
+  - Python/pip, Poetry and Node variants.
+  - `TAG_NAME` drives dev → test → prod via image tagging.
+  - `update-env` (1Password) was retired Oct 2024.
+- **Other tooling:**
+  - Release-drafter and ZenHub scripts.
+  - A Jenkins multibranch PR pipeline.
+  - A Jenkins-on-OpenShift setup (2.176.3, 100+ plugins).
+  - BCROS `pipeline-cli` and PR-environment cleanup webhooks.
+  - Notebook-report and sftp cronjobs (UTC). Namespaces: cc892f (lear), 6e0e49 (auth), 78c88a (pay).
+  - Containers for pay jobs and the FTP poller (Python 3.12.2, go-crond, Poetry 1.8.3).
+- **Cautions:**
+  - `TAG_NAME` is hardcoded to `dev`, so dispatch inputs for test or prod may not reach `make cd`.
+  - Push-triggered GCP workflows have no `target`.
+  - `main` is unpinned.
+  - The runner and actions are deprecated (`ubuntu-20.04`, `setup-python@v1`, `::set-output`).
+  - Many tests are commented out.
+  - `fail_ci_if_error=false` hides Codecov failures.
+  - Hardcoded test secrets.
+  - Jenkins `evaluate()` on remote code, plus command injection via `prNum`.
+  - Cron times are UTC.
+
+## 5. OpenShift/Kubernetes/Docker deployment artifacts
+- **Stack:** lear (legal-api, colin-api, entity-* queue services, jobs), coops-ui, sbc-auth (auth-api, account-mailer), sbc-pay (bcol-api, payment DB, notebook-report), NATS Streaming, PostgreSQL and Oracle 12.2.
+- **Namespaces:** `cc892f-*` (the newer Silver cluster), `6e0e49`, `78c88a`, `gl2uos-tools`, `fsxqpf-prod`, `hak2zo-dev`.
+- **Where to look:**
+  - NATS Streaming: 3 replicas, cluster `queuenet`, SQL store on Postgres.
+  - DB templates: PostgreSQL 9.6, 10 and 12.
+  - ImageStream and BuildConfig templates: docker-strategy Python builds on `python:3.8.x` via Artifactory, and S2I builds including `coops-ui` on Caddy.
+  - Deploy templates: DeploymentConfig, Service, Route and HPA, plus a DB pre-hook `pre-hook-update-db.sh`.
+  - CronJob parameter sets.
+  - RBAC bindings.
+  - Oracle container Dockerfiles.
+  - nginx configs, Docker Compose stacks (Prefect, Sentry, Jaeger, SFTP, MinIO) and `version.py` modules.
+- **Manifest fragments:**
+  - CronJob: `concurrencyPolicy: Forbid`, `batch/v1beta1`.
+  - Batch pod spec: `restartPolicy: Never`, `activeDeadlineSeconds: 1600`.
+  - Secret-backed env blocks (`${NAME}-${TAG}-secret`).
+  - HPA targeting the DeploymentConfig.
+  - Probes `/readyz` and `/healthz` on port 7070 against container port 8080.
+  - A vault-to-application mapping (shared, entity, gcp-queue, keycloak, minio, sentry, launchdarkly and others).
+- **Cautions:**
+  - Many manifests are truncated, with empty `objects` or `image` fields.
+  - Template syntax is mixed: `${VAR}`, `${{VAR}}` (numeric) and `{{VAR}}`.
+  - Namespaces and the Artifactory host are hardcoded.
+  - Min and max replicas are both 1, so autoscaling does nothing. Resource requests are tiny.
+  - EOL stacks (Python 3.7/3.8, Postgres 10, `nats-streaming`).
+  - Invalid Recreate strategy combined with `maxSurge`.
+  - Secret key mismatches (`database-username` vs `database-user`).
+  - `sslmode=disable`, a client secret in a ConfigMap, and CSP `unsafe-eval`.
+  - Defaults point at the fork `bsnopek-freshworks`.
+  - `restartPolicy: Never` plus the deadline means no retry on timeout.
+
+## 6. Logging, shell and feature flags
+- **Shell snippet:** loads `.env` with `export $line` and then `source`s it again. The double load can produce `export export`. Quoted values with spaces break. A missing `.env` gives no error, and a broken venv path doesn't halt the script.
+- **Logging INI configs:**
+  - Console handler to stdout, with a format including module, file and line.
+  - Root plus `api` or `pay_api` loggers, non-propagating.
+  - Variants add `asyncio`, `aiohttp`, `sqlalchemy.engine.Engine` and `tracing` (ERROR), and some use `bcol_api`.
+  - Logger levels override the handler's DEBUG.
+- **`setup_logging(conf)`:**
+  - Calls `fileConfig`, or prints an error to stderr when conf is missing. It never raises.
+  - Tests use `capsys` and weak `startswith` assertions.
+- **LaunchDarkly flags:** `Flags.init_app` reads `LD_SDK_KEY`. In production, a missing key silently skips initialization. Non-production falls back to a local `flags.json`.
+
+## 7. Payments (pay_api) code and tests
+- **PayBC fixtures:**
+  - Invoices 10021–10023, receipts 123451–123453, party 11111, account 4101 and site 29921.
+  - Amounts are integers, which loses cents.
+  - Duplicated fixtures.
+- **EFT short names (pay-api and pay-queue):**
+  - Models `EFTShortnames`, `EFTShortnamesHistorical` and the links model.
+  - Blueprint `/eft-shortnames` (SYSTEM/MANAGE_EFT roles). `/shortname-refund` needs `EFT_REFUND_APPROVER`.
+  - Services: historical entries, short-name actions (APPLY_CREDITS, CANCEL, REVERSE), `EFTRefundService` and a 60-day reversal window.
+  - TDI17 bank-file reconciliation. Fixed-width 140-char lines, header (1), record (2) and trailer (7), with 13 `EFTError` codes. A single error fails the whole file.
+  - Email templates for refund and reversal.
+  - Gaps: three link routes lack `@_jwt.requires_auth`, `apply_eft_credit` returns silently, and `handle_invoice_refund` misses PENDING_REFUND and CANCELLED.
+- **Pay-api tests:**
+  - Accounts (201 sync, 202 async), account fees, payment requests (all methods, fee waivers), routing slips (FAS), refunds, statements, bank-account verification, CORS, and payment-system services.
+  - Factories mostly return unsaved objects. `factory_statement` evaluates `datetime.now()` at definition time.
+  - Weak or contradictory assertions. `RefundService` has recursive getters.
+- **Pay jobs:**
+  - The runner dispatches 15 job types.
+  - Account creation and PAD activation, invoice creation, EFT link and reverse, and EJV/AP fixed-width file generation (an inverted `batch_type` filter).
+  - Routing-slip transitions, reconciliation, direct-pay refunds, and statements (weekly/monthly) with notifications.
+  - Hazards: swallowed exceptions, time-dependent logic, and an f-string SQL injection risk in the BCOL sync.
+- **bcol_api:** endpoint tests with LDAP, SOAP and JWT mocks and a hardcoded profile (PB25020). `MockLDAP.search_s` returns a scalar.
+- **auth_api tests:**
+  - Affiliation and team-member invitations, and the affiliation service.
+  - Product subscriptions with Keycloak group sync, tasks and staff review, users, and org payment integration.
+  - The autouse pub/sub mock always raises. `check_auth` is patched to True. Some tests are order-dependent.
+
+## 8. API specs (OpenAPI/JSON Schema fragments)
+- **CAS/CFS (PayBC, Oracle ORDS):**
+  - Host `heineken.cas.gov.bc.ca:7019/ords/cas/cfs/`.
+  - Hierarchy: `parties/{party}/accs/{acc}/sites/{site}/…` with conts, invs, rcpts, cms and payment.
+  - PayBC token and refund paths.
+  - Fixtures: party 11111, account 4101–4103, site 29921.
+  - Trailing spaces in HATEOAS hrefs.
+- **Pay API v1.0.7:**
+  - Paths `/fees`, `/payment-requests`, `/accounts` and `/accounts/transactions`.
+  - The `Account-Id` header is required. DELETE and refund return 202.
+  - Schemas under `bcrs.gov.bc.ca/.well_known/schemas/`, including routing_slip and EFT.
+- **FAS routing slips:**
+  - `RoutingSlip` models and services, the status transition service, the `RoutingSlipTask` and a 9-digit check-digit routine.
+  - Roles FAS_VOID, FAS_CORRECTION and FAS_REFUND_APPROVER. Self-approval is blocked.
+- **BCOL API:** `POST /profiles` and `/payments`, with the `adress.json` filename misspelled.
+- **Auth/Accounts API:**
+  - Orgs, members, users, entities, affiliations, authorizations (test ids CP0001234–CP0001239, CP0000000 unauthorized), codes and documents.
+  - Hosts `auth-api[-dev|-test].apps.silver.devops.gov.bc.ca`.
+- **Notify v1.0.0 and Report API:** `POST /Notification`, `GET /api/v1/notify/{id}` and `POST /reports`. JWT security. Requests are camelCase and responses snake_case.
+- **LEAR Business API:** business, addresses, parties, filings, documents and search. Security is `api_key` plus JWT with empty scopes.
+- **Common patterns:**
+  - Hardcoded CORS headers with Allow-Origin `*`.
+  - `ErrorResponse {code, message}`.
+  - Stub schemas.
+- **Cautions:**
+  - Truncation everywhere.
+  - No-op `^(.*)$` patterns and `default: ""` everywhere.
+  - Malformed structures: `additionalProperties` inside `properties`, and `type: object` with a `$ref`.
+  - Typos (`defaut`, `adress`, `auccountId`).
+  - Inconsistent money and date formats.
+  - External `$ref`s that must resolve.
+  - Empty `security: []`.
+  - FAS risks: swallowed exceptions, silent CORRECTION downgrade, and a `Receipt` name collision.
+- **AJV internals (unrelated):** generated-code templates and the instance API. Don't hand-edit generated code, and note that coercion mutates input.
+- **OpenSSL/TSA config:** an unrelated config.
+
+## 9. Keycloak, Postman and local dev tooling
+- **Postman collections:**
+  - "Keycloak SSO Client Creation" posts to `/auth/admin/realms/fcf0kpqr/clients`, with OIDC bodies (PKCE or confidential) and audience mappers. Environment "Keycloak-DEV" (2020 pathfinder, 2022 `dev.oidc.gov.bc.ca`).
+  - "KeyCloak User Creation - RH" and "passcode user importer" run a chain: create user → get id → reset password → get group → add to group. They are driven by CSV data (IncNumber/Passcode or corp_num/corp_type/temp_password).
+  - Stub auth-api, load-entities, api-gw-account-keys, data-reset-tool and lear-integration collections.
+  - A legal-api and pay-api set with Keycloak token scripts.
+- **Keycloak realm export ("demo", sbc-auth):**
+  - Realm roles: staff, edit, view, account_holder, premium, system, sandbox and others.
+  - Groups: product groups (bca, vs and mhr_*) grant `edit`.
+  - Clients: `sbc-auth-web` (placeholder secret `1111111111`) and `sbc-auth-admin` (service account, `2222222222`).
+  - Protocol mappers include hardcoded ones (`CORP_TYPE`='CP', `preferred_username`='sbc-auth-admin') and the audience `sbc-auth-web`.
+- **Local dev:**
+  - Docker Compose: Keycloak on 8081 (12.0.2, 15.0.0 or 16.1.0), nginx on 8080, and Stoplight Prism mocks on 4010 (notify, bcol, pay, reports, paybc, auth). Optional NATS, MinIO, SFTP and a Pub/Sub emulator.
+  - A startup script polls the realm URL.
+- **Code:**
+  - The Python auth-api `KeycloakService` (users, groups, async bulk updates, OTP, `create_client`), `remove_users.py` and a deprecated Flask endpoint.
+  - Vue/TypeScript Axios clients, services and Pinia stores.
+- **Cautions:**
+  - Plaintext secrets appear in environments and compose files (`sbc-auth-cron-job`, `minio123`, `test_staff`). Rotate them.
+  - Hosts and the hardcoded realm `fcf0kpqr` differ between exports, so confirm the target.
+  - Exports are old, and Keycloak 12 is EOL.
+  - Unset variables are sent literally.
+  - `jsonData[0].id` is unguarded.
+  - Passcodes lose leading zeros.
+  - `OVERWRITE_EXISTING` wipes the realm.
+  - Mapper pitfalls: hardcoded mappers override real data, and `aud-sbc-auth-web-mapper-REMOVE` is still active.
+
+## 10. Test-support and test suites (legal_api, entity-filer, emailer, auth_api, pay_api, colin_api)
+- **Flags and tooling:**
+  - Fixture flags (`string-flag`, `bool-flag`, `integer-flag`).
+  - Business flags: `enable-involuntary-dissolution`, `enable-legal-name-fix`, `namex-nro-decommissioned`, `enable-eft-payment-method`, `disable-nr-check`.
+  - A pytest debug config.
+  - LaunchDarkly `Flags` service tests.
+- **Test infrastructure:**
+  - Fixtures: session-scoped `app`/`db`, a per-test SAVEPOINT session, Docker mocks (keycloak, minio, stan), FakeOidc.
+  - Skip markers: `skip_in_pod`, `RUN_*_TESTS`, `oracle_integration`.
+  - Config tests, CORS preflight, `/ops` health, and MinioService.
+- **legal_api filing validation:**
+  - A router plus about 25 per-type validators.
+  - Suites for amalgamation, continuation in/out, incorporation, alteration, changes, dissolution, restoration, special resolution, AGM, annual report, firms and corrections.
+  - Address and share-class matrices, fee codes, `get_allowed_filings` permission matrices, and digital credentials.
+- **entity-filer:** processor tests for CRA/BN (`retry_number=9`), corrections, conversion, incorporation, registration, amalgamation, restoration, dissolution, put-back-on, change of address, transition, continuation-in and CCO.
+- **Email/queue:** the emailer `process()` function and CloudEvents-style payloads.
+- **Models and endpoints:** batch/furnishing, party/resolution/comment, review, DCConnection and RequestTracker model tests. v1 and v2 business endpoints, admin/reviews, MRAS, filing documents, ledger, reports and namex.
+- **auth_api and pay_api:** auth models, schemas and utilities, and pay model tests (CorpType, FilingType, PaymentMethod, Receipt, NSF). Also a pay runbook and the Zenhub release sync script.
+- **Cautions:**
+  - Heavy mocking without call assertions.
+  - Shared module-level templates need `deepcopy`.
+  - Cut-off parametrize decorators and undefined helpers (`COA_FILING`, `base_url`).
+  - Duplicated test ids.
+  - Known bugs:
+    - `lists_are_equal` only checks the last pair.
+    - `create_party` has a condition bug.
+    - `premium_user_mock` has a syntax error.
+    - Missing comma in `('PAID')('COMPLETED')`.
+    - `DATABASE_TEST_PORT="543313"` is likely a typo.
+  - Skip markers skip on a falsy or `'False'` value, and production flags silently disable without an SDK key.
+  - Validators return `None` on success. Correction filings bypass the other validations.
+  - Staff and general-user permissions differ, and general users get none on HISTORICAL businesses.
+  - Date and timezone logic is fragile (DST, UTC, `utcnow`).
+  - Test-only secrets in source.
+
+## Global cautions
+- Almost all fragments are truncated, duplicated or auto-generated. Confirm full sources, branches and hosts before acting.
+- Hardcoded test credentials and placeholder secrets appear throughout. Never commit real ones, and rotate any that may be real.
+- Many stacks are end-of-life (Bower, Bootstrap 3, jQuery 2, Python 3.7/3.8, Keycloak 12, `ubuntu-20.04`, `batch/v1beta1`).
+- Generated artifacts (SchemaSpy output, Ajv code, bundles) should be regenerated, not edited.

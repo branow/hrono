@@ -1,0 +1,10 @@
+RUN                                                      CALLS FAILED      INPUT     OUTPUT  CACHE-READ CACHE-WRITE MODEL-TIME    METERED SUBSCRIPTION*
+job_39bf368fab544b61af014e8b7a5963bc maintain by admin     780      8      5,103  1,768,910   9,625,521   7,480,091      5.49h          -        $26.73
+job_67c3ea34e605409eadd3c3ac628f9c3b maintain by admin     458     16      4,408  1,175,509   5,117,291   5,783,922      3.93h          -        $13.62
+job_24ce131b3eb041ce86e3ce0529ee268a sync-tree by admin    187      0        542    477,176   2,005,458   2,632,710      59.8m          -        $11.39
+job_e90ed0a19c41462d9acd7fa574b939ce maintain by admin     345      0        306    407,730   1,545,778   2,458,196      49.6m          -        $10.53
+job_19f5efd9f953454882a2c8c49ed104cf maintain by admin   2,245      1      2,272    574,022   2,637,732   2,897,313      2.02h          -         $6.76
+job_a161f1991926470aa88ec46669ca9f47 maintain by admin     146      2      1,444    382,821   1,650,080   1,948,840      1.52h          -         $4.52
+(unknown)                                                    4      0         24        443      28,851      28,851      18.5s          -       $0.0604
+
+* calls billed by subscription (claude-code): the API-equivalent price, an estimate, not money spent.

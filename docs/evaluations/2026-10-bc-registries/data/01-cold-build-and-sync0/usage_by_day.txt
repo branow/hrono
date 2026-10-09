@@ -1,0 +1,5 @@
+DAY         CALLS FAILED      INPUT     OUTPUT  CACHE-READ CACHE-WRITE MODEL-TIME    METERED SUBSCRIPTION*
+2026-10-08  3,633     27     13,251  3,901,705  19,059,475  18,139,017     12.97h          -        $51.69
+2026-10-09    532      0        848    884,906   3,551,236   5,090,906      1.82h          -        $21.92
+
+* calls billed by subscription (claude-code): the API-equivalent price, an estimate, not money spent.
