@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 
+from hrono.jobs import store as jobs_store
 from hrono.jobs.ops import JobContext
 from hrono.llm.claude_code import ClaudeCodeClient
 from hrono.llm.client import AnthropicClient, Completion, LLMError
@@ -103,7 +104,26 @@ def _claude_code(context: JobContext) -> Completion:
     The working directory is anchored on the database rather than the process
     cwd, because the CLI reads the project memory of wherever it starts (#107).
     """
-    return ClaudeCodeClient(context.cli_dir())
+    return ClaudeCodeClient(context.cli_dir(), wanted=_still_running(context))
+
+
+def _still_running(context: JobContext) -> Callable[[], bool]:
+    """Whether the job a call belongs to still wants its answer.
+
+    The claude-code client can wait hours out a usage limit; a run that was
+    stopped meanwhile must not keep it waiting. No job (a validation probe, a
+    direct call) wants it for as long as the caller waits.
+    """
+    job_id = context.job_id
+    if job_id is None:
+        return lambda: True
+
+    def running() -> bool:
+        with context.database.connect() as conn:
+            row = jobs_store.get(conn, job_id)
+        return row is None or row["status"] == "running"
+
+    return running
 
 
 def _openai(context: JobContext) -> Completion:

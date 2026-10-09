@@ -46,6 +46,7 @@ the exit code alone.
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import time
 from collections.abc import Callable
@@ -71,6 +72,17 @@ MAX_TURNS = 3
 # overloaded (529), unavailable (503). Waited out on BACKOFF, seconds apart.
 BUSY = frozenset({"429", "503", "529"})
 BACKOFF = (10.0, 30.0, 90.0)
+# A subscription's usage limit answers 429 for HOURS, not seconds: a 4-hour
+# build of 8505 sections died at brief 367 of 489 on one, after its backoff
+# was spent. Past BACKOFF the client keeps asking every PATIENT_WAIT seconds
+# until PATIENCE seconds of waiting in all — a subscription window is at most
+# five hours — so the run resumes by itself when the window resets.
+PATIENT_WAIT = 300.0
+PATIENCE = 6 * 3600.0
+WAITS = (
+    *BACKOFF,
+    *(PATIENT_WAIT,) * math.ceil((PATIENCE - sum(BACKOFF)) / PATIENT_WAIT),
+)
 # What the CLI is, when hrono is driving it. Every caller in `summarize` asks
 # for the empty system prompt — meaning "no instructions of my own, they are
 # all in the content" — and the empty string is exactly what must NOT be
@@ -99,11 +111,13 @@ class ClaudeCodeClient:
         run: Runner | None = None,
         timeout: float = TIMEOUT,
         pause: Callable[[float], None] = time.sleep,
+        wanted: Callable[[], bool] = lambda: True,
     ) -> None:
         self._workdir = workdir
         self._run = run if run is not None else _subprocess
         self._timeout = timeout
         self._pause = pause
+        self._wanted = wanted
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         """One answer, waiting out a rate limit rather than failing on it.
@@ -111,15 +125,17 @@ class ClaudeCodeClient:
         The SDK providers retry a 429 on their own; the CLI does not, and on
         an 8505-section build one 429 stopped condense 4534 sections in, while
         the very next call went through. A BUSY upstream is waited out on
-        ``BACKOFF``; every other failure is raised at once.
+        ``WAITS`` — seconds at first, then for as long as a usage window
+        lasts — unless ``wanted`` says the run asking has been stopped; every
+        other failure is raised at once.
         """
         self._workdir.mkdir(parents=True, exist_ok=True)
         argv = _argv(request)
-        for wait in (*BACKOFF, None):
+        for wait in (*WAITS, None):
             try:
                 return _read(*self._call(argv, request.content))
             except _Busy as busy:
-                if wait is None:
+                if wait is None or not self._wanted():
                     raise LLMError(str(busy)) from busy
                 self._pause(wait)
         raise AssertionError  # unreachable: the last pass returns or raises

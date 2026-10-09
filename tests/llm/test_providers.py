@@ -1,6 +1,7 @@
 """T44: a model's connection decides its completion client — map, not branch."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,7 @@ from cryptography.fernet import Fernet
 
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
+from hrono.jobs import store as jobs_store
 from hrono.llm.claude_code import ClaudeCodeClient
 from hrono.llm.client import AnthropicClient, LLMError
 from hrono.llm.providers import client_for
@@ -110,3 +112,20 @@ def test_an_unsupported_provider_is_one_llm_error(
 
     with pytest.raises(LLMError, match="unsupported provider"):
         client_for(job_context(db, tmp_path), _model("future"), "brief")
+
+
+def test_the_cli_client_stops_waiting_once_its_job_is_stopped(
+    db: Database, tmp_path: Path
+) -> None:
+    # a usage limit is waited out for hours; a run canceled meanwhile must
+    # not keep its call waiting. The predicate reads the REAL jobs row.
+    with db.connect() as conn, conn:
+        jobs_store.insert(conn, "jw", None, None, "condense", "{}", "t")
+        jobs_store.claim_next(conn, "t")
+    context = replace(job_context(db, tmp_path), job_id="jw")
+    wanted = client_for(context, _model("cli"), "brief").inner._wanted  # noqa: SLF001
+
+    assert wanted() is True
+    with db.connect() as conn, conn:
+        jobs_store.reclaim(conn, None, "t")  # out of running, as a stop is
+    assert wanted() is False

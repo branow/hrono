@@ -12,6 +12,7 @@ from hrono.llm.claude_code import (
     MAX_TURNS,
     SYSTEM,
     TIMEOUT,
+    WAITS,
     ClaudeCodeClient,
 )
 from hrono.llm.claude_code import _argv as cli_argv
@@ -314,18 +315,35 @@ def test_a_rate_limit_is_waited_out_and_the_answer_returned(
     assert waits == list(BACKOFF[:2])
 
 
-def test_a_rate_limit_that_outlasts_the_backoff_fails_the_call(
+def test_a_usage_window_is_waited_out_for_hours_then_given_up(
     tmp_path: Path,
 ) -> None:
-    runner = Replies(*[_status(429)] * (len(BACKOFF) + 1))
+    # a subscription's usage limit answers 429 for hours: a build died at
+    # brief 367 of 489 once a 130-second backoff was spent.
+    runner = Replies(*[_status(429)] * (len(WAITS) + 1))
     waits: list[float] = []
     client = ClaudeCodeClient(tmp_path, run=runner, pause=waits.append)
 
     with pytest.raises(LLMError, match="429"):
         client.complete(_request())
 
-    assert runner.calls == len(BACKOFF) + 1
-    assert waits == list(BACKOFF)
+    assert runner.calls == len(WAITS) + 1
+    assert waits[: len(BACKOFF)] == list(BACKOFF)
+    assert sum(waits) >= 5 * 3600  # outlasts a five-hour usage window
+
+
+def test_a_run_stopped_while_waiting_stops_waiting(tmp_path: Path) -> None:
+    runner = Replies(*[_status(429)] * 5)
+    waits: list[float] = []
+    asked = iter([True, True, False])
+    client = ClaudeCodeClient(
+        tmp_path, run=runner, pause=waits.append, wanted=lambda: next(asked)
+    )
+
+    with pytest.raises(LLMError, match="429"):
+        client.complete(_request())
+
+    assert runner.calls == 3 and len(waits) == 2
 
 
 def test_a_failure_that_is_not_busy_is_not_retried(tmp_path: Path) -> None:
