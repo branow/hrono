@@ -1,9 +1,9 @@
-"""#188 (T56, edit half): rename, brief, notes and hand-back from the page.
+"""Rename, brief, notes and hand-back from the page.
 
 Every assertion is made against the STORE the operation writes, not against
 the page that reports it. A UI that wrote `nodes.title` directly would render
 a correct page and lose the name on the next regeneration — which is the whole
-reason `edits.rename` pins the brief (#156).
+reason `edits.rename` pins the brief.
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         # The worker polls the SAME adopted connection this fixture writes
         # through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         browser = Browser(client, tokens, conn)
@@ -121,7 +121,7 @@ def test_a_rename_pins_the_brief_so_it_cannot_be_re_derived(
     browser: Browser,
 ) -> None:
     """The name is derived from the brief, so a rename that does not pin it is
-    a silent revert waiting for the next regeneration (#156)."""
+    a silent revert waiting for the next regeneration."""
     browser.sign_in()
 
     browser.post("rename", title="Named by hand")
@@ -130,7 +130,7 @@ def test_a_rename_pins_the_brief_so_it_cannot_be_re_derived(
 
 
 def test_a_hand_written_brief_reaches_recall(browser: Browser) -> None:
-    """Not just the page: the brief is what recall answers from (#071/#125)."""
+    """Not just the page: the brief is what recall answers from."""
     browser.sign_in()
 
     browser.post("brief", text="What an operator actually knows about this.")
@@ -281,7 +281,7 @@ def test_a_note_is_shown_as_text_not_markup(browser: Browser) -> None:
 def test_a_rewritten_brief_shows_the_old_text_and_what_changed(
     browser: Browser,
 ) -> None:
-    """E033: the page that wrote a brief can show what it replaced."""
+    """The page that wrote a brief can show what it replaced."""
     browser.sign_in()
     assert "Previous versions" not in browser.page()
 

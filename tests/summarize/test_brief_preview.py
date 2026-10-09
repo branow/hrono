@@ -1,4 +1,4 @@
-"""#431: the `brief-preview` op writes what an unsaved prompt would, and keeps
+"""The `brief-preview` op writes what an unsaved prompt would, and keeps
 nothing of it.
 
 The guard that matters is the negative one, so every test that runs the op

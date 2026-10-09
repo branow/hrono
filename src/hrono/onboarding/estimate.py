@@ -1,13 +1,13 @@
-"""What a first build would cost, said before it starts (#219).
+"""What a first build would cost, said before it starts.
 
 An ESTIMATE, and it says what it rests on. The only thing known exactly is how
 many sections the files cut into — counted by the same cut a split stores
 (`split_op.sections_of`). Everything else is a per-call size and time that was
 MEASURED on real builds and is baked below: no install has a history to
 project from before its first build, and an invented number shown to someone
-deciding whether to spend is worse than none (#192's rule).
+deciding whether to spend is worse than none.
 
-Money is the price table of #202 applied to those tokens, and keeps its two
+Money is the usage price table applied to those tokens, and keeps its two
 kinds apart: a metered provider's figure is what the build would be billed, a
 subscription's is the API-equivalent estimate and is never called spend.
 """
@@ -28,8 +28,8 @@ from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 from hrono.usage.prices import from_config, price_for
 from hrono.usage.rollup import SUBSCRIPTION
 
-# Measured on a real build of a 52-section repository through claude-code
-# (E013): 3 leaf topics and one root, 226 s. Bytes of code or prose per token.
+# Measured on a real build of a 52-section repository through claude-code:
+# 3 leaf topics and one root, 226 s. Bytes of code or prose per token.
 BYTES_PER_TOKEN = 3.5
 # Tokens the model WRITES per call, by how the provider is reached. Through the
 # CLI the count includes work the answer does not show (a 760-character
@@ -44,7 +44,7 @@ TEXT = {"condense": 220, "brief": 1670}
 # How many sections a leaf topic holds, and how many topics an upper one.
 SECTIONS_PER_TOPIC = 15
 UPPER_FANOUT = 8
-# A claude-code call carries a fixed harness prompt (#107), billed as cache:
+# A claude-code call carries a fixed harness prompt, billed as cache:
 # read at the cache rate, plus the part written fresh.
 HARNESS_READ = 11000
 HARNESS_WRITE = 3000

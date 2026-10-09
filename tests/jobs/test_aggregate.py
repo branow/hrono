@@ -1,4 +1,4 @@
-"""#172 (T57.1): what a parent job's children add up to.
+"""What a parent job's children add up to.
 
 A pure function over statuses, so the rules can be stated as a table rather
 than constructed a database at a time. The HTTP half is in

@@ -24,7 +24,7 @@ Each item states whether automation will deal with it on the next sync or whethe
 Regenerating one brief needs a way to run `brief` / `brief-upper` scoped to one topic; add the scope if the op lacks it.
 
 ## Findings from the UI review (2026-10-03)
-Seen by driving the dashboard in headless Chromium against a copy of the `~/hrono-click` database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
+Seen by driving the dashboard in headless Chromium against a copy of the local test database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
 
 - **B** Passing checks read as nonsense: "0 topics nothing points at", "0 sections placed without a score".
 - **B** Items are links to somewhere else; nothing can be fixed here.

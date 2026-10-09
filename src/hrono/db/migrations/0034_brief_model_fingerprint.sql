@@ -1,9 +1,9 @@
--- #191: a brief's provenance recorded the model's registry NAME and nothing
--- about what that name pointed at, so repointing a model at another upstream
--- model marked nothing stale and one tree quietly held two generations of
--- words under one name. `model_fingerprint` hashes the part of the model
--- config that decides the WORDS -- the upstream `model` string and `params` --
--- and `_is_fresh` compares it beside `prompt_hash`.
+-- A brief's provenance records the model's registry NAME, which says nothing
+-- about what that name points at, so without this repointing a model at another
+-- upstream model would mark nothing stale and one tree would hold two
+-- generations of words under one name. `model_fingerprint` hashes the part of
+-- the model config that decides the WORDS -- the upstream `model` string and
+-- `params` -- and `_is_fresh` compares it beside `prompt_hash`.
 --
 -- NULL is not staleness. Every brief written before this column existed has
 -- one, and invalidating the lot on upgrade would be a re-brief bill nobody

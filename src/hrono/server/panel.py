@@ -1,7 +1,7 @@
-"""One topic, read beside the map rather than instead of it (#199).
+"""One topic, read beside the map rather than instead of it.
 
-Clicking a topic used to leave the map for the topic page, which throws away
-the thing the click was asking a question about — where that topic sits. The
+Clicking a topic must not leave the map for the topic page, because that throws
+away the thing the click is asking a question about — where that topic sits. The
 map answers it in place instead: `?focus=<id>` renders this panel next to the
 canvas, and the canvas stays exactly as it was drawn.
 
@@ -152,8 +152,7 @@ def _relative(path: str, stem: str) -> str:
     """A section's path with the directory its whole topic shares taken off.
 
     Thirty rows opening with the same twenty characters are thirty rows nobody
-    scans (#198). The shared head is on the panel already, as the topic's own
-    name.
+    scans. The shared head is on the panel already, as the topic's own name.
     """
     return path.removeprefix(f"{stem}/") if stem else path
 

@@ -8,11 +8,11 @@ verify each appears in the source; a dotted compound counts as supported when
 every part does. Tokens with no support are suspected fabrications. Ported from
 the prototype's ``check_faithfulness.py``.
 
-What it deliberately does NOT treat as an identifier (#103, F22): anything
-joined by a SLASH. The first port read any token containing "/" or "." as a
-name, so ordinary prose — ``CI/CD``, ``tabs/spaces/line``, ``and/or``,
-``binaries/packages``, ``encoding/decoding``, ``Flask/Werkzeug`` — was flagged
-as fabrication. Six of seven flags on the QA corpus were prose, which makes the
+What it deliberately does NOT treat as an identifier: anything joined by a
+SLASH. Reading any token containing "/" or "." as a name flags ordinary prose —
+``CI/CD``, ``tabs/spaces/line``, ``and/or``, ``binaries/packages``,
+``encoding/decoding``, ``Flask/Werkzeug`` — as fabrication. Under that rule six
+of seven flags on a ~120-section test corpus were prose, which makes the
 verdict useless as a triage queue: a gate nobody can trust is a gate nobody
 reads. A dotted abbreviation (``e.g``, ``i.e``) is an identifier by shape, so it
 is excluded by name instead.

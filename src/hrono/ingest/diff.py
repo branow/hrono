@@ -1,16 +1,16 @@
-"""Classify a source's file-level diff between two synced versions (T33).
+"""Classify a source's file-level diff between two synced versions.
 
 The entry point of incremental update: given the previously-ingested files and
 the freshly-synced ones — each as a ``path -> content hash`` map — classify
 every affected file as NEW / CHANGED / DELETED / MOVED so the incremental
-pipeline (#068 placement, propagate) touches only the delta. Classification is
+pipeline (placement, propagate) touches only the delta. Classification is
 by CONTENT HASH, like the embed/condense caches: a file whose bytes are
 identical after a pull is not "changed"; a renamed file with identical bytes is
 MOVED (same content, new path) so its vectors/condensations are reused.
 
 ``classify`` is pure; ``current_files`` (from the synced cache, honouring the
-#026 filter) and ``stored_files`` (reconstructed from the last version's stored
-sections) build the two maps. On first sync ``stored_files`` is empty, so
+ingest filter) and ``stored_files`` (reconstructed from the last version's
+stored sections) build the two maps. On first sync ``stored_files`` is empty, so
 everything is NEW; a no-op re-sync classifies nothing.
 """
 
@@ -76,7 +76,7 @@ def current_files(
 ) -> dict[str, str]:
     """Return unit path -> content hash for what the source holds NOW.
 
-    The units come from the source's own reader (#143), so a diff over a
+    The units come from the source's own reader, so a diff over a
     non-filesystem source asks that source what it has rather than walking a
     directory that does not exist.
     """
@@ -89,7 +89,7 @@ def current_files(
 def stored_files(conn: sqlite3.Connection, source: str) -> dict[str, str]:
     """Return path -> content hash for the source's last-ingested files.
 
-    A file's bytes tile byte-for-byte across its stored sections (#029), so the
+    A file's bytes tile byte-for-byte across its stored sections, so the
     file hash is the hash of its sections concatenated in order — comparable to
     ``current_files`` (which hashes the raw file bytes).
     """

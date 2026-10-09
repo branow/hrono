@@ -19,7 +19,7 @@ Compare at least: hop limits 2, 3 and 4 on the same tree; and the export against
 
 Write the results as a report the user can read: a table, and the questions that failed with the path the agent took. Author the question set for one real corpus (hrono's own repository is the obvious one), including questions whose answer is deep and questions with no answer.
 
-The agent must run in a directory that carries no project or user memory — the review found `~/.claude/CLAUDE.md` leaking into model calls (#217).
+The agent must run in a directory that carries no project or user memory — the review found the user-level CLAUDE.md leaking into model calls (#217).
 
 ## Acceptance criteria
 - [ ] one command runs the evaluation over an export and writes a report

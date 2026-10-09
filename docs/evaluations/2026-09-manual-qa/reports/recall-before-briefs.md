@@ -2,28 +2,28 @@
 
 ## Q: how does the signer verify a signature
 hits: 5 | message: None
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/src/itsdangerous/signer.py@672971d66a2ef9f85151e5328311
+- [source] git://<repo>/.e2e/repos/itsdangerous/src/itsdangerous/signer.py@672971d66a2ef9f85151e5328311
     "A signer securely signs bytes, then unsigns them to verify that     the value hasn't been changed.  "
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/docs/signer.rst@672971d66a2ef9f85151e53283113f33d642dab
+- [source] git://<repo>/.e2e/repos/itsdangerous/docs/signer.rst@672971d66a2ef9f85151e53283113f33d642dab
     'The signature is appended to the string, separated by a dot. To validate the string, use the :meth:`~Signer.unsign` method:  '
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/docs/signer.rst@672971d66a2ef9f85151e53283113f33d642dab
+- [source] git://<repo>/.e2e/repos/itsdangerous/docs/signer.rst@672971d66a2ef9f85151e53283113f33d642dab
     '.. module:: itsdangerous.signer  Signing Interface =================  The most basic interface is the signing interface. The :class:`Signer` class can'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/src/itsdangerous/signer.py@672971d66a2ef9f85151e5328311
+- [source] git://<repo>/.e2e/repos/itsdangerous/src/itsdangerous/signer.py@672971d66a2ef9f85151e5328311
     'def validate(self, signed_value: str | bytes) -> bool:         """Only validates the given signed value. Returns ``True`` if         the signature exi'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/src/itsdangerous/signer.py@672971d66a2ef9f85151e5328311
+- [source] git://<repo>/.e2e/repos/itsdangerous/src/itsdangerous/signer.py@672971d66a2ef9f85151e5328311
     'def verify_signature(self, value: str | bytes, sig: str | bytes) -> bool:         """Verifies the signature for the given value."""         try:      '
 
 ## Q: how do I set the color level in chalk
 hits: 5 | message: None
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/chalk/source/vendor/supports-color/browser.js@661317e6f91fe7c90306c2
+- [source] git://<repo>/.e2e/repos/chalk/source/vendor/supports-color/browser.js@661317e6f91fe7c90306c2
     'const colorSupport = level !== 0 && { \tlevel, \thasBasic: true, \thas256: level >= 2, \thas16m: level >= 3, };  '
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/chalk/source/vendor/supports-color/index.js@661317e6f91fe7c90306c2c4
+- [source] git://<repo>/.e2e/repos/chalk/source/vendor/supports-color/index.js@661317e6f91fe7c90306c2c4
     '// A numeric `FORCE_COLOR` requests an exact level, while `FORCE_COLOR=true` and `FORCE_COLOR=` only enable color and let the level be detected. \t'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/chalk/source/vendor/ansi-styles/index.d.ts@661317e6f91fe7c90306c2c48
+- [source] git://<repo>/.e2e/repos/chalk/source/vendor/ansi-styles/index.d.ts@661317e6f91fe7c90306c2c48
     'export type ForegroundColorName = keyof ForegroundColor;  /** Basic background color names.  [More colors here.](https://github.com/chalk/chalk/blob/m'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/chalk/readme.md@661317e6f91fe7c90306c2c48ea9354562ee9146 sp:/API/cha
+- [source] git://<repo>/.e2e/repos/chalk/readme.md@661317e6f91fe7c90306c2c48ea9354562ee9146 sp:/API/cha
     '### chalk.level  Specifies the level of color support.  Color support is automatically detected, but you can override it by setting the `level` proper'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/chalk/source/vendor/supports-color/index.d.ts@661317e6f91fe7c90306c2
+- [source] git://<repo>/.e2e/repos/chalk/source/vendor/supports-color/index.d.ts@661317e6f91fe7c90306c2
     '/** Levels: - `0` - All colors disabled. - `1` - Basic 16 colors support. - `2` - ANSI 256 colors support. - `3` - Truecolor 16 million colors support'
 
 ## Q: generate a version 7 uuid
@@ -41,15 +41,15 @@ hits: 5 | message: None
 
 ## Q: what is the timestamp signer expiry logic
 hits: 5 | message: None
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/docs/timed.rst@672971d66a2ef9f85151e53283113f33d642dabd
+- [source] git://<repo>/.e2e/repos/itsdangerous/docs/timed.rst@672971d66a2ef9f85151e53283113f33d642dabd
     '.. module:: itsdangerous.timed  Signing With Timestamps =======================  If you want to expire signatures you can use the :class:`TimestampSig'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/docs/signer.rst@672971d66a2ef9f85151e53283113f33d642dab
+- [source] git://<repo>/.e2e/repos/itsdangerous/docs/signer.rst@672971d66a2ef9f85151e53283113f33d642dab
     'To record and validate the age of a signature, see :doc:`/timed`.  .. autoclass:: Signer     :members:  '
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/docs/timed.rst@672971d66a2ef9f85151e53283113f33d642dabd
+- [source] git://<repo>/.e2e/repos/itsdangerous/docs/timed.rst@672971d66a2ef9f85151e53283113f33d642dabd
     '.. code-block:: python      s.unsign(string, max_age=5)     Traceback (most recent call last):       ...     itsdangerous.exc.SignatureExpired: Signat'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/src/itsdangerous/timed.py@672971d66a2ef9f85151e53283113
+- [source] git://<repo>/.e2e/repos/itsdangerous/src/itsdangerous/timed.py@672971d66a2ef9f85151e53283113
     '"""Works like the regular :meth:`.Signer.unsign` but can also         validate the time. See the base docstring of the class for         the general b'
-- [source] git:///Users/orest/repos/hrono/.e2e/repos/itsdangerous/src/itsdangerous/timed.py@672971d66a2ef9f85151e53283113
+- [source] git://<repo>/.e2e/repos/itsdangerous/src/itsdangerous/timed.py@672971d66a2ef9f85151e53283113
     '"""Reverse of :meth:`dumps`, raises :exc:`.BadSignature` if the         signature validation fails. If a ``max_age`` is provided it will         ensur'
 
 ## Q: quantum entanglement in banana futures

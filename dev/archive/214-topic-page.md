@@ -26,7 +26,7 @@ A tab or breadcrumb that reflects where the user is, instead of lighting "Map".
 Use the width: the brief should not sit beside a long empty gutter.
 
 ## Findings from the UI review (2026-10-03)
-Seen by driving the dashboard in headless Chromium against a copy of the `~/hrono-click` database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
+Seen by driving the dashboard in headless Chromium against a copy of the local test database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
 
 - **A** The root topic is flagged in warning yellow: "PARENT none — nothing points at this topic". A root has no parent by definition. Screenshot: `admin-topic-root-1440-dark.png`.
 - **A** The sections list is eleven identical rows "CHANGES.md core" — no heading, line range or size to tell one from another. Screenshot: `admin-topic-leaf-1440-light.png`.

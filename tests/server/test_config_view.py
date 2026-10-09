@@ -1,4 +1,4 @@
-"""#187: each collection's rows are masked by ITS OWN declared secret paths.
+"""Each collection's rows are masked by ITS OWN declared secret paths.
 
 Through the route this is unobservable today: every path any collection
 declares also lives in `sources`' set, so masking everything with the wrong

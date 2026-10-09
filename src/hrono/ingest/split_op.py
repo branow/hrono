@@ -1,10 +1,9 @@
 """The ``split`` ingest op: turn a synced source into stored sections/passages.
 
-For a source leaf, asks the type's READER for the source's units (#143 — git's
-are the ingestable files of its synced working tree, #025/#026), splits each
-into sections + passages (#029/#030), assigns identity (#031), and persists
-them with content-addressed bodies (#032 store). The whole
-source is replaced in one transaction (delete-by-source then insert), so a
+For a source leaf, asks the type's READER for the source's units (git's are the
+ingestable files of its synced working tree), splits each into sections +
+passages, assigns identity, and persists them with content-addressed bodies. The
+whole source is replaced in one transaction (delete-by-source then insert), so a
 re-split of an unchanged cache is idempotent: identical bytes reuse their
 content rows and no sections are duplicated. Registers into the op registry so
 the worker dispatches ``split`` per source. Reads only the local cache — no
@@ -45,7 +44,7 @@ def split_source(job: Job, context: JobContext) -> Mapping[str, int]:
 
     Reports what the split CHANGED — files new or edited, the sections cut
     from them, files gone — so a re-split of an unchanged source, which
-    rewrites every row to the same bytes, says it had nothing to do (#213).
+    rewrites every row to the same bytes, says it had nothing to do.
     """
     name = str(job.scope["name"])
     config, version = _load(context, name)

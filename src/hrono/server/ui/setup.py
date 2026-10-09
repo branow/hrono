@@ -1,4 +1,4 @@
-"""Setup: from an empty install to a built tree, in the browser (#219).
+"""Setup: from an empty install to a built tree, in the browser.
 
 Four steps — a connection, models, a source, an estimate and the build — each
 a real form over the registry the Settings page edits. Nothing here keeps its

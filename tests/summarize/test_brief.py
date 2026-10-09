@@ -164,8 +164,8 @@ def test_references_are_recorded_mechanically_beside_the_text(
     db: Database,
 ) -> None:
     # the fake LLM returns a fixed body with no URIs; every reference stored
-    # therefore came from code, not the model. #102 keeps them OUT of the text:
-    # #071 indexes the text as passages, and a path list is dense enough to
+    # therefore came from code, not the model. They stay OUT of the text:
+    # recall indexes the text as passages, and a path list is dense enough to
     # outrank prose for a keyword-ish question.
     brief(job(), JobContext(db), client=FakeCompletion(text="BODY " * 12))
     nodes = _node_ids(db)
@@ -404,11 +404,10 @@ def test_a_good_brief_is_never_flagged_or_retried(db: Database) -> None:
 
 
 def test_a_brief_never_cites_a_section_it_did_not_read(db: Database) -> None:
-    # #122: the reduce input INNER JOINed `condensations` and the reference
-    # list did not, so a member with no condensation was dropped from the LLM
-    # input while still being cited. An incomplete map is a gap; a map that
-    # cites a source it never read is an error, and citations are the one thing
-    # we tell agents is mechanical.
+    # the reduce input and the reference list must agree: a member with no
+    # condensation that is dropped from the LLM input must not be cited. An
+    # incomplete map is a gap; a map that cites a source it never read is an
+    # error, and citations are the one thing we tell agents is mechanical.
     with db.connect() as conn, conn:
         orphan = add_condensed_section(conn, "uncondensed.py", b"zzz\n", 8)
         conn.execute(
@@ -437,10 +436,11 @@ def test_a_brief_never_cites_a_section_it_did_not_read(db: Database) -> None:
 
 
 def test_brief_reduces_what_the_condense_model_wrote(db: Database) -> None:
-    # #067's landmine, driven end to end: with a cheap condense model and a
-    # smart brief model, `brief` must still find the condensations. Reading
-    # them under its OWN name finds none and briefs nothing — silently, because
-    # an empty reduce input is not an error anywhere.
+    # condensations are keyed by the model that wrote them: with a cheap
+    # condense model and a smart brief model, `brief` must still find the
+    # condensations. Reading them under its OWN name finds none and briefs
+    # nothing — silently, because an empty reduce input is not an error
+    # anywhere.
     with db.connect() as conn, conn:
         conn.execute("DELETE FROM registry WHERE collection = 'models'")
         for name, role in (("cheap", "condense"), ("smart", "brief")):
@@ -478,7 +478,7 @@ def test_brief_reduces_what_the_condense_model_wrote(db: Database) -> None:
 
 
 def test_the_run_reports_the_tokens_it_spent(db: Database) -> None:
-    # #179, and #176's rule: the job tests plant this result by hand, so only
+    # the job tests plant this result by hand, so only
     # calling the OP proves anything about the op that writes it.
     outcome = brief(job(), JobContext(db), client=FakeCompletion())
 

@@ -1,4 +1,4 @@
-"""T26.1: the vector leg qualifies near-duplicates at z >= 3.5, rejects rest."""
+"""The vector leg qualifies near-duplicates at z >= 3.5, rejects rest."""
 
 from collections.abc import Iterator
 
@@ -111,7 +111,7 @@ def test_empty_index_returns_no_hits(tmp_path: object) -> None:
 
 
 def test_z_floor_is_baked() -> None:
-    # swept across the paraphrase, corpus-vocabulary and absent suites (#134);
+    # swept across the paraphrase, corpus-vocabulary and absent suites:
     # 3.5 left 4/6 paraphrases failing, 3.2 recovers all six and the eleven
     # absent questions are unchanged.
     assert Z_FLOOR == 3.2
@@ -122,9 +122,9 @@ def _plant(database: Database, *, noise_path_matches_query: bool) -> int:
 
     The blend is a per-passage average, so a passage only stands out blended
     when it beats the crowd THERE. When the crowd shares the query's path
-    signal, the answer's content advantage is halved into the noise (#127's
+    signal, the answer's content advantage is halved into the noise (the
     paraphrase case); when the crowd does not, a path-named answer is the only
-    thing the path half can see (#127's `uuid/version7.go` case). Returns the
+    thing the path half can see (the `uuid/version7.go` case). Returns the
     planted answer's passage id.
     """
     answer_path = "src/answer.py"
@@ -166,9 +166,9 @@ def _plant(database: Database, *, noise_path_matches_query: bool) -> int:
 def test_a_content_match_the_crowds_paths_drown_still_qualifies(
     tmp_path: object,
 ) -> None:
-    # #127: half a passage's norm in the blend is its FILE PATH. When the crowd
+    # half a passage's norm in the blend is its FILE PATH. When the crowd
     # shares the query's path signal, the answer's content advantage is halved
-    # into that noise and it never clears the floor. Measured on the QA corpus,
+    # into that noise and it never clears the floor. Measured on a test corpus,
     # "how do I style terminal output with colours" over a corpus holding the
     # whole of chalk: ONE passage cleared blended, SEVENTEEN content-only.
     database = Database.at(tmp_path / "hrono.db")

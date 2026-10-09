@@ -1,4 +1,4 @@
-"""The greedy two-budget packer over the #029 structure tree.
+"""The greedy two-budget packer over the structure tree.
 
 One greedy mechanism runs at two budgets: the file's category section budget to
 form sections, then the passage budget inside each section's node group to form
@@ -6,21 +6,22 @@ its passages, so passages nest inside sections and a section is the
 byte-identical concatenation of its passages. Consecutive whole nodes accumulate
 while they fit; a node over budget is descended into; an atomic span with no
 structure is byte-chopped into raw parts; a crumb under ``MIN_PARA`` merges into
-its neighbour. Because #029 tiles every parent exactly, sibling ends meet with
-no gaps, so the packed spans cover the file with no gaps or overlaps.
+its neighbour. Because the structure tree tiles every parent exactly, sibling
+ends meet with no gaps, so the packed spans cover the file with no gaps or
+overlaps.
 
-A group is flushed by the BUDGET and nothing else (#097, F7). The packer used to
-flush a passage group as soon as it reached ``MIN_GROUP`` (100 B), on the
-reading that "a decent structural unit stands alone" — which capped passages at
-a tenth of their budget: a real corpus packed to a 152 B median with 68% under
-200 B, so a recall hit was a truncated sentence instead of the ~200-token unit
-the budget describes, and the passage table was several times larger than
-intended. The settled recipe (``structure-split.ipynb:pack_node``) has no such
-flush, and neither does this.
+A group is flushed by the BUDGET and nothing else. Flushing a passage group
+as soon as it reaches ``MIN_GROUP`` (100 B), on the reading that "a decent
+structural unit stands alone", caps passages at a tenth of their budget: a real
+corpus packs to a 152 B median with 68% under 200 B, so a recall hit is a
+truncated sentence instead of the ~200-token unit the budget describes, and the
+passage table is several times larger than intended. The settled recipe
+(``structure-split.ipynb:pack_node`` in ``docs/research/prototype/``) has no
+such flush, and neither does this.
 
 ``_chop`` backs off to the nearest whitespace within ``_CHOP_BACKOFF`` of the
 budget before cutting an atomic span, so a raw part is never a mid-token
-fragment (F8's ``b'tColor = '``). The backoff needs the file bytes, which is
+fragment such as ``b'tColor = '``. The backoff needs the file bytes, which is
 why ``sections`` takes them.
 """
 
@@ -145,7 +146,7 @@ def _chop(start: int, end: int, budget: int, raw: bytes) -> tuple[_Span, ...]:
     407/406 and not 800 + a 13-byte crumb no later pass can fold away. Each cut
     then walks back to just after the last whitespace byte within
     ``_CHOP_BACKOFF`` of that target, so a part ends at a token boundary instead
-    of mid-identifier (F8). Both the target and the backed-off cut are at most
+    of mid-identifier. Both the target and the backed-off cut are at most
     one budget from the cursor, so no part can exceed the budget; with no
     whitespace in the window the target stands, so progress is guaranteed.
     """

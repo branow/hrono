@@ -1,4 +1,4 @@
-"""#215: asking a remote where it is, against a real repository."""
+"""Asking a remote where it is, against a real repository."""
 
 from __future__ import annotations
 

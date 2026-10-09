@@ -7,8 +7,8 @@ a model swap re-condenses under the new key. ``upsert`` stores one condensation
 once; a repeat key is a no-op.
 
 A section the model REFUSED (``refuse``) is held back from ``pending`` while the
-request is the same one it refused (E015): a refusal is never cached as a
-condensation (#221), so without the record every sync paid two calls to be
+request is the same one it refused: a refusal is never cached as a
+condensation, so without the record every sync would pay two calls to be
 refused again, forever. ``request_for`` is what "the same request" means.
 """
 
@@ -35,22 +35,22 @@ def pending(
 
     Distinct section content hashes only — passage and path bodies never
     condense. A stored condensation that is the model talking back counts as
-    MISSING (#221): it was cached by content hash forever, and every brief over
-    that section read it as source. A section already refused for ``request``
-    is left out (E015); with no ``request``, refusals are not consulted.
+    MISSING: cached by content hash it would stay forever, and every brief over
+    that section would read it as source. A section already refused for
+    ``request`` is left out; with no ``request``, refusals are not consulted.
 
-    ``sources`` scopes the selection to one tree's sections: condense runs as
-    a stage of one tree's sync or maintain, and an unscoped SELECT made that
+    ``sources`` scopes the selection to one tree's sections: condense runs as a
+    stage of one tree's sync or maintain, and an unscoped SELECT would make that
     run pay LLM calls for every other tree's pending sections too — spend the
     operator asked for on no tree at all. None keeps the whole-corpus read for
     an unscoped database.
 
     Bodies are read only for what is pending. Condense runs on every sync, and
     reading every section body to find the few that changed would make an
-    unchanged tree cost its whole corpus in I/O (qa, #221). The selection is
-    set-based and binds a fixed number of parameters whatever the corpus size:
-    one bound parameter per pending hash fails outright past SQLite's
-    32,766-variable limit, which is every first build of a large corpus (E001).
+    unchanged tree cost its whole corpus in I/O. The selection is set-based and
+    binds a fixed number of parameters whatever the corpus size: one bound
+    parameter per pending hash fails outright past SQLite's 32,766-variable
+    limit, which is every first build of a large corpus.
     """
     redo = sorted({digest for digest, _, _ in unusable(conn, model_name)})
     scoped = (
@@ -84,9 +84,9 @@ def redo(
 ) -> tuple[str, ...]:
     """Hashes whose condensation is not one and that ``request`` may retry.
 
-    What makes a sync over an unchanged corpus run condense at all (E001): a
+    What makes a sync over an unchanged corpus run condense at all: a
     talk-back not yet refused for this request. Once it is, the sync leaves it
-    alone until the body, the model or the prompt changes (E015).
+    alone until the body, the model or the prompt changes.
     """
     held = {
         row["content_hash"]
@@ -111,7 +111,7 @@ def unusable(
     Every stored condensation the current gate fails, and every section the
     model refused with nothing stored for it — that one has no row in
     ``condensations`` to fail, and without the refusal it would leave the
-    operator's list while still uncondensed (E015).
+    operator's list while still uncondensed.
     """
     rows = conn.execute(
         "SELECT content_hash, text FROM condensations WHERE model_name = ? "
@@ -138,7 +138,7 @@ def unusable(
 def request_for(model: Mapping[str, object], template: str) -> str:
     """What a refusal was refused FOR: the model's words and the prompt.
 
-    The model fingerprint (#191) rather than its name, so repointing a name
+    The model fingerprint rather than its name, so repointing a name
     at another upstream model is a new request; the template hash, so an
     edited prompt is one too.
     """
@@ -175,7 +175,7 @@ def replace(
     A fresh key is a plain insert. A key that held a reply that talked back is
     overwritten, and every topic holding that section — and every topic above
     it, whose brief was written from those — is marked stale, so the next
-    brief pass rewrites exactly the briefs that read the bad text (#221).
+    brief pass rewrites exactly the briefs that read the bad text.
     """
     prior = get(conn, content_hash, model_name)
     if prior is not None and not talks_back(prior["text"]):

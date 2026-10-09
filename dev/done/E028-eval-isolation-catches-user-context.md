@@ -16,7 +16,7 @@ lands in evidence reports. Verified must mean no operator context at all.
 ### 1 the probe fails on any injected user context
 Change: `isolation_verdict` also fails when the isolated reply carries the
 harness user-context block (e.g. a `userEmail` entry), not only the CLAUDE.md
-canary and `graphify`; the runner isolates it out if the CLI allows, else
+canary and a word from the operator's own config; the runner isolates it out if the CLI allows, else
 refuses to run without `--allow-unisolated`.
 Done when:
 - [ ] a unit test: an isolated reply quoting a userEmail entry is not verified

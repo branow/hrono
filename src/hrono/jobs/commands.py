@@ -1,16 +1,16 @@
-"""The ``hrono jobs`` command group (#138): what did my one verb actually do?
+"""The ``hrono jobs`` command group: what did my one verb actually do?
 
 `hrono tree sync` runs six stages behind one call, which is only acceptable if
 the operator can find out what happened. `jobs get` renders the job's `result`
-— the per-stage counts #132 persists — so a run that declined part of its work
-says so here instead of nowhere.
+— the per-stage counts the worker persists — so a run that declined part of
+its work says so here instead of nowhere.
 
 Read-only on purpose. Triggering an individual op is a debug door, not a
-command (#139).
+command.
 
 ``get`` and ``watch`` exit non-zero for a job that failed or was canceled, so
-a script can gate on them; both used to exit 0 whatever happened, which made
-them unusable as anything but scenery.
+a script can gate on them; an exit 0 whatever happened would make them
+unusable as anything but scenery.
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def cancel_job(job_id: str) -> None:
     typer.echo(f"Stopped {stopped} pending {plural}.")
     if running:
         # the running one was SIGNALED: it halts at its next checkpoint, but
-        # the step in flight finishes (#173) — interrupting it mid-write is
+        # the step in flight finishes — interrupting it mid-write is
         # how a database corrupts.
         stage = "stage was" if running == 1 else "stages were"
         typer.echo(f"{running} {stage} told to stop and will finish its step.")

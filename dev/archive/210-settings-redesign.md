@@ -26,7 +26,7 @@ Keep the JSON view, labelled as the advanced alternative.
 Screenshots of the current state are in `.autodev/board/ui-review-2026-10-03/` (`admin-config-*`, `s-cfg-*`).
 
 ## Findings from the UI review (2026-10-03)
-Seen by driving the dashboard in headless Chromium against a copy of the `~/hrono-click` database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
+Seen by driving the dashboard in headless Chromium against a copy of the local test database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
 
 - **A** Five collections on one endless page; opening one edit form pushes everything else down and the form sits in the middle of a 3000px page. Screenshot: `s-cfg-edit-source.png`.
 - **A** Every item has a "Delete this ..." disclosure on its own row, fenced by two rules, directly under it — the delete control takes more room than the item. Five models = five delete rows. Screenshot: `admin-config-1440-light.png`.

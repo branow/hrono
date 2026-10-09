@@ -1,4 +1,4 @@
-"""#201: every model call writes one ledger row, whatever became of it."""
+"""Every model call writes one ledger row, whatever became of it."""
 
 import ast
 import json
@@ -408,8 +408,8 @@ def test_every_way_to_start_a_run_records_who_started_it(
     body: dict[str, object] | None,
     jobs: int,
 ) -> None:
-    # #202's by=user and #203's "who started it" read this on every path; a
-    # path that forgets it reads as nobody (qa, 2026-10-03)
+    # the per-user spend and a run's "who started it" read this on every
+    # path; a path that forgets it reads as nobody
     key = Fernet.generate_key()
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, key)

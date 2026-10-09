@@ -1,4 +1,4 @@
-"""What a token costs, per upstream model (#202).
+"""What a token costs, per upstream model.
 
 A baked table, USD per million tokens, matched on the LONGEST name prefix: a
 provider reports a dated id (``claude-haiku-4-5-20251001``) and the price

@@ -4,10 +4,10 @@ Registered in ``create_app``. An ``AppError`` renders from its own metadata; any
 other uncaught exception becomes a generic 500 whose body carries no internal
 detail — the traceback is only logged.
 
-FastAPI's own request-validation failures come through here too (#138, F11).
-Body validation already raised our ``Invalid`` from inside the registry engine,
-but a bad QUERY PARAMETER escaped as FastAPI's raw ``{"detail": [...]}`` — so a
-client had to parse two shapes depending on which part of the request was wrong.
+FastAPI's own request-validation failures come through here too. Body
+validation raises our ``Invalid`` from inside the registry engine, but a bad
+QUERY PARAMETER would escape as FastAPI's raw ``{"detail": [...]}``, leaving a
+client to parse two shapes depending on which part of the request was wrong.
 One envelope, whatever failed.
 """
 
@@ -60,24 +60,23 @@ def _handle_app_error(request: Request, exc: Exception) -> JSONResponse:
 
 
 def _handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
-    """Render a domain failure with the code its own class declares (#161).
+    """Render a domain failure with the code its own class declares.
 
-    Through ``as_app_error``, which is the conversion #109 already settled for
-    the JOB door — so `hrono jobs get` and an HTTP call describe one failure the
-    same way, rather than the same `EmbedError` reading as `embed-error` in a
-    job record and `internal-error` over HTTP.
+    Through ``as_app_error``, the same conversion the JOB door uses — so `hrono
+    jobs get` and an HTTP call describe one failure the same way, rather than
+    the same `EmbedError` reading as `embed-error` in a job record and
+    `internal-error` over HTTP.
 
-    The status stays 500, as #145 ruled: this gives the failure back its NAME,
-    not a new place in the HTTP status space. Without it the operator whose
-    server has no embedding model was told "internal error" while the log
-    underneath said "no embedding model available" — the one line that would
-    have told them what to do.
+    The status stays 500: this gives the failure back its NAME, not a new
+    place in the HTTP status space. Without it an operator whose server has no
+    embedding model is told "internal error" while the log underneath says "no
+    embedding model available" — the one line that tells them what to do.
     """
     return _handle_app_error(request, as_app_error(exc))
 
 
 def _handle_request_invalid(request: Request, exc: Exception) -> JSONResponse:
-    """Render FastAPI's validation failure in the app's envelope (#138)."""
+    """Render FastAPI's validation failure in the app's envelope."""
     errors = exc.errors() if isinstance(exc, RequestValidationError) else []
     invalid = Invalid(
         "invalid request",

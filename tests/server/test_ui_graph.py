@@ -1,4 +1,4 @@
-"""#183 (T50.1/.2): the node graph, drawn server-side.
+"""The node graph, drawn server-side.
 
 Every state of the graph is a URL, so every assertion here is on the HTML that
 URL returns — which is the whole reason the expand state is a query parameter
@@ -111,7 +111,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
     app = create_app(connection=conn, master_key=KEY, key_id=1)
     with TestClient(app) as client:
         # Tests write through `conn` after this point, and the worker polls
-        # that same connection from its own thread (#194).
+        # that same connection from its own thread.
         app.state.worker.stop()
         app.state.worker.join(timeout=5)
         yield Browser(client, token, ids, conn)
@@ -223,7 +223,7 @@ def test_an_empty_tree_says_so_rather_than_drawing_nothing(
 
     assert "has no topics yet" in page
     # no empty canvas is drawn — and the map that HAS one proves the marker
-    # this looks for is the one the board really carries
+    # this looks for is the one the map really carries
     assert '<div class="canvas"' not in page
     assert '<div class="canvas"' in browser.map()
 
@@ -243,8 +243,8 @@ def test_a_hand_edited_open_parameter_cannot_break_the_page(
 def test_more_than_one_root_is_drawn(browser: Browser) -> None:
     """A tree mid-repair can have several, and that is what to look at.
 
-    Drawing only the first would hide exactly the state #124 and #163 are
-    about — a subtree hanging off nothing.
+    Drawing only the first would hide exactly the orphan state triage
+    reports — a subtree hanging off nothing.
     """
     with browser.client.app.state.db.write() as conn:  # type: ignore[attr-defined]
         conn.execute(
@@ -260,7 +260,7 @@ def test_more_than_one_root_is_drawn(browser: Browser) -> None:
 def test_a_topic_is_labelled_by_where_its_sections_live(
     browser: Browser,
 ) -> None:
-    """#198: a weak model gives every topic the same brief, so the brief
+    """A weak model gives every topic the same brief, so the brief
     cannot be the label. The files underneath do not lie."""
     from hrono.server.graph import build
 
@@ -297,9 +297,9 @@ def test_one_directory_holding_most_of_a_topic_names_it(
 def test_a_straddling_topic_names_the_two_directories_and_their_shares(
     browser: Browser,
 ) -> None:
-    """#199: it named the two ROOTS, which is `src + tests` — the least
-    telling segment of either path, and it landed on the two biggest topics
-    on the map. Each side is descended as far as IT is dominated instead."""
+    """Naming the two ROOTS gives `src + tests` — the least telling segment
+    of either path, and on the two biggest topics on the map. Each side is
+    descended as far as IT is dominated instead."""
     from hrono.server.graph import build
 
     with browser.conn:  # type: ignore[union-attr]
@@ -346,9 +346,9 @@ def test_two_directories_of_the_SAME_NAME_are_said_once(
 def test_the_one_root_of_a_tree_is_named_by_what_it_was_built_FROM(
     browser: Browser,
 ) -> None:
-    """#199/#200: the root straddles by construction, so it wore `src + tests`
-    — the first label anyone reads, saying nothing. Then it said "whole tree",
-    which is true and just as empty. What it IS, is its sources."""
+    """The root straddles by construction, so `src + tests` would be the
+    first label anyone reads, saying nothing; "whole tree" is true and just as
+    empty. What it IS, is its sources."""
     from hrono.server.graph import build
 
     with browser.conn:  # type: ignore[union-attr]
@@ -430,7 +430,7 @@ def test_a_straddle_too_wide_for_the_slot_keeps_BOTH_sides(
 def test_a_long_label_is_cut_from_the_front_to_fit_its_slot(
     browser: Browser,
 ) -> None:
-    """#197/#198: a label wider than its slot collides with its neighbour's,
+    """A label wider than its slot collides with its neighbour's,
     and cutting a PATH at the tail leaves the half every topic shares."""
     from hrono.server.graph import LABEL_CHARS, build
 
@@ -464,8 +464,8 @@ def test_a_short_label_is_left_alone(browser: Browser) -> None:
 
 
 def test_the_tree_hangs_DOWNWARDS_from_its_root(browser: Browser) -> None:
-    """#198: it was a left-to-right dendrogram, which is the shape a file
-    explorer has. A tree has its root at the top and its children below."""
+    """Not a left-to-right dendrogram, which is the shape a file explorer
+    has. A tree has its root at the top and its children below."""
     from hrono.server.graph import build
 
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
@@ -499,7 +499,7 @@ def test_no_label_is_cut_by_either_edge_of_the_canvas(
 def test_the_canvas_starts_where_the_drawing_starts(
     browser: Browser,
 ) -> None:
-    """#198: the map opened on a blank band with the first node below it."""
+    """The map must not open on a blank band with the first node below it."""
     from hrono.server.graph import MAX_RADIUS, build
 
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
@@ -513,8 +513,8 @@ def test_the_canvas_starts_where_the_drawing_starts(
 def test_siblings_STAY_ON_ONE_LEVEL_however_many_there_are(
     browser: Browser,
 ) -> None:
-    """#199: a wide family used to WRAP onto further rows so the map fitted
-    one window. That puts a topic's right-hand subtree UNDER its left-hand
+    """A wide family must not WRAP onto further rows to fit the map in one
+    window. That puts a topic's right-hand subtree UNDER its left-hand
     one, and two subtrees stacked read as one beneath the other rather than
     as siblings. The canvas gets as wide as the tree instead."""
     from hrono.server.graph import SLOT, build
@@ -612,7 +612,7 @@ def test_every_child_is_joined_to_its_parent_by_ONE_connector(
 def test_the_board_opens_on_the_ROOT_not_on_its_left_edge(
     browser: Browser,
 ) -> None:
-    """#199: a canvas as wide as the tree has no meaningful left edge, and
+    """A canvas as wide as the tree has no meaningful left edge, and
     landing there puts the reader in a corner of a map whose subject is in
     the middle."""
     root = _root(browser)
@@ -645,8 +645,8 @@ def test_where_the_board_opens_REACHES_the_page(browser: Browser) -> None:
 def test_reading_a_topic_opens_a_PANEL_and_leaves_the_map_drawn(
     browser: Browser,
 ) -> None:
-    """#199: clicking a topic navigated away from the tree, which throws
-    away the thing the click was asking about."""
+    """Clicking a topic must not navigate away from the tree, which would
+    throw away the thing the click was asking about."""
     browser.sign_in()
     big, root = browser.ids["big"], browser.ids["root"]
 
@@ -745,12 +745,11 @@ def test_collapse_still_means_collapsed(browser: Browser) -> None:
 
 
 def test_collapse_actually_collapses(browser: Browser) -> None:
-    """#197: it did the opposite.
+    """Collapse must not expand.
 
-    `_graph_url` dropped empty parameters, so the Collapse link carried no
-    `open` at all — and once an absent `open` came to mean "a first visit,
-    open some levels", Collapse became Expand. The link has to say `open=`
-    out loud.
+    An absent `open` means "a first visit, open some levels", so a Collapse
+    link that drops empty parameters becomes Expand. The link has to say
+    `open=` out loud.
     """
     browser.sign_in()
 
@@ -825,7 +824,7 @@ def _href(found: object) -> str:
 
 
 def test_each_top_level_subtree_gets_its_own_tint(browser: Browser) -> None:
-    """#197: a glance should say which branch a topic is in.
+    """A glance should say which branch a topic is in.
 
     Taken from the root's CHILDREN, not from the roots: with one root every
     topic would share a tint and the whole thing would be pointless.
@@ -898,9 +897,9 @@ def test_a_first_visit_puts_no_sentinel_in_its_own_links(
 def test_a_child_in_the_panel_links_to_the_map_the_reader_IS_ON(
     browser: Browser,
 ) -> None:
-    """The panel's child links were hard-coded to a bare `?focus=`, so reading
-    down one level threw away the expand state and every overlay the reader
-    had set up — the board collapsed under them (#200)."""
+    """The panel's child links must not be a bare `?focus=`: reading down one
+    level would throw away the expand state and every overlay the reader had
+    set up, collapsing the map under them."""
     browser.sign_in()
     root = browser.ids["root"]
 
@@ -937,8 +936,8 @@ def test_an_overlay_stays_on_when_a_topic_is_opened(
 def test_an_overlay_toggled_on_a_collapsed_map_leaves_it_collapsed(
     browser: Browser,
 ) -> None:
-    """#197 again, in the one link that kept its own URL builder: the toggle
-    dropped an EMPTY `open`, and an absent `open` means a first visit."""
+    """The same rule for the overlay toggle, which builds its own URL: it must
+    keep an EMPTY `open`, because an absent `open` means a first visit."""
     browser.sign_in()
 
     page = browser.map(open="")
@@ -952,7 +951,7 @@ def test_an_overlay_toggled_on_a_collapsed_map_leaves_it_collapsed(
 def test_a_reply_that_is_not_a_brief_draws_as_needing_one(
     browser: Browser,
 ) -> None:
-    # #217: the model talking back is a topic without a brief, on the map too
+    # the model talking back is a topic without a brief, on the map too
     database = browser.client.app.state.db  # type: ignore[attr-defined]
     browser.client.app.state.worker.stop()  # type: ignore[attr-defined]
     browser.client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]

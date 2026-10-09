@@ -32,7 +32,7 @@ class ValidationFailed(BadRequest):
 # pretending to exist, and it must not carry a separator that would change
 # which route it lands on. Declared once — five models with `name: str` let an
 # EMPTY name into the trees list, where it rendered as a switcher entry nobody
-# could select or delete (#197).
+# could select or delete.
 RegistryName = Annotated[
     str,
     # No `min_length`: the pattern already requires one non-space character,
@@ -52,7 +52,7 @@ class ValidationContext:
 
     A hook can read a sibling collection (e.g. resolve a referenced connection)
     through ``database`` and decrypt that row's secret with ``cipher``.
-    ``cache_root`` anchors where a subprocess LLM backend may run (#107); None
+    ``cache_root`` anchors where a subprocess LLM backend may run; None
     when the server has no database file to anchor one on.
     """
 
@@ -70,7 +70,7 @@ class Descriptor:
     validate: Callable[[dict[str, object], ValidationContext], None] | None = (
         None
     )
-    # Asked before a row is removed (#167). It may RAISE to refuse, and it may
+    # Asked before a row is removed. It may RAISE to refuse, and it may
     # return a note for the response — deleting one small config row can arm a
     # very large operation, and the operator has to hear about it at the moment
     # they do it, not at the moment it happens. `validate` covers writes only,

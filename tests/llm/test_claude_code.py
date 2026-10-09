@@ -1,4 +1,4 @@
-"""T44.2: the claude-code CLI driven headless as a Completion provider."""
+"""The claude-code CLI driven headless as a Completion provider."""
 
 import json
 import os
@@ -96,12 +96,12 @@ def test_the_argv_is_a_one_shot_text_completion(tmp_path: Path) -> None:
     assert argv[argv.index("--model") + 1] == "haiku"
     # the cap is for FINISHING an answer, not for holding a conversation —
     # one turn made the CLI answer `error_max_turns` on a large section and
-    # killed a build 78 condensations in (#197)
+    # killed a build 78 condensations in
     assert argv[argv.index("--max-turns") + 1] == str(MAX_TURNS)
     assert MAX_TURNS > 1
     assert argv[argv.index("--allowed-tools") + 1] == ""  # no tool use
     # the operator's CLAUDE.md, skills, hooks, plugins and output style are
-    # not part of a summarization call (#200)
+    # not part of a summarization call
     assert "--safe-mode" in argv
     assert argv[argv.index("--output-format") + 1] == "json"
     assert argv[argv.index("--system-prompt") + 1] == "be terse"
@@ -110,10 +110,11 @@ def test_the_argv_is_a_one_shot_text_completion(tmp_path: Path) -> None:
 def test_no_system_prompt_from_the_caller_still_replaces_the_CLI_s_own(
     tmp_path: Path,
 ) -> None:
-    """#200: every caller in `summarize` passes `system=""`, meaning "my
-    instructions are all in the content". Passing no flag let the CLI keep the
-    Claude Code agent prompt, and a 6 KB brief prompt came back as "There's no
-    actual question or task in your message. What do you need?"."""
+    """Every caller in `summarize` passes `system=""`, meaning "my
+    instructions are all in the content". Passing no flag lets the CLI keep
+    the Claude Code agent prompt, and a 6 KB brief prompt then comes back as
+    "There's no actual question or task in your message. What do you
+    need?"."""
     runner = Recorder()
     ClaudeCodeClient(tmp_path, run=runner).complete(_request())
 
@@ -141,7 +142,7 @@ def test_an_upstream_error_is_reported_as_one(tmp_path: Path) -> None:
 def test_a_nonzero_exit_with_empty_stderr_still_explains_itself(
     tmp_path: Path,
 ) -> None:
-    # measured during the QA run: exit 1, nothing on stderr, the explanation on
+    # measured on a real CLI: exit 1, nothing on stderr, the explanation on
     # stdout. An error that only reports the exit code tells the user nothing.
     runner = Recorder(code=1, out="cwd was wrong, no session", err="")
 
@@ -186,7 +187,7 @@ def _stub_cli(tmp_path: Path, body: str) -> Path:
 def test_the_real_subprocess_path_marshals_argv_stdin_and_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # #108: the injected runner proves the wiring and cannot prove that the
+    # the injected runner proves the wiring and cannot prove that the
     # subprocess call itself works. This drives the REAL `_subprocess` — real
     # argv, real stdin, real exit code, real JSON — against a stub binary, so
     # there is no API cost and no dependency on being logged in.
@@ -236,7 +237,7 @@ PROBE = (
 def test_a_real_call_reads_no_memory_of_the_directory_it_runs_in(
     tmp_path: Path,
 ) -> None:
-    # #217: the summarizer must not read the CLAUDE.md of where it runs. The
+    # the summarizer must not read the CLAUDE.md of where it runs. The
     # control call drops only --safe-mode and the replaced system prompt, and
     # must FIND the codeword, or this probe proves nothing.
     (tmp_path / "CLAUDE.md").write_text("The codeword is PELICAN-42.\n")

@@ -1,11 +1,11 @@
-"""#147: a github-user source discovers an owner's repos and ingests them all.
+"""A github-user source discovers an owner's repos and ingests them all.
 
 The seam's payoff, measured: `github-user` is a model variant plus three table
 entries, and no ingest engine changed to accept it. What these pin is the part
 that is genuinely new — enumeration, the repo-name globs, and the rule that
 each discovered repo keeps its OWN commit as the version of its files.
 
-Enumeration runs against a real HTTP server on a real socket (#108): a mocked
+Enumeration runs against a real HTTP server on a real socket: a mocked
 client object would prove the glob code and nothing about the request.
 """
 
@@ -167,7 +167,7 @@ def test_an_unknown_owner_is_a_clean_domain_error(
         repos({"name": "s", "owner": "ghost"}, fetch=_fetch_through(api))
 
     assert "ghost" in str(raised.value)
-    assert raised.value.code == "sync-error"  # #145
+    assert raised.value.code == "sync-error"  # its own domain code
 
 
 def test_validation_rejects_an_owner_that_does_not_resolve(api: str) -> None:

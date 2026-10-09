@@ -6,6 +6,6 @@ is now blind describe old behavior (they still pass on the response message).
 Rename or delete them so they say what is true.
 
 Blocked for agents: the file holds a GitHub-token-shaped fixture string, so the
-sensitive-canary hook refuses any read/edit. Needs the user's `[allow-secret]`
+secret-scanning hook refuses any read/edit. Needs the user's override tag
 once; while there, make the fixture not token-shaped so agents can read the
 file afterwards.

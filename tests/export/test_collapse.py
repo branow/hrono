@@ -1,4 +1,4 @@
-"""T29: collapse the stored tree to <= N agent-facing levels."""
+"""Collapse the stored tree to <= N agent-facing levels."""
 
 from hrono.export.collapse import ExportTree, StoredTree, collapse
 
@@ -78,8 +78,9 @@ def test_deterministic() -> None:
 
 
 def test_levels_below_two_is_clamped_not_a_crash() -> None:
-    # #080 exposes levels as user input; levels 1 and 0 must not raise
-    # ZeroDivisionError/IndexError — they clamp to the minimum useful 2 levels.
+    # the export endpoint takes levels as user input; levels 1 and 0 must not
+    # raise ZeroDivisionError/IndexError — they clamp to the minimum useful 2
+    # levels.
     for degenerate in (1, 0, -3):
         tree = collapse(balanced_tree(), levels=degenerate)
         assert tree.levels == 2  # root + leaves

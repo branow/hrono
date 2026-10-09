@@ -1,4 +1,4 @@
--- E034: a manual edit on a topic records what it replaced, so one click can
+-- A manual edit on a topic records what it replaced, so one click can
 -- put it back. `before` is the old title or the old brief text (NULL when
 -- there was none); for a note it is NULL and `ref` is the note's id, which an
 -- undo deletes. `who` is the user who made the edit. An undo clears the

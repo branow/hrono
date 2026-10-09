@@ -1,7 +1,7 @@
-"""#177 (T59): rotating the master key.
+"""Rotating the master key.
 
 Every test drives the rotation through the ENDPOINT and then reads the secret
-back through the registry's own decrypt path (#176) — a rotation that leaves
+back through the registry's own decrypt path — a rotation that leaves
 rows nothing can read is the failure mode, so reading them back is the test.
 """
 

@@ -1,6 +1,6 @@
-"""#155: a pinned membership or parenting survives the machine's opinion.
+"""A pinned membership or parenting survives the machine's opinion.
 
-Three places move things, and each had to learn the same rule — `repair`
+Three places move things, and each obeys the same rule — `repair`
 migrates a misfit member, `levels` re-attaches a misfit child, `settle`
 rebuilds the leaf level wholesale. A pin honoured by only one of them is worse
 than no pin at all: the edit survives until the next op runs instead of until
@@ -145,7 +145,7 @@ def test_placement_holds_a_pinned_delta_at_its_anchor(
     # the ingest door: reconcile carries a changed section's pin into its
     # delta, and placement must put the chunk at the anchor instead of
     # re-scoring it — the sticky rule and the placement rule are the machine's
-    # judgement, and a pin exempts the chunk from both (#154).
+    # judgement, and a pin exempts the chunk from both.
     from hrono.cluster.placement import SectionDelta, place
 
     database, first, second, misfit = db

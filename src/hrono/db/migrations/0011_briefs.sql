@@ -1,5 +1,5 @@
--- One brief per node (the T21 reduce stage): the LLM-written summary of a
--- topic, plus the provenance freshness (#064) and the cost API read back — the
+-- One brief per node (the reduce stage): the LLM-written summary of a topic,
+-- plus the provenance brief freshness checks and the cost API read back — the
 -- model that wrote it, the prompt by name and template hash, and token usage.
 -- Member reference URIs are baked into `text` mechanically by the op, never by
 -- the LLM. Keyed by node so a rebuilt node replaces its brief.

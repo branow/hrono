@@ -1,4 +1,4 @@
-"""Answer one question against one tree, with someone waiting (#169, #207).
+"""Answer one question against one tree, with someone waiting.
 
 The API's recall route and the panel's Ask page are the same request: resolve
 the embedding model, take the query encoder only if it is already in memory,
@@ -36,8 +36,8 @@ def _query_encode(model_id: str) -> Encoder:
     """The query encoder, if it is ready; otherwise say so and do not wait.
 
     A question has someone waiting on it, so it does not queue behind a load it
-    cannot see — it reports that the model is still arriving and asks them back
-    (#169). The miss starts the load, so "shortly" is true rather than
+    cannot see — it reports that the model is still arriving and asks them back.
+    The miss starts the load, so "shortly" is true rather than
     hopeful.
     """
     encoder = ready_encoder_for(model_id)

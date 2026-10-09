@@ -1,4 +1,4 @@
-"""The lists behind the Health page's counts (E009, #218).
+"""The lists behind the Health page's counts.
 
 `triage` says HOW MANY; this says WHICH, and what a person can do about each.
 A waiting section carries the topic it would fit best and the score; a stale

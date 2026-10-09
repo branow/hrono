@@ -1,4 +1,4 @@
-"""#054: the ``trees`` collection — which sources a tree is the map over.
+"""The ``trees`` collection — which sources a tree is the map over.
 
 A tree with no entry is UNSCOPED, not empty: that distinction is the whole
 reason this collection is additive, and it is what `sources_of` returning None
@@ -91,8 +91,7 @@ def test_a_tree_naming_an_unregistered_source_is_refused(
     client: tuple[TestClient, dict, object],
 ) -> None:
     # a tree whose source does not exist builds an empty map and reports
-    # success, which is #132's failure: an op that declines work and says it
-    # worked.
+    # success: an op that declines work and says it worked.
     http, headers, conn = client
 
     response = http.put(
@@ -219,7 +218,7 @@ def test_scoped_sources_drops_a_source_that_was_deleted(
 def test_deleting_a_built_tree_s_config_says_what_it_arms(
     client: tuple[TestClient, dict, object],
 ) -> None:
-    """#167: one small row, a corpus-wide recluster, and nothing said so.
+    """One small row, a corpus-wide recluster, and nothing said so.
 
     An absent row means UNSCOPED, which is the right meaning — so the next
     `maintain` on a tree whose config is gone clusters EVERY source into it.

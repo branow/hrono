@@ -1,7 +1,7 @@
-"""Why a run failed, said in words, with what to do about it (#213).
+"""Why a run failed, said in words, with what to do about it.
 
-A failed run used to show ``llm-error`` and the driver's sentence, and nothing
-else: not the stage, not the section, not a next step. Every error CODE hrono
+A bare ``llm-error`` and the driver's sentence say nothing else: not the
+stage, not the section, not a next step. So every error CODE hrono
 can raise has a plain sentence and a remedy here, keyed by the code — a test
 walks every error class and fails when one has no entry, so a new code cannot
 reach a run page unexplained. The raw message is still shown, behind a

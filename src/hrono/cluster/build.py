@@ -1,11 +1,11 @@
 """The full cluster build: UMAP reduce -> HDBSCAN leaf -> noise attach.
 
-Given the sections' combined vectors (#039), the settled recipe (clustering-
-lifecycle.md, how-hrono-works.md) is:
+Given the sections' combined vectors, the settled recipe (docs/clustering.md,
+docs/architecture.md) is:
 
 1. **UMAP** to the recipe's dims, ``metric="cosine"``, a fixed seed — the
    nonlinear reduction creates the density contrast HDBSCAN needs. A warm-init
-   seam (``init`` = stored coords) is wired for later incremental settle (#T39);
+   seam (``init`` = stored coords) is wired for incremental settle;
    a fresh full build inits from UMAP's default. Stored coords carry the width
    of the build that wrote them, so a level that has crossed a rung since then
    offers an init of the wrong width; that init is dropped and the build runs
@@ -19,18 +19,18 @@ lifecycle.md, how-hrono-works.md) is:
    for unit-blended vectors is cosine), so every section lands in exactly one
    topic. Attached members carry the attachment similarity; density-core members
    do not. A level HDBSCAN labels ENTIRELY noise has no core to attach to and is
-   one topic — the answer the ladder gives a level too small to reduce (#112),
-   not a failure (E003) — and the result says so (``collapsed``), so a large
+   one topic — the answer the ladder gives a level too small to reduce, not a
+   failure — and the result says so (``collapsed``), so a large
    corpus folded into one topic is never mistaken for one that clustered.
    Structureless input does that deterministically, and near-identical input
    (a level of identical briefs) does it on some runs and not others: UMAP
-   over tied points is not reproducible even seeded, which is what made one
-   ``maintain`` fail and the identical next one succeed (#198).
+   over tied points is not reproducible even seeded, so two identical
+   ``maintain`` runs can disagree unless a collapse is a valid answer.
 
 The parameters that scale with the point count (dims, neighbours, minimum
 cluster size) come from ``recipe`` — the same machinery reduces a level of
 thousands of sections and a level of tens of briefs, with the recipe scaled to
-what it is given (how-hrono-works.md); the rest is baked here, not config. The
+what it is given (docs/architecture.md); the rest is baked here, not config. The
 heavy numeric libraries are imported lazily so a missing ``cluster`` extra
 surfaces as a clean ``ClusterError`` rather than an import traceback, mirroring
 the embed backend — and a driver failure inside them is translated to
@@ -68,7 +68,7 @@ class ClusterResult:
     ``collapsed`` is True when the clusterer labelled every vector noise and
     the level became one topic for want of a core: a fair answer for a few
     points and a surprising one for many, so the caller must be able to say
-    which happened (#133).
+    which happened.
     """
 
     labels: tuple[int, ...]
@@ -139,7 +139,7 @@ def _one_topic(count: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def core_labels(combined: Sequence[Sequence[float]]) -> tuple[int, ...]:
-    """Scoped mini-pipeline for the incubator (#086): UMAP -> HDBSCAN leaf,
+    """Scoped mini-pipeline for the incubator: UMAP -> HDBSCAN leaf,
     returning the raw density labels WITHOUT attaching noise (-1 stays -1).
 
     Unlike ``build_clusters`` (which attaches every noise point to a core), the

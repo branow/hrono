@@ -1,6 +1,6 @@
-"""#174 (T57.3): watching a job's progress live.
+"""Watching a job's progress live.
 
-The fan-out watched here is created through `POST /jobs`, not planted (#176),
+The fan-out watched here is created through `POST /jobs`, not planted,
 so these tests fail if the producer breaks as well as if the stream does.
 """
 

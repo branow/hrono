@@ -1,7 +1,7 @@
--- E033: a brief overwritten, by a regeneration or by hand, is not lost.
+-- A brief overwritten, by a regeneration or by hand, is not lost.
 --
--- `briefs` holds one row per topic, so every write replaced the text before it
--- and a bad rewrite could not be noticed or copied back. `briefs.upsert` now
+-- `briefs` holds one row per topic, so every write replaces the text before it;
+-- for a bad rewrite to be noticed and copied back, `briefs.upsert`
 -- copies the text it replaces here, with who wrote that text (`model_name`,
 -- 'hand-edited' for a person), when it was written, when it was replaced, and
 -- why (`reason`: 'regen' or 'rewrite'). Only the newest few are kept per

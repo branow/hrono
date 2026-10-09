@@ -1,8 +1,8 @@
-"""T25.1: every stored passage is embeddable + path-blended by the existing ops.
+"""Every stored passage is embeddable + path-blended by the existing ops.
 
 Passages carry a content hash and share their file's path, and split stores each
-passage body as a ``contents`` row (like sections), so the #035 embed op (which
-embeds every content) already vectorises passage bodies, and #040's
+passage body as a ``contents`` row (like sections), so the embed op (which
+embeds every content) already vectorises passage bodies, and the build's
 ``register_path_bodies`` already embeds their path. These tests lock that in: a
 future change that stops indexing passages must fail here. No new production
 code is needed — this confirms the property over sync -> split -> embed.
@@ -149,7 +149,7 @@ def test_passage_combined_vector_is_the_blend(db: Database) -> None:
             combined = combined_vector(conn, chash, path, "emb")
             assert combined is not None
             assert len(combined) == 2 * DIMS
-            assert combined == combine(content, path_vec)  # #039 blend, a=0.5
+            assert combined == combine(content, path_vec)  # path blend, a=0.5
 
 
 def test_re_embed_is_a_no_op(db: Database, tmp_path: Path) -> None:

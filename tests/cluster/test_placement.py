@@ -1,4 +1,4 @@
-"""T34: the incremental placement rule — sticky, nearest-centroid, dissolve."""
+"""The incremental placement rule — sticky, nearest-centroid, dissolve."""
 
 from collections.abc import Iterator
 
@@ -272,7 +272,7 @@ def test_a_moved_section_is_re_attached_on_the_terms_it_had(
 ) -> None:
     # the prior membership is the only record of how the section got there, and
     # reconcile has already dropped the row it lived on — so placement must
-    # carry node, similarity AND the forced flag across a rename (#100).
+    # carry node, similarity AND the forced flag across a rename.
     with db.connect() as conn, conn:
         node_a, _ = make_node(conn, topic=0, n=3)
         make_node(conn, topic=1, n=3)

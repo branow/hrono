@@ -1,8 +1,8 @@
-"""E016: a text model on a `claude-code` connection validates through the CLI.
+"""A text model on a `claude-code` connection validates through the CLI.
 
 Driven through the endpoint with a real subprocess: a stand-in `claude` on PATH
 is the only fake, so the dispatch, the working directory and the error path run
-as production runs them (#108). The README's first-run path depends on this.
+as production runs them. The README's first-run path depends on this.
 """
 
 import inspect

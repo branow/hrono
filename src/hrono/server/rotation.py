@@ -1,4 +1,4 @@
-"""Rotating the master key of a RUNNING server (#177).
+"""Rotating the master key of a RUNNING server.
 
 ``crypto.rotate`` re-encrypts the rows; this also moves the process onto the
 new key, under the same write lock. Writers seal their secrets under that lock

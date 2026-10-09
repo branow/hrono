@@ -1,4 +1,4 @@
-"""Small helpers for saying a count the way a person would (#216)."""
+"""Small helpers for saying a count the way a person would."""
 
 from __future__ import annotations
 

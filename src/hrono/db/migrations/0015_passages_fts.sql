@@ -1,4 +1,4 @@
--- Full-text index over passage path + body for recall's keyword leg (T25.2),
+-- Full-text index over passage path + body for recall's keyword leg,
 -- ranked by BM25 (FTS5's default). Standalone, not external-content: a passage's
 -- body lives in `contents` by hash, so the `split` op populates this from the
 -- raw bytes and keeps it in sync (delete-by-source, then re-insert, on every

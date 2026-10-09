@@ -171,9 +171,8 @@ def test_input_is_the_child_briefs_not_sections(db: Database) -> None:
 
 
 def test_child_references_are_recorded_beside_the_text(db: Database) -> None:
-    # the upper-level twin of the footer problem (#102): the raw "Children:"
-    # list used to live in the brief text, where #071 indexed it and render
-    # duplicated it as proper titled links.
+    # the raw "Children:" list must not live in the brief text, because
+    # recall would index it and render already shows it as titled links.
     database, _ = db
     brief_upper(job(), JobContext(database), client=FakeCompletion())
     parents = _parents(database)
@@ -225,7 +224,7 @@ def test_the_run_reports_the_tokens_it_spent(db: Database) -> None:
 def test_the_upper_nodes_are_briefed_concurrently(
     db: tuple[Database, list[int]],
 ) -> None:
-    # the same pool as #059's leaf pass: upper briefs are independent too.
+    # the same pool as the leaf pass: upper briefs are independent too.
     database, _ = db
     client = Paired()
 
@@ -241,7 +240,7 @@ def test_the_upper_nodes_are_briefed_concurrently(
 def test_an_echo_of_the_upper_prompt_is_retried_and_stored_flagged(
     db: Database,
 ) -> None:
-    # E015: the ~/hrono-demo parents were the brief-upper prompt's own words
+    # a small local model's parents were the brief-upper prompt's own words
     database, _ = db
     with database.connect() as conn, conn:
         registry_store.replace(
@@ -277,7 +276,7 @@ def test_an_echo_of_the_upper_prompt_is_retried_and_stored_flagged(
 def test_a_stored_upper_brief_in_the_prompts_vocabulary_is_fresh_and_unlisted(
     db: tuple[Database, list[int]],
 ) -> None:
-    # E019: an upper brief's material is its child briefs, read back from the
+    # an upper brief's material is its child briefs, read back from the
     # store; a read that only knew member condensations would call it an echo
     database, _ = db
     with database.write() as conn:

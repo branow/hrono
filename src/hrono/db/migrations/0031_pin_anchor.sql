@@ -1,4 +1,4 @@
--- A membership pin has to say WHERE (#155).
+-- A membership pin has to say WHERE.
 --
 -- `pins(kind, target_id)` was enough for a brief: the target is the node and
 -- the pin means "do not rewrite this". A membership pin means "this section

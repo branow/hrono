@@ -1,6 +1,6 @@
-"""#152: a local openai-shaped server, at a declared endpoint.
+"""A local openai-shaped server, at a declared endpoint.
 
-The provider is #151's client with two differences, and these pin both: the
+The provider is the openai client with two differences, and these pin both: the
 endpoint is REQUIRED (a local server has no default address), and there may be
 no key at all (the usual case for ollama, vllm and lm-studio). The server here
 is a real one on a real socket, which is the whole argument for riding the REST

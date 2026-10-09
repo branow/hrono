@@ -1,18 +1,19 @@
 """The ``cluster-briefs`` op: build the next tree level up from a level's brief.
 
 The tree is recursive — cluster -> brief -> embed briefs -> cluster the briefs
--> ... to root — so this reuses the SAME embed (#035) and cluster build (#040)
+-> ... to root — so this reuses the SAME embed and cluster build
 over BRIEF TEXT instead of leaf sections, proving the pipeline is level-agnostic
 not section-only. For a source level N: register each level-N node's brief text
-as embeddable content (embed-once by content hash), run the #035 embed op to
-vectorise it, then cluster the brief vectors with the #040 build (same baked
+as embeddable content (embed-once by content hash), run the embed op to
+vectorise it, then cluster the brief vectors with the cluster build (same baked
 constants) and persist level N+1 nodes whose members are the level-N node ids
 (via node_children).
 
-Path-blend (#039) is content-ONLY for briefs: a topic has no file path, so there
-is nothing to blend (how-hrono-works.md) — the clustering vector is the brief's
+Path-blend is content-ONLY for briefs: a topic has no file path, so there is
+nothing to blend (docs/architecture.md) — the clustering vector is the brief's
 L2-normalised content vector (alpha = 0), not a combined one, and no synthetic
-path is invented. Heavy compute runs outside the #008 lock like #040.
+path is invented. Heavy compute runs outside the write lock, as in the cluster
+build.
 """
 
 from __future__ import annotations
@@ -94,25 +95,24 @@ def attach_orphans(
 ) -> tuple[tuple[int, int, float], ...]:
     """Parent every unparented node at ``level`` under its nearest node above.
 
-    ATTACH-ONLY (#114): a leaf the incubator emits after ``build_tree`` has
+    ATTACH-ONLY: a leaf the incubator emits after ``build_tree`` has
     recursed to a root is briefed but has no parent, and ``root.md``'s children
     are rendered from parent edges — so the topic is written to the export and
     unreachable in it.
 
-    ``level`` generalises that rule upward (#163). It was 0 because in #114 the
-    orphan was always a leaf, and that stopped being the whole truth: a node at
-    ANY level can lose its parent. ``cluster_briefs`` groups only the nodes
+    ``level`` generalises that rule upward, because a node at ANY level can
+    lose its parent, not only a leaf. ``cluster_briefs`` groups only the nodes
     that HAVE briefs, so an upper node whose brief failed or was rejected
-    (#121) is simply absent from its parent's grouping — and with the collector
-    stopping at level 0, nothing ever came back for it. An orphan up there
+    is simply absent from its parent's grouping — and a collector that stopped
+    at level 0 would never bring it back. An orphan up there
     takes its whole subtree out of the export with it.
 
-    Re-clustering the level above for one new leaf would
-    churn every sibling's membership and invalidate the briefs over them, which
-    is the incremental promise inverted; this places the leaf by the same move
-    #085 makes at level 0, in the same space the level above was clustered in:
-    the unit vector of its BRIEF against each candidate parent's centroid (the
-    mean of its children's brief vectors), best dot product wins.
+    Re-clustering the level above for one new leaf would churn every sibling's
+    membership and invalidate the briefs over them, which is the incremental
+    promise inverted; this places the leaf by the same move the placement rule
+    makes at level 0, in the same space the level above was clustered in: the
+    unit vector of its BRIEF against each candidate parent's centroid (the mean
+    of its children's brief vectors), best dot product wins.
 
     Below TAU it still attaches, to the nearest parent, recorded as
     ``attached = 1`` — the schema's meaning of the flag (0009_nodes.sql): 1 is
@@ -121,13 +121,12 @@ def attach_orphans(
     is worse than an imperfect parent, so this mirrors the incubator's
     force-assign rather than its park.
 
-    The flag now has a reader (#123): ``upper_misfits`` counts a below-TAU
+    The flag now has a reader: ``upper_misfits`` counts a below-TAU
     attached child as a misfit of its parent, and ``migrate_children`` moves it
-    once a better-fitting parent exists. Before that it had none, and this
-    docstring claimed the poor attachment would last "until a full rebuild
-    re-derives the level" — an escape that did not exist, because nothing
+    once a better-fitting parent exists. Without that reader a poor attachment
+    would last FOREVER: no full rebuild re-derives the level, because nothing
     deletes an upper brief, so ``_highest_brief_level`` never drops back and
-    ``build_tree`` starts at the root and stops. The true bound was FOREVER.
+    ``build_tree`` starts at the root and stops.
 
     The similarity is recorded on EVERY row, confident or not: it costs nothing
     (no reader to break), and a placement's score is exactly what a future
@@ -194,12 +193,12 @@ def upper_misfits(
 ) -> tuple[tuple[int, int, int], ...]:
     """Misfit counts for the parents at ``level``, measured over their children.
 
-    The level >= 1 twin of ``monitor._misfits`` (#113), in brief space rather
-    than combined-vector space: a child is a misfit of its parent when some
-    other parent's centroid is nearer, OR when it was attached by proximity
-    (#114) and sits below TAU. The second half is the one that matters — #114
-    attaches to the NEAREST parent, so ``best_other > own`` can never fire for
-    the placements this exists to review, exactly as a force-assigned member is
+    The level >= 1 twin of ``monitor._misfits``, in brief space rather than
+    combined-vector space: a child is a misfit of its parent when some other
+    parent's centroid is nearer, OR when it was attached by proximity and sits
+    below TAU. The second half is the one that matters — attach places a child
+    under the NEAREST parent, so ``best_other > own`` can never fire for the
+    placements this exists to review, exactly as a force-assigned member is
     invisible to the level-0 rule.
 
     Rows are ``(parent_id, misfits, children)``, the shape ``misfit`` stores, so
@@ -232,12 +231,12 @@ def migrate_children(
 ) -> int:
     """Move this level's misfit children to the parent that fits them better.
 
-    A child whose PARENTING is pinned is never moved (#155).
+    A child whose PARENTING is pinned is never moved.
 
     ``repair.migrate`` one level up, and the same rule: a child moves only when
     another parent actually scores higher, so a child with nowhere better keeps
     its place AND its flag, and the next pass looks again. Moving it records the
-    placement unforced, so the flag keeps meaning "not yet revisited" (#123).
+    placement unforced, so the flag keeps meaning "not yet revisited".
     """
     centroids = _parent_centroids(conn, tree, level, model_name)
     held = pins.pinned(conn, pins.PARENTING)
@@ -248,7 +247,7 @@ def migrate_children(
             continue
         for child_id, vector in _child_vectors(conn, parent_id, model_name):
             if child_id in held:
-                continue  # a human hung it here (#155)
+                continue  # a human hung it here
             target, best = _nearest(vector, others)
             if best > _dot(vector, centroids[parent_id]):
                 moves.append((child_id, target, best))
@@ -263,16 +262,16 @@ def replace_children(
     """Re-place a retiring node's children under the best REMAINING parent.
 
     The upper-level twin of ``repair.retire``: that re-places a leaf topic's
-    MEMBERS through #085's rule, and this re-places an upper topic's CHILDREN
-    through #114's — the child's unit brief vector against each candidate
-    parent's centroid, nearest wins, attaching below TAU rather than parking
-    because a node with no parent is unreachable and that is worse than an
-    imperfect parent.
+    MEMBERS through the placement rule, and this re-places an upper topic's
+    CHILDREN through attach-by-proximity — the child's unit brief vector against
+    each candidate parent's centroid, nearest wins, attaching below TAU rather
+    than parking because a node with no parent is unreachable and that is worse
+    than an imperfect parent.
 
     A child moves to a SIBLING of the node being retired, never to its
     grandparent: a parent sits exactly one level up (0012_node_children.sql),
-    and a child promoted two levels would break the invariant #158 now refuses
-    by hand.
+    and a child promoted two levels would break the invariant a manual move
+    refuses.
 
     Returns (child, new parent, similarity) per move. Empty when the node has
     no children, or when nothing is left at its level to receive them — the
@@ -374,7 +373,7 @@ def _collect_under_single_parent(
 def _sole_ancestor(
     context: JobContext, tree: str, from_level: int
 ) -> list[int]:
-    """The nearest level ABOVE ``from_level`` holding exactly one node (#124).
+    """The nearest level ABOVE ``from_level`` holding exactly one node.
 
     When SEVERAL candidate parents are childless there is no centroid to place
     by and no single node to collect under, so the search moves up: a level

@@ -1,57 +1,45 @@
 # hrono
 
-A hierarchical, incrementally-updated knowledge base for AI agents.
+A hierarchical, incrementally updated knowledge base for AI agents.
 
-hrono ingests heterogeneous sources, splits and embeds them, and clusters
-them into a tree of abstractions (raw sections to briefs to root) that it
-serves to agents for retrieval. Its differentiator is incremental update:
-a source change touches only the affected nodes, never a full rebuild.
+[![CI](https://github.com/branow/hrono/actions/workflows/ci.yml/badge.svg)](https://github.com/branow/hrono/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 
-The project ships as one binary, `hrono`. `hrono serve` is a long-running
-HTTP server that owns the SQLite database, all compute, and all LLM calls;
-every other subcommand is a thin HTTP client of that server.
+## What it is
 
-## Prerequisites and install
+hrono reads your sources (git repositories, a GitHub user or organization, a
+Bitbucket workspace, Confluence, Notion), splits them into sections, embeds
+them, and clusters them into a tree of topics. Each topic carries a brief: an
+LLM-written summary of what it holds. Briefs of briefs climb to a single root.
+An agent uses the tree two ways: **recall** hands it the passages that answer a
+question, with provenance, and **explore** lets it walk the briefs from the
+root down to the files it needs.
 
-- Python 3.13+ and [uv](https://docs.astral.sh/uv/); `git` for git sources;
-  the `claude` CLI, installed and signed in, only if you use the
-  `claude-code` provider.
-- From a clone, install with both heavyweight extras (in-process embedding
-  pulls torch; clustering pulls umap/hdbscan — several GB together):
+The differentiator is **incremental update**. When a source changes, hrono
+re-reads only what moved, re-places only the affected sections and rewrites
+only the briefs whose inputs changed. A one-file commit costs a handful of
+model calls, not a rebuild.
 
-      uv sync --extra embed --extra cluster
+hrono is one binary, `hrono`. `hrono serve` is a long-running HTTP server that
+owns the SQLite database, all compute and all LLM calls. Every other
+subcommand is a thin HTTP client of that server, and so is the web dashboard
+at `/ui`.
 
-  From a package install it is `uv pip install "hrono[embed,cluster]"`.
-  Without `[embed]` the embed stage fails with "in-process embedding backend
-  is not installed"; without `[cluster]`, the build fails at the clustering
-  stage with the matching message.
-- The first embedding run downloads the model weights (the default is
-  `sentence-transformers/all-MiniLM-L6-v2`) from Hugging Face, so the first
-  build needs network access and about 14 s extra.
-- Clustering needs at least 12 sections, so a toy source of two small files
-  stops with "too few sections" — point it at something with a few dozen
-  files, or widen the filter.
+## Quickstart
 
-## Getting started
+With hrono installed (below) and a repository of a few dozen files or more:
 
-```
+```sh
 hrono admin new-key --out hrono.key     # the key every secret is encrypted under
 hrono serve --key-file hrono.key        # prints a bootstrap admin token, once
+```
+
+In a second terminal:
+
+```sh
 hrono profile add local --server http://127.0.0.1:8080   # prompts for the token
-```
 
-Back the key up. Lose it and every stored secret is unreadable — hrono will
-start, and nothing it has encrypted will open.
-
-The server owns a SQLite file at `.hrono/hrono.db` **relative to the directory
-you start it from** (it prints the resolved path first). Start it elsewhere and
-you get a fresh, empty database; pin it with `--db` or `$HRONO_DB`. The client
-profile lives separately, under `~/.hrono` (or `$HRONO_HOME`).
-
-Then register what a build needs — each `set` takes a JSON config with `-f` or
-on stdin. A connection, two models (one embedding, one text) and a source:
-
-```
 hrono connections set claude -f - <<'EOF'
 {"name": "claude", "provider": "claude-code", "auth": {"method": "none"}}
 EOF
@@ -62,304 +50,216 @@ hrono models set emb -f - <<'EOF'
 EOF
 
 hrono models set writer -f - <<'EOF'
-{"name": "writer", "kind": "text", "connection": "claude",
- "model": "claude-sonnet-4-5"}
+{"name": "writer", "kind": "text", "connection": "claude", "model": "sonnet"}
 EOF
 
 hrono sources set repo -f - <<'EOF'
 {"name": "repo", "type": "git",
- "url": "https://github.com/you/your-repo.git", "auth": {}}
+ "url": "https://github.com/you/your-repo.git", "auth": {"method": "none"}}
 EOF
-```
 
-(An `anthropic` connection instead takes
-`"auth": {"method": "api-key", "api_key": "sk-..."}` — see the backend note
-below for when each pays off. `hrono connections get <name>` shows a stored
-config with its secrets masked.)
-
-Build, watch, ask:
-
-```
 hrono tree maintain default      # the cold, full build; prints a job id
-hrono jobs watch <job id>        # follows it until it ends; exits 1 on failure
+hrono jobs watch <job-id>        # follows it until it ends
 hrono recall default "how does the authentication flow work"
 ```
 
-After the sources change, `hrono tree sync default` applies only the diff —
-that is the everyday verb, and the whole point. `hrono recall "question"`
-with no tree name uses the profile's `--default-tree` (or `default`).
+After the sources change, `hrono tree sync default` applies only the diff.
+That is the everyday command.
 
-Or do all of that in the browser: sign in to the dashboard with the bootstrap
-token and its Set up page walks a new install from a connection to a built
-tree (below).
+Prefer the browser? Sign in to `http://127.0.0.1:8080/ui` with the bootstrap
+token. Its Set up page walks a new install from a connection to a built tree.
 
-A `set` is validated before it is stored: a connection against its provider, a
-local embedding model by loading its weights (about 14 s the first time for
-MiniLM), a text model on a `claude-code` connection by asking the `claude`
-CLI one trivial question (a few seconds, and one call's overhead). It waits up
-to 120 s for that. If it still times out, the write may have landed anyway. The
-message names the command that shows whether it did (`hrono models get
-<name>`), so run that before you retry.
+Back up the key file. Without it every stored secret is unreadable: hrono
+starts, and nothing it encrypted opens.
 
-### Choose the backend before the first build
+## Install
 
-A model points at a connection, and the connection's provider decides what a
-build costs:
+hrono is not yet published to PyPI; install it from source. You need Python
+3.13+, [uv](https://docs.astral.sh/uv/) and `git`. The `claude` CLI, installed
+and signed in, is needed only for the `claude-code` provider.
 
-- `claude-code` needs no API key and bills through your existing Claude
-  subscription. Use it to try hrono out, and for the incremental syncs after a
-  first build, where a handful of changed sections costs a handful of calls.
-- `anthropic` (an API key) is what a **first full build over a large corpus**
-  should use. The CLI pays a fixed overhead per call — 18871 cached input
-  tokens, about $0.038, 4–30 s — that no prompt can remove. Measured: the
-  `condense` pass over 421 sections took about 70 minutes and about $16 through
-  `claude-code`. The same work through `anthropic` pays for the content rather
-  than the harness.
-
-Both can be registered at once; the connection is named per model, so the
-`condense` model can use `anthropic` for the build while everything else stays
-on `claude-code`.
-
-### Scope a source to part of a repository
-
-`filter.only` is a whitelist of globs applied before anything else, so a
-monorepo can be ingested one package at a time:
-
-```json
-{"filter": {"only": ["src/hrono/crypto/**", "src/hrono/auth/**"]}}
+```sh
+git clone https://github.com/branow/hrono.git
+cd hrono
+uv sync --extra embed --extra cluster
+source .venv/bin/activate        # or prefix each command with `uv run`
 ```
 
-Without it every file of the clone is a candidate. `filter.exclude` removes
-paths, `filter.include` re-admits files the baked ignore list caught — neither
-is a whitelist.
+The two extras are heavyweight (torch, umap-learn, hdbscan; several GB
+together) and opt-in. Without `embed` the embed stage fails with "in-process
+embedding backend is not installed"; without `cluster` the build stops at
+clustering with the matching message.
 
-### How many calls at once
+The first build downloads the embedding model weights from Hugging Face, so it
+needs network access. Clustering needs at least 12 sections; a toy source of
+two small files stops with "too few sections".
 
-`hrono serve` runs one op's LLM calls in a bounded pool, 4 at a time by
-default. Set `HRONO_LLM_CONCURRENCY` in the server's environment to raise it
-(an API key with headroom) or lower it to 1 (a rate limit, or a small box).
-Writes stay serial whatever it is set to.
+## Concepts
+
+- **source**: a place hrono reads. Registering one pulls nothing; a sync does.
+- **section**: about 10 KB of one file; the unit hrono clusters and an agent
+  reads when it explores.
+- **passage**: about 800 B; the unit recall returns. A section reassembles
+  byte-identically from its passages.
+- **topic**: a group of sections, or of other topics, with a **brief** that
+  summarizes it. Topics nest up to one root.
+- **tree**: the topics over a named set of sources. One server can hold
+  several; `default` always exists.
+- **sync** brings a built tree up to date incrementally; **maintain** builds
+  one from scratch.
+
+The full vocabulary is in [GLOSSARY.md](GLOSSARY.md); the dashboard carries
+the same at `/ui/guide`, with this install's numbers.
+
+## The CLI
+
+| Command | What it does |
+| --- | --- |
+| `hrono serve` | Run the server (`--host`, `--port`, `--key-file`, `--db`). |
+| `hrono profile add\|list\|use\|current\|set-token\|rm` | Manage client profiles. |
+| `hrono connections\|models\|prompts\|sources list\|get\|set\|rm` | Manage the registry; `set` reads JSON from `-f` or stdin. |
+| `hrono tree config list\|get\|set\|rm` | Manage trees and the sources each maps. |
+| `hrono tree maintain <tree>` | Build a tree from scratch. |
+| `hrono tree sync <tree>` | Bring a built tree up to date incrementally. |
+| `hrono tree export <tree> --out <dir>` | Write the tree as a folder of Markdown (`--levels` sets the hop limit, default 4). |
+| `hrono tree pending <tree>` | List sections not yet placed in a topic. |
+| `hrono jobs list\|get\|watch\|cancel` | Inspect and control background jobs. |
+| `hrono recall [tree] "<question>"` | Return the passages that answer a question (`--limit`, `--json`). |
+| `hrono usage` | Tokens, model time and cost by run, model, upstream model, user or day. |
+| `hrono admin new-key\|reset-token` | Local recovery; acts on the database file, needs no token. |
+| `hrono reset` | Wipe the local database after a confirmation. |
+
+`hrono recall "question"` with no tree name uses the profile's
+`--default-tree`, or `default`.
+
+Exit codes: 0 ok, 1 failure, 2 usage, 3 server unreachable or timed out,
+4 unauthorized or forbidden, 5 not found. `hrono jobs get` and `watch` exit 1
+for a job that failed or was canceled.
+
+### The export an agent reads
+
+`hrono tree export` writes the tree as Markdown an agent can walk without a
+server: `root.md`, one directory per topic named by its subject, and the
+section files beneath. However deep the stored tree is, the export is at most
+`--levels` hops from root to a section. Facts a brief states carry a `[§]` link
+to the sections they came from. The dashboard's Export page has ready-to-paste
+commands for wiring an agent to a tree.
+
+## The dashboard
+
+<!-- screenshot: docs/images/dashboard.png -->
+
+`hrono serve` also serves a dashboard at `/ui`, from the same process and the
+same API. Sign in with the token the CLI uses; a reader sees read-only views
+and controls a role cannot use are absent as well as refused. It is
+server-rendered HTML with no build step, every view is a shareable URL, and
+everything is reachable from the keyboard.
+
+Home shows whether the tree is up to date and what is running. Map, Outline,
+Find and Ask are the ways into the knowledge. Runs, Health and Usage show what
+the pipeline did, what needs a person, and what it cost. Set up, Settings and
+Access cover installation, configuration and who may sign in.
+
+The page-by-page guide is in [docs/dashboard.md](docs/dashboard.md).
+
+## Configuration
+
+### LLM providers
+
+A model points at a connection, and the connection's provider decides what a
+build costs. Supported providers: `claude-code`, `anthropic`, `openai` and
+`openai-compatible` (Ollama, vLLM, LM Studio and similar servers).
+
+- `claude-code` needs no API key and bills through your Claude subscription.
+  Use it to try hrono and for incremental syncs, where a few changed sections
+  cost a few calls. Each call carries a fixed overhead (about 19k cached input
+  tokens and 4 to 30 s), so a first build over a large corpus is slow: the
+  condense pass over 421 sections took about 70 minutes.
+- `anthropic` bills per token to an API key and pays for the content rather
+  than the harness. Use it for a first full build over a large corpus:
+
+  ```json
+  {"name": "api", "provider": "anthropic",
+   "auth": {"method": "api-key", "key": "sk-ant-..."}}
+  ```
+
+Models can be assigned per role (`condense`, `brief`, `brief-upper`, `judge`),
+so the condense model can use `anthropic` while everything else stays on
+`claude-code`. A one-model install needs no roles.
+
+Every `set` is validated before it is stored: a connection against its
+provider, a local embedding model by loading its weights, a text model by one
+trivial call. `hrono connections get <name>` shows a stored config with its
+secrets masked.
+
+### Sources
+
+Source types: `git`, `github-user`, `bitbucket-workspace`, `confluence` and
+`notion`. A git source can be scoped to part of a repository with
+`filter.only`, a whitelist of globs applied before anything else:
+
+```json
+{"filter": {"only": ["src/payments/**", "src/auth/**"]}}
+```
+
+`filter.exclude` removes paths and `filter.include` re-admits files the
+built-in ignore list caught; neither is a whitelist.
+
+### Where data lives
+
+The server's database is `.hrono/hrono.db`, **relative to the directory you
+start it from**; `serve` prints the resolved path first. Pin it with `--db` or
+`HRONO_DB`. The client profile lives under `~/.hrono`.
 
 ### Environment variables
 
-- `HRONO_DB` — the database path `serve`, `reset` and `admin` commands use
-  when `--db` is not given (default: `.hrono/hrono.db`, relative to the
-  current directory).
-- `HRONO_HOME` — where the client profile config lives (default `~/.hrono`).
-- `HRONO_MASTER_KEY` — the master key, as an alternative to `--key-file`.
-- `HRONO_TOKEN` — the token `profile add` / `profile set-token` read when
-  `--token` is not given (they prompt otherwise, keeping it out of history).
-- `HRONO_LLM_CONCURRENCY` — the pool width above.
+| Variable | Meaning |
+| --- | --- |
+| `HRONO_DB` | Database path for `serve`, `reset` and `admin` when `--db` is not given. |
+| `HRONO_HOME` | Where the client profile lives (default `~/.hrono`). |
+| `HRONO_MASTER_KEY` | The master key, instead of `--key-file`. |
+| `HRONO_TOKEN` | The token `profile add` and `profile set-token` read when `--token` is not given. |
+| `HRONO_LLM_CONCURRENCY` | Concurrent LLM calls per operation (default 4). Writes stay serial. |
 
-### If you lose the token or the key
+### Recovering access
 
-The bootstrap token is shown once. Lost, it is reissued locally, on the
-machine that has the database file — that is the trust boundary, so no token
-is needed:
+The bootstrap token is shown once. To reissue it, on the machine that holds
+the database file:
 
-```
+```sh
 hrono admin reset-token admin        # prints a fresh token, once
 hrono profile set-token local        # records it on the existing profile
 ```
 
-A lost **master key** is not recoverable: `hrono reset` wipes the database
-(and the synced source caches) after a confirmation, and refuses to run while
-the server holds the file. The next `hrono serve` starts clean and bootstraps
-a new admin.
-
-### Known limits
-
-- A section is up to 10 KB, and the embedding model reads only what fits its
-  own input window (256 word pieces for MiniLM) — the vector represents the
-  head of a long section. The baked path-blend compensates in clustering;
-  a model with a larger window simply uses more of the text.
-- Scripts can gate on exit codes: 0 ok, 1 failure, 2 usage, 3 server
-  unreachable or timed out, 4 unauthorized/forbidden, 5 not found. `hrono
-  jobs get|watch` exit 1 for a job that failed or was canceled.
-
-## The dashboard
-
-`hrono serve` also serves a web dashboard at `/ui`, from the same process and
-the same API. Sign in with the same token the CLI uses; it is held in an
-HttpOnly SameSite=Strict cookie and resolved by the same role check every API
-route uses, so a reader sees read-only views and the controls a role cannot use
-are absent as well as refused.
-
-Everything is reachable from the keyboard. The first Tab stops on a "Skip to
-content" link (on the map, a second one skips to the outline, a plain list of
-the topics); `/` focuses Search from anywhere that is not a text field; the
-tree switcher opens with Enter and folds with Escape; and on the map Tab walks
-the topics in drawing order, a ringed disc shows where you are, and Enter opens
-the topic and moves focus into its panel.
-
-It is server-rendered Jinja with no build step and no JavaScript to vendor: the
-map, the runs view, the health checks, the activity log and the config tables
-are plain HTML, and every view is a URL you can paste to someone else. Home
-answers four questions: whether the tree is up to date (each git source of the
-tree says when it was last read, at which commit, and whether its remote has
-moved on since — asked of the remote with `git ls-remote`, at most once a
-minute), whether anything is running (live, from the same event stream as the
-Runs page, on an empty tree too), what the last run did (the two sit side by
-side), and, below them, whether anything needs a person. Health lists each
-problem and fixes it beside it: an admin places a waiting section into its
-nearest topic or a chosen one, and moves a section that was placed without a
-score (both placements are held by hand, so a sync leaves them where they are),
-rewrites one stale brief (not one the model echoed twice, which needs a person),
-and hands back any hand edit; a reader sees the same lists with no controls.
-Every empty state offers its next step as a button, and every action returns to
-the page it came from saying what it did. Spend is on Home and on every run's
-page (split by stage), and the Usage page, open to every role, adds it up by
-day, model, run and person, and, for a writer or admin, the questions agents
-asked through recall (the last 10,000 per tree are kept; over the last 30 days,
-a count per day and the share it was not confident about; and the latest
-questions, each unsure one linking to Ask; the Ask page itself is not counted);
-a subscription's figure is marked as an estimate and never added to metered
-spend, and a run from before spend was recorded reads unknown rather than
-free. A topic's page opens with a breadcrumb from the root, then who wrote its
-brief, when and with how many tokens; hashes are behind Details. A brief that
-was replaced, by a run or by hand, is kept (the last 5 per topic) under Previous
-versions, each saying who wrote it and what replaced it, with a line diff
-against the current one and the full old text behind Details; saving a brief
-unchanged keeps nothing. Its sections show where each starts (the heading, the
-lines, the size), worst fit first, filterable by path and paged. A section from
-a repo on github.com, gitlab.com or bitbucket.org links to its file at the
-synced commit, on its lines; any other source, a self-hosted instance included,
-shows the path alone. For admins, Edit (name, brief, note) and Structure
-(reparent, merge, dissolve, split) sit in the page head, each saying what it
-will change before it runs; moving a section is on the section. Edit also offers
-Undo for the topic's latest name, brief or note: it says what will change, asks
-for a tick and puts the old value back, so it is one step and a second Undo
-finds nothing. An edit that changes nothing offers no Undo, an undone brief
-rewrite goes back to the model and prompt that wrote it, when hrono kept them,
-and handing the topic back closes its Undo. Every manual edit stays listed under
-Edits on the topic page, readers included: what it was, who made it, when, and
-an "undone" tag on those put back; past ten it says how many older there are.
-Structural changes are not undone.
-
-Find is the other way in, for when you know a word or a file rather than
-where it sits on the map. The search box in the top bar looks for every word
-you type in topic names, briefs, file paths and file text, grouped by kind; it
-matches words and their prefixes, and is not semantic (a question in your own
-words belongs to Ask). Outline shows the whole tree as a collapsible list, with
-each topic's size and whether recall can answer from it, and stays readable at
-hundreds of topics. Files takes a path, or the start of one, to the sections
-cut from it and the topic each was filed under; a section waiting to be filed
-says it is parked, and a path outside the tree's sources says it is not
-ingested.
-
-Ask is the other door, for a question in your own words: it shows the passages
-recall would hand an agent. The last six questions are kept in this browser
-only (a cookie, for a day), each with a compact snapshot of what it returned.
-Ask one again after a fix and every passage is marked new, changed (the same
-place under a newer version), moved from a rank or the same, and the ones that
-dropped out are listed.
-
-Set up is the path for a new install, reached from Home while the tree is empty
-and from Settings when you want to add a git source. Four steps, each a real
-form over the registry Settings edits: a connection (tested against its
-provider before it is saved, so a wrong key is refused in the provider's own
-words and nothing is stored), the models (an embedding model and one text model
-per writing role, each asked one small question before it is stored), a source
-(fetched, then a preview of the files the filter keeps, the largest, and what it
-leaves out and why — read through the same filter ingest uses and with no model
-call) and an estimate (model calls, tokens, time and cost, from the price table,
-with the basis stated and a subscription's figure marked as not spend) ending in
-the build, which lands on its run. A step is done when the registry says so, so
-leaving halfway and coming back resumes where you stopped, and nothing is built
-until the last step.
-
-Settings shows one collection at a time — trees, sources, connections, models,
-prompts — as a table, with each field of a form labelled and explained. It says
-at the top whether the registry is complete enough to build (a role with no
-model, a model whose connection is gone), and a delete or a reset shows what it
-would leave stale before you confirm it. A brief prompt's form can also
-preview the edit on one topic: "Preview on topic" runs the unsaved prompt over
-that topic's own inputs with the model a real brief uses, and shows the result
-beside the current brief. The topics are grouped by level, and on a large tree a
-box filters them by name. A preview canceled from Runs says it was canceled.
-Nothing is saved, no config changes, and the run is counted on Usage like any
-other. The values the server's environment
-sets — version, database path, `HRONO_LLM_CONCURRENCY` — are shown read-only.
-
-Access is the admin-only page for who may sign in: list the people with their
-roles, add one (the new token is shown once, in the answer to the form, and is
-stored only as a hash), change a role, reissue a token or delete a person, each
-of the last two after a confirmation naming them. The last admin can be neither
-deleted nor demoted, here or through the API. The master key can be rotated from
-the same page, which says how many secrets it re-encrypted. The running server
-switches to the new key at once, so credentials saved afterwards survive a
-restart; the key file must be updated before that restart.
-
-## In-process embedding and clustering
-
-Embedding sources locally (for clustering and recall) uses the heavyweight
-`sentence-transformers` backend, and clustering uses `umap-learn` + `hdbscan`;
-both are opt-in extras so the default install stays lean:
-
-    uv pip install "hrono[embed,cluster]"
-    # or, from a clone: uv sync --extra embed --extra cluster
-
-Without `[embed]` the default install has no `torch`, and the `embed`
-operation fails with a clear "in-process embedding backend is not installed"
-message that names the install line; without `[cluster]`, the build stops at
-clustering with the matching message. The browser setup's models step says the
-same, and offers no form, until the extra is installed and the server
-restarted.
+A lost master key is not recoverable. `hrono reset` wipes the database and the
+synced source caches after a confirmation, and refuses while a server holds
+the file; the next `hrono serve` starts clean.
 
 ## Status
 
-Early development, and everything in the build order is implemented: ingest,
-clustering, briefs, recall, export, the incremental update lifecycle, manual
-edits, the dashboard, and hardening (master-key rotation, shared-resource
-dry-run). It has not been run against a large corpus in anger; recall costs
-about 0.011 ms per passage per query, so a corpus of a few hundred thousand
-passages is the first size where that is worth re-measuring.
+hrono is alpha software. Ingest, clustering, briefs, recall, export,
+incremental sync, manual edits, the dashboard, usage accounting and master-key
+rotation all work and are covered by tests. Interfaces may still change
+between releases. Large corpora are the open frontier: recall costs about
+0.011 ms per passage per query, so a few hundred thousand passages is the
+first size worth re-measuring.
 
-## The export an agent reads
+## Documentation
 
-`hrono tree export` writes the tree as a folder of markdown. A topic's directory
-is named by its subject, not by the clause a brief opens with, and the facts a
-brief states (constants, environment variables, sizes) carry a `[§]` link to the
-section pages they were found in, added when the folder is written; the stored
-brief is never altered. A page that has children shows only its opening and its
-`## Children` list, because every turn of a session carries the pages it has
-read; the detail is one hop down. On every page below the root, each child entry
-also links up to three section files beneath it, first those its brief's facts
-came from, so an agent that has picked a branch can open the answer from the
-index; as many as keep the page, human note included, within one section's size
-(10 KB), fewer on a wide page. The root has none: it is read on every turn, and
-measured, its links cost the searching agent more than they saved the walking
-one. Siblings whose titles read alike are told apart in their directory names by
-what each one says next, not by a number alone.
-
-To wire an agent to a tree, open the tree's Export page in the dashboard: its
-Connect an agent block has ready-to-paste commands for the CLI, a `curl` call to
-recall and the export, filled with this server and tree. The token in them is
-the placeholder `YOUR_TOKEN`, never yours; mint one on the Access page.
-
-## Evaluations
-
-How hrono does on real corpora, measured rather than assumed, is recorded
-under `docs/evaluations/`: one folder per run, with its log, findings and
-metrics.
-
-## CI
-
-Every push to `main` and every pull request runs the same gate
-`CONTRIBUTING.md` defines — `ruff format`, `ruff check`, `pytest` — on Python
-3.13 against the locked environment. It reports rather than rewrites: CI never
-fixes formatting, because a green build has to mean the author ran the gate.
-
-## The words hrono uses
-
-A topic is a group of sections; a section is ~10 KB of one file; a brief is a
-topic's summary, written from the sections' condensations rather than their raw
-text. The full list, including the names that were superseded during
-development, is in [GLOSSARY.md](GLOSSARY.md) — and the dashboard carries the
-same thing at `/ui/guide`, with this install's own numbers in it.
+- [docs/README.md](docs/README.md): the documentation index.
+- [docs/architecture.md](docs/architecture.md): how hrono works.
+- [docs/api.md](docs/api.md): the REST API and CLI reference.
+- [docs/dashboard.md](docs/dashboard.md): the dashboard, page by page.
+- [docs/evaluations/](docs/evaluations/): runs against real corpora, with
+  logs, findings and metrics.
 
 ## Contributing
 
-How this codebase is built — its settled design decisions, code-quality
-rules, and testing rules, each with the ticket that taught it — is in
-[CONTRIBUTING.md](CONTRIBUTING.md). Read it before writing code.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+the gate every change passes, and the engineering conventions. Coding agents
+start at [AGENTS.md](AGENTS.md). Report security issues privately as described
+in [SECURITY.md](SECURITY.md).
+
+## License
+
+[Apache-2.0](LICENSE). Copyright 2026 Orest Bodnar.

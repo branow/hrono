@@ -4,24 +4,46 @@ version = "0.1.0"
 description = "Hierarchical, incrementally-updated knowledge base for AI agents"
 readme = "README.md"
 requires-python = ">=3.13"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Orest Bodnar", email = "branow.code@gmail.com" }]
+keywords = [
+    "knowledge-base",
+    "ai-agents",
+    "llm",
+    "rag",
+    "retrieval",
+    "clustering",
+    "summarization",
+    "embeddings",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Text Processing :: Indexing",
+]
 dependencies = [
     "anthropic>=0.40,<1",
     "cryptography>=44,<45",
     "fastapi>=0.115.0",
     "httpx>=0.27,<0.29",
     "jinja2>=3.1,<4",
-    # Briefs and condensations are MARKDOWN — the models write headings, lists
-    # and backticks — and the dashboard printed them as one unbroken line
-    # (#200). CommonMark's reference implementation for Python, and the reason
-    # it rather than a hand-rolled renderer: model output is untrusted input,
-    # `html=False` escapes any HTML inside it, and getting that wrong by hand
-    # is how a summary becomes a script tag.
+    # Renders model-written Markdown. Model output is untrusted input, and
+    # `html=False` escapes any HTML inside it; a hand-rolled renderer would
+    # risk turning a summary into a script tag.
     "markdown-it-py>=3.0,<4",
-    # Recall's vector leg scores every in-scope passage per query, and that
-    # arithmetic is the whole cost: 0.15 ms per passage in interpreted loops,
-    # 18x faster as two matrix-vector products (#193, #194). The extras below
-    # exist to keep torch and numba/llvmlite out of a lean install; numpy is
-    # neither, and recall runs with no extra installed at all.
+    # Recall scores every in-scope passage per query as matrix-vector
+    # products, 18x faster than interpreted loops. A core dependency, so
+    # recall runs with no extra installed.
     "numpy>=1.26,<3",
     "platformdirs>=4.2,<5",
     "sqlite-vec>=0.1.9",
@@ -33,19 +55,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# In-process embedding backend (heavyweight: pulls torch). Opt-in so the default
-# install stays lean; without it the `embed` op fails with a clean
-# "in-process embedding backend is not installed" message. Enable with:
-#   uv pip install "hrono[embed]"
+# In-process embedding (pulls torch). Opt-in so the default install stays lean.
 embed = ["sentence-transformers>=3.0,<6"]
-# In-process clustering backend (heavyweight: pulls numba/llvmlite/scipy/
-# scikit-learn). Opt-in like `embed`; without it the `cluster` op fails with a
-# clean "clustering backend is not installed" message. Enable with:
-#   uv pip install "hrono[cluster]"
+# In-process clustering (pulls numba, llvmlite, scipy, scikit-learn). Opt-in.
 cluster = [
     "umap-learn>=0.5.6,<0.6",
     "hdbscan>=0.8.38,<0.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/branow/hrono"
+Repository = "https://github.com/branow/hrono"
+Issues = "https://github.com/branow/hrono/issues"
+Changelog = "https://github.com/branow/hrono/blob/main/CHANGELOG.md"
 
 [project.scripts]
 hrono = "hrono.cli:app"
@@ -55,9 +77,8 @@ dev = [
     "httpx>=0.27.0",
     "pytest>=8.4.2",
     "ruff>=0.14.5",
-    # The clustering backend is an opt-in runtime extra, but the tests exercise
-    # the real UMAP -> HDBSCAN recipe (known-group recovery), so the gate needs
-    # it installed.
+    # The tests exercise the real UMAP -> HDBSCAN recipe, so the dev
+    # environment carries the clustering extra.
     "umap-learn>=0.5.6,<0.6",
     "hdbscan>=0.8.38,<0.9",
     "numpy>=1.26,<3",
@@ -72,21 +93,15 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 80
 src = ["src", "tests"]
-# records kept as they were written: the research prototype, the 2026-09 QA
-# harness and the board's evidence are evidence, not code we maintain
-extend-exclude = [
-    "docs/design/prototype",
-    "docs/evaluations/2026-09-manual-qa/scripts",
-    "dev/evidence",
-]
+# research notebooks and evaluation scripts are records, not maintained code
+extend-exclude = ["docs/research/prototype", "docs/evaluations/*/scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.format]
 docstring-code-format = true
-# the code in a document is quoted as it was: a finding, a board ticket, a
-# design note; the formatter must not rewrite the evidence it cites
+# code quoted in a document stays as it was written
 exclude = ["*.md"]
 
 [tool.pytest.ini_options]

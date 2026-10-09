@@ -1,4 +1,4 @@
-"""#094: the clustering recipe scales with the point count."""
+"""The clustering recipe scales with the point count."""
 
 import pytest
 

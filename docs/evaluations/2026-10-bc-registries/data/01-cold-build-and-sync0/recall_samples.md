@@ -1,10 +1,12 @@
+> Excerpts from bcgov/lear, bcgov/sbc-auth, bcgov/sbc-pay and bcgov/business-filings-ui, licensed Apache-2.0.
+
 ## how is a filing payment processed after the user pays
 
 ```
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/queue_services/account-mailer/src/account_mailer/email_templates/online_banking_over_payment.html@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.text/.raw[1/1]
+[source] git://<workspace>/mirror/sbc-auth/queue_services/account-mailer/src/account_mailer/email_templates/online_banking_over_payment.html@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.text/.raw[1/1]
 We have received payment in the amount of ${{ paid_amount }}. Payment received over the outstanding balance has been applied as a credit to your account and will be applied to future purchases.
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/views/ConsentAmalgamationOut.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[64]
+[source] git://<workspace>/mirror/business-filings-ui/src/views/ConsentAmalgamationOut.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[64]
     // if this is a staff user clicking File and Pay (not Submit)
     // then detour via Staff Payment dialog
     if (this.isRoleStaff && !fromStaffPayment) {
@@ -16,7 +18,7 @@ We have received payment in the amount of ${{ paid_amount }}. Payment received o
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/views/ConsentContinuationOut.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[64]
+[source] git://<workspace>/mirror/business-filings-ui/src/views/ConsentContinuationOut.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[64]
     // if this is a staff user clicking File and Pay (not Submit)
     // then detour via Staff Payment dialog
     if (this.isRoleStaff && !fromStaffPayment) {
@@ -28,7 +30,7 @@ We have received payment in the amount of ${{ paid_amount }}. Payment received o
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/views/StandaloneDirectorsFiling.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[69]
+[source] git://<workspace>/mirror/business-filings-ui/src/views/StandaloneDirectorsFiling.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[69]
     // if this is a staff user clicking File and Pay (not Submit)
     // then detour via Staff Payment dialog
     if (this.isRoleStaff && !fromStaffPayment) {
@@ -40,7 +42,7 @@ We have received payment in the amount of ${{ paid_amount }}. Payment received o
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[61]
+[source] git://<workspace>/mirror/business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[61]
     // if this is a staff user clicking File and Pay (not Submit)
     // then detour via Staff Payment dialog
     if (this.isRoleStaff && !fromStaffPayment) {
@@ -52,7 +54,7 @@ We have received payment in the amount of ${{ paid_amount }}. Payment received o
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/.decorated_definition/worker/.block/.comment[6] sp:/.decorated_definition/worker/.block/.assignment[1] sp:/.decorated_definition/worker/.block/.if_statement[7] sp:/.decorated_definition/worker/.block/.comment[7]
+[source] git://<workspace>/mirror/lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/.decorated_definition/worker/.block/.comment[6] sp:/.decorated_definition/worker/.block/.assignment[1] sp:/.decorated_definition/worker/.block/.if_statement[7] sp:/.decorated_definition/worker/.block/.comment[7]
 logger.info(f"processing payment: {payment_token.id}")
 
     # setting the payment_completion_date, marks the filing as paid
@@ -77,7 +79,7 @@ logger.info(f"processing payment: {payment_token.id}")
 
     
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/DEVELOPER_NOTES.md@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.section/.paragraph[9] sp:/.section/.paragraph[11] sp:/.section/.paragraph[12]
+[source] git://<workspace>/mirror/sbc-pay/DEVELOPER_NOTES.md@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.section/.paragraph[9] sp:/.section/.paragraph[11] sp:/.section/.paragraph[12]
 It's the terminology we use to pay our partners. For example there is EJV disbursement for Ministry partners, we have AP Disbursement (EFT) for Non-Ministry Partners. We debit our internal GL (excluding service fees) and credit an external GL or bank account. 
 
 7. How is the PAY-API spec updated?
@@ -96,7 +98,7 @@ Are great starting points.
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/reconcile_payments/.block/.string
+[source] git://<workspace>/mirror/sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/reconcile_payments/.block/.string
 """Read the file and update payment details.
 
     1: Check to see if file has been processed already.
@@ -112,11 +114,11 @@ Are great starting points.
     file_name: str = msg.get('fileName')
     
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/tests/unit/StandaloneDirectorsFiling.spec.ts@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.expression_statement[8]/.call_expression/.arguments/.arrow_function/.statement_block/.expression_statement[5]/.call_expression/.arguments/.binary_expression
+[source] git://<workspace>/mirror/business-filings-ui/tests/unit/StandaloneDirectorsFiling.spec.ts@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.expression_statement[8]/.call_expression/.arguments/.arrow_function/.statement_block/.expression_statement[5]/.call_expression/.arguments/.binary_expression
 ('saves a new filing and redirects to Pay URL when this is a new filing and the File & Pay button ' +
     'is clicked - as a BCOMP', async () => 
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/components/Dashboard/FilingHistoryList/FilingTemplate.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[3] sp:/.~blank-line[4] sp:/.~blank-line[5] sp:/.~blank-line[6]
+[source] git://<workspace>/mirror/business-filings-ui/src/components/Dashboard/FilingHistoryList/FilingTemplate.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[3] sp:/.~blank-line[4] sp:/.~blank-line[5] sp:/.~blank-line[6]
         <slot name="actions">
           <HeaderActions
             :filing="filing"
@@ -173,7 +175,7 @@ It has three paths:
 ## Caution:
 
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/auth-api/src/auth_api/services/authorization.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.decorated_definition/check_auth/.block/.if_statement/.else_clause/.block/.call
+[source] git://<workspace>/mirror/sbc-auth/auth-api/src/auth_api/services/authorization.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.decorated_definition/check_auth/.block/.if_statement/.else_clause/.block/.call
 _check_for_roles(auth.get('orgMembership', None) if auth else None, kwargs)
 
 
@@ -186,14 +188,14 @@ _check_for_roles(auth.get('orgMembership', None) if auth else None, kwargs)
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/auth-api/src/auth_api/utils/role_validator.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/status%20as%20http_status
+[source] git://<workspace>/mirror/sbc-auth/auth-api/src/auth_api/utils/role_validator.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/status%20as%20http_status
 from auth_api import status as http_status
 
 
 def validate_roles(**role_args):
     
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/auth-api/src/auth_api/services/user.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.decorated_definition/User/.block/.decorated_definition[31]
+[source] git://<workspace>/mirror/sbc-auth/auth-api/src/auth_api/services/user.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.decorated_definition/User/.block/.decorated_definition[31]
 @staticmethod
     def is_user_admin_or_coordinator(user, org_id: int) -> bool:
         """Check if user(userservice wrapper) provided is admin or coordinator for the given org id."""
@@ -225,7 +227,7 @@ def validate_roles(**role_args):
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/auth-api/src/auth_api/utils/user_context.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/UserContext/.block/has_role sp:/UserContext/.block/is_staff sp:/UserContext/.block/is_staff_admin sp:/UserContext/.block/is_system sp:/UserContext/.block/is_bceid_user
+[source] git://<workspace>/mirror/sbc-auth/auth-api/src/auth_api/utils/user_context.py@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/UserContext/.block/has_role sp:/UserContext/.block/is_staff sp:/UserContext/.block/is_staff_admin sp:/UserContext/.block/is_system sp:/UserContext/.block/is_bceid_user
 def has_role(self, role_name: str) -> bool:
         """Return True if the user has the role."""
         return role_name in self._roles
@@ -248,7 +250,7 @@ def has_role(self, role_name: str) -> bool:
 
     
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/auth-web/src/components/auth/mixins/AccountMixin.vue@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.~blank-line[6]
+[source] git://<workspace>/mirror/sbc-auth/auth-web/src/components/auth/mixins/AccountMixin.vue@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.~blank-line[6]
   get isSbcStaffAccount (): boolean {
     return this.currentOrganization?.orgType === Account.SBC_STAFF
   }
@@ -273,7 +275,7 @@ def has_role(self, role_name: str) -> bool:
 ## how does the COLIN sync of filings work
 
 ```
-[source] git:///Users/orest/hrono-eval/mirror/lear/.github/workflows/update-colin-filings-ci.yml@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/.document/.block_node/.block_mapping/name sp:/.document/.block_node/.block_mapping/on sp:/.document/.block_node/.block_mapping/defaults
+[source] git://<workspace>/mirror/lear/.github/workflows/update-colin-filings-ci.yml@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/.document/.block_node/.block_mapping/name sp:/.document/.block_node/.block_mapping/on sp:/.document/.block_node/.block_mapping/defaults
 name: Update Colin Filings Job CI
 
 on:
@@ -308,7 +310,7 @@ jobs:
 - **Routing summary**: a second description of the same flow, covering registration, conversion, changeOfRegistration, dissolution, putBackOn and correction. It uses `versioning_manager` and `ColinEventId`.
 
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/update-colin-filings/update_colin_filings.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/run/.block/.string
+[source] git://<workspace>/mirror/lear/jobs/update-colin-filings/update_colin_filings.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/run/.block/.string
 """Get filings that haven't been synced with colin and send them to the colin-api."""
     application = create_app()
     corps_with_failed_filing = []
@@ -317,7 +319,7 @@ jobs:
             # get updater-job token
             
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/.github/workflows/update-colin-filings-cd.yml@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/.document/.block_node/.block_mapping/jobs/.block_node/.block_mapping/update-colin-filings-cd-by-push/.flow_node
+[source] git://<workspace>/mirror/lear/.github/workflows/update-colin-filings-cd.yml@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/.document/.block_node/.block_mapping/jobs/.block_node/.block_mapping/update-colin-filings-cd-by-push/.flow_node
 update-colin-filings-cd-by-push:
     runs-on: ubuntu-20.04
 
@@ -337,7 +339,7 @@ update-colin-filings-cd-by-push:
 **4. Business, search and documents (v2)**
 
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/update-colin-filings/run.sh@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/
+[source] git://<workspace>/mirror/lear/jobs/update-colin-filings/run.sh@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/
 cd /opt/app-root
 echo 'run update_colin_filings'
 python update_colin_filings.py
@@ -351,7 +353,7 @@ python update_colin_filings.py
 - *BC firms data extracts (SP/GP)*: A "Filings Daily Stats" notebook writes `data/from_openshift.txt`, with state code, legal type, identifier and name. A BCFN_MR notebook builds a fixed-width Master Record file, gzipped as `BCFN_MR_YYYYMMDD_[rowcount].gz`.
 
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/update-colin-filings/update_colin_filings.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/run/.block/.with_statement/.block/.try_statement/.block/.while_statement/.block/.for_statement/.block/.if_statement/.else_clause/.block/.assignment sp:/run/.block/.with_statement/.block/.try_statement/.block/.while_statement/.block/.for_statement/.block/.if_statement/.else_clause/.block/.if_statement
+[source] git://<workspace>/mirror/lear/jobs/update-colin-filings/update_colin_filings.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/run/.block/.with_statement/.block/.try_statement/.block/.while_statement/.block/.for_statement/.block/.if_statement/.else_clause/.block/.assignment sp:/run/.block/.with_statement/.block/.try_statement/.block/.while_statement/.block/.for_statement/.block/.if_statement/.else_clause/.block/.if_statement
 colin_ids = send_filing(application, token, filing, filing_id)
                         update = None
                         if colin_ids:
@@ -363,18 +365,18 @@ colin_ids = send_filing(application, token, filing, filing_id)
 ## how are fees calculated for a filing
 
 ```
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/src/pay_api/services/payment_service.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/_calculate_fees/.def sp:/_calculate_fees/.identifier sp:/_calculate_fees/.parameters
+[source] git://<workspace>/mirror/sbc-pay/pay-api/src/pay_api/services/payment_service.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/_calculate_fees/.def sp:/_calculate_fees/.identifier sp:/_calculate_fees/.parameters
 def _calculate_fees(corp_type, filing_info):
     """Calculate and return the fees based on the filing type codes."""
     fees = []
     service_fee_applied: bool = False
     
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/src/pay_api/resources/v1/fee.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.decorated_definition/get_fee_by_corp_and_filing_type/.def sp:/.decorated_definition/get_fee_by_corp_and_filing_type/.identifier sp:/.decorated_definition/get_fee_by_corp_and_filing_type/.parameters
+[source] git://<workspace>/mirror/sbc-pay/pay-api/src/pay_api/resources/v1/fee.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.decorated_definition/get_fee_by_corp_and_filing_type/.def sp:/.decorated_definition/get_fee_by_corp_and_filing_type/.identifier sp:/.decorated_definition/get_fee_by_corp_and_filing_type/.parameters
 def get_fee_by_corp_and_filing_type(corp_type, filing_type_code):
     
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/src/pay_api/services/payment_service.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/_calculate_fees/.block/.return_statement
+[source] git://<workspace>/mirror/sbc-pay/pay-api/src/pay_api/services/payment_service.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/_calculate_fees/.block/.return_statement
 if service_fee_applied:
             fee.service_fees = 0
         elif fee.service_fees > 0:
@@ -392,7 +394,7 @@ if service_fee_applied:
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/src/pay_api/services/fee_schedule.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.string sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.call sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.assignment[1] sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement[1]
+[source] git://<workspace>/mirror/sbc-pay/pay-api/src/pay_api/services/fee_schedule.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.string sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.call sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.assignment[1] sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement[1]
 """Calculate fees for the filing by using the arguments."""
         current_app.logger.debug(f'<get_fees_by_corp_type_and_filing_type : {corp_type}, {filing_type_code}, '
                                  f'{valid_date}')
@@ -412,7 +414,7 @@ if service_fee_applied:
 
         
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/tests/unit/api/test_fee.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/test_calculate_fees_for_service_fee/.def sp:/test_calculate_fees_for_service_fee/.identifier sp:/test_calculate_fees_for_service_fee/.parameters
+[source] git://<workspace>/mirror/sbc-pay/pay-api/tests/unit/api/test_fee.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/test_calculate_fees_for_service_fee/.def sp:/test_calculate_fees_for_service_fee/.identifier sp:/test_calculate_fees_for_service_fee/.parameters
 def test_calculate_fees_for_service_fee(session, client, jwt, app):
     
 
@@ -428,7 +430,7 @@ This group is a set of condensed notes from a BC/CP corporate-registry payment A
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/docs/databse-schema/tables/fee_item.html@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/html/body/div/div/section[1]/div/div[1]/table/tbody/tr[2]
+[source] git://<workspace>/mirror/sbc-pay/docs/databse-schema/tables/fee_item.html@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/html/body/div/div/section[1]/div/div[1]/table/tbody/tr[2]
 <tr>
 				 <td><span id="filing_fees">filing_fees</span></td>
 				 <td>int4</td>
@@ -448,7 +450,7 @@ This group is a set of condensed notes from a BC/CP corporate-registry payment A
 				</tr>
 				
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/src/pay_api/services/payment_service.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/_calculate_fees/.block/.for_statement/.block/.call sp:/_calculate_fees/.block/.for_statement/.block/.assignment sp:/_calculate_fees/.block/.for_statement/.block/.comment
+[source] git://<workspace>/mirror/sbc-pay/pay-api/src/pay_api/services/payment_service.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/_calculate_fees/.block/.for_statement/.block/.call sp:/_calculate_fees/.block/.for_statement/.block/.assignment sp:/_calculate_fees/.block/.for_statement/.block/.comment
 current_app.logger.debug(f"Getting fees for {filing_type_info.get('filingTypeCode')} ")
         fee: FeeSchedule = FeeSchedule.find_by_corp_type_and_filing_type(
             corp_type=corp_type,
@@ -463,7 +465,7 @@ current_app.logger.debug(f"Getting fees for {filing_type_info.get('filingTypeCod
         # If service fee is already applied, do not charge again.
         
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-pay/pay-api/src/pay_api/services/fee_schedule.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement[4] sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement[5] sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.call[1]
+[source] git://<workspace>/mirror/sbc-pay/pay-api/src/pay_api/services/fee_schedule.py@ac82a1c957ebabcfdf13b244a9e0dfbad1d81da0 sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement[4] sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.if_statement[5] sp:/.decorated_definition/FeeSchedule/.block/.decorated_definition[36]/find_by_corp_type_and_filing_type/.block/.call[1]
 if kwargs.get('is_future_effective') and fee_schedule_dao.future_effective_fee and apply_filing_fees:
             fee_schedule.future_effective_fee = fee_schedule_dao.future_effective_fee.amount
 
@@ -491,13 +493,13 @@ These are two "Change of Director" (OTFDR) filings. Both have paymentMethod INTE
 ## what happens when a business is dissolved
 
 ```
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/stage_1_process/.block/.string
+[source] git://<workspace>/mirror/lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/stage_1_process/.block/.string
 """Initiate dissolution process for new businesses that meet dissolution criteria."""
     try:
         # check if batch has already run today
         
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/legal-api/report-templates/template-parts/dissolution/dissolutionStatement.html@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/div/div[2]/.text/.~line[1] sp:/div/div[2]/.text/.~line[2] sp:/div/div[2]/.text/.~line[3] sp:/div/div[2]/.text/.~line[4] sp:/div/div[2]/.text/.~line[6] sp:/div/div[2]/.text/.~line[7] sp:/div/div[2]/.text/.~line[8]
+[source] git://<workspace>/mirror/lear/legal-api/report-templates/template-parts/dissolution/dissolutionStatement.html@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/div/div[2]/.text/.~line[1] sp:/div/div[2]/.text/.~line[2] sp:/div/div[2]/.text/.~line[3] sp:/div/div[2]/.text/.~line[4] sp:/div/div[2]/.text/.~line[6] sp:/div/div[2]/.text/.~line[7] sp:/div/div[2]/.text/.~line[8]
 {% if business.legalType == 'CP' %}
             {% if dissolutionStatementType == '197NoAssetsNoLiabilities' %}
                 The Cooperative Association has, by special resolution, voluntarily resolved to dissolve
@@ -509,7 +511,7 @@ These are two "Change of Director" (OTFDR) filings. Both have paymentMethod INTE
                 Association has no assets and has made provision for the payment of each of the Cooperative Association's
 
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/furnishings/src/furnishings/stage_processors/post_processor.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/XmlMeta/.block/.assignment/.dictionary/Furnishing.FurnishingName.CORP_DISSOLVED
+[source] git://<workspace>/mirror/lear/jobs/furnishings/src/furnishings/stage_processors/post_processor.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/XmlMeta/.block/.assignment/.dictionary/Furnishing.FurnishingName.CORP_DISSOLVED
 Furnishing.FurnishingName.CORP_DISSOLVED: {
             'title': 'Dissolutions (B.C.)',
             'category': 'DISSOLUTIONS',
@@ -522,7 +524,7 @@ Furnishing.FurnishingName.CORP_DISSOLVED: {
         },
         
 
-[source] git:///Users/orest/hrono-eval/mirror/sbc-auth/auth-web/src/views/auth/staff/InvoluntaryDissolution.vue@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.~blank-line[1]/.~line[10] sp:/.~blank-line[1]/.~line[11] sp:/.~blank-line[1]/.~line[12] sp:/.~blank-line[1]/.~line[13]
+[source] git://<workspace>/mirror/sbc-auth/auth-web/src/views/auth/staff/InvoluntaryDissolution.vue@e76103cf7604938dc6074f35a3024af42774f9e1 sp:/.~blank-line[1]/.~line[10] sp:/.~blank-line[1]/.~line[11] sp:/.~blank-line[1]/.~line[12] sp:/.~blank-line[1]/.~line[13]
     <!-- Automated Dissolution Section -->
     <section>
       <v-row>
@@ -549,7 +551,7 @@ Furnishing.FurnishingName.CORP_DISSOLVED: {
         >
 
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/resources/GP.ts@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.export_statement/.lexical_declaration/BusinessConfigGp/.object/obligations/.object
+[source] git://<workspace>/mirror/business-filings-ui/src/resources/GP.ts@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.export_statement/.lexical_declaration/BusinessConfigGp/.object/obligations/.object
 {
         label: 'Dissolving a Sole Proprietorship or Partnership ',
         description: 'when a business is no longer required it needs to be dissolved.'
@@ -557,7 +559,7 @@ Furnishing.FurnishingName.CORP_DISSOLVED: {
     ]
   }
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/resources/SP.ts@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.export_statement/.lexical_declaration/BusinessConfigSp/.object/obligations/.object
+[source] git://<workspace>/mirror/business-filings-ui/src/resources/SP.ts@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.export_statement/.lexical_declaration/BusinessConfigSp/.object/obligations/.object
 {
         label: 'Dissolving a Sole Proprietorship or Partnership ',
         description: 'when a business is no longer required it needs to be dissolved.'
@@ -565,7 +567,7 @@ Furnishing.FurnishingName.CORP_DISSOLVED: {
     ]
   }
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/run/.block/.if_statement
+[source] git://<workspace>/mirror/lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/run/.block/.if_statement
 """Run the stage 1-3 methods for dissolving businesses."""
     if application is None:
         application = create_app()
@@ -573,7 +575,7 @@ Furnishing.FurnishingName.CORP_DISSOLVED: {
     with application.app_context():
         
 
-[source] git:///Users/orest/hrono-eval/mirror/business-filings-ui/src/components/dialogs/NotInGoodStandingDialog.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[2] sp:/.~blank-line[3]
+[source] git://<workspace>/mirror/business-filings-ui/src/components/dialogs/NotInGoodStandingDialog.vue@6af0a43ed247024f9cfc2cc46092f698e428d9f3 sp:/.~blank-line[2] sp:/.~blank-line[3]
         <template v-if="isDissolveMessage">
           <p class="warning-text">
             This business cannot be dissolved at this time because it is not in good standing
@@ -589,12 +591,12 @@ Furnishing.FurnishingName.CORP_DISSOLVED: {
 
 
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/jobs/furnishings/report-templates/noticeOfDissolutionCommencement.html@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/html/body/div/div/div[1]/div[17] sp:/html/body/div/div/div[1]/div[18]
+[source] git://<workspace>/mirror/lear/jobs/furnishings/report-templates/noticeOfDissolutionCommencement.html@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/html/body/div/div/div[1]/div[17] sp:/html/body/div/div/div[1]/div[18]
 <div class="mt-5">To request a delay of the dissolution, go to <a href="https://www.business.bcregistry.gov.bc.ca/{{ furnishing.businessIdentifier }}" class="break-url">business.bcregistry.gov.bc.ca/{{ furnishing.businessIdentifier }}</a> and request for a Delay of Dissolution or Cancellation under the To Do section. This must be completed prior to the dissolution of the company.</div>
           <div class="mt-5">If your company is dissolved under section 422(1)(a) of the Act, section 347 of the Act states the liability of each director, officer, shareholder and liquidator of a company that is dissolved continues and may be enforced as if the company had not been dissolved.</div>
           
 
-[source] git:///Users/orest/hrono-eval/mirror/lear/legal-api/report-templates/noticeOfDissolutionCommencement.html@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/html/body/div/div/div[1]/div[17] sp:/html/body/div/div/div[1]/div[18]
+[source] git://<workspace>/mirror/lear/legal-api/report-templates/noticeOfDissolutionCommencement.html@a30995be5c09afdc54018ba8eb3aad796509a7d9 sp:/html/body/div/div/div[1]/div[17] sp:/html/body/div/div/div[1]/div[18]
 <div class="mt-5">To request a delay of the dissolution, go to <a href="https://www.business.bcregistry.gov.bc.ca/{{ furnishing.businessIdentifier }}" class="break-url">business.bcregistry.gov.bc.ca/{{ furnishing.businessIdentifier }}</a> and request for a Delay of Dissolution or Cancellation under the To Do section. This must be completed prior to the dissolution of the company.</div>
           <div class="mt-5">If your company is dissolved under section 422(1)(a) of the Act, section 347 of the Act states the liability of each director, officer, shareholder and liquidator of a company that is dissolved continues and may be enforced as if the company had not been dissolved.</div>
           

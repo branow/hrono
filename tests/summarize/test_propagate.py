@@ -1,4 +1,4 @@
-"""T36: the propagate judge cascade — mark ancestors stale, marks only."""
+"""The propagate judge cascade — mark ancestors stale, marks only."""
 
 import json
 import subprocess
@@ -185,7 +185,7 @@ def test_majority_of_three() -> None:
 
 
 def test_a_verdict_is_the_leading_word_not_a_substring() -> None:
-    # F33: the prompt asks for one word, the model explains itself half the
+    # the prompt asks for one word, the model explains itself half the
     # time, and an explanation repeats the prompt's own vocabulary.
     assert _verdict("none") == "none"
     assert _verdict("minor\n\nThe removal of `as name` aliasing is...") == (
@@ -398,7 +398,7 @@ def test_marked_ancestor_regenerates_only_the_path(
             members = cluster_store.node_member_rows(conn, leaf)
             cluster_store.remove_member(conn, leaf, members[0][0])
 
-        # before propagate: the parent looks fresh (#068 signature unchanged)
+        # before propagate: the parent looks fresh (member signature unchanged)
         from hrono.summarize.brief_upper import brief_upper
 
         before = FakeCompletion()
@@ -541,8 +541,8 @@ def _drift(db: Database) -> int:
 def test_a_reclaimed_re_run_judges_nothing_twice(
     db: Database, tmp_path: Path
 ) -> None:
-    # #093 reclaims a job whose work committed but whose status write failed,
-    # so the SAME propagate runs again over an unchanged tree.
+    # job reclaim retries a job whose work committed but whose status write
+    # failed, so the SAME propagate runs again over an unchanged tree.
     with db.connect() as conn, conn:
         leaf = _leaf(conn)
         parent = _upper(conn, 1, leaf)
@@ -641,8 +641,8 @@ def test_an_abstained_topic_is_judged_again_on_the_next_run(
 def test_judging_a_leaf_does_not_suppress_its_re_brief(
     db: Database, tmp_path: Path
 ) -> None:
-    # the ticket's flagged open question, answered as a test: the judged marker
-    # lives in its own column, so #064's freshness (which reads
+    # the judged marker lives in its own column, so brief freshness (which
+    # reads
     # `member_signature`) still sees the leaf as owing a brief after judgement.
     with db.connect() as conn, conn:
         leaf = _leaf(conn)
@@ -676,7 +676,7 @@ def test_a_clean_run_reports_what_it_judged(
         "skipped": 0,
         "abstained": 0,
         "incomplete": False,
-        # what the panel cost (#179): three votes, each one a completion
+        # what the panel cost: three votes, each one a completion
         "tokens": {"input": 3, "output": 3},
     }
 
@@ -684,9 +684,9 @@ def test_a_clean_run_reports_what_it_judged(
 def test_a_run_that_declined_its_work_says_so(
     db: Database, tmp_path: Path
 ) -> None:
-    # #132: the abstention #105 added was recorded only in `update_log`, which
-    # has no readers — so hrono could leave a changed topic unjudged, finish as
-    # `succeeded`, and no operator could learn a stale brief is still served.
+    # an abstention must reach the run's outcome, not only `update_log`, which
+    # has no readers: otherwise hrono leaves a changed topic unjudged, finishes
+    # as `succeeded`, and no operator learns a stale brief is still served.
     with db.connect() as conn, conn:
         _leaf(conn)
 
@@ -700,8 +700,8 @@ def test_a_run_that_declined_its_work_says_so(
         "skipped": 0,
         "abstained": 1,
         "incomplete": True,
-        # an abstention is not free: three votes, each RE-ASKED once, and
-        # until #179 the most expensive outcome reported no cost at all
+        # an abstention is not free: three votes, each RE-ASKED once, and the
+        # most expensive outcome must still report its cost
         "tokens": {"input": 6, "output": 6},
     }
 
@@ -709,9 +709,10 @@ def test_a_run_that_declined_its_work_says_so(
 def test_the_judge_reads_what_the_condense_model_wrote(
     db: Database, tmp_path: Path
 ) -> None:
-    # #067's landmine in propagate: the judge compares a leaf's NEW content
-    # against its stored brief, and that content is the member CONDENSATIONS —
-    # keyed by the condense model's name, not the judge's. Reading them under
+    # condensations are keyed by the model that wrote them, in propagate: the
+    # judge compares a leaf's NEW content against its stored brief, and that
+    # content is the member CONDENSATIONS — keyed by the condense model's
+    # name, not the judge's. Reading them under
     # the judge's name finds none, so every leaf looks unchanged and the whole
     # cascade silently stops.
     with db.connect() as conn, conn:

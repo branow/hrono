@@ -1,4 +1,4 @@
-"""#138: the one operator verb, and the surface defects that shipped with it."""
+"""The one operator verb, and the surface rules around it."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -81,8 +81,8 @@ def _prompt(name: str) -> dict[str, object]:
 
 
 def test_put_creates_when_absent(harness: Harness) -> None:
-    # "config is data you PUT" — it used to 404 unless the name already
-    # existed, so writing config meant knowing whether it was there first.
+    # "config is data you PUT" — a 404 unless the name already exists would
+    # mean writing config needs knowing whether it is there first.
     response = harness.client.put(
         "/prompts/fresh",
         json=_prompt("fresh"),

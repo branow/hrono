@@ -1,4 +1,4 @@
-"""#216: one vocabulary, enforced rather than remembered.
+"""One vocabulary, enforced rather than remembered.
 
 `GLOSSARY.md` lists the words hrono does not use. This reads every page the
 dashboard serves, over a tree that has something on every page, and fails on

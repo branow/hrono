@@ -1,8 +1,9 @@
-"""#197: maintain spent the whole ingest budget before checking it could brief.
+"""Maintain checks it can brief before it spends the ingest budget.
 
-Measured on hrono's own repository: it cloned, split 394 sections and embedded
-4321 vectors — minutes — and then failed with `llm-error: no text model
-available`, which was knowable at second zero.
+On hrono's own repository, a missing text model is otherwise found only after
+cloning, splitting 394 sections and embedding 4321 vectors — minutes — and
+then failing with `llm-error: no text model available`, which is knowable at
+second zero.
 """
 
 from __future__ import annotations
@@ -70,7 +71,7 @@ def test_no_model_at_all_fails_before_anything_is_ingested(
 
 
 def test_an_embedding_model_alone_is_not_enough(db: Database) -> None:
-    """The shape this ticket found: embeddings configured, briefs not.
+    """Embeddings configured, briefs not.
 
     That install ingests and embeds happily and then cannot write a word.
     """
@@ -127,7 +128,7 @@ def test_the_check_adds_no_requirement_the_chain_did_not_have(
         registry_store.insert(
             conn, "models", "sole", _model("sole", "text"), None, "t"
         )
-        # `hrono serve` seeds these on first run (#021); a bare Database has
+        # `hrono serve` seeds these on first run; a bare Database has
         # none, and they are a precondition the stages have always had.
         for role in ("condense", "brief", "brief-upper"):
             registry_store.insert(

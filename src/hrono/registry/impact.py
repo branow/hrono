@@ -1,4 +1,4 @@
-"""What a shared-resource edit would do, before it does it (T58, #190).
+"""What a shared-resource edit would do, before it does it.
 
 `sources`, `connections`, `models` and `prompts` are referenced by name from
 many trees, so editing one has cross-tree blast radius and `?dry_run=true` is
@@ -7,11 +7,10 @@ the spec's safety.
 The rule this module lives by: **report what the system actually does, not what
 the edit sounds like it should do.** Freshness is decided in ONE place —
 `briefs._is_fresh`, reached through `stale_or_missing` — and it compares the
-brief's recorded prompt hash and model NAME. So a prompt edit really does
-invalidate what that prompt wrote, and a model edit that repoints the row at a
-different upstream model really does invalidate nothing. Both are said plainly
-here; inventing the second would be a preview that lies in the reassuring
-direction.
+brief's recorded prompt hash and model fingerprint. So a prompt edit really
+does invalidate what that prompt wrote, and a credential change really does
+invalidate nothing. Both are said plainly here; inventing the second would be
+a preview that lies in the reassuring direction.
 
 Numbers nobody measured are never printed. How many SECTIONS a source's new
 url yields is not knowable without doing the sync, so it is null with a reason.
@@ -46,7 +45,7 @@ class Stale:
 
 @dataclass(frozen=True)
 class Estimate:
-    """What the work would cost. ``tokens`` is null with no history (#192)."""
+    """What the work would cost. ``tokens`` is null with no history."""
 
     brief_calls: int
     tokens: dict[str, int] | None
@@ -71,13 +70,12 @@ def estimate(
     """Project the cost of ``calls`` briefs from what briefs HERE have cost.
 
     From this install's own measurements, never a constant: `briefs` records
-    the input and output tokens of every brief it wrote (#179's question, one
-    row lower down), so the mean at the affected levels of THIS tree is a
-    number somebody measured. With nothing measured yet it is null and says so
-    — a made-up figure shown to someone deciding whether to spend is worse than
-    no figure.
+    the input and output tokens of every brief it wrote, so the mean at the
+    affected levels of THIS tree is a number somebody measured. With nothing
+    measured yet it is null and says so — a made-up figure shown to someone
+    deciding whether to spend is worse than no figure.
 
-    Hand-written briefs (#156) record zero tokens because no model wrote them,
+    Hand-written briefs record zero tokens because no model wrote them,
     and averaging them in would quietly halve every estimate.
     """
     if not levels or not calls:
@@ -136,7 +134,7 @@ def of_delete(
     prompt strands exactly what it wrote; removing a source strands nothing
     and stops its sections following the repository; removing a connection
     rewrites nothing and breaks the models that call through it. A tree's
-    own delete is `trees._before_delete`'s note, not a count (#167).
+    own delete is `trees._before_delete`'s note, not a count.
     """
     return _removal(conn, collection, name) + _unserved(conn, collection, name)
 
@@ -353,7 +351,7 @@ def _trees(conn: sqlite3.Connection) -> tuple[str, ...]:
     """Every tree that has nodes, plus every tree with a registry row.
 
     A tree with a config and no nodes yet is still a tree an edit reaches; a
-    tree with nodes and no config row is the default one (#054).
+    tree with nodes and no config row is the default one.
     """
     named = {str(row["name"]) for row in store.list_all(conn, "trees")}
     built = {
@@ -449,7 +447,7 @@ def _levels(
 
 
 # A source's credential: changing it changes no bytes, so nothing goes stale
-# (`implementation-notes.md`). Everything else about a source decides WHAT gets
+# (`docs/api.md`). Everything else about a source decides WHAT gets
 # pulled, and that is a content change on the next sync.
 AUTH_FIELD = "auth"
 
@@ -487,7 +485,7 @@ def _without_auth(config: dict[str, object]) -> dict[str, object]:
 
 
 def _in_scope(conn: sqlite3.Connection, tree: str, source: str) -> bool:
-    """Whether this tree pulls from this source (#054): None means all."""
+    """Whether this tree pulls from this source: None means all."""
     scope = sources_of(conn, tree)
     return scope is None or source in scope
 
@@ -505,7 +503,7 @@ def _holders(conn: sqlite3.Connection, tree: str, source: str) -> int:
 
 def _all_levels(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
     """Every level: a leaf change climbs, and the cascade decides where it
-    stops at run time (#087), not here."""
+    stops at run time, not here."""
     return tuple(
         int(row["level"])
         for row in conn.execute(
@@ -523,11 +521,10 @@ def _model_impact(
 ) -> tuple[TreeImpact, ...]:
     """What repointing a model would rewrite.
 
-    Until #191 this was a disclaimer: freshness compared the registry NAME, so
-    swapping the upstream model left every brief looking fresh and the preview
-    had to say so. It now compares a fingerprint of what decides the WORDS, so
-    this is a count — and a credential change still counts nothing, because
-    the connection is not part of the fingerprint.
+    Freshness compares a fingerprint of what decides the WORDS, not the
+    registry NAME, so swapping the upstream model really does stale the briefs
+    it wrote and this is a count — and a credential change still counts
+    nothing, because the connection is not part of the fingerprint.
     """
     after = model_fingerprint(proposed)
     if after == model_fingerprint(current):

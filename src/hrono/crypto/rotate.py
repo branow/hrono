@@ -1,4 +1,4 @@
-"""Rotating the master key (T59, #177).
+"""Rotating the master key.
 
 Every provider secret is encrypted under one key and tagged with its ``key_id``.
 Changing that key means decrypting each row under the old one and re-encrypting

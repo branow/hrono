@@ -1,4 +1,4 @@
-"""#076: `node-` is hrono's own source namespace, not a user's."""
+"""`node-` is hrono's own source namespace, not a user's."""
 
 import pytest
 from pydantic import ValidationError
@@ -37,8 +37,8 @@ def test_an_ordinary_name_that_mentions_node_is_fine(name: str) -> None:
 
 
 def test_the_reserved_prefix_is_the_one_brief_passages_use() -> None:
-    # the two must not drift apart: if #071's key shape ever changes, this
-    # fails rather than leaving a reservation that guards nothing.
+    # the two must not drift apart: if the brief passages' key shape ever
+    # changes, this fails rather than leaving a reservation that guards nothing.
     from hrono.recall.brief_passages import SOURCE_TYPE
 
     assert f"{SOURCE_TYPE}-" == RESERVED_PREFIX

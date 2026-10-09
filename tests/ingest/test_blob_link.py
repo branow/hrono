@@ -1,4 +1,4 @@
-"""E039 (#391): a git section's file on its host, at the commit it was read."""
+"""A git section's file on its host, at the commit it was read."""
 
 from __future__ import annotations
 

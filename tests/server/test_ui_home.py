@@ -1,4 +1,4 @@
-"""#215: the home page answers four questions.
+"""The home page answers four questions.
 
 Is the tree up to date with its sources, is anything running, does anything
 need a person, what did the last run do. The remote is a real repository, the
@@ -302,7 +302,7 @@ def test_a_reader_sees_the_four_answers_and_no_sync_button(
 def test_a_finished_fan_out_run_reads_its_derived_status_not_pending(
     browser: Browser,
 ) -> None:
-    # #203: the parent row is stored `pending` and is never updated; its
+    # the parent row is stored `pending` and is never updated; its
     # status is its children's, derived at read time.
     browser.run("job_parent", "pending")
     for index in range(2):

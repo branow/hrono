@@ -1,24 +1,24 @@
-"""RRF fusion of the two recall legs (T27): weighted 70/30, k=60, cap 10.
+"""RRF fusion of the two recall legs: weighted 70/30, k=60, cap 10.
 
-Frozen recipe (how-hrono-works.md): union the qualified passages from the vector
-leg (#072) and the keyword leg (#073) and rank them by weighted reciprocal rank
+Frozen recipe (docs/architecture.md): union the qualified passages from the
+vector leg and the keyword leg and rank them by weighted reciprocal rank
 fusion
 
     score(p) = 0.7/(60 + vector_rank) + 0.3/(60 + keyword_rank)
 
 contributing a term only for the leg(s) where the passage qualified, then cap at
-10 hits. **On the QA corpus the keyword leg has never contributed a passage**
-(#140), so in practice this has weighted one list rather than two; the mechanism
+10 hits. **On a ~120-section test corpus the keyword leg has never contributed a
+passage**, so in practice this weights one list rather than two; the mechanism
 stays because it is the recipe and a different corpus or embedding model could
-make the other leg fire — but a reader should not infer from the 70/30 that
-both legs are currently in play.
+make the other leg fire — but a reader should not infer from the 70/30 that both
+legs are currently in play.
 
 There is NO gap-based cutoff — the legs' z-floors alone decide membership.
 Ordering is deterministic (ties break by passage id). An empty union returns no
 hits and the exact explore message. All constants are baked.
 
-DIVERSITY IS A RESERVE, NOT A CAP (#126). The window used to have no notion of
-where its hits came from, so one document could fill all ten. A hard per-doc
+DIVERSITY IS A RESERVE, NOT A CAP. A window with no notion of where its hits
+came from lets one document fill all ten. A hard per-doc
 cap was rejected because it cannot tell "this document IS the answer" from "this
 document is hogging the window" — "generate a version 7 uuid" answers from one
 file, and truncating it to make room for worse hits elsewhere serves a metric
@@ -39,7 +39,7 @@ K = 60
 VECTOR_WEIGHT = 0.7
 KEYWORD_WEIGHT = 0.3
 CAP = 10
-MAX_DOCUMENT_SHARE = 0.4  # one document's reserve of the window (#126)
+MAX_DOCUMENT_SHARE = 0.4  # one document's reserve of the window
 EXPLORE_MESSAGE = "no confident matches - explore the map."
 
 
@@ -64,7 +64,7 @@ def fuse(
     """Union + weighted-RRF-rank the two legs' passages, capped at 10.
 
     ``documents`` maps a passage to the document it belongs to and turns on the
-    diversity reserve; without it the window is pure score order (#126).
+    diversity reserve; without it the window is pure score order.
     """
     vector_rank = {pid: i + 1 for i, (pid, _) in enumerate(vector_hits)}
     keyword_rank = {pid: i + 1 for i, (pid, _) in enumerate(keyword_hits)}
@@ -87,7 +87,7 @@ def fuse(
 def _reserve(
     ordered: Sequence[int], documents: Mapping[int, str]
 ) -> tuple[int, ...]:
-    """Fill the window in score order, holding back a dominant document (#126).
+    """Fill the window in score order, holding back a dominant document.
 
     One pass places up to each document's share; a passage past its document's
     share is DEFERRED, not dropped. The deferred pool then fills whatever the

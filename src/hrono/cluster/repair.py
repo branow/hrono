@@ -1,28 +1,29 @@
-"""Local cluster repairs (#090, T38): split, migrate, dissolve.
+"""Local cluster repairs: split, migrate, dissolve.
 
-The one-cluster repairs the misfit monitor (#089) triggers — each touches ONLY
-its cluster's members and lets only that cluster's brief regenerate (via #064).
-All three reuse settled primitives: the scoped mini-pipeline (#086's
-``core_labels``), the placement rule (#085's ``assign_or_park``), and the
-store's centroid maths. New nodes carry the #068 content-hash signature so a
+The one-cluster repairs the misfit monitor triggers — each touches ONLY
+its cluster's members and lets only that cluster's brief regenerate (via brief
+freshness). All three reuse settled primitives: the scoped mini-pipeline (the
+incubator's ``core_labels``), the placement rule (``assign_or_park``), and the
+store's centroid maths. New nodes carry the content-hash signature so a
 later full rebuild matches them.
 
 - ``split``  — a cluster over MAX_CAP (the summarization budget) re-clusters its
   own members into density-core children; residual noise attaches to the nearest
   child. The oversized node retires.
-- a PINNED member is never moved by any of these (#155): a hand-placed chunk
+- a PINNED member is never moved by any of these: a hand-placed chunk
   that migrates on the next batch is the silent revert pins exist to prevent.
 - ``migrate`` — a cluster over the misfit threshold sheds its misfit members
   (best_other > own), each moving to the cluster that actually fits it. A
   cluster holding a FORCED member runs the rule whatever its rate: one alien
   pioneer rarely moves a rate past 0.25, and leaving it married to the topic for
-  ever is the defect 0017 promised not to have (#113). Moving it re-records the
+  ever is the defect 0017 promised not to have. Moving it re-records the
   member unforced, so the flag keeps meaning "not yet revisited".
 - ``dissolve`` — a cluster below two members retires; each survivor re-enters
   the placement rule against the remaining clusters.
-- upper levels get the migrate rule too (#123), in brief space over child edges:
-  a child #114 attached by proximity below TAU is the level >= 1 twin of a
-  forced member, and without this it stayed under the wrong parent for ever —
+- upper levels get the migrate rule too, in brief space over child edges:
+  a child attached by proximity below TAU is the level >= 1 twin of a
+  forced member, and without this it would stay under the wrong parent for
+  ever —
   polluting that parent's brief, because a parent's brief is written over its
   children.
 
@@ -63,7 +64,7 @@ def repair(
     tree = job.tree or DEFAULT_TREE
     done = {"dissolved": 0, "split": 0, "migrated": 0, "freed": 0}
     with context.database.write() as conn:
-        # what a pin HELD is part of this run's outcome (#155)
+        # what a pin HELD is part of this run's outcome
         held = pins.pinned(conn, pins.MEMBERSHIP)
         done["pinned"] = len(held)
         model = str(resolve_embedding_model(conn, job.scope)["name"])
@@ -76,7 +77,7 @@ def repair(
             forced = len(store.forced_members(conn, node_id))
             if size < 2:
                 if _holds_pin(conn, node_id, held):
-                    continue  # a human holds a member here (#154)
+                    continue  # a human holds a member here
                 done["dissolved"] += int(
                     dissolve(conn, tree, node_id, model, batch)
                 )
@@ -87,7 +88,7 @@ def repair(
             elif _needs_migrate(conn, tree, node_id):
                 moved = migrate(conn, tree, node_id, model)
                 done["migrated"] += moved
-                # a forced member that MOVED is a pioneer freed (#113): the
+                # a forced member that MOVED is a pioneer freed: the
                 # decision an operator most wants to see the system revisit.
                 done["freed"] += min(moved, forced)
         done["reparented"] = _repair_upper_levels(conn, tree, model)
@@ -149,13 +150,13 @@ def _sole_node(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
 def _repair_upper_levels(
     conn: sqlite3.Connection, tree: str, model_name: str
 ) -> int:
-    """Re-parent misfit children at every level above the leaf (#123).
+    """Re-parent misfit children at every level above the leaf.
 
     A level runs the rule when its stored rate is over the threshold OR any of
     its parents holds a child attached by proximity — the same either/or
     `_needs_migrate` applies at level 0, and for the same reason: one poorly
-    attached child rarely moves a parent's rate past 0.25, and #114 attaches to
-    the NEAREST parent, so the rate can never see it.
+    attached child rarely moves a parent's rate past 0.25, and attach places a
+    child under the NEAREST parent, so the rate can never see it.
     """
     moved = 0
     for level in _upper_levels(conn, tree):
@@ -185,7 +186,7 @@ def _upper_levels(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
 
 
 def _needs_migrate(conn: sqlite3.Connection, tree: str, node_id: int) -> bool:
-    """Over the misfit threshold, or holding a member forced past TAU (#113)."""
+    """Over the misfit threshold, or holding a member forced past TAU."""
     if monitor.cluster_rate(conn, tree, node_id) > MISFIT_THRESHOLD:
         return True
     return bool(store.forced_members(conn, node_id))
@@ -205,17 +206,18 @@ def split(
     ``over`` is the size that makes a split WANTED, and it is MAX_CAP for the
     automatic repair because that is the summarization budget. A human asking
     for a split is not subject to that budget — a six-member topic they can see
-    is really two is exactly the case #159 exists for — so they pass their own
-    floor. What does not change is the refusal below: fewer than two density
-    cores is not a split, whoever asked.
+    is really two is exactly the case a manual split exists for — so they pass
+    their own floor. What does not change is the refusal below: fewer than two
+    density cores is not a split, whoever asked.
     """
     rows = store.node_member_rows(conn, node_id)
     if len(rows) <= over:
         return ()
     members = _vectors(conn, node_id, model_name)
     # a member with no vector cannot be judged, but dropping it breaks the
-    # #086 invariant (in exactly one cluster or pending): it is dealt into the
-    # biggest child below, with the topic's company, instead of into nothing.
+    # one-home invariant (in exactly one cluster or pending): it is dealt into
+    # the biggest child below, with the topic's company, instead of into
+    # nothing.
     vectored = {member[0] for member, _ in members}
     unjudged = [row for row in rows if row[0] not in vectored]
     labeler = core_labeler if core_labeler is not None else _default_core
@@ -243,7 +245,7 @@ def split(
     # new leaves and retired the old one without ever attaching them, so the
     # halves of a topic that was under the root became unparented nodes beside
     # the tree — two circles on the map with no line to anything, and a root
-    # whose brief no longer mentions a seventh of the corpus (#200). The
+    # whose brief no longer mentions a seventh of the corpus. The
     # divided topic is still in the same place; it is only narrower.
     above = store.parent_of(conn, node_id)
     new_ids: list[int] = []
@@ -259,7 +261,7 @@ def split(
         for member, _vector in group:
             if anchored.get(member[0]) == node_id:
                 # the topic was divided, not lost: the child holding this
-                # chunk IS what the operator pointed at, narrowed (#162).
+                # chunk IS what the operator pointed at, narrowed.
                 pins.reanchor(conn, pins.MEMBERSHIP, member[0], child)
         new_ids.append(child)
     for section_id, _, _ in unjudged:
@@ -274,7 +276,7 @@ def split(
             pins.reanchor(
                 conn, pins.MEMBERSHIP, section_id, _require_child(biggest)
             )
-    store.delete_node(conn, node_id)  # its brief cascades (#068)
+    store.delete_node(conn, node_id)  # its brief cascades
     return tuple(new_ids)
 
 
@@ -299,7 +301,7 @@ def migrate(
     moves: list[tuple[int, int, float]] = []
     for section_id, content_hash, path in store.node_member_rows(conn, node_id):
         if section_id in held:
-            continue  # a human put it here (#155)
+            continue  # a human put it here
         vector = combined_vector(conn, content_hash, path, model_name)
         if vector is None or not others:
             continue
@@ -326,7 +328,7 @@ def dissolve(
     batch: int,
     centroids: dict[int, tuple[float, ...]] | None = None,
 ) -> bool:
-    """Retire a below-two cluster; re-place survivors via the rule (#085)."""
+    """Retire a below-two cluster; re-place survivors via the rule."""
     if store.member_count(conn, node_id) >= 2:
         return False
     retire(conn, tree, node_id, model_name, batch, centroids)
@@ -346,12 +348,12 @@ def retire(
     The operation ``dissolve`` performs once its BELOW-TWO rule says it may.
     They are separate because the rule is the automatic repair's, not the
     operation's: an operator dissolving a topic they can see is wrong is not
-    asking about its size, and #158 shipped `dissolve` reporting success over
-    a node it had silently left standing because of it.
+    asking about its size, and a `dissolve` bound by the rule would report
+    success over a node it had silently left standing.
 
     The counts are the honest answer to "what happened to my chunks": a member
     whose best topic scores below TAU is PARKED, not placed, and an operator
-    told only "6 members replaced" would never learn that (#133).
+    told only "6 members replaced" would never learn that.
     """
     centroids = centroids or store.node_centroids(conn, tree, model_name)
     others = {nid: c for nid, c in centroids.items() if nid != node_id}

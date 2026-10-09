@@ -1,6 +1,6 @@
-"""Manual-adjustment routes: the dashboard's hands (M9, T46-T48).
+"""Manual-adjustment routes: the dashboard's hands.
 
-Admin-gated, per the spec, because every one of them overrides the pipeline's
+Admin-gated, because every one of them overrides the pipeline's
 own judgement. Each is synchronous — it touches one node and a human is
 waiting — and each pins what it changed, so the next run does not undo it.
 """
@@ -152,7 +152,7 @@ def dissolve_node(
     """Retire a topic; its members re-enter the placement rule.
 
     The node is confirmed before the embedding model is resolved, so an
-    unknown id is a 404 rather than the 500 a server with no model gave.
+    unknown id is a 404 even on a server with no model, never a 500.
     """
     with request.app.state.db.write() as conn:
         edits.require_node(conn, name, node_id)
@@ -167,9 +167,9 @@ def split_node(
 ) -> dict[str, object]:
     """Divide a topic; the old node retires, its children take over.
 
-    The node is confirmed BEFORE the embedding model is resolved: a server
-    with no embedding model answered an unknown node with a 500, because the
-    model it did not need yet was the first thing it went looking for.
+    The node is confirmed BEFORE the embedding model is resolved, so a server
+    with no embedding model answers an unknown node with a 404 rather than a
+    500 about a model it does not need yet.
     """
     with request.app.state.db.write() as conn:
         edits.require_node(conn, name, node_id)
@@ -190,7 +190,7 @@ def move_section(
 
     ``from_node`` is null when the chunk came from the pending pool rather
     than from another topic. A ``note`` appears when the move emptied the topic
-    it came from (#165).
+    it came from.
     """
     with request.app.state.db.write() as conn:
         move = edits.move_section(conn, name, section_id, body.to_node)

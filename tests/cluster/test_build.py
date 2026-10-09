@@ -129,7 +129,7 @@ def structureless(count: int, dim: int = 384, seed: int = 0) -> np.ndarray:
 
 
 def test_real_recipe_makes_a_structureless_level_one_topic() -> None:
-    # E003 / #198: the real reducer and clusterer label every point of this
+    # the real reducer and clusterer label every point of this
     # level noise (core_labels proves it), and the build answers one topic
     # rather than failing the run.
     vectors = structureless(30)
@@ -158,9 +158,9 @@ def test_result_shape_is_frozen() -> None:
 
 @pytest.mark.parametrize("count", [1, 4, 10, MIN_POINTS - 1])
 def test_real_recipe_refuses_a_level_it_cannot_reduce(count: int) -> None:
-    # #094: below the smallest rung there is no honest reduction — the caller
-    # must see ClusterError ("this level cannot be reduced further"), never a
-    # scipy/numba driver exception.
+    # below the smallest rung of the clustering ladder there is no honest
+    # reduction — the caller must see ClusterError ("this level cannot be
+    # reduced further"), never a scipy/numba driver exception.
     vectors, _ = planted_vectors(groups=1, per_group=count)
     with pytest.raises(ClusterError, match="too few vectors"):
         build_clusters(vectors)
@@ -186,7 +186,7 @@ def test_real_recipe_clusters_every_size_it_accepts(count: int) -> None:
 def test_real_recipe_drops_a_warm_init_from_another_rung(
     stale_width: int, count: int
 ) -> None:
-    # #094: stored coords carry the width of the build that wrote them, so a
+    # stored coords carry the width of the build that wrote them, so a
     # level that has crossed a rung since offers an init this recipe cannot
     # reduce to. The build must run cold rather than fail — identical to one
     # given no init at all — in both directions across the boundary.

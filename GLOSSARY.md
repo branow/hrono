@@ -1,23 +1,23 @@
 # Glossary
 
-The words hrono uses, and the ones it deliberately does not. Settled from
-the design notes (`docs/design/how-hrono-works.md` and the summarization
-experiments in the same folder).
-
-Several of these were renamed during development and the old names are still
-findable in early design notes. Where that happened the superseded word is
-listed, so a search for it lands here rather than on a wrong assumption.
+The words hrono uses, and the ones it deliberately does not. The dashboard
+uses only these words, and a test fails on any word listed under
+[Words we do not use](#words-we-do-not-use). See
+[docs/architecture.md](docs/architecture.md) and
+[docs/summarization.md](docs/summarization.md) for how the pieces fit.
 
 ## The shape of what hrono builds
 
-**source** — a place hrono reads: a git repository first, later a Confluence or
-Notion space. Registering one pulls nothing; `sync` does.
+**source** — a place hrono reads: a git repository (`git`), every repository
+of a GitHub user or organization (`github-user`), every repository of a
+Bitbucket workspace (`bitbucket-workspace`), Confluence pages chosen by space
+or page (`confluence`), or the Notion pages shared with an integration
+(`notion`). Registering one pulls nothing; `sync` does.
 
 **section** — the organizing unit. Around 10 KB of one file, filled greedily to
 a per-category budget (code 10 KB, docs 10 KB, data 2 KB). A section is what
 gets clustered, and what an agent reads when it explores.
-*Superseded name: **chunk**. Used throughout the early design sketch (an
-external design note); do not reintroduce it.*
+*Superseded name: **chunk**; see [Words we do not use](#words-we-do-not-use).*
 
 **passage** — around 800 B, the unit **recall** injects into a prompt. A section
 reassembles byte-identically from its passages. Passages exist for retrieval;
@@ -31,8 +31,6 @@ map-reduce.
 
 **topic** — a group of related sections, or of other topics, plus a brief. The
 node of the tree. Bottom-level topics hold sections; topics above hold topics.
-*Internal name: **node**, which is what the database calls it and what a URL
-carries. A user-facing surface says topic.*
 
 **brief** — an LLM-written summary of what a topic is, written from its
 sections' **condensations**, not from their raw text. This is the **reduce**
@@ -86,9 +84,10 @@ carries no similarity score.
 
 **cluster** — the algorithm's verb. The thing it produces is a **topic**.
 
-**chunk** — superseded by **section**.
+**chunk** — an older name for **section**. Do not reintroduce it.
 
-**node** — the database's and the URL's word for a topic. On screen it is always a topic.
+**node** — the internal name for a topic: what the database calls it and what
+a URL carries. On screen it is always a topic.
 
 **paragraph** — not a unit in hrono. Splitting is by structure and byte budget,
 never by paragraph.

@@ -1,7 +1,7 @@
-"""The Ask page (#207): what recall hands an agent, for any question.
+"""The Ask page: what recall hands an agent, for any question.
 
-Recall is one of hrono's two doors, and until this page it opened only from a
-terminal. The page asks exactly what ``POST /trees/{name}/recall`` asks — the
+Recall is one of hrono's two doors, and this page opens it outside a terminal.
+The page asks exactly what ``POST /trees/{name}/recall`` asks — the
 same ``recall.ask`` — and shows each passage as an agent receives it, with the
 file and byte range it came from, its fused score, and the topic that holds it.
 
@@ -14,7 +14,7 @@ The question lives in the URL (a GET, since asking changes nothing), so an
 answer can be shared; the last few questions this browser asked are kept in a
 cookie for comparing before and after a fix. The cookie keeps a compact
 snapshot of what each answered, so asking one again marks every passage new,
-moved or the same, and lists the ones that dropped out (#401). A missing or
+moved or the same, and lists the ones that dropped out. A missing or
 still-loading embedding backend is a message with a next step, not a 503.
 """
 

@@ -1,4 +1,4 @@
-"""#221: a condensation that is the model talking back is never cached."""
+"""A condensation that is the model talking back is never cached."""
 
 import sqlite3
 from collections.abc import Iterator
@@ -32,7 +32,7 @@ CHATTER = (
     "has the heading. Paste the md content here and I'll condense it for you."
 )
 GOOD = "Defines the a() helper, which returns 1."
-SHORT = "Could you paste the file for me?"  # under MIN_CHARS (E015)
+SHORT = "Could you paste the file for me?"  # under MIN_CHARS
 
 
 class Talking:
@@ -105,7 +105,7 @@ def built(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Built]:
         client=Talking(None),
         build=fake_build,
     )
-    # what condense wrote for one section before #221: the chatter, cached
+    # what an older condense cached for one section: the chatter
     with database.write() as conn:
         digest = conn.execute(
             "SELECT content_hash FROM sections WHERE path = 'f4.txt'"
@@ -170,7 +170,7 @@ def test_the_listing_binds_no_parameter_per_condensation(
     built: Built,
 ) -> None:
     # a placeholder per hash fails past SQLite's variable limit; the limit is
-    # lowered here so every section talking back is already past it (E001)
+    # lowered here so every section talking back is already past it
     with built.database.write() as conn:
         rows = conn.execute(
             "SELECT content_hash FROM condensations WHERE model_name = ?",
@@ -220,7 +220,7 @@ def test_a_good_condensation_is_never_overwritten(built: Built) -> None:
 
 def test_pending_reads_no_body_it_will_not_condense(built: Built) -> None:
     # condense runs on every sync: finding the few that changed must not read
-    # every section's content (qa, #221)
+    # every section's content
     statements: list[str] = []
     with built.database.connect() as conn:
         conn.set_trace_callback(statements.append)

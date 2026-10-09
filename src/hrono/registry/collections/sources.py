@@ -1,20 +1,20 @@
-"""The ``sources`` collection: source config, discriminated by type (T7.1).
+"""The ``sources`` collection: source config, discriminated by type.
 
-Registering a source stores config only; nothing is pulled. Reach + auth
-validation fills the descriptor's hook in a follow-up (#013).
+Registering a source stores config only; nothing is pulled. The descriptor's
+hook checks reach and auth per source type.
 
-THE ``node-`` PREFIX IS RESERVED (#076). Brief passages are stored under a
-synthetic source key ``node-<id>`` (#071) in the same ``sources.source``
+THE ``node-`` PREFIX IS RESERVED. Brief passages are stored under a
+synthetic source key ``node-<id>`` in the same ``sources.source``
 namespace a user registers into, and `store_brief` clears that key before
 re-writing — so a user source literally named ``node-5`` would have its passages
 and FTS rows wiped by node 5's next re-brief, and vice versa. Silent
 cross-deletion, in a namespace the user has no reason to know is shared.
 
-Reserving the prefix at the boundary is the smaller half of the two fixes the
-ticket offered: it costs one validator and no migration, where re-namespacing
-the brief keys would touch the passage store, the FTS index and every stored
-row. The retirement direction is already closed by construction — #125's trigger
-matches on ``source_type`` as well as name — so this is the remaining one.
+Reserving the prefix at the boundary costs one validator and no migration,
+where re-namespacing the brief keys would touch the passage store, the FTS
+index and every stored row. The retirement direction is already closed by
+construction — the node-retirement cleanup trigger matches on ``source_type``
+as well as name — so this closes the remaining one.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from hrono.registry.validation.source_validation import validate_source
 
 RESERVED_PREFIX = "node-"
 
-# The three questions a source's form is grouped by (#210). Declared on the
+# The three questions a source's form is grouped by. Declared on the
 # field, so the API's model and the dashboard's form are one schema: a field
 # added to a source type lands in its group with no edit to the page.
 LOCATION = {"group": "Location"}
@@ -141,7 +141,7 @@ class GitFilter(BaseModel):
 
 
 def _reject_reserved(value: str) -> str:
-    """`node-` is hrono's own source namespace, not a user's (#076)."""
+    """`node-` is hrono's own source namespace, not a user's."""
     if value.lower().startswith(RESERVED_PREFIX):
         raise ValueError(
             f"`{RESERVED_PREFIX}` is reserved for hrono's own briefs, so a "
@@ -188,7 +188,7 @@ class GitSource(BaseModel):
 
 
 class GithubUserSource(BaseModel):
-    """An owner's repos, discovered through the provider API (T41.2).
+    """An owner's repos, discovered through the provider API.
 
     ``owner`` is a github username or org; the optional globs filter REPO
     NAMES, not paths — a source's file filter is the git type's job and applies
@@ -236,7 +236,7 @@ class GithubUserSource(BaseModel):
 
 
 class BitbucketWorkspaceSource(BaseModel):
-    """A workspace's repos, discovered through the provider API (T41.1).
+    """A workspace's repos, discovered through the provider API.
 
     Same shape as ``GithubUserSource`` — ``owner`` is the workspace slug — and
     deliberately a separate variant rather than a shared model with a provider
@@ -321,7 +321,7 @@ class Selector(BaseModel):
 
 
 class ConfluenceSource(BaseModel):
-    """Pages from a confluence site, narrowed by a union of selectors (T42)."""
+    """Pages from a confluence site, narrowed by a union of selectors."""
 
     name: RegistryName = _name()
     type: Literal["confluence"] = Field(
@@ -365,7 +365,7 @@ class TokenAuth(BaseModel):
 
 
 class NotionSource(BaseModel):
-    """Pages shared with a notion integration (T43).
+    """Pages shared with a notion integration.
 
     No base url — always api.notion.com — and no owner: an integration sees
     exactly what has been shared with it, so the token IS the scope's outer
@@ -407,11 +407,11 @@ class Source(
         ]
     ]
 ):
-    """A source, discriminated by its ``type`` (#141).
+    """A source, discriminated by its ``type``.
 
-    The union is the point: a reader M8 adds is a model variant plus table
+    The union is the point: a new reader is a model variant plus table
     entries, with no change to the registry engine that stores it —
-    ``github-user`` (#147) was exactly that. An unknown ``type`` is rejected
+    ``github-user`` is exactly that. An unknown ``type`` is rejected
     here, by pydantic, with the known tags in the message, and the engine turns
     that into a 422 like any other invalid body.
     """

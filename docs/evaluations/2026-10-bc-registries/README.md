@@ -56,7 +56,8 @@ identifiers, 44% bot commits on the frontend) and Helsinki Linked Events
 
 ## Setup
 
-All of it is outside the repository, in `~/hrono-eval/`:
+All of it is outside the repository, in `<workspace>/`, with `scripts/` copied
+to `<workspace>/bin/`:
 
 - `upstream/<repo>`: full clones from GitHub.
 - `mirror/<repo>.git`: bare repositories that hrono's git sources point at.
@@ -68,7 +69,7 @@ All of it is outside the repository, in `~/hrono-eval/`:
   exported as `data/01-cold-build-and-sync0`.
 - One server, `hrono serve --port 8787`, started with
   `HRONO_LLM_CONCURRENCY=8` (4 for the first 15 minutes) under `nohup`.
-- CLI profile `eval` in `~/hrono-eval/home`, used through `scripts/h`.
+- CLI profile `eval` in `<workspace>/home`, used through `scripts/h`.
 
 Registered configuration:
 
@@ -203,7 +204,7 @@ real Haiku, one call answered 5 tasks in 6 s.
 scripts/pin.sh 2024-10-01                  # mirrors to the snapshot
 scripts/h tree maintain bcreg              # cold build
 scripts/replay.sh 2024-11-01 2024-12-01    # stage 2: one sync per date
-python scripts/export_metrics.py ~/hrono-eval/db/hrono.db bcreg data/<name>
+python scripts/export_metrics.py <workspace>/db/hrono.db bcreg data/<name>
 ```
 
 The server needs `uv sync --extra embed --extra cluster` in the hrono

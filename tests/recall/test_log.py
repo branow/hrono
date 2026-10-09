@@ -1,4 +1,4 @@
-"""E042: the recall log keeps what was asked, bounded per tree."""
+"""The recall log keeps what was asked, bounded per tree."""
 
 from pathlib import Path
 

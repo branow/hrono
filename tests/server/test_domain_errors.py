@@ -1,9 +1,9 @@
-"""#161: a domain failure reaches the client with the name #145 gave it.
+"""A domain failure reaches the client with its own error code.
 
-Only `AppError` was registered on the boundary, so every `DomainError` fell
-into the catch-all and rendered `internal-error` — the operator whose server
-had no embedding model was told "internal error" while the log underneath said
-"no embedding model available".
+Every `DomainError` must be registered on the boundary, not only `AppError`:
+otherwise it falls into the catch-all and renders `internal-error`, and the
+operator whose server has no embedding model is told "internal error" while
+the log underneath says "no embedding model available".
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def test_a_domain_failure_keeps_its_code_and_its_message(
 ) -> None:
     response = raising.get(path)
 
-    assert response.status_code == 500  # #145 ruled: these stay 500
+    assert response.status_code == 500  # these stay 500
     body = response.json()["error"]
     assert body["code"] == code
     assert fragment in body["message"]
@@ -83,11 +83,10 @@ def test_a_subclass_answers_with_its_own_code_not_its_family_s(
 ) -> None:
     """`TooFewPoints` is a `ClusterError` and does NOT answer as one.
 
-    I expected the family's code here and was wrong, which is worth keeping as
-    a test rather than a correction: #145's rule is that each class declares
-    its own, and `TooFewPoints` declares one deliberately because it is the one
-    clustering failure that is not a failure — a caller may answer it by
-    COLLECTING (#094, #112). A client that could not tell it from a broken
+    The family's code is the natural expectation and the wrong one: each
+    class declares its own, and `TooFewPoints` declares one deliberately
+    because it is the one clustering failure that is not a failure — a caller
+    may answer it by COLLECTING. A client that could not tell it from a broken
     clusterer would have to guess at exactly the distinction the type exists
     to make.
     """
@@ -120,10 +119,10 @@ def test_a_foreign_exception_still_says_nothing(raising: TestClient) -> None:
 def test_the_real_server_names_a_missing_embedding_model(
     tmp_path: Path,
 ) -> None:
-    """The case from the ticket, through the real app and a real route.
+    """A missing embedding model, through the real app and a real route.
 
     `POST /trees/<t>/nodes/<id>/dissolve` resolves an embedding model, and a
-    server with none registered raised `EmbedError` into the catch-all.
+    server with none registered raises `EmbedError`.
     """
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)

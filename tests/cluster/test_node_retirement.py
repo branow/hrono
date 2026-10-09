@@ -1,4 +1,4 @@
-"""#125: a retired node takes its brief passages with it."""
+"""A retired node takes its brief passages with it."""
 
 import sqlite3
 from collections.abc import Iterator
@@ -62,7 +62,7 @@ def _brief_passages(db: Database, node_id: int) -> tuple[int, int]:
 
 
 def _user_source(conn: sqlite3.Connection, source: str) -> int:
-    """A git source whose NAME collides with a node's (#076); return its id."""
+    """A git source whose NAME collides with a node's; return its id."""
     body = b"user body\n"
     address = Address("git", "ex/repo", "c.py", "v1")
     istore.upsert_content(conn, content_hash(body), body)
@@ -234,7 +234,7 @@ def test_dropping_a_whole_level_takes_its_brief_passages(
 def test_a_user_source_named_like_a_node_is_untouched(
     db: tuple[Database, int, int],
 ) -> None:
-    # #076's collision, from the other direction: the trigger matches on
+    # the name collision, from the other direction: the trigger matches on
     # source_type too, so a git source that happens to be called "node-9"
     # survives node 9 being retired.
     database, _kept, going = db

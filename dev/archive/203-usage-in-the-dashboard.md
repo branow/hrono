@@ -20,7 +20,7 @@ A new Usage page (all roles): spend over time; a table per configured model with
 Server-rendered like the rest; charts are plain SVG or bars, no new JS dependency.
 
 ## Findings from the UI review (2026-10-03)
-Seen by driving the dashboard in headless Chromium against a copy of the `~/hrono-click` database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
+Seen by driving the dashboard in headless Chromium against a copy of the local test database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
 
 - **B** "COST 2 in, 5,371 out" — input is wrong for `claude-code` (cache tokens are dropped), and tokens are not a cost.
 - **A** A 6m30s successful `maintain` shows "It reported nothing" and "No result recorded": no stages, no counts, no tokens. The most expensive action in the product leaves no trace. Screenshot: `s-run-ok.png`.

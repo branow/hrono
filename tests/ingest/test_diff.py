@@ -1,4 +1,4 @@
-"""T33: content-hash file diff classification for incremental update."""
+"""Content-hash file diff classification for incremental update."""
 
 from collections.abc import Iterator
 from pathlib import Path

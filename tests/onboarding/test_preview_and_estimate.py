@@ -1,4 +1,4 @@
-"""#219: what the setup path says a source holds and a build would cost.
+"""What the setup path says a source holds and a build would cost.
 
 The preview and the estimate are READS over the same files ingest reads, so
 the tests that matter run the real sync and split ops over a real repository

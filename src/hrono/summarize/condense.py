@@ -1,28 +1,28 @@
-"""The ``condense`` job op: the T20 map stage over a scope's sections.
+"""The ``condense`` job op: the map stage over a scope's sections.
 
 Resolves the text model (the sole ``text``-kind model, or the one named in the
 job scope) and the seeded ``condense``-role prompt, then reduces each stored
 section that has no condensation for that model to its essential information via
-one #057 completion call, caching the result by the section's content hash. An
+one completion call, caching the result by the section's content hash. An
 unchanged section is never re-condensed (a re-run makes zero LLM calls) — the
 incremental lever brief rebuilds stand on.
 
-Lock discipline mirrors #035/#040: load the pending sections + the cached
-hashes UNDER the #008 lock, release it, make each LLM call OUTSIDE the lock, and
-re-acquire only to persist that one result — so a section that fails its call
-fails the leaf cleanly while every section condensed before it is kept, and an
-idempotent re-run fills only the gaps. A section the model refuses twice is
-recorded as refused for this model and prompt (E015), so a re-run skips it
-until its body, the model or the prompt changes, instead of paying two calls
-on every sync to be refused again. No token cap and no truncation: the
+Lock discipline mirrors ``embed`` and clustering: load the pending sections +
+the cached hashes UNDER the database lock, release it, make each LLM call
+OUTSIDE the lock, and re-acquire only to persist that one result — so a section
+that fails its call fails the leaf cleanly while every section condensed before
+it is kept, and an idempotent re-run fills only the gaps. A section the model
+refuses twice is recorded as refused for this model and prompt, so a re-run
+skips it until its body, the model or the prompt changes, instead of paying two
+calls on every sync to be refused again. No token cap and no truncation: the
 recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
 
 Because the calls are keyed by CONTENT HASH they are independent of each other,
 so they run in ``pool.mapped``'s bounded worker pool rather than one at a time:
-421 sections at 4-30 s each was 70 minutes of a process that was idle for all
-of it. The persist stays on this thread, one at a time. And each call carries
-up to ``packed.PACK_ITEMS`` sections, because through ``claude-code`` the
-call's own overhead, not the section, was most of what a build paid for.
+421 sections at 4-30 s each, serially, is 70 minutes of a process that is idle
+for all of it. The persist stays on this thread, one at a time. And each call
+carries up to ``packed.PACK_ITEMS`` sections, because through ``claude-code``
+the call's own overhead, not the section, is most of what a build pays for.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def condense(
     def keep(pack: tuple[Section, ...], made: list[Made]) -> None:
         for section, (result, refused) in zip(pack, made, strict=True):
             with context.database.write() as conn:
-                if refused:  # never cached (#221), never re-paid (E015)
+                if refused:  # never cached, never re-paid
                     store.refuse(
                         conn,
                         section[0],
@@ -108,9 +108,9 @@ def condense(
         )
         for made in results
     ]
-    # an op that calls a model says what it spent (#179); until now condense
-    # reported nothing at all, which made the most expensive stage of a first
-    # build the one nobody could account for.
+    # an op that calls a model says what it spent: condense is the most
+    # expensive stage of a first build, and must not be the one nobody can
+    # account for.
     refused = sum(1 for _, flag in condensed if flag)
     outcome: dict[str, object] = {"condensed": len(condensed) - refused}
     if refused:
@@ -124,7 +124,7 @@ def condense(
 
 
 def _named(context: JobContext, pack: tuple[Section, ...]) -> str:
-    """The sections of a failed call by the files they are in (#213).
+    """The sections of a failed call by the files they are in.
 
     A pack fails as one call, so every section it carried is named: the one
     that broke it is among them, and which one cannot be known.

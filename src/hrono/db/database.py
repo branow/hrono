@@ -3,7 +3,7 @@
 The server borrows a connection per operation rather than sharing one for the
 whole process: a connection that an op left mid-transaction is rolled back and
 dropped back into the pool clean, so one failure cannot pin a stale snapshot or
-hold the write lock for every other caller (F23).
+hold the write lock for every other caller.
 """
 
 from __future__ import annotations
@@ -186,7 +186,7 @@ class Database:
 
         The write lock is taken before the block runs, with bounded retries on
         top of the busy timeout, so a writer that loses a race waits instead of
-        failing its job (F13).
+        failing its job.
         """
         with self.connect() as conn:
             if conn.in_transaction:

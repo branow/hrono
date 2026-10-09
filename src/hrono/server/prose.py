@@ -1,11 +1,10 @@
-"""Model-written text, rendered as the markdown it actually is (#200).
+"""Model-written text, rendered as the markdown it actually is.
 
 Every brief and every condensation comes back as markdown — the prompts ask for
 headings, for bullet groupings, for a `Caution:` section, for identifiers in
-backticks — and the dashboard printed all of it into a `<blockquote>`, where
-markdown's blank lines collapse and a four-paragraph brief with three bullet
-lists reads as one unbroken line. The structure the model was asked to produce
-was being thrown away at the last step.
+backticks. Printed raw into a `<blockquote>`, markdown's blank lines collapse
+and a four-paragraph brief with three bullet lists reads as one unbroken line,
+throwing away at the last step the structure the model was asked to produce.
 
 **The text is untrusted.** It is whatever a language model wrote about whatever
 was in somebody's repository, so `html=False` is the load-bearing setting here:
@@ -46,7 +45,7 @@ def markdown(text: str | None) -> str:
 def linked(text: str, resolve: Callable[[str], str]) -> str:
     """``markdown``, with every link's target passed through ``resolve``.
 
-    For a page that shows a set of linked files in place (#205): the files link
+    For a page that shows a set of linked files in place: the files link
     to each other by relative path, and in the panel each of those has to
     become a link to the panel's own view of that file.
     """

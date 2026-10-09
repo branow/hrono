@@ -7,9 +7,9 @@ log-scale Kneedle knee of file-size distributions measured over four large
 repos). Values live here as data so the packer walks a table, not literals.
 
 ``DEFAULT_IGNORE`` sits beside that table for the same reason: it is the other
-half of "what kind of file is this" — the globs #104 bakes as not worth a
+half of "what kind of file is this" — the globs baked as not worth a
 section, grouped by WHY (vendored trees, lockfiles, non-prose assets, tabular
-data, generated code). The #013 filter reads it; nothing here decides policy.
+data, generated code). The ingest filter reads it; nothing here decides policy.
 Only ``OPTIONAL_IGNORE`` has a named opt-in (``filter.include_generated``); any
 group is re-admitted file by file with an explicit ``filter.include`` pattern.
 """
@@ -93,7 +93,7 @@ DEFAULT_IGNORE: dict[str, tuple[str, ...]] = {
         "**/bower/**",
     ),
     # exact NAMES, never prefixes: a real file called
-    # `package-lock.example.json` is documentation, not a lockfile (#118).
+    # `package-lock.example.json` is documentation, not a lockfile.
     "locks": (
         "**/*.lock",  # yarn, uv, poetry, Cargo, composer, Gemfile
         "**/package-lock.json",  # npm's default, and the biggest miss

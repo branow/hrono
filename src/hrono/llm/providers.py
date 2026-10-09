@@ -1,17 +1,17 @@
-"""Which ``Completion`` a model's connection resolves to (#107, T44).
+"""Which ``Completion`` a model's connection resolves to.
 
 Dispatch is DATA, not a branch: one entry per provider, the same shape
-``connection_validation._VALIDATORS`` uses, so ``openai`` (T44.1) and
-``openai-compatible`` (T44.3) are later map entries rather than new code paths
-through every op. Before this, four ops each carried their own
-``_default_client`` hardcoding the anthropic SDK, so a connection registered
-with any other provider failed at call time with no useful message.
+``connection_validation._VALIDATORS`` uses, so ``openai`` and
+``openai-compatible`` are map entries rather than new code paths through every
+op. No op carries its own default client: one hardcoding the anthropic SDK
+would fail a connection registered with any other provider at call time, with
+no useful message.
 
 The model's connection names the provider; a model that resolves to no
 connection keeps the anthropic default, which is what every existing database
 has.
 
-Every client handed out here is wrapped in the usage ledger (#201), including
+Every client handed out here is wrapped in the usage ledger, including
 one a caller injected in place of the provider's own, so no provider and no op
 can make a call the ledger does not see.
 """
@@ -75,7 +75,7 @@ def _build(
 
 
 def provider_for(context: JobContext, model: dict[str, object]) -> str:
-    """The provider named by this model's connection (#151).
+    """The provider named by this model's connection.
 
     Shared with the embedding side, which dispatches on the same answer: a
     model is remote or local by whether it HAS a connection, and which remote
@@ -102,7 +102,7 @@ def _claude_code(context: JobContext) -> Completion:
     """No credential of its own — it bills through the operator's login.
 
     The working directory is anchored on the database rather than the process
-    cwd, because the CLI reads the project memory of wherever it starts (#107).
+    cwd, because the CLI reads the project memory of wherever it starts.
     """
     return ClaudeCodeClient(context.cli_dir(), wanted=_still_running(context))
 

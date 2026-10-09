@@ -80,8 +80,8 @@ def reset_token(conn: sqlite3.Connection, name: str) -> tuple[User, str]:
     """Reissue an existing user's token; return the ``User`` and raw token once.
 
     Only the new token's hash is persisted (the old one stops authenticating),
-    and `modified_at` moves — a rotation that left no trace is the gap #042
-    closed. Raises ``NotFound`` for an unknown user.
+    and `modified_at` moves — a rotation must leave a trace. Raises
+    ``NotFound`` for an unknown user.
 
     The returned ``User`` carries the NEW timestamp: a caller that printed the
     one it was handed would report the moment before the rotation it just did.

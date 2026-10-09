@@ -1,11 +1,12 @@
--- A retired node must not leave its brief behind (#125).
+-- A retired node must not leave its brief behind.
 --
 -- `briefs`, `node_members` and `node_children` all FK the node and cascade with
--- it, but #071's brief PASSAGES are keyed by a STRING source, `node-<id>`, which
--- no foreign key can express — so every rebuild that retired a node left its
--- summary in the recall index for ever. On the QA corpus that had reached 51 of
--- 85 node:// passages (60%): recall was answering with summaries of topics the
--- map no longer contained, which is a correctness defect in the read door.
+-- it, but the brief PASSAGES are keyed by a STRING source, `node-<id>`, which
+-- no foreign key can express — so without this every rebuild that retired a
+-- node would leave its summary in the recall index for ever. On a ~120-section
+-- test corpus that reached 51 of 85 node:// passages (60%): recall answered
+-- with summaries of topics the map no longer contained, which is a correctness
+-- defect in the read door.
 --
 -- A TRIGGER rather than a cleanup call at each retirement site: the three sites
 -- today (`_reconcile`'s retire branch, `delete_node`, `build_tree._drop_level`)
@@ -16,7 +17,7 @@
 --
 -- Both deletes are scoped by SOURCE TYPE, which is what makes them the exact
 -- inverse of `store_brief`'s single source constructor: a USER source that
--- happened to be named `node-5` (#076's collision) is left alone in full. The
+-- happened to be named `node-5` (a name collision) is left alone in full. The
 -- FTS table carries no `source_type` of its own, so its rows are reached
 -- THROUGH the passages they index — which is also why the FTS delete must come
 -- FIRST, while those passages still exist.

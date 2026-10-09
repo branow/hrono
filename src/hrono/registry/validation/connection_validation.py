@@ -1,12 +1,12 @@
 """Provider reachability + auth validation for connections, run on write.
 
 Dispatch is data-driven: one validator per provider, so a new provider is a map
-entry (T44), not a branch. ``anthropic`` hits the no-inference list-models
+entry, not a branch. ``anthropic`` hits the no-inference list-models
 endpoint (200 = the key authenticates). ``claude-code`` has no credential at all
 — it bills through the operator's login — so what it validates is that the CLI
 is present and runnable, which is the failure a user would otherwise meet hours
-later at ``condense`` time (#107). Other providers keep the no-op stub until
-their tickets. The api-key never appears in a reason or log line.
+later at ``condense`` time. A provider with no validator registers without a
+check. The api-key never appears in a reason or log line.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ def _judge(reply: Reply, key: str) -> None:
 
 
 def _validate_claude_code(probe: Probe) -> None:
-    """A ``claude-code`` connection is valid when the CLI answers (#107).
+    """A ``claude-code`` connection is valid when the CLI answers.
 
     There is no key to check — it bills through the operator's own login — so
     what must be true at WRITE time is that the binary is present and runnable.

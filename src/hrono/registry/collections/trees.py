@@ -1,9 +1,9 @@
-"""The ``trees`` collection: which sources a tree is the map over (#054).
+"""The ``trees`` collection: which sources a tree is the map over.
 
-`hrono tree maintain <name>` has taken the tree as a required argument since
-#138, while the build loaded every embedded section regardless — so a second
-named tree was a duplicate of the first over the whole corpus, and every
-section belonged to both. A tree needs to say what it is a map OF.
+`hrono tree maintain <name>` takes the tree as a required argument, but a build
+that loaded every embedded section regardless would make a second named tree a
+duplicate of the first over the whole corpus, with every section belonging to
+both. A tree needs to say what it is a map OF.
 
 It says it by naming SOURCES, not sections: ``sections.source`` already records
 the registered source a chunk came from, so the association is declared once
@@ -52,8 +52,7 @@ def _validate(config: dict[str, object], context: ValidationContext) -> None:
 
     The reference check is the same one every other collection makes: a tree
     whose source does not exist builds an empty map and reports success, which
-    is the failure #132 named — an op that declines work and still says it
-    worked.
+    is an op that declines work and still says it worked.
 
     The CLAIM check is new and load-bearing: ``sections`` has no tree column,
     so a source ingested by two trees is one set of rows both trees mutate.
@@ -94,9 +93,9 @@ def _before_delete(name: str, context: ValidationContext) -> str | None:
 
     An absent row means UNSCOPED, which is the right meaning and the whole
     reason this collection is additive over every database built before it
-    (#054) — so the next `maintain` on a tree whose config is gone clusters
+    — so the next `maintain` on a tree whose config is gone clusters
     EVERY source in the corpus into it. One small row, a very large operation,
-    and nothing said so until it happened (#167).
+    and nothing would say so until it happened.
 
     Not a refusal: wanting a tree unscoped again is legitimate, and the config
     is one PUT away from coming back. What was missing is that the operator
@@ -129,7 +128,7 @@ def is_known(conn: sqlite3.Connection, tree: str) -> bool:
     """Whether work may be queued for ``tree``: registered, or the default.
 
     A database nobody has partitioned has exactly one tree, `default`, with no
-    registry row (#054); any other name that is not registered is a typo.
+    registry row; any other name that is not registered is a typo.
     """
     return tree == DEFAULT_TREE or store.get(conn, "trees", tree) is not None
 
@@ -159,7 +158,7 @@ def ingest_sources(conn: sqlite3.Connection, tree: str) -> tuple[str, ...]:
     """The sources an ingesting op (update/maintain) may mutate for ``tree``.
 
     ``scoped_sources`` with one refusal on top: an UNSCOPED tree maps every
-    source, and once any other tree is registered that overlap is the #054
+    source, and once any other tree is registered that overlap is a
     corruption — both trees reconciling one set of section rows. A scoped tree
     cannot overlap (``_validate`` refuses the claim), so the only door left is
     the unscoped default, and this closes it at the moment it would do harm

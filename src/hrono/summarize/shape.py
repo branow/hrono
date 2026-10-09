@@ -1,12 +1,11 @@
 """Is this reply a brief at all? A deterministic shape check on LLM output.
 
-The faithfulness gate (#063) asks whether a brief's claims are supported; this
+The faithfulness gate asks whether a brief's claims are supported; this
 asks the cruder question it cannot: whether the model summarised the content or
-answered the CALLER. In the QA run one node's stored brief was "This appears to
-be a condensation format guide with SVG examples, not a request for me to act
-on something. Are you shar[ing]..." — the map's first topic was the model
-talking back, and the faithfulness gate passed it because it invents nothing
-(#103, F21).
+answered the CALLER. One observed stored brief was "This appears to be a
+condensation format guide with SVG examples, not a request for me to act on
+something. Are you shar[ing]..." — the map's first topic was the model talking
+back, and the faithfulness gate passes that because it invents nothing.
 
 Deliberately conservative, because a false positive costs a paid retry and then
 pollutes the triage queue the flag exists to serve. Only three shapes are
@@ -16,45 +15,43 @@ rejected, each a thing a summary of code or docs does not do:
 - ``asks-the-caller`` — a ``you``-bearing question that is the LAST sentence and
   carries no reporting cue. A summary describes material; it does not
   interrogate the person who asked for it. Both qualifiers are what let it tell
-  interrogating from QUOTING (#121): a brief that quotes a question out of its
+  interrogating from QUOTING: a brief that quotes a question out of its
   source carries on afterwards, because the quote is evidence for a point it
   then makes, and one that REPORTS a question says so ("the docstring opens
   with", "the final entry asks:"). A brief that interrogates ends on its
-  question and introduces nobody. Without those two the check rejected an FAQ
-  summary, a docstring that opens by asking, and any brief reporting a question
-  in its material — which is what a Confluence or Notion corpus is largely made
-  of.
+  question and introduces nobody. Without those two the check would reject an
+  FAQ summary, a docstring that opens by asking, and any brief reporting a
+  question in its material — which is what a Confluence or Notion corpus is
+  largely made of.
 - ``addresses-the-caller`` — an assistant meta-opener that STARTS the first
   sentence ("I cannot", "as an AI", "I'd be happy to", "let me know if").
-  Anchored to the opening so a brief that quotes such a phrase mid-text is safe
-  — which the rule always claimed, while actually scanning the whole first
-  sentence (#121).
+  Anchored to the opening so a brief that quotes such a phrase mid-text is safe.
 
-- ``talks-to-the-caller`` (#217) — a sentence about the CONVERSATION rather
+- ``talks-to-the-caller`` — a sentence about the CONVERSATION rather
   than the material ("your message is just system context", "there's no
   actual input content", "your prompt got blocked"), or one where the model
   speaks as itself to the reader — a first-person ``I``/``me`` and a ``you`` in
   the same sentence ("I haven't acted on them; say the word if you want...").
   A summary of code or docs describes the material in the third person; the
   two together are an assistant offering, refusing or explaining itself. Both
-  shapes reached the export's root page on the 2026-10-03 review tree, and
-  neither asked a question, so the rules above passed them.
+  shapes have reached an export's root page, and neither asks a question, so
+  the rules above pass them.
 
 A brief is also checked against the PROMPT it answered (``brief_gate``):
 
-- ``echoes-the-prompt`` (E015) — a reply whose vocabulary is the
-  instruction's rather than the material's. A local model on ~/hrono-demo
-  wrote one brief for 26 different topics, "This group covers State, what,
+- ``echoes-the-prompt`` — a reply whose vocabulary is the
+  instruction's rather than the material's. A small local model was seen
+  writing one brief for 26 different topics, "This group covers State, what,
   group, condensations, whole, then...": the brief prompt's own words, and
   identical for every topic because the prompt was. It neither asks nor
-  addresses anybody, so the rules above passed it. On real briefs at most
+  addresses anybody, so the rules above pass it. On real briefs at most
   15% of the distinct words also occur in the instruction (6% typical); the
   echo was 57%. A real brief quotes the prompt's few words it obeys ("five
   natural groupings", "Caution:"), never most of them.
 
 Everything else passes, including shapes that are merely untidy: a brief with a
 generic "## Summary" heading, no heading at all, bullet lists, or an unusual
-length. Those are the renderer's problem (#103 chose to fix the export title
+length. Those are the renderer's problem (the export title is fixed
 there), not evidence the model failed to answer.
 """
 
@@ -128,9 +125,9 @@ _TAIL = re.compile(r"^(?:$|[-*+]\s|references:|sources:|\w+://)", re.IGNORECASE)
 def unusable(text: str) -> str:
     """Return why ``text`` is not a brief, or "" when it is usable.
 
-    The conversational checks run BEFORE the length floor (E015): "Could you
-    paste the file for me?" is under ``MIN_CHARS``, and reading it as merely
-    short hid it from ``talks_back``, which forgives short.
+    The conversational checks run BEFORE the length floor: "Could you paste
+    the file for me?" is under ``MIN_CHARS``, and reading it as merely short
+    would hide it from ``talks_back``, which forgives short.
     """
     stripped = text.strip()
     if not stripped:
@@ -142,7 +139,7 @@ def unusable(text: str) -> str:
 
 
 def talks_back(text: str) -> str:
-    """``unusable`` without the length floor, for a CONDENSATION (#221).
+    """``unusable`` without the length floor, for a CONDENSATION.
 
     A brief summarises a topic and is never legitimately a few words; a
     condensation summarises one section, and a two-line ``__init__.py`` has a
@@ -175,7 +172,7 @@ def echoes(text: str, template: object, material: str = "") -> str:
     words that could tell one prompt from another carry weight; the
     placeholders are not the instruction's words. Both a share
     and a floor have to hold: a two-line brief can share three words with
-    anything. A word the ``material`` itself uses is not evidence (E019): a
+    anything. A word the ``material`` itself uses is not evidence: a
     brief on an INI parser, or on a node/parent/child tree, shares the
     prompt's words because its subject does, and an echo is the prompt's words
     with nothing of the material behind them. Nor is a word the prompt quotes
@@ -218,11 +215,11 @@ def _converses(sentence: str) -> bool:
 
 
 def _prose(text: str) -> list[str]:
-    """The reply's sentences, with any trailing NON-prose tail dropped (#121).
+    """The reply's sentences, with any trailing NON-prose tail dropped.
 
     "The question must be last" is a signal about prose only. A brief that ends
-    with a reference list or bullets — which stored briefs did before #102 moved
-    the URI footer out of the text — would otherwise hide an interrogating
+    with a reference list or bullets — as a brief stored with its URI footer in
+    the text does — would otherwise hide an interrogating
     question behind its own footer and read as usable.
 
     The tail is dropped by LINE rather than by sentence, because the sentence
@@ -236,7 +233,7 @@ def _prose(text: str) -> list[str]:
 
 
 def _interrogates(last: str) -> bool:
-    """Is this closing sentence a question AT the caller (#121)?
+    """Is this closing sentence a question AT the caller?
 
     Three things have to hold together: it is a question, it is about "you",
     and nothing marks it as reported or quoted. Any one of them alone catches
@@ -258,7 +255,7 @@ def answer(
     passed, otherwise the second reply's reason. Exactly one retry, so a model
     that always answers conversationally terminates after two calls and the
     node keeps a brief — a flagged brief an operator can see and regenerate is
-    better than a topic missing from the map (#103, PO 2026-09-14). Usage from
+    better than a topic missing from the map. Usage from
     both calls is summed, because that is what the node cost.
     """
     first = completion.complete(request)

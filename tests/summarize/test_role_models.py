@@ -1,4 +1,4 @@
-"""#067: a role picks the text model; a consumer reads the producer's cache."""
+"""A role picks the text model; a consumer reads the producer's cache."""
 
 import json
 from collections.abc import Iterator
@@ -93,7 +93,7 @@ def test_two_models_claiming_one_role_is_an_error(db: Database) -> None:
 
 
 def test_the_consumer_reads_the_producers_model_name(db: Database) -> None:
-    # THE LANDMINE (#067). `brief` reduces the condensations `condense` wrote,
+    # THE LANDMINE. `brief` reduces the condensations `condense` wrote,
     # and they are keyed by the CONDENSE model's name. While one text model
     # served both, the two names matched and the join worked. With a cheap
     # condense model and a smart brief model, briefing under its own name finds
@@ -108,10 +108,10 @@ def test_the_consumer_reads_the_producers_model_name(db: Database) -> None:
 
 
 def test_an_invalid_role_is_refused_at_write_time(db: Database) -> None:
-    # #067: a typo'd role is config that validates and then does nothing — the
+    # a typo'd role is config that validates and then does nothing — the
     # model is never selected for any stage, and the operator believes they
-    # configured a mapping. Same bar as #107's connection: refuse at WRITE
-    # time, never at condense time.
+    # configured a mapping. Same bar as a connection's validation: refuse at
+    # WRITE time, never at condense time.
     with pytest.raises(ValidationError):
         Model(
             name="oops",

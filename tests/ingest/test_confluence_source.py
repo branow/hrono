@@ -1,4 +1,4 @@
-"""#149: a confluence source ingests the pages of its scoped spaces.
+"""A confluence source ingests the pages of its scoped spaces.
 
 The first type with nothing to clone. What these pin is the part that is
 confluence's: the scope selectors and their union, `_links.next` pagination,

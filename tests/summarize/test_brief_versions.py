@@ -1,4 +1,4 @@
-"""E033: an overwritten brief is kept, five deep, with who and why."""
+"""An overwritten brief is kept, five deep, with who and why."""
 
 from __future__ import annotations
 

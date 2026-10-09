@@ -1,4 +1,4 @@
-"""The ``claude-code`` completion provider (#107, T44.2): the CLI, headless.
+"""The ``claude-code`` completion provider: the CLI, headless.
 
 A second ``Completion`` beside the anthropic SDK client, driving the Claude Code
 CLI in print mode. It needs no API key and bills through the operator's existing
@@ -160,7 +160,7 @@ def _argv(request: CompletionRequest) -> list[str]:
         "--allowed-tools",
         "",
         # the operator's CLAUDE.md, skills, hooks, plugins, MCP servers and
-        # output style are not part of this call (#200)
+        # output style are not part of this call
         "--safe-mode",
         "--system-prompt",
         request.system or SYSTEM,

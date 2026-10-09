@@ -1,4 +1,4 @@
-"""T32: `hrono tree export` materializes the rendered tree to disk, safely."""
+"""`hrono tree export` materializes the rendered tree to disk, safely."""
 
 from pathlib import Path
 
@@ -74,9 +74,9 @@ def test_export_no_profile_is_a_clean_error(
 def test_export_normalises_a_server_absolute_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # F19: 93 of 94 manifest paths came back with a leading slash, pathlib
-    # rerooted the join, the guard refused the first entry and the command
-    # wrote ZERO files. A leading slash now means "top of the export".
+    # a leading slash means "top of the export": manifest paths may carry
+    # one, and taken literally pathlib reroots the join, the guard refuses
+    # the entry and the command writes nothing.
     fake = FakeClient(
         [
             {"path": "/benchmark-js-97.md", "content": "SECTION"},
@@ -119,9 +119,9 @@ def test_a_refused_entry_does_not_cost_the_whole_export(
 def test_a_path_resolving_onto_the_output_directory_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, degenerate: str
 ) -> None:
-    # such a path maps onto `out` itself, which is a DIRECTORY: it used to pass
-    # the guard and raise IsADirectoryError out of the command, losing every
-    # entry after it with no "Wrote"/"refused" line at all.
+    # such a path maps onto `out` itself, which is a DIRECTORY: it must not
+    # pass the guard, because IsADirectoryError out of the command would lose
+    # every entry after it with no "Wrote"/"refused" line at all.
     fake = FakeClient(
         [
             {"path": "a.md", "content": "A"},
@@ -142,10 +142,10 @@ def test_a_path_resolving_onto_the_output_directory_is_refused(
 
 
 def test_a_directory_collision_costs_only_its_own_entry(tmp_path: Path) -> None:
-    # #117: `alpha-1/brief.md` makes `alpha-1` a directory, so writing `alpha-1`
-    # as a FILE raises IsADirectoryError. An unguarded loop lost every entry
-    # after it and skipped the report entirely — the same shape #096's path
-    # guard removed, one layer down.
+    # `alpha-1/brief.md` makes `alpha-1` a directory, so writing `alpha-1`
+    # as a FILE raises IsADirectoryError. An unguarded loop would lose every
+    # entry after it and skip the report entirely — the same shape the
+    # output-path guard removes, one layer down.
     files = [
         {"path": "alpha-1/brief.md", "content": "first"},
         {"path": "alpha-1", "content": "the collision"},
@@ -181,10 +181,9 @@ def test_a_file_blocking_a_directory_costs_only_its_own_entry(
 def test_the_refusal_message_says_which_kind_each_was(
     tmp_path: Path,
 ) -> None:
-    # #117's folded-in fix: the line used to say every refusal "would write
-    # outside" the folder, which is untrue of a collision (inside it) and of a
-    # degenerate path (onto it). A user who saw it was told something false
-    # about their own data.
+    # saying every refusal "would write outside" the folder is untrue of a
+    # collision (inside it) and of a degenerate path (onto it), and would tell
+    # a user something false about their own data.
     files = [
         {"path": "alpha-1/brief.md", "content": "first"},
         {"path": "alpha-1", "content": "collides"},

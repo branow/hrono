@@ -1,4 +1,4 @@
--- Human notes, and the export shows them (#157, T46).
+-- Human notes, and the export shows them.
 --
 -- The spec is explicit about who a note is FOR: "a human 'deprecated, use X'
 -- annotation flows into the rendered tree so the traversing agent sees it."

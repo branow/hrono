@@ -1,7 +1,7 @@
--- #042: `users` recorded when a row was created and nothing about when it was
--- last touched, so `admin reset-token` rotated a credential and left no trace.
--- The audit an operator actually does with this table -- "is anyone still
--- carrying a token nobody has rotated?" -- had no column to read.
+-- `users` records when a row was created; without this nothing says when it
+-- was last touched, and `admin reset-token` would rotate a credential and
+-- leave no trace. The audit an operator actually does with this table -- "is
+-- anyone still carrying a token nobody has rotated?" -- needs this column.
 --
 -- Backfilled to `created_at`: a row nobody has touched was last modified when
 -- it was made. NOT NULL with no default, because a default would let a future

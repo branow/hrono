@@ -1,4 +1,4 @@
--- A topic a human renamed keeps that name (#156, T46).
+-- A topic a human renamed keeps that name.
 --
 -- A node had no title: the export derives one from its brief's first real
 -- line. That is right by default and wrong the moment an operator disagrees —

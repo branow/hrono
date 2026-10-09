@@ -4,7 +4,7 @@ A section is the clustering and traversal unit; a passage is the recall
 injection unit. A section's passages tile it exactly, so a section is the
 byte-identical concatenation of its passages, and the sections tile the whole
 file. Passages byte-chopped from an atomic over-budget span carry their raw
-``part``/``of`` index so identity (#031) can render a raw sp-path tail; ordinary
+``part``/``of`` index so identity can render a raw sp-path tail; ordinary
 passages leave both None.
 """
 

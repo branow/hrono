@@ -1,4 +1,4 @@
-"""What a source's filter keeps, from the files and nothing else (#219).
+"""What a source's filter keeps, from the files and nothing else.
 
 No model is called and nothing is stored: the answer is `ingest.filter.survey`
 read over the fetched cache. That is the same function ingest reads its files

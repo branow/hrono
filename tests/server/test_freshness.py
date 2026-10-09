@@ -1,4 +1,4 @@
-"""#215: is the tree up to date with its sources.
+"""Is the tree up to date with its sources.
 
 The remote is a real repository that really moves; the only thing stood in for
 is the clock, which is what the one-minute memory is measured against.

@@ -1,8 +1,8 @@
--- Sections the condense model refused, twice, for one request (E015).
+-- Sections the condense model refused, twice, for one request.
 --
--- A refusal is never cached as a condensation (#221), so the section stayed
--- pending and every later sync, even over an unchanged corpus, paid two calls
--- to be refused again. One row per (section body, model name) records the
+-- A refusal is never cached as a condensation, so without this the section
+-- stays pending and every later sync, even over an unchanged corpus, pays two
+-- calls to be refused again. One row per (section body, model name) records the
 -- last refusal; `request` hashes the model fingerprint and the prompt
 -- template it was asked with, so a changed body (another content_hash), a
 -- repointed model or an edited prompt is a new request and is tried again.

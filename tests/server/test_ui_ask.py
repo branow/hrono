@@ -1,4 +1,4 @@
-"""#207: the Ask page — recall as an agent receives it, for every role."""
+"""The Ask page — recall as an agent receives it, for every role."""
 
 import hashlib
 import json
@@ -221,7 +221,7 @@ def test_a_backend_that_cannot_embed_says_what_to_do(
 
 
 def test_a_brief_passage_names_its_own_topic(panel: Panel) -> None:
-    # the passage the brief op stored for each topic's brief (#071), rendered
+    # the passage the brief op stored for each topic's brief, rendered
     # as recall renders a hit: it belongs to the topic it summarises
     rows = panel.conn.execute(  # type: ignore[attr-defined]
         "SELECT id, source FROM passages WHERE source_type = 'node'"

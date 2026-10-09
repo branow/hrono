@@ -9,7 +9,7 @@ stored row.
 The endpoint is resolved through ``llm.urls.api_root`` — the same rule the
 completion client and the connection validator use — because an endpoint may
 already name its ``/v1`` root. Appending one regardless probed
-``/v1/v1/chat/completions`` and refused every working local server (#153).
+``/v1/v1/chat/completions`` and would refuse every working local server.
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ def _generate_in(context: ValidationContext, cli_timeout: float) -> Generate:
 def _generate_with_cli(
     config: dict[str, object], context: ValidationContext, timeout: float
 ) -> str:
-    """One trivial question through the same client a job would use (#107).
+    """One trivial question through the same client a job would use.
 
     It is ledgered like any other call and runs from the directory hrono
     owns, bounded by ``timeout`` so a hung CLI ends in a bad request.

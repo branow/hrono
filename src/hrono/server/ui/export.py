@@ -1,9 +1,10 @@
-"""The Export page (#205): what an agent will be handed, before it is handed.
+"""The Export page: what an agent will be handed, before it is handed.
 
-Export is the deliverable, and until this page a curator could only see it from
-a terminal. Here they choose the hop limit, read the shape #204 reports, page
-through the rendered files in place by following their own links, download the
-same files as one archive, and copy the command that writes them to a folder.
+Export is the deliverable, and this page shows it outside a terminal. Here a
+curator chooses the hop limit, reads the shape the export reports, pages
+through the rendered files in place by following their own links, downloads
+the same files as one archive, and copies the command that writes them to a
+folder.
 
 Everything comes from ``export.produce`` — the function the API's manifest and
 archive come from — so the panel cannot show a different export from the one

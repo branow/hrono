@@ -94,7 +94,7 @@ def test_backend_is_importable_when_the_embed_extra_is_installed() -> None:
 
 def test_a_cached_encoder_loads_its_model_once() -> None:
     # the measured cost: 13.3s for the first recall and 14ms for every later
-    # one, all of it the weights (#168).
+    # one, all of it the weights.
     loads: list[str] = []
 
     def build(model_id: str):
@@ -151,7 +151,7 @@ def test_the_cache_holds_a_REAL_encoder() -> None:
     Guarded by an env var rather than skipped outright, because the thing worth
     knowing here is that `encoder_for`'s actual return value survives being
     cached and still encodes -- and that costs a weights load, which the lean
-    install and an offline CI cannot pay (#108).
+    install and an offline CI cannot pay.
     """
     model_id = os.environ["HRONO_TEST_REAL_MODEL"]
     runner._CACHE.clear()
@@ -177,7 +177,7 @@ def test_a_ready_encoder_is_returned_without_waiting() -> None:
 
 def test_a_cold_encoder_reports_a_miss_and_starts_loading() -> None:
     # never a dead end: the miss is what makes "shortly" true rather than
-    # hopeful, so a retry finds it (#169).
+    # hopeful, so a retry finds it.
     started = threading.Event()
     runner._CACHE.clear()
     runner._INFLIGHT.clear()
@@ -211,7 +211,7 @@ def test_a_second_caller_does_not_start_a_second_load() -> None:
 
 def test_a_remembered_failure_is_raised_not_hidden_behind_loading() -> None:
     # "still loading" is the one message an operator waits on rather than acts
-    # on, and it was said forever about a model that could never load (#169).
+    # on, so it must never be said about a model that can never load.
     runner._CACHE.clear()
     runner._INFLIGHT.clear()
     runner._FAILED.clear()

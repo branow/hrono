@@ -1,4 +1,4 @@
-"""The ``notion`` source type: the pages shared with an integration (T43).
+"""The ``notion`` source type: the pages shared with an integration.
 
 Notion differs from confluence in one structural way: there is no document to
 fetch. A page is a TREE OF BLOCKS, so the syncer renders it — paragraphs,
@@ -7,7 +7,7 @@ other block contributes whatever plain text it carries rather than vanishing.
 The rendering is deliberately small: hrono splits and summarises prose, and a
 faithful reproduction of Notion's formatting would buy nothing downstream.
 
-An integration only sees what has been shared with it (implementation-notes),
+An integration only sees what has been shared with it (``docs/api.md``),
 so "everything" is not an admin question — it is `POST /v1/search`, which
 returns exactly what this token can read. The workspace in a page's address
 comes from the token's own bot (`GET /v1/users/me`) rather than from user
@@ -145,7 +145,7 @@ def _search(
 def _database_pages(
     poster: object, headers: dict[str, str], db_id: str, timeout: float
 ) -> Iterator[dict[str, object]]:
-    """A database contributes its pages; the rows themselves are M9's."""
+    """A database contributes its pages; the rows themselves are not read."""
     cursor: str | None = None
     while True:
         body: dict[str, object] = {"page_size": PAGE_SIZE}

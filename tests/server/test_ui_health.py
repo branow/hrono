@@ -1,4 +1,4 @@
-"""E009 (#218): the Health page lists each problem and fixes it in place.
+"""The Health page lists each problem and fixes it in place.
 
 Every assertion about a fix reads the STORE after the click, never the page
 that reports it. The placement test then runs the REAL `migrate` over the

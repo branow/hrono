@@ -160,7 +160,7 @@ code, pre, .mono { font-family: var(--mono); font-size: .8125rem; }
 /* The explanation does not disappear, it MOVES: onto a mark beside the thing
    it explains. Drawn here rather than left to `title=`, which waits about a
    second and then renders as an operating-system tooltip — long enough that a
-   person decides the mark does nothing (#197). This one appears at once, on
+   person decides the mark does nothing. This one appears at once, on
    hover AND on keyboard focus, and reads as part of the page. */
 .tip {
   position: relative;
@@ -202,7 +202,7 @@ details.reveal > summary::-webkit-details-marker { display: none; }
 /* A marker, but NOT on a summary that already draws one. `.twisty` draws its
    chevron out of two borders on this same pseudo-element, and the two rules
    cascaded together: the glyph arrived wearing `.twisty`'s 6px box, borders
-   and rotation, which rendered as a sheared mark nobody could read (#200). */
+   and rotation, which rendered as a sheared mark nobody could read. */
 details.reveal > summary:not(.twisty)::before { content: "\25b8";
   display: inline-block; width: 1em; transition: transform .12s; }
 details.reveal[open] > summary:not(.twisty)::before { transform: rotate(90deg); }
@@ -227,8 +227,8 @@ details.reveal .hint { margin-top: var(--s2); }
 .brand:hover { text-decoration: none; }
 .brand svg { display: block; color: var(--accent); }
 
-/* The label used to float beside the select and overlap it. It is now part of
-   one control: a bordered group whose first cell names it. */
+/* The label is part of one control, not floating beside the select where it
+   would overlap it: a bordered group whose first cell names it. */
 /* A real menu rather than a platform select: the options are LINKS, so the
    whole thing works with no JavaScript at all, and each one keeps you on the
    page you are already looking at. */
@@ -544,7 +544,7 @@ ol.steps code {
 
 /* The map is a BOARD, not a picture that has to fit: siblings stay on one
    level however many there are, so the drawing is routinely wider than the
-   window and the reader moves around it instead (#199). Hence a viewport
+   window and the reader moves around it instead. Hence a viewport
    with a height of its own — a box that scrolls both ways — rather than a
    div that grows to whatever was drawn. */
 .board { display: flex; align-items: flex-start; gap: var(--s4); }
@@ -652,9 +652,9 @@ svg .link { stroke-width: 1.75; fill: none; }
 svg .link.pull { stroke: var(--accent); stroke-dasharray: 6 4; }
 svg .link.proximity { stroke: var(--ok); stroke-dasharray: 1 4; stroke-linecap: round; }
 svg .link.propagation { stroke: var(--ink-faint); }
-/* An overlay line has to SAY what it found, on the board. The number was in a
+/* An overlay line has to SAY what it found, on the board. With the number in a
    `<title>` only — a tooltip you have to know is there and hover to read —
-   so three different relationships all looked like "a line" (#200). */
+   three different relationships all look like "a line". */
 svg text.link-says {
   font: 600 10.5px var(--mono);
   stroke-width: 3px;
@@ -791,7 +791,7 @@ blockquote {
   font: 400 .78125rem/1.5 var(--mono); color: var(--ink-faint); }
 .crumbs .sep { color: var(--rule-firm); }
 
-/* Connect snippets (E041): shell commands, so a long line scrolls inside its
+/* Connect snippets: shell commands, so a long line scrolls inside its
    own box rather than wrapping or widening the page. The scrollbar is styled
    so it stays visible where the system hides it, showing a clipped tail. */
 pre.snippet { margin: 0; max-width: 100%; overflow-x: auto; }
@@ -804,7 +804,7 @@ pre.snippet::-webkit-scrollbar-thumb { background: var(--rule-firm);
   pre.snippet { scrollbar-color: var(--rule-firm) transparent; }
 }
 .btn[hidden] { display: none; }
-/* Ask (#207): a passage is shown as the agent receives it, whole, and wraps
+/* Ask: a passage is shown as the agent receives it, whole, and wraps
    rather than pushing the page sideways. */
 pre.passage { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   max-height: 24rem; overflow: auto; padding: var(--s3);
@@ -863,9 +863,9 @@ summary { list-style: none; }
 summary::-webkit-details-marker { display: none; }
 .twisty::before {
   content: "";
-  /* `inline-block`, not the flex item it was: this marker is two borders on a
-     6px box, and in a summary that is NOT a flex row it collapsed to a bare
-     vertical line — a disclosure control drawn as a stray pipe (#200). */
+  /* `inline-block`, not a flex item: this marker is two borders on a 6px box,
+     and in a summary that is NOT a flex row a flex item collapses to a bare
+     vertical line — a disclosure control drawn as a stray pipe. */
   display: inline-block;
   flex: none;
   vertical-align: .08rem;
@@ -947,7 +947,7 @@ details.hashes { margin-top: var(--s3); }
 
 /* A candidate topic is not its row id: the path its sections live under, what
    it holds, what it says, and a link that opens it in a new tab so an operator
-   can look before they merge (#199). */
+   can look before they merge. */
 .picker {
   flex: 1 1 100%;
   max-height: 16rem; overflow: auto;
@@ -1144,9 +1144,8 @@ main.bleed .panel {
 .afloat.bl { bottom: var(--s3); left: var(--s3); }
 /* Out from under the panel when one is open. Through `:has`, because the
    class that says a panel is open is on the board and these bars float over
-   the whole map from OUTSIDE it — so the descendant selector this was written
-   as never matched anything, and the overlay toggles sat on top of the
-   panel's own heading. */
+   the whole map from OUTSIDE it — so a descendant selector would never match,
+   and the overlay toggles would sit on top of the panel's own heading. */
 main:has(.board.reading) .afloat.tr { right: calc(22rem + var(--s3)); }
 .afloat .keys { margin: 0; }
 .afloat.br { bottom: var(--s3); right: var(--s3); }
@@ -1162,7 +1161,7 @@ main:has(.board.reading) .afloat.br { right: calc(22rem + var(--s3)); }
 /* ----------------------------------------------------------------- guide */
 /* Diagrams, drawn inline so they cost no request and follow the theme. Every
    colour is a token: a figure with a baked hex is a figure that is unreadable
-   in one of the two themes (#200). */
+   in one of the two themes. */
 .figure { display: block; width: 100%; max-width: 44rem; margin: var(--s3) auto; height: auto; }
 .figure.small { width: 9.5rem; margin: 0; flex: none; }
 .fig-box { fill: var(--surface); stroke: var(--rule-firm); stroke-width: 1.2; }
@@ -1338,7 +1337,7 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 .gate .mark svg { color: var(--accent); }
 
 /* -------------------------------------------------------------- settings */
-/* One collection at a time (#210): the sub-navigation picks it, and an add,
+/* One collection at a time: the sub-navigation picks it, and an add,
    an edit or a delete opens as its own view rather than in the list. */
 .subnav {
   display: flex; gap: var(--s1); flex-wrap: wrap;

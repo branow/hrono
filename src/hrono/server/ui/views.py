@@ -3,7 +3,7 @@
 Pages that answer "what is in here", sharing one shape: read under one
 connection, render, write nothing. The map's expand
 state and edge overlays ride in the URL rather than in the page, which is what
-makes every view of it shareable (#183, #184).
+makes every view of it shareable.
 """
 
 from __future__ import annotations
@@ -22,12 +22,12 @@ from hrono.server.words import counted
 
 _LIVE = frozenset({"pending", "running", "partial"})
 
-# The overlays the MAP offers. `propagation` is deliberately not among them
-# (#200): it is a record of judge decisions a sync already made, which is a
-# thing you REVIEW, not a repair you perform on the board — and it draws
-# nothing at all on a tree that has never been re-synced, which is how most
-# people met it. It lives on the Activity page, beside the decisions it is
-# made of. The URL still accepts it; only the toggle is gone.
+# The overlays the MAP offers. `propagation` is deliberately not among them:
+# it is a record of judge decisions a sync already made, which is a thing you
+# REVIEW, not a repair you perform on the board — and it draws nothing at all
+# on a tree that has never been re-synced. It lives on the Activity page,
+# beside the decisions it is made of. The URL still accepts it; the map just
+# offers no toggle for it.
 MAP_EDGES = ("pull", "proximity")
 
 # A first visit should show a useful amount of tree rather than one circle
@@ -57,7 +57,7 @@ def _down_to(conn: object, tree: str, depth: int) -> set[int]:
 
 
 # Enough to recognise a section, not enough to lose the topic off the screen. A
-# section is ~10 KB and a topic can hold thirty of them (#182).
+# section is ~10 KB and a topic can hold thirty of them.
 PREVIEW_CHARS = 600
 
 
@@ -149,9 +149,9 @@ def _climbs(decided: list[dict[str, object]]) -> dict[str, object]:
 
     Each row says "topic 12 climbed to topic 18". Twelve such rows do not say
     the thing an operator actually wants to know, which is SHAPE: whether one
-    commit restaled a corner of the map or swept it to the root. This used to
-    be a map overlay (#200); it belongs here, over the decisions it is made
-    of, and on a tree with no decisions there is simply nothing to draw.
+    commit restaled a corner of the map or swept it to the root. It is not a
+    map overlay; it belongs here, over the decisions it is made of, and on a
+    tree with no decisions there is simply nothing to draw.
     """
     climbed = [
         (int(row["node_id"]), int(row["climbed_to"]))  # type: ignore[arg-type]
@@ -185,9 +185,9 @@ def _climbs(decided: list[dict[str, object]]) -> dict[str, object]:
 def _decision(row: object) -> dict[str, object]:
     """One logged decision, with the abstention called out.
 
-    #105 made abstaining a first-class outcome and #132 made it visible in a
-    job's result, because a topic that CHANGED and was not judged leaves a
-    stale brief in service. On this page that is the row to look at.
+    Abstaining is a first-class judge outcome, reported in a job's result,
+    because a topic that CHANGED and was not judged leaves a stale brief in
+    service. On this page that is the row to look at.
     """
     action = str(row["action"])  # type: ignore[index]
     return {
@@ -218,7 +218,7 @@ def graph_page(
     The expand state rides in `open` rather than in the page, so a graph
     someone is looking at can be pasted to someone else. It is also why this
     needs no JavaScript: toggling is a link, and so is reading a topic —
-    `focus` opens the panel beside the map on the server (#199).
+    `focus` opens the panel beside the map on the server.
     """
     # `?open=` present means the view was chosen — even when empty, which is
     # what Collapse posts. Absent means a first visit, which opens enough
@@ -259,7 +259,7 @@ def graph_page(
                 "shown": len(drawn.nodes),
                 # ONE control, not two: a map is either all open or it is
                 # not, and two mutually exclusive buttons sitting side by side
-                # made the reader work out which one was already true (#200)
+                # make the reader work out which one is already true
                 "fold": _folding(tree, opened, branches, edges, focus),
             },
             "overlay": {
@@ -273,9 +273,8 @@ def graph_page(
             },
             "panel": focused,
             # a child in the panel is a link back onto the map, and it has to
-            # be the map the reader is ON — the hard-coded one in the template
-            # dropped the expand state and the overlays, so clicking a child
-            # collapsed the board under the reader (#200)
+            # be the map the reader is ON, expand state and overlays kept, or
+            # clicking a child collapses the board under the reader
             "reads": {
                 part.id: _graph_url(tree, open, edges, focus=str(part.id))
                 for part in (focused.parts if focused else ())
@@ -353,9 +352,9 @@ def _tall_enough(height: float, links: list[dict[str, object]]) -> float:
     """The canvas, grown to fit whatever the overlays put on it.
 
     An overlay arc leaves the row it joins (`_drawn`), and the SVG is sized
-    from the TREE — so with the arcs added the drawing was taller than the box
-    it was drawn in, and every arc and every label was cut off at the bottom
-    edge (#200). The board is a scrolling box; it can simply be taller.
+    from the TREE — so with the arcs added the drawing is taller than the box
+    it is drawn in, and every arc and every label is cut off at the bottom
+    edge. The board is a scrolling box; it can simply be taller.
     """
     lowest = max((float(link["low"]) for link in links), default=0.0)
     return max(height, lowest + MARGIN)
@@ -432,9 +431,9 @@ def _graph_url(
 
     `open` is emitted even when EMPTY, and that is the whole of the Collapse
     link: an absent `open` means a first visit, which opens several levels, so
-    dropping an empty one turned Collapse into Expand (#197). The one `open`
-    that must NOT be emitted is the sentinel for "there wasn't one" — passing
-    it through put a literal `open=%00` in the links of every first visit.
+    dropping an empty one turns Collapse into Expand. The one `open` that
+    must NOT be emitted is the sentinel for "there wasn't one" — passing it
+    through puts a literal `open=%00` in the links of every first visit.
     Every other parameter is omitted when it has nothing to say.
     """
     query = urlencode(
@@ -467,7 +466,7 @@ def _drawn_links(
     overlay: overlays.Overlay, drawn: graph.Graph, only: int = 0
 ) -> Arcs:
     """Give each link the path that joins the topics it is about, and a place
-    to say what it found where no other words are (#212).
+    to say what it found where no other words are.
 
     A link whose end is not on the page is dropped rather than drawn to
     nowhere: the overlay describes what is DRAWN, and `?open=` decides that.
@@ -475,9 +474,9 @@ def _drawn_links(
     label already placed, so none is printed over another.
 
     At most `ARC_CAP` arcs are drawn, the strongest first, and never one that
-    would run through a topic's words: on a hundred topics the overlays were a
-    solid band of arcs. Every link left out is counted against both topics it
-    joins, and `only` draws one topic's links alone.
+    would run through a topic's words: on a hundred topics the overlays are
+    otherwise a solid band of arcs. Every link left out is counted against both
+    topics it joins, and `only` draws one topic's links alone.
     """
     nodes = {node.id: node for node in drawn.nodes}
     here = [
@@ -561,7 +560,7 @@ def _lanes(
     """How deep each same-row arc goes, so overlapping ones do not coincide.
 
     Three arcs over adjacent siblings all span the same distance, so at one
-    depth their apexes land on top of each other (#200). Greedy interval
+    depth their apexes land on top of each other. Greedy interval
     colouring: an arc takes the shallowest lane no arc it OVERLAPS is already
     using.
     """
@@ -600,7 +599,7 @@ def _drawn(
 
     A same-row link leaves each topic BELOW its furniture — its name, where it
     lives, its count — and bows further down, so the curve never runs through
-    a topic's words (#212); a link between levels runs from under the upper
+    a topic's words; a link between levels runs from under the upper
     topic's furniture to the top of the lower one's circle. The label tries
     points along the path, middle first. A same-row link that would cut
     through something steps down a lane until it does not; one that cannot
@@ -706,9 +705,9 @@ def _edge_toggles(
     The overlay is part of the URL for the same reason the expand state is: a
     graph someone is looking at can be pasted to someone else — which is why
     this builds its link through `_graph_url` like every other link on the
-    page rather than assembling a second one of its own. The copy it used to
-    keep dropped an EMPTY `open`, so turning an overlay on from a collapsed
-    map re-opened the map (the #197 bug, in the one place that was not fixed).
+    page rather than assembling a second one of its own. A second copy that
+    dropped an EMPTY `open` would re-open a collapsed map whenever an overlay
+    was turned on.
     """
     toggles = []
     for kind in MAP_EDGES:
@@ -755,8 +754,8 @@ def _with_toggle(
 
     Reading a topic is `?focus=` on the map rather than a link to the topic
     page: the question a click asks is about a topic IN its tree, and
-    answering it somewhere the tree is not visible throws the question away
-    (#199). The topic page is one link further on, in the panel.
+    answering it somewhere the tree is not visible throws the question away.
+    The topic page is one link further on, in the panel.
     """
     node_id = node.id  # type: ignore[attr-defined]
     after = opened - {node_id} if node_id in opened else opened | {node_id}

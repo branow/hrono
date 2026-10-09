@@ -1,0 +1,223 @@
+# Architecture
+
+hrono turns heterogeneous sources into a tree of topics that an AI agent can
+recall from or explore, and it absorbs source changes incrementally instead of
+rebuilding: settled knowledge does not move.
+
+Pipeline: **sources → sections and passages → embeddings → topics → briefs →
+tree**, served as **recall** (passages injected for a question) and **export**
+(a folder of markdown an agent walks).
+
+## Process model
+
+One binary, `hrono` (`src/hrono/cli.py`). `hrono serve` (`src/hrono/server/`,
+FastAPI) is the only process that touches the database: it owns the SQLite
+file (single writer), all compute and all LLM calls. Every other subcommand is
+a thin HTTP client (`src/hrono/client/http.py`), and so is the `/ui`
+dashboard (`src/hrono/server/ui/`, server-rendered Jinja). Many people share
+one server and one knowledge base. See [api.md](api.md).
+
+- **Storage**: SQLite + `sqlite-vec` in one file (`src/hrono/db/`), with a
+  forward-only migration runner (`db/migrations/`). At the target scale
+  (~1M sections) every candidate database handles the load, so the choice is
+  the one with no moving parts, and an update (section row, vector, parent
+  pointer) stays one ACID transaction instead of a cross-store consistency
+  problem. Default path `.hrono/hrono.db` (`--db` or `HRONO_DB`); source
+  clones live beside it (`src/hrono/paths.py`).
+- **Jobs**: config is data you PUT; work is a job you POST. A background
+  worker thread (`src/hrono/jobs/worker.py`) runs one job at a time from the
+  op registry (`jobs/ops.py`). A job whose heartbeat stops is re-queued, which
+  is safe because the expensive stages are content-hash cached.
+- **Registry** (`src/hrono/registry/`): five collections, `sources`,
+  `connections`, `models`, `prompts` and `trees`, on one generic CRUD engine.
+  A write is validated (reachability, auth, prompt placeholders) and a dry run
+  reports its impact on each tree (`registry/impact.py`).
+- **Secrets** (`src/hrono/crypto/`): Fernet under a master key from
+  `--key-file` or `HRONO_MASTER_KEY`; only the key's fingerprint is stored.
+  User tokens are stored as hashes (`src/hrono/auth/`). Roles: reader, writer,
+  admin.
+- **LLM providers** (`src/hrono/llm/`): `anthropic`, `openai` and compatible,
+  and `claude-code` (the `claude` CLI, billed to a Claude subscription). Each
+  role (`condense`, `brief`, `brief-upper`, `judge`) resolves to one model;
+  first-run defaults are in `src/hrono/onboarding/defaults.py` (cheap model
+  for condense and judge, stronger for briefs). Every call is a row in the
+  usage ledger (`llm/ledger.py`), rolled up by `src/hrono/usage/`.
+
+## Sources
+
+`src/hrono/ingest/`. A source is a place knowledge already lives:
+
+| Type | Reader |
+|---|---|
+| `git` | clone or fetch one repo (`git_syncer.py`) |
+| `github-user`, `bitbucket-workspace` | discover an account's repos, then clone each (`discovery.py`) |
+| `confluence`, `notion` | pull pages over the API and materialize them in the cache (`pages.py`) |
+
+Every piece read carries a **version**: the commit hash, or the page's own
+version. It is opaque and compared only for equality. The address scheme is
+the resource's content model, never the access method: the same repo fetched
+over SSH or HTTPS has one `git://host/org/repo` identity, otherwise one
+section would get two identities and dedup would break.
+
+**Filtering** (`ingest/filter.py`) applies, in order: the source's `only`
+whitelist, its `exclude`, the baked ignore groups (`DEFAULT_IGNORE` in
+`ingest/split/constants.py`: vendored trees, lockfiles, binary and media,
+tabular data, generated code), then re-admission by `include` or
+`include_generated`. Then a size cap (2 MB) and a null-byte sniff of the
+first 8 KB. Symlinks and non-regular files are skipped.
+
+## Sections and passages
+
+`src/hrono/ingest/split/`. Files are never cut into arbitrary blocks.
+
+1. **Structure tree.** tree-sitter parses the file with a grammar chosen by
+   extension (`grammar.py`). Where structure runs out (a leaf span, or a
+   file with no grammar), a delimiter cascade grows the tree synthetically:
+   blank line → line → sentence → comma → word (`cascade.py`).
+2. **Packer** (`pack.py`). One greedy packer groups consecutive siblings
+   under a byte budget, descends into a node too big on its own, byte-chops a
+   span with no delimiters (at a whitespace edge within 10% of the budget) and
+   merges crumbs under 64 bytes into a neighbour. A group is flushed by the
+   budget and nothing else.
+
+The packer runs twice over the same tree:
+
+- A **section** is the organizing unit: what is clustered and what an
+  exploring agent reads. Budget by category (`constants.py`): code and docs
+  10 KB, data 2 KB, each the log-scale knee of file-size distributions over
+  four large repos.
+- A **passage** is the quoting unit: what recall injects. Budget 800 bytes
+  (~200 tokens), packed inside each section, so every section reassembles
+  byte-identically from its passages.
+
+A section that is mostly encoded data (runs of 400+ non-whitespace bytes over
+half its length: base64 assets, minified bundles) is dropped
+(`split/encoded.py`); condensing one wastes a call or exhausts it.
+
+**Identity** (`ingest/identity.py`). Every section and passage has three:
+
+- **Address**, where it came from: `<source_type>://<instance>/<path>@<version>`,
+  rendered from four stored parts. Fragment-free: position is data, not
+  identity.
+- **Content hash**, what it is: SHA-256 of the raw bytes. Identical bytes are
+  stored, embedded and condensed once, the way git splits refs from blobs.
+- **Structure path**, where it sits in its file: segments `{type, name?, idx}`
+  from the root to each packed node, rendered as `sp:/ContactService/.class_body/getByUser`.
+
+A recalled passage's header is its address followed by its `sp:` paths.
+
+## Topics and briefs
+
+**Embedding** (`src/hrono/embed/`) runs in-process with
+sentence-transformers. Vectors are keyed `(content hash, model)`, so re-runs
+embed only new bytes and a model change re-embeds automatically. A section's
+clustering vector blends what it says with where it lives:
+`[√(1−α)·content ; √α·path]`, α = 0.5 (`cluster/blend.py`), so a dot product
+is `(1−α)·content_sim + α·path_sim`.
+
+**Clustering** (`src/hrono/cluster/`): UMAP → HDBSCAN (leaf) → attach every
+noise section to its nearest core member, so every section is in exactly one
+topic. Leaf selection gives the small topics a summarization tree wants.
+Upper levels cluster the briefs of the level below with the same pipeline,
+scaled to the point count, until one root remains. Rules and constants:
+[clustering.md](clustering.md).
+
+**Briefing** (`src/hrono/summarize/`): each section is condensed once
+(cheap model, cached by content hash), each leaf topic is briefed from its
+condensations, and each upper topic from its children's briefs. References
+are rendered by code, never by the LLM. Recipe: [summarization.md](summarization.md).
+
+There is no per-section importance score. Importance is a relation between a
+section and a question, not a property of the section, so a static score
+chases the wrong thing. Redundancy is handled by structure instead: density
+clustering collapses near-duplicates into one topic, condensation length
+follows content density, and a brief compresses near-identical members into
+a pattern plus variations.
+
+**Manual edits** (`src/hrono/edits.py`, `src/hrono/pins.py`): an operator can
+rewrite a brief, move a section or re-parent a topic. Every edit pins what it
+changed, and the pipeline treats a pin as a hard constraint, so a manual fix
+is never silently reverted by the next update.
+
+## Recall
+
+`src/hrono/recall/`. `POST /trees/{name}/recall` and `hrono recall` run over
+the union of the tree's source passages and its brief passages. Briefs are
+markdown, so they go through the same splitter into the same store under
+`source_type='node'` (`recall/brief_passages.py`): architectural questions
+surface briefs, detail questions surface sources.
+
+- **Vector leg** (`vector_leg.py`): each passage is scored both content-only
+  and path-blended, each z-scored against the query's own distribution
+  (median and MAD, so the matches do not raise their own bar), and keeps the
+  better. A passage qualifies at z ≥ 3.2 with keyword corroboration, or
+  z ≥ 4.5 without.
+- **Keyword leg** (`keyword_leg.py`): BM25 over FTS5 (path + body). A keyword
+  hit never qualifies alone (its background is stopword matches); it needs
+  z ≥ 6.0 and vector z ≥ 3.0. In practice it corroborates rather than
+  retrieves.
+- **Fusion** (`fusion.py`): weighted reciprocal rank fusion, 70/30
+  vector/keyword, k = 60, capped at 10 hits, with a diversity reserve so one
+  document fills at most 40% of the window while other qualified documents
+  wait. No gap cutoff: the z-floors alone decide.
+
+Recall is strict on purpose, because injection costs tokens on every request.
+An empty result returns one line, *no confident matches - explore the map*:
+misses fail safe to exploring, never to silence.
+
+## Explore: the export
+
+`src/hrono/export/`. An agent explores a rendered copy of the tree, not the
+stored one: plain markdown files it walks with the tools it already has
+(`hrono tree export`, or a zip from `GET /trees/{name}/export.zip`).
+
+The stored tree keeps whatever depth the data produced. The export collapses
+it to a hop limit (`levels`, default 4: the links from `root.md` down to a
+section file), always keeping the root and the leaf level
+(`export/collapse.py`). The fixed cost of a hop dwarfs the cost of showing
+more siblings ([research/hop-cost.md](research/hop-cost.md)), so wide and
+shallow beats narrow and deep. Among the selections that fit, the one whose
+widest page is smallest wins; a page budget of 40 entries keeps an index page
+the size of one section.
+
+Each page is the stored brief (Caution section included) plus a child listing
+rendered by code (`export/render.py`), so navigation never depends on an LLM
+writing a link correctly. Leaves list their sections, each reassembled
+byte-identically from its passages with its address header. Export output is
+deterministic.
+
+## Lifecycle
+
+Updates never re-run the build pipeline. Full rules:
+[clustering.md](clustering.md) and [summarization.md](summarization.md#propagation).
+
+- **`maintain`** (`tree/maintain.py`) builds a tree: sync → split → embed →
+  condense → cluster → brief → build to root.
+- **`sync-tree`** (`tree/sync_chain.py`) refreshes one: update → propagate →
+  brief stale leaves → brief stale upper levels → monitor → repair → adopt new
+  leaves. The order is load-bearing, so it is one op.
+- **`update`** (`tree/update.py`) syncs, diffs files by content hash, re-splits
+  only changed files, embeds and condenses only new bytes, and places changed
+  sections against the pre-batch centroids. Untouched sections never move.
+  Sections too novel for any topic wait in an incubator until enough gather to
+  form a topic.
+- **`propagate`** asks a judge whether a leaf's new content changes what its
+  stored brief says; `minor` or `major` marks ancestor briefs stale and adds
+  drift.
+- **`monitor`** and **`repair`** measure misfits and split, migrate or
+  dissolve one topic at a time.
+- **`settle`** (`tree/settle.py`) is a warm full rebuild that applies only the
+  membership diff. `sync-tree` reports when one is due; it runs only when an
+  operator enqueues it (`POST /jobs` with `op: settle`).
+
+Invariants:
+
+1. An update never moves a section whose content did not change.
+2. Every placement outside build and settle is deterministic given the stored
+   state.
+3. Every section is in exactly one topic, or in the incubator.
+4. Every membership change marks the affected brief stale; briefs regenerate
+   from staleness only.
+5. Embeddings and condensations are content-addressed; nothing is computed
+   twice for the same bytes.
+6. A pinned entity is never changed by the pipeline.

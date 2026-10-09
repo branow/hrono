@@ -1,10 +1,10 @@
-"""Where the words on the map are, so no two of them land on each other (#212).
+"""Where the words on the map are, so no two of them land on each other.
 
 The map is SVG drawn on the server, which means every piece of text has a
 position before the page exists — so whether two labels collide is arithmetic,
-and is decided here rather than left to whoever looks at the result. With the
-overlays on, the review tree had "18 sections" struck through by an arc and two
-"0.88 similar" labels printed over each other.
+and is decided here rather than left to whoever looks at the result. Left
+undecided, an overlay arc strikes through "18 sections" and two "0.88 similar"
+labels print over each other.
 
 A text's box is estimated from its length: every label on the map is set in a
 monospaced face (`base.html`), so a character's advance is a constant of the

@@ -1,6 +1,6 @@
-"""What a parent job's children add up to (T57.1, #172).
+"""What a parent job's children add up to.
 
-`jobs/model.py` has said since M0 that the parent-only ``partial`` status is
+`jobs/model.py` says the parent-only ``partial`` status is
 "derived at read time, never stored, so it is absent from ``JobStatus``". This
 is that derivation, and it is a pure function over the children's statuses so
 it can be tested without a database and cannot drift from what is stored.
@@ -51,7 +51,7 @@ def rollup(children: Sequence[str]) -> Rollup | None:
     - PARTIAL is for a parent whose children have all finished EXCEPT some —
       the state the spec named and the one a progress bar is for.
     - SUCCEEDED only when every child did. A parent that reports success over
-      an unfinished child is #132's defect with more moving parts.
+      an unfinished child claims work that was never done.
     """
     if not children:
         return None
@@ -79,7 +79,7 @@ def total_spend(results: Sequence[object]) -> dict[str, int] | None:
     """Sum the token counts a set of job results carry, or None if none do.
 
     A parent's cost is its children's, added up — the same derivation as its
-    status (#172), for the same reason: nothing stores it, so nothing can go
+    status, for the same reason: nothing stores it, so nothing can go
     stale. A run where no stage called a model has no cost key at all rather
     than a zero, which would invite the reader to ask which model it used.
     """

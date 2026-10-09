@@ -1,9 +1,9 @@
-"""#130: what warm init is FOR — unchanged content keeps its place.
+"""What warm init is FOR — unchanged content keeps its place.
 
-#101 restored the warm path (`backfill_coords` gives every placed section a
-coordinate, so `stored_coords` stops returning None) and its tests assert the
-mechanism: coverage, and an `init` that arrives non-None. This drives the whole
-warm path over the REAL recipe (#108: no injected build seam) — build, add
+The warm path (`backfill_coords` gives every placed section a coordinate, so
+`stored_coords` does not return None) has tests that assert the mechanism:
+coverage, and an `init` that arrives non-None. This drives the whole warm path
+over the REAL recipe (no injected build seam) — build, add
 sections, place them, backfill, rebuild — and asserts the property the mechanism
 exists to deliver: after the rebuild, unchanged sections are still with the same
 neighbours, and nobody has fallen out of the map.
@@ -33,9 +33,9 @@ So the assertions with teeth here are the warm path's own mechanism end to end
 — the backfill covering every new section, `stored_coords` going warm because
 of it, and the rebuild keeping everyone placed. Each of those three is killed
 by mutating exactly the code it names. The stability floor rides along as the
-property statement #130 asked for and a guard against a rebuild that scrambles
-the map; the benefit of warm init over cold remains unproven, which is now a
-measurement rather than a suspicion (see #130's review log).
+property statement and a guard against a rebuild that scrambles the map; the
+benefit of warm init over cold remains unproven, which is a measurement rather
+than a suspicion.
 
 Slow by nature: two real UMAP builds, a few seconds each.
 """

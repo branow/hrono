@@ -1,4 +1,4 @@
-"""#190 (T58, impact half): what a shared-resource edit would do.
+"""What a shared-resource edit would do.
 
 The claim under test is not "a number appears" but that the number is the one
 the next run would act on. So the prompt case is asserted against
@@ -131,7 +131,7 @@ def api(tmp_path: Path) -> Iterator[Api]:
     """Two trees over two sources, each with briefed leaves.
 
     Two on purpose: "tree-keyed impact" is a claim that the answer differs per
-    tree, and one tree cannot tell a per-tree answer from a global one (#054).
+    tree, and one tree cannot tell a per-tree answer from a global one.
     """
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)
@@ -224,7 +224,7 @@ def api(tmp_path: Path) -> Iterator[Api]:
         # The worker polls the SAME adopted connection this fixture writes
         # through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         api = Api(client, tokens, conn)
@@ -290,7 +290,7 @@ def test_a_brief_already_stale_is_not_this_edits_blast_radius(
 
 
 def test_a_pinned_brief_is_not_counted(api: Api) -> None:
-    """The pin holds whatever the prompt says (#154), so no work is coming."""
+    """The pin holds whatever the prompt says, so no work is coming."""
     with api.conn:  # type: ignore[union-attr]
         pins.pin(api.conn, pins.BRIEF, api.nodes["beta"][0], reason="held")  # type: ignore[arg-type]
 
@@ -314,7 +314,7 @@ def test_an_unchanged_prompt_affects_nothing(api: Api) -> None:
 
 
 def test_an_auth_only_source_edit_changes_no_bytes(api: Api) -> None:
-    """`implementation-notes.md`: auth-only edit = no staleness, same bytes.
+    """`docs/api.md`: auth-only edit = no staleness, same bytes.
 
     Asked of `preview` directly rather than over HTTP: rotating a credential on
     a LOCAL repository is not a reachable git remote, and the write-time
@@ -345,7 +345,7 @@ def test_the_same_edit_with_a_new_url_is_not_auth_only(api: Api) -> None:
 
 
 def test_a_url_edit_reaches_only_the_trees_that_pull_it(api: Api) -> None:
-    """#054: a tree's sources are its own, and alpha does not read code."""
+    """A tree's sources are its own, and alpha does not read code."""
     answer = api.dry_run(
         "sources",
         "docs",
@@ -382,10 +382,10 @@ def test_an_unmeasurable_count_is_null_and_says_why(api: Api) -> None:
 
 
 def test_repointing_a_model_counts_what_it_would_rewrite(api: Api) -> None:
-    """#191: the name did not change and every word would.
+    """The name did not change and every word would.
 
-    Before #191 this was a disclaimer — freshness compared the registry NAME —
-    and the preview had to warn rather than count. It counts now.
+    Freshness compares what the model resolves to, not the registry NAME, so
+    the preview can count rather than warn.
     """
     answer = api.dry_run(
         "models",
@@ -408,7 +408,7 @@ def test_changing_a_models_params_counts_too(api: Api) -> None:
 
 
 def test_changing_the_connection_changes_no_words(api: Api) -> None:
-    """A credential lives on the connection; the words do not (#190)."""
+    """A credential lives on the connection; the words do not."""
     with api.conn:  # type: ignore[union-attr]
         registry_store.insert(
             api.conn,  # type: ignore[arg-type]
@@ -691,7 +691,7 @@ def test_tokens_are_projected_from_what_briefs_here_have_cost(
 def test_a_hand_written_brief_does_not_drag_the_mean_down(
     api: Api,
 ) -> None:
-    """#156 records zero tokens because no model wrote it.
+    """A hand-written brief records zero tokens because no model wrote it.
 
     Averaging those in would quietly halve every estimate an operator is
     shown, in the direction that makes spending look cheaper.

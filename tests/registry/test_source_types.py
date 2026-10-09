@@ -1,10 +1,10 @@
-"""#141: a source is declared by its TYPE, and git is one variant.
+"""A source is declared by its TYPE, and git is one variant.
 
-M8 adds readers. This pins the property that makes that cheap: a new source
-type is a model variant plus a validator table entry, and the registry engine
-that stores it does not change. The second variant is defined HERE rather than
-shipped — an unused `confluence` model in `sources.py` would be the speculative
-structure CLAUDE.md forbids, and it would prove nothing this does not.
+This pins the property that makes a new reader cheap: a new source type is a
+model variant plus a validator table entry, and the registry engine that
+stores it does not change. The second variant is defined HERE rather than in
+`sources.py` — an unused model there would be speculative structure, and it
+would prove nothing this does not.
 """
 
 from __future__ import annotations
@@ -36,7 +36,10 @@ SPACE = "https://example.atlassian.net/wiki/spaces/ENG"
 
 
 class FakeSource(BaseModel):
-    """A second reader, as M8 will add one: no url, no auth, its own scope."""
+    """A second reader, as a new source type adds one.
+
+    No url, no auth, its own scope.
+    """
 
     name: str
     type: Literal["fake"]
@@ -94,9 +97,9 @@ def test_an_unknown_source_type_is_rejected_by_name(
     client: tuple[TestClient, dict[str, str]],
 ) -> None:
     opened, admin = client
-    # an unregistered tag, deliberately: `confluence` became a real variant in
-    # #149, and a test that keeps using it would stop testing the discriminator
-    # and start testing a body with missing fields.
+    # an unregistered tag, deliberately: `confluence` is a real variant, and
+    # a test that used it would stop testing the discriminator and start
+    # testing a body with missing fields.
     response = opened.post(
         "/sources",
         json={"name": "wiki", "type": "sharepoint", "space": SPACE},
@@ -178,7 +181,7 @@ def test_a_type_with_no_validator_registers_without_a_reach_check() -> None:
 def test_a_git_url_that_starts_with_a_dash_is_a_422_naming_the_field(
     client: tuple[TestClient, dict[str, str]],
 ) -> None:
-    # E020: `--upload-pack=<cmd>` would reach git as an option. Refused at the
+    # `--upload-pack=<cmd>` would reach git as an option. Refused at the
     # boundary: nothing stored, and the hook (which runs git) never reached.
     opened, admin = client
     response = opened.post(

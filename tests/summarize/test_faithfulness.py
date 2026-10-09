@@ -26,7 +26,7 @@ def test_a_fabricated_identifier_is_caught() -> None:
 
 
 def test_a_slash_compound_is_prose_not_an_identifier() -> None:
-    # F22: reading any slashed token as a name made 6 of 7 flags on the QA
+    # reading any slashed token as a name made 6 of 7 flags on a real test
     # corpus ordinary prose — CI/CD, tabs/spaces/line, binaries/packages.
     assert faithfulness("under api/handlers", SOURCE) == ()
     assert faithfulness("under api/ghost", SOURCE) == ()
@@ -63,7 +63,7 @@ def test_result_is_sorted_and_deterministic() -> None:
     )
 
 
-# the eight tokens the QA run's gate flagged on real briefs (F22): only
+# eight tokens the gate flagged on real briefs of a test corpus: only
 # Signer.rsplit is a genuine catch — the brief attributes a str.rsplit call to
 # the Signer API — and the other seven are ordinary prose.
 QA_SOURCE = (

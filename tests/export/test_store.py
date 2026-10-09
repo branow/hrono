@@ -1,4 +1,4 @@
-"""#096: loading a stored tree that is not built to a single root."""
+"""Loading a stored tree that is not built to a single root."""
 
 from collections.abc import Iterator
 
@@ -55,8 +55,8 @@ def _level0(db: Database) -> list[int]:
 
 
 def test_a_forest_is_a_loud_defect(db: Database) -> None:
-    # F20: two topics, no level above them. Picking one with max(node_level)
-    # served that topic's brief as root.md and dropped the other silently.
+    # two topics, no level above them. Picking one with max(node_level) would
+    # serve that topic's brief as root.md and drop the other silently.
     with db.connect() as conn, pytest.raises(Internal) as caught:
         load(conn, TREE)
     assert "single root" in caught.value.message
@@ -91,8 +91,9 @@ def test_a_tree_built_to_one_root_loads(db: Database) -> None:
 
 def test_an_unparented_leaf_below_the_root_still_loads(db: Database) -> None:
     # a leaf the incubator drained in after the build hangs under no parent
-    # (#114). That is one node at the top level, not a forest, so export must
-    # still work — the orphan is #114's gap, not a reason to refuse the tree.
+    # until attach-by-proximity places it. That is one node at the top level,
+    # not a forest, so export must still work — the orphan is a gap, not a
+    # reason to refuse the tree.
     level0 = _level0(db)
     with db.connect() as conn, conn:
         cluster_store.replace_level(
@@ -131,7 +132,7 @@ def _job(conn: object, op: str, status: str) -> None:
 def test_a_forest_with_no_running_build_is_still_a_defect(
     db: Database,
 ) -> None:
-    # #096: a build that died half-way leaves a PERMANENT forest, and rendering
+    # a build that died half-way leaves a PERMANENT forest, and rendering
     # one silently drops briefs. That must stay loud.
     with db.connect() as conn, conn:
         _forest(conn)
@@ -143,7 +144,7 @@ def test_a_forest_with_no_running_build_is_still_a_defect(
 def test_a_forest_during_a_build_is_a_conflict_not_a_fault(
     db: Database,
 ) -> None:
-    # #116: `build_tree` commits each level as it recurses, so a read landing
+    # `build_tree` commits each level as it recurses, so a read landing
     # between two levels sees a forest with nothing wrong. 500 there reads as a
     # server fault, pages an operator and spends the error budget on a tree
     # that is simply not ready yet.
@@ -157,7 +158,7 @@ def test_a_forest_during_a_build_is_a_conflict_not_a_fault(
 
 def test_a_finished_build_does_not_excuse_a_forest(db: Database) -> None:
     # only an IN-FLIGHT job explains it; a job that finished and left a forest
-    # is exactly #096's defect.
+    # is exactly the permanent-forest defect.
     with db.connect() as conn, conn:
         _forest(conn)
         _job(conn, "maintain", "succeeded")
@@ -184,9 +185,9 @@ def test_another_trees_build_does_not_excuse_this_forest(
 def test_a_job_that_does_not_reshape_the_tree_excuses_nothing(
     db: Database,
 ) -> None:
-    # #116: only ops that RESHAPE a tree explain a forest. An embed or recall
+    # only ops that RESHAPE a tree explain a forest. An embed or recall
     # job says nothing about its shape, and letting one excuse a forest would
-    # turn #096's permanent defect into a polite "try again" for as long as any
+    # turn a permanent defect into a polite "try again" for as long as any
     # unrelated job sat in the queue.
     with db.connect() as conn, conn:
         _forest(conn)

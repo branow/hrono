@@ -2,9 +2,9 @@
 
 Resolves the target embedding model (named by the job scope, or the sole
 embedding-kind model in the registry), selects the content hashes that have no
-vector for it yet (#032 ``contents``), embeds only those in batches through the
+vector for it yet (``contents``), embeds only those in batches through the
 encoder that model asks for — in process, or over HTTP when it names a
-connection (#151) — and stores each vector keyed by (hash, model). A re-run
+connection — and stores each vector keyed by (hash, model). A re-run
 finds nothing missing (idempotent); a different model embeds under its own
 key. A local model reads only local content and needs no cipher; a remote one
 needs it to read its connection's key. Registers into the op
@@ -78,7 +78,7 @@ def _allowed(conn: object, tree: str) -> frozenset[str] | None:
     - its sources' section and passage bodies;
     - its own nodes' brief sections and passages (their source is the
       synthetic ``node-<id>``);
-    - the PATH strings of all of the above, which blend (#039) embeds as
+    - the PATH strings of all of the above, which the blend embeds as
       content keyed by the hash of the path's bytes — computable only here,
       so they are hashed in Python over the distinct paths;
     - each brief's whole text, which ``cluster_briefs`` registers as one body.

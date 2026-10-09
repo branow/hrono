@@ -1,33 +1,32 @@
 """The ``build-tree`` controller: recurse brief levels up to a single root.
 
-Given a leaf level of briefs (#059), drive #060 (embed + cluster the level's
-briefs into the next level up) then #061 (brief-upper the new level), one level
-per pass, until the tree collapses to a single root node. Rebuilds bottom-up:
-starts at the HIGHEST level that already has briefs, so a fresh corpus recurses
-from level 0 and a re-run over an already-built tree starts at the root and does
-nothing (idempotent, no duplicate levels — never rebuilding a level under an
-already-built parent, per #060's node_children cascade constraint).
+Given a leaf level of briefs, embed + cluster the level's briefs into the next
+level up, then brief-upper the new level, one level per pass, until the tree
+collapses to a single root node. Rebuilds bottom-up: starts at the HIGHEST level
+that already has briefs, so a fresh corpus recurses from level 0 and a re-run
+over an already-built tree starts at the root and does nothing (idempotent, no
+duplicate levels — never rebuilding a level under an already-built parent,
+because of the ``node_children`` cascade).
 
-A leaf that appears AFTER the recursion — the incubator's drain emits them
-(#095) — cannot be seen by it: the pass starts at the highest briefed level,
+A leaf that appears AFTER the recursion — the incubator's drain emits them —
+cannot be seen by it: the pass starts at the highest briefed level,
 which is already the root. Such leaves are attached to their nearest parent
-afterwards and that parent is re-briefed (#114, attach-only); without the edge
+afterwards and that parent is re-briefed (attach-only); without the edge
 the topic is written to the export but unreachable from ``root.md``.
 
 Termination is guarded four ways so a pathological corpus cannot spin: a level
 of one node IS the root; a level too sparse to cluster raises ``ClusterError``
 near the root and stops (declaring the current top the root); a level that fails
 to REDUCE the node count is discarded and stops; and depth is hard-capped at
-``D_MAX`` (clustering-lifecycle.md). Deterministic under the fixed clustering
+``D_MAX`` (docs/clustering.md). Deterministic under the fixed clustering
 seed, except over tied points (``cluster.build``: a level of identical briefs).
 
-ONLY ``TooFewPoints`` stops the climb (#131). It used to catch ``ClusterError``
-broadly, and ``build_clusters`` raises that when the reduction fails, when the
-clusterer fails and when the backend is not installed — so a BROKEN backend at
-any level was read as "the current top is the root" and produced a TRUNCATED
-tree reported as success. #112 hit the same defect one level down and created
-the type that tells the two apart: a ladder that declines to reduce is not a
-failure, and everything else is.
+ONLY ``TooFewPoints`` stops the climb. ``build_clusters`` raises
+``ClusterError`` when the reduction fails, when the clusterer fails and when the
+backend is not installed, so catching it broadly would read a BROKEN backend at
+any level as "the current top is the root" and report a TRUNCATED tree as
+success. ``TooFewPoints`` is the type that tells the two apart: a ladder that
+declines to reduce is not a failure, and everything else is.
 """
 
 from __future__ import annotations
@@ -99,20 +98,19 @@ def _require_reachable(context: JobContext, tree: str) -> None:
 
     ``root.md``'s children are rendered from parent EDGES, so an unparented
     node is written to the export and unreachable in it. Every route that
-    produces one has been closed as it was found (#114, #124), and this is the
-    guard for the routes nobody has thought of yet: reporting success over an
-    unreachable map is the shape F16, F20 and F29 all share.
+    produces one has been closed, and this is the guard for the routes nobody
+    has thought of yet: reporting success over an unreachable map is never
+    acceptable.
 
-    EVERY level below the top, not just the leaves (#163). Checking only level
-    0 let a whole subtree hang off nothing and still pass: the orphan was an
-    upper node, so its own children were parented — to it — and the leaf-level
-    check saw a tidy map. This guard is the one that would have caught that,
-    and did not.
+    EVERY level below the top, not just the leaves. Checking only level 0 lets
+    a whole subtree hang off nothing and still pass: when the orphan is an
+    upper node, its own children are parented — to it — and a leaf-level check
+    sees a tidy map.
     """
     with context.database.connect() as conn:
         top = _top_level(conn, tree)
         if top == 0:
-            return  # a one-topic tree: the leaf IS the root (#112)
+            return  # a one-topic tree: the leaf IS the root
         orphans = tuple(
             node
             for level in range(top)
@@ -140,24 +138,24 @@ def _adopt_late_leaves(
 ) -> None:
     """Attach nodes born or orphaned after the recursion, then re-brief.
 
-    The incubator emits new leaves long after the tree was built (#095), and the
+    The incubator emits new leaves long after the tree was built, and the
     recursion cannot see them: it starts at the highest BRIEFED level, finds one
     root there and stops. The leaf is briefed and written to the export but
-    nothing links to it from ``root.md`` (#114). ATTACH-ONLY, per #085's rule
-    one level up — see ``levels.attach_orphans``.
+    nothing links to it from ``root.md``. ATTACH-ONLY, per incremental update's
+    placement rule one level up — see ``levels.attach_orphans``.
 
     The parent gains a child, so its brief no longer describes its children:
-    ``brief_upper`` re-runs for that level, which #064 makes cheap — only the
-    node whose child-set signature changed is regenerated, its siblings are
-    skipped. Leaving it stale instead would ship a parent brief that omits the
-    topic underneath it, which is this ticket's harm one level up.
+    ``brief_upper`` re-runs for that level, which brief freshness makes cheap —
+    only the node whose child-set signature changed is regenerated, its siblings
+    are skipped. Leaving it stale instead would ship a parent brief that omits
+    the topic underneath it — the same unreachable-topic harm one level up.
     """
     with context.database.connect() as conn:
         top = _top_level(conn, tree)
     attached: tuple[tuple[int, int, float], ...] = ()
     # every level, bottom up: an orphan at level N is adopted before level N+1
     # is swept, so a subtree that had come loose is whole again by the time its
-    # own parent is looked at (#163).
+    # own parent is looked at.
     for level in range(top):
         attached += attach_orphans(
             _level_job(tree, level),

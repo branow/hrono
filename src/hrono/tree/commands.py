@@ -14,7 +14,7 @@ outside the tree is visible from the CLI instead of silently absent.
 ``hrono tree export <name> -o <dir>`` materialises the rendered map under
 ``<dir>``: every payload path is forced relative before the traversal guard
 runs, so a server path with a leading slash lands in the folder instead of
-rerooting the export (#096), and a refused entry costs only itself.
+rerooting the export, and a refused entry costs only itself.
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ def export(
 
 
 def describe(shape: dict[str, object]) -> str:
-    """The export's shape in a sentence or two, as #204 reports it."""
+    """The export's shape in a sentence or two."""
     pages = shape.get("pages_per_level") or []
     line = (
         f"{shape.get('levels')} hops; pages per level "
@@ -152,12 +152,12 @@ class Refusal:
 
 
 def _refusal(out: Path, total: int, refused: Sequence[Refusal]) -> str:
-    """One line that says how many were refused and WHY (#117).
+    """One line that says how many were refused and WHY.
 
-    The message used to say every refusal "would write outside" the folder,
-    which is untrue of half of them: a degenerate path ("/", ".", "") writes
-    ONTO the folder, and a directory collision writes inside it. A user who saw
-    that line was told something false about their own data.
+    Not every refusal "would write outside" the folder: a degenerate path
+    ("/", ".", "") writes ONTO the folder, and a directory collision writes
+    inside it. One blanket reason would tell the user something false about
+    their own data.
     """
     kinds: dict[str, list[str]] = {}
     for item in refused:
@@ -177,12 +177,12 @@ def _materialize(
 
     A leading slash is NORMALISED rather than obeyed: ``out / "/a.md"`` is
     ``/a.md`` to pathlib, which would reroot the whole export out of the output
-    folder (#096, F19). An entry is written only if it names a file strictly
+    folder. An entry is written only if it names a file strictly
     under ``out``: one that escapes, or that lands ON ``out`` itself ("/", ".",
     "" — a directory, not a file), is refused and counted instead. One bad
     entry costs its own file, not the other ninety-three.
 
-    The WRITE is guarded the same way (#117): a payload whose entries collide on
+    The WRITE is guarded the same way: a payload whose entries collide on
     disk — ``alpha-1/brief.md`` and then ``alpha-1`` — raises ``OSError`` from
     the ``mkdir`` or the write, and an unguarded loop would lose every entry
     after it AND skip the report entirely, which is the same shape the path
@@ -206,7 +206,7 @@ def _materialize(
         except OSError:
             # a payload naming a path that collides with one already written
             # (`alpha-1/brief.md` then `alpha-1`) costs its own file, like any
-            # other bad entry — not the ninety-three after it (#117).
+            # other bad entry — not the ninety-three after it.
             refused.append(Refusal(entry["path"], "collides"))
             continue
         written += 1

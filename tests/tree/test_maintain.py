@@ -207,11 +207,11 @@ def test_second_maintain_re_condenses_and_re_embeds_source_nothing(
     condensations = _count(db, "condensations")
     source_embeddings = _source_embeddings(db)
     run(db, tmp_path)  # unchanged tree
-    # the M4 content-hash caches hold: condense (the expensive LLM map) does
+    # the content-hash caches hold: condense (the expensive LLM map) does
     # zero new work, and no source section is re-embedded.
     assert _count(db, "condensations") == condensations
     assert _source_embeddings(db) == source_embeddings
-    # briefs no longer churn either now that #068 keeps node ids stable — the
+    # briefs do not churn either, because node ids are stable — the
     # stronger zero-LLM-calls proof is the test below.
 
 
@@ -227,9 +227,9 @@ def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     db: Database,
     tmp_path: Path,
 ) -> None:
-    # the incremental differentiator, now whole (#068): once built, a second
-    # maintain over an unchanged corpus regenerates NO briefs — cluster reuses
-    # node ids by content signature so briefs survive #064's skip.
+    # the incremental differentiator: once built, a second maintain over an
+    # unchanged corpus regenerates NO briefs — cluster reuses node ids by
+    # content signature so brief freshness skips every brief.
     first = FakeCompletion()
     maintain(
         job(),
@@ -274,8 +274,8 @@ def _tiny_db(tmp_path: Path) -> Database:
 def test_a_corpus_below_the_smallest_rung_builds_one_topic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # #112: the REAL clustering backend over a sub-MIN_POINTS corpus. The ladder
-    # (#094) cannot reduce it, and "cannot reduce" must mean "then this IS the
+    # the REAL clustering backend over a sub-MIN_POINTS corpus. The ladder
+    # cannot reduce it, and "cannot reduce" must mean "then this IS the
     # topic" — the move `_collect_root` already makes at the top of the tree —
     # not a failed job and a user with no tree.
     monkeypatch.chdir(tmp_path)
@@ -306,7 +306,8 @@ def test_a_corpus_below_the_smallest_rung_builds_one_topic(
                 "FROM node_members"
             ).fetchall()
         # nothing was attached by proximity because nothing clustered: the flag
-        # is a claim about HOW a member arrived, and #114/#124 read it.
+        # is a claim about HOW a member arrived, and attach-by-proximity and the
+        # reachability guard read it.
         assert [(int(r["attached"]), r["sim"]) for r in how] == [(0, None)]
         assert_every_leaf_is_reachable(database, "default")
 
@@ -322,7 +323,7 @@ def test_a_corpus_below_the_smallest_rung_builds_one_topic(
 
 def test_the_recipe_ladder_still_refuses_below_its_floor() -> None:
     # the collect is the CALLER's decision, not a new rung: `build_tree` reads
-    # this same ClusterError as "the current top is the root" (#094).
+    # this same ClusterError as "the current top is the root".
     with pytest.raises(ClusterError):
         recipe_for(MIN_POINTS - 1)
 
@@ -330,7 +331,7 @@ def test_the_recipe_ladder_still_refuses_below_its_floor() -> None:
 def test_a_broken_backend_fails_the_job_it_does_not_collect(
     db: Database, tmp_path: Path
 ) -> None:
-    # #112's collect is decided by the point count, never by catching the
+    # the collect is decided by the point count, never by catching the
     # backend's error: `build_clusters` raises the same `ClusterError` when the
     # reduction fails, when the clusterer fails and when it is not installed.
     # Collapsing a corpus into one topic because its clustering BROKE would
@@ -347,7 +348,7 @@ def test_a_broken_backend_fails_the_job_it_does_not_collect(
             build=broken,
         )
     assert isinstance(failed.value.cause, ClusterError)
-    assert failed.value.stage == "cluster"  # the stage is named (#213)
+    assert failed.value.stage == "cluster"  # the stage is named
     assert _count(db, "nodes") == 0  # nothing invented on the way out
 
 
@@ -374,7 +375,7 @@ class CountingCompletion:
 def test_one_changed_file_re_briefs_only_its_own_path(
     db: Database, tmp_path: Path
 ) -> None:
-    # #084: hrono's core promise, as a committed regression guard. A second
+    # hrono's core promise, as a committed regression guard. A second
     # maintain over a CHANGED corpus must do partial work — more than nothing,
     # far less than a full build — and must leave the untouched topics' node
     # ids and brief TEXT exactly as they were.

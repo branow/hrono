@@ -22,7 +22,7 @@ Set body text to a measure that fits the card, and make diagram captions readabl
 Where a number can come from a constant, it comes from the constant, so the guide cannot go stale again.
 
 ## Findings from the UI review (2026-10-03)
-Seen by driving the dashboard in headless Chromium against a copy of the `~/hrono-click` database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
+Seen by driving the dashboard in headless Chromium against a copy of the local test database (tree `click`: 8 topics, 2 levels, 126 sections, 3 runs), as admin and reader, at 1440px and 800px, light and dark. Screenshots are in `.autodev/board/ui-review-2026-10-03/`. Severity: **A** wrong or broken, **B** confusing enough to cost time, **C** polish. The tree is small, so anything that only breaks at scale was not seen; forms were opened, not submitted.
 
 - **A** "Who writes what" is broken: the upstream model name wraps onto its own line under the role, the configured name floats far right. Screenshot: `admin-guide-1440-light.png`.
 - **A** Claims to verify against the code, at least: "Change one in Settings and every brief it wrote goes stale" (#191 says repointing a model invalidates nothing); the "cached by content hash" caption sits under *section* in the pipeline diagram and belongs to *condensation*.

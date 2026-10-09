@@ -44,8 +44,7 @@ def decrypt(
 
     The inverse of ``encrypt``, and reading the SAME ``secret_paths``: a source
     type whose credential sits somewhere other than ``auth.token`` is then
-    decrypted by declaring that path, not by editing the reader that needs it
-    (#142).
+    decrypted by declaring that path, not by editing the reader that needs it.
     """
     plain = deepcopy(config)
     for path in descriptor.secret_paths:
@@ -88,8 +87,8 @@ def unmask(
     untouched is the value already stored.
 
     Reading the same ``secret_paths`` as ``mask`` and ``encrypt``, so a
-    collection whose credential moves is covered by declaring the new path
-    (#142), not by remembering this function exists.
+    collection whose credential moves is covered by declaring the new path,
+    not by remembering this function exists.
     """
     merged = deepcopy(config)
     for path in descriptor.secret_paths:

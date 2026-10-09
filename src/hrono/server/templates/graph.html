@@ -3,8 +3,8 @@
 {% import "prose.html" as prose %}
 {% block title %}hrono — {{ tree }} map{% endblock %}
 {# The kind is the URL's word and the API's; what a person reads is the
-   QUESTION it answers. "pull / proximity / propagation" named the mechanism
-   to someone who already knew the mechanism (#200). #}
+   QUESTION it answers. "pull / proximity / propagation" names the mechanism
+   to someone who already knows the mechanism. #}
 {% set names = {
   "pull": "misfiled",
   "proximity": "near-duplicates",
@@ -222,8 +222,8 @@
      Every region that a map link can change has to be in this list or the
      page goes out of step with itself — opening a topic also moves the
      "{n} drawn" count, and an overlay toggle also moves which toggle is lit.
-     Listing only the board was why Expand all, Collapse, the overlay toggles
-     and every link in the panel still reloaded the page (#200).
+     Listing only the board would leave Expand all, Collapse, the overlay
+     toggles and every link in the panel reloading the page.
 
      Each of these links still WORKS on its own — with this off, or if a fetch
      fails, the browser just follows it and the page rebuilds as before. */
@@ -325,7 +325,7 @@
     });
   });
 
-  /* The map opens FITTED to the window (#212): a wide tree drawn at full
+  /* The map opens FITTED to the window: a wide tree drawn at full
      size showed a corner of itself, and with the panel open it shifted and
      stayed small. Fitting scales the drawing through its viewBox; the button
      goes back to actual size and again, and the choice holds while the page
@@ -414,8 +414,8 @@
     /* Touch and trackpad already pan this box; only the mouse needs help. */
     if (event.pointerType === "touch" || event.button !== 0) return;
     /* A drag that starts ON a name is someone copying that name, not panning.
-       Panning swallowed it, which made every label on the map unselectable
-       (#200); the rest of the canvas is empty space and still pans. */
+       Panning would swallow it and make every label on the map unselectable;
+       the rest of the canvas is empty space and still pans. */
     if (event.target.nodeName === "text") return;
     grab = {
       x: event.clientX, y: event.clientY,

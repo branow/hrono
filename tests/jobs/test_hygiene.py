@@ -1,7 +1,7 @@
 """The jobs table's hygiene: idle cost, crash loops, retention, transactions.
 
-Each test here guards one of the review's findings: the idle worker taking
-the write lock dozens of times a second, a poison-pill job retried forever,
+Each test here guards one failure mode: the idle worker taking the write
+lock dozens of times a second, a poison-pill job retried forever,
 fan-out parents and finished runs accumulating for the life of the database,
 and a store call committing its caller's transaction out from under it.
 """

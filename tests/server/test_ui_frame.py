@@ -1,4 +1,4 @@
-"""#215: the frame every page sits in — navigation, empty states, feedback.
+"""The frame every page sits in — navigation, empty states, feedback.
 
 Driven the way a browser drives it: real GETs and form POSTs with a real
 cookie, on a database the production writers filled where one is needed.

@@ -1,8 +1,8 @@
-"""#186 (T54): the activity view over `update_log`.
+"""The activity view over `update_log`.
 
 The rows are written by the real writers — `propagate._record` and the
-incubator — not planted (#176), so the page's reading of "abstained" is tested
-against what production actually stores rather than against what I assumed.
+incubator — not planted, so the page's reading of "abstained" is tested
+against what production actually stores rather than against an assumption.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         # The worker polls the SAME adopted connection this fixture writes
         # through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         yield Browser(client, token, conn)
@@ -125,8 +125,8 @@ def test_rows_are_per_tree(browser: Browser) -> None:
 
 
 def test_the_incubators_rows_appear_too(browser: Browser) -> None:
-    # `update_log` has two writers (#087, #095) and the view reads one table
-    # with one shape, whatever produced the row.
+    # `update_log` has two writers (propagation and the incubator) and the
+    # view reads one table with one shape, whatever produced the row.
     browser.sign_in()
     with browser.conn:  # type: ignore[union-attr]
         record(browser.conn, TREE, 5, "drain", "forced")  # type: ignore[arg-type]

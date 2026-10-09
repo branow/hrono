@@ -4,10 +4,10 @@
 client of it, so the CLI and the future dashboard see one surface.
 
 The operator verb is ``hrono tree sync <name>`` — one command that brings a
-knowledge base up to date (#137/#138). ``hrono tree maintain`` is the cold
+knowledge base up to date. ``hrono tree maintain`` is the cold
 build. The lifecycle's individual stages are deliberately NOT commands: they
 must run in a particular order and a wrong order produces a map that looks right
-and is quietly wrong, so they live behind an admin-only HTTP door (#139).
+and is quietly wrong, so they live behind an admin-only HTTP door.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ app.add_typer(jobs_app, name="jobs")
 app.command("usage")(usage)
 # `trees` config hangs under `hrono tree config` rather than beside it: a
 # `hrono trees` next to `hrono tree` reads as a typo, and the work commands and
-# the config for the same noun belong together (#054).
+# the config for the same noun belong together.
 tree_app.add_typer(build_app("trees"), name="config")
 for _descriptor in COLLECTIONS:
     if _descriptor.collection != "trees":
@@ -62,7 +62,7 @@ for _descriptor in COLLECTIONS:
 # server whose startup warm-up has not finished, or that had no embedding model
 # registered when it booted, pays the weights once -- 13.3s on the machine this
 # was measured on, and more on a slower disk or a larger model. The registry
-# CRUD default of 10s was never chosen for this and fell just under it (#168).
+# CRUD default of 10s is too short for it.
 RECALL_TIMEOUT = 120.0
 
 
@@ -198,7 +198,7 @@ def reset(
     except AppError as exc:
         # a wipe that stopped part-way still owes the operator the list of what
         # it destroyed — that report is what recovery is planned from. The
-        # MESSAGE is the boundary's job (#048); this handler exists only for
+        # MESSAGE is the boundary's job; this handler exists only for
         # the report, and re-raises.
         _report_removed(_removed_so_far(exc))
         raise
@@ -298,10 +298,10 @@ def _bootstrap(key: bytes, db_path: Path, host: str, port: int) -> None:
 def _bootstrap_message(token: str, host: str, port: int) -> str:
     """The first-run hint, addressed at the server the user actually started.
 
-    It used to print a literal ``http://127.0.0.1:8080`` whatever ``--host`` and
-    ``--port`` were given, so the one copy-pasteable line in hrono's first-run
-    experience pointed somewhere that was not listening. A hint that does not
-    work is worse than no hint (#138, F3).
+    It must not print a literal ``http://127.0.0.1:8080`` whatever ``--host``
+    and ``--port`` were given, because the one copy-pasteable line in hrono's
+    first-run experience would point somewhere that is not listening. A hint
+    that does not work is worse than no hint.
     """
     return (
         "\nThe users table was empty, so a bootstrap admin was created.\n"

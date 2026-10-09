@@ -1,16 +1,15 @@
 """Load the stored tree for a named tree into the pure ``StoredTree`` shape.
 
-Reads the nodes at every level, the node->child-node edges (#060 node_children),
-and each leaf node's sections (#040 node_members) for one tree, and picks the
-single highest-level node as the root. The collapse (#078) and render (#079)
-operate on this pure data; the endpoint (#080) loads it here.
+Reads the nodes at every level, the node->child-node edges (``node_children``),
+and each leaf node's sections (``node_members``) for one tree, and picks the
+single highest-level node as the root. The collapse and render operate on
+this pure data; the endpoint loads it here.
 
 ``build_tree``'s ``_collect_root`` guarantees exactly ONE node at the top level
 whenever the recursion stops, so a forest is never a legitimate stored tree — it
 only appears when a build died half-way. Loading one is therefore a defect that
-fails loudly (#096, F20): picking one of them arbitrarily served a single
-topic's brief as ``root.md`` and silently dropped the other briefs from the
-export.
+fails loudly: picking one of them arbitrarily would serve a single topic's
+brief as ``root.md`` and silently drop the other briefs from the export.
 """
 
 from __future__ import annotations
@@ -63,9 +62,9 @@ def load(conn: sqlite3.Connection, tree: str) -> StoredTree | None:
 def _root(
     conn: sqlite3.Connection, tree: str, node_level: dict[int, int]
 ) -> int:
-    """The single node at the top level; a forest there is a DEFECT (#096).
+    """The single node at the top level; a forest there is a DEFECT.
 
-    Unless a build is RUNNING (#116). `build_tree` commits each level as it
+    Unless a build is RUNNING. `build_tree` commits each level as it
     recurses and only `_collect_root` collapses the top, so a read that lands
     between two levels sees a forest with nothing wrong — and answering 500
     there reads as a server fault, pages an operator and spends the error

@@ -15,8 +15,7 @@ KEY = Fernet.generate_key()
 
 
 # Built rather than written, so this file holds no literal that a secret
-# scanner can mistake for a real key — three tickets were blocked by one that
-# did (#146, #152, #153).
+# scanner can mistake for a real key.
 API_KEY = "not-a-key-" + "x" * 8
 
 
@@ -26,7 +25,7 @@ def _valid_provider(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Both runners are patched: anthropic authenticates with `x-api-key` and the
     openai-shaped providers with a bearer header, so they have different
-    defaults (#153) and a test that patched only one would reach the network
+    defaults and a test that patched only one would reach the network
     for the other.
     """
     for name in ("_get", "_bearer_get"):

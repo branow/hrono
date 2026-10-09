@@ -1,53 +1,29 @@
-# Deny by default: ignore everything, then un-ignore only what we track.
-*
-
-# Descend into directories so the un-ignore rules below can reach nested files.
-!*/
-
-# Root files we track.
-!/.gitignore
-!/.python-version
-!/AGENTS.md
-!/CLAUDE.md
-!/CONTRIBUTING.md
-!/GLOSSARY.md
-!/README.md
-!/REQUIREMENTS.md
-!/pyproject.toml
-!/uv.lock
-
-# Source and tests.
-!/src/**
-!/tests/**
-
-# Docs: the design record, and every evaluation's log and metrics. What a real
-# run measured is evidence the next change is judged against, so it outlives
-# one working copy (#171).
-!/docs/**
-
-# The development process: dev/ is the epic board (tickets by status, their
-# evidence, the PO's index), and .claude/ holds the autodev roles and the
-# workflow that drives them, where Claude Code finds workflows.
-!/dev/**
-!/.claude/autodev/**
-!/.claude/workflows/**
-
-# CI. Deny-by-default means the workflow needs saying out loud or git never
-# sees it, and a workflow git cannot see never runs (#171 hit this with
-# CONTRIBUTING.md).
-!/.github/**
-
-# Re-ignore junk the broad rules above would otherwise pull back in.
+# Python
 __pycache__/
-*.py[oc]
-.DS_Store
+*.py[cod]
+*.egg-info/
+build/
+dist/
 
-# Local-only inside tracked trees: board screenshots (20 MB of PNG evidence
-# kept on the machine that took them).
-/dev/**/*.png
-
-# Heavy or local-only directories: re-ignore fully so git never descends.
+# Environments and tool caches
 .venv/
+.ruff_cache/
+.pytest_cache/
+
+# hrono's local data
 .hrono/
-.claude/worktrees/
+
+# Test and browser artifacts
+.e2e/
 .playwright-mcp/
+
+# Local agent state
+.claude/worktrees/
+.claude/settings.local.json
+
+# Board evidence and screenshots stay on the machine that made them
+dev/evidence/
+dev/**/*.png
+
+# OS
+.DS_Store

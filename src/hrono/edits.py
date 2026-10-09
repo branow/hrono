@@ -1,7 +1,7 @@
-"""Manual adjustments: what an operator changes by hand (M9).
+"""Manual adjustments: what an operator changes by hand.
 
 Every function here does two things in one transaction — the edit, and the PIN
-that keeps it (#154/#155). That coupling is the point: the spec's rule is "a
+that keeps it. That coupling is the point: the spec's rule is "a
 hand-edit pins the entity", not "a hand-edit and then, separately, a pin the
 user must remember". The endpoints in ``server/edits`` are a thin HTTP shell
 over these.
@@ -46,7 +46,7 @@ def require_one_level(
     The survivor is the lowest id, which is deterministic and says nothing
     about which node is the right KIND: a leaf surviving a merge with its own
     grandparent would hold that branch's children under a node whose content is
-    chunks (#158 G4).
+    chunks.
     """
     seen = {_level(conn, node_id) for node_id in node_ids}
     if len(seen) > 1:
@@ -67,8 +67,8 @@ def require_leaf(conn: sqlite3.Connection, node_id: int) -> None:
     (``attach_orphans`` reads level 0 only), so the subtree leaves the root
     and the export with no bound on how long — and ``move_section`` puts one
     IN, which above level 0 would file a chunk under a topic that is not made
-    of chunks. #163 decides what surgery up there should do; until then they
-    say so.
+    of chunks. What surgery up there should do is undecided, so they refuse
+    and say so.
     """
     level = _level(conn, node_id)
     if level != 0:
@@ -119,7 +119,7 @@ def override_brief(
 
     Written through the same path ``brief`` writes: the node:// passages and
     their FTS rows are rebuilt, so recall answers from the operator's text
-    rather than from the summary it replaced (#071/#125). Provenance records
+    rather than from the summary it replaced. Provenance records
     who wrote it — the model name is the edit itself, because a brief nobody
     can attribute is worse than one attributed to a human.
     """
@@ -189,7 +189,7 @@ def latest_edit(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     """The topic's newest edit if an undo can still put it back, else None.
 
     Only the newest row is ever offered, and only while it is open: an undo or
-    a hand-back closes it, and an older row never comes back (E034, E039). A
+    a hand-back closes it, and an older row never comes back. A
     rewrite of a topic that had no brief is recorded but not offered: there
     is no earlier text to restore.
     """
@@ -230,7 +230,7 @@ def undo(
 
     ``edit_id`` is the edit the person was shown: if another edit has landed
     since, or this one was already undone, nothing is touched. The edit is then
-    closed, so undoing twice never reaches an older edit (one step, E034).
+    closed, so undoing twice never reaches an older edit (one step).
     A restored name or brief keeps the pin an edit by hand carries.
     """
     require_node(conn, tree, node_id)
@@ -277,7 +277,7 @@ def release(conn: sqlite3.Connection, tree: str, node_id: int) -> int:
     Every pin on the node, not one kind: an operator saying "hand this back"
     means the topic, not a vocabulary they have never been shown. Its undo
     is closed too: a restored name or brief would pin the topic again over
-    whatever the pipeline has written since (E036).
+    whatever the pipeline has written since.
     """
     require_node(conn, tree, node_id)
     _close(conn, node_id, "released")
@@ -290,7 +290,7 @@ def reparent(
     """Hang a node under a chosen parent, and pin it there.
 
     Without the pin the next `repair` run re-attaches it by proximity, which
-    is the machine disagreeing with a human and winning quietly (#155).
+    is the machine disagreeing with a human and winning quietly.
     """
     require_node(conn, tree, node_id)
     require_node(conn, tree, parent_id)
@@ -339,8 +339,8 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
             )
         # an upper topic's content is its CHILDREN, and they have to come too:
         # the loser's child edges cascade away with it, and a subtree detached
-        # up here left the root and the export with nothing to say about it
-        # (#163).
+        # up here would leave the root and the export with nothing to say about
+        # it.
         for child_id in _children(conn, node_id):
             store.move_child(conn, child_id, survivor, similarity=None)
         store.delete_node(conn, node_id)  # its brief and passages cascade
@@ -366,7 +366,7 @@ def merge(conn: sqlite3.Connection, tree: str, node_ids: Sequence[int]) -> int:
 def dissolve(
     conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
 ) -> dict[str, int]:
-    """Retire a topic; its members re-enter the placement rule (#085).
+    """Retire a topic; its members re-enter the placement rule.
 
     Through ``repair.retire`` and NOT ``repair.dissolve``: the latter carries
     the automatic repair's below-two rule, so a topic of any real size was left
@@ -387,12 +387,11 @@ def dissolve(
 def _dissolve_upper(
     conn: sqlite3.Connection, tree: str, node_id: int, model_name: str
 ) -> dict[str, int]:
-    """Retire an upper topic; its CHILDREN re-enter the attach rule (#163).
+    """Retire an upper topic; its CHILDREN re-enter the attach rule.
 
     Refused when nothing is left at its level to receive them: a node with no
     siblings IS the level, and retiring it would leave every child of it
-    hanging from nothing — which is the harm this ticket exists to close, not
-    a thing to do on request.
+    hanging from nothing — a harm, not a thing to do on request.
     """
     if not levels.has_siblings(conn, tree, node_id):
         raise Invalid(
@@ -409,13 +408,13 @@ def _dissolve_upper(
 
 @dataclass(frozen=True)
 class Move:
-    """What a hand-move did, and what it left behind (#165).
+    """What a hand-move did, and what it left behind.
 
-    ``emptied`` is the old topic having no members left. The pipeline retires
-    an empty topic on its next `repair` run and #125's trigger takes its
-    summary with it, so the stale brief answers recall for at most one cycle —
-    but the operator who emptied it is the one holding the context, and they
-    only get to act on it if anyone tells them.
+    ``emptied`` is the old topic having no members left. The pipeline retires an
+    empty topic on its next `repair` run and the ``nodes_brief_cleanup`` trigger
+    takes its summary with it, so the stale brief answers recall for at most one
+    cycle — but the operator who emptied it is the one holding the context, and
+    they only get to act on it if anyone tells them.
     """
 
     from_node: int | None
@@ -429,7 +428,7 @@ def move_section(
 
     Returns what it did: the node it left (None when the chunk came from the
     PENDING POOL) and whether that node is now empty. A
-    parked chunk is the case an operator most needs this for (#164): a chunk
+    parked chunk is the case an operator most needs this for: a chunk
     in the wrong topic is at least on the map, and one the placement rule
     declined is invisible until the incubator's own rules reach it. Joining
     unparks, exactly as ``assign_or_park`` does and for its reason — a chunk
@@ -442,7 +441,7 @@ def move_section(
     machine made up.
 
     Pinned, or the misfit monitor migrates it back inside one batch and the
-    operator watches their own correction undone (#155).
+    operator watches their own correction undone.
     """
     require_node(conn, tree, node_id)
     require_leaf(conn, node_id)
@@ -541,7 +540,7 @@ def split(
         children = repair.split(conn, tree, node_id, model_name, over=0)
     except TooFewPoints as exc:
         # the ladder's floor, not a budget: below it there is no honest
-        # reduction to run, so there is nothing to divide BY (#094).
+        # reduction to run, so there is nothing to divide BY.
         raise Invalid(
             f"too few members to divide this topic: the grouping recipe "
             f"needs at least {MIN_POINTS}"

@@ -111,7 +111,7 @@ profile '..'." exit 1; current-clear on rm. Gate clean: ruff format/check, pytes
 342. Commit f7be76e.
 
 Spec reconciliation: implementation-notes.md lives in the external spec repo
-(/Users/orest/repos/rad/hrono) — OUT OF THIS REPO/dev lane. FLAGGING for PO to
+(the design record, then kept outside this repo) — OUT OF THIS REPO/dev lane. FLAGGING for PO to
 update the spec term to "profile" (with a "(kubectl/gh call this a context)"
 note). Code/CLI/config/tests rename is complete here.
 
@@ -147,7 +147,7 @@ passed. Then drove the real binary (fresh `HRONO_HOME`), not on dev's word:
 Open item for PO (not a blocker — ticket explicitly permits flagging): the
 external-spec `implementation-notes.md` term update is out of dev's lane and is
 flagged above; PO to reconcile "context" -> "profile" (keeping the kubectl/gh
-note) in /Users/orest/repos/rad/hrono. All in-repo ACs met.
+note) in the design record. All in-repo ACs met.
 - 2026-08-16 PO: PASS -> done. Verified the rename is a clean, atomic,
   behavior-preserving refactor. Grep audit: `src/hrono/profile/` exists,
   `context/` gone; no client-profile "context" terms left in src (hrono context /
@@ -159,7 +159,7 @@ note) in /Users/orest/repos/rad/hrono. All in-repo ACs met.
   exits, a token-bearing malformed config does NOT leak the token, #010 client
   uses from_profile/NoProfile. Gate 342 passed. Spec reconciliation (the one
   flagged open item, out of dev's lane): PO updated
-  /Users/orest/repos/rad/hrono/implementation-notes.md - section is now
+  the design record's implementation-notes.md - section is now
   "Profiles (kubectl/gh call this a context)", commands + `[profiles]` table +
   "current profile", with a note on why it was renamed. Spec and code now agree.
   Closed at f7be76e.

@@ -1,7 +1,7 @@
 """Settings: every registry collection, and the writes that change one.
 
-The page and its writes live together (#195), because a form and what it posts
-to are one subject.
+The page and its writes live together, because a form and what it posts to
+are one subject.
 
 Every write goes through `registry.engine`'s OWN operations — the same
 functions the API routes call — so what a valid config is, how a secret is
@@ -15,10 +15,9 @@ errors rendered against the field they name, the blast radius shown before the
 edit is applied, and a mask that means UNTOUCHED rather than "write ``***``
 over the credential".
 
-**Two views over the same collections (#200).** The page was five textareas of
-JSON, which is the API's surface wearing a browser: adding a model meant
-knowing the schema by heart, and the collection could only be edited one item
-at a time — there was no way to say "these are my models". So:
+**Two views over the same collections.** Raw JSON alone is the API's surface
+wearing a browser: adding a model means knowing the schema by heart, and there
+is no way to say "these are my models" in one edit. So:
 
 - `view=form` (the default) renders the collection as a TABLE of named
   columns (`config_view.COLUMNS`), and each item's add or edit as FIELDS
@@ -27,15 +26,15 @@ at a time — there was no way to say "these are my models". So:
   `engine.sync_items`, which writes what differs and removes what is gone —
   the advanced alternative.
 
-**One collection at a time (#210).** All five on one page was a 3000px wall
-with an edit form opened in the middle of it. `section` picks the collection
+**One collection at a time.** All five on one page is a 3000px wall with an
+edit form opened in the middle of it. `section` picks the collection
 from a sub-navigation, and an add, an edit or a delete is its own view, so
 none of them reorders or pushes down the list it came from.
 
 **Trees come first.** A tree is the thing every other collection is in service
-of, and it was the last card on the page, behind a `<details>` — an operator
-looking for "how do I make a tree" found four screens of model JSON instead.
-It is the first section and the one the page lands on.
+of, so it is the first section and the one the page lands on: an operator
+looking for "how do I make a tree" must not have to get past four screens of
+model JSON first.
 """
 
 from __future__ import annotations
@@ -99,20 +98,19 @@ def config_page(
     """One registry collection at a time, with secrets masked.
 
     Masked through the registry's OWN `mask()`, not a second redaction here: it
-    reads each collection's declared `secret_paths` (#142), so a source type
-    whose credential moves is masked by declaring the new path — and there is
+    reads each collection's declared `secret_paths`, so a source type whose
+    credential moves is masked by declaring the new path — and there is
     no second place that can forget to.
 
-    `section` picks the collection (#210): five collections on one page was a
-    3000px wall, and an edit form opened in the middle of it. `edit`, `add`,
+    `section` picks the collection: five collections on one page is a 3000px
+    wall, and an edit form opened in the middle of it. `edit`, `add`,
     `delete` and `variant` ride in the URL rather than in the page, so the
     form an operator has open is a link like any other, a refused write can
     redirect back to exactly it, and the list it came from is untouched — it
     is one Cancel away rather than pushed down the page.
 
-    `done` and `error` are read back off the redirect every write ends with.
-    They were being SENT and never read — the route took neither, so a save
-    redirected to a page that said nothing about the save (#200).
+    `done` and `error` are read back off the redirect every write ends with,
+    so a save lands on a page that says what the save did.
     """
     return _render(
         request,
@@ -138,7 +136,7 @@ async def preview_on_a_topic(request: Request, user: Reader) -> Response:
     the save would refuse is refused here too, before a model call is paid
     for. What is POSTed is a job, and what comes back is the form with the
     job's id: the typed text is rebuilt from the job, so a preview loses none
-    of it, and nothing about the prompt or the tree is written (#431).
+    of it, and nothing about the prompt or the tree is written.
     """
     descriptor = _descriptor("prompts")
     _may_write(descriptor, request)
@@ -202,8 +200,8 @@ async def item_from_the_page(
     """Save one item from its form — creating it, or replacing what is there.
 
     One route for both, because `engine.replace_item` is already create-or-
-    replace (#138): "config is data you PUT". A page that chose between POST
-    and PUT by first asking whether the name existed would be re-deriving that
+    replace: "config is data you PUT". A page that chose between POST and PUT
+    by first asking whether the name existed would be re-deriving that
     decision in a second place.
     """
     descriptor = _descriptor(collection)
@@ -674,7 +672,7 @@ def _table(request: Request, collection: str) -> config_view.Table:
 
 
 def _delete_note(descriptor: Descriptor, name: str, request: Request) -> str:
-    """What deleting this row would arm, asked BEFORE it is offered (#167).
+    """What deleting this row would arm, asked BEFORE it is offered.
 
     The same hook the DELETE runs, called here for its warning — so what the
     operator reads beside the button is what the operation itself would say,

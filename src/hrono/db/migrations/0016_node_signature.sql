@@ -1,4 +1,4 @@
--- Stable node identity across rebuilds (#068, M7 incremental placement). A
+-- Stable node identity across rebuilds (incremental placement). A
 -- content-derived signature per node so a re-cluster over unchanged input REUSES
 -- the node id — keeping its brief (no cascade-delete, no LLM regeneration) — and
 -- only genuinely new/changed clusters mint fresh ids. Leaf nodes sign over their

@@ -1,14 +1,14 @@
 """The ``cluster`` job op: build a tree's bottom level from embedded sections.
 
-Full build over a tree (empty tree = full build; incremental placement is M7):
-load every embedded section's combined vector (#039) under the #008 lock,
-release it, run the heavy UMAP -> HDBSCAN -> attach pipeline OUTSIDE the lock
-(like #035's embedding), then re-acquire to persist the nodes, members, per-
-section reduced coords, and flags. The tree is named by the job's ``tree`` (the
-topic hierarchy over a corpus), defaulting to ``default``. Warm-init reads the
-tree's stored coords, so a rebuild extends the prior layout; a first build inits
-fresh. A corpus below the smallest rung of the ladder (#094) cannot be reduced
-at all; it is then ONE topic holding every section (#112) — the same collect
+Full build over a tree (empty tree = full build; incremental placement is the
+``update`` op): load every embedded section's combined vector under the write
+lock, release it, run the heavy UMAP -> HDBSCAN -> attach pipeline OUTSIDE the
+lock (like the embed op), then re-acquire to persist the nodes, members,
+per-section reduced coords, and flags. The tree is named by the job's ``tree``
+(the topic hierarchy over a corpus), defaulting to ``default``. Warm-init reads
+the tree's stored coords, so a rebuild extends the prior layout; a first build
+inits fresh. A corpus below the smallest rung of the ladder cannot be reduced at
+all; it is then ONE topic holding every section — the same collect
 ``build_tree._collect_root`` makes at the top of the tree, where "too few points
 to reduce" already means "then this IS the node" rather than "then fail". A tree
 of one topic is a correct, walkable map of a small repo, and recall and export
@@ -18,12 +18,12 @@ fails and when it is not installed, and collapsing a large corpus into one topic
 because its clustering BROKE would answer with a confident, wrong map instead of
 failing. Every one of those still fails the job. A level the clusterer labels
 entirely noise is different — it ran and found no density — and the builder
-itself returns that as one topic (E003), flagged ``collapsed``; the run reports
-it as ``collected`` too, since from outside it is the same surprise. A full
-build homes every embedded section, so the incubator pool (#086) is swept in
-the same transaction — its rows would otherwise claim a re-homed chunk is
-still stranded. Reads only local vectors — no secret — so it needs no cipher.
-Registers into the op registry so the worker dispatches ``cluster``.
+itself returns that as one topic, flagged ``collapsed``; the run reports it as
+``collected`` too, since from outside it is the same surprise. A full build
+homes every embedded section, so the incubator pool is swept in the same
+transaction — its rows would otherwise claim a re-homed chunk is still stranded.
+Reads only local vectors — no secret — so it needs no cipher. Registers into the
+op registry so the worker dispatches ``cluster``.
 """
 
 from __future__ import annotations
@@ -69,7 +69,7 @@ def cluster(
         result = _one_topic(len(vectors))
         collected = True  # a one-topic tree is a legitimate answer for a small
         # corpus and a surprising one for a large one; from outside they look
-        # identical unless the run says which happened (#133).
+        # identical unless the run says which happened.
 
     members = [
         (label, section_ids[i], result.attached[i], sim)

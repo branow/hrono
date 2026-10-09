@@ -1,4 +1,4 @@
-"""T30: render the collapsed tree to markdown files."""
+"""Render the collapsed tree to markdown files."""
 
 import json
 import posixpath
@@ -249,8 +249,8 @@ def test_no_rendered_path_is_absolute(
 def test_the_roots_own_sections_render_beside_root_md(
     tmp_path: object,
 ) -> None:
-    # F19: a tree whose ROOT carries sections wrote "/<name>.md" for each of
-    # them — pathlib rerooted the join and the CLI refused the whole export.
+    # a tree whose ROOT carries sections must not write "/<name>.md" for each
+    # of them, because pathlib reroots the join and the CLI refuses the export.
     database = Database.at(tmp_path / "flat.db")
     with database.connect() as conn, conn:
         s0 = add_section(conn, "a.py", b"alpha\n")
@@ -281,7 +281,7 @@ def test_the_roots_own_sections_render_beside_root_md(
 def test_a_parentless_node_keeps_its_own_brief_path(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    # F20: the renderer must stay total — the loader refuses a forest, but if
+    # the renderer must stay total — the loader refuses a forest, but if
     # one ever reaches render, two briefs may not collide onto one key.
     database, ids = db
     with database.connect() as conn:
@@ -306,9 +306,9 @@ def test_a_brief_is_rendered_verbatim_including_its_own_headings(
 ) -> None:
     # the renderer DERIVES a title from the brief but never rewrites the brief:
     # a "## Summary" heading survives into the file as written. (The boilerplate
-    # skip this test used to claim is exercised by
-    # test_a_long_first_line_is_trimmed_to_a_usable_title — a single node IS the
-    # root, so no directory name is derived from it here. #102.)
+    # skip is exercised by test_a_long_first_line_is_trimmed_to_a_usable_title
+    # — a single node IS the root, so no directory name is derived from it
+    # here.)
     database = Database.at(tmp_path / "b.db")
     with database.connect() as conn, conn:
         s0 = add_section(conn, "a.py", b"alpha\n")
@@ -399,7 +399,7 @@ def test_a_long_first_line_is_trimmed_to_a_usable_title(
 def test_the_member_references_are_re_attached_from_metadata(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    # #102 moved the member URIs out of briefs.text so #071's passages carry
+    # the member URIs live outside briefs.text so the brief passages carry
     # prose only. The map must still show every reference: the renderer puts
     # them back from the stored metadata.
     database, ids = db
@@ -421,10 +421,10 @@ def test_the_member_references_are_re_attached_from_metadata(
 def test_an_upper_node_does_not_repeat_its_children_as_references(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    # #102: an upper brief's member list is child NODE IDS. ## Children already
+    # an upper brief's member list is child NODE IDS. ## Children already
     # renders them as titled links, and an id is only meaningful while that node
     # exists — a brief written before a rebuild would have root.md cite topics
-    # that have since been retired (three of them, on the live corpus).
+    # that have since been retired.
     database, ids = db
     with database.connect() as conn, conn:
         conn.execute(
@@ -460,10 +460,10 @@ def test_a_leaf_still_shows_its_source_references(
 def test_a_childless_upper_node_still_skips_its_references(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    # #114's transient state: a rebuild re-minted the leaf ids and cascaded the
+    # a transient state: a rebuild re-minted the leaf ids and cascaded the
     # root's edges away, so the root has no children to render. A guard on the
-    # CHILD COUNT calls that a leaf and prints its stored node ids — three of
-    # which were retired on the live corpus. The guard is on the LEVEL.
+    # CHILD COUNT would call that a leaf and print its stored node ids, which
+    # may name retired nodes. The guard is on the LEVEL.
     database, ids = db
     with database.connect() as conn, conn:
         conn.execute("DELETE FROM node_children")
@@ -479,7 +479,7 @@ def test_a_childless_upper_node_still_skips_its_references(
 def test_an_index_entry_says_what_the_child_holds(
     db: tuple[Database, dict[str, int]],
 ) -> None:
-    # #204: an agent picks a branch from the index page without opening it
+    # an agent picks a branch from the index page without opening it
     database, ids = db
 
     root = _files(database)["root.md"]
@@ -497,7 +497,7 @@ def test_an_index_entry_says_what_the_child_holds(
 def test_a_briefs_fact_links_the_section_page_that_states_it(
     tmp_path: object,
 ) -> None:
-    # E018: the root cites a fact from a section two levels down, and the leaf
+    # the root cites a fact from a section two levels down, and the leaf
     # cites it from beside the page, so each link is relative to its own file.
     database = Database.at(tmp_path / "e.db")
     with database.connect() as conn, conn:
@@ -580,7 +580,7 @@ def test_the_root_keeps_its_opening_and_leaves_the_facts_to_its_children(
     kept: str,
     dropped: str,
 ) -> None:
-    # E018: the root is read first and carried on every later turn; its facts
+    # the root is read first and carried on every later turn; its facts
     # are on the children's pages.
     database, ids = db
     with database.connect() as conn, conn:
@@ -609,7 +609,7 @@ def test_a_brief_opening_with_a_heading_is_named_by_its_subject(
 def test_only_a_page_with_children_is_trimmed_to_its_opening(
     tmp_path: object,
 ) -> None:
-    # E018: the root, a middle index page and a leaf. The middle page has
+    # the root, a middle index page and a leaf. The middle page has
     # children and keeps its opening; the leaf has none and keeps every fact.
     database = Database.at(tmp_path / "m.db")
     text = "# Topic\n\nIntro.\n\n## Facts\n- TAU is 7."
@@ -688,8 +688,8 @@ def _grove(
     ``shape`` is a list of middle nodes, each a list of leaves, each a list of
     section paths. ``texts`` maps "root", "m<i>" and "l<i>.<j>" to a brief.
     ``apex`` puts one more node above "root", so that "root" is an ordinary
-    index page below the export's root.md (which carries no section links,
-    E027); export it with ``hops=4``. Its page is ``_page(ids["root"])``.
+    index page below the export's root.md (which carries no section links);
+    export it with ``hops=4``. Its page is ``_page(ids["root"])``.
     """
     database = Database.at(tmp_path / "grove.db")
     ids: dict[str, int] = {}
@@ -779,7 +779,7 @@ def _page_links(files: dict[str, str], page: str, entry: str) -> list[str]:
 def test_an_index_entry_names_the_section_files_beneath_it(
     tmp_path: object,
 ) -> None:
-    # E022: an agent that has chosen a branch opens the answer from the index
+    # an agent that has chosen a branch opens the answer from the index
     database, ids = _grove(
         tmp_path,
         [[["src/deep/a/x1.py", "src/deep/a/x2.py"]], [["b/y1.py"]]],
@@ -809,7 +809,7 @@ def test_an_index_entry_names_the_section_files_beneath_it(
 
 
 def test_the_root_page_carries_no_section_links(tmp_path: object) -> None:
-    # E027: every turn of every session reads root.md, and its links cost the
+    # every turn of every session reads root.md, and its links cost the
     # grep arm more than they saved the walk arm
     database, ids = _grove(
         tmp_path,
@@ -1027,7 +1027,7 @@ def test_a_summary_stem_is_not_taken_when_a_sibling_already_has_it(
 def test_an_index_page_at_full_width_stays_within_one_section(
     tmp_path: object,
 ) -> None:
-    # E022: the Sections line is not allowed to push a WIDTH-entry page past
+    # the Sections line is not allowed to push a WIDTH-entry page past
     # the budget collapse.py sizes it on
     middles = 40
     database, ids = _grove(
@@ -1120,7 +1120,7 @@ def _links_at_budget(
 def test_an_entry_takes_the_most_section_links_the_budget_allows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fitting: int
 ) -> None:
-    # E022: the ladder 3, 2, 1, 0 stops at the first step that fits, and the
+    # the ladder 3, 2, 1, 0 stops at the first step that fits, and the
     # bound is the page as written, not a page a few bytes shorter
     _, size = _links_at_budget(
         tmp_path / "a", monkeypatch, leads=fitting, budget=10**9
@@ -1139,7 +1139,7 @@ def test_an_entry_takes_the_most_section_links_the_budget_allows(
 def test_a_human_note_counts_against_the_link_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # E022: the note is on the page, so the links leave room for it
+    # the note is on the page, so the links leave room for it
     note = "kept by hand " * 20
     _, size = _links_at_budget(
         tmp_path / "a", monkeypatch, leads=3, budget=10**9, note=note

@@ -1,9 +1,9 @@
-"""The #086 pool invariant, as an assertion any lifecycle test can make.
+"""The pool invariant, as an assertion any lifecycle test can make.
 
 `0017_incubator.sql`: "every chunk is in exactly one cluster OR pending here,
-never both, never neither" — plus #095's time bound, that nothing stays pending
-for more than ``MAX_AGE`` batches. Both halves are asserted per SECTION, the key
-membership and (since `0022_pending_by_section.sql`) the pool share: two
+never both, never neither" — plus the incubator's time bound, that nothing stays
+pending for more than ``MAX_AGE`` batches. Both halves are asserted per SECTION,
+the key membership and (since `0022_pending_by_section.sql`) the pool share: two
 sections with identical bodies at different paths are two chunks, and only one
 of them may be homeless.
 
@@ -12,7 +12,7 @@ only a PLACEABLE chunk is bound. A chunk with no combined vector, or a tree with
 no level-0 cluster to fall back on, cannot be force-assigned anywhere, so ageing
 is not a rescue that exists for it.
 
-Brief sections (``node://``, #071) are not corpus chunks and are excluded; they
+Brief sections (``node://``) are not corpus chunks and are excluded; they
 are never clustered.
 """
 
@@ -67,9 +67,9 @@ def assert_pool_invariant(db: Database, tree: str, model: str) -> None:
 def assert_every_leaf_is_reachable(db: Database, tree: str) -> None:
     """Assert no level-0 node is orphaned once the tree has a level above it.
 
-    ``root.md``'s child listing is rendered from parent EDGES (#079), so a leaf
+    ``root.md``'s child listing is rendered from parent EDGES, so a leaf
     with no parent is written to the export and unreachable in it — an agent
-    walking the map from the root never sees the topic (#114). Vacuous while a
+    walking the map from the root never sees the topic. Vacuous while a
     tree is a single level: ``build_tree``'s ``_collect_root`` gives it a root
     before there is anything to be reachable from.
     """

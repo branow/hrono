@@ -1,6 +1,6 @@
 """A real server on a real port with a seeded database, for a real browser.
 
-The dashboard's layout defects (#215) are properties of rendered pixels, so a
+The dashboard's layout defects are properties of rendered pixels, so a
 TestClient reading HTML cannot see them. This starts the production app under
 uvicorn and hands a browser its address and an admin cookie.
 """

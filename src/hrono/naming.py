@@ -1,13 +1,13 @@
-"""What a topic is called, wherever it is shown (#156, #103, #212).
+"""What a topic is called, wherever it is shown.
 
 ONE rule, so the map, the side panel, the topic page, the Ask page and the
 exported folder an agent reads all call a topic the same thing: the name a
 person gave it, else a short title taken from its brief.
 
-Where a topic's files live used to be its name on the map (#198), because a
-weak model opened every brief with the same clause — and the review tree then
-had four siblings called ``src/click``, which is the one thing siblings share.
-Where it lives is now the second line; this is the first. Two siblings must
+Where a topic's files live must not be its name on the map: a weak model
+opens every brief with the same clause, so a path-named tree gets four siblings
+called ``src/click``, which is the one thing siblings share. Where it lives is
+the second line; this is the first. Two siblings must
 still never read the same, so a title shared under one parent carries the
 topic's number, the one thing that is certainly different.
 """
@@ -88,15 +88,16 @@ def _siblings(
 
 
 def heading(conn: sqlite3.Connection, node_id: int) -> str:
-    """A short title for a node: the operator's if they named it (#156).
+    """A short title for a node: the operator's if they named it.
 
     A stored title wins outright. Deriving one from the brief is the default,
     not the rule, and a human who renamed a topic has said something the model
     cannot: what the topic is FOR in this organisation.
 
-    The brief's SHAPE used to leak into navigation (#103): a brief opening with
-    a generic ``## Summary`` heading named its export directory ``summary-2``,
-    and one opening with a paragraph made the whole paragraph a link title. The
+    The brief's SHAPE must not leak into navigation: a brief opening with
+    a generic ``## Summary`` heading would name its export directory
+    ``summary-2``, and one opening with a paragraph would make the whole
+    paragraph a link title. The
     brief is not at fault for either — a heading is a reasonable way to start a
     summary — so the fix is here rather than a shape rule that would retry and
     flag a perfectly good brief. A boilerplate heading is skipped, markdown
@@ -133,7 +134,7 @@ def unframe(line: str) -> str:
     A brief opens by saying what it is ("These condensations describe the
     SQLite schema", "What this is: a set of condensed notes on tree building")
     before it says what it is ABOUT, and a name made of the announcement is the
-    same on every sibling and is cut before the subject (E018). What is left is
+    same on every sibling and is cut before the subject. What is left is
     the subject; a line that is nothing but the announcement is returned whole.
     """
     text = _EMPHASIS.sub("", line).strip()

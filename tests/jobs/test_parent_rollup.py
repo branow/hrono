@@ -1,4 +1,4 @@
-"""#172 (T57.1): the parent's answer, over HTTP.
+"""The parent's answer, over HTTP.
 
 `tests/jobs/test_aggregate.py` states the rules as a table; this proves the
 route asks for them, and that a LEAF's answer is unchanged.
@@ -219,7 +219,7 @@ def test_a_leaf_reports_the_tokens_it_spent(harness: Harness) -> None:
 
 
 def test_a_parents_cost_is_its_childrens_summed(harness: Harness) -> None:
-    # the same derivation as its status (#172): nothing stores it, so nothing
+    # the same derivation as its status: nothing stores it, so nothing
     # can go stale.
     _spent(harness, "job_one", 100, 10)
     _spent(harness, "job_two", 200, 20)

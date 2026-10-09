@@ -1,10 +1,11 @@
-"""#148: a bitbucket-workspace source discovers a workspace's repos.
+"""A bitbucket-workspace source discovers a workspace's repos.
 
-What differs from #147 is the enumeration and only the enumeration, so that is
-what these pin: `next`-link pagination (bitbucket carries the next URL in the
-body rather than counting pages) and picking the https clone link out of the
-several a repo advertises. The cloning, the globs, the per-repo versions and
-the addresses are `discovery`'s, already pinned by #147's tests.
+What differs from github-user discovery is the enumeration and only the
+enumeration, so that is what these pin: `next`-link pagination (bitbucket
+carries the next URL in the body rather than counting pages) and picking the
+https clone link out of the several a repo advertises. The cloning, the globs,
+the per-repo versions and the addresses are `discovery`'s, already pinned by the
+github-user tests.
 """
 
 from __future__ import annotations

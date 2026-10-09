@@ -1,4 +1,4 @@
-"""E011: search, the outline and the file lookup, for a reader (#208).
+"""Search, the outline and the file lookup, for a reader.
 
 The searched tree is built the way production builds one — a git source
 through `maintain` — so a section's text, its passages, its FTS rows and its

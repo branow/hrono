@@ -1,8 +1,7 @@
-"""#197: a new install could not be started at all.
+"""A new install can make its master key and be told how to use it.
 
-`hrono serve` needs a master key, nothing generated one, and nothing told you
-how — the README never mentioned it and `--key-file` had no help text. The
-first step of the first session was a wall.
+`hrono serve` needs a master key, so hrono must generate one and say how to
+pass it; without that the first step of the first session is a wall.
 """
 
 from __future__ import annotations

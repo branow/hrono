@@ -1,4 +1,4 @@
-"""T35: the incubator pending pool — park, drain, force-assign, aging."""
+"""The incubator pending pool — park, drain, force-assign, aging."""
 
 from collections.abc import Iterator
 from threading import Thread
@@ -167,7 +167,7 @@ def test_young_pending_chunk_is_not_aged_out(db: Database) -> None:
 def test_a_pool_the_clusterer_cannot_reduce_does_not_raise(
     db: Database,
 ) -> None:
-    # #094: the drain gate is the clusterer's own minimum, so a 5-chunk pool
+    # the drain gate is the clusterer's own minimum, so a 5-chunk pool
     # takes the real mini-pipeline nowhere near a driver exception.
     with db.connect() as conn, conn:
         for i in range(5):
@@ -254,7 +254,7 @@ def test_drain_and_age_are_written_to_the_update_log(db: Database) -> None:
 def test_age_empties_a_pool_the_clusterer_can_never_reduce(
     db: Database,
 ) -> None:
-    # #095: the age gate is the DRAINABLE size, so a pool that is big enough to
+    # the age gate is the DRAINABLE size, so a pool that is big enough to
     # look full but has no usable vectors still ages out instead of stranding.
     with db.connect() as conn, conn:
         for i in range(MIN_POINTS + 3):
@@ -306,9 +306,9 @@ TWIN_PATH = "docs/x.py"
 
 
 def _twins(conn: object) -> tuple[int, int]:
-    """Two sections with the SAME body at different paths (#095).
+    """Two sections with the SAME body at different paths.
 
-    Identical content, so one content hash — but the #039 path blend gives them
+    Identical content, so one content hash — but the path blend gives them
     different combined vectors, so one can be homed while the other is parked.
     """
     register_path_bodies(conn, [TWIN_PATH])  # type: ignore[arg-type]
@@ -375,7 +375,7 @@ def _write_from_another_thread(db: Database, done: list[bool]) -> None:
 
 def test_drain_labels_the_pool_off_the_write_lock(planted: Database) -> None:
     # the mini-pipeline is real UMAP -> HDBSCAN; the module's lock discipline
-    # says heavy compute runs outside the #008 lock, so another thread must be
+    # says heavy compute runs outside the write lock, so another thread must be
     # able to take the write lock while the pool is being labelled.
     done: list[bool] = []
 
@@ -392,10 +392,10 @@ def test_drain_labels_the_pool_off_the_write_lock(planted: Database) -> None:
 
 
 def test_a_section_homed_mid_drain_is_not_homed_twice(db: Database) -> None:
-    # #115: the pool is read under the read door and the clustering runs off
+    # the pool is read under the read door and the clustering runs off
     # the lock, so the write block acts on a SNAPSHOT. Trusting it writes a
     # second level-0 membership for any section that found a home in between —
-    # the "is in 2 nodes" half of the #086 invariant, in a tree nobody touched.
+    # the "is in 2 nodes" half of the pool invariant, in a tree nobody touched.
     with db.connect() as conn, conn:
         parked = [
             add_section(conn, f"core{i}\n".encode(), unit(1))
@@ -459,10 +459,11 @@ def _node_count(db: Database) -> int:
 def test_a_residual_homed_mid_drain_is_not_force_assigned(
     db: Database,
 ) -> None:
-    # #115's other half: a residual takes the force-assign path, not the core
+    # the other half: a residual takes the force-assign path, not the core
     # path, and it needs the same re-check. A section homed while the drain
     # computes would be force-assigned on top of the home it already found —
-    # and flagged `forced`, so #113 would later "free" a pioneer that never was.
+    # and flagged `forced`, so repair would later "free" a pioneer that never
+    # was.
     with db.connect() as conn, conn:
         for i in range(MIN_POINTS - 1):
             section_id = add_section(conn, f"core{i}\n".encode(), unit(1))

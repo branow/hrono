@@ -1,4 +1,4 @@
-"""T25.2: the FTS5 index over passage path + body, kept in sync by split."""
+"""The FTS5 index over passage path + body, kept in sync by split."""
 
 import json
 import subprocess

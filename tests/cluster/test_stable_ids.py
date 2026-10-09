@@ -1,4 +1,4 @@
-"""#068: a re-cluster over unchanged CONTENT preserves node ids (and briefs)."""
+"""A re-cluster over unchanged CONTENT preserves node ids (and briefs)."""
 
 from collections.abc import Iterator
 
@@ -103,7 +103,8 @@ def test_a_preserved_nodes_brief_survives_the_recluster(db: Database) -> None:
         row = briefs.get(conn, node_a)
         assert row is not None  # NOT cascade-deleted
         assert row["text"] == "# Alpha\n\nkept."
-        # its content-derived signature is unchanged -> #064 skip would fire
+        # its content-derived signature is unchanged -> the freshness skip
+        # would fire
         assert briefs.member_signature(conn, node_a) == stored_sig
 
 
@@ -128,7 +129,7 @@ def test_changed_content_mints_a_new_node_id(db: Database) -> None:
 def test_a_cascade_delete_does_not_refresh_the_signature(
     db: Database,
 ) -> None:
-    # #120: the regression guard for a fix that must never be made. A section
+    # the regression guard for a fix that must never be made. A section
     # deleted by FK cascade takes its `node_members` row with it and leaves
     # `nodes.signature` alone — the snapshot of the member set as of the last
     # WRITE is what lets `_reconcile` recognise the node after a re-split, when

@@ -1,12 +1,12 @@
 """Tree routes: kick a tree's work (writer+) and read what it holds.
 
 ``POST /trees/{name}/sync`` is the operator verb: it enqueues the incremental
-chain (#137) that brings an existing tree up to date.
+chain that brings an existing tree up to date.
 ``POST /trees/{name}/maintain`` enqueues a maintain job for the named tree and
 returns its id; the background worker runs the ordered pipeline. Writing this
 does the work of a job, so it is a POST behind the writer role, and it returns
 only the job id to track — config-vs-work stays separated.
-``GET /trees/{name}/pending`` reads the incubator pool (#086) so chunks waiting
+``GET /trees/{name}/pending`` reads the incubator pool so chunks waiting
 outside the tree are visible rather than silently missing from the map.
 """
 
@@ -94,13 +94,13 @@ def require_tree(request: Request, name: str) -> None:
 def sync_tree(name: str, request: Request, user: Writer) -> dict[str, str]:
     """Enqueue the incremental chain for ``name`` and return its job id.
 
-    THE operator verb (#137/#138): one call brings an existing tree up to date —
+    THE operator verb: one call brings an existing tree up to date —
     ingest the diff, re-place what moved, judge what changed, regenerate the
     briefs that are now wrong, measure and repair. `maintain` stays for the
     COLD build of a tree that does not exist yet; the two have very different
     costs and conflating them is how a user pays for a rebuild by accident.
     """
-    require_tree(request, name)  # `maintain` checks; this one forgot to
+    require_tree(request, name)  # as `maintain` does
     return _one_build(request, "sync-tree", name, user.name)
 
 
@@ -110,7 +110,7 @@ def recall_tree(
 ) -> dict[str, object]:
     """Run the recall engine synchronously and return its ranked hits.
 
-    Each answered call is logged (E042); a call that raises is not.
+    Each answered call is logged; a call that raises is not.
     """
     database = request.app.state.db
     result = ask(database, name, body.question, body.limit)
@@ -129,9 +129,9 @@ def export_tree(
     """Return the rendered agent-facing tree as a path -> content manifest.
 
     ``levels`` is the hop limit, the links an agent follows from ``root.md``
-    to a section (default 4); #078 floors it at 2, so ``levels`` below 2
-    yields a 2-level export rather than an error. ``shape`` says what came out
-    (#204): pages per level and the widest page against the width budget. A
+    to a section (default 4); the exporter floors it at 2, so ``levels`` below
+    2 yields a 2-level export rather than an error. ``shape`` says what came
+    out: pages per level and the widest page against the width budget. A
     non-integer ``levels`` is a clean 422 (FastAPI validation); an unbuilt tree
     is a clean 404.
     """
@@ -149,7 +149,7 @@ def export_tree(
 def export_archive(
     name: str, request: Request, _: Reader, levels: int = _EXPORT_LEVELS
 ) -> Response:
-    """The same export as one zip archive (#205).
+    """The same export as one zip archive.
 
     For a browser, which has no folder to write a manifest into and no build
     step to zip one with. The entries are exactly the manifest's files, so the
@@ -179,15 +179,15 @@ def _exported(request: Request, name: str, levels: int) -> Export:
 def unusable_briefs(
     name: str, request: Request, _: Reader
 ) -> dict[str, object]:
-    """Stored briefs that are not briefs (#217, E015).
+    """Stored briefs that are not briefs.
 
     The model talking back, or a reply made of its prompt's own words
     (``echoes-the-prompt``); ``why`` names which.
 
     ``POST /trees/{name}/sync`` rewrites a model's reply and nothing else. A
     settled ``echoes-the-prompt`` stays listed but is not rewritten until its
-    members, the brief prompt or the brief model change (E019); this is the
-    list to check first.
+    members, the brief prompt or the brief model change; this is the list to
+    check first.
     """
     with request.app.state.db.connect() as conn:
         found = briefs.unusable_in(conn, name)
@@ -207,10 +207,10 @@ def unusable_condensations(
     """Condensations in this tree that are the model talking back.
 
     The condense stage treats each as missing, so the next sync re-condenses
-    exactly these sections and rewrites the briefs that read them (#221). One
-    the model refuses again stays listed — with its last reply, even when
+    exactly these sections and rewrites the briefs that read them. One the
+    model refuses again stays listed — with its last reply, even when
     nothing was ever stored — and is not retried until its body, the condense
-    model or the condense prompt changes (E015).
+    model or the condense prompt changes.
     """
     with request.app.state.db.connect() as conn:
         model = str(resolve_text_model(conn, {}, "condense")["name"])
@@ -230,7 +230,7 @@ def _paths_in(
     """The files in ``tree`` whose sections have each content hash.
 
     The hashes go in as one JSON parameter: a placeholder each fails past
-    SQLite's 32,766-variable limit (E001).
+    SQLite's 32,766-variable limit.
     """
     if not digests:
         return {}
@@ -250,7 +250,7 @@ def _paths_in(
 
 @router.get("/trees/{name}/pending")
 def pending_tree(name: str, request: Request, _: Reader) -> dict[str, object]:
-    """Return the incubator pool: chunks parked in no node yet (#086).
+    """Return the incubator pool: chunks parked in no node yet.
 
     A parked chunk is in the corpus but not on the map, so the pool has to be
     visible; an empty pool (or an unbuilt tree) is a plain zero, not a 404.

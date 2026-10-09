@@ -1,10 +1,10 @@
-"""#168: the server pays for the model's weights, not the first question.
+"""The server pays for the model's weights, not the first question.
 
-Measured before this: recall #1 13.3s, #2 14ms — the whole cost landing on one
-arbitrary user. The warm-up moves it off the request path, and the only way to
-know it really did is to watch a REAL model arrive in the cache, so this is
-guarded by the same env var as the runner's real-backend test rather than
-skipped outright (#108).
+Measured without the warm-up: the first recall 13.3s, the second 14ms — the
+whole cost landing on one arbitrary user. The warm-up moves it off the
+request path, and the only way to know it really did is to watch a REAL model
+arrive in the cache, so this is guarded by the same env var as the runner's
+real-backend test rather than skipped outright.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def test_a_server_with_no_embedding_model_starts_and_says_why_quietly(
 
     NOT guarded by the env var: this registers no model, so it needs no
     weights, no network and no cache, and it is the guard that must run
-    everywhere (qa, 2026-09-25).
+    everywhere.
 
     The assertion is on the LOG, not on the server surviving. The warm-up runs
     in a daemon thread, so a raise there could never take the server down and
@@ -132,11 +132,11 @@ def _server_with_model(tmp_path: Path, model_id: str) -> tuple[object, str]:
 
 
 def test_a_recall_before_the_model_is_ready_says_so(tmp_path: Path) -> None:
-    """#169: a question does not queue behind a load it cannot see.
+    """A question does not queue behind a load it cannot see.
 
     The in-flight set is seeded rather than raced for: "loading" and "failed"
     are different answers and a test that reaches one by arriving first would
-    pass through a version that could not tell them apart (qa, 2026-09-26).
+    pass through a version that could not tell them apart.
     """
     model_id = "a-model-that-is-loading"
     conn, token = _server_with_model(tmp_path, model_id)
@@ -163,11 +163,11 @@ def test_a_recall_before_the_model_is_ready_says_so(tmp_path: Path) -> None:
 
 
 def test_a_model_that_cannot_load_says_why_instead(tmp_path: Path) -> None:
-    """The regression this ticket first shipped: "still loading", forever.
+    """Not "still loading", forever.
 
-    A mistyped model id answered 503 "still loading" on every attempt while
-    three failures sat in the log. That sentence is the one an operator WAITS
-    on, and before #169 the same typo said `embed-error: embedding model failed
+    A mistyped model id must not answer 503 "still loading" on every attempt
+    while three failures sit in the log. That sentence is the one an operator
+    WAITS on; the same typo has to say `embed-error: embedding model failed
     to load`.
     """
     model_id = "totally/not-a-model"

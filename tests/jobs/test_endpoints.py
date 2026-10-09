@@ -71,7 +71,7 @@ def test_fetch_one_job(harness: Harness) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "failed"
-    # #109: a job's failure is served in the same envelope as an HTTP error
+    # a job's failure is served in the same envelope as an HTTP error
     assert body["error"] == {
         "code": "internal-error",
         "message": "boom",
@@ -90,7 +90,7 @@ def test_unknown_job_is_404(harness: Harness) -> None:
 
 
 def test_the_job_read_path_carries_the_ops_outcome(harness: Harness) -> None:
-    # #132: the operator surface that exists today. A run that declined part of
+    # the operator surface. A run that declined part of
     # its work has to be visible HERE, not only in a table nothing selects.
     response = harness.client.get("/jobs/job_c", headers=harness.auth("reader"))
 
@@ -108,8 +108,8 @@ def test_a_job_with_nothing_to_report_carries_no_result(
 
 
 def test_an_admin_can_run_any_registered_op(harness: Harness) -> None:
-    # #139: the service door. The September run had to insert job rows into
-    # SQLite by hand to find out why a tree was stuck.
+    # the service door: without it an operator inserts job rows into SQLite
+    # by hand to find out why a tree is stuck.
     response = harness.client.post(
         "/jobs",
         json={"op": "monitor", "scope": {}, "tree": "default"},

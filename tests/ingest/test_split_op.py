@@ -251,10 +251,10 @@ def test_instance_normalises_url_forms() -> None:
 def test_two_working_directories_share_one_cache(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # F25: the server ran in one directory and an op driver in another, so ONE
-    # database grew TWO clone sets three commits apart, and diffing against the
-    # stale one invented changes (including a reversed rename). The cache now
-    # hangs off the database, so the working directory cannot move it.
+    # the cache hangs off the database, so the working directory cannot move
+    # it: a server in one directory and an op driver in another must not grow
+    # TWO clone sets for ONE database, because diffing against the stale one
+    # invents changes (including a reversed rename).
     url = make_repo(tmp_path / "remote", {"a.txt": "alpha body here\n"})
     db_path = tmp_path / "data" / "hrono.db"
     db_path.parent.mkdir()
@@ -287,8 +287,9 @@ def test_two_working_directories_share_one_cache(
 def test_a_second_process_directory_sees_no_phantom_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # the measurement hazard behind F25: re-diffing the same corpus from a
-    # different directory must report nothing, not a tree of invented changes.
+    # the measurement hazard of a second clone set: re-diffing the same corpus
+    # from a different directory must report nothing, not a tree of invented
+    # changes.
     url = make_repo(tmp_path / "remote", {"a.txt": "alpha body here\n"})
     db_path = tmp_path / "data" / "hrono.db"
     db_path.parent.mkdir()

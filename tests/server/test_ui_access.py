@@ -1,4 +1,4 @@
-"""#209 (E012): the Access page — manage users from the panel.
+"""The Access page — manage users from the panel.
 
 Every test posts the forms the page draws, with the browser's own cookie. The
 last-admin tests post FORGED requests (no button on the page makes them) because

@@ -1,4 +1,4 @@
-"""#203: the panel shows what was spent, and says honestly what kind of money.
+"""The panel shows what was spent, and says honestly what kind of money.
 
 State is written the way production writes it: calls through `ledger.record`
 (the one writer), runs through `enqueue`, and read back through the pages.

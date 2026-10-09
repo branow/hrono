@@ -1,9 +1,9 @@
-"""Signing in and out of the dashboard (#180).
+"""Signing in and out of the dashboard.
 
 The browser carries the SAME token the CLI does, in an HttpOnly SameSite=Strict
 cookie. SameSite=Strict is also this dashboard's CSRF answer: a cross-site POST
 does not carry the cookie, which is why the write routes elsewhere in this
-package need no token of their own (#188).
+package need no token of their own.
 """
 
 from __future__ import annotations

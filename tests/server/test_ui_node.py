@@ -1,4 +1,4 @@
-"""#182 (T51): the dashboard's topic page.
+"""The dashboard's topic page.
 
 The ordering is the substance here — "worst fit first" is a claim about NULLs
 sorting last, which is the opposite of what SQLite does by default.
@@ -81,7 +81,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
                 (core, False, None),  # a density core: no score at all
                 (edge, False, 0.80),  # attached by proximity
                 (worse, False, 0.72),  # attached, and the worst of them
-                (pushed, True, None),  # forced: nobody scored it (#113)
+                (pushed, True, None),  # forced: nobody scored it
             ],
         )
         briefs.upsert(
@@ -111,7 +111,7 @@ def browser(tmp_path: Path) -> Iterator[Browser]:
         # The worker polls the SAME adopted connection this fixture and its
         # tests write through. Two threads on one sqlite connection interleave
         # transactions, which is an intermittent failure in whichever test
-        # happens to be writing when a poll lands (#194).
+        # happens to be writing when a poll lands.
         client.app.state.worker.stop()  # type: ignore[attr-defined]
         client.app.state.worker.join(timeout=5)  # type: ignore[attr-defined]
         yield Browser(client, token, conn)
@@ -135,8 +135,8 @@ def test_the_page_shows_the_brief_and_where_the_topic_sits(
 
     assert "Signing and serialization." in page
     assert "level 0" in page
-    # the parent is named ONCE, in the panel beside the brief: it used to be
-    # a chip under the title as well, repeating a path the h1 already shows
+    # the parent is named ONCE, in the panel beside the brief, not also as
+    # a chip under the title repeating a path the h1 already shows
     assert "<dt>Parent</dt>" in page
 
 
@@ -170,7 +170,7 @@ def test_members_are_worst_fit_first_with_core_last(
 
 
 def test_a_forced_member_is_marked(browser: Browser) -> None:
-    # #113: a forced placement is one nobody scored, and it should not read as
+    # a forced placement is one nobody scored, and it should not read as
     # a confident one.
     browser.sign_in()
 
@@ -186,9 +186,9 @@ def test_a_score_is_shown_for_an_attached_member(browser: Browser) -> None:
 
 
 def test_a_section_is_shown_WHOLE(browser: Browser) -> None:
-    """#200: it used to stop at 4,000 characters and say how many it was
-    holding back. The one thing a reader opens a section FOR is the part that
-    cut removed — and a section is already the readable unit the splitter
+    """No cut at 4,000 characters with a count of what is held back. The
+    one thing a reader opens a section FOR is the part such a cut would
+    remove — and a section is already the readable unit the splitter
     chose, inside a `<details>` nobody opens by accident."""
     browser.sign_in()
 
@@ -213,7 +213,7 @@ def test_pins_say_what_they_hold_and_why(browser: Browser) -> None:
 
 
 def test_the_page_shows_who_wrote_the_brief(browser: Browser) -> None:
-    """#199: "I am admin, I want to see everything there."
+    """An admin sees everything about a brief on its page.
 
     The provenance columns are the whole incremental mechanism — an operator
     looking at a brief they distrust wants the model that wrote it, what it
@@ -291,10 +291,10 @@ def test_section_content_is_escaped_not_executed(browser: Browser) -> None:
 def test_a_child_topic_is_listed_by_its_name_not_its_number(
     browser: Browser,
 ) -> None:
-    """#197: the topic page listed children as "topic 27", "topic 28".
+    """Children are not listed as "topic 27", "topic 28".
 
-    Every one of them has a title the map already shows, so navigating the
-    tree from here meant navigating by row id.
+    Every one of them has a title the map already shows, so listing ids would
+    make navigating the tree from here navigating by row id.
     """
     browser.sign_in()
     parent = int(
@@ -341,9 +341,9 @@ def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
     # the NAME, not the page: the section previews carry their own ellipsis,
     # so asking whether the page contains one proves nothing about the title.
     # The brief's first line is the name a topic is OFFERED under — in the
-    # move and merge pickers, and in the map's tooltip. It is no longer printed
+    # move and merge pickers, and in the map's tooltip. It is not printed
     # under the h1: the whole brief is on this page, so a cut copy of its
-    # opening clause above it said the same thing twice (#200).
+    # opening clause above it would say the same thing twice.
     offered = re.findall(r'<span class="who-holds">(.*?)</span>', page, re.S)
     assert offered, "the name is still offered where a topic is chosen"
     title = next(name.strip() for name in offered if name.strip().endswith("…"))
@@ -358,10 +358,10 @@ def test_a_long_title_is_cut_at_a_word_and_says_so(browser: Browser) -> None:
 def test_a_section_shows_the_condensation_it_was_summarised_through(
     browser: Browser,
 ) -> None:
-    """#197: the middle of the pipeline was invisible.
+    """The middle of the pipeline is visible.
 
     hrono condenses each section, then writes the topic's brief FROM those
-    condensations. The page showed the brief and the raw file and nothing of
+    condensations. A page showing only the brief and the raw file would hide
     the layer between, which is the layer the brief was actually made of.
     """
     node = _node_id(browser)
@@ -390,10 +390,10 @@ def test_a_section_shows_the_condensation_it_was_summarised_through(
 
 
 def test_a_gotcha_is_shown_ONCE(browser: Browser) -> None:
-    """#200: the GOTCHA lines were lifted out and printed as warnings ABOVE
-    the condensation — which opens with those same lines. The page said each
-    hazard twice and put the duplicate first, so the reader met the ending
-    before the beginning."""
+    """The GOTCHA lines are not lifted out and printed as warnings ABOVE the
+    condensation, which opens with those same lines: that says each hazard
+    twice and puts the duplicate first, so the reader meets the ending before
+    the beginning."""
     node = _node_id(browser)
     with browser.conn:  # type: ignore[union-attr]
         digest = browser.conn.execute(  # type: ignore[attr-defined]
@@ -432,7 +432,7 @@ def test_a_section_not_condensed_yet_says_so(browser: Browser) -> None:
 
 
 def test_a_reply_that_is_not_a_brief_does_not_stand(browser: Browser) -> None:
-    # #217: the review tree's root was the model talking back, shown "stands"
+    # a stored brief that is the model talking back must not read "stands"
     node = _node_id(browser)
     with browser.conn:  # type: ignore[union-attr]
         briefs.upsert(

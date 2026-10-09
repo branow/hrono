@@ -1,8 +1,8 @@
-"""The dashboard shell: server-rendered, logged in, role-gated (T49, #180).
+"""The dashboard shell: server-rendered, logged in, role-gated.
 
 Jinja and plain HTML, served by the same process that owns the database — so
 the dashboard ships inside the one `hrono` binary with no build step and no
-second release artifact. The stakeholder chose that on 2026-09-27.
+second release artifact.
 
 Authentication is the API's, not a second system: the browser carries the SAME
 token the CLI uses, in an HttpOnly SameSite=Strict cookie, resolved by the same
@@ -10,10 +10,10 @@ token the CLI uses, in an HttpOnly SameSite=Strict cookie, resolved by the same
 FAILURE — an API caller gets a 401, a browser gets the login page, because a
 401 in a tab is a dead end.
 
-One router, one module per subject (#195). Importing the view modules at the
-bottom is what registers their routes on it, so `app.py` still imports one
-name; it is at the bottom because they import this module back for the router
-and the shared dependencies.
+One router, one module per subject. Importing the view modules at the bottom is
+what registers their routes on it, so `app.py` still imports one name; it is at
+the bottom because they import this module back for the router and the shared
+dependencies.
 """
 
 from __future__ import annotations
@@ -138,7 +138,7 @@ async def read_off_loop(database, fn):  # noqa: ANN001, ANN201
 
 
 class LoginRequired(AppError):
-    """A browser reached a page without a usable cookie (#180).
+    """A browser reached a page without a usable cookie.
 
     Its own type so the shell can answer with the login PAGE while the API
     keeps answering 401. Same authentication, different dead end.
@@ -166,7 +166,7 @@ Reader = Annotated[User, Depends(_viewer("reader"))]
 Writer = Annotated[User, Depends(_viewer("writer"))]
 # The API's edit routes are admin-gated (`server/edits.py`). A page that
 # accepted a writer for the same operation would be a second, weaker
-# authorization for it — the thing #180 refused, said as a role.
+# authorization for it.
 Admin = Annotated[User, Depends(_viewer("admin"))]
 
 
@@ -203,9 +203,9 @@ def next_theme(current: str) -> str:
 def switch(here: str, tree: str, to: str) -> str:
     """The same page, in another tree.
 
-    Switching trees used to bounce you to the overview whatever you were
-    looking at. Every view except one is the same question asked of a
-    different tree, so it should stay put — the exception is a page about ONE
+    Switching trees keeps you on the page you were looking at. Every view
+    except one is the same question asked of a different tree, so it should
+    stay put — the exception is a page about ONE
     topic, because a topic id does not exist in another tree, and that falls
     back to the new tree's map rather than to a 404.
     """
@@ -219,7 +219,7 @@ def switch(here: str, tree: str, to: str) -> str:
 # lives, and the paths that are "inside" it. A run's page belongs to Runs, a
 # topic's page to no tab at all, so it gets a transient one of its own rather
 # than lighting up Map for a page that is not the map. Data, so the nav and the
-# current-page mark cannot disagree about which pages exist (#215).
+# current-page mark cannot disagree about which pages exist.
 TABS: tuple[tuple[str, str, str, str], ...] = (
     ("home", "Home", "/ui", r"/ui"),
     ("map", "Map", "/ui/trees/{tree}/graph", r"/ui/trees/[^/]+/graph"),
@@ -251,7 +251,7 @@ TOPIC_PAGE = r"/ui/trees/[^/]+/nodes/\d+"
 
 
 # Drawn for an admin only, from the same rule that refuses everyone else the
-# page (#209), and placed before the Guide.
+# page, and placed before the Guide.
 ACCESS_TAB = ("access", "Access", "/ui/access", r"/ui/access(/.*)?")
 
 
@@ -289,7 +289,7 @@ templates.env.globals["next_theme"] = next_theme
 
 
 def _trees(conn: object) -> list[str]:
-    """Every declared tree (#054), or `default` when none are.
+    """Every declared tree, or `default` when none are.
 
     A database nobody has partitioned still has exactly one tree, and the
     switcher should say so rather than be empty.

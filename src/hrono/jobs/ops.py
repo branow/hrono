@@ -23,12 +23,12 @@ class JobContext:
 
     ``cipher`` is None only when no op in play needs to decrypt a secret (tests
     of secretless ops); real ingest ops that read source auth require it.
-    ``cache_root`` is where this database's synced clones live (#098): the
+    ``cache_root`` is where this database's synced clones live: the
     server resolves it from the database path at startup and it is passed here,
     never re-derived from the working directory. It is None only for a context
     whose ops never touch the cache — asking for a path then is a bug, not a
     reason to guess a location, so ``cache_for`` raises. ``job_id`` is the job
-    the worker is running, which every model call is recorded against (#201);
+    the worker is running, which every model call is recorded against;
     None for an op driven directly, outside any job.
     """
 
@@ -38,7 +38,7 @@ class JobContext:
     job_id: str | None = None
 
     def cli_dir(self) -> Path:
-        """Where a subprocess LLM backend runs (#107), beside the clone cache.
+        """Where a subprocess LLM backend runs, beside the clone cache.
 
         Derived from the same anchor as ``cache_for`` rather than re-resolved
         from the database path, so nothing downstream can point a subprocess at

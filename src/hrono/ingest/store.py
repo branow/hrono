@@ -4,7 +4,7 @@ Bodies are content-addressed: one ``contents`` row per unique hash, so
 re-storing identical bytes is a no-op and every body is embedded once. Sections
 and passages hold identity (the four address parts + rendered URI) and byte
 ranges as data; a passage points at its parent section, and both point at a body
-by hash. All access goes through the caller's connection (held under the #008
+by hash. All access goes through the caller's connection (held under the
 Database lock). Replacing a source's rows is delete-by-source (passages cascade)
 then insert, so a re-split is idempotent.
 """

@@ -1,9 +1,8 @@
-"""#197: the CLI threw away the only useful half of the server's error.
+"""The CLI shows the useful half of the server's error: the field and why.
 
-`hrono sources set` on a config with a missing field printed exactly two
-words — "invalid body" — while the response carried the field and the reason.
-A user could not learn the shape from the tool, and could not learn what they
-had got wrong either.
+A bare "invalid body" for a config with a missing field, while the response
+carries the field and the reason, leaves a user unable to learn the shape from
+the tool or what they got wrong.
 """
 
 from __future__ import annotations

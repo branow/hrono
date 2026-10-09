@@ -1,4 +1,4 @@
-"""#138: the CLI is a thin client — commands exist and address the server."""
+"""The CLI is a thin client — commands exist and address the server."""
 
 import json
 from pathlib import Path
@@ -59,9 +59,9 @@ def test_tree_sync_posts_the_operator_verb(
 
 
 def test_the_lifecycle_stages_are_not_commands() -> None:
-    # PO note D.2: stages must run in one order, and a wrong order produces a
-    # map that looks right and is quietly wrong. They live behind an admin HTTP
-    # door (#139), not a CLI verb anyone can reach for.
+    # stages must run in one order, and a wrong order produces a map that
+    # looks right and is quietly wrong. They live behind an admin HTTP door,
+    # not a CLI verb anyone can reach for.
     listing = runner.invoke(app, ["tree", "--help"]).stdout
 
     for stage in ("propagate", "repair", "monitor", "settle", "update"):
@@ -74,7 +74,7 @@ def test_the_lifecycle_stages_are_not_commands() -> None:
 def test_each_collection_has_the_four_config_commands(
     collection: str,
 ) -> None:
-    # registering a source used to mean hand-written curl.
+    # registering a source must not need hand-written curl.
     listing = runner.invoke(app, [collection, "--help"]).stdout
 
     for command in ("list", "get", "set", "rm"):
@@ -111,8 +111,8 @@ def test_set_defaults_the_name_from_the_path(
 def test_set_gives_the_write_the_budget_its_validation_needs(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # #199: validating a local model loads its weights, which outlasts the
-    # client's 10s read default — the write landed and reported a timeout.
+    # validating a local model loads its weights, which outlasts the client's
+    # 10s read default — the write would land and report a timeout.
     from hrono.registry.commands import WRITE_TIMEOUT
 
     client = _patch(monkeypatch, "hrono.registry.commands", FakeClient())
@@ -131,7 +131,7 @@ def test_set_gives_the_write_the_budget_its_validation_needs(
 def test_a_timed_out_set_names_the_command_that_shows_if_it_landed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # E003: through the real client and the one boundary — a write that timed
+    # through the real client and the one boundary — a write that timed
     # out may have landed, so the reader is told what to run, not to retry.
     import httpx
 
@@ -174,7 +174,7 @@ def test_jobs_get_renders_what_the_run_reported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # one verb over six stages is only acceptable if the operator can find out
-    # what happened (#132).
+    # what happened.
     client = _patch(
         monkeypatch,
         "hrono.jobs.commands",
@@ -229,7 +229,7 @@ def test_the_bootstrap_hint_addresses_the_server_that_was_started() -> None:
 
 
 def test_there_is_no_command_that_runs_a_single_stage() -> None:
-    # #139: the service door is HTTP and admin-only, deliberately. A debugging
+    # the service door is HTTP and admin-only, deliberately. A debugging
     # tool that looks like a product feature invites users to build workflows
     # on stages that are only safe in one order.
     top = runner.invoke(app, ["--help"]).stdout
@@ -262,10 +262,9 @@ def test_rm_says_whether_the_config_is_gone_or_reset(
 def test_one_boundary_renders_every_cli_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # #048: six near-identical `_run` helpers rendered CLI errors, and #138
-    # added two more while building the config CLI. Presentation is not each
-    # command's business — commands raise, the boundary renders, and a command
-    # body carries no error handling at all.
+    # presentation is not each command's business — commands raise, the
+    # boundary renders, and a command body carries no error handling at all,
+    # so per-command `_run` helpers cannot drift apart.
     from hrono.client.http import ClientError
 
     def boom() -> object:
@@ -514,7 +513,8 @@ def test_tree_sync_with_no_job_id_fails_instead_of_printing_none(
 def test_registry_rm_without_force_asks_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # one mistyped name used to delete a connection with its secret, silently.
+    # one mistyped name must not delete a connection with its secret,
+    # silently.
     client = _patch(monkeypatch, "hrono.registry.commands", FakeClient())
 
     refused = runner.invoke(app, ["connections", "rm", "prod"], input="n\n")

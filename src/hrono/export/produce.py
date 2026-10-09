@@ -1,4 +1,4 @@
-"""One export, produced once for every door that hands it out (#205).
+"""One export, produced once for every door that hands it out.
 
 The JSON manifest the CLI writes to a folder, the archive the panel downloads
 and the pages the panel shows are the same files; producing them in one place is

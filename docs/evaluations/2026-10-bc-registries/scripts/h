@@ -1,3 +1,7 @@
 #!/bin/sh
-# hrono CLI against the eval server, with its own profile home.
-HRONO_HOME="${HRONO_EVAL:-$HOME/hrono-eval}/home" exec uv run -q --project /Users/orest/repos/hrono hrono "$@"
+# hrono CLI against the eval server, with its own profile home. Like the
+# other scripts it runs from <workspace>/bin; HRONO_REPO points at the hrono
+# checkout when the current directory is not inside it.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+repo="${HRONO_REPO:-$(git rev-parse --show-toplevel)}"
+HRONO_HOME="${HRONO_EVAL:-$root}/home" exec uv run -q --project "$repo" hrono "$@"

@@ -14,7 +14,7 @@ from hrono.registry.validation.connection_validation import validate_connection
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
-# built, not written: a literal here blocked three tickets (#153)
+# built, not written: a literal here trips secret scanners
 API_KEY = "not-a-key-" + "x" * 8
 
 

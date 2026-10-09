@@ -1,4 +1,4 @@
-"""#103: the shape guard between the model and the stored tree."""
+"""The shape guard between the model and the stored tree."""
 
 import json
 from pathlib import Path
@@ -15,7 +15,7 @@ from hrono.summarize.shape import (
     unusable,
 )
 
-# the reply that was actually stored as a topic's brief in the QA run (F21)
+# a reply a model wrote and hrono stored as a topic's brief
 F21 = (
     "This appears to be a condensation format guide with SVG examples, not a "
     "request for me to act on something. Are you sharing this as a reference "
@@ -56,7 +56,7 @@ def test_an_empty_reply_is_rejected(reply: str) -> None:
     [
         GOOD,
         # a generic heading is untidy, not a non-answer: the renderer handles
-        # the title (#103), and retrying a good brief costs money for nothing.
+        # the title, and retrying a good brief costs money for nothing.
         "## Summary\n\nThe module packs sections into passages within budget.",
         # bullets only, no prose intro
         "- signs payloads\n- validates timestamps\n- rotates keys safely now",
@@ -86,8 +86,8 @@ def test_usable_briefs_are_left_alone(reply: str) -> None:
 def test_a_short_talk_back_is_caught_under_the_floor(
     reply: str, why: str
 ) -> None:
-    # E015: the length floor ran first and called these "empty", which a
-    # condensation forgives, so a short talk-back was never caught
+    # the conversational checks run before the length floor: read as merely
+    # "empty", which a condensation forgives, a short talk-back would pass
     assert len(reply) < 40
     assert talks_back(reply) == why
     assert unusable(reply) == why
@@ -173,24 +173,23 @@ QUOTED_QUESTIONS = [
 
 
 def test_the_real_f21_brief_is_still_rejected() -> None:
-    # the true positive, from the actual stored text of the 2026-09 manual QA
-    # run rather than a lookalike: the map's first topic was the model talking
-    # back.
+    # the true positive, from a real stored reply rather than a lookalike:
+    # the map's first topic was the model talking back.
     assert unusable(F21) == "asks-the-caller"
 
 
 @pytest.mark.parametrize("text", QUOTED_QUESTIONS)
 def test_a_quoted_or_reported_question_is_usable(text: str) -> None:
-    # #121: the rule could not tell interrogating the caller from quoting a
-    # question that is IN the material. The exposure is FAQs, troubleshooting
-    # pages and second-person how-to docs — exactly the source types on the
-    # roadmap.
+    # interrogating the caller must be told from quoting a question that is
+    # IN the material. The exposure is FAQs, troubleshooting pages and
+    # second-person how-to docs, which Confluence and Notion sources are full
+    # of.
     assert unusable(text) == ""
 
 
 def test_an_assistant_phrase_quoted_mid_sentence_is_usable() -> None:
-    # the module docstring always promised this; the check actually scanned the
-    # whole first sentence, so a quote inside a long opener was rejected.
+    # the opener check is anchored to the start of the first sentence, so a
+    # quote inside a long opener is material, not the model speaking.
     text = (
         "The contributing guide tells reviewers to reply 'let me know if you "
         "need more detail' when requesting changes, and documents the "
@@ -210,11 +209,9 @@ def test_a_genuine_meta_opener_is_still_rejected() -> None:
 
 
 def test_a_footer_cannot_hide_an_interrogating_question() -> None:
-    # stored briefs carried a URI footer before #102 moved it out of the text,
-    # and the sentence splitter cuts a URI at every dot — so the fragments look
-    # like prose and the question stops being "last". Measured: with the tail
-    # dropped by LINE, the 2026-09 manual QA corpus rejects exactly F21 again,
-    # which is what the PO recorded before this change.
+    # a reply can end in a URI footer, and the sentence splitter cuts a URI
+    # at every dot — so the fragments look like prose and the question stops
+    # being "last". The tail is dropped by LINE so the question is last again.
     with_footer = (
         F21 + "\n\nReferences:\n- git:///repos/chalk/media/logo.svg@661317e\n"
         "- git:///repos/itsdangerous/docs/_static/name.svg@672971d\n"
@@ -234,7 +231,7 @@ def test_a_brief_that_merely_ends_in_bullets_is_usable() -> None:
 
 
 def test_a_multi_line_brief_that_ends_by_interrogating_is_rejected() -> None:
-    # #121: the tail drop must remove ONLY the non-prose tail. F21's own reply
+    # the tail drop must remove ONLY the non-prose tail. F21's own reply
     # is two sentences on one line; had the model put a blank line before its
     # question — ordinary formatting — a tail drop that ate prose would have
     # thrown the question away and read the brief as usable.
@@ -259,8 +256,8 @@ def test_the_tail_drop_keeps_a_prose_closing_line() -> None:
     assert unusable(text) == ""
 
 
-# Replies stored as briefs on the 2026-10-03 review tree, verbatim (#217), and
-# real briefs a model wrote for the prototype corpus, which must still pass.
+# Replies of the shape models store as briefs when they talk to the caller,
+# and real briefs of the shape a model writes, which must still pass.
 SEEN = json.loads((Path(__file__).parent / "briefs_seen.json").read_text())
 
 
@@ -295,8 +292,8 @@ def _default(name: str) -> str:
     )
 
 
-# Stored on ~/hrono-demo, verbatim: one text for 26 level-0 topics, another
-# for every topic above them — each made of its prompt's own words (E015).
+# What a small local model wrote: one text for 26 level-0 topics, another for
+# every topic above them — each made of its prompt's own words.
 ECHOED = {
     "brief": (
         "This group covers State, what, group, condensations, whole, then. "

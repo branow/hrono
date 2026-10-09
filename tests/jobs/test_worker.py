@@ -82,7 +82,7 @@ def test_a_failing_leaf_fails_without_killing_siblings(tmp_path: Path) -> None:
         assert wait_terminal(db, good) == "succeeded"
         with db.connect() as conn:
             row = store.get(conn, bad)
-        # #109: the record is the ENVELOPE, and the op's own wording
+        # the record is the ENVELOPE, and the op's own wording
         # ("kaboom" — here a RuntimeError, in the field sqlite's ABORT text)
         # never becomes hrono's answer; the type is all a client learns.
         assert row["error_code"] == "internal-error"
@@ -128,8 +128,8 @@ def test_each_job_runs_exactly_once_under_concurrency(tmp_path: Path) -> None:
 def test_a_job_dying_mid_transaction_does_not_wedge_the_queue(
     tmp_path: Path,
 ) -> None:
-    """F23: after a job failed inside a write, the worker stopped claiming
-    anything and never saw rows another process had committed."""
+    """After a job fails inside a write, the worker must still claim jobs and
+    see rows another process has committed."""
 
     def poison(job: object, ctx: JobContext) -> None:
         with ctx.database.write() as conn:
@@ -185,7 +185,7 @@ class Flaky:
 
 
 def wedging(tmp_path: Path) -> tuple[Database, Worker, threading.Event]:
-    """A worker whose status write loses the database once, as in F24."""
+    """A worker whose status write loses the database once."""
     armed = threading.Event()
     refused = threading.Event()
     db = Database(Flaky(tmp_path / "hrono.db", armed, refused))
@@ -218,8 +218,8 @@ def strand(db: Database, op: str, age: float) -> str:
 def test_a_failing_status_write_does_not_kill_the_worker(
     tmp_path: Path,
 ) -> None:
-    """F24: the write in `_finish` escaped `run()`, the thread ended, and the
-    job enqueued after it was never claimed."""
+    """A write in `_finish` must not escape `run()`: the thread would end and
+    the job enqueued after it would never be claimed."""
     db, worker, refused = wedging(tmp_path)
     worker.start()
     try:
@@ -236,7 +236,7 @@ def test_a_failing_status_write_does_not_kill_the_worker(
 def test_a_failing_status_write_is_logged(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """F24: `grep "Exception in thread"` on the server log found nothing."""
+    """A failing status write shows up in the server log."""
     db, worker, refused = wedging(tmp_path)
     with caplog.at_level(logging.ERROR, logger="hrono.worker"):
         worker.start()
@@ -335,7 +335,7 @@ def _result_of(db: Database, job_id: str) -> object:
 
 
 def test_an_ops_outcome_is_persisted_with_the_job(tmp_path: Path) -> None:
-    # #132: a job that succeeded incompletely must be distinguishable from a
+    # a job that succeeded incompletely must be distinguishable from a
     # clean one by reading the JOB, with no SQL against an audit table.
     db = database(tmp_path)
     workers = run_workers(
@@ -410,9 +410,9 @@ def test_a_worker_with_both_threads_running_is_healthy(tmp_path: Path) -> None:
 
 
 def test_a_dead_reclaimer_makes_the_worker_unhealthy(tmp_path: Path) -> None:
-    # #111: `is_alive()` reports the SUPERVISOR. If the reclaimer thread ended
+    # `is_alive()` reports the SUPERVISOR. If the reclaimer thread ended
     # while the supervisor lived, nothing would requeue a stranded job and
-    # /health would still answer alive — a quieter replay of F24.
+    # /health would still answer alive.
     db = database(tmp_path)
     workers = run_workers(db, {"noop": lambda job, ctx: None})
     try:

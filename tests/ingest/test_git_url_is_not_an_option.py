@@ -1,4 +1,4 @@
-"""A git source URL never reaches git as an option (E020)."""
+"""A git source URL never reaches git as an option."""
 
 import subprocess
 from pathlib import Path

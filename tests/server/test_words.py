@@ -1,4 +1,4 @@
-"""#216: counts and sizes said the way a person says them."""
+"""Counts and sizes said the way a person says them."""
 
 from __future__ import annotations
 

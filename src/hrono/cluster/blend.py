@@ -11,7 +11,7 @@ similarity that standard UMAP/ANN tooling recovers unchanged. ``ALPHA`` is a
 baked constant (0.5), not config.
 
 The path is embedded with the SAME model as content, embed-once: its string is
-registered as a content body (keyed by hash), so #035's store + embed op
+registered as a content body (keyed by hash), so the content store and embed op
 vectorise it exactly once. The combined vector is computed on the fly from the
 two stored component vectors (storage stays lean); the components are assumed
 non-unit and are L2-normalised here so the similarity identity holds.
@@ -48,7 +48,7 @@ def combine(
 def blend_weights(alpha: float = ALPHA) -> tuple[float, float]:
     """The (content, path) weights `combine` applies. ONE definition.
 
-    Recall scores thousands of passages per query and does it in numpy (#194);
+    Recall scores thousands of passages per query and does it in numpy;
     it needs these two numbers rather than the concatenated vector, and it must
     not re-derive them — `combine` above is what a passage's stored clustering
     vector means, and two places computing `sqrt(1 - alpha)` is two places to
@@ -63,7 +63,7 @@ def similarity_weights(alpha: float = ALPHA) -> tuple[float, float]:
     `combine` scales each half by `sqrt(w)`, and both sides of the dot product
     carry that scaling, so each view arrives weighted by w — the SQUARE of the
     vector weight. Recall needs this form because it scores the two views
-    separately (#194) instead of dotting one 768-wide vector.
+    separately instead of dotting one 768-wide vector.
 
     It cannot be checked against the baked ALPHA of 0.5: the two weights are
     equal there, and a z-score is invariant under scaling all scores alike, so

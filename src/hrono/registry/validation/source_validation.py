@@ -1,7 +1,7 @@
-"""Per-source-type validation for the ``sources`` collection (#141).
+"""Per-source-type validation for the ``sources`` collection.
 
 Dispatch is data-driven, exactly as ``connections`` does it: one validator per
-source type, so M8's next reader is a map entry rather than a branch in the
+source type, so the next reader is a map entry rather than a branch in the
 write path. A type with no entry registers WITHOUT a reach check — config is
 data you PUT, and a reader that cannot yet be probed is not a reason to refuse
 the user's declaration; its sync will fail loudly at ``sync`` time if the

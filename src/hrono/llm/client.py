@@ -1,8 +1,8 @@
-"""Text completion over the anthropic SDK — the one LLM call seam for M4.
+"""Text completion over the anthropic SDK — the one LLM call seam.
 
-``AnthropicClient.complete`` takes a resolved text-kind model config (#018), a
-system prompt, and the content to summarise, resolves and decrypts the provider
-key from the model's ``connection`` via the #004 cipher (the only way it reads
+``AnthropicClient.complete`` takes a resolved text-kind model config, a system
+prompt, and the content to summarise, resolves and decrypts the provider key
+from the model's ``connection`` via the secrets cipher (the only way it reads
 the secret — never logged, returned, or persisted in cleartext), calls the
 provider, and returns ``(text, usage)`` with input/output token counts. Any
 SDK/transport/auth failure surfaces as one ``LLMError``, never a raw traceback.
@@ -52,7 +52,7 @@ class Usage:
     ``input_tokens`` never includes cached input: a provider that reports a
     cache hit or a cache write has it in ``cache_read`` / ``cache_creation``,
     and one that reports neither leaves them None, which is unknown rather than
-    zero (#201). ``model`` is what the provider says it ran.
+    zero. ``model`` is what the provider says it ran.
     """
 
     input_tokens: int

@@ -112,8 +112,8 @@ def test_help_documents_recovery_and_data_loss() -> None:
 def test_reset_removes_the_cache_and_the_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # F32: reset claimed to destroy ingested content but left the clones, so
-    # the next "fresh start" diffed against 10 MB of orphaned trees.
+    # reset must remove the clones too, or the next "fresh start" diffs
+    # against megabytes of orphaned trees.
     monkeypatch.chdir(tmp_path)
     conn = open_database(DEFAULT_PATH)
     conn.close()
@@ -238,7 +238,7 @@ def test_the_cli_prints_the_removals_of_a_partial_wipe(
 def test_remove_unlinks_a_symlinked_directory_instead_of_recursing(
     tmp_path: Path,
 ) -> None:
-    # #119: what makes the TOCTOU case safe. `_refuse_linked_cache` fires first
+    # what makes the TOCTOU case safe. `_refuse_linked_cache` fires first
     # in the normal flow, so this guard is unreachable there — and that is
     # exactly why it needs a direct test: a swap between the refusal check and
     # the delete loop must still not reach outside the bound.

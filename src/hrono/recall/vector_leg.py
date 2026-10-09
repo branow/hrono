@@ -1,6 +1,6 @@
-"""Recall's vector leg (T26.1): path-blended similarity, z-scored and floored.
+"""Recall's vector leg: path-blended similarity, z-scored and floored.
 
-Scores every embedded passage (source #069 and brief #071) by the a=0.5
+Scores every embedded passage (source and brief) by the a=0.5
 path-blended similarity used for clustering — the query is content-embedded and
 compared against each passage's content AND path components:
 
@@ -8,15 +8,15 @@ compared against each passage's content AND path components:
 
 which is exactly ``dot(combine(q, q), combined_vector(passage))``: putting the
 query content in both blend slots recovers the blended similarity from one
-dot product (#039). Raw scores are converted to z-scores over the QUERY's own
+dot product. Raw scores are converted to z-scores over the QUERY's own
 full passage distribution (not a global constant) and a passage qualifies at
-z >= 3.5. Both constants are baked. Correctness first — an ANN shadow index is a
-later perf concern (#035 note).
+z >= ``Z_FLOOR``. Both constants are baked. Correctness first — an ANN shadow
+index is a later performance concern.
 
 The z-score is taken against the distribution's MEDIAN and MAD, not its mean and
-standard deviation (#102). Mean/sd are estimated from the same population being
+standard deviation. Mean/sd are estimated from the same population being
 scored, so the matches inflate the baseline they are then measured against —
-worst exactly when the corpus is ON-TOPIC. Measured on the QA corpus: "generate
+worst exactly when the corpus is ON-TOPIC. Measured on a test corpus: "generate
 a version 7 uuid" gave mean 0.178 / sd 0.161, so genuine matches at cosine
 0.71/0.70/0.67 scored z = 3.27/3.22/3.06 and were cut, while 23 passages in the
 corpus matched the question — 2 hits cleared the floor. Against a flat off-topic
@@ -27,23 +27,23 @@ distribution stops them raising their own threshold: same corpus, same probe,
 half the population shares one score, so the spread falls back to the standard
 deviation there (see ``_spread``) rather than scoring everything zero.
 
-TWO VIEWS, BEST OF EITHER (#127). The blend above is the CLUSTERING vector, and
-half a passage's norm there is its file path — which a question phrased in
-ordinary English shares no vocabulary with, so the content signal is halved and
-dragged toward the median. Measured on the QA corpus, "how do I style terminal
-output with colours" over a corpus containing the whole of chalk: ONE passage
-cleared the floor blended, SEVENTEEN content-only. But dropping the blend is not
-the fix either — "generate a version 7 uuid" went 10 hits to 1, because THAT
-question's vocabulary lives in the path (`uuid/version7.go`). The two question
-shapes pull opposite ways, so a passage is scored in BOTH spaces, each z-scored
-against its own distribution, and keeps the better of the two: evidence that a
-passage is about the question can come from what it says or from where it lives,
-and requiring both halves at once was the defect. Measured, the union dominates
-— every question tested is at least as good as blended, and the eleven absent
-questions are unchanged at zero.
+TWO VIEWS, BEST OF EITHER. The blend above is the CLUSTERING vector, and half a
+passage's norm there is its file path — which a question phrased in ordinary
+English shares no vocabulary with, so the content signal is halved and dragged
+toward the median. Measured over a corpus containing the whole of chalk, "how do
+I style terminal output with colours" cleared the floor with ONE passage
+blended, SEVENTEEN content-only. But dropping the blend is not the fix either —
+"generate a version 7 uuid" went 10 hits to 1, because THAT question's
+vocabulary lives in the path (`uuid/version7.go`). The two question shapes pull
+opposite ways, so a passage is scored in BOTH spaces, each z-scored against its
+own distribution, and keeps the better of the two: evidence that a passage is
+about the question can come from what it says or from where it lives, and
+requiring both halves at once fails one shape or the other. Measured, the union
+dominates — every question tested is at least as good as blended, and the eleven
+absent questions are unchanged at zero.
 
-``Z_FLOOR`` is 3.2, swept not guessed (#134). #127 left two paraphrases failing
-with the RIGHT documents ranked #1-5 at z=3.19-3.62, and the suspicion was that
+``Z_FLOOR`` is 3.2, swept not guessed. At 3.5 two paraphrases fail with the
+RIGHT documents ranked #1-5 at z=3.19-3.62, and the suspicion was that
 corroboration was the binding constraint. The sweep says otherwise. Relaxing
 corroboration is the wrong lever and leaks badly — dropping ``KEYWORD_SUPPORT``
 to -1.0 takes the eleven absent questions from 1 answered to 5, and lowering
@@ -52,13 +52,13 @@ nothing: corroboration still gates, the bar simply sits where the evidence puts
 it.
 
     Z_FLOOR  UNCORROB  KW_SUPPORT | paraphrases | corpus-vocab | absent answered
-       3.5       4.5         0.0  |     4/6     |     5/5      |   1/11 (was)
-       3.2       4.5         0.0  |     6/6     |     5/5      |   1/11 (is)
+       3.5       4.5         0.0  |     4/6     |     5/5      |   1/11
+       3.2       4.5         0.0  |     6/6     |     5/5      |   1/11 (baked)
        3.0       4.5         0.0  |     6/6     |     5/5      |   1/11
 
 3.0 works too, so 3.2 is not a cliff edge — it is the smaller move with headroom
 below it. The one absent question that answers is "sourdough starter hydration"
-at a single hit, and it did that before this change as well.
+at a single hit, and it does so at 3.5 as well.
 
 REJECTED, with numbers: letting a BRIEF passage corroborate a source hit under
 the same topic. Briefs describe topics conceptually, so they looked like the
@@ -86,8 +86,8 @@ import numpy
 from hrono.cluster.blend import path_body, similarity_weights
 from hrono.ingest.identity import content_hash
 
-Z_FLOOR = 3.2  # with keyword corroboration (#134; was 3.5)
-UNCORROBORATED_FLOOR = 4.5  # without it (#102): derived on the QA corpus
+Z_FLOOR = 3.2  # with keyword corroboration (swept)
+UNCORROBORATED_FLOOR = 4.5  # without it: derived on a test corpus
 KEYWORD_SUPPORT = 0.0  # keyword z that counts as corroboration
 _NO_SUPPORT = -1.0  # a passage the question's terms never matched
 _MAD_TO_SD = 1.4826  # MAD -> sd-equivalent for a normal distribution
@@ -101,22 +101,22 @@ def scores(
 ) -> dict[int, float]:
     """Return the vector z-score for every embedded passage IN SCOPE.
 
-    The keyword leg (#073) needs a passage's vector z even when it is below the
-    qualify floor (its support bar is 3.0), and the endpoint (#074) fuses on
+    The keyword leg needs a passage's vector z even when it is below the
+    qualify floor (its support bar is 3.0), and the endpoint fuses on
     it, so the full z-map is exposed here and ``search`` just filters it.
 
-    ``scope`` is the tree's passages, or None for every one of them (#166). It
+    ``scope`` is the tree's passages, or None for every one of them. It
     is applied before the z, not after: a passage's z is measured against the
     passages that could have answered the question, which is its tree's.
 
-    THE ARITHMETIC IS THE COST, and it is done in numpy (#194). Measured at 384
+    THE ARITHMETIC IS THE COST, and it is done in numpy. Measured at 384
     dims: 0.15 ms per passage per query in interpreted loops, 18x faster as two
-    matrix-vector products — 1.215s to 0.066s over 8000 passages (#193). The
+    matrix-vector products — 1.215s to 0.066s over 8000 passages. The
     math is unchanged: the same two views, over the same population, with the
     same weights, read from `blend.blend_weights` rather than re-derived. What
     an ANN index would change instead is WHICH passages are scored, and the z
     is taken over the query's own full distribution, so that is a question
-    about the recipe and this is not (#077).
+    about the recipe and this is not.
     """
     content_weight, path_weight = similarity_weights()
     bodies, paths, ids = _stack(conn, model_name, scope)
@@ -127,7 +127,7 @@ def scores(
     content_sim = bodies @ query
     # `combined_vector` is concat(cw * unit(content), pw * unit(path)) and the
     # query enters `combine(q, q)` the same way, so their dot product is this
-    # (#039) — one product per view instead of a 768-wide one per passage.
+    # — one product per view instead of a 768-wide one per passage.
     blended = content_weight * content_sim + path_weight * (paths @ query)
 
     by_blend = _z_scores(list(zip(ids, blended.tolist(), strict=True)))
@@ -149,9 +149,9 @@ def _stack(
     time did: half a blend is not a smaller score, it is a different question.
 
     Scope is applied in the passage SELECT and the vectors are read for the
-    surviving hashes only: this used to read the WHOLE embeddings table per
-    query — every orphan row, every other tree's vectors — so query cost grew
-    with the database, not the tree asked.
+    surviving hashes only: reading the WHOLE embeddings table per query — every
+    orphan row, every other tree's vectors — makes query cost grow with the
+    database, not the tree asked.
     """
     rows = _passages(conn, scope)
     needed = {str(row["content_hash"]) for row in rows} | {
@@ -223,7 +223,7 @@ def _unit_row(vector: numpy.ndarray) -> numpy.ndarray:
 
 
 def _z_scores(scored: Sequence[tuple[int, float]]) -> dict[int, float]:
-    """z against the distribution's own median and MAD (#102)."""
+    """z against the distribution's own median and MAD."""
     raw = [score for _, score in scored]
     centre = _median(raw)
     spread = _spread(raw, centre)
@@ -240,20 +240,21 @@ def qualify(
 ) -> tuple[tuple[int, float], ...]:
     """Return (passage_id, z) for passages that qualify, best first.
 
-    Two bars, because similarity alone cannot tell "about this" from "nearest
-    of the available topics" (#102). A passage the question's own terms
-    corroborate — keyword z at or above ``KEYWORD_SUPPORT``, the average of
-    everything the query matched at all — qualifies at ``Z_FLOOR``. One no term
-    supports has to clear ``UNCORROBORATED_FLOOR``.
+    Two bars, because similarity alone cannot tell "about this" from "nearest of
+    the available topics". A passage the question's own terms corroborate —
+    keyword z at or above ``KEYWORD_SUPPORT``, the average of everything the
+    query matched at all — qualifies at ``Z_FLOOR``. One no term supports has to
+    clear ``UNCORROBORATED_FLOOR``.
 
-    This is #073's rule applied symmetrically: a keyword hit already needs
-    vector support at z >= 3.0 because BM25's background is stopword matches,
-    and the mirror is that an embedding's nearest neighbours are never empty —
-    ask a corpus about labrador puppies and it still has a most-similar passage.
-    The keyword leg is the orthogonal evidence: measured on the QA corpus, the
-    absent question's five vector candidates carried no distinctive term of it
-    (its one FTS match scored keyword z -0.37, i.e. matched on stopwords), while
-    the on-topic questions' candidates carried uuid/v7/NewV7 and signer/unsign.
+    This is the keyword leg's rule applied symmetrically: a keyword hit already
+    needs vector support at z >= 3.0 because BM25's background is stopword
+    matches, and the mirror is that an embedding's nearest neighbours are never
+    empty — ask a corpus about labrador puppies and it still has a most-similar
+    passage. The keyword leg is the orthogonal evidence: measured on a test
+    corpus, the absent question's five vector candidates carried no distinctive
+    term of it (its one FTS match scored keyword z -0.37, i.e. matched on
+    stopwords), while the on-topic questions' candidates carried uuid/v7/NewV7
+    and signer/unsign.
 
     Accepted cost, deliberately: a question phrased in vocabulary the corpus
     does not share is cut and fails safe to the explore message. Better to cut

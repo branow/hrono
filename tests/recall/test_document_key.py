@@ -1,14 +1,12 @@
-"""#144: the document key is the URI, because the URI carries no position.
+"""The document key is the URI, because the URI carries no position.
 
-`_documents` used to `split("#")` the URI, on the belief that a passage
-addressed `...#chunk-3@v1`. Nothing has ever emitted that fragment: named
-fragments were considered and rejected for hrono (`docs/design/context.md`)
-since
-`@version` already changes every URI on any edit, and where a passage sits
-lives in `ordinal` and `sp_paths`. The strip was therefore a no-op that only
-looked like the rule it named — and would have gone on looking right if a
-fragment ever HAD appeared, silently grouping by file when the code around it
-assumed otherwise.
+`_documents` must not `split("#")` the URI on the belief that a passage is
+addressed `...#chunk-3@v1`. Nothing emits that fragment: hrono has no named
+fragments, since `@version` already changes every URI on any edit, and where a
+passage sits lives in `ordinal` and `sp_paths`. Such a strip would be a no-op
+that only looks like the rule it names — and would go on looking right if a
+fragment ever DID appear, silently grouping by file when the code around it
+assumes otherwise.
 """
 
 from __future__ import annotations

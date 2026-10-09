@@ -1,4 +1,4 @@
-"""#210: what deleting a registry row would strand, said before it goes.
+"""What deleting a registry row would strand, said before it goes.
 
 Asserted against rows written the way production writes them — sections
 through the ingest store, topics through the cluster store, briefs and

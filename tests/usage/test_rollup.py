@@ -1,4 +1,4 @@
-"""#202: the ledger rolled up — per run, model, user, day — with honest cost."""
+"""The ledger rolled up — per run, model, user, day — with honest cost."""
 
 import json
 from collections.abc import Iterator
@@ -295,7 +295,7 @@ def test_a_model_config_carries_its_own_price() -> None:
 def test_a_paid_call_with_no_token_count_is_unknown_not_free(
     db: Database,
 ) -> None:
-    # a remote embedding batch: billed per token, recorded with none (qa)
+    # a remote embedding batch: billed per token, recorded with none
     run_id = enqueue(db, "embed", {}, started_by="ana")
     context = JobContext(db, job_id=run_id)
     config = {"name": "oai-embed", "model": "text-embedding-3-small"}

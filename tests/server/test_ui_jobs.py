@@ -1,6 +1,6 @@
-"""#181 (T53): the dashboard's jobs view.
+"""The dashboard's jobs view.
 
-The runs are created through `POST /jobs` (#176) so these fail if the fan-out
+The runs are created through `POST /jobs` so these fail if the fan-out
 breaks as well as if the page does, and every assertion is on the HTML an
 operator actually receives.
 """
@@ -124,12 +124,12 @@ def test_a_finished_run_shows_what_it_spent(browser: Browser) -> None:
 
     page = browser.page()
 
-    assert "240 in / 80 out" in page  # both children, summed (#179)
+    assert "240 in / 80 out" in page  # both children, summed
     assert "2/2" in page
 
 
 def test_a_failed_run_shows_its_code_and_message(browser: Browser) -> None:
-    # #161 made these worth reading; this is where someone reads them.
+    # the error envelope's code and message are where someone reads them
     browser.sign_in()
     job_id = str(
         browser.client.post(
@@ -150,7 +150,7 @@ def test_a_failed_run_shows_its_code_and_message(browser: Browser) -> None:
     listed = browser.page()
     page = browser.client.get(f"/ui/jobs/{job_id}?tree=default").text
 
-    # the list stays one line a run; the run page explains it (#213)
+    # the list stays one line a run; the run page explains it
     assert 'data-state="failed"' in listed
     assert "The embedding model could not turn text into vectors." in page
     assert "Check the embedding model in Settings." in page
@@ -205,8 +205,8 @@ def test_an_admin_can_cancel_from_the_page(browser: Browser) -> None:
 def test_a_writer_sees_no_cancel_and_is_refused_at_the_route(
     browser: Browser,
 ) -> None:
-    # #180's lesson: hiding it is courtesy, the route is the permission.
-    # A WRITER now, the strongest role the route must refuse: cancel is an
+    # hiding it is courtesy, the route is the permission.
+    # A WRITER, the strongest role the route must refuse: cancel is an
     # operator decision, exactly as the API's own cancel is.
     browser.sign_in("writer")
     parent = str(
@@ -247,7 +247,7 @@ def test_no_token_reaches_the_page(browser: Browser) -> None:
 def test_a_run_says_when_it_started_and_which_one_it_is(
     browser: Browser,
 ) -> None:
-    """#197: three `maintain` rows with no clock and no id on them are three
+    """Three `maintain` rows with no clock and no id on them are three
     indistinguishable rows, and nothing to take to `hrono jobs get`."""
     browser.sign_in()
 
@@ -277,7 +277,7 @@ def test_the_running_filter_includes_a_run_with_stages_done(
     browser: Browser,
 ) -> None:
     # a run with some stages done is derived `partial`, which the page says as
-    # `running`; filtering for what is running has to find it (#216)
+    # `running`; filtering for what is running has to find it
     browser.sign_in()
     parent = browser.fan_out()
     first = job_store.children(browser.conn, parent)[0]  # type: ignore[arg-type]

@@ -1,17 +1,17 @@
-"""Render the collapsed agent-facing tree (#078) to a path -> markdown mapping.
+"""Render the collapsed agent-facing tree to a path -> markdown mapping.
 
-Per agent node: its stored brief text as-is (#059/#061 — already ends with its
+Per agent node: its stored brief text as-is (already ends with its
 Caution section; never regenerated), its member references re-attached from the
-metadata #102 keeps them in, then a MECHANICAL child listing rendered
+metadata they are stored in, then a MECHANICAL child listing rendered
 from the collapsed tree in code (titles + relative links, no LLM, no
 hallucinated links; each entry below the root also links a few of the section
 files beneath it). Leaf nodes list their sections; each section is rendered to
-its own file, reassembled byte-identically from its stored passages (#032) with
-an address header. Human notes render only when passed (M9 creates them; here
-render-if-present). No file I/O — returns a deterministic path -> content map
-that #081 materialises into a folder tree.
+its own file, reassembled byte-identically from its stored passages with
+an address header. Human notes render only when
+passed. No file I/O — returns a deterministic path -> content map
+that the caller materialises into a folder tree.
 
-Every key is RELATIVE and unique (#096). The root's own brief is ``root.md``
+Every key is RELATIVE and unique. The root's own brief is ``root.md``
 and its sections sit beside it at the top level; every other node owns an
 id-suffixed directory, so no path can start with "/" (which pathlib would let
 reroot the whole export out of the output folder) and no two briefs can land on
@@ -148,7 +148,7 @@ def _node_markdown(
             )
 
         # as many section links per entry as keep the page within one
-        # SECTION: a page at full WIDTH cannot afford any (E022)
+        # SECTION: a page at full WIDTH cannot afford any
         # (the page is the parts joined by a blank line, the Children list
         # and the human note among them, and a closing newline)
         after = [f"## Notes\n\n{note}"] if note else []
@@ -157,7 +157,7 @@ def _node_markdown(
         )
         # the root carries no links: every turn of every session reads it,
         # and what it spent on them cost the grep arm more than the walk
-        # arm saved (E027)
+        # arm saved
         for leads in range(0 if node_id == tree.root else _LEADS, 0, -1):
             children = listing(leads)
             if base + len(children.encode()) <= _PAGE_BYTES:
@@ -188,8 +188,8 @@ def _routing(brief: str) -> str:
     """An index page's opening, which says what its subtree is about.
 
     The root is read first and the pages under it next, and every later turn
-    carries them, so their length is paid for on each turn (E018: a 24 KB root
-    made the export cost more than the raw repository). What an index page owes
+    carries them, so their length is paid for on each turn (a 24 KB root makes
+    the export cost more than the raw repository). What an index page owes
     the reader is where to go, and ``## Children`` says that; the facts under a
     brief's own headings live in the children and their sections, so the page
     keeps only what comes before the first heading that follows prose.
@@ -213,8 +213,8 @@ def _child_entry(
 ) -> str:
     """An index page's entry: title, link, what the child holds, where to read.
 
-    The summary is there so an agent can choose a branch WITHOUT opening it
-    (#204); a wider page is only affordable if each entry says enough to skip
+    The summary is there so an agent can choose a branch WITHOUT opening it;
+    a wider page is only affordable if each entry says enough to skip
     the ones that do not matter. ``leads`` names section files beneath the
     child, so an agent that has chosen can open the answer from the index.
     """
@@ -317,8 +317,8 @@ def _summary(conn: sqlite3.Connection, node_id: int) -> str:
 def _references(conn: sqlite3.Connection, node_id: int) -> str:
     """Re-attach a LEAF's member list, which is stored beside its text.
 
-    #102 moved it out of ``briefs.text`` so a lexically dense path list stops
-    entering the vector index and FTS as if it were prose; a leaf's list is its
+    It lives outside ``briefs.text`` so a lexically dense path list stays out of
+    the vector index and FTS, which would read it as prose; a leaf's list is its
     members' source URIs — provenance the export shows nowhere else — so this is
     where it is put back.
 
@@ -329,11 +329,12 @@ def _references(conn: sqlite3.Connection, node_id: int) -> str:
     have the map cite topics that have since been retired.
 
     The caller keys that on the node's LEVEL, not on whether it has children.
-    They differ in exactly one state, and it is a real one: #114's childless
-    upper node, where a rebuild re-minted the leaf ids and cascaded the root's
-    edges away. Such a root has no children to render, so a child-count guard
-    called it a leaf and printed its stored ids — three of which were retired on
-    the QA corpus. Level is the property the member list actually depends on.
+    They differ in exactly one state, and it is a real one: a childless
+    upper node, left when a rebuild re-mints the leaf ids and cascades the
+    root's edges away. Such a root has no children to render, so a child-count
+    guard calls it a leaf and prints its stored ids — three of which had been
+    retired in a ~120-section test corpus. Level is the property the member
+    list actually depends on.
     """
     row = briefs.get(conn, node_id)
     members = json.loads(row["members"]) if row is not None else []

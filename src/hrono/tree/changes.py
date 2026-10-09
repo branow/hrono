@@ -1,4 +1,4 @@
-"""What a run changed in the tree, measured before and after it (#213).
+"""What a run changed in the tree, measured before and after it.
 
 A finished run should say what it did to the map — topics added and removed,
 sections re-filed, briefs rewritten — and the ops' own counts answer a

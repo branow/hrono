@@ -1,4 +1,4 @@
-"""#210: Settings says what a build still lacks, before one is attempted.
+"""Settings says what a build still lacks, before one is attempted.
 
 Each case is the refusal the run itself would meet, because the checks ask the
 same resolvers the stages ask — so the "complete" case matters as much as the
@@ -127,8 +127,8 @@ def test_the_delete_copy_has_every_column_the_real_registry_has(
 ) -> None:
     """A migration that adds a registry column must reach the copy.
 
-    The copy used to restate the table by hand, so a ninth column would have
-    left the delete preview reading a registry the real one no longer was.
+    The copy must not restate the table by hand, or a ninth column would
+    leave the delete preview reading a registry the real one no longer is.
     """
     _complete(conn)
     conn.execute("ALTER TABLE registry ADD COLUMN later TEXT")

@@ -1,4 +1,4 @@
-"""Is the tree up to date with its sources (#215).
+"""Is the tree up to date with its sources.
 
 A source is up to date when the commit its last sync pinned is still where the
 remote's HEAD is. That needs one question put to the remote, so it is put once
@@ -113,7 +113,7 @@ def survey(
 
     The registry is read and the lock let go BEFORE the remotes are asked: a
     page waiting on a slow remote must not be holding the database while it
-    does (#035).
+    does.
     """
     with database.connect() as conn:
         pinned = {

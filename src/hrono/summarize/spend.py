@@ -1,10 +1,10 @@
-"""What an op spent, in tokens (#179).
+"""What an op spent, in tokens.
 
-The spec's job shape has carried a ``cost`` field since M0 and nothing filled
-it. Tokens live in the op's OUTCOME rather than a new column, because `result`
-is already defined as "a JSON object of COUNTS, never prose" (0027) and a token
-count is exactly that — so `GET /jobs/<id>` derives `cost` at read time the way
-#172 derives a parent's status, with no second place for it to go stale.
+The job shape has a ``cost`` field, and this is what fills it. Tokens live in
+the op's OUTCOME rather than a new column, because `result` is already defined
+as "a JSON object of COUNTS, never prose" (0027) and a token count is exactly
+that — so `GET /jobs/<id>` derives `cost` at read time the way a parent job's
+status is derived, with no second place for it to go stale.
 
 Only tokens. Converting them to money needs a price per model, which is config
 this project does not have and which goes stale the moment a provider changes

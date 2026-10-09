@@ -1,13 +1,13 @@
-"""Live job progress as Server-Sent Events (T57.3, #174).
+"""Live job progress as Server-Sent Events.
 
-SSE and not a WebSocket because the spec said why: this is one-way. Nothing the
-client sends matters, so a socket buys a handshake, a second protocol and a
+SSE and not a WebSocket because this is one-way. Nothing the client sends
+matters, so a socket buys a handshake, a second protocol and a
 reconnect story in exchange for nothing.
 
 The stream POLLS and holds no database connection between polls. A watcher that
 kept one open would hold the single writer's shared lock for as long as someone
-left a terminal window open (#008, #092), which is a way to wedge the server by
-being interested in it.
+left a terminal window open, which is a way to wedge the server by being
+interested in it.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ _TERMINAL = frozenset(
 def state_of(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
     """The job's current status and progress, or None if it is gone.
 
-    The DERIVED status (#172), so a watcher of a fan-out sees `partial` and the
+    The DERIVED status, so a watcher of a fan-out sees `partial` and the
     children's counts rather than the parent row's own stale `pending`.
     """
     row = store.get(conn, job_id)
@@ -57,10 +57,10 @@ def is_terminal(state: dict[str, object]) -> bool:
     """Whether the watch may end: the outcome is decided AND nothing is left.
 
     A parent's status goes terminal the moment one child FAILS — the run cannot
-    now succeed, which is the right answer for `GET /jobs/<id>` (#172). It is
-    the wrong moment to close a WATCH: driving this live, the stream ended at
-    `failed 1/2` while the other stage was still writing, and a watcher who
-    acts on that acts on a database still being changed.
+    now succeed, which is the right answer for `GET /jobs/<id>`. It is the
+    wrong moment to close a WATCH: the stream would end at `failed 1/2` while
+    the other stage is still writing, and a watcher who acts on that acts on a
+    database still being changed.
 
     So a parent's stream also waits for its children to finish. The status it
     ends on is the same; what changes is that "the stream ends when the job

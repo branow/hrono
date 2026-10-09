@@ -1,17 +1,16 @@
-"""The one page where explanation belongs (#197, #200).
+"""The one page where explanation belongs.
 
 Every other page in this dashboard runs to a tight prose budget — a hint on a
 mark beside the thing, never a paragraph above it. That rule only works if the
-explanation has somewhere to BE, and until now it had nowhere: the vocabulary
-lived in a spec outside the repository and in a gitignored working file, so a
-person looking at the map could not find out what a topic was without asking.
+explanation has somewhere to BE, and this is it: without it a person looking
+at the map cannot find out what a topic is without asking.
 
 It reads from the live tree rather than describing a general system: the
 numbers in it are this install's, so the pipeline is explained in terms of what
 it has actually done here. A guide that describes a general hrono is a guide
 whose reader cannot tell which step has not run yet on THEIRS.
 
-What it has to answer, because the map alone does not (#200):
+What it has to answer, because the map alone does not:
 
 - the SHAPE — not "there is a tree" but how wide each level of this one is
 - WHO WRITES WHAT — which configured model is called at which stage

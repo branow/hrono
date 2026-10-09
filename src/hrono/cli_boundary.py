@@ -1,8 +1,7 @@
-"""The ONE place a CLI error becomes a message and an exit code (#048).
+"""The ONE place a CLI error becomes a message and an exit code.
 
-Every command group used to carry its own ``_run`` — six near-identical
-try/excepts by the time the config CLI landed (#138 added two of them) — so
-adding a command meant copying error presentation, and a renderer could drift in
+No command group carries its own ``_run`` try/except, because then adding a
+command would mean copying error presentation, and a renderer could drift in
 one group without anyone noticing. Presentation is not each command's business:
 commands raise typed domain errors and this renders them.
 
@@ -53,7 +52,7 @@ RENDERERS: Mapping[type[Exception], Callable[[Exception], str]] = {
     ClientError: lambda exc: client_message(exc),  # type: ignore[arg-type]
     AppError: lambda exc: cli_message(exc),  # type: ignore[arg-type]
     json.JSONDecodeError: lambda exc: f"config is not valid JSON: {exc}",
-    UnsafePath: str,  # an export payload that tried to escape its folder (#096)
+    UnsafePath: str,  # an export payload that tried to escape its folder
     PermissionError: lambda exc: (
         f"permission denied: {getattr(exc, 'filename', None) or exc}"
     ),

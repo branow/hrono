@@ -1,8 +1,8 @@
-"""The ``sync`` ingest op: bring a source's content into the cache (T25).
+"""The ``sync`` ingest op: bring a source's content into the cache.
 
 The op itself knows nothing about how any source type is fetched: it resolves
 the source's config, decrypts its secrets, and hands both to the syncer
-registered for its ``type`` (#142). What comes back is the version, opaque
+registered for its ``type``. What comes back is the version, opaque
 text, which it pins in ``source_state``.
 
 Registers into the op registry so the worker dispatches ``sync`` per source.
@@ -31,7 +31,7 @@ def sync(job: Job, context: JobContext) -> Mapping[str, int]:
     """Sync the job's source through its type's syncer and pin the version.
 
     Reports whether the version is new, so a first sync says it fetched one
-    and a re-sync of an unchanged source says it had nothing to do (#213).
+    and a re-sync of an unchanged source says it had nothing to do.
     """
     return sync_source(context, str(job.scope["name"]))
 
@@ -53,7 +53,7 @@ def fetch_source(context: JobContext, name: str) -> str:
     The setup path fetches a source to show what it holds, and must fetch it
     the way a sync does or the two would disagree about what the cache is. It
     reads the cache before any build; pinning there would make the first real
-    sync report nothing to do (#213).
+    sync report nothing to do.
     """
     config = _load_source(context, name)
     source_type = str(config["type"])

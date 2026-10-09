@@ -107,10 +107,9 @@ class Store:
     def set_token(self, name: str, token: str) -> None:
         """Replace one profile's token, keeping everything else.
 
-        Recovery's missing verb: `admin reset-token` invalidates the stored
-        token, and the only way to record the new one used to be `rm` + `add`
-        — with the hint pointing at an `add` that fails whenever the profile
-        already exists, which in recovery it always does.
+        Recovery's verb: `admin reset-token` invalidates the stored token,
+        and recording the new one must not take `rm` + `add` — an `add` fails
+        whenever the profile already exists, which in recovery it always does.
         """
         _write(self._path, _retoken(_read(self._path), name, token))
 

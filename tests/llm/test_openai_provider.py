@@ -1,6 +1,6 @@
-"""#151: the openai provider — completions and embeddings over real HTTP.
+"""The openai provider — completions and embeddings over real HTTP.
 
-Both halves are driven against a local server on a real socket (#108): the
+Both halves are driven against a local server on a real socket: the
 whole reason this rides httpx rather than an SDK is that ollama, vllm and
 lm-studio speak the same REST shape, and a mocked client object would prove
 none of it.
@@ -300,7 +300,7 @@ def test_a_provider_that_cannot_embed_says_so(
 def test_a_remote_embedding_batch_records_the_tokens_the_provider_reports(
     server: str, db: tuple[Database, Cipher], tmp_path: Path
 ) -> None:
-    # #220: through the real encoder, the real HTTP exchange and the real
+    # through the real encoder, the real HTTP exchange and the real
     # ledger, then the roll-up that prices it.
     database, cipher = db
     _connection(db, "oa", "openai", server)

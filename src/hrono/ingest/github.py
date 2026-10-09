@@ -1,7 +1,7 @@
 """The ``github-user`` source type: an owner's repos, discovered then cloned.
 
 Discovery is how repos are FOUND, never their address
-(implementation-notes.md): every repo a `github-user` source pulls in keeps the
+(``docs/api.md``): every repo a `github-user` source pulls in keeps the
 identity it would have had as a git source of its own —
 `git://github.com/<owner>/<repo>/<path>@<sha>` — so moving a repo in or out of
 a discovery source never re-addresses its content.

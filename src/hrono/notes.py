@@ -1,4 +1,4 @@
-"""Human notes on a node or a section (#157, T46).
+"""Human notes on a node or a section.
 
 Append-only by design: the export shows a topic's notes to a traversing agent,
 and an operator's later correction should sit ABOVE the earlier note rather
