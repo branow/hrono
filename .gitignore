@@ -25,10 +25,11 @@
 # one working copy (#171).
 !/docs/**
 
-# Development tooling: the autodev loop (roles, board, archive) and the export
-# evaluation. The workflow that drives autodev must sit where Claude Code finds
-# workflows.
+# The development process: dev/ is the epic board (tickets by status, their
+# evidence, the PO's index), and .claude/ holds the autodev roles and the
+# workflow that drives them, where Claude Code finds workflows.
 !/dev/**
+!/.claude/autodev/**
 !/.claude/workflows/**
 
 # CI. Deny-by-default means the workflow needs saying out loud or git never
@@ -42,9 +43,8 @@ __pycache__/
 .DS_Store
 
 # Local-only inside tracked trees: board screenshots (20 MB of PNG evidence
-# kept on the machine that took them) and export-eval run output.
-/dev/autodev/board/**/*.png
-/dev/eval/runs/
+# kept on the machine that took them).
+/dev/**/*.png
 
 # Heavy or local-only directories: re-ignore fully so git never descends.
 .venv/

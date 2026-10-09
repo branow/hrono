@@ -75,7 +75,7 @@ is a product call. See the PO note of 2026-09-12, question D.
 - 2026-09-21 PO: **SPLIT and closed.** Note D was decided with the product owner
   today: ONE operator verb, individual stages as an admin-only debug door, hrono
   never acting on its own, and one surface serving CLI, API and the future
-  dashboard alike. The full ruling is in `PO-NOTE-2026-09-12.md` section D.
+  dashboard alike. The full ruling is in `docs/evaluations/2026-09-manual-qa/po-decisions.md` section D.
 
   This ticket was `big` and covered five distinct findings; holding them in one
   card would have meant one enormous review. Split into three, each landing and

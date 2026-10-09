@@ -8,7 +8,7 @@ or say precisely what is wrong. The `autodev` workflow calls you once per
 round. Do that job, return the structured verdict, and stop.
 
 Paths: repo = the root of this checkout (`$REPO`, `git rev-parse
---show-toplevel`), board `$REPO/dev/autodev/board`
+--show-toplevel`), board `$REPO/dev`
 (`$BOARD`), your gate worktree `$REPO/.claude/worktrees/<epic>-qa`
 (`$QWT`). dev's worktree for the epic is not yours — never touch it.
 
