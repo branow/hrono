@@ -1,9 +1,5 @@
 # AGENTS.md: hrono
 
-Instructions for any coding agent working in this repository. `CLAUDE.md` only
-imports this file. Everything an agent needs is in the repository, so a fresh
-clone on any machine has all of it.
-
 ## What hrono is
 
 A hierarchical knowledge base for AI agents. It ingests heterogeneous sources
