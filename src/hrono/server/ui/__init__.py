@@ -36,7 +36,7 @@ from hrono.jobs.aggregate import PARTIAL
 from hrono.registry import store as registry_store
 from hrono.server import prose
 from hrono.server.auth import allows, require_role
-from hrono.server.words import counted, size
+from hrono.server.words import counted, size, weight
 
 router = APIRouter()
 templates = Jinja2Templates(
@@ -83,6 +83,7 @@ templates.env.filters["idents"] = idents
 templates.env.globals["partial_status"] = PARTIAL
 templates.env.filters["counted"] = counted
 templates.env.filters["size"] = size
+templates.env.filters["weight"] = weight
 # the two leaf budgets, quoted on several pages: one source for the number
 templates.env.globals["limits"] = {
     "section": SECTION_BYTES,

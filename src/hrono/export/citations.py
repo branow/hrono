@@ -17,7 +17,13 @@ token found in most of them settles nothing in particular.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import (
+    Callable,
+    Collection,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 
 _MOST = 3
 _PER_LINE = 2
@@ -28,6 +34,7 @@ _FACT = re.compile(
 )
 _WORD = re.compile(r"[\w.]+")
 _RUN = _WORD
+_CHAR = re.compile(r"\w")
 _NOT_PROSE = ("#", "|", "```")
 
 
@@ -60,12 +67,30 @@ class FactIndex:
     def _search(self, fact: str) -> tuple[str, ...]:
         if _WORD.fullmatch(fact):
             return tuple(self._index().get(fact, ()))
-        pattern = re.compile(rf"(?<![\w.]){re.escape(fact)}(?![\w])")
         return tuple(
             label
-            for label, body in self._pages.items()
-            if fact in body and pattern.search(body)
+            for label in self._candidates(fact)
+            if _states(self._pages[label], fact)
         )
+
+    def _candidates(self, fact: str) -> Iterable[str]:
+        """The sections holding every word run of ``fact``, in page order.
+
+        A section stating the fact holds each of its runs as a run of its own,
+        or the last as the head of a longer one, so the word index narrows a
+        scan of 9,000 sections to the few the pattern still has to confirm.
+        """
+        runs = _RUN.findall(fact)
+        if not runs:
+            return self._pages
+        index = self._index()
+        postings = sorted((index.get(run, ()) for run in runs), key=len)
+        rest = [set(posting) for posting in postings[1:]]
+        return [
+            label
+            for label in postings[0]
+            if all(label in posting for posting in rest)
+        ]
 
     def _index(self) -> dict[str, list[str]]:
         if self._words is None:
@@ -75,6 +100,23 @@ class FactIndex:
                     words.setdefault(word, []).append(label)
             self._words = words
         return self._words
+
+
+def _states(body: str, fact: str) -> bool:
+    """Whether ``fact`` occurs in ``body`` not inside a longer word.
+
+    No word character or dot before it, no word character after: the bounds
+    a regex lookbehind would test, without its scan of the whole body.
+    """
+    at = body.find(fact)
+    while at >= 0:
+        end = at + len(fact)
+        before = body[at - 1] if at else " "
+        after = body[end] if end < len(body) else " "
+        if before != "." and not _CHAR.match(before) and not _CHAR.match(after):
+            return True
+        at = body.find(fact, at + 1)
+    return False
 
 
 def _words(body: str) -> set[str]:

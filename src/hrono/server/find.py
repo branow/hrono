@@ -40,6 +40,7 @@ SHOWN = 25
 # the escaping that makes the snippet safe to put in a page.
 _OPEN, _CLOSE = "\x02", "\x03"
 _WORD = re.compile(r"\w+")
+_MARKUP = re.compile(r"\*\*|`|(?<![^\s\x02])#{1,6}\s")
 MAX_TERMS = 8
 
 
@@ -90,7 +91,7 @@ def search(conn: sqlite3.Connection, tree: str, query: str) -> Found:
             node = int(str(row["source"]).removeprefix("node-"))
             if node not in seen_topics:
                 seen_topics.add(node)
-                topic_hits.append((node, _marked(row["snip"]), "brief"))
+                topic_hits.append((node, _marked(_plain(row["snip"])), "brief"))
         elif int(row["section_id"]) not in seen_sections:
             seen_sections.add(int(row["section_id"]))
             section_hits.append(row)
@@ -217,6 +218,15 @@ def _marked(snippet: str) -> Markup:
     """A snippet with its matched words in ``<mark>``, the rest escaped."""
     text = str(escape(snippet))
     return Markup(text.replace(_OPEN, "<mark>").replace(_CLOSE, "</mark>"))
+
+
+def _plain(snippet: str) -> str:
+    """A brief's snippet without its Markdown marks, which read as noise.
+
+    A brief is Markdown, and a cut through it shows ``**`` and ``##`` bare; a
+    file's text is left as written, since there the marks may be the code.
+    """
+    return _MARKUP.sub("", snippet)
 
 
 def _like(text: str) -> str:

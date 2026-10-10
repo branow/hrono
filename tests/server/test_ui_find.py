@@ -474,3 +474,11 @@ def test_a_section_filed_only_in_another_tree_is_not_ingested_here(
 
     assert "Not ingested" in html
     assert "#section-" not in html
+
+
+def test_a_brief_snippet_drops_its_markdown_marks() -> None:
+    from hrono.server.find import _plain
+
+    said = _plain("## Filing **docs** use `get_filings` and a#b")
+
+    assert said == "Filing docs use get_filings and a#b"

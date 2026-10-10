@@ -1,14 +1,16 @@
 """The Export page: what an agent will be handed, before it is handed.
 
 Export is the deliverable, and this page shows it outside a terminal. Here a
-curator chooses the hop limit, reads the shape the export reports, pages
-through the rendered files in place by following their own links, downloads
-the same files as one archive, and copies the command that writes them to a
-folder.
+curator chooses the hop limit, presses Export, reads the shape the export
+reports, pages through the rendered files in place by following their own
+links, downloads the same files as one archive, and copies the command that
+writes them to a folder.
 
-Everything comes from ``export.produce`` — the function the API's manifest and
-archive come from — so the panel cannot show a different export from the one
-the CLI writes. Every role may use it: export has always been a reader route.
+Building an export renders every file in the tree, so the page never builds
+one. The Export button starts the ``export`` op, which stores the result
+(``export.saved``); viewing a page and downloading the archive read that
+stored copy. It comes from ``export.produce``, the function the API's manifest
+and archive come from, so it holds the same files the CLI writes.
 
 A topic whose brief is missing or was stored flagged is listed before anything
 else, because the root page is the first thing an agent reads and a brief that
@@ -24,17 +26,18 @@ from collections.abc import Callable
 from urllib.parse import quote, urlencode
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from hrono.errors import NotFound
+from hrono.export import saved as saved_export
 from hrono.export.collapse import WIDTH
-from hrono.export.produce import Export, produce
-from hrono.naming import name
+from hrono.export.saved import ROOT_PAGE
+from hrono.jobs.worker import enqueue
 from hrono.server import prose
-from hrono.server.ui import Reader, _trees, router, templates
-from hrono.summarize import briefs
+from hrono.server.ui import Reader, Writer, _fields, _trees, router, templates
 
-ROOT_PAGE = "root.md"
 DEFAULT_LEVELS = 4
+OP = "export"
 
 
 @router.get("/ui/trees/{tree}/export", response_class=HTMLResponse)
@@ -42,47 +45,110 @@ def export_page(
     request: Request,
     user: Reader,
     tree: str,
-    levels: int = DEFAULT_LEVELS,
     page: str = ROOT_PAGE,
 ) -> Response:
-    """The export's shape at ``levels`` hops, one rendered page, a download."""
-    levels = max(2, levels)
+    """The kept export: its shape, one rendered page, a download."""
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
-        made = produce(conn, tree, levels)
-        flagged = [] if made is None else _flagged(conn, made, tree, levels)
-    shown = page if made is not None and page in made.files else ROOT_PAGE
+        built = _built(conn, tree)
+        kept = saved_export.load(conn, tree)
+        running = _running(conn, tree)
+    levels = kept.levels if kept is not None else DEFAULT_LEVELS
     context: dict[str, object] = {
         "user": user,
         "trees": trees,
         "tree": tree,
         "levels": levels,
-        "built": made is not None,
+        "built": built,
+        "exported": kept is not None,
+        "running": running,
         "snippets": connect_snippets(
             str(request.base_url).rstrip("/"), tree, levels
         ),
         "can_write": user.role in {"writer", "admin"},
     }
-    if made is not None:
+    if kept is not None:
+        pages = kept.pages()
+        shown = page if page in pages else ROOT_PAGE
         context |= {
-            "shape": made.shape,
+            "built_at": kept.built_at,
+            "shape": kept.shape,
             "budget": WIDTH,
-            "files": len(made.files),
-            "size": sum(
-                len(text.encode("utf-8")) for text in made.files.values()
-            ),
-            "flagged": flagged,
+            "files": kept.files,
+            "size": kept.size,
+            "flagged": [
+                {
+                    "title": flag.title,
+                    "why": flag.why,
+                    "link": page_link(tree, flag.page),
+                }
+                for flag in kept.flagged
+            ],
             "page": shown,
             "html": prose.linked(
-                made.files[shown], _resolver(tree, levels, shown, made)
+                kept.read(shown) or "", _resolver(tree, shown, pages)
             ),
             "crumbs": [
-                (page_link(tree, levels, path), label)
-                for path, label in _crumbs(shown)
+                (page_link(tree, path), label) for path, label in _crumbs(shown)
             ],
-            "download": f"/trees/{tree}/export.zip?levels={levels}",
+            "download": f"/ui/trees/{tree}/export.zip",
         }
     return templates.TemplateResponse(request, "export.html", context)
+
+
+@router.post("/ui/trees/{tree}/export")
+async def start_export(tree: str, request: Request, user: Writer) -> Response:
+    """Build the export at the chosen hop limit in the background.
+
+    Redirect-after-POST so a refresh does not start a second build.
+    """
+    raw = (await _fields(request)).get("levels", "")
+    levels = int(raw) if raw.isdigit() else DEFAULT_LEVELS
+    enqueue(
+        request.app.state.db,
+        OP,
+        {"levels": max(2, levels)},
+        tree=tree,
+        started_by=user.name,
+    )
+    said = quote("Started the export. Refresh this page when it finishes.")
+    return RedirectResponse(
+        f"/ui/trees/{tree}/export?tree={tree}&done={said}", status_code=303
+    )
+
+
+@router.get("/ui/trees/{tree}/export.zip")
+def download_export(tree: str, request: Request, _: Reader) -> Response:
+    """The kept export as one archive, exactly as it was built."""
+    with request.app.state.db.connect() as conn:
+        kept = saved_export.load(conn, tree)
+    if kept is None:
+        raise NotFound(f"tree not exported yet: {tree}")
+    return Response(
+        kept.archive,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{tree}-export-{kept.levels}.zip"'
+            )
+        },
+    )
+
+
+def _built(conn: sqlite3.Connection, tree: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM nodes WHERE tree = ? LIMIT 1", (tree,)
+    ).fetchone()
+    return row is not None
+
+
+def _running(conn: sqlite3.Connection, tree: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM jobs WHERE tree = ? AND op = ? "
+        "AND status IN ('pending', 'running') LIMIT 1",
+        (tree, OP),
+    ).fetchone()
+    return row is not None
 
 
 TOKEN = "YOUR_TOKEN"
@@ -127,21 +193,21 @@ def connect_snippets(
     ]
 
 
-def page_link(tree: str, levels: int, page: str) -> str:
+def page_link(tree: str, page: str) -> str:
     """The panel's own view of one exported file."""
-    query = urlencode({"tree": tree, "levels": levels, "page": page})
+    query = urlencode({"tree": tree, "page": page})
     return f"/ui/trees/{tree}/export?{query}#page"
 
 
 def _resolver(
-    tree: str, levels: int, here: str, made: Export
+    tree: str, here: str, pages: frozenset[str]
 ) -> Callable[[str], str]:
     """Map a link inside ``here`` to the panel's view of the file it names."""
     directory = posixpath.dirname(here)
 
     def resolve(target: str) -> str:
         path = posixpath.normpath(posixpath.join(directory, target))
-        return page_link(tree, levels, path) if path in made.files else "#page"
+        return page_link(tree, path) if path in pages else "#page"
 
     return resolve
 
@@ -153,42 +219,3 @@ def _crumbs(page: str) -> list[tuple[str, str]]:
     for depth in range(1, len(parts) + 1):
         trail.append(("/".join(parts[:depth]) + "/brief.md", parts[depth - 1]))
     return trail
-
-
-def _flagged(
-    conn: sqlite3.Connection, made: Export, tree: str, levels: int
-) -> list[dict[str, object]]:
-    """Exported topics whose brief is missing or was stored flagged."""
-    ids = sorted(made.tree.nodes)
-    marks = ",".join("?" * len(ids))
-    rows = conn.execute(
-        "SELECT n.id AS id, b.flagged AS flagged, b.text AS text, "  # noqa: S608
-        f"b.node_id AS has, {briefs.TEMPLATE} AS template "
-        f"FROM nodes n LEFT JOIN briefs b ON b.node_id = n.id "
-        f"WHERE n.id IN ({marks}) ORDER BY n.id",
-        ids,
-    ).fetchall()
-    return [
-        {
-            "title": name(conn, int(row["id"])),
-            "why": "no brief" if row["has"] is None else _refusal(conn, row),
-            "link": page_link(tree, levels, _page_of(made, int(row["id"]))),
-        }
-        for row in rows
-        if row["has"] is None or _refusal(conn, row)
-    ]
-
-
-def _refusal(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
-    return briefs.refusal(
-        conn, int(row["id"]), row["flagged"], row["text"], row["template"]
-    )
-
-
-def _page_of(made: Export, node_id: int) -> str:
-    if node_id == made.tree.root:
-        return ROOT_PAGE
-    suffix = f"-{node_id}/brief.md"
-    return next(
-        (p for p in sorted(made.files) if p.endswith(suffix)), ROOT_PAGE
-    )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from hrono.server.words import counted, size
+from hrono.server.words import counted, size, weight
 
 
 @pytest.mark.parametrize(
@@ -32,3 +32,11 @@ def test_a_size_reads_in_the_unit_it_is_budgeted_in(
     count: int, said: str
 ) -> None:
     assert size(count) == said
+
+
+@pytest.mark.parametrize(
+    ("count", "said"),
+    [(32_818_903, "31.3 MB"), (5000, "5 KB"), (800, "800 B")],
+)
+def test_a_measured_total_reads_rounded(count: int, said: str) -> None:
+    assert weight(count) == said

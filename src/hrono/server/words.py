@@ -23,3 +23,16 @@ def size(count: int) -> str:
     if count >= 1024 and count % 1024 == 0:
         return f"{count // 1024} KB"
     return f"{count} B"
+
+
+def weight(count: int) -> str:
+    """A measured byte total, rounded the way a person reads it: `31.3 MB`.
+
+    Unlike ``size``, which quotes a budget exactly, this is for a total the
+    page counted; its last digits are noise to the reader.
+    """
+    if count >= 1024 * 1024:
+        return f"{count / (1024 * 1024):.1f} MB"
+    if count >= 1024:
+        return f"{round(count / 1024)} KB"
+    return f"{count} B"

@@ -127,7 +127,7 @@ def test_edit_log_rebuild_keeps_rows_and_never_reuses_an_id(
         )
     rows_before = [tuple(r) for r in conn.execute("SELECT * FROM edit_log")]
 
-    assert migrate(conn) == (42, 43, 44, 45)
+    assert migrate(conn) == (42, 43, 44, 45, 46)
 
     # 43 adds `closed`, open (NULL) on every row that was already there
     assert [tuple(r) for r in conn.execute("SELECT * FROM edit_log")] == [
@@ -157,7 +157,7 @@ def test_recall_log_migration_keeps_existing_data(tmp_path: Path) -> None:
             "VALUES ('t', 1, 0, 'now')"
         )
 
-    assert migrate(conn) == (44, 45)
+    assert migrate(conn) == (44, 45, 46)
 
     assert conn.execute("SELECT count(*) FROM nodes").fetchone()[0] == 1
     assert conn.execute("SELECT count(*) FROM recall_log").fetchone()[0] == 0
