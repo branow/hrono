@@ -215,6 +215,11 @@ def create_app(
         """A browser gets the login page where an API caller gets a 401."""
         return RedirectResponse("/ui/login", status_code=303)
 
+    @app.get("/", include_in_schema=False)
+    def _root() -> Response:
+        """The bare address opens the dashboard."""
+        return RedirectResponse("/ui", status_code=307)
+
     app.include_router(router)
     app.include_router(users_router)
     app.include_router(jobs_router)
