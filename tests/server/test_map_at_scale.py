@@ -262,9 +262,7 @@ def test_no_arc_runs_through_another_arcs_label_in_a_fan(
 
     arcs = _drawn_links(overlay, every)
 
-    # an arc into a leaf deep in a far stack, or one that would cross a
-    # column, is counted instead of drawn; enough remain to make a fan
-    assert len(arcs.drawn) >= 6
+    assert len(arcs.drawn) >= 8
     for arc in arcs.drawn:
         box = labels.text(
             float(str(arc["x"])),
