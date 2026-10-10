@@ -1,0 +1,11 @@
+[project]
+name = "hrono-bench"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "rank-bm25", "sentence-transformers", "numpy<2.3", "scipy", "scikit-learn",
+  "umap-learn", "tiktoken", "faiss-cpu", "tenacity", "openai", "httpx",
+  "lightrag-hku", "pandas", "matplotlib",
+]
+[tool.uv]
+package = false

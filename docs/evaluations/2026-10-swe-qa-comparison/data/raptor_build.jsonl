@@ -1,0 +1,3 @@
+{"repo": "flask", "leaves": 1593, "summaries": 312, "layers": {"0": 1593, "1": 255, "2": 49, "3": 8}, "seconds": 255.8}
+{"repo": "requests", "leaves": 868, "summaries": 177, "layers": {"0": 868, "1": 142, "2": 29, "3": 6}, "seconds": 168.1}
+{"repo": "streamlink", "leaves": 4790, "summaries": 829, "layers": {"0": 4790, "1": 676, "2": 124, "3": 24, "4": 5}, "seconds": 1795.9}
