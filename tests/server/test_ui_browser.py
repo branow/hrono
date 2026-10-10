@@ -739,6 +739,26 @@ def test_tab_reaches_every_topic_enter_opens_it_and_focus_is_drawn(
     assert page.evaluate("!!document.activeElement.closest('#panel')")  # type: ignore[attr-defined]
 
 
+def test_the_wheel_zooms_the_map_about_the_cursor(
+    page: object, live: Live
+) -> None:
+    page.set_viewport_size({"width": 1440, "height": 900})  # type: ignore[attr-defined]
+    page.goto(f"{live.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
+    page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
+    width = (
+        "parseFloat(document.querySelector('#board svg').getAttribute('width'))"
+    )
+    box = page.locator("#board").bounding_box()  # type: ignore[attr-defined]
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)  # type: ignore[attr-defined]
+    start = page.evaluate(width)  # type: ignore[attr-defined]
+    page.mouse.wheel(0, -300)  # type: ignore[attr-defined]
+    page.wait_for_function(f"{width} > {start}")  # type: ignore[attr-defined]
+    page.mouse.wheel(0, 600)  # type: ignore[attr-defined]
+    page.wait_for_function(f"{width} < {start}")  # type: ignore[attr-defined]
+    # the page itself never scrolls: the wheel belongs to the map
+    assert page.evaluate("window.scrollY") == 0  # type: ignore[attr-defined]
+
+
 def test_the_map_has_a_skip_link_to_a_plain_list_of_topics(
     page: object, live: Live
 ) -> None:

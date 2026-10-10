@@ -225,9 +225,11 @@ def test_names_that_differ_only_past_the_slot_are_told_apart(
     assert all(len(label) <= graph.LABEL_CHARS for label in shown)
 
 
-def test_an_arc_leaves_a_topic_below_its_words(
+def test_an_arc_leaves_a_topic_clear_of_its_words(
     conn: sqlite3.Connection,
 ) -> None:
+    """Under its words for a topic in a row; out of the circle's left side,
+    away from the words, for a leaf in a stack."""
     every = [int(r[0]) for r in conn.execute("SELECT id FROM nodes")]
     drawn = graph.build(conn, TREE, every)
     row = [node for node in drawn.nodes if node.level == 0]
@@ -237,21 +239,29 @@ def test_an_arc_leaves_a_topic_below_its_words(
     )
 
     placed = _drawn_links(overlays.Overlay(("pull",), links), drawn).drawn
-    assert len(placed) == len(links)
+    assert placed
 
-    words = {
-        node.id: max(
-            box.bottom
-            for box in labels.topic(
-                node.x,
-                node.y,
-                node.radius,
-                (node.label, node.place, f"{node.holds} {node.holds_what}"),
-                node.has_children,
-            )
+    nodes = {node.id: node for node in row}
+    for drawn_link in placed:
+        x, y = (
+            float(part)
+            for part in str(drawn_link["d"]).split()[0][1:].split(",")
         )
-        for node in row
-    }
-    for link, drawn_link in zip(links, placed, strict=True):
-        start_y = float(str(drawn_link["d"]).split()[0].split(",")[1])
-        assert start_y > words[link.source]
+        source = next(
+            node
+            for node in row
+            if abs(node.y - y) <= node.radius + 80
+            and abs(node.x - x) <= node.radius + 80
+        )
+        words = labels.topic(
+            source.x,
+            source.y,
+            source.radius,
+            (source.label, source.place, f"{source.holds} {source.holds_what}"),
+            source.has_children,
+            graph.BESIDE if source.beside else 0.0,
+        )
+        assert not any(
+            box.left <= x <= box.right and box.top <= y <= box.bottom
+            for box in words
+        ), (drawn_link["d"], nodes)
