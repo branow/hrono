@@ -5,16 +5,14 @@ line segments, and SVG is markup — so the graph is rendered by the same Jinja
 that renders everything else, with no JS dependency to vendor, review and pin.
 
 The layout is a TOP-DOWN TREE of BLOCKS: the root sits at the top and its
-children hang below it, SIDE BY SIDE. It is not a left-to-right dendrogram —
-the shape a file explorer has, which nobody reads as a tree — and it does not
-WRAP a wide family of subtrees onto further rows: that puts a topic's
+children hang below it, SIDE BY SIDE, however many there are. It is not a
+left-to-right dendrogram — the shape a file explorer has, which nobody reads
+as a tree — and it does not WRAP a wide family onto further rows to keep the
+whole map inside one window. Wrapping buys that width by putting a topic's
 right-hand subtree underneath its left-hand one, and two subtrees stacked read
-as one over the other rather than as siblings.
-
-The exception is the last layer. A family of LEAVES has nothing beneath it to
-confuse, so it is STACKED: one column under its parent, each leaf a row with
-its name beside its circle. A level of thirty leaves side by side is a canvas
-five thousand pixels wide; stacked, it is one column.
+as one over the other rather than as siblings. So
+siblings stay on one level and the canvas gets as wide as the tree needs; the
+page makes it a board the reader moves around instead.
 
 Each topic is labelled by its NAME (`hrono.naming`, the rule the export and
 every other page use), with where its sections live (`server/where.py`) on the
@@ -39,7 +37,7 @@ from hrono.summarize import briefs
 
 # A topic's own footprint: one cell wide, with its circle at the top and its
 # two lines of text centred under it.
-SLOT = 170
+SLOT = 130
 # Vertical room a topic's own furniture needs below the top of its cell: the
 # circle, its name, where it lives, its count. A topic that can be opened
 # carries a chevron under those.
@@ -53,8 +51,8 @@ TOP = 10
 BOTTOM = 8
 # A label must fit inside its slot or it collides with its neighbour's and is
 # cut by the canvas edge. The label font is 11.5px mono, ~6.9px a character,
-# so 21 of them fit a 170px slot with a gutter to spare.
-LABEL_CHARS = 21
+# so 16 of them fit a 130px slot with a gutter to spare.
+LABEL_CHARS = 16
 LABEL_CHAR = 6.9
 LABEL_WIDTH = LABEL_CHARS * LABEL_CHAR
 # The brief-derived name is only ever read in a tooltip, where a long line
@@ -64,15 +62,6 @@ MIN_RADIUS = 6
 MAX_RADIUS = 18
 # The radius of the rounded corner where a connector turns.
 TURN = 8
-# A stacked leaf: one row, its circle on a spine down the left of its
-# parent's column and its three lines of text beside the circle.
-ROW = 62
-# The spine stands this far in from the column's edge, leaving a gutter for
-# the overlay arcs that join two leaves of one stack.
-SPINE = 40
-STEP = 24
-BESIDE = MAX_RADIUS + 8
-COLUMN = SPINE + STEP + BESIDE + LABEL_WIDTH + 2 * LABEL_CHAR
 
 
 @dataclass(frozen=True)
@@ -93,7 +82,6 @@ class Node:
     branch: int  # which top-level subtree it belongs to, for its tint
     has_children: bool
     has_hidden_children: bool
-    beside: bool  # a stacked leaf: its text sits beside its circle, not under
     x: float
     y: float
     radius: float
@@ -259,24 +247,15 @@ def _lay_out(
     biggest = max(holds.values(), default=1) or 1
     radii = {node: _radius(holds[node], biggest) for node in visible}
     tall = {node: _own_height(bool(children.get(node))) for node in visible}
-    stacks = _stacks(drawn_kids, children)
-    stacked = {kid for node in stacks for kid in drawn_kids[node]}
-    boxes = _boxes(visible, drawn_kids, tall, stacks)
+    boxes = _boxes(visible, drawn_kids, tall)
     shown_as = _labels(
         visible,
         drawn_kids,
         called,
-        {
-            node: COLUMN - SPINE - STEP - BESIDE
-            if node in stacked
-            else boxes[node].width
-            for node in visible
-        },
+        {node: boxes[node].width for node in visible},
     )
     tops = _drawn_roots(visible, drawn_kids)
-    placed, edges, width, height = _place(
-        tops, boxes, drawn_kids, radii, tall, stacks
-    )
+    placed, edges, width, height = _place(tops, boxes, drawn_kids, radii, tall)
     blank = where_module.Where("", "")
     tint = _branches(tops, drawn_kids)
     drawn = tuple(
@@ -305,7 +284,6 @@ def _lay_out(
             branch=tint.get(node, 0),
             has_children=bool(children.get(node)),
             has_hidden_children=bool(children.get(node)) and node not in opened,
-            beside=node in stacked,
             x=placed[node][0],
             y=placed[node][1],
             radius=radii[node],
@@ -341,17 +319,6 @@ def _drawn_roots(
     return [node for node in visible if node not in hung]
 
 
-def _stacks(
-    drawn_kids: dict[int, list[int]], children: dict[int, list[int]]
-) -> set[int]:
-    """The topics whose drawn family is all LEAVES, which stack in a column."""
-    return {
-        node
-        for node, kids in drawn_kids.items()
-        if kids and not any(children.get(kid) for kid in kids)
-    }
-
-
 def _own_height(has_children: bool) -> float:
     return NODE_HEIGHT + (CHEVRON if has_children else 0)
 
@@ -360,7 +327,6 @@ def _boxes(
     visible: Sequence[int],
     drawn_kids: dict[int, list[int]],
     tall: dict[int, float],
-    stacks: set[int],
 ) -> dict[int, _Box]:
     """Measure every topic bottom-up: a parent cannot be sized before its kids.
 
@@ -372,12 +338,6 @@ def _boxes(
         kids = drawn_kids[node]
         if not kids:
             boxes[node] = _Box(SLOT, tall[node])
-            continue
-        if node in stacks:
-            boxes[node] = _Box(
-                width=max(SLOT, COLUMN),
-                height=tall[node] + DROP + len(kids) * ROW,
-            )
             continue
         boxes[node] = _Box(
             width=max(SLOT, _spanned(kids, boxes)),
@@ -396,7 +356,6 @@ def _place(
     drawn_kids: dict[int, list[int]],
     radii: dict[int, float],
     tall: dict[int, float],
-    stacks: set[int],
 ) -> tuple[dict[int, tuple[float, float]], tuple[str, ...], float, float]:
     """Walk the blocks top-down, placing each and drawing what joins them."""
     spread = _spanned(roots, boxes)
@@ -411,11 +370,6 @@ def _place(
         if not kids:
             continue
         foot = top + tall[node]
-        if node in stacks:
-            edges.extend(
-                _stack(placed, node, kids, left, box.width, foot, radii)
-            )
-            continue
         laid = _laid(kids, boxes, left, box.width, foot + DROP)
         edges.extend(_connectors(placed[node], foot, laid, boxes, radii))
         stack.extend(laid)
@@ -425,43 +379,6 @@ def _place(
         spread + PAD * 2,
         TOP + max(boxes[node].height for node in roots) + BOTTOM,
     )
-
-
-def _stack(
-    placed: dict[int, tuple[float, float]],
-    parent: int,
-    kids: Sequence[int],
-    left: float,
-    width: float,
-    foot: float,
-    radii: dict[int, float],
-) -> list[str]:
-    """Place a family of leaves one under another, and join each to its parent.
-
-    The connector leaves the parent, runs along to a spine down the left of
-    the column, and turns into each leaf's circle — the shape an indented list
-    has, which reads as "these belong to that".
-    """
-    spine = left + (width - COLUMN) / 2 + SPINE
-    rail = foot + DROP / 2
-    above = placed[parent][0]
-    out: list[str] = []
-    for index, kid in enumerate(kids):
-        y = foot + DROP + index * ROW + MAX_RADIUS
-        x = spine + STEP
-        placed[kid] = (x, y)
-        out.append(
-            _path(
-                [
-                    (above, foot),
-                    (above, rail),
-                    (spine, rail),
-                    (spine, y),
-                    (x - radii[kid], y),
-                ]
-            )
-        )
-    return out
 
 
 def _laid(

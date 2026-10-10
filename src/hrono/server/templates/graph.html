@@ -130,15 +130,9 @@
     <a href="{{ node.read }}"{% if node.focused %} aria-current="true"{% endif %}>
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
       <circle class="ring" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius + 5 }}"/>
-      {% if node.beside %}
-      <text class="label beside" x="{{ node.x + 26 }}" y="{{ node.y - 6 }}">{{ node.label }}</text>
-      <text class="meta beside" x="{{ node.x + 26 }}" y="{{ node.y + 8 }}">{{ node.place }}</text>
-      <text class="meta beside" x="{{ node.x + 26 }}" y="{{ node.y + 22 }}">{{ node.holds|counted(node.holds_what) }}</text>
-      {% else %}
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 43 }}">{{ node.holds|counted(node.holds_what) }}</text>
-      {% endif %}
       <title>{{ node.name }} — in {{ node.where or "no one directory" }}, {{ node.holds|counted(node.holds_what) }}, topic {{ node.id }}{% if node.spread %}, spread over {{ node.spread }}{% endif %}{% if node.stale %}, brief needs rewriting{% endif %}</title>
     </a>
     {% if node.has_children %}

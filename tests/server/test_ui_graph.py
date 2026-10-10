@@ -424,7 +424,8 @@ def test_a_straddle_too_wide_for_the_slot_keeps_BOTH_sides(
     big = next(node for node in drawn.nodes if node.id == browser.ids["big"])
     assert len(big.where) > LABEL_CHARS  # the pair does not fit
     assert len(big.place) <= LABEL_CHARS
-    assert big.place == "db + cluster"
+    # both sides survive the cut, each reduced to the directory it names
+    assert big.place.startswith("db + clust")
 
 
 def test_a_long_label_is_cut_from_the_front_to_fit_its_slot(
@@ -475,25 +476,24 @@ def test_the_tree_hangs_DOWNWARDS_from_its_root(browser: Browser) -> None:
         by_id[browser.ids[key]] for key in ("root", "big", "small")
     )
     assert big.y > root.y and small.y > root.y  # below, not beside
-    # two leaves: stacked one under the other, in a column under the root
-    assert big.x == small.x and big.y != small.y
+    assert big.x != small.x  # siblings spread sideways
+    # and the parent sits over the middle of the block it owns
+    assert root.x == (big.x + small.x) / 2
 
 
 def test_no_label_is_cut_by_either_edge_of_the_canvas(
     browser: Browser,
 ) -> None:
-    """A label sits under its circle and centred on it, or, on a stacked
-    leaf, beside it; either way the canvas must hold all of it."""
-    from hrono.server.graph import BESIDE, BOTTOM, LABEL_WIDTH, build
+    """Labels sit UNDER their circle and centred on it, so the canvas has to
+    keep half a label either side or the outermost names are sliced."""
+    from hrono.server.graph import BOTTOM, LABEL_WIDTH, build
 
     drawn = build(browser.conn, TREE, [browser.ids["root"]])  # type: ignore[arg-type]
 
-    for node in drawn.nodes:
-        if node.beside:
-            left, right = node.x - node.radius, node.x + BESIDE + LABEL_WIDTH
-        else:
-            left, right = node.x - LABEL_WIDTH / 2, node.x + LABEL_WIDTH / 2
-        assert left >= 0 and right <= drawn.width, node
+    # half a label either side: a name is centred on its circle, so this is
+    # what the outermost topic in a row needs not to be sliced
+    assert min(node.x for node in drawn.nodes) >= LABEL_WIDTH / 2
+    assert drawn.width - max(node.x for node in drawn.nodes) >= LABEL_WIDTH / 2
     assert drawn.height >= max(node.y for node in drawn.nodes) + BOTTOM
 
 
@@ -511,13 +511,14 @@ def test_the_canvas_starts_where_the_drawing_starts(
     assert blank <= MAX_RADIUS
 
 
-def test_a_family_of_leaves_STACKS_in_one_column(
+def test_siblings_STAY_ON_ONE_LEVEL_however_many_there_are(
     browser: Browser,
 ) -> None:
-    """Leaves have nothing beneath them to confuse, so a wide family of them
-    stacks under its parent instead of making the canvas a leaf per column
-    wide."""
-    from hrono.server.graph import COLUMN, SLOT, build
+    """A wide family must not WRAP onto further rows to fit the map in one
+    window. That puts a topic's right-hand subtree UNDER its left-hand
+    one, and two subtrees stacked read as one beneath the other rather than
+    as siblings. The canvas gets as wide as the tree instead."""
+    from hrono.server.graph import SLOT, build
 
     with browser.conn:  # type: ignore[union-attr]
         for index in range(14):
@@ -544,33 +545,11 @@ def test_a_family_of_leaves_STACKS_in_one_column(
 
     assert len(drawn.nodes) == 17  # the root and sixteen leaves
     kids = [node for node in drawn.nodes if node.id != browser.ids["root"]]
-    assert all(node.beside for node in kids)
-    assert len({node.x for node in kids}) == 1  # one column
-    assert len({node.y for node in kids}) == len(kids)  # each its own row
-    assert drawn.width <= max(SLOT, COLUMN) + 2 * 20
-
-
-def test_a_family_of_subtrees_STAYS_ON_ONE_LEVEL(browser: Browser) -> None:
-    """Wrapping subtrees puts a topic's right-hand subtree UNDER its left-hand
-    one, and two subtrees stacked read as one beneath the other rather than
-    as siblings. Only leaves stack."""
-    from hrono.server.graph import build
-
-    root = browser.ids["root"]
-    with browser.conn:  # type: ignore[union-attr]
-        kids = [
-            row[0]
-            for row in browser.conn.execute(  # type: ignore[union-attr]
-                "SELECT child_id FROM node_children WHERE parent_id = ?",
-                (root,),
-            )
-        ]
-    drawn = build(browser.conn, TREE, [root])  # type: ignore[arg-type]
-    shown = [node for node in drawn.nodes if node.id in kids]
-    if not any(node.has_children for node in shown):
-        pytest.skip("the fixture's root holds only leaves")
-    assert len({node.y for node in shown}) == 1
-    assert not any(node.beside for node in shown)
+    assert len({node.y for node in kids}) == 1  # all on the same level
+    assert len({node.x for node in kids}) == len(kids)  # each its own column
+    # and the canvas grew to hold them rather than folding them under one
+    # another: sixteen slots is wider than any window this is drawn in
+    assert drawn.width >= SLOT * len(kids)
 
 
 def test_the_canvas_is_only_as_deep_as_what_is_DRAWN(
