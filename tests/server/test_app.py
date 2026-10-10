@@ -31,6 +31,12 @@ def test_health_reports_ok(client: TestClient) -> None:
     }
 
 
+def test_the_bare_address_opens_the_dashboard(client: TestClient) -> None:
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/ui"
+
+
 def test_health_is_degraded_when_the_database_is_unusable(
     client: TestClient,
 ) -> None:
