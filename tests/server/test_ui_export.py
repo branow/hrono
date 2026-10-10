@@ -1,4 +1,4 @@
-"""The Export page — the shape, the pages, the archive, for any role."""
+"""The Export page — built on request, then the shape, pages and archive."""
 
 import io
 import re
@@ -15,7 +15,11 @@ from fastapi.testclient import TestClient
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
-from hrono.db.database import open_database
+from hrono.db.database import Database, open_database
+from hrono.export import saved
+from hrono.export.op import export
+from hrono.jobs.model import Job
+from hrono.jobs.ops import JobContext
 from hrono.server.app import create_app
 from hrono.server.ui.export import connect_snippets
 from hrono.summarize import briefs
@@ -27,9 +31,29 @@ TREE = "default"
 
 
 class Panel:
-    def __init__(self, client: TestClient, tokens: dict[str, str]) -> None:
+    def __init__(
+        self, client: TestClient, tokens: dict[str, str], conn: object
+    ) -> None:
         self.client = client
         self.tokens = tokens
+        self.conn = conn
+
+    def export(self, levels: int = 4) -> None:
+        """What pressing Export does, run here instead of by the worker."""
+        export(
+            Job(
+                id="job_test",
+                parent_id=None,
+                tree=TREE,
+                op="export",
+                scope={"levels": levels},
+                status="running",
+                error=None,
+                created_at="now",
+                updated_at="now",
+            ),
+            JobContext(database=Database.adopt(self.conn)),  # type: ignore[arg-type]
+        )
 
     def sign_in(self, role: str = "reader") -> None:
         self.client.post("/ui/login", data={"token": self.tokens[role]})
@@ -59,7 +83,10 @@ def _brief(conn: object, node_id: int, text: str, flagged: str = "") -> None:
 def panel(tmp_path: Path) -> Iterator[Panel]:
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)
-    tokens = {"reader": create_user(conn, "rita", "reader")[1]}
+    tokens = {
+        "reader": create_user(conn, "rita", "reader")[1],
+        "writer": create_user(conn, "wes", "writer")[1],
+    }
     sections = [
         add_section(conn, f"{name}.py", f"{name} body\n".encode())
         for name in ("alpha", "beta", "gamma")
@@ -105,7 +132,7 @@ def panel(tmp_path: Path) -> Iterator[Panel]:
     with TestClient(app) as client:
         app.state.worker.stop()
         app.state.worker.join(timeout=5)
-        yield Panel(client, tokens)
+        yield Panel(client, tokens, conn)
     conn.close()
 
 
@@ -114,18 +141,22 @@ def _links(html: str) -> list[str]:
 
 
 def test_a_reader_sees_the_shape_before_downloading(panel: Panel) -> None:
+    panel.export()
     panel.sign_in("reader")
 
     html = panel.page()
 
     assert 'aria-label="export shape"' in html
-    assert re.search(r'figure num">1 / 3</div>', html)  # pages per level
+    assert re.search(
+        r'figure num per-level">1 / 3</div>', html
+    )  # pages per level
     assert re.search(r'figure num">3</div>\s*<div class="label">entries', html)
     assert "files," in html
-    assert f'href="/trees/{TREE}/export.zip?levels=4"' in html
+    assert f'href="/ui/trees/{TREE}/export.zip"' in html
 
 
 def test_the_pages_read_in_place_and_their_links_work(panel: Panel) -> None:
+    panel.export()
     panel.sign_in("reader")
 
     root = panel.page()
@@ -163,6 +194,7 @@ def test_the_archive_is_the_cli_export_byte_for_byte(
 
 
 def test_topics_without_a_usable_brief_are_flagged(panel: Panel) -> None:
+    panel.export()
     panel.sign_in("reader")
 
     html = panel.page()
@@ -183,13 +215,87 @@ def test_an_unbuilt_tree_gets_a_next_step(panel: Panel) -> None:
 
 
 def test_the_hop_limit_is_chosen_on_the_page(panel: Panel) -> None:
-    panel.sign_in("reader")
+    panel.export(levels=2)
+    panel.sign_in("writer")
 
-    html = panel.page("&levels=2")
+    html = panel.page()
 
     assert 'name="levels" min="2" max="30" value="2"' in html
-    assert f'href="/trees/{TREE}/export.zip?levels=2"' in html
+    assert "at 2 hops" in html
     assert "hrono tree export default -o ./default-export --levels 2" in html
+
+
+def test_opening_the_page_builds_nothing(panel: Panel) -> None:
+    panel.sign_in("writer")
+
+    html = panel.page()
+
+    assert "Not exported yet" in html
+    assert ">Export</button>" in html
+    assert 'id="page"' not in html
+    rows = panel.conn.execute("SELECT count(*) FROM exports").fetchone()  # type: ignore[attr-defined]
+    assert rows[0] == 0
+
+
+def test_pressing_export_starts_a_job_and_says_so(panel: Panel) -> None:
+    panel.sign_in("writer")
+
+    answer = panel.client.post(
+        f"/ui/trees/{TREE}/export",
+        data={"levels": "3"},
+        follow_redirects=False,
+    )
+    job = panel.conn.execute(  # type: ignore[attr-defined]
+        "SELECT op, tree, scope FROM jobs WHERE op = 'export'"
+    ).fetchone()
+
+    assert answer.status_code == 303
+    assert (job["op"], job["tree"], job["scope"]) == (
+        "export",
+        TREE,
+        '{"levels": 3}',
+    )
+    html = panel.page()
+    assert "Exporting" in html
+    assert "disabled>Export</button>" in html
+
+
+def test_a_reader_cannot_start_an_export(panel: Panel) -> None:
+    panel.sign_in("reader")
+
+    html = panel.page()
+    answer = panel.client.post(
+        f"/ui/trees/{TREE}/export", follow_redirects=False
+    )
+
+    assert "A writer can export" in html
+    assert f'action="/ui/trees/{TREE}/export"' not in html
+    assert answer.status_code in {302, 303, 401, 403}
+    assert (
+        panel.conn.execute(  # type: ignore[attr-defined]
+            "SELECT count(*) FROM jobs WHERE op = 'export'"
+        ).fetchone()[0]
+        == 0
+    )
+
+
+def test_the_download_is_the_kept_export(panel: Panel) -> None:
+    panel.export(levels=3)
+    panel.sign_in("reader")
+
+    answer = panel.client.get(f"/ui/trees/{TREE}/export.zip")
+    kept = saved.load(panel.conn, TREE)  # type: ignore[arg-type]
+
+    assert kept is not None
+    assert answer.status_code == 200
+    assert answer.content == kept.archive
+    assert (
+        answer.content
+        == panel.client.get(
+            f"/trees/{TREE}/export.zip?levels=3",
+            headers={"Authorization": f"Bearer {panel.tokens['reader']}"},
+        ).content
+    )
 
 
 def test_the_stored_non_briefs_are_listed_over_http(panel: Panel) -> None:
@@ -205,9 +311,10 @@ def test_the_stored_non_briefs_are_listed_over_http(panel: Panel) -> None:
 def test_connect_snippets_are_filled_and_carry_no_secret(
     panel: Panel,
 ) -> None:
+    panel.export(levels=3)
     panel.sign_in("reader")
 
-    html = unescape(panel.page("&levels=3"))
+    html = unescape(panel.page())
 
     assert f"hrono profile add {TREE} --server http://testserver" in html
     assert f'hrono recall {TREE} "' in html

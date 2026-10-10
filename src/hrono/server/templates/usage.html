@@ -34,7 +34,7 @@
           <span class="num">{{ day.key }}</span>
           <span class="bar wide"><span style="width:{{ day.share }}%"></span></span>
           <span class="num faint">{{ day.tokens }}</span>
-          <span>{{ money(day) }}</span>
+          <span>{{ money(day, true) }}</span>
         </li>
         {% endfor %}
       </ul>
@@ -56,7 +56,7 @@
               <td class="num">{{ row.calls }}</td>
               <td class="num">{{ row.tokens }}{% if row.cached %}<br><span class="faint">{{ row.cached }}</span>{% endif %}</td>
               <td class="num">{{ row.time }}</td>
-              <td>{{ money(row) }}</td>
+              <td>{{ money(row, true) }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -79,7 +79,7 @@
               <td class="num">{{ row.calls }}</td>
               <td class="num">{{ row.tokens }}</td>
               <td class="num">{{ row.time }}</td>
-              <td>{{ money(row) }}</td>
+              <td>{{ money(row, true) }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -101,7 +101,7 @@
               <td class="num">{{ row.calls }}</td>
               <td class="num">{{ row.tokens }}</td>
               <td class="num">{{ row.time }}</td>
-              <td>{{ money(row) }}</td>
+              <td>{{ money(row, true) }}</td>
             </tr>
             {% endfor %}
           </tbody>

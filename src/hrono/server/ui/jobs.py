@@ -42,7 +42,7 @@ _LIVE = frozenset({"pending", "running", "partial"})
 _RETRYABLE = frozenset({"failed", "canceled"})
 # The ops a writer may start from the tree's own buttons; every other op is the
 # admin's `POST /jobs` door (`server/trees.py`), and so is its retry.
-_WRITER_OPS = frozenset({"sync-tree", "maintain"})
+_WRITER_OPS = frozenset({"sync-tree", "maintain", "export"})
 
 # An op name is the API's word and the CLI's word, so the page keeps it — but
 # an operator reading a run log should not have to already know what
@@ -70,6 +70,8 @@ MEANS = {
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
     "settle": "place the sections that were still waiting",
+    "export": "write the tree out as the Markdown files an agent reads, and "
+    "keep them for the Export page",
     "noop": "do nothing — a health check of the worker",
 }
 
@@ -102,7 +104,7 @@ ORDER = (
 WHOLE = ("sync-tree", "maintain", "build-tree")
 # Ops a person starts from somewhere that supplies what they need, not from a
 # button here: a preview needs the prompt it is previewing.
-OFFSTAGE = frozenset({"brief-preview"})
+OFFSTAGE = frozenset({"brief-preview", "export"})
 
 
 PAGE = 25

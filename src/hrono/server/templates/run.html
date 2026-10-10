@@ -41,7 +41,7 @@
   {% if job.failure %}
   <div class="callout bad" id="failure">
     <div class="body">
-      <div class="title">Failed{% if job.failure.stage %} at {{ job.failure.stage }}{% endif %}{% if job.failure.item %}, on {{ job.failure.item }}{% endif %}</div>
+      <div class="title">Failed{% if job.failure.stage %} at {{ job.failure.stage }}{% endif %}{% if job.failure.item %}, on <span title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</div>
       <p>{{ job.failure.says }}</p>
       <p class="hint">{{ job.failure.next }}</p>
       <details class="reveal mt-2">
@@ -89,7 +89,7 @@
               <td class="num">{{ row.calls }}</td>
               <td class="num">{{ row.tokens }}</td>
               <td class="num">{{ row.time }}</td>
-              <td>{{ money(row) }}</td>
+              <td>{{ money(row, true) }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -114,7 +114,7 @@
         <li>
           <div class="piece-head">
             <code>{{ stage.op }}</code>
-            {% if stage.over %}<span class="chip plain">{{ stage.over }}</span>{% endif %}
+            {% if stage.over %}<span class="chip plain over">{{ stage.over }}</span>{% endif %}
             <span class="grow"></span>
             <span class="state" data-state="succeeded">done</span>
             <span class="num faint">{{ stage.took }}</span>
@@ -126,7 +126,7 @@
         <li>
           <div class="piece-head">
             <code>{{ job.failure.stage }}</code>
-            {% if job.failure.item %}<span class="chip plain">{{ job.failure.item }}</span>{% endif %}
+            {% if job.failure.item %}<span class="chip plain over" title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}
             <span class="grow"></span>
             <span class="state" data-state="failed">failed</span>
           </div>

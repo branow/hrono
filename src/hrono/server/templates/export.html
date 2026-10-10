@@ -17,15 +17,37 @@
 </div>
 {% else %}
 <div class="stack">
-  <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/export">
-    <input type="hidden" name="tree" value="{{ tree }}">
+  {% if can_write %}
+  <form class="toolbar" method="post" action="/ui/trees/{{ tree }}/export">
     <label class="field">
       <span>Hops from root.md to a section<span class="tip" tabindex="0" role="note" data-tip="Fewer hops make each page list more topics. At least 2">?</span></span>
-      <input type="number" name="levels" min="2" max="30" value="{{ levels }}">
+      <input class="narrow" type="number" name="levels" min="2" max="30" value="{{ levels }}">
     </label>
-    <button class="btn small" type="submit">Show this shape</button>
-    <a class="btn small primary" href="{{ download }}" download>Download .zip</a>
+    <button class="btn small primary" type="submit"{% if running %} disabled{% endif %}>{{ "Export again" if exported else "Export" }}</button>
+    {% if exported %}<a class="btn small" href="{{ download }}" download>Download .zip</a>{% endif %}
   </form>
+  {% elif exported %}
+  <div class="toolbar"><a class="btn small primary" href="{{ download }}" download>Download .zip</a></div>
+  {% endif %}
+
+  {% if running %}
+  <div class="callout">
+    <div class="body">
+      <div class="title">Exporting</div>
+      <p class="hint">The export is being built in the background. Refresh this page when it finishes; the <a href="/ui/jobs?tree={{ tree }}">Runs</a> page shows its progress.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not exported %}
+  <div class="card">
+    <div class="card-body stack" data-empty>
+      <h2>Not exported yet</h2>
+      <p class="hint">{% if can_write %}Press Export to write {{ tree }} out as Markdown files. Nothing is built until you do.{% else %}A writer can export {{ tree }} from this page.{% endif %}</p>
+    </div>
+  </div>
+  {% else %}
+  <p class="hint">Exported {{ built_at }} at {{ levels }} hops. It does not change until the next export.</p>
 
   {% if flagged %}
   <div class="callout warn">
@@ -47,7 +69,7 @@
       <div class="label">hops</div>
     </div>
     <div class="stat">
-      <div class="figure num">{{ shape.pages_per_level|join(" / ") }}</div>
+      <div class="figure num per-level">{{ shape.pages_per_level|join(" / ") }}</div>
       <div class="label">pages per level<span class="tip" tabindex="0" role="note" data-tip="Root first, then each level down; the last is the topics that list source files">?</span></div>
     </div>
     <div class="stat">
@@ -56,7 +78,7 @@
     </div>
     <div class="stat">
       <div class="figure num">{{ files }}</div>
-      <div class="label">files, {{ "{:,}".format(size) }} bytes</div>
+      <div class="label">files, <span title="{{ "{:,}".format(size) }} bytes">{{ size|weight }}</span></div>
     </div>
   </section>
 
@@ -67,6 +89,8 @@
       <p class="hint">The hop limit was kept, so that page is wide. Allow one more hop to narrow it.</p>
     </div>
   </div>
+  {% endif %}
+
   {% endif %}
 
   <section class="card" id="connect">
@@ -95,6 +119,7 @@
     });
   </script>
 
+  {% if exported %}
   <section class="card" id="page">
     <div class="card-body stack">
       {% if crumbs|length > 1 %}
@@ -109,6 +134,7 @@
       <div class="prose">{{ html|safe }}</div>
     </div>
   </section>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

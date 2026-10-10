@@ -149,6 +149,7 @@ class Failure:
 
     stage: str | None
     item: str | None
+    whole: str | None
     says: str
     next: str
     code: str
@@ -166,9 +167,23 @@ def explain(
     item = found.get("item")
     return Failure(
         stage=str(stage) if stage else None,
-        item=str(item) if item else None,
+        item=short(str(item)) if item else None,
+        whole=str(item) if item else None,
         says=says,
         next=then,
         code=known,
         raw=message or "",
     )
+
+
+def short(item: str) -> str:
+    """A list of things a stage was on, as its first and how many more.
+
+    A condense batch fails on a dozen sections at once; naming every path in a
+    heading pushes the page sideways, and the first is enough to know where.
+    """
+    kind, _, rest = item.partition(" ")
+    names = rest.split(", ") if rest else []
+    if len(names) < 2:
+        return item
+    return f"{kind} {names[0]} and {len(names) - 1} more"

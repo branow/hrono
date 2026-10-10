@@ -50,7 +50,7 @@
   {% if climbs.links %}
   <div class="card-body">
     <h3 class="sub">What a change touched<span class="tip" tabindex="0" role="note" data-tip="A line per topic whose change forced a summary above it to be rewritten. Several lines meeting on one topic is one edit restaling a whole branch">?</span></h3>
-    <svg class="figure climb" viewBox="0 0 {{ climbs.width }} {{ climbs.height }}" role="img"
+    <svg class="figure climb" viewBox="0 0 {{ climbs.width }} {{ climbs.height }}" width="{{ climbs.width }}" height="{{ climbs.height }}" role="img"
          aria-label="{{ climbs.links|length }} climb{{ '' if climbs.links|length == 1 else 's' }}: each runs from the topic that changed to the summary above it that had to be rewritten">
       <g class="fig-ink">
         {% for link in climbs.links %}

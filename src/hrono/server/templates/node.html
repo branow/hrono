@@ -42,7 +42,7 @@
     <a href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Map</a>
     {% for above in node.trail %}
     <span class="sep">/</span>
-    <a href="/ui/trees/{{ tree }}/nodes/{{ above.id }}?tree={{ tree }}">{{ topic_name(above) }}</a>
+    <a href="/ui/trees/{{ tree }}/nodes/{{ above.id }}?tree={{ tree }}" title="{{ topic_name(above) }}">{{ topic_name(above) }}</a>
     {% endfor %}
     <span class="sep">/</span>
     <span aria-current="page">{{ node.name }}</span>
@@ -200,7 +200,7 @@
     </div>
     <div class="card-body stack">
       {% if node.brief %}
-      {{ prose.text(node.brief, "brief", "text") }}
+      {{ prose.text(node.brief, "brief", "brief", fold=true) }}
       {% else %}
       <div class="empty">
         <div class="title">No brief</div>

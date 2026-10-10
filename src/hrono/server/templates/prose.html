@@ -7,10 +7,14 @@
   is the one question a rendered view cannot answer by itself.
 
   `id` must be unique on the page — a topic page carries thirty of these.
+
+  `fold` shows a long text's opening and a second switch to read the rest, so
+  a root brief of several thousand words does not bury what sits below it.
 #}
-{% macro text(body, id, label="text") %}
+{% macro text(body, id, label="text", fold=false) %}
 {% if body %}
-<div class="prose-block">
+{% set folds = fold and body|length > 2400 %}
+<div class="prose-block{{ ' folds' if folds }}">
   <input type="checkbox" class="prose-switch" id="raw-{{ id }}">
   <div class="prose-head">
     <label for="raw-{{ id }}" class="prose-toggle">
@@ -18,8 +22,15 @@
       <span class="when-on">Show it formatted</span>
     </label>
   </div>
+  {% if folds %}<input type="checkbox" class="prose-more" id="more-{{ id }}">{% endif %}
   <div class="prose rendered">{{ body|markdown|safe }}</div>
   <pre class="prose raw">{{ body }}</pre>
+  {% if folds %}
+  <label for="more-{{ id }}" class="prose-more-toggle">
+    <span class="when-shut">Read the whole {{ label }}</span>
+    <span class="when-open">Show less</span>
+  </label>
+  {% endif %}
 </div>
 {% endif %}
 {% endmacro %}

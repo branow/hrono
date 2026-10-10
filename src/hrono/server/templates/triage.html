@@ -5,10 +5,10 @@
 </select>
 {% endmacro %}
 {% macro place(tree, row, topics) %}
-<form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/place">
+<form class="place-form" method="post" action="/ui/trees/{{ tree }}/triage/place">
   <input type="hidden" name="section" value="{{ row.id }}">
   {{ picker(row.path, row.nearest, topics) }}
-  <button class="btn primary" type="submit">Place here</button>
+  <button class="btn small" type="submit">Place here</button>
 </form>
 {% endmacro %}
 {% block title %}hrono — {{ tree }} triage{% endblock %}
@@ -52,18 +52,18 @@
     <p class="hint">No sections are waiting for a topic.</p>
     {% else %}
     <p class="hint">A sync files these by itself once {{ min_points }} are waiting, or after {{ max_age }} runs. Place one now to skip the wait; a placement is held by hand and a sync leaves it there.</p>
-    <table class="settings-table">
+    <div class="table-wrap"><table class="settings-table">
       <thead><tr><th>Section</th><th>Nearest topic</th>{% if can_write %}<th>Place in</th>{% endif %}</tr></thead>
       <tbody>
       {% for row in parked %}
         <tr>
-          <td class="mono">{{ row.path }}</td>
+          <td class="mono path">{{ row.path }}</td>
           <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">no score yet</span>{% endif %}</td>
           {% if can_write %}<td>{{ place(tree, row, topics) }}</td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% if parked_total > shown %}<p class="hint">The oldest {{ shown }} of {{ parked_total }}.</p>{% endif %}
     {% endif %}
   </div>
@@ -76,19 +76,19 @@
     <p class="hint">Every section was placed by a score.</p>
     {% else %}
     <p class="hint">A few of these are normal. The next sync checks them again and moves any that fit better elsewhere, unless you move one by hand: then it stays.</p>
-    <table class="settings-table">
+    <div class="table-wrap"><table class="settings-table">
       <thead><tr><th>Section</th><th>In topic</th><th>Nearer topic</th>{% if can_write %}<th>Place in</th>{% endif %}</tr></thead>
       <tbody>
       {% for row in misfits %}
         <tr>
-          <td class="mono">{{ row.path }}</td>
+          <td class="mono path">{{ row.path }}</td>
           <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.topic }}?tree={{ tree }}">{{ row.topic_name }}</a></td>
           <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">none</span>{% endif %}</td>
           {% if can_write %}<td>{{ place(tree, row, topics) }}</td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% if misfit_total > shown %}<p class="hint">The first {{ shown }} of {{ misfit_total }}.</p>{% endif %}
     {% endif %}
   </div>
@@ -101,7 +101,7 @@
     <p class="hint">Every topic has a brief that holds.</p>
     {% else %}
     <p class="hint">The next sync rewrites each of these except a brief marked as needing a person. Rewrite one now to fix only that topic.</p>
-    <table class="settings-table">
+    <div class="table-wrap"><table class="settings-table">
       <thead><tr><th>Topic</th><th>Why</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
       <tbody>
       {% for row in stale %}
@@ -112,7 +112,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </div>
 </section>
@@ -124,7 +124,7 @@
     <p class="hint">Nothing is held by hand.</p>
     {% else %}
     <p class="hint">A sync never changes these. Each one waits for a person to hand it back.</p>
-    <table class="settings-table">
+    <div class="table-wrap"><table class="settings-table">
       <thead><tr><th>Held</th><th>What</th><th>Since</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
       <tbody>
       {% for row in held %}
@@ -136,7 +136,7 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </div>
 </section>

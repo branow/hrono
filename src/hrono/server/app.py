@@ -21,6 +21,7 @@ import hrono.cluster.monitor  # noqa: F401 - registers the monitor op
 import hrono.cluster.op  # noqa: F401 - registers the cluster op
 import hrono.cluster.repair  # noqa: F401 - registers the repair op
 import hrono.embed.op  # noqa: F401 - registers the embed op
+import hrono.export.op  # noqa: F401 - registers the export op
 import hrono.ingest.split_op  # noqa: F401 - registers the split op
 import hrono.ingest.sync  # noqa: F401 - registers the sync op into the registry
 import hrono.summarize.brief  # noqa: F401 - registers the brief op
