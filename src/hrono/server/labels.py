@@ -30,6 +30,9 @@ COUNT_LINE = 43.0
 # chevron under it for a topic that opens.
 TEXT_END = COUNT_LINE + DESCENT + 2
 CHEVRON_END = 64.0
+# A stacked leaf's three lines sit BESIDE its circle, on these baselines
+# relative to its centre (`graph.html`).
+BESIDE_LINES = (-6.0, 8.0, 22.0)
 # How far a label is moved when every spot on its line is taken.
 STEP = 14.0
 TRIES = 40
@@ -93,15 +96,41 @@ def text(x: float, baseline: float, words: str, char: float) -> Box:
     return Box(x - half, baseline - ASCENT, x + half, baseline + DESCENT)
 
 
+def text_from(left: float, baseline: float, words: str, char: float) -> Box:
+    """The box of a line of text that starts at ``left``."""
+    return Box(
+        left, baseline - ASCENT, left + len(words) * char, baseline + DESCENT
+    )
+
+
 def topic(
     x: float,
     y: float,
     radius: float,
     lines: tuple[str, str, str],
     opens: bool,
+    beside: float = 0.0,
 ) -> tuple[Box, ...]:
-    """Everything one topic draws: its circle, its three lines, its chevron."""
+    """Everything one topic draws: its circle, its three lines, its chevron.
+
+    ``beside`` is how far right of the centre a stacked leaf's text starts;
+    zero means the lines are centred under the circle.
+    """
     name, place, count = lines
+    if beside:
+        return (
+            Box(x - radius, y - radius, x + radius, y + radius),
+            *(
+                text_from(x + beside, y + offset, words, char)
+                for offset, words, char in zip(
+                    BESIDE_LINES,
+                    lines,
+                    (NAME_CHAR, META_CHAR, META_CHAR),
+                    strict=True,
+                )
+                if words
+            ),
+        )
     boxes = [
         Box(x - radius, y - radius, x + radius, y + radius),
         text(x, y + radius + NAME_LINE, name, NAME_CHAR),
@@ -120,8 +149,12 @@ def topic(
     return tuple(box for box in boxes if box.right > box.left)
 
 
-def furniture_end(y: float, radius: float, opens: bool) -> float:
+def furniture_end(
+    y: float, radius: float, opens: bool, beside: bool = False
+) -> float:
     """The y below which a topic draws nothing — where an arc may leave it."""
+    if beside:
+        return y + max(radius, BESIDE_LINES[-1] + DESCENT) + 2
     return y + radius + (CHEVRON_END if opens else TEXT_END) + 2
 
 

@@ -54,7 +54,7 @@
   <a class="btn small" href="{{ overlay.only.href }}" data-tip="Click to draw the strongest arcs of the whole map again. Showing only the arcs of: {{ overlay.only.name }}">Only this topic's arcs &times;</a>
   {% endif %}
   <button class="btn small quiet" type="button" id="fit" hidden
-          data-tip="Switch between the whole map in the window and its actual size">Actual size</button>
+          data-tip="Switch between the whole map in the window and its actual size; the mouse wheel zooms">Actual size</button>
 </div>
 
 <div class="afloat tr" id="overlays">
@@ -105,7 +105,7 @@
 
 <div class="board{% if panel %} reading{% endif %}">
 <div class="canvas" id="board" tabindex="0" role="region" data-home="{{ graph.home }}"
-     aria-label="topic map: {{ graph.shown }} topics — drag, scroll or use the arrow keys to move">
+     aria-label="topic map: {{ graph.shown }} topics — drag, scroll or use the arrow keys to move; the mouse wheel zooms">
 <svg width="{{ graph.width }}" height="{{ graph.height }}" role="img"
      aria-label="topic map: {{ graph.shown }} topics">
   {% for line in graph.edges %}
@@ -130,9 +130,15 @@
     <a href="{{ node.read }}"{% if node.focused %} aria-current="true"{% endif %}>
       <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
       <circle class="ring" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius + 5 }}"/>
+      {% if node.beside %}
+      <text class="label beside" x="{{ node.x + 26 }}" y="{{ node.y - 6 }}">{{ node.label }}</text>
+      <text class="meta beside" x="{{ node.x + 26 }}" y="{{ node.y + 8 }}">{{ node.place }}</text>
+      <text class="meta beside" x="{{ node.x + 26 }}" y="{{ node.y + 22 }}">{{ node.holds|counted(node.holds_what) }}</text>
+      {% else %}
       <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
       <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 43 }}">{{ node.holds|counted(node.holds_what) }}</text>
+      {% endif %}
       <title>{{ node.name }} — in {{ node.where or "no one directory" }}, {{ node.holds|counted(node.holds_what) }}, topic {{ node.id }}{% if node.spread %}, spread over {{ node.spread }}{% endif %}{% if node.stale %}, brief needs rewriting{% endif %}</title>
     </a>
     {% if node.has_children %}
@@ -329,9 +335,14 @@
      size showed a corner of itself, and with the panel open it shifted and
      stayed small. Fitting scales the drawing through its viewBox; the button
      goes back to actual size and again, and the choice holds while the page
-     does. Never below a third, where the names stop being readable. */
+     does. Never below a third, where the names stop being readable. The
+     mouse wheel zooms freely between ZOOM_MIN and ZOOM_MAX; the button
+     returns to fitted or actual size. */
   var FLOOR = 0.35;
+  var ZOOM_MIN = 0.1;
+  var ZOOM_MAX = 3;
   var fitted = true;
+  var chosen = null;
   var fit = document.getElementById("fit");
 
   function scale() {
@@ -343,12 +354,13 @@
     drawing.dataset.height = tall;
     drawing.setAttribute("viewBox", "0 0 " + wide + " " + tall);
     var room = Math.min(board.clientWidth / wide, board.clientHeight / tall, 1);
-    var zoom = fitted ? Math.max(room, FLOOR) : 1;
+    var zoom = chosen !== null ? chosen : fitted ? Math.max(room, FLOOR) : 1;
     drawing.setAttribute("width", wide * zoom);
     drawing.setAttribute("height", tall * zoom);
     if (fit) {
-      fit.hidden = room >= 1;
-      fit.textContent = fitted ? "Actual size" : "Fit to window";
+      fit.hidden = room >= 1 && chosen === null;
+      fit.textContent =
+        fitted && chosen === null ? "Actual size" : "Fit to window";
     }
     return zoom;
   }
@@ -396,9 +408,33 @@
   });
   document.addEventListener("click", function (event) {
     if (!event.target.closest || !event.target.closest("#fit")) return;
-    fitted = !fitted;
+    fitted = chosen === null ? !fitted : true;
+    chosen = null;
     settle();
   });
+
+  /* The wheel zooms about the point under the cursor, so what the reader
+     points at stays put while the map grows or shrinks around it. */
+  board.addEventListener("wheel", function (event) {
+    var drawing = board.querySelector("svg");
+    if (!drawing) return;
+    event.preventDefault();
+    var before = parseFloat(drawing.getAttribute("width")) /
+      parseFloat(drawing.dataset.width || drawing.getAttribute("width"));
+    var after = Math.min(
+      ZOOM_MAX, Math.max(ZOOM_MIN, before * Math.exp(-event.deltaY * 0.002))
+    );
+    if (after === before) return;
+    var frame = board.getBoundingClientRect();
+    var px = event.clientX - frame.left, py = event.clientY - frame.top;
+    var x = (board.scrollLeft + px) / before;
+    var y = (board.scrollTop + py) / before;
+    chosen = after;
+    scale();
+    board.scrollLeft = x * after - px;
+    board.scrollTop = y * after - py;
+    beyond();
+  }, { passive: false });
 
   function selecting() {
     var picked = window.getSelection && window.getSelection();

@@ -8,7 +8,7 @@ makes every view of it shareable.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
@@ -302,8 +302,10 @@ def _chips(
     that topic's arcs alone."""
     return [
         {
-            "x": round(node.x + node.radius + CHIP_GAP, 1),
-            "y": round(node.y + 4, 1),
+            "x": round(_chip_x(node), 1),
+            "y": round(
+                node.y + (labels.BESIDE_LINES[0] if node.beside else 4), 1
+            ),
             "text": _more(unseen[node.id]),
             "says": (
                 f"{unseen[node.id]} more overlay arcs touch {node.name}. "
@@ -316,6 +318,13 @@ def _chips(
         for node in drawn.nodes
         if unseen.get(node.id)
     ]
+
+
+def _chip_x(node: graph.Node) -> float:
+    """Beside the circle, or, on a stacked leaf, after its name."""
+    if node.beside:
+        return node.x + graph.BESIDE + len(node.label) * labels.NAME_CHAR + 6
+    return node.x + node.radius + CHIP_GAP
 
 
 def _more(count: int) -> str:
@@ -491,8 +500,8 @@ def _drawn_links(
         [
             (
                 link,
-                (nodes[link.source].x, nodes[link.source].y),
-                (nodes[link.target].x, nodes[link.target].y),
+                nodes[link.source],
+                nodes[link.target],
             )
             for link in chosen
         ]
@@ -534,6 +543,7 @@ def topic_boxes(drawn: graph.Graph) -> list[labels.Box]:
             node.radius,
             (node.label, node.place, counted(node.holds, node.holds_what)),
             node.has_children,
+            graph.BESIDE if node.beside else 0.0,
         )
     ]
 
@@ -544,6 +554,11 @@ def topic_boxes(drawn: graph.Graph) -> list[labels.Box]:
 BOW_FLOOR = 40.0
 LANE = 36.0
 BOW_CAP = 360.0
+# A link between two leaves of one stack bows LEFT, into the gutter beside the
+# spine, and steps out a lane at a time the same way.
+SIDE_FLOOR = 24.0
+SIDE_LANE = 12.0
+SIDE_CAP = 2 * (graph.SPINE + graph.STEP - graph.MAX_RADIUS)
 # How many lanes a blocked arc may step down before it is given up on, and how
 # finely its curve is walked to see whether it runs through a word.
 MAX_LANES = 6
@@ -555,24 +570,38 @@ ARC_CAP = 12
 
 
 def _lanes(
-    drawn: list[tuple[overlays.Link, tuple[float, float], tuple[float, float]]],
+    drawn: list[tuple[overlays.Link, graph.Node, graph.Node]],
 ) -> dict[int, int]:
     """How deep each same-row arc goes, so overlapping ones do not coincide.
 
     Three arcs over adjacent siblings all span the same distance, so at one
     depth their apexes land on top of each other. Greedy interval
     colouring: an arc takes the shallowest lane no arc it OVERLAPS is already
-    using.
+    using. Arcs within one stack are coloured the same way, over their span
+    down the column.
     """
-    spans = sorted(
-        (
-            (min(start[0], end[0]), max(start[0], end[0]), id(link))
-            for link, start, end in drawn
-            if abs(start[1] - end[1]) <= 1
-        ),
-        key=lambda span: (span[0], span[1]),
+    lanes = _coloured(
+        (min(start.x, end.x), max(start.x, end.x), id(link))
+        for link, start, end in drawn
+        if abs(start.y - end.y) <= 1
     )
-    taken: list[float] = []  # the right edge held by each lane so far
+    lanes.update(
+        _coloured(
+            (min(start.y, end.y), max(start.y, end.y), id(link))
+            for link, start, end in drawn
+            if _stacked_pair(start, end)
+        )
+    )
+    return lanes
+
+
+def _stacked_pair(start: graph.Node, end: graph.Node) -> bool:
+    return start.beside and end.beside and abs(start.x - end.x) <= 1
+
+
+def _coloured(found: Iterable[tuple[float, float, int]]) -> dict[int, int]:
+    spans = sorted(found, key=lambda span: (span[0], span[1]))
+    taken: list[float] = []  # the far edge held by each lane so far
     lanes: dict[int, int] = {}
     for left, right, key in spans:
         lane = next(
@@ -605,7 +634,9 @@ def _drawn(
     through something steps down a lane until it does not; one that cannot
     be drawn clear of every word is not drawn, and is counted instead.
     """
-    if abs(start.y - end.y) > 1:
+    if _stacked_pair(start, end):
+        route = _down_the_stack(start, end, lane, taken)
+    elif abs(start.y - end.y) > 1:
         route = _between_levels(start, end, taken)
     else:
         route = _along_the_row(start, end, lane, taken)
@@ -633,8 +664,14 @@ def _between_levels(
 ) -> Route | None:
     upper, lower = (start, end) if start.y < end.y else (end, start)
     x1 = upper.x
-    y1 = labels.furniture_end(upper.y, upper.radius, upper.has_children)
+    y1 = labels.furniture_end(
+        upper.y, upper.radius, upper.has_children, upper.beside
+    )
     x2, y2 = lower.x, lower.y - lower.radius
+    if lower.beside:
+        # a stacked leaf has its words to its right and a sibling above it:
+        # the clear way in is from the left, through the gutter
+        x2, y2 = lower.x - lower.radius - 2, lower.y
     if labels.crosses(taken, [(x1, y1), (x2, y2)]):
         return None
     points = [(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t) for t in _ALONG]
@@ -649,8 +686,10 @@ def _between_levels(
 def _along_the_row(
     start: graph.Node, end: graph.Node, lane: int, taken: list[labels.Box]
 ) -> Route | None:
-    y1 = labels.furniture_end(start.y, start.radius, start.has_children)
-    y2 = labels.furniture_end(end.y, end.radius, end.has_children)
+    y1 = labels.furniture_end(
+        start.y, start.radius, start.has_children, start.beside
+    )
+    y2 = labels.furniture_end(end.y, end.radius, end.has_children, end.beside)
     x1, x2 = start.x, end.x
     bows = [
         BOW_FLOOR + deeper * LANE
@@ -670,6 +709,32 @@ def _along_the_row(
             f"M{x1},{y1} Q{cx},{cy} {x2},{y2}",
             points,
             (max(y1, y2) + cy) / 2,  # the deepest point of the curve
+            line,
+        )
+    return None
+
+
+def _down_the_stack(
+    start: graph.Node, end: graph.Node, lane: int, taken: list[labels.Box]
+) -> Route | None:
+    """Two leaves of one stack: out of each circle's left side, bowing left."""
+    x1, y1 = start.x - start.radius - 2, start.y
+    x2, y2 = end.x - end.radius - 2, end.y
+    bows = [
+        SIDE_FLOOR + deeper * SIDE_LANE
+        for deeper in range(lane, lane + MAX_LANES)
+        if SIDE_FLOOR + deeper * SIDE_LANE <= SIDE_CAP
+    ] or [SIDE_CAP]
+    for bow in bows:
+        cx, cy = min(x1, x2) - bow, (y1 + y2) / 2
+        line = _curve(x1, y1, cx, cy, x2, y2, STEPS)
+        if labels.crosses(taken, line):
+            continue
+        points = [_curve_at(x1, y1, cx, cy, x2, y2, t) for t in _ALONG]
+        return (
+            f"M{x1},{y1} Q{cx},{cy} {x2},{y2}",
+            points,
+            max(y1, y2),
             line,
         )
     return None
@@ -773,6 +838,7 @@ def _with_toggle(
         "holds_what": node.holds_what,  # type: ignore[attr-defined]
         "level": node.level,  # type: ignore[attr-defined]
         "stale": node.stale,  # type: ignore[attr-defined]
+        "beside": node.beside,  # type: ignore[attr-defined]
         "has_children": node.has_children,  # type: ignore[attr-defined]
         "has_hidden_children": node.has_hidden_children,  # type: ignore[attr-defined]
         "focused": node_id == focused,

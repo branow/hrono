@@ -589,6 +589,9 @@ main:has(.board) { max-width: 1480px; }
   max-width: 22rem;
   max-height: clamp(24rem, 64vh, 48rem);
   overflow: auto;
+  /* Paths and identifiers have no spaces to break at; in a column this
+     narrow they must break anywhere or the panel scrolls sideways. */
+  overflow-wrap: anywhere;
   padding: var(--s4);
   background: var(--surface);
   border: 1px solid var(--rule);
@@ -614,6 +617,7 @@ main:has(.board) { max-width: 1480px; }
 .panel .said { color: var(--ink-soft); margin: .35rem 0 var(--s3); font-size: .875rem; }
 .panel .shut { flex: none; padding: .25rem; color: var(--ink-faint); }
 .panel-facts { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; }
+.panel-facts .chip { white-space: normal; overflow-wrap: anywhere; }
 .panel blockquote { font-size: .875rem; color: var(--ink); }
 .panel .hint { font-size: .78125rem; }
 .panel ul.parts { list-style: none; margin: 0; padding: 0; }
@@ -714,6 +718,8 @@ svg text {
   stroke-linejoin: round;
 }
 svg text.meta { font: 400 10.5px var(--mono); fill: var(--ink-faint); }
+/* A stacked leaf reads like a list row: its text starts beside its circle. */
+svg text.beside { text-anchor: start; }
 /* The arcs a topic has that the map left undrawn, counted beside it. */
 svg text.meta.more { text-anchor: start; fill: var(--accent); font-weight: 600; cursor: pointer; }
 svg a.more:hover text { text-decoration: underline; }
@@ -1202,7 +1208,9 @@ ul.didwhat.big { font-size: .875rem; gap: .25rem; }
    characters is a checkbox and two rules — no script, because this dashboard
    works with JavaScript off and "what is actually in the database" is the one
    question a rendered view cannot answer by itself. */
-.prose-block { display: grid; gap: var(--s2); }
+/* One column that never grows past its box: an auto track widens to fit a
+   code block or a long identifier and pushes the whole column sideways. */
+.prose-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
 .prose-switch { position: absolute; opacity: 0; pointer-events: none; }
 .prose-head { display: flex; justify-content: flex-end; }
 .prose-toggle {
@@ -1220,7 +1228,7 @@ ul.didwhat.big { font-size: .875rem; gap: .25rem; }
 .prose-switch:checked ~ .rendered { display: none; }
 .prose-switch:not(:checked) ~ .raw { display: none; }
 
-.prose { color: var(--ink); font-size: .875rem; line-height: 1.6; }
+.prose { color: var(--ink); font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }
 .prose > :first-child { margin-top: 0; }
 .prose > :last-child { margin-bottom: 0; }
 .prose p { margin: 0 0 var(--s3); }
