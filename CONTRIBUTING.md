@@ -37,6 +37,19 @@ All three must be clean. Ruff's formatter is authoritative; do not hand-format
 or fight its output. CI runs the same gate in check mode and never rewrites
 code, so a green build means the author ran it.
 
+While you work, run less. The gate runs everything; these are for the loop
+between edits:
+
+```sh
+uv run pytest tests/<area>               # only the area you changed
+uv run pytest tests/<area>/test_x.py -k word   # one module, matching tests
+uv run pytest -n auto -m "not slow"      # everything but the slow tests
+```
+
+`slow` marks the tests that drive a real Chromium or run the real UMAP recipe
+(see `tests/conftest.py`); a quick run skips them. Run them, or the whole gate,
+before you finish: CI runs every test and skips none.
+
 ## Pull requests
 
 1. Fork the repository and create a branch from `main`.
@@ -154,10 +167,19 @@ open an issue first so the approach can be agreed before the work.
   `tests.stub_server.serving`.
 - A module that runs the real UMAP and HDBSCAN recipe goes in `_UMAP_MODULES`
   in `tests/conftest.py`, so its one-time import and compile cost is paid by
-  two workers rather than all of them.
+  two workers rather than all of them, and it is marked `slow`. Import
+  `umap` and `hdbscan` inside the function that uses them, never at a module's
+  top: every worker imports every test module to collect it.
 - A module whose tests all start from the same built tree builds it once, as a
   module fixture, and restores a copy per test (`tests/world.py`); see
-  `tests/tree/test_update.py`.
+  `tests/tree/test_update.py`. Add it to `_WORLD_GROUPS` in
+  `tests/conftest.py` so one worker builds it, not every worker.
+- A helper that makes a git repository from its arguments alone takes
+  `@memoized` (`tests/repo_template.py`): it is built once per process and
+  copied to each caller's path.
+- A new database is a copy of one migrated once per process
+  (`tests/template_db.py`); `tests/db` turns that off to watch the migration
+  runner itself.
 - A wait that proves something takes time is scaled down, not slept at
   production length; a poll interval is a module constant the test patches.
 - A fixture that writes through the adopted database connection while a
