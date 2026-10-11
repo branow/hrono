@@ -172,18 +172,23 @@ stored one: plain markdown files it walks with the tools it already has
 (`hrono tree export`, or a zip from `GET /trees/{name}/export.zip`).
 
 The stored tree keeps whatever depth the data produced. The export collapses
-it to a hop limit (`levels`, default 4: the links from `root.md` down to a
-section file), always keeping the root and the leaf level
+it to a hop limit (`levels`, default 4: the hops from `root.md` down to the
+sections a leaf names), always keeping the root and the leaf level
 (`export/collapse.py`). The fixed cost of a hop dwarfs the cost of showing
 more siblings ([research/hop-cost.md](research/hop-cost.md)), so wide and
 shallow beats narrow and deep. Among the selections that fit, the one whose
 widest page is smallest wins; a page budget of 40 entries keeps an index page
 the size of one section.
 
-Each page is the stored brief (Caution section included) plus a child listing
+The export is knowledge, not information: it holds briefs only and copies no
+source. The reading agent already has the repositories, so a page points into
+them. Each page is the stored brief (Caution section included) plus a listing
 rendered by code (`export/render.py`), so navigation never depends on an LLM
-writing a link correctly. Leaves list their sections, each reassembled
-byte-identically from its passages with its address header. Export output is
+writing a link correctly. An index page lists its children, each with a
+one-sentence summary and, below the root, a `Sources:` line naming up to three
+repo-relative files beneath it and how many more there are, as many as keep
+the page within one section's size. A leaf ends with `## Sources`: each of its
+files once, with the source name and the 7-character version. Export output is
 deterministic.
 
 ## Lifecycle

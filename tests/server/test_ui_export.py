@@ -169,8 +169,10 @@ def test_the_pages_read_in_place_and_their_links_work(panel: Panel) -> None:
 
     assert "Overview of everything this tree holds" in root
     assert "Alpha holds the signing code" in child
-    section = next(link for link in _links(child) if "alpha-py" in link)
-    assert "alpha body" in panel.client.get(section).text
+    assert "Sources" in child
+    assert "alpha.py" in child
+    assert "alpha body" not in child  # the source is named, not copied
+    assert not [link for link in _links(child) if "alpha-py" in link]
 
 
 def test_the_archive_is_the_cli_export_byte_for_byte(

@@ -1,7 +1,6 @@
 """Render the collapsed tree to markdown files."""
 
 import json
-import posixpath
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -131,47 +130,28 @@ def test_root_renders_brief_and_mechanical_child_listing(
     assert f"[Beta topic](beta-topic-{ids['n1']}/brief.md)" in root
 
 
-def test_leaf_lists_sections_and_carries_caution(
+def test_leaf_lists_its_sources_and_carries_caution(
     db: tuple[Database, dict[str, int]],
 ) -> None:
     database, ids = db
     files = _files(database)
     alpha = files[f"alpha-topic-{ids['n0']}/brief.md"]
     assert "Caution: none." in alpha  # the stored Caution rendered as-is
-    assert "## Sections" in alpha
+    sources = alpha.split("## Sources\n", 1)[1].split()
+    assert " ".join(sources) == "- `a.py` — repo @ v1"
 
 
-def test_section_reassembles_byte_identically(
+def test_no_section_copy_is_written(
     db: tuple[Database, dict[str, int]],
 ) -> None:
+    # the export is briefs only: the reader has the repository, so a leaf
+    # points at its files and copies none of them
     database, ids = db
     files = _files(database)
-    alpha_dir = f"alpha-topic-{ids['n0']}"
-    section_files = [
-        p
-        for p in files
-        if p.startswith(f"{alpha_dir}/") and p != f"{alpha_dir}/brief.md"
-    ]
-    assert section_files
-    content = files[section_files[0]]
-    assert "alpha line one\nalpha line two\n" in content  # reassembled body
-    # the reassembled bytes equal the stored section bytes
-    with database.connect() as conn:
-        stored_body = istore.get_content(
-            conn,
-            conn.execute(
-                "SELECT content_hash FROM sections WHERE id = ?", (ids["s0"],)
-            ).fetchone()["content_hash"],
-        )
-        passages = b"".join(
-            istore.get_content(conn, r["content_hash"])
-            for r in conn.execute(
-                "SELECT content_hash FROM passages WHERE section_id = ? "
-                "ORDER BY ordinal",
-                (ids["s0"],),
-            ).fetchall()
-        )
-    assert passages == stored_body
+    assert all(p == "root.md" or p.endswith("/brief.md") for p in files)
+    alpha = files[f"alpha-topic-{ids['n0']}/brief.md"]
+    assert "- `a.py`" in alpha
+    assert "alpha line one" not in alpha
 
 
 def test_notes_render_only_when_present(
@@ -244,38 +224,6 @@ def test_no_rendered_path_is_absolute(
     files = _files(db[0])
     assert files
     assert not [p for p in files if p.startswith("/")]
-
-
-def test_the_roots_own_sections_render_beside_root_md(
-    tmp_path: object,
-) -> None:
-    # a tree whose ROOT carries sections must not write "/<name>.md" for each
-    # of them, because pathlib reroots the join and the CLI refuses the export.
-    database = Database.at(tmp_path / "flat.db")
-    with database.connect() as conn, conn:
-        s0 = add_section(conn, "a.py", b"alpha\n")
-        s1 = add_section(conn, "b.py", b"beta\n")
-        cluster_store.replace_tree(
-            conn,
-            TREE,
-            0,
-            [(0, s0, False, None), (0, s1, False, None)],
-            [(s0, [0.1]), (s1, [0.2])],
-        )
-        root = int(
-            conn.execute("SELECT id FROM nodes WHERE level = 0").fetchone()[
-                "id"
-            ]
-        )
-        brief(conn, root, "# Only topic\n\nAll of it.")
-    try:
-        files = _files(database)
-        assert not [p for p in files if p.startswith("/")]
-        assert "root.md" in files
-        sections = sorted(p for p in files if p != "root.md")
-        assert sections == [f"a-py-{s0}.md", f"b-py-{s1}.md"]
-    finally:
-        database.close()
 
 
 def test_a_parentless_node_keeps_its_own_brief_path(
@@ -396,28 +344,6 @@ def test_a_long_first_line_is_trimmed_to_a_usable_title(
         database.close()
 
 
-def test_the_member_references_are_re_attached_from_metadata(
-    db: tuple[Database, dict[str, int]],
-) -> None:
-    # the member URIs live outside briefs.text so the brief passages carry
-    # prose only. The map must still show every reference: the renderer puts
-    # them back from the stored metadata.
-    database, ids = db
-    uris = ("git://ex/repo/a.py@v1", "git://ex/repo/b.py@v1")
-    with database.connect() as conn, conn:
-        conn.execute(
-            "UPDATE briefs SET members = ? WHERE node_id = ?",
-            (json.dumps(list(uris)), ids["n0"]),
-        )
-    files = _files(database)
-    rendered = files[f"alpha-topic-{ids['n0']}/brief.md"]
-    assert "## References" in rendered
-    for uri in uris:
-        assert uri in rendered
-    # ... and a node with no recorded members gets no empty section
-    assert "## References" not in files[f"beta-topic-{ids['n1']}/brief.md"]
-
-
 def test_an_upper_node_does_not_repeat_its_children_as_references(
     db: tuple[Database, dict[str, int]],
 ) -> None:
@@ -438,23 +364,22 @@ def test_an_upper_node_does_not_repeat_its_children_as_references(
         assert retired not in files["root.md"]
 
 
-def test_a_leaf_still_shows_its_source_references(
-    db: tuple[Database, dict[str, int]],
-) -> None:
-    # the other side of the skip: a LEAF's member list is its members' source
-    # URIs — provenance the export shows nowhere else, and never a node id, so
-    # a retired id cannot reach the map through this path at all.
-    database, ids = db
-    uris = ("git://ex/repo/a.py@v1", "git://ex/repo/b.py@v1")
-    with database.connect() as conn, conn:
-        conn.execute(
-            "UPDATE briefs SET members = ? WHERE node_id = ?",
-            (json.dumps(list(uris)), ids["n0"]),
-        )
-    rendered = _files(database)[f"alpha-topic-{ids['n0']}/brief.md"]
-    assert "## References" in rendered
-    for uri in uris:
-        assert uri in rendered
+def test_a_leaf_lists_each_source_file_once(tmp_path: object) -> None:
+    # a long file is split into several sections; the reader opens it once
+    database, ids = _grove(
+        tmp_path,
+        [[["big/x.py", "big/x.py", "big/y.py"]]],
+        {"root": "# Root\n\nAll.", "m0": "# Mid\n\nA.", "l0.0": "# L\n\nB."},
+    )
+    try:
+        files = _files(database)
+    finally:
+        database.close()
+    leaf = next(c for c in files.values() if "## Sources" in c)
+    sources = [
+        line for line in leaf.split("## Sources\n", 1)[1].splitlines() if line
+    ]
+    assert sources == ["- `big/x.py` — repo @ v1", "- `big/y.py` — repo @ v1"]
 
 
 def test_a_childless_upper_node_still_skips_its_references(
@@ -492,55 +417,6 @@ def test_an_index_entry_says_what_the_child_holds(
         f"- [Beta topic](beta-topic-{ids['n1']}/brief.md) — Beta stuff."
         in root.splitlines()
     )
-
-
-def test_a_briefs_fact_links_the_section_page_that_states_it(
-    tmp_path: object,
-) -> None:
-    # the root cites a fact from a section two levels down, and the leaf
-    # cites it from beside the page, so each link is relative to its own file.
-    database = Database.at(tmp_path / "e.db")
-    with database.connect() as conn, conn:
-        s0 = add_section(conn, "a.py", b"TAU is 0.70 here\n")
-        s1 = add_section(conn, "b.py", b"nothing\n")
-        cluster_store.replace_tree(
-            conn,
-            TREE,
-            0,
-            [(0, s0, False, None), (1, s1, False, None)],
-            [(s0, [0.1]), (s1, [0.2])],
-        )
-        level0 = sorted(
-            int(r["id"])
-            for r in conn.execute(
-                "SELECT id FROM nodes WHERE level = 0"
-            ).fetchall()
-        )
-        cluster_store.replace_level(
-            conn,
-            TREE,
-            1,
-            [(0, level0[0], False, None), (0, level0[1], False, None)],
-        )
-        root = int(
-            conn.execute("SELECT id FROM nodes WHERE level = 1").fetchone()[
-                "id"
-            ]
-        )
-        brief(conn, level0[0], "# Alpha\n\nTAU is 0.70.")
-        brief(conn, level0[1], "# Beta\n\nBeta stuff.")
-        brief(conn, root, "# Root\n\nTAU is 0.70 everywhere.")
-    try:
-        files = _files(database)
-        section = next(p for p in files if p.endswith(f"-{s0}.md"))
-        directory = section.rsplit("/", 1)[0]
-        assert f"[§]({section})" in files["root.md"]
-        assert (
-            f"[§]({section.rsplit('/', 1)[1]})"
-            in files[f"{directory}/brief.md"]
-        )
-    finally:
-        database.close()
 
 
 def test_an_index_summary_skips_the_sentence_that_became_the_name(
@@ -667,7 +543,7 @@ def test_only_a_page_with_children_is_trimmed_to_its_opening(
             files = render(conn, collapse(stored, 4))
         pages = {p: c for p, c in files.items() if p.endswith("brief.md")}
         indexes = [c for c in pages.values() if "## Children" in c]
-        leaves_md = [c for c in pages.values() if "## Sections" in c]
+        leaves_md = [c for c in pages.values() if "## Sources" in c]
         assert indexes
         assert leaves_md
         assert all("TAU is 7" not in c for c in indexes)
@@ -680,7 +556,6 @@ def _grove(
     tmp_path: object,
     shape: list[list[list[str]]],
     texts: dict[str, str],
-    bodies: dict[str, bytes] | None = None,
     apex: bool = False,
 ) -> tuple[Database, dict[str, int]]:
     """A tree from nested names: root -> middles -> leaves -> sections.
@@ -688,7 +563,7 @@ def _grove(
     ``shape`` is a list of middle nodes, each a list of leaves, each a list of
     section paths. ``texts`` maps "root", "m<i>" and "l<i>.<j>" to a brief.
     ``apex`` puts one more node above "root", so that "root" is an ordinary
-    index page below the export's root.md (which carries no section links);
+    index page below the export's root.md (which names no sources);
     export it with ``hops=4``. Its page is ``_page(ids["root"])``.
     """
     database = Database.at(tmp_path / "grove.db")
@@ -701,11 +576,7 @@ def _grove(
         for m, leaves in enumerate(shape):
             for paths in leaves:
                 for path in paths:
-                    sid = add_section(
-                        conn,
-                        path,
-                        (bodies or {}).get(path, b"body one\nbody two\n"),
-                    )
+                    sid = add_section(conn, path, b"body one\nbody two\n")
                     ids[path] = sid
                     rows.append((label, sid, False, None))
                     vectors.append((sid, [0.01 * len(rows)]))
@@ -767,19 +638,26 @@ def _page(node_id: int) -> str:
     return f"root-{node_id}/brief.md"
 
 
-def _page_links(files: dict[str, str], page: str, entry: str) -> list[str]:
-    """The files an index entry's Sections line points at, from ``page``."""
+def _entry_sources(files: dict[str, str], page: str, entry: str) -> list[str]:
+    """The source files an index entry's Sources line names on ``page``."""
     lines = files[page].splitlines()
     at = next(n for n, line in enumerate(lines) if entry in line)
-    found = re.findall(r"\]\(([^)]+)\)", lines[at + 1])
-    base = posixpath.dirname(page)
-    return [posixpath.normpath(posixpath.join(base, link)) for link in found]
+    following = lines[at + 1] if at + 1 < len(lines) else ""
+    if not following.startswith("  Sources: "):
+        return []
+    return re.findall(r"`([^`]+)`", following)
 
 
-def test_an_index_entry_names_the_section_files_beneath_it(
+def _sources_line(page: str) -> str:
+    return next(
+        line for line in page.splitlines() if line.startswith("  Sources:")
+    )
+
+
+def test_an_index_entry_names_the_source_files_beneath_it(
     tmp_path: object,
 ) -> None:
-    # an agent that has chosen a branch opens the answer from the index
+    # an agent that has chosen a branch opens the answer in its repository
     database, ids = _grove(
         tmp_path,
         [[["src/deep/a/x1.py", "src/deep/a/x2.py"]], [["b/y1.py"]]],
@@ -796,21 +674,21 @@ def test_an_index_entry_names_the_section_files_beneath_it(
         files = _files(database, hops=4)
     finally:
         database.close()
-    root = files[_page(ids["root"])]
-    assert "[a/x1.py](" in root  # the link carries the rest of the path
-    assert "[src/deep" not in root
-    assert "[b/y1.py](" in root
-    for entry in ("[Mid A]", "[Mid B]"):
-        for target in _page_links(files, _page(ids["root"]), entry):
-            assert target in files  # every named file exists in the export
+    page = _page(ids["root"])
+    assert _entry_sources(files, page, "[Mid A]") == [
+        "src/deep/a/x1.py",
+        "src/deep/a/x2.py",
+    ]  # the repo-relative path, as a plain name, not a link
+    assert _entry_sources(files, page, "[Mid B]") == ["b/y1.py"]
+    assert "](src/" not in files[page]
     mid = f"root-{ids['root']}/mid-a-{ids['m0']}/brief.md"
-    assert len(_page_links(files, mid, "[Leaf A]")) == 2
-    assert not [line for line in root.splitlines() if "more" in line]
+    assert len(_entry_sources(files, mid, "[Leaf A]")) == 2
+    assert "more" not in files[page]
 
 
-def test_the_root_page_carries_no_section_links(tmp_path: object) -> None:
-    # every turn of every session reads root.md, and its links cost the
-    # grep arm more than they saved the walk arm
+def test_the_root_page_names_no_sources(tmp_path: object) -> None:
+    # every turn of every session reads root.md, and naming sources there
+    # cost the grep arm more than it saved the walk arm
     database, ids = _grove(
         tmp_path,
         [[["a/x1.py"], ["b/y1.py"]]],
@@ -827,8 +705,8 @@ def test_the_root_page_carries_no_section_links(tmp_path: object) -> None:
     finally:
         database.close()
     assert "[Root](" in files["root.md"]  # it still lists its children
-    assert "Sections:" not in files["root.md"]
-    assert "Sections:" in files[_page(ids["root"])]  # a page below does
+    assert "Sources:" not in files["root.md"]
+    assert "Sources:" in files[_page(ids["root"])]  # a page below does
 
 
 def test_an_entry_over_many_sections_samples_each_leaf_and_counts_the_rest(
@@ -849,16 +727,9 @@ def test_an_entry_over_many_sections_samples_each_leaf_and_counts_the_rest(
         files = _files(database, hops=4)
     finally:
         database.close()
-    root = files[_page(ids["root"])]
-    sections_line = next(
-        line for line in root.splitlines() if line.startswith("  Sections:")
-    )
-    assert "[p/a1.py]" in sections_line
-    assert "[q/b1.py]" in sections_line  # the second leaf is not crowded out
-    assert "[p/a2.py]" in sections_line
-    assert "a3.py" not in sections_line
-    assert sections_line.endswith(" and 2 more")
-    assert sections_line.count("](") == 3
+    line = _sources_line(files[_page(ids["root"])])
+    # taken in turn from each leaf, so the second is not crowded out
+    assert line == "  Sources: `p/a1.py`, `q/b1.py`, `p/a2.py` and 2 more"
 
 
 def test_a_file_split_into_sections_is_named_once(tmp_path: object) -> None:
@@ -876,52 +747,13 @@ def test_a_file_split_into_sections_is_named_once(tmp_path: object) -> None:
         files = _files(database, hops=4)
     finally:
         database.close()
-    line = next(
-        line
-        for line in files[_page(ids["root"])].splitlines()
-        if line.startswith("  Sections:")
-    )
-    assert line.count("[big/x.py]") == 1
-    assert "[big/y.py]" in line
-    assert line.endswith(" and 1 more")
+    line = _sources_line(files[_page(ids["root"])])
+    assert line == "  Sources: `big/x.py`, `big/y.py`"
 
 
-def test_an_entry_offers_first_the_sections_its_brief_drew_its_facts_from(
+def test_a_page_links_its_children_from_its_own_directory(
     tmp_path: object,
 ) -> None:
-    database, ids = _grove(
-        tmp_path,
-        [
-            [["p/a1.py", "p/a2.py", "p/a3.py", "p/a4.py", "p/a5.py"]],
-            [["q/b1.py"]],
-        ],
-        {
-            "root": "# Root\n\nAll.",
-            "m0": "# Mid\n\nThe cap is `MAX_CAP_Q`.",
-            "l0.0": "# Leaf\n\nOne.",
-            "m1": "# Other\n\nElsewhere.",
-            "l1.0": "# Leaf B\n\nTwo.",
-        },
-        {
-            "p/a5.py": b"the knob MAX_CAP_Q is set here\n",
-            "q/b1.py": b"MAX_CAP_Q is read here too\n",
-        },
-        apex=True,
-    )
-    try:
-        files = _files(database, hops=4)
-    finally:
-        database.close()
-    line = next(
-        line
-        for line in files[_page(ids["root"])].splitlines()
-        if line.startswith("  Sections:")
-    )
-    assert line.startswith("  Sections: [p/a5.py]")
-    assert line.count("](") == 3
-
-
-def test_a_page_links_from_its_own_directory(tmp_path: object) -> None:
     # a middle page sits one directory down, so its links drop that prefix
     database, ids = _grove(
         tmp_path,
@@ -939,9 +771,8 @@ def test_a_page_links_from_its_own_directory(tmp_path: object) -> None:
         database.close()
     mid_dir = f"mid-{ids['m0']}"
     leaf_a = f"leaf-a-{ids['l0.0']}"
-    assert _page_links(files, f"{mid_dir}/brief.md", "[Leaf A]") == [
-        f"{mid_dir}/{leaf_a}/a-x1-py-{ids['a/x1.py']}.md"
-    ]
+    assert f"[Leaf A]({leaf_a}/brief.md)" in files[f"{mid_dir}/brief.md"]
+    assert f"{mid_dir}/{leaf_a}/brief.md" in files
 
 
 def _siblings_saying(
@@ -1057,7 +888,7 @@ def test_an_index_page_at_full_width_stays_within_one_section(
     assert len(root.encode()) <= section_budget(Path("index.md"))
 
 
-def test_a_narrow_index_page_keeps_all_its_section_links(
+def test_a_narrow_index_page_names_as_many_sources_as_allowed(
     tmp_path: object,
 ) -> None:
     database, ids = _grove(
@@ -1076,10 +907,12 @@ def test_a_narrow_index_page_keeps_all_its_section_links(
         files = _files(database, hops=4)
     finally:
         database.close()
-    assert len(_page_links(files, _page(ids["root"]), "[Mid A]")) == 3
+    assert _sources_line(files[_page(ids["root"])]) == (
+        "  Sources: `a/x.py`, `a/y.py`, `a/z.py` and 1 more"
+    )
 
 
-def _links_at_budget(
+def _sources_at_budget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -1087,7 +920,7 @@ def _links_at_budget(
     budget: int,
     note: str | None = None,
 ) -> tuple[int, int]:
-    """(Mid A's section links, root.md bytes) with the ladder and budget set."""
+    """(Mid A's source names, its page's bytes) at the ladder and budget."""
     tmp_path.mkdir()
     database, ids = _grove(
         tmp_path,
@@ -1111,47 +944,48 @@ def _links_at_budget(
         files[_page(ids["root"])]
         .split("[Mid A]")[1]
         .split("[Mid B]")[0]
-        .count("]("),
+        .count("`")
+        // 2,
         len(files[_page(ids["root"])].encode()),
     )
 
 
 @pytest.mark.parametrize("fitting", [3, 2, 1])
-def test_an_entry_takes_the_most_section_links_the_budget_allows(
+def test_an_entry_takes_the_most_source_names_the_budget_allows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fitting: int
 ) -> None:
     # the ladder 3, 2, 1, 0 stops at the first step that fits, and the
     # bound is the page as written, not a page a few bytes shorter
-    _, size = _links_at_budget(
+    _, size = _sources_at_budget(
         tmp_path / "a", monkeypatch, leads=fitting, budget=10**9
     )
-    links, _ = _links_at_budget(
+    named, _ = _sources_at_budget(
         tmp_path / "b", monkeypatch, leads=3, budget=size
     )
-    assert links == fitting  # a page of exactly this size fits
-    links, written = _links_at_budget(
+    assert named == fitting  # a page of exactly this size fits
+    named, written = _sources_at_budget(
         tmp_path / "c", monkeypatch, leads=3, budget=size - 1
     )
-    assert links == fitting - 1  # one byte less drops a step
+    assert named == fitting - 1  # one byte less drops a step
     assert written <= size - 1
 
 
-def test_a_human_note_counts_against_the_link_budget(
+def test_a_human_note_counts_against_the_sources_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # the note is on the page, so the links leave room for it
+    # the note is on the page, so the source names leave room for it
     note = "kept by hand " * 20
-    _, size = _links_at_budget(
+    _, size = _sources_at_budget(
         tmp_path / "a", monkeypatch, leads=3, budget=10**9, note=note
     )
-    links, written = _links_at_budget(
+    named, written = _sources_at_budget(
         tmp_path / "b", monkeypatch, leads=3, budget=size, note=note
     )
-    assert (links, written) == (3, size)  # exactly fits, note in
-    links, written = _links_at_budget(
+    assert (named, written) == (3, size)  # exactly fits, note in
+    named, written = _sources_at_budget(
         tmp_path / "c", monkeypatch, leads=3, budget=size - 1, note=note
     )
-    assert links == 2
+    assert named == 2
     assert written <= size - 1
     assert note.strip() in _note_page(tmp_path / "d", monkeypatch, note)
 
