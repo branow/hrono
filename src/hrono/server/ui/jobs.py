@@ -48,8 +48,7 @@ _WRITER_OPS = frozenset({"sync-tree", "maintain", "export"})
 # an operator reading a run log should not have to already know what
 # `cluster-briefs` does. The name stays, and this says it in a sentence.
 MEANS = {
-    "sync-tree": "re-read the sources and change only what the changes "
-    "touched — the everyday run",
+    "sync-tree": "update only what changed — the everyday run",
     "sync": "fetch a source's files",
     "split": "cut the files into sections",
     "embed": "turn sections into vectors",
@@ -60,13 +59,11 @@ MEANS = {
     "brief-upper": "write a summary for each topic that groups topics",
     "brief-preview": "write one topic's summary with a prompt that is not "
     "saved yet, and keep nothing",
-    "build-tree": "throw the tree away and build it again from nothing — "
-    "every section re-condensed, every brief rewritten, every model call paid "
-    "for twice",
+    "build-tree": "rebuild the whole tree from nothing; every model call is "
+    "paid again",
     "update": "re-file only what changed",
     "propagate": "mark the summaries a change has invalidated",
-    "maintain": "ingest the sources and build a tree that does not exist yet "
-    "— the first run. On a tree that does, it fills in what is missing",
+    "maintain": "build what is missing — the first run",
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
     "settle": "place the sections that were still waiting",

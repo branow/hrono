@@ -56,9 +56,11 @@ def test_a_waiting_section_shows_its_nearest_topic_and_score(
     page = _health(browser)
 
     row = page.split("near-a.md", 1)[1].split("</tr>", 1)[0]
-    nearest = row.split("</td>")[1]
-    assert f"/nodes/{a}?" in nearest and f"/nodes/{b}?" not in nearest
-    assert re.search(r'class="num">\d\.\d\d<', nearest)
+    place, fit = row.split("</td>")[1:3]
+    # the nearest topic is the one the place picker starts on, with its fit
+    assert f'value="{a}" selected' in place
+    assert f'value="{b}" selected' not in place
+    assert re.search(r">\d\.\d\d<", fit)
 
 
 def test_a_placement_made_from_the_list_survives_a_sync(
@@ -377,3 +379,18 @@ def test_a_misfits_nearer_topic_is_never_the_one_it_sits_in(
 
     assert f"/nodes/{a}?" in row.split("</td>")[1]
     assert f"/nodes/{a}?" not in row.split("</td>")[2]
+
+
+def test_the_pages_centroids_are_the_ones_the_monitor_uses(
+    browser: Browser,
+) -> None:
+    """The page computes centroids in one matrix pass for speed; it must
+    still name the nearest topic the pipeline would, so they match."""
+    from hrono.server import attention
+
+    ids, matrix = attention._centroids(browser.conn, TREE, MODEL)  # type: ignore[arg-type]
+    monitor = cluster_store.node_centroids(browser.conn, TREE, MODEL)  # type: ignore[arg-type]
+
+    assert sorted(ids) == sorted(monitor)
+    for row, node in enumerate(ids):
+        assert matrix[row].tolist() == pytest.approx(list(monitor[node]))

@@ -404,6 +404,10 @@ def test_the_guides_model_table_keeps_each_name_on_one_line(
     page = fresh_page
     page.set_viewport_size({"width": width, "height": 900})  # type: ignore[attr-defined]
     page.goto(f"{fresh.base}/ui/guide")  # type: ignore[attr-defined]
+    page.evaluate(  # type: ignore[attr-defined]
+        "document.querySelectorAll('details.guide-part')"
+        ".forEach(part => { part.open = true; })"
+    )
 
     lines = page.evaluate(  # type: ignore[attr-defined]
         """() => [...document.querySelectorAll(

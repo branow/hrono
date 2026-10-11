@@ -2,7 +2,7 @@
 {% block title %}hrono — {{ tree }} ask{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Ask<span class="tip" tabindex="0" role="note" data-tip="What recall hands an agent for this question: the passages, their source and score, and the topic that holds each">?</span></h1>
+  <h1>Ask<span class="tip" tabindex="0" role="note" data-tip="What recall hands an agent for this question: the passages, their source and score, and the topic that holds each. Questions you ask are kept in this browser only, for a day">?</span></h1>
 </div>
 
 <div class="stack">
@@ -14,11 +14,11 @@
     </label>
     <button class="btn primary" type="submit">Ask</button>
   </form>
-  <p class="hint">Asked before lives in this browser only, for a day. Ask one again to see what changed since.</p>
+
 
   {% if asked %}
   <nav class="crumbs" aria-label="asked before">
-    <span>Asked before:</span>
+    <span>Asked before<span class="tip" tabindex="0" role="note" data-tip="Kept in this browser only, for a day. Ask one again to see what changed since">?</span>:</span>
     {% for text, link in asked %}
     {% if not loop.first %}<span class="sep">·</span>{% endif %}
     <a href="{{ link }}">{{ text }}</a>
@@ -39,8 +39,8 @@
       <div><a class="btn small" href="/ui/trees/{{ tree }}/ask?tree={{ tree }}&q={{ question|urlencode }}">Ask again</a></div>
       {% else %}
       <div class="title">Recall cannot run on this server yet</div>
-      <p class="hint">{{ problem }}.</p>
-      <p class="hint">The query has to be embedded with the same model the tree was built with. Install the in-process backend with <code>uv pip install "hrono[embed]"</code> and restart the server, or check the embedding model in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>.</p>
+      {% set first = problem.split(";")[0] %}
+      <p class="hint">{{ first[:1]|upper }}{{ first[1:] }}. Install the in-process backend with <code>uv pip install "hrono[embed]"</code> and restart the server, or check the embedding model in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>.</p>
       {% endif %}
     </div>
   </div>

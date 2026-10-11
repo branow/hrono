@@ -101,10 +101,12 @@ def readable(html: str) -> list[str]:
 
 def banned(line: str) -> bool:
     """Whether a line says a banned word. `hrono[cluster]` is the name of a
-    package extra a person types, so it is not a word of the vocabulary."""
+    package extra a person types, so it is not a word of the vocabulary; and a
+    backticked span in a hint is an identifier, as `<code>` is on the page."""
     pattern = re.compile(
         rf"\b(?:re-?)?(?:{'|'.join(banned_words())})(?:s|ed|ing)?\b", re.I
     )
+    line = re.sub(r"`[^`]*`", "", line)
     return bool(pattern.search(re.sub(r"hrono\[\w+\]", "", line)))
 
 
@@ -442,7 +444,7 @@ def test_the_name_help_names_the_prefix_as_an_identifier(
     empty.sign_in()
     page = empty.client.get("/ui/config?add=sources&variant=git").text
 
-    assert "<code>node-</code>" in page
+    assert "`node-`" in page  # in the name's hint, marked as an identifier
     assert offences(page) == []
 
 

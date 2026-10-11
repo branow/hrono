@@ -12,15 +12,18 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+import numpy as np
+
 from hrono import naming, pins
 from hrono.cluster import incubator
-from hrono.cluster import store as cluster_store
-from hrono.cluster.blend import combined_vector
+from hrono.cluster.blend import blend_weights, combined_vector, path_body
 from hrono.errors import AppError
+from hrono.ingest.identity import content_hash as digest
 from hrono.server import triage
 from hrono.summarize import briefs
 
 SHOWN = 50
+_WEIGHTS = blend_weights()
 
 
 @dataclass(frozen=True)
@@ -58,18 +61,21 @@ class Held:
 class Centres:
     """Every leaf topic's centroid, worked out at most once and only if asked.
 
-    A centroid costs every member vector; a page that lists nothing waiting
-    and nothing misfiled must not pay for 9,000 of them, and a page that lists
-    both must pay once, not twice.
+    The same centroid `cluster.store.node_centroids` gives the monitor (the
+    mean of each member's combined vector, renormalized), computed as one
+    matrix pass: in pure Python it rebuilt 9,000 vectors on every visit to
+    the Health page. A page that lists nothing waiting and nothing misfiled
+    does not pay for it at all.
     """
 
     def __init__(
         self, conn: sqlite3.Connection, tree: str, model: str | None
     ) -> None:
         self._conn, self._tree, self._model = conn, tree, model
-        self._made: dict[int, tuple[float, ...]] | None = None
+        self._made: tuple[list[int], np.ndarray] | None = None
 
-    def __call__(self) -> dict[int, tuple[float, ...]]:
+    def __call__(self) -> tuple[list[int], np.ndarray]:
+        """The leaf ids and, row for row, their unit centroids."""
         if self._made is None:
             self._made = _centroids(self._conn, self._tree, self._model)
         return self._made
@@ -87,7 +93,7 @@ def waiting(
     if not shown:
         return len(rows), ()
     centroids = (centres or Centres(conn, tree, model))()
-    called = _names(conn, centroids, ())
+    called = _names(conn, centroids[0], ())
     return len(rows), tuple(
         _section(conn, called, centroids, model, sid, chash, path, None)
         for sid, chash, path, _ in shown
@@ -113,7 +119,7 @@ def misfits(
     if not rows:
         return 0, ()
     centroids = (centres or Centres(conn, tree, model))()
-    called = _names(conn, centroids, [int(row["node"]) for row in rows])
+    called = _names(conn, centroids[0], [int(row["node"]) for row in rows])
     return len(rows), tuple(
         _section(
             conn,
@@ -214,24 +220,76 @@ def release(
 
 def _centroids(
     conn: sqlite3.Connection, tree: str, model: str | None
-) -> dict[int, tuple[float, ...]]:
+) -> tuple[list[int], np.ndarray]:
     if model is None:
-        return {}
-    return cluster_store.node_centroids(conn, tree, model)
+        return [], np.zeros((0, 0))
+    members = conn.execute(
+        "SELECT m.node_id AS node, s.content_hash AS h, s.path AS path "
+        "FROM node_members m JOIN nodes n ON n.id = m.node_id "
+        "JOIN sections s ON s.id = m.section_id "
+        "WHERE n.tree = ? AND n.level = 0 ORDER BY m.node_id",
+        (tree,),
+    ).fetchall()
+    path_hash = {row["path"]: digest(path_body(row["path"])) for row in members}
+    vectors = _vectors(
+        conn, model, {row["h"] for row in members} | set(path_hash.values())
+    )
+    kept = [
+        row
+        for row in members
+        if row["h"] in vectors and path_hash[row["path"]] in vectors
+    ]
+    if not kept:
+        return [], np.zeros((0, 0))
+    content = _unit_rows(np.vstack([vectors[row["h"]] for row in kept]))
+    place = _unit_rows(
+        np.vstack([vectors[path_hash[row["path"]]] for row in kept])
+    )
+    combined = np.hstack((content * _WEIGHTS[0], place * _WEIGHTS[1]))
+    # rows arrive grouped by topic (ORDER BY node_id): sum each run of them
+    owner = np.array([int(row["node"]) for row in kept])
+    ids, starts, sizes = np.unique(owner, return_index=True, return_counts=True)
+    means = np.add.reduceat(combined, starts, axis=0) / sizes[:, None]
+    return [int(node) for node in ids], _unit_rows(means)
+
+
+def _vectors(
+    conn: sqlite3.Connection, model: str, hashes: set[str]
+) -> dict[str, np.ndarray]:
+    """Every stored vector of ``model`` among ``hashes``, in one read."""
+    found: dict[str, np.ndarray] = {}
+    wanted = sorted(hashes)
+    for start in range(0, len(wanted), 900):
+        chunk = wanted[start : start + 900]
+        marks = ",".join("?" * len(chunk))
+        for row in conn.execute(
+            "SELECT content_hash, vector FROM embeddings "  # noqa: S608
+            f"WHERE model_name = ? AND content_hash IN ({marks})",
+            (model, *chunk),
+        ):
+            found[row["content_hash"]] = np.frombuffer(
+                row["vector"], dtype=np.float32
+            ).astype(np.float64)
+    return found
+
+
+def _unit_rows(matrix: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    return np.divide(matrix, norms, out=matrix.copy(), where=norms != 0)
 
 
 def _names(
     conn: sqlite3.Connection,
-    centroids: dict[int, tuple[float, ...]],
+    nodes: list[int],
     extra: list[int] | tuple[int, ...],
 ) -> dict[int, str]:
-    return naming.names(conn, [*centroids, *extra])
+    return naming.names(conn, [*nodes, *extra])
 
 
 def _section(
     conn: sqlite3.Connection,
     called: dict[int, str],
-    centroids: dict[int, tuple[float, ...]],
+    centroids: tuple[list[int], np.ndarray],
     model: str | None,
     section_id: int,
     content_hash: str,
@@ -252,22 +310,22 @@ def _section(
 
 def _nearest(
     conn: sqlite3.Connection,
-    centroids: dict[int, tuple[float, ...]],
+    centroids: tuple[list[int], np.ndarray],
     model: str | None,
     content_hash: str,
     path: str,
     skip: int | None,
 ) -> tuple[int | None, float | None]:
-    if model is None:
+    ids, matrix = centroids
+    if model is None or not ids:
         return None, None
     vector = combined_vector(conn, content_hash, path, model)
     if vector is None:
         return None, None
-    scored = [
-        (node, sum(a * b for a, b in zip(vector, centre, strict=True)))
-        for node, centre in centroids.items()
-        if node != skip
-    ]
-    if not scored:
+    scores = matrix @ np.asarray(vector)
+    if skip in ids:
+        scores[ids.index(skip)] = -np.inf
+    best = int(np.argmax(scores))
+    if not np.isfinite(scores[best]):
         return None, None
-    return max(scored, key=lambda pair: pair[1])
+    return ids[best], float(scores[best])

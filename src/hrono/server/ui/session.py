@@ -25,7 +25,9 @@ from hrono.server.ui import (
 
 @router.get("/ui/login", response_class=HTMLResponse)
 def login_page(request: Request) -> Response:
-    return templates.TemplateResponse(request, "login.html", {"error": None})
+    return templates.TemplateResponse(
+        request, "login.html", {"rejected": False}
+    )
 
 
 @router.post("/ui/login")
@@ -47,7 +49,7 @@ async def sign_in(request: Request) -> Response:
         return templates.TemplateResponse(
             request,
             "login.html",
-            {"error": "that token was not accepted"},
+            {"rejected": True},
             status_code=401,
         )
     answer = RedirectResponse("/ui", status_code=303)

@@ -13,12 +13,12 @@
     <span class="chip">started {{ job.started }}</span>
     <span class="chip">{{ job.took }}</span>
     {% if job.scope.name %}<span class="chip">over {{ job.scope.name }}</span>{% endif %}
-    {% if job.spend %}{{ money(job.spend) }}{% elif job.cost %}{{ unrecorded(job.before_ledger, job.cost) }}{% endif %}
+    {% if not job.spend and job.cost %}{{ unrecorded(job.before_ledger, job.cost) }}{% endif %}
     <span class="chip plain mono">{{ job.short_id }}</span>
   </p>
 </div>
 
-<div class="topic-layout" id="run" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
+<div class="run-layout" id="run" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
 <div class="topic-main stack">
 
   {% if job.live %}
@@ -74,21 +74,26 @@
     <div class="card-head"><h2>What it spent<span class="tip" tabindex="0" role="note" data-tip="Every model call this run made, including those that failed. Embedding with a model run in this process spends no tokens">?</span></h2><a class="small" href="/ui/usage?tree={{ tree }}">Usage</a></div>
     <div class="card-body">
       {% if job.spend %}
-      <p class="row">{{ money(job.spend) }}
-        <span class="chip plain num">{{ job.spend.tokens }}</span>
-        {% if job.spend.cached %}<span class="chip plain num">{{ job.spend.cached }}</span>{% endif %}
-        <span class="chip plain num">{{ job.spend.time }} of model time</span></p>
+      <dl class="totals">
+        <div><dt>Cost</dt><dd>{{ money(job.spend) }}</dd></div>
+        <div><dt>Calls</dt><dd class="num">{{ "{:,}".format(job.spend.calls) }}</dd></div>
+        <div><dt>Tokens in</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_in) }}">{{ job.spend.tokens_in|compact }}</dd></div>
+        <div><dt>Tokens out</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_out) }}">{{ job.spend.tokens_out|compact }}</dd></div>
+        {% if job.spend.tokens_cached %}<div><dt>Cached</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_cached) }}">{{ job.spend.tokens_cached|compact }}</dd></div>{% endif %}
+        <div><dt>Model time</dt><dd class="num">{{ job.spend.time }}</dd></div>
+      </dl>
       {% if job.spend_by_stage|length > 1 %}
-      <div class="table-wrap mt-2">
-        <table>
-          <thead><tr><th>Stage</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
+      <div class="table-wrap mt-3">
+        <table class="usage">
+          <thead><tr><th>Stage</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th>Cost</th></tr></thead>
           <tbody>
             {% for row in job.spend_by_stage %}
             <tr data-stage="{{ row.stage }}">
               <td><code>{{ row.stage }}</code></td>
-              <td class="num">{{ row.calls }}</td>
-              <td class="num">{{ row.tokens }}</td>
-              <td class="num">{{ row.time }}</td>
+              <td class="count">{{ row.calls }}</td>
+              <td class="count" title="{{ '{:,}'.format(row.tokens_in) }}">{{ row.tokens_in|compact }}</td>
+              <td class="count" title="{{ '{:,}'.format(row.tokens_out) }}">{{ row.tokens_out|compact }}</td>
+              <td class="count">{{ row.time }}</td>
               <td>{{ money(row, true) }}</td>
             </tr>
             {% endfor %}
@@ -211,20 +216,13 @@
     </div>
   </section>
   {% endif %}
+  {% if job.raw %}
+  <details class="reveal" id="raw">
+    <summary>Raw result<span class="tip" tabindex="0" role="note" data-tip="What the run returned, as stored. The sections above are read from it">?</span></summary>
+    <pre class="preview">{{ job.raw|tojson(indent=2) }}</pre>
+  </details>
+  {% endif %}
 </div>
-
-<aside class="topic-aside stack">
-  <section class="card">
-    <div class="card-head"><h2>Raw result</h2></div>
-    <div class="card-body">
-      {% if job.raw %}
-      <pre class="preview">{{ job.raw|tojson(indent=2) }}</pre>
-      {% else %}
-      <div class="empty"><div class="title">No result recorded</div><div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">All runs</a></div></div>
-      {% endif %}
-    </div>
-  </section>
-</aside>
 </div>
 
 <script>

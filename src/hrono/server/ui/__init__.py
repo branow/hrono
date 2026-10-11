@@ -18,6 +18,7 @@ dependencies.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Annotated
@@ -85,6 +86,7 @@ templates.env.filters["counted"] = counted
 templates.env.filters["size"] = size
 templates.env.filters["weight"] = weight
 templates.env.filters["compact"] = compact
+templates.env.filters["fromjson"] = json.loads
 # the two leaf budgets, quoted on several pages: one source for the number
 templates.env.globals["limits"] = {
     "section": SECTION_BYTES,
