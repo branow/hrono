@@ -22,12 +22,9 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Callable, Mapping
-from itertools import chain, zip_longest
-from pathlib import Path
+from collections.abc import Mapping
 
-from hrono.export.collapse import ExportNode, ExportTree
-from hrono.ingest.split.constants import section_budget
+from hrono.export.collapse import ExportTree
 from hrono.naming import heading, names, sentence, slug, unframe
 from hrono.summarize import briefs
 
@@ -61,7 +58,6 @@ def render(
             notes.get(node_id),
             text,
             stems,
-            lambda child, leads: _leads_to(conn, tree, child, leads),
         )
     return files
 
@@ -78,40 +74,18 @@ def _node_markdown(
     note: str | None,
     brief: str,
     stems: Mapping[int, str],
-    leads_to: Callable[[int, int], str],
 ) -> str:
     node = tree.nodes[node_id]
     parts = [brief.rstrip()]
     if node.children:
         called = names(conn, node.children)
-
-        def listing(leads: int) -> str:
-            return "\n".join(
-                _child_entry(
-                    conn, child, called[child], stems, leads_to(child, leads)
-                )
+        parts.append("## Children")
+        parts.append(
+            "\n".join(
+                _child_entry(conn, child, called[child], stems)
                 for child in node.children
             )
-
-        # as many section links per entry as keep the page within one
-        # SECTION: a page at full WIDTH cannot afford any
-        # (the page is the parts joined by a blank line, the Children list
-        # and the human note among them, and a closing newline)
-        after = [f"## Notes\n\n{note}"] if note else []
-        base = (
-            len("\n\n".join([*parts, "## Children", "", *after]).encode()) + 1
         )
-        # the root carries no links: every turn of every session reads it,
-        # and what it spent on them cost the grep arm more than the walk
-        # arm saved
-        for leads in range(0 if node_id == tree.root else _LEADS, 0, -1):
-            children = listing(leads)
-            if base + len(children.encode()) <= _PAGE_BYTES:
-                break
-        else:
-            children = listing(0)
-        parts.append("## Children")
-        parts.append(children)
     elif node.sections:
         parts.append("## Sources")
         parts.append(_sources(conn, node.sections))
@@ -145,67 +119,17 @@ def _child_entry(
     child: int,
     title: str,
     stems: Mapping[int, str],
-    leads: str,
 ) -> str:
-    """An index page's entry: title, link, what the child holds, where to read.
+    """An index page's entry: title, link and what the child holds.
 
     The summary is there so an agent can choose a branch WITHOUT opening it;
     a wider page is only affordable if each entry says enough to skip
-    the ones that do not matter. ``leads`` names source files beneath the
-    child, so an agent that has chosen can open the answer in its repository.
+    the ones that do not matter. Source files are named once, on the leaf
+    that holds them, not sampled again on every page above it.
     """
     link = f"- [{title}]({_name(child, stems)}/brief.md)"
     summary = _summary(conn, child)
-    entry = f"{link} — {summary}" if summary else link
-    return f"{entry}\n  {leads}" if leads else entry
-
-
-def _leads_to(
-    conn: sqlite3.Connection,
-    tree: ExportTree,
-    child: int,
-    limit: int,
-) -> str:
-    """Up to ``limit`` source files beneath ``child``.
-
-    Taken in turn from each node of the subtree that holds sections, so a
-    child with many leaves shows several of them rather than the first one's
-    run, and a file split into several sections is named once. The count of
-    the rest says the list is a sample.
-    """
-    held = [
-        node.sections for node in _descendants(tree, child) if node.sections
-    ]
-    files = _distinct_files(
-        conn, [sid for sid in chain.from_iterable(zip_longest(*held)) if sid]
-    )
-    shown = files[:limit]
-    if not shown:
-        return ""
-    named = ", ".join(f"`{_section_heading(conn, sid)}`" for sid in shown)
-    rest = len(files) - len(shown)
-    return f"Sources: {named}" + (f" and {rest} more" if rest else "")
-
-
-def _distinct_files(
-    conn: sqlite3.Connection, section_ids: list[int]
-) -> list[int]:
-    """The first section of each file: a long file is several sections."""
-    seen: set[str] = set()
-    first: list[int] = []
-    for sid in section_ids:
-        path = _section_heading(conn, sid)
-        if path not in seen:
-            seen.add(path)
-            first.append(sid)
-    return first
-
-
-def _descendants(tree: ExportTree, node_id: int) -> list[ExportNode]:
-    node = tree.nodes[node_id]
-    return [node] + [
-        below for child in node.children for below in _descendants(tree, child)
-    ]
+    return f"{link} — {summary}" if summary else link
 
 
 def _summary(conn: sqlite3.Connection, node_id: int) -> str:
@@ -223,24 +147,28 @@ def _summary(conn: sqlite3.Connection, node_id: int) -> str:
 
 
 def _sources(conn: sqlite3.Connection, section_ids: tuple[int, ...]) -> str:
-    """A leaf's source files, each once: where to read it in the repository.
+    """A leaf's source files, each once, grouped under the source they are in.
 
     A path is relative to its source's repository, which the reading agent has
-    checked out; the source's name and commit say which one and which state.
+    checked out; the source's name and commit head each group once instead of
+    repeating on every line.
     """
-    seen: set[tuple[str, str]] = set()
-    lines: list[str] = []
+    groups: dict[str, list[str]] = {}
     for sid in section_ids:
         row = conn.execute(
             "SELECT source, path, version FROM sections WHERE id = ?", (sid,)
         ).fetchone()
-        if row is None or (row["source"], row["path"]) in seen:
+        if row is None:
             continue
-        seen.add((row["source"], row["path"]))
         version = str(row["version"] or "")[:7]
-        at = f" @ {version}" if version else ""
-        lines.append(f"- `{row['path']}` — {row['source']}{at}")
-    return "\n".join(lines)
+        where = f"{row['source']} @ {version}" if version else row["source"]
+        paths = groups.setdefault(where, [])
+        if row["path"] not in paths:
+            paths.append(row["path"])
+    return "\n\n".join(
+        f"{where}:\n\n" + "\n".join(f"- `{p}`" for p in paths)
+        for where, paths in groups.items()
+    )
 
 
 def _directory(
@@ -329,7 +257,5 @@ def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
 
 
 _SUMMARY_CHARS = 160
-_LEADS = 3
-_PAGE_BYTES = section_budget(Path("index.md"))  # one SECTION
 _NOT_PROSE = ("#", "-", "*", "|", ">", "```")
 _EMPHASIS = re.compile(r"[*_`]+")

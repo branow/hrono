@@ -88,14 +88,14 @@ def _source(conn: sqlite3.Connection, node: int, role: str, job: Job) -> str:
             f"a {role} prompt does not write for a level {level} topic"
         )
     if role == "brief":
-        texts = briefs.reduce_input(
+        source = briefs.reduce_input(
             conn, node, producer_model_name(conn, job.scope, "condense")
-        ).texts
+        ).rendered
     else:
-        texts = briefs.child_briefs(conn, node)
-    if not texts:
+        source = briefs.labeled(briefs.child_inputs(conn, node))
+    if not source:
         raise LLMError("this topic has nothing to write a brief from yet")
-    return "\n\n".join(texts)
+    return source
 
 
 OPS["brief-preview"] = brief_preview

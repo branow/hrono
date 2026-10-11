@@ -113,7 +113,7 @@ def brief(
 
     def call(entry: Pending) -> Written:
         _, inputs, _ = entry
-        source = "\n\n".join(inputs.texts)
+        source = inputs.rendered
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
         result, flagged = answer(
             completion,

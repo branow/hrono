@@ -79,6 +79,18 @@ def pending(
     return tuple((row["h"], bytes(row["body"])) for row in rows)
 
 
+def paths(conn: sqlite3.Connection, digests: list[str]) -> dict[str, str]:
+    """A file path for each content hash: the first, when several files hold
+    the same bytes (a condensation is shared by content)."""
+    rows = conn.execute(
+        "SELECT content_hash AS h, MIN(path) AS path FROM sections "
+        "WHERE content_hash IN (SELECT value FROM json_each(?)) "
+        "GROUP BY content_hash",
+        (json.dumps(digests),),
+    ).fetchall()
+    return {row["h"]: row["path"] for row in rows}
+
+
 def redo(
     conn: sqlite3.Connection, model_name: str, request: str
 ) -> tuple[str, ...]:

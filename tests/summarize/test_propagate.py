@@ -22,6 +22,7 @@ from hrono.llm.client import (
 )
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs, propagate
+from hrono.summarize import store as condense_store
 from hrono.summarize.propagate import (
     _JUDGE_MAX_TOKENS,
     BEST_OF,
@@ -757,3 +758,44 @@ def test_the_judge_reads_what_the_condense_model_wrote(
     # lookup finds nothing, the source is empty, and the panel votes on a blank
     # page while every call count still looks correct.
     assert "the condensed leaf content" in judge.requests[0].content
+
+
+def test_the_judge_is_shown_the_change_under_its_file(
+    db: Database, tmp_path: Path
+) -> None:
+    # the research judge read the summary and the CHANGE, not the whole topic
+    with db.connect() as conn, conn:
+        leaf = _leaf(conn)
+        for i in range(2):
+            body = f"leaf section {i}\n".encode()
+            condense_store.upsert(
+                conn, content_hash(body), "sonnet", f"condensed {i}", 1, 1
+            )
+        briefs.upsert(
+            conn,
+            leaf,
+            f"brief for {leaf}",
+            model_name="sonnet",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature="STALE-DOES-NOT-MATCH",
+            input_tokens=1,
+            output_tokens=1,
+            members=json.dumps(["git://ex/repo/gone.txt@v0"]),
+        )
+
+    judge = FakeJudge("none")
+    _run(db, judge, tmp_path)
+
+    shown = judge.requests[0].content
+    assert shown.startswith("S ADDED OR CHANGED:\n\n=== f.txt ===")
+    assert shown.count("=== f.txt ===") == 1  # one file, two sections
+    assert "condensed 0" in shown and "condensed 1" in shown
+    assert f"M brief for {leaf}" in shown
+
+
+def test_brief_inputs_are_grouped_under_their_labels() -> None:
+    assert (
+        briefs.labeled([("a.py", "one"), ("a.py", "two"), ("b.py", "three")])
+        == "=== a.py ===\n\none\n\ntwo\n\n=== b.py ===\n\nthree"
+    )

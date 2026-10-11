@@ -61,14 +61,19 @@ def condense(
         sections = store.pending(
             conn, model_name, request=request, sources=scope
         )
+        paths = store.paths(conn, [digest for digest, _ in sections])
     if not sections:
         return {"condensed": 0}
 
     completion = client_for(context, model, "condense", client=client)
 
     def render(section: Section) -> str:
+        # the file it came from, as the research prompt was given it: a
+        # model that knows it reads a test, a migration or a template says so
+        body = section[1].decode("utf-8", "replace")
+        path = paths.get(section[0])
         return template.replace(
-            _CONTENT_PLACEHOLDER, section[1].decode("utf-8", "replace")
+            _CONTENT_PLACEHOLDER, f"File: {path}\n\n{body}" if path else body
         )
 
     def call(pack: tuple[Section, ...]) -> list[Made]:

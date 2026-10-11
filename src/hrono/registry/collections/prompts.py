@@ -132,8 +132,9 @@ generalize names. Output only the summary in markdown.
 {content}"""
 
 _JUDGE = """\
-Below is the current summary of an area of a codebase, followed by the area's \
-content as it is now, after a change somewhere within it. Judge whether the \
+Below is the current summary of an area of a codebase, followed by a change \
+that occurred somewhere within it: the content added or changed, and the \
+content removed (each shown condensed, under its file). Judge whether this \
 change affects the summary:
 - "none": everything the summary says remains accurate and complete
 - "minor": a small detail of the summary should change (a value, a name, one \
@@ -141,13 +142,12 @@ local fact)
 - "major": statements in the summary become wrong, or important new facts now \
 belong in it
 Judge only against what the summary says or clearly should say at its level \
-of detail. Reply with the one word first (none, minor or major), then a \
-one-line reason.
+of detail. Reply with exactly one word: none, minor or major.
 
 CURRENT SUMMARY:
 {summary}
 
-CONTENT NOW:
+THE CHANGE:
 {source}"""
 
 _DEFAULTS: tuple[dict[str, object], ...] = (

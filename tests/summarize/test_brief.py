@@ -187,6 +187,7 @@ def test_prompt_is_rendered_over_the_condensations(db: Database) -> None:
     joined = "\n".join(client.contents)
     assert "Brief this group:" in joined
     assert "condensation of a.py" in joined
+    assert "=== a.py ===" in joined  # each condensation under its file
     assert "{content}" not in joined
 
 
