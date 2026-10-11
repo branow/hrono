@@ -236,7 +236,7 @@ def test_the_head_says_what_a_topic_is_in_one_quiet_line(
     browser: Browser,
 ) -> None:
     """Size, level and number are read, not clicked: plain text, no chips,
-    and the Edit button carries no badge inside it."""
+    and the head carries no edit panes, only a link down to Manage."""
     browser.sign_in()
     node = _node_id(browser)
 
@@ -247,7 +247,13 @@ def test_the_head_says_what_a_topic_is_in_one_quiet_line(
     assert "chip" not in meta.group(1)
     words = re.sub(r"<[^>]+>|\s+", " ", meta.group(1)).split()
     assert words[:5] == ["4", "sections", "level", "0", f"#{node}"]
-    assert '<summary class="btn">Edit</summary>' in page
+    assert 'href="#manage"' in meta.group(1)
+    head = page[
+        page.index('<div class="page-head">') : page.index(
+            'class="topic-layout"'
+        )
+    ]
+    assert "<form" not in head and "<details" not in head
 
 
 def test_every_text_switch_has_the_same_short_label(
@@ -748,21 +754,25 @@ def test_a_section_with_no_final_newline_counts_its_last_line(
     assert "lines 1-3<" in page
 
 
-def test_the_edit_actions_sit_in_the_page_head_for_an_admin(
+def test_the_edit_actions_sit_below_the_reading_for_an_admin(
     browser: Browser,
 ) -> None:
     _topic_over(browser, [_section(browser.conn, "docs/other.md", b"o\n")])
     browser.sign_in()
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
-    head = page[: page.index('class="topic-layout"')]
+    manage = page[page.index('id="manage"') :]
+    brief = page[
+        page.index('class="card brief-card"') : page.index('id="manage"')
+    ]
 
-    for action in ("rename", "brief", "note", "reparent", "merge", "split"):
-        assert f"/{action}" in head
+    assert "/brief" in brief  # the brief is edited where it is read
+    for action in ("rename", "note", "reparent", "merge", "split", "dissolve"):
+        assert f"/{action}" in manage
     # each destructive one says what it will change before it runs
-    assert "Folds this topic" in head
-    assert "re-filed under the nearest remaining topic" in head
-    assert "replaced by narrower ones" in head
+    assert "Folds this topic" in manage
+    assert "re-filed under the nearest remaining topic" in manage
+    assert "Replaced by narrower topics" in manage
     # moving a section is an edit too: tucked behind its own disclosure in
     # the open section, not shown beside what the section says
     move = page.index('class="move"')

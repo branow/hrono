@@ -55,13 +55,38 @@ class Held:
     since: str
 
 
+class Centres:
+    """Every leaf topic's centroid, worked out at most once and only if asked.
+
+    A centroid costs every member vector; a page that lists nothing waiting
+    and nothing misfiled must not pay for 9,000 of them, and a page that lists
+    both must pay once, not twice.
+    """
+
+    def __init__(
+        self, conn: sqlite3.Connection, tree: str, model: str | None
+    ) -> None:
+        self._conn, self._tree, self._model = conn, tree, model
+        self._made: dict[int, tuple[float, ...]] | None = None
+
+    def __call__(self) -> dict[int, tuple[float, ...]]:
+        if self._made is None:
+            self._made = _centroids(self._conn, self._tree, self._model)
+        return self._made
+
+
 def waiting(
-    conn: sqlite3.Connection, tree: str, model: str | None
+    conn: sqlite3.Connection,
+    tree: str,
+    model: str | None,
+    centres: Centres | None = None,
 ) -> tuple[int, tuple[Section, ...]]:
     """Parked sections, oldest first, each with the topic it is nearest to."""
     rows = incubator.pending(conn, tree)
-    centroids = _centroids(conn, tree, model)
     shown = rows[:SHOWN]
+    if not shown:
+        return len(rows), ()
+    centroids = (centres or Centres(conn, tree, model))()
     called = _names(conn, centroids, ())
     return len(rows), tuple(
         _section(conn, called, centroids, model, sid, chash, path, None)
@@ -70,7 +95,10 @@ def waiting(
 
 
 def misfits(
-    conn: sqlite3.Connection, tree: str, model: str | None
+    conn: sqlite3.Connection,
+    tree: str,
+    model: str | None,
+    centres: Centres | None = None,
 ) -> tuple[int, tuple[Section, ...]]:
     """Sections placed by rule: the topic each sits in, and the one it is
     nearest to besides."""
@@ -82,7 +110,9 @@ def misfits(
         "WHERE n.tree = ? AND m.forced = 1 ORDER BY m.node_id, s.id",
         (tree,),
     ).fetchall()
-    centroids = _centroids(conn, tree, model)
+    if not rows:
+        return 0, ()
+    centroids = (centres or Centres(conn, tree, model))()
     called = _names(conn, centroids, [int(row["node"]) for row in rows])
     return len(rows), tuple(
         _section(

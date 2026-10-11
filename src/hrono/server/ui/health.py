@@ -38,8 +38,9 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
         trees = _trees(conn)
         items = triage.survey(conn, tree)
         model = _model(conn)
-        parked_total, parked = attention.waiting(conn, tree, model)
-        misfit_total, misfit = attention.misfits(conn, tree, model)
+        centres = attention.Centres(conn, tree, model)
+        parked_total, parked = attention.waiting(conn, tree, model, centres)
+        misfit_total, misfit = attention.misfits(conn, tree, model, centres)
         context = {
             "parked_total": parked_total,
             "parked": parked,

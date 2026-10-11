@@ -121,11 +121,10 @@
 <div class="canvas listing" id="board" tabindex="-1" role="region" data-view="list" data-home="0"
      aria-label="topic list: {{ graph.shown }} topics">
 <table class="topics">
-  <thead>
+  <colgroup><col><col class="col-brief"></colgroup>
+  <thead class="visually-hidden">
     <tr>
       <th scope="col">Topic</th>
-      <th scope="col" class="col-holds">Holds</th>
-      <th scope="col" class="col-where">Where</th>
       <th scope="col" class="col-brief">Brief</th>
     </tr>
   </thead>
@@ -145,11 +144,10 @@
       <span class="fold" aria-hidden="true"></span>
       {% endif %}
       <a class="name" href="{{ node.read }}" title="{{ node.name }}"{% if node.focused %} aria-current="true"{% endif %}>{{ node.name }}</a>
+      <span class="meta" title="{{ holds }}{% if node.where %} · {{ node.where }}{% endif %}"><span class="num">{{ holds }}</span>{% if node.where %}<span class="where"> · <span class="mono">{{ node.where }}</span></span>{% endif %}</span>
       </span>
     </th>
-    <td class="col-holds num" title="{{ holds }}">{{ node.holds }}<span class="unit"> {{ holds.split(" ", 1)[1] }}</span></td>
-    <td class="col-where" title="{{ node.where }}">{{ node.where }}</td>
-    <td class="col-brief">{% if node.stale %}<span class="needs" title="Missing or out of date: recall cannot answer from this topic">needs one</span>{% else %}<span class="fine" title="Recall can answer from this topic">ok</span>{% endif %}</td>
+    <td class="col-brief">{% if node.stale %}<span class="needs" title="Missing or out of date: recall cannot answer from this topic">needs a brief</span>{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>
