@@ -100,14 +100,26 @@ def _query(live: Live, sql: str) -> list[tuple]:
 def test_no_route_scrolls_sideways(
     page: object, live: Live, width: int
 ) -> None:
-    page.set_viewport_size({"width": width, "height": 900})  # type: ignore[attr-defined]
+    # Network idle is half a second of quiet after a page loads. One tab per
+    # route lets those half seconds pass together instead of one after another;
+    # each tab is still measured only once its own page has gone quiet.
+    routes = _routes(live)
+    tabs = (
+        [page]
+        + [
+            page.context.new_page()  # type: ignore[attr-defined]
+            for _ in routes[1:]
+        ]
+    )
+    for tab, route in zip(tabs, routes, strict=True):
+        tab.set_viewport_size({"width": width, "height": 900})
+        tab.goto(live.base + route)
     wide = {}
-    for route in _routes(live):
-        page.goto(live.base + route)  # type: ignore[attr-defined]
-        page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
+    for tab, route in zip(tabs, routes, strict=True):
+        tab.wait_for_load_state("networkidle")
         if route != "/ui/login":
-            assert "/ui/login" not in page.url  # type: ignore[attr-defined]
-        over = page.evaluate(  # type: ignore[attr-defined]
+            assert "/ui/login" not in tab.url
+        over = tab.evaluate(
             "document.documentElement.scrollWidth - "
             "document.documentElement.clientWidth"
         )

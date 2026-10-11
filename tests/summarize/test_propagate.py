@@ -30,6 +30,7 @@ from hrono.summarize.propagate import (
     _verdict,
 )
 from tests.context import job_context
+from tests.repo_template import memoized
 
 TREE = "default"
 
@@ -315,6 +316,7 @@ def _fake_build(vectors: object, *, init: object = None) -> ClusterResult:
     )
 
 
+@memoized
 def _make_repo(path: Path) -> str:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)

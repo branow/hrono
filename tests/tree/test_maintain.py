@@ -20,6 +20,7 @@ from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
 from tests.cluster.invariant import assert_every_leaf_is_reachable
 from tests.context import job_context
+from tests.repo_template import memoized
 
 DIMS = 8
 
@@ -54,6 +55,7 @@ def fake_build(vectors: object, *, init: object = None) -> ClusterResult:
     )
 
 
+@memoized
 def make_repo(path: Path, files: int = 9) -> str:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)

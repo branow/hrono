@@ -31,6 +31,7 @@ from tests.cluster.invariant import (
     assert_pool_invariant,
 )
 from tests.context import job_context
+from tests.repo_template import memoized
 
 DIMS = 8
 
@@ -68,6 +69,7 @@ def _git(path: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(path), *args], check=True)
 
 
+@memoized
 def make_repo(path: Path, files: int = 9) -> str:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)

@@ -17,6 +17,7 @@ from hrono.jobs.worker import Worker
 from hrono.paths import cache_root
 from hrono.registry import store as registry_store
 from tests.context import job_context
+from tests.repo_template import memoized
 
 KEY = Fernet.generate_key()
 
@@ -30,6 +31,7 @@ def git(cwd: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+@memoized
 def make_repo(path: Path, content: str = "one") -> str:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)
