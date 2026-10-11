@@ -233,7 +233,7 @@ def test_home_shows_the_total_and_the_last_runs_spend(panel: Panel) -> None:
 
     spent = page.split('id="spent"')[1].split("</section>")[0]
     assert "$10.00" in spent  # all of it
-    assert "5,000,000 in" in spent
+    assert 'title="5,000,000"' in spent  # the exact figure, on the cell
     assert 'href="/ui/usage?tree=default"' in spent
     assert re.search(r"Last run.*?\$2\.00", spent, re.S)
 

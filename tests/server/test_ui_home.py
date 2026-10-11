@@ -144,7 +144,7 @@ def test_a_source_at_the_remotes_commit_is_up_to_date_and_says_where(
     assert 'data-state="current"' in _row(page, "docs")
     assert head_of(repo)[:8] in _row(page, "docs")
     assert "03 Oct 10:00" in _row(page, "docs")
-    assert "up to date with every source" in page
+    assert "sources behind" not in page and "source behind" not in page
 
 
 def test_each_source_has_its_own_row(browser: Browser, tmp_path: Path) -> None:
@@ -181,7 +181,7 @@ def test_home_counts_only_the_sources_the_tree_is_built_from(
     page = browser.home()
 
     assert 'data-source="other"' not in page
-    assert "up to date with every source" in page
+    assert "sources behind" not in page and "source behind" not in page
 
 
 def test_a_commit_pinned_by_the_real_sync_reads_as_up_to_date_then_behind(

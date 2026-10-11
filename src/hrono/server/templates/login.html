@@ -3,35 +3,25 @@
 {% block chrome %}{% endblock %}
 {% block main %}
 <div class="gate">
-  <div class="card">
-    <div class="card-body stack">
-      <div class="mark">
-        <svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 5v2.2M8 8L4.2 10M8 8l3.8 2" stroke="currentColor" stroke-width="1.1" fill="none" opacity=".45"/>
-          <circle cx="8" cy="3" r="2.2" fill="currentColor"/>
-          <circle cx="3.6" cy="12" r="2.2" fill="currentColor" opacity=".7"/>
-          <circle cx="12.4" cy="12" r="2.2" fill="currentColor" opacity=".7"/>
-        </svg>
-        hrono
-      </div>
-      <p class="hint">A browsable map of what hrono has read.</p>
-      {% if error %}
-      <div class="callout bad">
-        <div class="body">
-          <div class="title">That token was not accepted</div>
-        </div>
-      </div>
-      {% endif %}
-      <form method="post" action="/ui/login" class="stack">
-        <div class="field">
-          <label for="token">API token</label>
-          <input type="password" id="token" name="token" aria-label="api token"
-                 autofocus autocomplete="off" placeholder="paste your token">
-          <span class="hint">The same token the <code>hrono</code> CLI uses.</span>
-        </div>
-        <div><button class="btn primary" type="submit">Sign in</button></div>
-      </form>
-    </div>
+  <div class="mark">
+    <svg width="56" height="56" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 5v2.2M8 8L4.2 10M8 8l3.8 2" stroke="currentColor" stroke-width="1.1" fill="none" opacity=".45"/>
+      <circle cx="8" cy="3" r="2.2" fill="currentColor"/>
+      <circle cx="3.6" cy="12" r="2.2" fill="currentColor" opacity=".7"/>
+      <circle cx="12.4" cy="12" r="2.2" fill="currentColor" opacity=".7"/>
+    </svg>
+    <span>hrono</span>
   </div>
+  <form class="card gate-form" method="post" action="/ui/login">
+    {% if error %}
+    <p class="gate-error" role="alert">That token was not accepted.</p>
+    {% endif %}
+    <div class="field">
+      <label for="token">Token<span class="tip" tabindex="0" role="note" data-tip="The API token the hrono CLI uses">?</span></label>
+      <input type="password" id="token" name="token" aria-label="api token"
+             autofocus autocomplete="off" placeholder="paste your token">
+    </div>
+    <button class="btn primary gate-go" type="submit">Sign in</button>
+  </form>
 </div>
 {% endblock %}

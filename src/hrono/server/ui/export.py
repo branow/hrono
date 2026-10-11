@@ -169,7 +169,7 @@ def connect_snippets(
     return [
         (
             "cli",
-            "Ask from the command line",
+            "Command line",
             f"hrono profile add {name_arg} --server {shlex.quote(server)}"
             f" --token {TOKEN}\n"
             f"hrono profile use {name_arg}\n"
@@ -177,14 +177,14 @@ def connect_snippets(
         ),
         (
             "http",
-            "Ask over HTTP",
+            "HTTP",
             f"curl -s -X POST {shlex.quote(base + '/recall')} {header} \\\n"
             '  -H "Content-Type: application/json" \\\n'
             '  -d \'{"question": "what does this tree know about ...?"}\'',
         ),
         (
             "export",
-            "Hand over the export",
+            "Export",
             f"hrono profile use {name_arg} && \\\n"
             f"hrono tree export {name_arg} -o {folder} --levels {levels}\n"
             f"curl -s {shlex.quote(f'{base}/export.zip?levels={levels}')}"

@@ -155,7 +155,6 @@ def test_only_an_admin_is_offered_the_access_tab(
         (f"/ui/trees/{TREE}/graph", "Map"),
         (f"/ui/trees/{TREE}/find", "Find"),
         (f"/ui/trees/{TREE}/outline", "Find"),
-        (f"/ui/trees/{TREE}/files", "Find"),
         (f"/ui/trees/{TREE}/ask", "Ask"),
         ("/ui/jobs", "Runs"),
         ("/ui/jobs/finished", "Runs"),
@@ -323,3 +322,16 @@ def test_an_outcome_is_said_once_on_a_page_that_used_to_say_it_itself(
     page = browser.get("/ui/config?section=sources&done=saved+one")
 
     assert page.count("saved one") == 1
+
+
+def test_the_old_files_page_opens_search_narrowed_to_files(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    answer = browser.client.get(
+        f"/ui/trees/{TREE}/files?path=src/a.py", follow_redirects=False
+    )
+
+    assert answer.status_code == 307
+    assert answer.headers["location"].endswith("q=src%2Fa.py&within=files")

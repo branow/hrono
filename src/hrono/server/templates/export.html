@@ -3,7 +3,6 @@
 {% block title %}hrono — {{ tree }} export{% endblock %}
 {% block main %}
 <div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
   <h1>Export<span class="tip" tabindex="0" role="note" data-tip="The tree as a folder of Markdown files an agent reads: root.md first, one link per level down to the source text">?</span></h1>
 </div>
 
@@ -20,14 +19,14 @@
   {% if can_write %}
   <form class="toolbar" method="post" action="/ui/trees/{{ tree }}/export">
     <label class="field">
-      <span>Hops from root.md to a section<span class="tip" tabindex="0" role="note" data-tip="Fewer hops make each page list more topics. At least 2">?</span></span>
+      <span>Depth<span class="tip" tabindex="0" role="note" data-tip="Hops from root.md to a section. Fewer hops make each page list more topics. At least 2">?</span></span>
       <input class="narrow" type="number" name="levels" min="2" max="30" value="{{ levels }}">
     </label>
-    <button class="btn small primary" type="submit"{% if running %} disabled{% endif %}>{{ "Export again" if exported else "Export" }}</button>
-    {% if exported %}<a class="btn small" href="{{ download }}" download>Download .zip</a>{% endif %}
+    <button class="btn primary" type="submit"{% if running %} disabled{% endif %}>{{ "Export again" if exported else "Export" }}</button>
+    {% if exported %}<a class="btn" href="{{ download }}" download>Download .zip</a>{% endif %}
   </form>
   {% elif exported %}
-  <div class="toolbar"><a class="btn small primary" href="{{ download }}" download>Download .zip</a></div>
+  <div class="toolbar"><a class="btn primary" href="{{ download }}" download>Download .zip</a></div>
   {% endif %}
 
   {% if running %}
@@ -96,7 +95,7 @@
   <section class="card" id="connect">
     <div class="card-body stack">
       <h2>Connect an agent</h2>
-      <p class="hint">Each snippet is filled with this server and tree. Replace <code>YOUR_TOKEN</code> with a token from the Access page; a reader's token is enough. The export snippet uses the profile the first one adds, and if you added it already, skip that <code>profile add</code> line, which fails on a duplicate.</p>
+      <p class="hint">Replace <code>YOUR_TOKEN</code> with a token from Access; a reader's is enough.<span class="tip" tabindex="0" role="note" data-tip="Each snippet is filled with this server and tree. The export snippet uses the profile the first one adds; if you added it already, skip that profile add line, which fails on a duplicate">?</span></p>
       {% for key, heading, text in snippets %}
       <div class="stack" data-snippet="{{ key }}">
         <div class="act-row">
