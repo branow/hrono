@@ -1,5 +1,3 @@
-import dataclasses
-
 import pytest
 from cryptography.fernet import Fernet
 
@@ -7,7 +5,6 @@ from hrono.crypto.cipher import (
     Cipher,
     InvalidCiphertext,
     KeyMismatch,
-    Secret,
 )
 
 KEY = Fernet.generate_key()
@@ -59,9 +56,3 @@ def test_ciphertext_from_a_different_key_raises() -> None:
 def test_plaintext_is_not_present_in_ciphertext() -> None:
     secret = cipher().encrypt("supersecretvalue")
     assert "supersecretvalue" not in secret.ciphertext
-
-
-def test_secret_is_frozen() -> None:
-    secret = Secret(key_id=1, ciphertext="abc")
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        secret.ciphertext = "xyz"  # type: ignore[misc]

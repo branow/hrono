@@ -19,16 +19,12 @@ def test_add_persists_and_first_becomes_current(tmp_path: Path) -> None:
     box = store(tmp_path)
     box.add(Profile("prod", "https://prod", "tok-prod", "root"))
     box.add(Profile("dev", "https://dev", "tok-dev"))
-    assert [c.name for c in box.profiles()] == ["prod", "dev"]
+    assert list(box.profiles()) == [
+        Profile("prod", "https://prod", "tok-prod", "root"),
+        Profile("dev", "https://dev", "tok-dev"),
+    ]
     assert box.current() is not None
     assert box.current().name == "prod"
-
-
-def test_stored_profile_round_trips_all_fields(tmp_path: Path) -> None:
-    box = store(tmp_path)
-    box.add(Profile("prod", "https://prod", "tok", "main"))
-    stored = box.profiles()[0]
-    assert stored == Profile("prod", "https://prod", "tok", "main")
 
 
 def test_add_duplicate_name_raises_without_overwriting(tmp_path: Path) -> None:

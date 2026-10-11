@@ -12,17 +12,24 @@ from hrono.db.database import Database
 from hrono.jobs import store as jobs_store
 from hrono.llm.claude_code import ClaudeCodeClient
 from hrono.llm.client import AnthropicClient, LLMError
+from hrono.llm.openai import OpenAIClient
 from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
 from tests.context import job_context
 
 
-def _connection(conn: object, name: str, provider: str) -> None:
+def _connection(
+    conn: object, name: str, provider: str, endpoint: str | None = None
+) -> None:
+    config: dict[str, object] = {"name": name, "provider": provider}
+    config["auth"] = {}
+    if endpoint is not None:
+        config["endpoint"] = endpoint
     registry_store.insert(
         conn,  # type: ignore[arg-type]
         "connections",
         name,
-        json.dumps({"name": name, "provider": provider, "auth": {}}),
+        json.dumps(config),
         None,
         "t",
     )
@@ -34,6 +41,8 @@ def db(tmp_path: Path):
     with database.connect() as conn, conn:
         _connection(conn, "sdk", "anthropic")
         _connection(conn, "cli", "claude-code")
+        _connection(conn, "oa", "openai")
+        _connection(conn, "local", "openai-compatible", "http://127.0.0.1:1/v1")
     yield database
     database.close()
 
@@ -42,12 +51,24 @@ def _model(connection: str | None) -> dict[str, object]:
     return {"name": "m", "kind": "text", "connection": connection}
 
 
-def test_a_claude_code_connection_resolves_to_the_cli_client(
+def test_each_provider_resolves_to_its_own_client(
     db: Database, tmp_path: Path
 ) -> None:
-    client = client_for(job_context(db, tmp_path), _model("cli"), "brief")
-
-    assert isinstance(client.inner, ClaudeCodeClient)
+    context = job_context(
+        db, tmp_path, Cipher(Fernet(Fernet.generate_key()), 1)
+    )
+    expected = {
+        "cli": ClaudeCodeClient,
+        "sdk": AnthropicClient,
+        "oa": OpenAIClient,
+        "local": OpenAIClient,
+    }
+    wrong = {}
+    for connection, cls in expected.items():
+        inner = client_for(context, _model(connection), "brief").inner
+        if not isinstance(inner, cls):
+            wrong[connection] = type(inner).__name__
+    assert wrong == {}
 
 
 def test_the_cli_client_runs_in_the_contexts_own_directory(
@@ -67,18 +88,6 @@ def test_the_cli_client_runs_in_the_contexts_own_directory(
     assert clones not in cli_dir.parents  # and not inside it
     assert cli_dir not in clones.parents  # nor an ancestor of the clones
     assert cli_dir.is_relative_to(clones.parent)  # still hrono-owned
-
-
-def test_an_anthropic_connection_still_resolves_to_the_sdk_client(
-    db: Database, tmp_path: Path
-) -> None:
-    context = job_context(
-        db, tmp_path, Cipher(Fernet(Fernet.generate_key()), 1)
-    )
-
-    client = client_for(context, _model("sdk"), "brief")
-
-    assert isinstance(client.inner, AnthropicClient)
 
 
 def test_a_model_with_no_connection_keeps_the_anthropic_default(

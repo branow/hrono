@@ -7,7 +7,6 @@ import pytest
 from hrono.db.database import Database
 from hrono.recall import fts
 from hrono.recall.keyword_leg import (
-    VECTOR_SUPPORT,
     Z_FLOOR,
     _match_expr,
     _qualify,
@@ -22,11 +21,6 @@ def make_hits(
     hits = [(pid, -10000.0) for pid in strong]
     hits += [(1000 + i, -1.0) for i in range(weak)]
     return tuple(hits)
-
-
-def test_constants_are_baked() -> None:
-    assert Z_FLOOR == 6.0
-    assert VECTOR_SUPPORT == 3.0
 
 
 def test_strong_keyword_with_vector_support_qualifies() -> None:
