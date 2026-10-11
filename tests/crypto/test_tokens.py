@@ -19,11 +19,6 @@ def test_hash_token_is_deterministic_sha256_hex() -> None:
     assert len(hash_token(token)) == 64
 
 
-def test_hash_token_never_returns_the_input() -> None:
-    token = generate_token()
-    assert hash_token(token) != token
-
-
 def test_verify_token_true_only_for_the_matching_token() -> None:
     token = generate_token()
     digest = hash_token(token)

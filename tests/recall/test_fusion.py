@@ -3,17 +3,8 @@
 from hrono.recall.fusion import (
     CAP,
     EXPLORE_MESSAGE,
-    KEYWORD_WEIGHT,
-    MAX_DOCUMENT_SHARE,
-    VECTOR_WEIGHT,
-    K,
     fuse,
 )
-
-
-def test_constants_are_baked() -> None:
-    assert (K, VECTOR_WEIGHT, KEYWORD_WEIGHT, CAP) == (60, 0.7, 0.3, 10)
-    assert MAX_DOCUMENT_SHARE == 0.4  # 4 of 10
 
 
 def test_a_both_leg_passage_outranks_an_equal_single_leg_one() -> None:

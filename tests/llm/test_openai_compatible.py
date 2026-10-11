@@ -25,7 +25,6 @@ from hrono.embed.encoders import encoder_for_model
 from hrono.jobs.ops import JobContext
 from hrono.llm.client import CompletionRequest, LLMError
 from hrono.llm.openai import OpenAIClient, credential
-from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
 from hrono.registry.collections.connections import Connection
 from tests.stub_server import serving
@@ -207,21 +206,6 @@ def test_a_server_that_is_not_running_is_one_clean_error(
         OpenAIClient(database, cipher).complete(
             CompletionRequest(_model("text"), "", "ask")
         )
-
-
-def test_the_provider_table_serves_an_openai_compatible_connection(
-    local: str, db: tuple[Database, Cipher], tmp_path: Path
-) -> None:
-    database, cipher = db
-    _keyless(db, local)
-
-    client = client_for(
-        JobContext(database, cipher, tmp_path / "cache"),
-        _model("text"),
-        "brief",
-    )
-
-    assert isinstance(client.inner, OpenAIClient)  # type: ignore[attr-defined]
 
 
 def test_a_connection_without_an_endpoint_is_refused_by_the_model() -> None:

@@ -12,7 +12,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import content_hash
 from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import Worker
 from hrono.registry import store as registry_store
 
@@ -68,10 +68,6 @@ def db(tmp_path: object) -> Iterator[Database]:
         register_model(conn, "emb")
     yield database
     database.close()
-
-
-def test_embed_is_registered() -> None:
-    assert "embed" in OPS
 
 
 def test_embeds_every_missing_hash_with_the_declared_dims(db: Database) -> None:

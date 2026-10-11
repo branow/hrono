@@ -131,13 +131,11 @@ def _passages(db: Database) -> list[tuple[str, str]]:
         ]
 
 
-def test_there_are_passages(db: Database) -> None:
-    assert len(_passages(db)) >= 2
-
-
 def test_every_passage_has_a_content_and_a_path_vector(db: Database) -> None:
+    passages = _passages(db)
+    assert len(passages) >= 2  # the loop below must not pass vacuously
     with db.connect() as conn:
-        for chash, path in _passages(db):
+        for chash, path in passages:
             assert get_vector(conn, chash, "emb") is not None
             path_hash = content_hash(path_body(path))
             assert get_vector(conn, path_hash, "emb") is not None

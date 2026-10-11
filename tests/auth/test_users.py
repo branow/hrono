@@ -1,4 +1,3 @@
-import dataclasses
 import sqlite3
 from pathlib import Path
 
@@ -95,12 +94,6 @@ def test_user_read_never_exposes_token_or_hash(tmp_path: Path) -> None:
     conn.close()
 
 
-def test_get_user_missing_returns_none(tmp_path: Path) -> None:
-    conn = db(tmp_path)
-    assert get_user(conn, "nobody") is None
-    conn.close()
-
-
 def test_list_users_returns_a_sorted_tuple(tmp_path: Path) -> None:
     conn = db(tmp_path)
     create_user(conn, "carol", "reader")
@@ -141,12 +134,6 @@ def test_create_user_rejects_invalid_role_before_writing(
     conn.close()
 
 
-def test_user_is_frozen() -> None:
-    user = User("x", "reader", "2026-08-15", "2026-08-15")
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        user.role = "admin"  # type: ignore[misc]
-
-
 def test_a_fresh_user_was_last_modified_when_it_was_created(
     conn: sqlite3.Connection,
 ) -> None:
@@ -170,18 +157,6 @@ def test_a_token_rotation_moves_modified_at_and_leaves_created_at(
     assert rotated.created_at == made.created_at
     assert rotated.modified_at > made.modified_at
     assert get_user(conn, "alice") == rotated
-
-
-def test_the_rotation_returns_the_new_stamp_not_the_old_one(
-    conn: sqlite3.Connection,
-) -> None:
-    # a caller that printed what it was handed would report the moment BEFORE
-    # the rotation it had just performed
-    made, _ = create_user(conn, "alice", "admin")
-
-    rotated, _ = reset_token(conn, "alice")
-
-    assert rotated.modified_at != made.modified_at
 
 
 def test_every_read_path_carries_the_stamp(

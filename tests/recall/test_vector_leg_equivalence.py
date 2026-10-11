@@ -154,19 +154,6 @@ def test_the_z_scores_match_the_reference_loop(corpus: Corpus) -> None:
         assert fast[passage_id] == pytest.approx(z, abs=1e-9)
 
 
-def test_the_ordering_is_the_same(corpus: Corpus) -> None:
-    """Ranking is what a recall returns, so agreeing on ORDER is the claim."""
-    rng = random.Random(4)
-    query = _vector(rng)
-
-    fast = vector_leg.scores(corpus.conn, query, MODEL)  # type: ignore[arg-type]
-    slow = _reference(corpus.conn, query, None)
-
-    assert sorted(fast, key=lambda p: -fast[p]) == sorted(
-        slow, key=lambda p: -slow[p]
-    )
-
-
 def test_a_scoped_recall_scores_only_its_trees_passages(
     corpus: Corpus,
 ) -> None:

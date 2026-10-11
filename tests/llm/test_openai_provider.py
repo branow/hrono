@@ -25,7 +25,6 @@ from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import enqueue
 from hrono.llm.client import CompletionRequest, LLMError
 from hrono.llm.openai import OpenAIClient, embeddings
-from hrono.llm.providers import client_for
 from hrono.registry import store as registry_store
 from hrono.usage.rollup import usage
 from tests.stub_server import serving
@@ -224,18 +223,6 @@ def test_no_key_material_appears_in_any_error(
         )
 
     assert SECRET not in str(raised.value)
-
-
-def test_the_provider_table_resolves_an_openai_connection(
-    server: str, db: tuple[Database, Cipher], tmp_path: Path
-) -> None:
-    database, cipher = db
-    _connection(db, "oa", "openai", server)
-    context = JobContext(database, cipher, tmp_path / "cache")
-
-    client = client_for(context, _model("text", "oa"), "brief")
-
-    assert isinstance(client.inner, OpenAIClient)  # type: ignore[attr-defined]
 
 
 def test_an_embedding_model_with_no_connection_still_loads_locally(

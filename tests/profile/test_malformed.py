@@ -26,20 +26,6 @@ WRONG_SHAPE = (
 )
 
 
-@pytest.mark.parametrize("text", [INVALID_TOML, WRONG_SHAPE])
-def test_malformed_config_errors_cleanly(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, text: str
-) -> None:
-    write_config(tmp_path, text)
-    result = run(monkeypatch, tmp_path, "list")
-    assert result.exit_code != 0
-    assert "Malformed config" in result.output
-    assert "Traceback" not in result.output
-    assert result.exception is None or not isinstance(
-        result.exception, KeyError
-    )
-
-
 def test_error_never_contains_the_token(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -49,10 +35,14 @@ def test_error_never_contains_the_token(
     assert TOKEN not in result.output
 
 
+@pytest.mark.parametrize(
+    "text", [INVALID_TOML, WRONG_SHAPE], ids=["invalid-toml", "wrong-shape"]
+)
 def test_every_command_reports_malformed_config(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, text: str
 ) -> None:
-    write_config(tmp_path, INVALID_TOML)
+    write_config(tmp_path, text)
+    failures = []
     for args in (
         ["list"],
         ["current"],
@@ -61,8 +51,15 @@ def test_every_command_reports_malformed_config(
         ["add", "x", "--server", "u", "--token", "t"],
     ):
         result = run(monkeypatch, tmp_path, *args)
-        assert result.exit_code != 0
-        assert "Malformed config" in result.output
+        clean = (
+            result.exit_code != 0
+            and "Malformed config" in result.output
+            and "Traceback" not in result.output
+            and not isinstance(result.exception, KeyError)
+        )
+        if not clean:
+            failures.append(f"{' '.join(args)}: {result.output!r}")
+    assert failures == []
 
 
 def test_well_formed_config_still_works(
