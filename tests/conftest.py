@@ -14,6 +14,8 @@ import os
 
 import pytest
 
+from tests import template_db
+
 for _name in (
     "OMP_NUM_THREADS",
     "OPENBLAS_NUM_THREADS",
@@ -22,6 +24,10 @@ for _name in (
     "NUMBA_NUM_THREADS",
 ):
     os.environ.setdefault(_name, "1")
+
+# Before any test module imports ``open_database``: a new database is a copy
+# of one migrated once per process (see tests/template_db.py).
+template_db.install()
 
 
 # Importing umap and compiling its numba kernels costs about nine seconds once
