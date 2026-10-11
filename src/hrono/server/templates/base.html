@@ -11,6 +11,12 @@
 :root {
   --topbar: 3.3rem;
   color-scheme: light dark;
+}
+/* Native controls (checkboxes, selects, scrollbars) follow the chosen theme,
+   not the system's: a light page on a dark system must not draw black boxes. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+:root {
 
   --bg: #F5F2EC;
   --surface: #FFFDF9;
@@ -426,6 +432,7 @@ form.inline { display: inline; }
 /* ---------------------------------------------------------------- fields */
 select, input, textarea {
   font: inherit;
+  font-weight: 400; /* never the weight of the label wrapped around it */
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--rule-firm);
@@ -1254,7 +1261,7 @@ ul.members summary .fit.warn-text { color: var(--warn); }
   display: inline-flex; align-items: center; gap: .35rem;
   font-size: .8125rem; font-weight: 500; color: var(--ink-soft); cursor: pointer; white-space: nowrap;
 }
-.confirm input { margin: 0; accent-color: var(--danger); }
+.confirm input { margin: 0; width: 1rem; height: 1rem; flex: none; accent-color: var(--danger); }
 
 /* ---------------------------------------------------------- topic: manage */
 /* Changing a topic sits below reading it, as one form of rows: the name of
@@ -1725,6 +1732,47 @@ fieldset.fields + fieldset.fields { padding-top: var(--s3); border-top: 1px soli
 .fields .hint { font-size: .75rem; margin: 0; }
 .needed { color: var(--accent); margin-left: .15rem; }
 #steps .chip { font: 560 .8125rem/1.5 var(--sans); }
+/* Access: one row per person, every cell on the same middle line, actions
+   in one right-hand column; a confirmation replaces the actions in place. */
+table.people td { vertical-align: middle; padding-top: .55rem; padding-bottom: .55rem; }
+table.people .name strong { font-weight: 600; }
+table.people .you { margin-left: .5rem; font-size: .75rem; color: var(--ink-faint); }
+table.people .acts { text-align: right; white-space: nowrap; width: 1%; }
+table.people .acts .btn + .btn { margin-left: var(--s2); }
+table.people tr.asking > td { background: var(--sunken); }
+table.people tr.asking:not(.ask-row) > td { border-bottom: 0; }
+table.people tr.ask-row > td { padding: var(--s2) var(--s3) var(--s3); }
+.role-form { display: flex; gap: var(--s2); align-items: center; margin: 0; }
+.role-form select { min-width: 7.5rem; }
+form.ask { display: flex; align-items: center; justify-content: flex-end; gap: var(--s2) var(--s3); flex-wrap: wrap; margin: 0; }
+.ask-says { font-size: .8125rem; color: var(--ink-soft); margin-right: auto; }
+.ask-says strong { color: var(--ink); font-weight: 600; margin-right: .25rem; }
+.add-row { display: grid; grid-template-columns: minmax(10rem, 18rem) 10rem auto; gap: var(--s3); align-items: end; justify-content: start; margin: 0; }
+.add-row select, .add-row input { width: 100%; }
+.key-form { display: grid; grid-template-columns: repeat(2, minmax(0, 18rem)); gap: var(--s3); align-items: end; margin: 0; }
+.key-form input:not([type=checkbox]) { width: 100%; }
+.key-act { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
+.token-row { display: flex; gap: var(--s2); align-items: center; }
+.token-row input { flex: 1; min-width: 0; }
+@media (max-width: 40rem) {
+  .add-row, .key-form { grid-template-columns: minmax(0, 1fr); }
+  /* a person is a block on a phone: name and role, then the date, then
+     the actions, instead of a table that hides its actions off-screen */
+  table.people thead { display: none; }
+  table.people, table.people tbody, table.people tr, table.people td { display: block; }
+  table.people tr:not(.ask-row) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s3);
+    padding: var(--s3) 0; border-bottom: 1px solid var(--rule); }
+  table.people tr:not(.ask-row) > td { border: 0; padding: 0; }
+  table.people td.name { grid-row: 1; grid-column: 1; align-self: center; }
+  table.people td:nth-child(2) { grid-row: 1; grid-column: 2; }
+  table.people td.faint { grid-row: 2; grid-column: 1 / -1; }
+  table.people td.acts { grid-row: 3; grid-column: 1 / -1; text-align: left; width: auto; }
+  table.people tr.asking { background: var(--sunken); padding-inline: var(--s2); border-radius: var(--r2) var(--r2) 0 0; }
+  table.people tr.ask-row { border-radius: 0 0 var(--r2) var(--r2); }
+  table.people tr.asking > td { background: none; }
+  table.people tr.ask-row > td { border: 0; }
+  table.people tbody tr:last-child { border-bottom: 0; }
+}
 /* A row of totals: label over figure, the way a receipt reads. */
 .totals { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s6); margin: 0 0 var(--s2); }
 .totals dt { font-size: .75rem; color: var(--ink-faint); }
