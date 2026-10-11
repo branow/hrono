@@ -473,7 +473,6 @@ def _node(
         "name": naming.name(conn, node_id),  # type: ignore[arg-type]
         "where": wheres.get(node_id, ""),
         "title": row["title"] or _titled(brief, node_id),
-        "named": bool(row["title"]),
         "label": int(row["label"]),
         "born": _when(row["created_at"]),
         "brief": brief["text"] if brief is not None else None,

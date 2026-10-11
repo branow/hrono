@@ -195,10 +195,15 @@ def test_a_section_is_shown_WHOLE(browser: Browser) -> None:
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
     assert "E" * 12000 in page  # the whole 12,000-byte section
-    assert "12,000 characters." in page
+    assert "12,000 characters" in page
     assert "Showing the first" not in page
     # and a short one still says how big it is, so the two read the same
-    assert "31 characters." in page
+    assert "31 characters" in page
+    # whole, but folded behind "Source" until asked for: the summary is what
+    # an open section leads with
+    source = page.index('<summary class="twisty">Source')
+    assert page.index("E" * 12000) > source
+    assert page.rfind('<details class="section-more">', 0, source) > 0
 
 
 def test_pins_say_what_they_hold_and_why(browser: Browser) -> None:
@@ -207,9 +212,71 @@ def test_pins_say_what_they_hold_and_why(browser: Browser) -> None:
 
     page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
 
-    assert "pinned: brief" in page  # what is held
+    assert "brief written by hand" in page  # what is held, in plain words
     assert "renamed by hand" in page  # and the why the pin recorded
     assert "watch this one" in page  # the note, in full
+    assert "held by hand" in page  # and the head says it is held at all
+
+
+def test_an_unpinned_topic_shows_no_pins_row(browser: Browser) -> None:
+    """Nothing pinned is the normal case, and a row saying so is noise."""
+    browser.sign_in()
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        pins.unpin_all(browser.conn, node)  # type: ignore[arg-type]
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    assert "<dt>Parent</dt>" in page
+    assert "<dt>Pinned" not in page
+    assert "held by hand" not in page
+
+
+def test_the_head_says_what_a_topic_is_in_one_quiet_line(
+    browser: Browser,
+) -> None:
+    """Size, level and number are read, not clicked: plain text, no chips,
+    and the Edit button carries no badge inside it."""
+    browser.sign_in()
+    node = _node_id(browser)
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+    meta = re.search(r'<p class="topic-meta">(.*?)</p>', page, re.S)
+
+    assert meta is not None
+    assert "chip" not in meta.group(1)
+    words = re.sub(r"<[^>]+>|\s+", " ", meta.group(1)).split()
+    assert words[:5] == ["4", "sections", "level", "0", f"#{node}"]
+    assert '<summary class="btn">Edit</summary>' in page
+
+
+def test_every_text_switch_has_the_same_short_label(
+    browser: Browser,
+) -> None:
+    node = _node_id(browser)
+    with browser.conn:  # type: ignore[union-attr]
+        digest = browser.conn.execute(  # type: ignore[attr-defined]
+            "SELECT s.content_hash FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
+            "ORDER BY s.id LIMIT 1",
+            (node,),
+        ).fetchone()[0]
+        condensations.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            digest,
+            "scribe-9",
+            "Body.",
+            10,
+            20,
+        )
+    browser.sign_in()
+
+    page = browser.node(node).text  # type: ignore[attr-defined]
+
+    # the brief and the condensation: two switches, one wording
+    assert page.count('<span class="when-off">Plain text</span>') == 2
+    assert page.count('<span class="when-on">Formatted</span>') == 2
+    assert "Show the plain" not in page
 
 
 def test_the_page_shows_who_wrote_the_brief(browser: Browser) -> None:
@@ -451,7 +518,8 @@ def test_a_reply_that_is_not_a_brief_does_not_stand(browser: Browser) -> None:
 
     page = browser.node(node).text  # type: ignore[attr-defined]
 
-    assert "not a brief — the next run rewrites it" in page
+    assert ">not a brief</span>" in page
+    assert "the next run rewrites it" in page
     assert "talks-to-the-caller" in page
     assert '<span class="chip ok">stands</span>' not in page
 
@@ -597,6 +665,13 @@ def test_the_section_list_filters_by_path(browser: Browser) -> None:
     assert "worse.md" in page
     assert "edge.md" not in page
     assert "1 of 4" in page
+    # a plain search box: Enter submits it without script, the script filters
+    # as you type by swapping in this same list, so the list has its own id
+    form = page[page.index('<form class="section-filter"') :]
+    form = form[: form.index("</form>")]
+    assert "<button" not in form
+    assert 'class="visually-hidden" for="section-q"' in form
+    assert 'id="section-list"' in page
 
 
 def test_a_long_section_list_is_paged_and_a_link_finds_its_page(
@@ -688,6 +763,10 @@ def test_the_edit_actions_sit_in_the_page_head_for_an_admin(
     assert "Folds this topic" in head
     assert "re-filed under the nearest remaining topic" in head
     assert "replaced by narrower ones" in head
+    # moving a section is an edit too: tucked behind its own disclosure in
+    # the open section, not shown beside what the section says
+    move = page.index('class="move"')
+    assert page.rfind('<summary class="twisty">Move</summary>', 0, move) > 0
 
 
 def _ingest_from(

@@ -10,6 +10,9 @@
 
   `fold` shows a long text's opening and a second switch to read the rest, so
   a root brief of several thousand words does not bury what sits below it.
+
+  Called with `{% call %}`, the caller's markup is the text's heading, set on
+  the switch's own line so a heading and its switch take one row, not two.
 #}
 {% macro text(body, id, label="text", fold=false) %}
 {% if body %}
@@ -17,9 +20,10 @@
 <div class="prose-block{{ ' folds' if folds }}">
   <input type="checkbox" class="prose-switch" id="raw-{{ id }}">
   <div class="prose-head">
-    <label for="raw-{{ id }}" class="prose-toggle">
-      <span class="when-off">Show the plain {{ label }}</span>
-      <span class="when-on">Show it formatted</span>
+    {% if caller is defined %}<div class="prose-title">{{ caller() }}</div>{% endif %}
+    <label for="raw-{{ id }}" class="prose-toggle" title="Switch between the formatted text and the exact characters stored">
+      <span class="when-off">Plain text</span>
+      <span class="when-on">Formatted</span>
     </label>
   </div>
   {% if folds %}<input type="checkbox" class="prose-more" id="more-{{ id }}">{% endif %}
