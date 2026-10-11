@@ -16,14 +16,12 @@
 </li>
 {% endmacro %}
 {% macro line(row) %}
-<a href="/ui/trees/{{ tree }}/nodes/{{ row.id }}?tree={{ tree }}">{{ row.name }}</a>
-{% if row.where %}<span class="mono small faint">{{ row.where }}</span>{% endif %}
-<span class="chip num" title="{{ row.sections }} section{{ '' if row.sections == 1 else 's' }} beneath this topic">{{ row.holds }} {{ row.holds_what if row.holds != 1 else row.holds_what[:-1] }}</span>
-{% if row.healthy %}<span class="chip ok" title="Recall can answer from this topic">ok</span>{% else %}<span class="chip warn" title="No usable brief, or a stale one: recall cannot answer from this topic">needs a brief</span>{% endif %}
+<a class="ol-name" href="/ui/trees/{{ tree }}/nodes/{{ row.id }}?tree={{ tree }}" title="{{ row.name }}">{{ row.name }}</a>
+<span class="ol-meta" title="{{ row.sections }} section{{ '' if row.sections == 1 else 's' }} beneath this topic">{{ row.holds }} {{ row.holds_what if row.holds != 1 else row.holds_what[:-1] }}{% if row.where %} · <span class="mono">{{ row.where }}</span>{% endif %}</span>
+{% if not row.healthy %}<span class="ol-warn" title="No usable brief, or a stale one: recall cannot answer from this topic">needs a brief</span>{% endif %}
 {% endmacro %}
 {% block main %}
 <div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
   <h1>Outline<span class="tip" tabindex="0" role="note" data-tip="The same topics as the map, as a list. Open a row to see what is under it; click a name to open the topic">?</span></h1>
 </div>
 {{ nav(tree, page) }}

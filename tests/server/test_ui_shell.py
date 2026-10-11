@@ -173,9 +173,9 @@ def test_the_shell_reports_what_the_chosen_tree_holds(
     # the shape, as the front page states it: how many topics, over how
     # many levels
     assert re.search(
-        r'class="figure num">1</div>\s*<div class="label">topics', body
+        r'class="figure num">1</div>\s*<div class="label">Topics', body
     )
-    assert "across 1 level" in body
+    assert "Across 1 level" in body
 
 
 def test_the_write_button_actually_starts_a_sync(browser: Browser) -> None:

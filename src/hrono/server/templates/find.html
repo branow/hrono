@@ -3,69 +3,143 @@
 {% block title %}hrono — {{ tree }} search{% endblock %}
 {% block main %}
 <div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
-  <h1>Search<span class="tip" tabindex="0" role="note" data-tip="Words in topic names, briefs, file paths and file text. To ask a question in your own words, use Ask">?</span></h1>
+  <h1>Search<span class="tip" tabindex="0" role="note" data-tip="Words in topic names, briefs, file paths and file text. Narrow to Files and type a path to see where a file was filed. To ask a question in your own words, use Ask">?</span></h1>
 </div>
 {{ nav(tree, page) }}
-
 <div class="stack">
-  <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/find" role="search">
+  <form class="searchbar" id="find" method="get" action="/ui/trees/{{ tree }}/find" role="search">
     <input type="hidden" name="tree" value="{{ tree }}">
-    <label class="field grow">
+    <label class="grow">
       <span class="visually-hidden">Words to find</span>
-      <input type="search" name="q" value="{{ query }}" placeholder="token rotation" autofocus>
+      <input type="search" name="q" value="{{ query }}" placeholder="token rotation, or a path like src/auth/" autofocus autocomplete="off">
     </label>
-    <button class="btn primary small" type="submit">Search</button>
+    <fieldset class="scope">
+      <legend class="visually-hidden">Search in</legend>
+      {% for key, label in (("all", "All"), ("topics", "Topics"), ("files", "Files")) %}
+      <label><input type="radio" name="within" value="{{ key }}"{% if scope == key %} checked{% endif %}><span>{{ label }}</span></label>
+      {% endfor %}
+    </fieldset>
+    <button class="btn primary" type="submit">Search</button>
   </form>
 
+  <div id="results-area" aria-live="polite">
+  {% set show_topics = scope != "files" %}
+  {% set show_sections = scope != "topics" %}
+  {% set topics = found.topics if found and show_topics else () %}
+  {% set sections = found.sections if found and show_sections else () %}
   {% if not query %}
-  <p class="hint">Finds every word you type, in a topic's name or brief, a file's path, or its text. Looking for a file you know? Try <a href="/ui/trees/{{ tree }}/files?tree={{ tree }}">Files</a>. Want an answer, not a place? <a href="/ui/trees/{{ tree }}/ask?tree={{ tree }}">Ask</a>.</p>
-  {% elif not found.topics and not found.sections %}
+  <p class="hint">Finds every word you type in a topic's name or brief, a file's path, or its text. Want an answer, not a place? <a href="/ui/trees/{{ tree }}/ask?tree={{ tree }}">Ask</a>.</p>
+  {% elif not_ingested and not sections %}
+  <div class="callout" id="results">
+    <div class="body">
+      <div class="title">Not ingested</div>
+      <p class="hint"><span class="mono">{{ query }}</span> is not in any source this tree reads. A source's filters may exclude it, or it has not been synced yet.</p>
+    </div>
+  </div>
+  {% elif not topics and not sections and not located %}
   <div class="callout" id="results">
     <div class="body">
       <div class="title">Nothing contains all of those words</div>
-      <p class="hint">Try fewer or shorter words; a word also matches the words that begin with it. To find a file by its path, use <a href="/ui/trees/{{ tree }}/files?tree={{ tree }}&amp;path={{ query|urlencode }}">Files</a>.</p>
+      <p class="hint">Try fewer or shorter words; a word also matches the words that begin with it.{% if scope != "all" %} Or search <a href="/ui/trees/{{ tree }}/find?tree={{ tree }}&amp;q={{ query|urlencode }}">everything</a>.{% endif %}</p>
     </div>
   </div>
   {% else %}
   <div class="stack" id="results">
-    {% if found.more %}<p class="hint">Showing the best matches; add a word to narrow them.</p>{% endif %}
+    {% if found and found.more %}<p class="hint">Showing the best matches; add a word to narrow them.</p>{% endif %}
 
-    {% if found.topics %}
-    <section class="card" aria-label="topic matches">
-      <div class="card-head"><h2>Topics <span class="faint num">{{ found.topics|length }}</span></h2></div>
-      <div class="card-body stack">
-        {% for topic in found.topics %}
-        <div>
-          <a href="/ui/trees/{{ tree }}/nodes/{{ topic.id }}?tree={{ tree }}">{{ topic.name }}</a>
-          <span class="chip">{{ "named by hand" if topic.why == "named" else "brief" }}</span>
-          {% if topic.where %}<span class="mono small faint">{{ topic.where }}</span>{% endif %}
-          {% if topic.snippet %}<p class="hint">{{ topic.snippet }}</p>{% endif %}
-        </div>
-        {% endfor %}
+    {% if located %}
+    <section class="card" aria-label="files under this path">
+      <div class="card-head"><h2>Files <span class="faint num">{{ located.files|length }}{% if located.more %} of {{ located.files|length + located.more }}{% endif %}</span></h2></div>
+      <div class="card-body">
+        <ul class="hits">
+          {% for file in located.files %}
+          <li>
+            <div class="hit-title mono">{{ file.path }}</div>
+            <ul class="hit-sections">
+              {% for s in file.sections %}
+              <li>
+                <span class="faint num">bytes {{ s.start }}–{{ s.end }}</span>
+                {% if s.topic is not none %}
+                <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}&section={{ s.id }}#section-{{ s.id }}">{{ s.topic_name }}</a>
+                {% elif s.parked %}<a class="warn-text" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}#waiting">waiting for a topic</a>
+                {% else %}<span class="faint">not in this tree</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </li>
+          {% endfor %}
+        </ul>
       </div>
     </section>
     {% endif %}
 
-    {% if found.sections %}
-    <section class="card" aria-label="section matches">
-      <div class="card-head"><h2>Sections <span class="faint num">{{ found.sections|length }}</span></h2></div>
-      <div class="card-body stack">
-        {% for s in found.sections %}
-        <div>
-          <a class="mono small" href="/ui/trees/{{ tree }}/files?tree={{ tree }}&amp;path={{ s.path|urlencode }}">{{ s.path }}</a>
-          <span class="faint small">@{{ s.version }}</span>
-          {% if s.topic is not none %}
-          <span class="hint">in <a href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}&section={{ s.id }}#section-{{ s.id }}">{{ s.topic_name }}</a></span>
-          {% elif s.parked %}<span class="chip warn" title="Ingested, and not in any topic yet">parked</span>
-          {% endif %}
-          <p class="hint">{{ s.snippet }}</p>
-        </div>
-        {% endfor %}
+    {% if topics %}
+    <section class="card" aria-label="topic matches">
+      <div class="card-head"><h2>Topics <span class="faint num">{{ topics|length }}</span></h2></div>
+      <div class="card-body">
+        <ul class="hits">
+          {% for topic in topics %}
+          <li>
+            <a class="hit-title" href="/ui/trees/{{ tree }}/nodes/{{ topic.id }}?tree={{ tree }}" title="{{ topic.name }}">{{ topic.name }}</a>
+            {% if topic.where or topic.why == "named" %}<div class="hit-meta">{% if topic.where %}<span class="mono">{{ topic.where }}</span>{% endif %}{% if topic.why == "named" %} <span>named by hand</span>{% endif %}</div>{% endif %}
+            {% if topic.snippet %}<p class="hit-snippet">{{ topic.snippet }}</p>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if sections %}
+    <section class="card" aria-label="file matches">
+      <div class="card-head"><h2>In files <span class="faint num">{{ sections|length }}</span></h2></div>
+      <div class="card-body">
+        <ul class="hits">
+          {% for s in sections %}
+          <li>
+            {% if s.topic is not none %}
+            <a class="hit-title mono" href="/ui/trees/{{ tree }}/nodes/{{ s.topic }}?tree={{ tree }}&section={{ s.id }}#section-{{ s.id }}">{{ s.path }}</a>
+            <div class="hit-meta">in {{ s.topic_name }}</div>
+            {% else %}
+            <span class="hit-title mono">{{ s.path }}</span>
+            <div class="hit-meta">{% if s.parked %}<a class="warn-text" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}#waiting">waiting for a topic</a>{% else %}not in this tree{% endif %}</div>
+            {% endif %}
+            <p class="hit-snippet mono">{{ s.snippet }}</p>
+          </li>
+          {% endfor %}
+        </ul>
       </div>
     </section>
     {% endif %}
   </div>
   {% endif %}
+  </div>
 </div>
+<script>
+// Results follow the typing: the same GET the form makes, fetched after a
+// short pause, its results swapped in and the address updated so it can be
+// shared. Without script the form still submits.
+(() => {
+  const form = document.getElementById("find");
+  const area = document.getElementById("results-area");
+  let timer = null, pending = null;
+  const run = () => {
+    const query = new URLSearchParams(new FormData(form));
+    const url = form.action + "?" + query;
+    pending?.abort();
+    pending = new AbortController();
+    fetch(url, { signal: pending.signal, credentials: "same-origin" })
+      .then((answer) => answer.text())
+      .then((html) => {
+        const fresh = new DOMParser().parseFromString(html, "text/html");
+        area.innerHTML = fresh.getElementById("results-area").innerHTML;
+        history.replaceState(null, "", url);
+      })
+      .catch(() => {});
+  };
+  form.q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 250); });
+  form.querySelectorAll("[name=within]").forEach((radio) => radio.addEventListener("change", run));
+  form.addEventListener("submit", (event) => { event.preventDefault(); clearTimeout(timer); run(); });
+})();
+</script>
 {% endblock %}

@@ -36,3 +36,17 @@ def weight(count: int) -> str:
     if count >= 1024:
         return f"{round(count / 1024)} KB"
     return f"{count} B"
+
+
+def compact(count: int) -> str:
+    """A large count at a glance: `4.79M`, `14.1k`, `812`.
+
+    For a table of totals, where seven-digit figures side by side are read as
+    their size; the exact figure goes in the cell's title.
+    """
+    for scale, unit in ((1_000_000_000, "B"), (1_000_000, "M"), (1_000, "k")):
+        if count >= scale:
+            value = count / scale
+            digits = 2 if value < 10 else 1 if value < 100 else 0
+            return f"{value:.{digits}f}{unit}"
+    return str(count)

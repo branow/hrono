@@ -31,6 +31,8 @@ from tests.server.test_ui_ask import panel as panel  # noqa: PLC0414
 
 def page(p: Panel, route: str, **query: str) -> str:
     p.client.post("/ui/login", data={"token": p.token})
+    if route == "files":  # the Files page is Search narrowed to files now
+        route, query = "find", {"q": query.get("path", ""), "within": "files"}
     args = "&".join(f"{k}={quote(v)}" for k, v in query.items())
     return p.client.get(f"/ui/trees/{TREE}/{route}?tree={TREE}&{args}").text
 
@@ -50,7 +52,7 @@ def test_a_word_only_in_a_sections_text_finds_the_section_and_its_topic(
 ) -> None:
     html = page(panel, "find", q="module 7")
 
-    sections = html[html.index('aria-label="section matches"') :]
+    sections = html[html.index('aria-label="file matches"') :]
     assert "f7.txt" in sections
     assert "f3.txt" not in sections
     home = topic_of(panel, "f7.txt")
@@ -62,8 +64,7 @@ def test_a_word_in_a_brief_finds_its_topic(panel: Panel) -> None:
     html = page(panel, "find", q="related things")
 
     assert 'aria-label="topic matches"' in html
-    assert "brief</span>" in html
-    assert 'aria-label="section matches"' not in html
+    assert 'aria-label="file matches"' not in html
 
 
 def test_a_name_a_person_gave_is_found_though_no_passage_holds_it(
@@ -122,7 +123,6 @@ def test_the_outline_lists_every_topic_and_each_row_opens_its_page(
         int(r[0]) for r in panel.conn.execute("SELECT id FROM nodes")
     }
     assert f"{total} topics" in html
-    assert 'class="chip ok"' in html
 
 
 def test_the_outline_collapses_below_the_top_and_expands_on_request(
@@ -154,7 +154,7 @@ def test_a_file_lists_its_sections_with_their_topics(panel: Panel) -> None:
     html = page(panel, "files", path="f5.txt")
 
     home = topic_of(panel, "f5.txt")
-    assert "section 1, bytes 0–" in html
+    assert "bytes 0–" in html
     assert f"/nodes/{home}?tree={TREE}&section=" in html
     assert "f6.txt" not in html
 
@@ -189,15 +189,14 @@ def test_a_parked_section_says_it_is_parked(panel: Panel) -> None:
     html = page(panel, "files", path="f8.txt")
     found = page(panel, "find", q="module 8")
 
-    assert ">parked</span>" in html
-    assert "not in any topic yet" in html
-    assert ">parked</span>" in found
+    assert "waiting for a topic</a>" in html
+    assert "waiting for a topic</a>" in found
 
 
 def test_the_search_box_is_on_every_page_and_the_tab_is_marked(
     panel: Panel,
 ) -> None:
-    for route in ("find", "outline", "files"):
+    for route in ("find", "outline"):
         html = page(panel, route)
         assert 'role="search"' in html.split("<main")[0]
         assert re.search(
@@ -320,7 +319,7 @@ def test_a_word_in_many_sections_does_not_crowd_out_a_brief(
     html = page(panel, "find", q="module")
 
     assert 'aria-label="topic matches"' in html
-    assert 'aria-label="section matches"' in html
+    assert 'aria-label="file matches"' in html
 
 
 def file_in_other_tree(p: Panel, path: str) -> int:
@@ -356,7 +355,7 @@ def test_a_topic_of_another_tree_is_not_linked_from_this_one(
     for html in (found, files):
         assert "f9.txt" in html
         assert f"/nodes/{other}" not in html
-        assert ">parked</span>" in html
+        assert "waiting for a topic</a>" in html
 
 
 def test_another_trees_source_sharing_a_path_is_not_this_trees(
@@ -438,7 +437,7 @@ def test_a_section_still_parked_here_outlives_its_source_leaving_the_tree(
     html = page(panel, "files", path="f8.txt")
 
     assert "Not ingested" not in html
-    assert ">parked</span>" in html
+    assert "waiting for a topic</a>" in html
 
 
 def test_a_section_parked_only_in_another_tree_is_not_ingested_here(
@@ -459,7 +458,7 @@ def test_a_section_parked_only_in_another_tree_is_not_ingested_here(
     html = page(panel, "files", path="f7.txt")
 
     assert "Not ingested" in html
-    assert ">parked</span>" not in html
+    assert "waiting for a topic</a>" not in html
 
 
 def test_a_section_filed_only_in_another_tree_is_not_ingested_here(

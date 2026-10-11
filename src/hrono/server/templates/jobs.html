@@ -3,7 +3,6 @@
 {% block title %}hrono — {{ tree }} jobs{% endblock %}
 {% block main %}
 <div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
   <h1>Runs<span class="tip" tabindex="0" role="note" data-tip="Background work. Each run is one instruction; the indented lines are the pieces it was broken into">?</span></h1>
 </div>
 
@@ -50,7 +49,7 @@
 </section>
 {% endif %}
 
-<form class="toolbar mb-3" method="get" action="/ui/jobs" aria-label="filter runs">
+<form class="toolbar mb-3" method="get" action="/ui/jobs" aria-label="filter runs" data-live>
   <input type="hidden" name="tree" value="{{ tree }}">
   <label class="field">
     <span>Status</span>
@@ -66,7 +65,7 @@
       {% for name in ops %}<option value="{{ name }}"{% if filters.op == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
     </select>
   </label>
-  <button class="btn small" type="submit">Show</button>
+  <button class="btn small" type="submit" data-static>Show</button>
   <span class="hint">{{ paging.total }} run{{ '' if paging.total == 1 else 's' }}</span>
 </form>
 
@@ -109,7 +108,7 @@
           <span class="bar"><span style="width:{{ (100 * job.progress.done / job.progress.total)|round|int }}%"></span></span>
           {% endif %}
         </td>
-        <td class="num nowrap">{% if job.usage %}{{ "{:,}".format(job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation) }} in / {{ "{:,}".format(job.usage.tokens.output) }} out{% elif job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% elif job.before_ledger %}<span class="faint" title="This ran before spend was recorded">unknown</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td class="num nowrap">{% if job.usage %}{% set tin = job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation %}<span title="{{ "{:,}".format(tin) }} in / {{ "{:,}".format(job.usage.tokens.output) }} out">{{ tin|compact }} in / {{ job.usage.tokens.output|compact }} out</span>{% elif job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% elif job.before_ledger %}<span class="faint" title="This ran before spend was recorded">unknown</span>{% else %}<span class="faint">—</span>{% endif %}</td>
         <td><a class="faint" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.id }}"><code>{{ job.short_id }}</code></a></td>
         <td class="nowrap">
           {% if job.live and can_write %}

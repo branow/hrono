@@ -33,6 +33,9 @@ def describe(view: dict[str, object] | None) -> dict[str, object] | None:
         "tokens": f"{int(tokens.get('input', 0)):,} in, "
         f"{int(tokens.get('output', 0)):,} out",
         "volume": int(tokens.get("input", 0)) + int(tokens.get("output", 0)),
+        "tokens_in": int(tokens.get("input", 0)),
+        "tokens_out": int(tokens.get("output", 0)),
+        "tokens_cached": cached,
         "cached": f"{cached:,} cached" if cached else "",
         "time": duration(float(view["model_seconds"])),  # type: ignore[arg-type]
         "paid": usd(cost.get("metered"), "metered" in billing),

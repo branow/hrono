@@ -3,7 +3,6 @@
 {% block title %}hrono — {{ tree }} activity{% endblock %}
 {% block main %}
 <div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
   <h1>What changed<span class="tip" tabindex="0" role="note" data-tip="When a source file changes, a judge model is asked once whether the new content changes what the topic's brief says; if it does, the briefs above are marked for a rewrite. This is every one of those decisions — the only record of why a summary was, or was not, rewritten, and what one edit cost">?</span></h1>
 </div>
 
@@ -16,7 +15,7 @@
   </div>
   {% else %}
   <div class="card-head">
-    <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/activity" aria-label="filter decisions">
+    <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/activity" aria-label="filter decisions" data-live>
       <label class="field">
         <span>Verdict</span>
         <select name="verdict">
@@ -35,7 +34,7 @@
         <span>Topic</span>
         <input type="text" name="topic" inputmode="numeric" size="6" value="{{ filters.topic }}">
       </label>
-      <button class="btn small" type="submit">Show</button>
+      <button class="btn small" type="submit" data-static>Show</button>
       {% if filters.verdict or filters.action or filters.topic %}<a class="btn small" href="/ui/trees/{{ tree }}/activity">Clear</a>{% endif %}
     </form>
     {% if rows %}

@@ -1,18 +1,23 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }}{% endblock %}
 {% from "_parts.html" import start_sync, money, unrecorded with context %}
+{% macro spend_row(label, s, link=none) %}
+<tr>
+  <th scope="row">{% if link %}<a href="{{ link }}">{{ label }}</a>{% else %}{{ label }}{% endif %}</th>
+  <td>{{ money(s, true) }}</td>
+  <td class="count">{{ s.calls }}</td>
+  <td class="count" title="{{ '{:,}'.format(s.tokens_in) }}">{{ s.tokens_in|compact }}</td>
+  <td class="count" title="{{ '{:,}'.format(s.tokens_out) }}">{{ s.tokens_out|compact }}</td>
+  <td class="count">{{ s.time }}</td>
+</tr>
+{% endmacro %}
 {% block main %}
 <div class="page-head">
   <div class="spread">
     <div>
-      <div class="eyebrow">tree</div>
       <h1>{{ tree }}</h1>
-      {% if topics and sources %}
-      <p class="verdict mt-2">
-        {% if behind %}<span class="chip warn">{{ behind }} of {{ sources }} source{{ '' if sources == 1 else 's' }} behind</span>
-        {% elif source_states|selectattr("state", "equalto", "current")|list|length == sources %}<span class="chip ok">up to date with every source</span>
-        {% else %}<span class="chip plain">not every source could be compared</span>{% endif %}
-      </p>
+      {% if topics and sources and behind %}
+      <p class="verdict mt-2"><span class="chip warn">{{ behind }} of {{ sources }} source{{ '' if sources == 1 else 's' }} behind</span></p>
       {% endif %}
     </div>
     <div class="row">
@@ -70,19 +75,19 @@
   <section class="stats">
     <div class="stat">
       <div class="figure num">{{ shape.topics }}</div>
-      <div class="label">topics<span class="tip" tabindex="0" role="note" data-tip="across {{ shape.levels }} level{{ '' if shape.levels == 1 else 's' }}">?</span></div>
+      <div class="label">Topics<span class="tip" tabindex="0" role="note" data-tip="Across {{ shape.levels }} level{{ '' if shape.levels == 1 else 's' }}">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.leaves }}</div>
-      <div class="label">topics that hold sections<span class="tip" tabindex="0" role="note" data-tip="The others group other topics">?</span></div>
+      <div class="label">Bottom topics<span class="tip" tabindex="0" role="note" data-tip="Topics that hold sections. The others group other topics">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.filed }}</div>
-      <div class="label">sections in topics<span class="tip" tabindex="0" role="note" data-tip="A section is roughly {{ limits.section|size }} of one file">?</span></div>
+      <div class="label">Sections<span class="tip" tabindex="0" role="note" data-tip="Sections filed in a topic. A section is roughly {{ limits.section|size }} of one file">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.parked }}</div>
-      <div class="label">sections waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read and embedded, but not in any topic yet">?</span></div>
+      <div class="label">Waiting<span class="tip" tabindex="0" role="note" data-tip="Sections read and embedded, but not in any topic yet">?</span></div>
     </div>
   </section>
 
@@ -124,15 +129,23 @@
       <a class="small" href="/ui/usage?tree={{ tree }}">Usage</a>
     </div>
     <div class="card-body">
-      {% if spent %}
-      <p class="row">{{ money(spent) }}
-        <span class="chip plain num">{{ spent.tokens }}</span>
-        <span class="chip plain num">{{ spent.calls|string ~ (" call" if spent.calls == 1 else " calls") }}</span></p>
-      {% else %}
-      <p class="hint">Nothing yet. Model calls are counted here as runs make them.</p>
+      {% if spent or last %}
+      <div class="table-wrap">
+        <table class="spend">
+          <thead><tr><th><span class="visually-hidden">Runs</span></th><th>Cost</th><th class="count">Calls</th><th class="count">Tokens in</th><th class="count">Tokens out</th><th class="count">Model time</th></tr></thead>
+          <tbody>
+            {% if spent %}{{ spend_row("All runs", spent) }}{% endif %}
+            {% if last %}
+            {% if last.spend %}{{ spend_row("Last run", last.spend, "/ui/jobs/" ~ last.id ~ "?tree=" ~ tree) }}
+            {% else %}<tr><th scope="row"><a href="/ui/jobs/{{ last.id }}?tree={{ tree }}">Last run</a></th><td colspan="5">{{ unrecorded(last.before_ledger, last.cost) }}</td></tr>{% endif %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      {% if spent and spent.subscription %}<p class="hint mt-2">est. = what the same tokens would cost at the API's prices; the subscription charged nothing per call.</p>{% endif %}
       {% endif %}
-      {% if last %}
-      <p class="mt-2 row"><span class="faint">Last run</span> {% if last.spend %}{{ money(last.spend) }} <span class="chip plain num">{{ last.spend.tokens }}</span>{% else %}{{ unrecorded(last.before_ledger, last.cost) }}{% endif %}</p>
+      {% if not spent %}
+      <p class="hint{{ ' mt-2' if last }}">Nothing yet. Model calls are counted here as runs make them.</p>
       {% endif %}
     </div>
   </section>

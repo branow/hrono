@@ -2,18 +2,17 @@
 {% block title %}hrono — {{ tree }} ask{% endblock %}
 {% block main %}
 <div class="page-head">
-  <div class="eyebrow">{{ tree }}</div>
   <h1>Ask<span class="tip" tabindex="0" role="note" data-tip="What recall hands an agent for this question: the passages, their source and score, and the topic that holds each">?</span></h1>
 </div>
 
 <div class="stack">
-  <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/ask" role="search">
+  <form class="searchbar" method="get" action="/ui/trees/{{ tree }}/ask" role="search">
     <input type="hidden" name="tree" value="{{ tree }}">
-    <label class="field grow">
+    <label class="grow">
       <span class="visually-hidden">Question</span>
       <input type="search" name="q" value="{{ question }}" placeholder="How are tokens signed?" autofocus>
     </label>
-    <button class="btn primary small" type="submit">Ask</button>
+    <button class="btn primary" type="submit">Ask</button>
   </form>
   <p class="hint">Asked before lives in this browser only, for a day. Ask one again to see what changed since.</p>
 

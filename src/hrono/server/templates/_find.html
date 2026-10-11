@@ -2,6 +2,5 @@
 <nav class="subnav" aria-label="find">
   <a href="/ui/trees/{{ tree }}/find?tree={{ tree }}"{% if page == "search" %} aria-current="page"{% endif %}>Search</a>
   <a href="/ui/trees/{{ tree }}/outline?tree={{ tree }}"{% if page == "outline" %} aria-current="page"{% endif %}>Outline</a>
-  <a href="/ui/trees/{{ tree }}/files?tree={{ tree }}"{% if page == "files" %} aria-current="page"{% endif %}>Files</a>
 </nav>
 {%- endmacro %}
