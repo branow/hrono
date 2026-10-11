@@ -14,8 +14,6 @@ import os
 
 import pytest
 
-from tests import template_db
-
 for _name in (
     "OMP_NUM_THREADS",
     "OPENBLAS_NUM_THREADS",
@@ -25,9 +23,15 @@ for _name in (
 ):
     os.environ.setdefault(_name, "1")
 
+# Imported after the variables above, which numpy and numba read on load.
+from tests import numba_cache, template_db  # noqa: E402
+
 # Before any test module imports ``open_database``: a new database is a copy
 # of one migrated once per process (see tests/template_db.py).
 template_db.install()
+# Before umap loads: its compiled kernels are kept on disk between runs (see
+# tests/numba_cache.py), so a warm run skips most of the cost described below.
+numba_cache.install()
 
 
 # Importing umap and compiling its numba kernels costs about nine seconds once
