@@ -100,22 +100,6 @@ def test_an_abstention_is_marked(browser: Browser) -> None:
     assert page.count('class="needs"') == 1  # the abstention, and only it
 
 
-def test_the_view_is_bounded_and_says_what_it_is_hiding(
-    browser: Browser,
-) -> None:
-    # "showing 100 of 100" and "showing 100 of 41,000" are different
-    # situations, and a page that shows only the first cannot tell them apart
-    browser.sign_in()
-    with browser.conn:  # type: ignore[union-attr]
-        for node in range(PAGE + 25):
-            record(browser.conn, TREE, node, "none", "skipped")  # type: ignore[arg-type]
-
-    page = browser.activity()
-
-    assert f"showing 1–{PAGE} of {PAGE + 25}" in page
-    assert page.count("<tr") == PAGE + 1  # the rows plus the header
-
-
 def test_rows_are_per_tree(browser: Browser) -> None:
     browser.sign_in()
     with browser.conn:  # type: ignore[union-attr]
@@ -150,6 +134,10 @@ def test_every_decision_is_reachable_by_paging(browser: Browser) -> None:
     first = browser.client.get(f"/ui/trees/{TREE}/activity").text
     second = browser.client.get(f"/ui/trees/{TREE}/activity?page=2").text
 
+    # the view is bounded and says what it is hiding: "showing 100 of 100"
+    # and "showing 100 of 41,000" are different situations
+    assert f"showing 1–{PAGE} of {PAGE + 25}" in first
+    assert first.count("<tr") == PAGE + 1  # the rows plus the header
     assert "page 1 of 2" in first
     assert f"showing {PAGE + 1}\u2013{PAGE + 25} of {PAGE + 25}" in second
     assert second.count("<tr") == 25 + 1
@@ -203,11 +191,14 @@ def test_action_and_topic_filters_narrow_too(browser: Browser) -> None:
     assert ">topic 1</a>" not in by_topic
 
 
-def test_filter_and_page_ride_in_the_pager_links(browser: Browser) -> None:
+def test_a_filter_rides_in_the_pager_and_holds_on_page_two(
+    browser: Browser,
+) -> None:
     browser.sign_in()
     with browser.conn:  # type: ignore[union-attr]
-        for node in range(PAGE + 3):
-            record(browser.conn, TREE, node + 1, "none", "skipped")  # type: ignore[arg-type]
+        for _ in range(PAGE + 3):
+            record(browser.conn, TREE, 7, "none", "skipped")  # type: ignore[arg-type]
+        record(browser.conn, TREE, 8, "none", "skipped")  # type: ignore[arg-type]
         record(browser.conn, TREE, 500, "major", "propagated", 9)  # type: ignore[arg-type]
 
     page = browser.client.get(
@@ -218,16 +209,6 @@ def test_filter_and_page_ride_in_the_pager_links(browser: Browser) -> None:
         "verdict=none&action=skipped&page=2" in page
     )
     assert 'value="none" selected' in page
-
-
-def test_a_topic_filter_rides_in_the_pager_and_holds_on_page_two(
-    browser: Browser,
-) -> None:
-    browser.sign_in()
-    with browser.conn:  # type: ignore[union-attr]
-        for _ in range(PAGE + 3):
-            record(browser.conn, TREE, 7, "none", "skipped")  # type: ignore[arg-type]
-        record(browser.conn, TREE, 8, "none", "skipped")  # type: ignore[arg-type]
 
     first = browser.client.get(f"/ui/trees/{TREE}/activity?topic=7").text
     second = browser.client.get(

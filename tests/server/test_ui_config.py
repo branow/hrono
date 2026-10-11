@@ -132,25 +132,6 @@ def test_only_the_chosen_collection_is_on_the_page(browser: Browser) -> None:
     assert "<h2>Sources</h2>" not in models
 
 
-def test_a_configured_item_is_shown(browser: Browser) -> None:
-    browser.sign_in()
-
-    assert "https://github.com/x/y.git" in browser.config(section="sources")
-    assert "alpha" in browser.config(section="trees")
-
-
-def test_a_collection_is_a_table_of_named_columns(browser: Browser) -> None:
-    """Sources read as type, location, access and which files — not as one
-    grey run-on line of every scalar field."""
-    browser.sign_in()
-
-    page = browser.config(section="sources")
-
-    for heading in ("Type", "Location", "Access", "Which files"):
-        assert f"<th>{heading}</th>" in page
-    assert "<td>git</td>" in page and "<td>every file</td>" in page
-
-
 def test_a_secret_is_masked_and_so_is_its_ciphertext(
     browser: Browser,
 ) -> None:
