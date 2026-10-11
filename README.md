@@ -139,11 +139,14 @@ for a job that failed or was canceled.
 ### The export an agent reads
 
 `hrono tree export` writes the tree as Markdown an agent can walk without a
-server: `root.md`, one directory per topic named by its subject, and the
-section files beneath. However deep the stored tree is, the export is at most
-`--levels` hops from root to a section. Facts a brief states carry a `[§]` link
-to the sections they came from. The dashboard's Export page has ready-to-paste
-commands for wiring an agent to a tree.
+server: `root.md` and one directory per topic named by its subject, each
+holding that topic's `brief.md`. It holds briefs only, never copies of the
+source: an index entry names a few files beneath it, and a leaf ends with
+`## Sources`, the repo-relative path of each file it covers with its source
+and version, for the agent to open in its own checkout. However deep the
+stored tree is, the export is at most `--levels` hops from root to a leaf's
+sources. The dashboard's Export page has ready-to-paste commands for wiring an
+agent to a tree.
 
 ## The dashboard
 

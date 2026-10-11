@@ -3,7 +3,7 @@
 Pure and deterministic (no LLM, no I/O): given the stored tree (each node's
 level, the node->child-node edges, and each leaf node's sections) and a target
 ``levels`` N — the HOP LIMIT, since an agent reads the root page and then
-follows one link per level down to a section file — keep N stored levels,
+follows one link per level down to a leaf brief — keep N stored levels,
 always including the root level and stored level 0 (whose nodes carry the
 sections), and re-parent across the skipped levels so each kept node's agent
 children are its descendants at the next kept level. A tree already within N
@@ -22,8 +22,8 @@ An entry is a title (80 chars), a one-line summary (160) and a link, about 250
 bytes at the most; 40 of them are 10 KB, the size of one SECTION — the
 traversal unit the whole design is sized on (`ingest.split.constants`). So an
 index page costs an agent no more to read than one section does. The renderer
-adds a line of up to three section links to each entry of a page below the
-root (about 150 bytes each), and only as many per entry as keep the page
+adds a line naming up to three source files to each entry of a page below
+the root (about 150 bytes each), and only as many per entry as keep the page
 within that one SECTION: a page at full WIDTH carries none. The root carries
 none at all. When no selection fits, the hop limit holds and the
 shape says so: ``Shape.within_budget`` is False.

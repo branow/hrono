@@ -1,37 +1,33 @@
 """Render the collapsed agent-facing tree to a path -> markdown mapping.
 
-Per agent node: its stored brief text as-is (already ends with its
-Caution section; never regenerated), its member references re-attached from the
-metadata they are stored in, then a MECHANICAL child listing rendered
-from the collapsed tree in code (titles + relative links, no LLM, no
-hallucinated links; each entry below the root also links a few of the section
-files beneath it). Leaf nodes list their sections; each section is rendered to
-its own file, reassembled byte-identically from its stored passages with
-an address header. Human notes render only when
-passed. No file I/O — returns a deterministic path -> content map
-that the caller materialises into a folder tree.
+The export is the KNOWLEDGE, not the information: briefs only. The agent that
+reads it already has the repositories, so a leaf ends with pointers to its
+source files and copies none of them.
 
-Every key is RELATIVE and unique. The root's own brief is ``root.md``
-and its sections sit beside it at the top level; every other node owns an
-id-suffixed directory, so no path can start with "/" (which pathlib would let
-reroot the whole export out of the output folder) and no two briefs can land on
-one key.
+Per agent node: its stored brief text as-is (already ends with its Caution
+section; never regenerated), then a MECHANICAL child listing rendered from the
+collapsed tree in code (titles + relative links, no LLM, no hallucinated
+links; each entry below the root also names a few source files beneath it). A
+leaf lists its source files instead. Human notes render only when passed. No
+file I/O — returns a deterministic path -> content map that the caller
+materialises into a folder tree.
+
+Every key is RELATIVE and unique. The root's own brief is ``root.md``; every
+other node owns an id-suffixed directory, so no path can start with "/" (which
+pathlib would let reroot the whole export out of the output folder) and no two
+briefs can land on one key.
 """
 
 from __future__ import annotations
 
-import json
-import posixpath
 import re
 import sqlite3
 from collections.abc import Callable, Mapping
 from itertools import chain, zip_longest
 from pathlib import Path
 
-from hrono.export.citations import FactIndex, cite, settling
 from hrono.export.collapse import ExportNode, ExportTree
 from hrono.ingest.split.constants import section_budget
-from hrono.ingest.store import get_content
 from hrono.naming import heading, names, sentence, slug, unframe
 from hrono.summarize import briefs
 
@@ -51,73 +47,23 @@ def render(
     }
     files: dict[str, str] = {}
     stems = _stems(conn, tree)
-    directories = {
-        node_id: _directory(node_id, parent, tree.root, stems)
-        for node_id in tree.nodes
-    }
-    where = {
-        section_id: _under(
-            directories[node_id], _section_name(conn, section_id)
-        )
-        for node_id, node in tree.nodes.items()
-        for section_id in node.sections
-    }
-    bodies = {
-        sid: _reassemble(conn, sid).decode("utf-8", "replace") for sid in where
-    }
-
-    index = FactIndex({where[sid]: body for sid, body in bodies.items()})
     for node_id in sorted(tree.nodes):
         node = tree.nodes[node_id]
-        directory = directories[node_id]
+        directory = _directory(node_id, parent, tree.root, stems)
         path = "root.md" if node_id == tree.root else _under(directory, "brief")
-        under = {where[sid] for sid in _subtree_sections(tree, node_id)}
         text = _brief_text(conn, node_id)
-        if node.children:  # cite only what the index page keeps
+        if node.children:
             text = _routing(text)
-        start = posixpath.dirname(path) or "."
         files[path] = _node_markdown(
             conn,
             tree,
             node_id,
             notes.get(node_id),
-            _cited(text, index, under, path),
+            text,
             stems,
-            lambda child, leads, start=start: _leads_to(
-                conn,
-                tree,
-                child,
-                where,
-                start,
-                _settling(conn, tree, child, where, index),
-                leads,
-            ),
+            lambda child, leads: _leads_to(conn, tree, child, leads),
         )
-        for section_id in node.sections:
-            files[where[section_id]] = _section_markdown(
-                conn, section_id, bodies[section_id]
-            )
     return files
-
-
-def _subtree_sections(tree: ExportTree, node_id: int) -> tuple[int, ...]:
-    node = tree.nodes[node_id]
-    return node.sections + tuple(
-        section
-        for child in node.children
-        for section in _subtree_sections(tree, child)
-    )
-
-
-def _cited(text: str, index: FactIndex, within: set[str], page: str) -> str:
-    """The brief with its facts linked to the section pages that state them."""
-    start = posixpath.dirname(page) or "."
-    return cite(
-        text,
-        index,
-        link=lambda path: posixpath.relpath(path, start),
-        within=within,
-    )
 
 
 def _under(directory: str, name: str) -> str:
@@ -153,7 +99,7 @@ def _node_markdown(
         # and the human note among them, and a closing newline)
         after = [f"## Notes\n\n{note}"] if note else []
         base = (
-            len("\n\n".join([*parts, "## Children\n", "", *after]).encode()) + 1
+            len("\n\n".join([*parts, "## Children", "", *after]).encode()) + 1
         )
         # the root carries no links: every turn of every session reads it,
         # and what it spent on them cost the grep arm more than the walk
@@ -164,23 +110,13 @@ def _node_markdown(
                 break
         else:
             children = listing(0)
-        parts.append("## Children\n")
+        parts.append("## Children")
         parts.append(children)
     elif node.sections:
-        parts.append("## Sections\n")
-        parts.append(
-            "\n".join(
-                f"- [{_section_heading(conn, sid)}]"
-                f"({_section_name(conn, sid)}.md)"
-                for sid in node.sections
-            )
-        )
+        parts.append("## Sources")
+        parts.append(_sources(conn, node.sections))
     if note:
         parts.append(f"## Notes\n\n{note}")
-    if node.level == tree.levels - 1:  # a LEAF: its members are source URIs
-        references = _references(conn, node_id)
-        if references:
-            parts.append(references)
     return "\n\n".join(parts) + "\n"
 
 
@@ -215,8 +151,8 @@ def _child_entry(
 
     The summary is there so an agent can choose a branch WITHOUT opening it;
     a wider page is only affordable if each entry says enough to skip
-    the ones that do not matter. ``leads`` names section files beneath the
-    child, so an agent that has chosen can open the answer from the index.
+    the ones that do not matter. ``leads`` names source files beneath the
+    child, so an agent that has chosen can open the answer in its repository.
     """
     link = f"- [{title}]({_name(child, stems)}/brief.md)"
     summary = _summary(conn, child)
@@ -228,50 +164,27 @@ def _leads_to(
     conn: sqlite3.Connection,
     tree: ExportTree,
     child: int,
-    where: Mapping[int, str],
-    start: str,
-    settles: list[int],
     limit: int,
 ) -> str:
-    """Up to ``limit`` section files beneath ``child``, linked from ``start``.
+    """Up to ``limit`` source files beneath ``child``.
 
-    The sections the child's own brief drew its facts from come first
-    (``settles``); the rest are taken in turn from each node of the subtree
-    that holds sections, so a child with many leaves shows several of them
-    rather than the first one's run, and a file split into several sections is
-    named once. The count of the rest says the list is a sample.
+    Taken in turn from each node of the subtree that holds sections, so a
+    child with many leaves shows several of them rather than the first one's
+    run, and a file split into several sections is named once. The count of
+    the rest says the list is a sample.
     """
     held = [
         node.sections for node in _descendants(tree, child) if node.sections
     ]
-    shown = _distinct_files(
-        conn,
-        settles
-        + [sid for sid in chain.from_iterable(zip_longest(*held)) if sid],
-    )[:limit]
+    files = _distinct_files(
+        conn, [sid for sid in chain.from_iterable(zip_longest(*held)) if sid]
+    )
+    shown = files[:limit]
     if not shown:
         return ""
-    links = ", ".join(
-        f"[{_short(_section_heading(conn, sid))}]"
-        f"({posixpath.relpath(where[sid], start)})"
-        for sid in shown
-    )
-    rest = sum(map(len, held)) - len(shown)
-    return f"Sections: {links}" + (f" and {rest} more" if rest else "")
-
-
-def _settling(
-    conn: sqlite3.Connection,
-    tree: ExportTree,
-    child: int,
-    where: Mapping[int, str],
-    index: FactIndex,
-) -> list[int]:
-    under = {where[sid]: sid for sid in _subtree_sections(tree, child)}
-    return [
-        under[label]
-        for label in settling(_brief_text(conn, child), index, set(under))
-    ]
+    named = ", ".join(f"`{_section_heading(conn, sid)}`" for sid in shown)
+    rest = len(files) - len(shown)
+    return f"Sources: {named}" + (f" and {rest} more" if rest else "")
 
 
 def _distinct_files(
@@ -286,11 +199,6 @@ def _distinct_files(
             seen.add(path)
             first.append(sid)
     return first
-
-
-def _short(path: str) -> str:
-    """The last two parts of a path: the link already carries the rest."""
-    return "/".join(path.split("/")[-2:])
 
 
 def _descendants(tree: ExportTree, node_id: int) -> list[ExportNode]:
@@ -314,54 +222,25 @@ def _summary(conn: sqlite3.Connection, node_id: int) -> str:
     return ""
 
 
-def _references(conn: sqlite3.Connection, node_id: int) -> str:
-    """Re-attach a LEAF's member list, which is stored beside its text.
+def _sources(conn: sqlite3.Connection, section_ids: tuple[int, ...]) -> str:
+    """A leaf's source files, each once: where to read it in the repository.
 
-    It lives outside ``briefs.text`` so a lexically dense path list stays out of
-    the vector index and FTS, which would read it as prose; a leaf's list is its
-    members' source URIs — provenance the export shows nowhere else — so this is
-    where it is put back.
-
-    An UPPER node's list is child NODE IDS, and the caller skips it there for
-    two reasons: ``## Children`` already renders those children as titled links,
-    so it would be the same thing twice in the same file; and an id is only
-    meaningful while that node exists, so a brief written before a rebuild would
-    have the map cite topics that have since been retired.
-
-    The caller keys that on the node's LEVEL, not on whether it has children.
-    They differ in exactly one state, and it is a real one: a childless
-    upper node, left when a rebuild re-mints the leaf ids and cascades the
-    root's edges away. Such a root has no children to render, so a child-count
-    guard calls it a leaf and prints its stored ids — three of which had been
-    retired in a ~120-section test corpus. Level is the property the member
-    list actually depends on.
+    A path is relative to its source's repository, which the reading agent has
+    checked out; the source's name and commit say which one and which state.
     """
-    row = briefs.get(conn, node_id)
-    members = json.loads(row["members"]) if row is not None else []
-    if not members:
-        return ""
-    listed = "\n".join(f"- {member}" for member in members)
-    return f"## References\n\n{listed}"
-
-
-def _section_markdown(
-    conn: sqlite3.Connection, section_id: int, body: str
-) -> str:
-    row = conn.execute(
-        "SELECT path, uri FROM sections WHERE id = ?", (section_id,)
-    ).fetchone()
-    return f"# {row['path']}\n\n<!-- {row['uri']} -->\n\n{body}"
-
-
-def _reassemble(conn: sqlite3.Connection, section_id: int) -> bytes:
-    rows = conn.execute(
-        "SELECT content_hash FROM passages WHERE section_id = ? "
-        "ORDER BY ordinal, id",
-        (section_id,),
-    ).fetchall()
-    return b"".join(
-        get_content(conn, row["content_hash"]) or b"" for row in rows
-    )
+    seen: set[tuple[str, str]] = set()
+    lines: list[str] = []
+    for sid in section_ids:
+        row = conn.execute(
+            "SELECT source, path, version FROM sections WHERE id = ?", (sid,)
+        ).fetchone()
+        if row is None or (row["source"], row["path"]) in seen:
+            continue
+        seen.add((row["source"], row["path"]))
+        version = str(row["version"] or "")[:7]
+        at = f" @ {version}" if version else ""
+        lines.append(f"- `{row['path']}` — {row['source']}{at}")
+    return "\n".join(lines)
 
 
 def _directory(
@@ -447,10 +326,6 @@ def _section_heading(conn: sqlite3.Connection, section_id: int) -> str:
         "SELECT path FROM sections WHERE id = ?", (section_id,)
     ).fetchone()
     return row["path"] if row is not None else f"section {section_id}"
-
-
-def _section_name(conn: sqlite3.Connection, section_id: int) -> str:
-    return f"{slug(_section_heading(conn, section_id))}-{section_id}"
 
 
 _SUMMARY_CHARS = 160

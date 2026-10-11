@@ -164,8 +164,9 @@ def test_every_manifest_path_is_relative(harness: Harness) -> None:
 def test_a_root_carrying_sections_serves_relative_paths(
     tmp_path: Path,
 ) -> None:
-    # the root's own sections must not be served as "/<name>.md", or
-    # `hrono tree export` refuses the first entry and writes nothing at all.
+    # a root that is itself a leaf is served as "root.md", never as a path
+    # with a leading slash, or `hrono tree export` refuses the first entry
+    # and writes nothing at all.
     conn = open_database(tmp_path / "flat.db")
     reconcile(conn, KEY)
     token = create_user(conn, "reader", "reader")[1]
@@ -189,8 +190,10 @@ def test_a_root_carrying_sections_serves_relative_paths(
         )
     conn.close()
     assert resp.status_code == 200
-    paths = sorted(f["path"] for f in resp.json()["files"])
-    assert paths == [f"a-py-{s0}.md", f"b-py-{s1}.md", "root.md"]
+    files = {f["path"]: f["content"] for f in resp.json()["files"]}
+    assert list(files) == ["root.md"]
+    assert "- `a.py`" in files["root.md"]
+    assert "- `b.py`" in files["root.md"]
 
 
 def test_a_tree_that_is_not_built_to_one_root_fails_loudly(
