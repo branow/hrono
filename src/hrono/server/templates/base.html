@@ -575,8 +575,19 @@ ol.steps li::before {
   font: 680 .75rem/1 var(--mono);
 }
 ol.steps .what { font-weight: 600; }
-.guide .hint, .guide .said, .guide .callout .hint { max-width: none; }
-.guide .card-body > * + * { margin-top: var(--s3); }
+/* The Guide is documentation: one column of headed text, read top to
+   bottom, with a line of contents under the title. */
+.guide { max-width: 58rem; }
+.doc-toc { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; margin-top: var(--s3); font-size: .8125rem; }
+.doc-part { margin-top: var(--s6); padding-top: var(--s5); border-top: 1px solid var(--rule); scroll-margin-top: calc(var(--topbar) + var(--s4)); }
+.doc-part h2 { font-size: 1.125rem; margin-bottom: var(--s3); }
+.doc-part h3 { font-size: .9375rem; margin-top: var(--s5); }
+.doc-part > div > * + * { margin-top: var(--s3); }
+.doc-part > div > h3 + p { margin-top: var(--s1); }
+.guide .hint, .guide .said, .guide .callout .hint, .doc-part p {
+  max-width: none; font-size: .9375rem; line-height: 1.65; color: var(--ink);
+}
+.guide .fig-note, .guide .figure { color: inherit; }
 ol.steps code {
   display: inline-block; margin-top: .3rem;
   padding: .15rem .4rem;
@@ -1722,17 +1733,8 @@ fieldset.fields + fieldset.fields { padding-top: var(--s3); border-top: 1px soli
 table.usage td code { font-size: .8125rem; }
 table.usage td.small { font-size: .78125rem; }
 table.usage .chip.plain { padding: 0; }
-details.guide-part:not([open]) > summary.card-head { padding-bottom: var(--s3); border-bottom: 0; }
-details.guide-part > summary { cursor: pointer; list-style: none; }
-details.guide-part > summary::-webkit-details-marker { display: none; }
-details.guide-part > summary h2::before {
-  content: ""; display: inline-block; width: .45rem; height: .45rem; margin: 0 .6rem .12rem .1rem;
-  border-right: 1.6px solid var(--ink-faint); border-bottom: 1.6px solid var(--ink-faint);
-  transform: rotate(-45deg); transition: transform .15s ease-out;
-}
-details.guide-part[open] > summary h2::before { transform: rotate(45deg); }
-details.guide-part:not([open]) > summary { border-bottom: 0; }
-details.guide-part > summary:hover h2 { color: var(--accent); }
+
+
 .fields input.line, .fields select, .fields textarea { width: 100%; }
 
 textarea.code { width: 100%; font: 400 .8125rem/1.5 var(--mono); }
