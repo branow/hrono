@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-import hdbscan
 import numpy as np
 
 from hrono.cluster.build import ClusterResult, build_clusters
@@ -94,6 +93,10 @@ def leaf_clusterer(min_cluster_size: int) -> Callable[[np.ndarray], np.ndarray]:
     """HDBSCAN leaf clusterer with a caller-chosen (possibly wrong) min size."""
 
     def cluster(reduced: np.ndarray) -> np.ndarray:
+        # imported here, not at the top: scikit-learn and scipy come with it,
+        # and every worker would pay for them collecting the suite
+        import hdbscan
+
         return hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
             metric="euclidean",
