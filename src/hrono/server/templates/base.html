@@ -1732,6 +1732,16 @@ fieldset.fields + fieldset.fields { padding-top: var(--s3); border-top: 1px soli
 .fields .hint { font-size: .75rem; margin: 0; }
 .needed { color: var(--accent); margin-left: .15rem; }
 #steps .chip { font: 560 .8125rem/1.5 var(--sans); }
+.check-state { display: flex; align-items: center; gap: var(--s3); min-height: 2.25rem; }
+.check-state form { margin: 0; }
+.checking { display: inline-flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--ink-soft); }
+.spinner {
+  width: .85rem; height: .85rem; border-radius: 50%;
+  border: 2px solid var(--rule-firm); border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 /* Access: one row per person, every cell on the same middle line, actions
    in one right-hand column; a confirmation replaces the actions in place. */
 table.people td { vertical-align: middle; padding-top: .55rem; padding-bottom: .55rem; }

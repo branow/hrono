@@ -7,6 +7,7 @@ that took a lesser role would be a weaker second authorization for it.
 
 from __future__ import annotations
 
+import sqlite3
 from urllib.parse import quote, urlencode
 
 from fastapi import Request
@@ -28,6 +29,7 @@ from hrono.server.ui import (
     templates,
     write_off_loop,
 )
+from hrono.server.ui.jobs import clock
 
 
 @router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)
@@ -40,9 +42,12 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
         kept = report.load(conn, tree)
+        checking = _checking(conn, tree)
     items = kept.items if kept is not None else ()
     context = {
-        "checked_at": kept.checked_at if kept is not None else "",
+        "checked_at": clock(kept.checked_at) if kept is not None else "",
+        "checked": kept is not None,
+        "checking": checking,
         "parked_total": kept.parked_total if kept is not None else 0,
         "parked": kept.parked if kept is not None else (),
         "misfit_total": kept.misfit_total if kept is not None else 0,
@@ -150,11 +155,20 @@ async def release_from_health(
 
 @router.post("/ui/trees/{tree}/triage/recheck")
 def recheck_from_health(tree: str, request: Request, user: Admin) -> Response:
-    """Work the report out again in the background."""
+    """Work the report out again in the background; the page shows it
+    checking and reloads itself when the run ends."""
     enqueue(request.app.state.db, "health", {}, tree=tree, started_by=user.name)
-    return _here(
-        tree, done="Rechecking. Refresh this page when the run finishes."
-    )
+    return _here(tree)
+
+
+def _checking(conn: sqlite3.Connection, tree: str) -> str:
+    """The id of a health run for ``tree`` still waiting or working, or ""."""
+    row = conn.execute(
+        "SELECT id FROM jobs WHERE op = 'health' AND tree = ? "
+        "AND status IN ('pending', 'running') ORDER BY created_at DESC LIMIT 1",
+        (tree,),
+    ).fetchone()
+    return str(row["id"]) if row else ""
 
 
 def _here(tree: str, **outcome: str) -> Response:
