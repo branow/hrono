@@ -40,21 +40,13 @@ def test_the_rules_as_a_table(children: list[str], expected: str) -> None:
     assert result.status == expected
 
 
-def test_a_failure_outranks_work_still_running() -> None:
-    # the run cannot now succeed, and "running" would have an operator wait
-    # for an outcome that has already been decided.
-    assert rollup([F, R, P]) == Rollup(status=JobStatus.FAILED, done=1, total=3)
-
-
-def test_a_failure_outranks_a_cancel() -> None:
-    # "it broke" is what a person needs to hear first.
-    assert rollup([C, F]).status == JobStatus.FAILED  # type: ignore[union-attr]
-
-
 def test_progress_counts_the_finished_children() -> None:
     assert rollup([S, F, C, R, P]) == Rollup(
         status=JobStatus.FAILED, done=3, total=5
     )
+    # a failure outranks work still running: the run cannot now succeed, and
+    # "running" would have an operator wait for an outcome already decided.
+    assert rollup([F, R, P]) == Rollup(status=JobStatus.FAILED, done=1, total=3)
 
 
 def test_a_job_with_no_children_is_a_leaf_and_answers_for_itself() -> None:

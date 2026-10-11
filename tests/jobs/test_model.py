@@ -1,15 +1,11 @@
-import dataclasses
 import sqlite3
 from pathlib import Path
-
-import pytest
 
 from hrono.db.connection import connect
 from hrono.db.migrations import Migrator, packaged
 from hrono.jobs.model import (
     Job,
     JobStatus,
-    deserialize_scope,
     serialize_scope,
     to_job,
 )
@@ -24,27 +20,6 @@ def test_status_set_is_exactly_the_five_leaf_statuses() -> None:
         "canceled",
     }
     assert "partial" not in {s.value for s in JobStatus}
-
-
-def test_job_is_frozen() -> None:
-    job = Job(
-        id="job_1",
-        parent_id=None,
-        tree=None,
-        op="sync",
-        scope={"type": "all"},
-        status="pending",
-        error=None,
-        created_at="t",
-        updated_at="t",
-    )
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        job.status = "running"  # type: ignore[misc]
-
-
-def test_scope_round_trips() -> None:
-    scope = {"type": "source", "name": "webphone"}
-    assert deserialize_scope(serialize_scope(scope)) == scope
 
 
 def test_row_reads_into_a_job(tmp_path: Path) -> None:

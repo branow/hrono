@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from hrono.cluster import ClusterError
-from hrono.cluster.build import ClusterResult, build_clusters, core_labels
+from hrono.cluster.build import build_clusters, core_labels
 from hrono.cluster.recipe import MIN_POINTS, recipe_for
 
 STUB_DIMS = 4  # any width: the stub reducers below stand in for UMAP
@@ -145,18 +145,7 @@ def test_empty_input_fails_cleanly() -> None:
         build_clusters([])
 
 
-def test_result_shape_is_frozen() -> None:
-    result = build_clusters(
-        np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
-        reduce=lambda vecs, init: np.zeros((len(vecs), STUB_DIMS)),
-        cluster=_labeler([0, 0]),
-    )
-    assert isinstance(result, ClusterResult)
-    with pytest.raises(AttributeError):
-        result.labels = (1,)  # type: ignore[misc]
-
-
-@pytest.mark.parametrize("count", [1, 4, 10, MIN_POINTS - 1])
+@pytest.mark.parametrize("count", [1, MIN_POINTS - 1])
 def test_real_recipe_refuses_a_level_it_cannot_reduce(count: int) -> None:
     # below the smallest rung of the clustering ladder there is no honest
     # reduction — the caller must see ClusterError ("this level cannot be

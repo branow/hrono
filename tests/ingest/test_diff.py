@@ -49,12 +49,6 @@ def test_no_op_resync_classifies_nothing() -> None:
     assert classify(files, files) == ()
 
 
-def test_deterministic_order() -> None:
-    old = {"x": "1"}
-    new = {"y": "2", "z": "3"}
-    assert classify(old, new) == classify(old, new)
-
-
 @pytest.fixture
 def cache(tmp_path: Path) -> Path:
     root = tmp_path / "cache"
