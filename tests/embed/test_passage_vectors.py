@@ -25,6 +25,7 @@ from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.registry import store as registry_store
 from tests.context import job_context
+from tests.repo_template import memoized
 
 DIMS = 4
 
@@ -35,6 +36,7 @@ def _git(cwd: Path, *args: str) -> None:
     )
 
 
+@memoized
 def make_repo(path: Path) -> str:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)

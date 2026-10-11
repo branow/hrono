@@ -54,6 +54,7 @@ from hrono.summarize import briefs
 from hrono.summarize import store as condensations
 from hrono.summarize.resolve import template_hash
 from hrono.usage.rollup import for_jobs
+from tests.repo_template import memoized
 from tests.stub_server import serving
 
 KEY = Fernet.generate_key()
@@ -174,6 +175,7 @@ class Browser:
         return self.cipher.decrypt(int(row["key_id"]), str(value))  # type: ignore[index]
 
 
+@memoized
 def _bare_repo(path: Path) -> Path:
     subprocess.run(["git", "init", "--bare", "--quiet", str(path)], check=True)
     return path
