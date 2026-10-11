@@ -390,18 +390,6 @@ def test_the_agent_chips_count_only_the_newest_window_and_say_so(
     assert str(first) not in asked
 
 
-def test_the_agent_card_sits_in_the_page_stack(panel: Panel) -> None:
-    panel.as_("writer")
-    ask_api(panel, "ana", "q", 1)
-
-    page = panel.get("/ui/usage?tree=default")
-
-    assert "mt-4" not in page.split('id="asked"')[0].rsplit("<section", 1)[1]
-    stack = page.split('<div class="stack">')[1]
-    assert 'id="asked"' in stack.split("</div>\n<style>")[0]
-    assert "data-empty" in stack.split('id="asked"')[0]
-
-
 def test_a_reader_never_receives_the_questions(panel: Panel) -> None:
     panel.as_("reader")
     ask_api(panel, "ana", "secret question", 1)

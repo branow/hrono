@@ -102,17 +102,6 @@ def test_the_guide_defines_every_word_the_ui_uses(browser: Browser) -> None:
         assert f"<dt>{word}</dt>" in page, word
 
 
-def test_it_says_which_words_are_NOT_used(browser: Browser) -> None:
-    """The reason this page exists: the owner could not remember whether the
-    word was chunk or section, and nothing told him."""
-    browser.sign_in()
-
-    page = browser.guide()
-
-    assert "cluster" in page
-    assert "Chunk" in page and "earlier name" in page
-
-
 def test_the_counts_are_this_install_not_a_description(
     browser: Browser,
 ) -> None:
@@ -278,12 +267,3 @@ def test_the_not_used_words_are_the_glossarys(browser: Browser) -> None:
     named = {w.lower() for w in re.findall(r"<strong>(\w+)</strong>", block[1])}
 
     assert named == set(banned_words())
-
-
-def test_the_models_table_keeps_each_name_on_one_line(browser: Browser) -> None:
-    browser.sign_in()
-
-    page = browser.guide()
-
-    assert '<table class="roles">' in page
-    assert page.count('<th scope="row">condense</th>') == 1

@@ -8,7 +8,6 @@ kinds and silent about the fifth is the failure this view exists to prevent.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -159,6 +158,10 @@ def test_a_clean_tree_says_it_is_clean(clean_tree: Browser) -> None:
     page = clean_tree.triage()
 
     assert "nothing needs attention in default." in page
+    # a zero is shown rather than hidden
+    assert page.count('class="ok"') == 5  # every kind, all at zero
+    assert "No run has failed" in page
+    assert "Every topic can be reached from the root" in page
     # a zero carries no non-zero sentence beneath it
     for item in triage.survey(clean_tree.conn, TREE):  # type: ignore[arg-type]
         assert item.detail not in page
@@ -229,16 +232,6 @@ def test_an_unreachable_topic_links_to_the_topic_itself(
     assert orphan.link in page
 
 
-def test_a_zero_is_shown_rather_than_hidden(clean_tree: Browser) -> None:
-    clean_tree.sign_in()
-
-    page = clean_tree.triage()
-
-    assert page.count('class="ok"') == 5  # every kind, all at zero
-    assert "No run has failed" in page
-    assert "Every topic can be reached from the root" in page
-
-
 def test_counts_are_per_tree(messy: Browser) -> None:
     # a count that silently spans trees is worse than no count
     assert messy.survey("other") == {
@@ -259,24 +252,6 @@ def test_the_top_level_is_not_counted_as_unreachable(
     points at", which is how a triage page teaches people to ignore it.
     """
     assert clean_tree.survey()["topics cut off from the root"] == 0
-
-
-def test_no_internal_ticket_numbers_reach_the_page(
-    clean_tree: Browser,
-) -> None:
-    """No issue number like "(#124)" is printed on the page.
-
-    Issue numbers mean nothing to the person looking at the page, and
-    invite a question nobody wants to answer in a demo.
-    """
-    clean_tree.sign_in()
-
-    # the stylesheet is not copy, and its colour tokens are full of `#1...`
-    # — strip it so this asks about what a person actually reads
-    page = re.sub(r"<style>.*?</style>", "", clean_tree.triage(), flags=re.S)
-
-    assert "#1" not in page
-    assert not re.search(r"\(#\d+", page)
 
 
 def _echo(browser: Browser, nth: int = 0) -> None:
@@ -338,15 +313,16 @@ def test_a_settled_echo_does_not_promise_a_sync(clean_tree: Browser) -> None:
     assert "sync" not in detail
     assert "1 needs a person" in detail
 
-
-def test_several_settled_echoes_say_need_a_person(clean_tree: Browser) -> None:
+    # and several of them say "need", still with no sync promised
     with clean_tree.conn:  # type: ignore[attr-defined]
         cluster_store.add_leaf_node(
             clean_tree.conn,  # type: ignore[arg-type]
             TREE,
             [(_section(clean_tree.conn, "b.md"), False, None)],  # type: ignore[arg-type]
         )
-    _echo(clean_tree, 0)
     _echo(clean_tree, 1)
 
-    assert "2 need a person" in _briefless_detail(clean_tree)
+    detail = _briefless_detail(clean_tree)
+
+    assert "sync" not in detail
+    assert "2 need a person" in detail

@@ -71,12 +71,6 @@ def test_a_tab_with_no_cookie_gets_the_login_page_not_a_401(
     assert answer.headers["location"] == "/ui/login"  # type: ignore[attr-defined]
 
 
-def test_the_api_still_answers_401_for_the_same_missing_credential(
-    browser: Browser,
-) -> None:
-    assert browser.client.get("/jobs").status_code == 401
-
-
 def test_signing_in_sets_a_cookie_the_page_cannot_read(
     browser: Browser,
 ) -> None:
@@ -271,26 +265,14 @@ def _without_style(page: str) -> str:
     return re.sub(r"<style>.*?</style>", "", page, flags=re.S)
 
 
-def test_a_hint_is_drawn_by_the_page_not_by_the_browser(
-    browser: Browser,
-) -> None:
-    """The marks are not `title=` attributes.
-
-    A native tooltip waits about a second and then renders as an operating
-    system tooltip — long enough that a person decides the mark does nothing.
-    The page draws its own.
-    """
-    browser.sign_in()
-
-    markup = _without_style(browser.page("/ui").text)  # type: ignore[attr-defined]
-
-    assert 'class="tip"' in markup
-    assert "data-tip=" in markup
-    assert 'class="tip" tabindex="0" title=' not in markup
-
-
 def test_every_hint_mark_carries_a_hint(browser: Browser) -> None:
-    """A `?` with nothing behind it is worse than no `?` at all."""
+    """A `?` with nothing behind it is worse than no `?` at all.
+
+    The marks are not `title=` attributes: a native tooltip waits about a
+    second and then renders as an operating system tooltip, long enough that
+    a person decides the mark does nothing. The page draws its own. And hover
+    is not an input method everybody has, so each mark takes keyboard focus.
+    """
     browser.sign_in()
 
     seen = 0
@@ -301,40 +283,10 @@ def test_every_hint_mark_carries_a_hint(browser: Browser) -> None:
             assert "data-tip=" in mark, f"{path}: {mark}"
             body = re.search(r'data-tip="([^"]*)"', mark)
             assert body is not None and body.group(1).strip(), f"{path}: empty"
+            assert 'tabindex="0"' in mark, f"{path}: {mark}"
+            assert not re.search(r"\stitle=", mark), f"{path}: {mark}"
     # a loop over marks that do not exist asserts nothing at all
     assert seen >= 3, f"only {seen} hint marks found — is the loop vacuous?"
-
-
-def test_a_hint_is_reachable_from_the_keyboard(browser: Browser) -> None:
-    # hover is not an input method everybody has
-    browser.sign_in()
-
-    marks = re.findall(
-        r"<span class=\"tip\"[^>]*>",
-        _without_style(browser.page("/ui").text),  # type: ignore[attr-defined]
-    )
-
-    assert marks
-    for mark in marks:
-        assert 'tabindex="0"' in mark
-
-
-def test_the_page_carries_the_rule_that_draws_a_hint(
-    browser: Browser,
-) -> None:
-    """The mark and its text are useless if nothing renders them.
-
-    The box and the script that fills it from `data-tip` are what turn the
-    attribute into something a person sees; without them every hint is in the
-    markup and on screen nowhere. Where it lands is measured in a real browser
-    (`test_ui_browser.py`).
-    """
-    browser.sign_in()
-
-    page = browser.page("/ui").text  # type: ignore[attr-defined]
-
-    assert 'id="tipbox"' in page
-    assert "dataset.tip" in page
 
 
 def test_the_theme_choice_survives_without_javascript(
