@@ -779,3 +779,26 @@ def test_a_sync_starts_from_the_keyboard_alone(
     with page.expect_navigation():  # type: ignore[attr-defined]
         page.keyboard.press("Enter")  # type: ignore[attr-defined]
     assert "run=job_" in page.url  # type: ignore[attr-defined]
+
+
+def test_the_section_box_filters_as_you_type_without_a_reload(
+    page: object, live: Live
+) -> None:
+    leaf = _routes(live)[ROUTES.index("/ui/trees/default/nodes/{leaf}")]
+    page.goto(f"{live.base}{leaf}")  # type: ignore[attr-defined]
+    paths = page.locator("ul.members .path").all_inner_texts()  # type: ignore[attr-defined]
+    tail = paths[0].rsplit("/", 1)[-1]
+    wanted = sum(tail in path for path in paths)
+    assert 0 < wanted < len(paths)
+    # a mark on the window survives only if the page is never reloaded
+    page.evaluate("window.stayed = true")  # type: ignore[attr-defined]
+
+    page.locator("#section-q").press_sequentially(tail)  # type: ignore[attr-defined]
+
+    page.wait_for_function(  # type: ignore[attr-defined]
+        f"document.querySelectorAll('ul.members > li').length === {wanted}"
+    )
+    assert page.evaluate("window.stayed === true")  # type: ignore[attr-defined]
+    assert "q=" in page.url  # type: ignore[attr-defined]
+    count = page.locator(".filter-count").inner_text()  # type: ignore[attr-defined]
+    assert count.startswith(f"{wanted} of {len(paths)}")
