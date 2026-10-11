@@ -159,8 +159,20 @@ map is, and gives Claude a skill for walking it.
 /plugin install hrono@hrono
 ```
 
-Then, in a project, set its tree (`hrono-config`) and export its map
-(`hrono-export`). See [`plugins/hrono/README.md`](plugins/hrono/README.md).
+It needs the `hrono` CLI on the PATH with a signed-in profile. Then, in a
+project, ask Claude in plain words:
+
+1. "Connect this project to hrono tree `my-tree`." Claude writes the
+   project's entry in `~/.hrono/agent.json`.
+2. "Export the hrono map." Claude runs `hrono tree export --replace` into the
+   project's map folder.
+3. Ask anything. Passages that match each prompt are attached automatically;
+   for how things fit together, Claude walks the map from `root.md` down to
+   the source files.
+
+"Turn off hrono recall" switches the automatic recall off for that project;
+re-export after the tree changes. Settings and internals:
+[`plugins/hrono/README.md`](plugins/hrono/README.md).
 
 ## The dashboard
 
