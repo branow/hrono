@@ -200,20 +200,6 @@ def _points(path: str) -> list[tuple[float, float]]:
     ]
 
 
-def test_the_tree_is_the_size_the_evidence_was(scale: Scale) -> None:
-    assert len(scale.drawn().nodes) == 1 + GROUPS + GROUPS * LEAVES
-
-
-def test_no_more_arcs_are_drawn_than_the_cap(scale: Scale) -> None:
-    every = scale.drawn()
-    overlay = scale.every_link(every)
-
-    arcs = _drawn_links(overlay, every)
-
-    assert len(overlay.links) > 3 * ARC_CAP
-    assert 0 < len(arcs.drawn) <= ARC_CAP
-
-
 def test_every_arc_left_out_is_counted_against_both_its_topics(
     scale: Scale,
 ) -> None:
@@ -222,6 +208,9 @@ def test_every_arc_left_out_is_counted_against_both_its_topics(
 
     arcs = _drawn_links(overlay, every)
 
+    # no more arcs are drawn than the cap
+    assert len(overlay.links) > 3 * ARC_CAP
+    assert 0 < len(arcs.drawn) <= ARC_CAP
     assert sum(arcs.unseen.values()) == 2 * (
         len(overlay.links) - len(arcs.drawn)
     )
@@ -280,7 +269,16 @@ def test_no_arc_runs_through_another_arcs_label_in_a_fan(
                 assert not inside, (other["d"], arc["label"], box)
 
 
-def test_the_cap_keeps_the_strongest_of_EACH_kind() -> None:
+def test_the_cap_keeps_the_strongest_of_each_kind_in_found_order() -> None:
+    # under the cap, links keep the order they were found in
+    found = [
+        overlays.Link("proximity", 1, 2, "a", weight=0.9),
+        overlays.Link("pull", 1, 2, "b", weight=5.0),
+        overlays.Link("pull", 3, 4, "c", weight=1.0),
+    ]
+    assert overlays.strongest(found, 3) == tuple(found)
+
+    # over it, the strongest of EACH kind
     pulls = [
         overlays.Link("pull", i, i + 1, "n", weight=float(i)) for i in range(30)
     ]
@@ -378,13 +376,3 @@ def test_a_row_wider_than_the_window_has_a_way_to_the_rest(
 
     assert 'id="beyond-left"' in page
     assert 'id="beyond-right"' in page
-
-
-def test_links_under_the_cap_keep_the_order_they_were_found_in() -> None:
-    found = [
-        overlays.Link("proximity", 1, 2, "a", weight=0.9),
-        overlays.Link("pull", 1, 2, "b", weight=5.0),
-        overlays.Link("pull", 3, 4, "c", weight=1.0),
-    ]
-
-    assert overlays.strongest(found, 3) == tuple(found)

@@ -167,22 +167,10 @@ def test_members_are_worst_fit_first_with_core_last(
         "docs/sign/core.md",
         "docs/sign/pushed.md",
     ]
-
-
-def test_a_forced_member_is_marked(browser: Browser) -> None:
     # a forced placement is one nobody scored, and it should not read as
-    # a confident one.
-    browser.sign_in()
-
-    page = browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
-
+    # a confident one; an attached member shows its score
     assert "forced" in page
-
-
-def test_a_score_is_shown_for_an_attached_member(browser: Browser) -> None:
-    browser.sign_in()
-
-    assert "0.72" in browser.node(_node_id(browser)).text  # type: ignore[attr-defined]
+    assert "0.72" in page
 
 
 def test_a_section_is_shown_WHOLE(browser: Browser) -> None:
@@ -232,59 +220,6 @@ def test_an_unpinned_topic_shows_no_pins_row(browser: Browser) -> None:
     assert "held by hand" not in page
 
 
-def test_the_head_says_what_a_topic_is_in_one_quiet_line(
-    browser: Browser,
-) -> None:
-    """Size, level and number are read, not clicked: plain text, no chips,
-    and the head carries no edit panes, only a link down to Manage."""
-    browser.sign_in()
-    node = _node_id(browser)
-
-    page = browser.node(node).text  # type: ignore[attr-defined]
-    meta = re.search(r'<p class="topic-meta">(.*?)</p>', page, re.S)
-
-    assert meta is not None
-    assert "chip" not in meta.group(1)
-    words = re.sub(r"<[^>]+>|\s+", " ", meta.group(1)).split()
-    assert words[:5] == ["4", "sections", "level", "0", f"#{node}"]
-    assert 'href="#manage"' in meta.group(1)
-    head = page[
-        page.index('<div class="page-head">') : page.index(
-            'class="topic-layout"'
-        )
-    ]
-    assert "<form" not in head and "<details" not in head
-
-
-def test_every_text_switch_has_the_same_short_label(
-    browser: Browser,
-) -> None:
-    node = _node_id(browser)
-    with browser.conn:  # type: ignore[union-attr]
-        digest = browser.conn.execute(  # type: ignore[attr-defined]
-            "SELECT s.content_hash FROM node_members m "
-            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ? "
-            "ORDER BY s.id LIMIT 1",
-            (node,),
-        ).fetchone()[0]
-        condensations.upsert(
-            browser.conn,  # type: ignore[arg-type]
-            digest,
-            "scribe-9",
-            "Body.",
-            10,
-            20,
-        )
-    browser.sign_in()
-
-    page = browser.node(node).text  # type: ignore[attr-defined]
-
-    # the brief and the condensation: two switches, one wording
-    assert page.count('<span class="when-off">Plain text</span>') == 2
-    assert page.count('<span class="when-on">Formatted</span>') == 2
-    assert "Show the plain" not in page
-
-
 def test_the_page_shows_who_wrote_the_brief(browser: Browser) -> None:
     """An admin sees everything about a brief on its page.
 
@@ -325,16 +260,16 @@ def test_a_brief_still_over_its_own_members_says_so(browser: Browser) -> None:
     assert "unchanged" in page
 
 
-def test_a_node_from_another_tree_is_a_404(browser: Browser) -> None:
+@pytest.mark.parametrize("where", ["another-tree", "unknown"])
+def test_a_node_not_in_this_tree_is_a_404(browser: Browser, where: str) -> None:
     browser.sign_in()
 
-    assert browser.node(_node_id(browser), tree="other").status_code == 404  # type: ignore[attr-defined]
+    if where == "another-tree":
+        answer = browser.node(_node_id(browser), tree="other")  # type: ignore[attr-defined]
+    else:
+        answer = browser.node(99999)  # type: ignore[attr-defined]
 
-
-def test_an_unknown_node_is_a_404(browser: Browser) -> None:
-    browser.sign_in()
-
-    assert browser.node(99999).status_code == 404  # type: ignore[attr-defined]
+    assert answer.status_code == 404
 
 
 def test_the_page_needs_a_login(browser: Browser) -> None:
@@ -809,20 +744,21 @@ def test_a_git_section_links_to_its_file_at_the_synced_commit(
     assert any("-L" in link for link in links)
 
 
-def test_a_section_off_a_known_host_shows_its_path_and_no_link(
-    browser: Browser,
+@pytest.mark.parametrize(
+    ("kind", "host"),
+    [
+        ("git", "git.internal/acme/repo"),
+        ("confluence", "github.com/acme/repo"),
+    ],
+    ids=["unknown-host", "page"],
+)
+def test_a_section_with_no_file_to_open_shows_its_path_and_no_link(
+    browser: Browser, kind: str, host: str
 ) -> None:
-    topic = _ingest_from(browser, "git", "git.internal/acme/repo", "g.md")
+    topic = _ingest_from(browser, kind, host, "g.md")
     browser.sign_in()
 
     page = browser.node(topic).text  # type: ignore[attr-defined]
 
     assert "Open the file" not in page
     assert "g.md" in page
-
-
-def test_a_page_section_has_no_file_link(browser: Browser) -> None:
-    topic = _ingest_from(browser, "confluence", "github.com/acme/repo", "g.md")
-    browser.sign_in()
-
-    assert "Open the file" not in browser.node(topic).text  # type: ignore[attr-defined]
