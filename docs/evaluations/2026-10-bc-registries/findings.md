@@ -75,6 +75,71 @@ Numbered in the order they were found. Status is **fixed** (with the commit),
   also ranked an email template, a CI workflow and UI dialogs first for
   "how is a filing payment processed" and "how does the COLIN sync work".
   See `data/01-cold-build-and-sync0/recall_samples.md`.
+- **E23, open. Core code is clustered with build, test and fixture files.**
+  This was found by tracing the question "once a filing is paid, how is it
+  applied to the business, and what differs for future-effective filings?"
+  (`../2026-10-bc-registries-agents/`, question `lear-filings-1`) through
+  the tree. The five files that answer it land in these leaves:
+  - `entity_pay/worker.py` (the payment listener) is in "condensed
+    descriptions of python test suites helpers".
+  - `entity_filer/worker.py` (it applies the filing) is in that same
+    test-suites leaf, and also in "filing queue worker".
+  - `jobs/future-effective-filings/file_future_effective.py` is in
+    "container and shell entrypoints", "Dockerfile summaries" and "17
+    Makefiles".
+  - `legal_api/models/filing.py` is in "corpus fixtures", among others.
+  - Only `business_pay/resources/pay_filer.py` sits in a fitting leaf,
+    "Business-Pay service".
+
+  An agent looking for payments or filings never opens those leaves.
+- **E24, open. No brief tells a flow that crosses leaves.** The facts of
+  the flow in E23 (pay listener → filer queue → entity-filer applies it;
+  future-effective filings wait for a scheduled job) are each present in
+  some leaf. They are spread over five unrelated leaves in different
+  branches, though, so no upper brief can state the flow. Agents answering
+  architecture questions get routing at best, and no explanation.
+- **E25, open. Leaf briefs are file catalogs.** The best-placed leaf above,
+  "Business-Pay service" (1,000 words), is about half licence text,
+  gunicorn and WSGI settings, Sentry and environment defaults. The
+  behaviour the question needs (mark PAID, route to staff review or the
+  filer queue, notify the emailer) is the other half. Briefs walk through
+  files one by one instead of saying what the component does, what it
+  consumes and emits, and who calls it.
+- **E26, open. One service is scattered across the whole tree.** This was
+  found by a second trace, question `pay-3`: "how is an account lock after
+  a bounced debit or an overdue statement modeled, enforced and lifted?",
+  on the export with `--levels 3`.
+  - The 8 pay-api, pay-queue and payment-job files that answer it sit in
+    about 12 leaves under 5 different top groups. One of those groups is
+    the "lear ecosystem" group, and another is "notebooks, migrations,
+    models and tests".
+  - One file can land in up to 3 leaves in different groups. For example,
+    `services/payment_account.py` has its sections split across "payapi
+    source files", "pay-api flask service" and "python billing payment
+    codebase".
+  - An agent that picks the "payments" branch sees a fraction of the
+    payment service.
+- **E27, open. Top-level groups and leaf titles do not route.** Of root's
+  25 groups (with `--levels 3`), 3 are SchemaSpy documentation, 2 are
+  Postman, and one is "API spec fragments and AJV internals". Product code
+  shares 4–5 vague groups with tests and fixtures. Some leaf titles come
+  from boilerplate, for example
+  `apache-2-0-licensed-source-files-2024-province-of-british-co`, which
+  holds `pad_service.py` and `base_payment_system.py`.
+- **E28, open. Briefs name things without saying what they do.** Every
+  identifier of the `pay-3` answer appears somewhere: `has_nsf_invoices`,
+  `ensure_no_payment_blockers`, `unlock_frozen_accounts`, `PAD_STOP`,
+  `FREEZE`. But they appear as one-line fragments in 6 or more leaves, and
+  often as bare lists ("`unlock_frozen_accounts`, `delete_account`,
+  `enable_eft` and the fee methods"). The concept "an account lock: set on
+  NSF or overdue, blocks new invoices, lifted by a card payment" is stated
+  nowhere. The same identifiers also recur in test and migration leaves,
+  which adds noise.
+- **E29, note. Secrets copied from the source into briefs.** A test-support
+  brief carries an `.env`-style test password copied from the repository.
+  It is a test value, but the export trips secret scanners (the
+  sensitive-canary hook blocked reading it). Condense and brief should not
+  copy credential-looking values.
 
 ## Operator experience
 

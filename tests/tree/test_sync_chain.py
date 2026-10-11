@@ -15,6 +15,7 @@ from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.tree.maintain import maintain
 from hrono.tree.sync_chain import sync
+from tests import world
 from tests.context import job_context
 from tests.tree.test_update import (
     edit,
@@ -65,38 +66,55 @@ def _job(op: str) -> Job:
     )
 
 
+@pytest.fixture(scope="module")
+def _world(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    """The tree `maintain` builds over the repo, built once."""
+    root = tmp_path_factory.mktemp("world")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.chdir(root)
+        url = make_repo(root / "src-repo")
+        database = Database.at(root / "hrono.db")
+        with database.connect() as conn, conn:
+            register(conn, url)
+            registry_store.insert(
+                conn,
+                "prompts",
+                "judge",
+                json.dumps(
+                    {
+                        "name": "judge",
+                        "role": "judge",
+                        "template": "S {source} M {summary}",
+                    }
+                ),
+                None,
+                "t",
+            )
+        maintain(
+            _job("maintain"),
+            job_context(database, root),
+            encoder_for=fake_encoder,
+            client=Judge(),
+            build=fake_build,
+        )
+        database.close()
+    return root, world.snapshot(root, tmp_path_factory.mktemp("copy"))
+
+
+@pytest.fixture
+def tmp_path(_world: tuple[Path, Path]) -> Path:
+    """Shadows pytest's: every test here starts in the built world."""
+    root, copy = _world
+    return world.restore(copy, root)
+
+
 @pytest.fixture
 def built(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[tuple[Database, Path]]:
     monkeypatch.chdir(tmp_path)
-    origin = tmp_path / "src-repo"
-    url = make_repo(origin)
     database = Database.at(tmp_path / "hrono.db")
-    with database.connect() as conn, conn:
-        register(conn, url)
-        registry_store.insert(
-            conn,
-            "prompts",
-            "judge",
-            json.dumps(
-                {
-                    "name": "judge",
-                    "role": "judge",
-                    "template": "S {source} M {summary}",
-                }
-            ),
-            None,
-            "t",
-        )
-    maintain(
-        _job("maintain"),
-        job_context(database, tmp_path),
-        encoder_for=fake_encoder,
-        client=Judge(),
-        build=fake_build,
-    )
-    yield database, origin
+    yield database, tmp_path / "src-repo"
     database.close()
 
 

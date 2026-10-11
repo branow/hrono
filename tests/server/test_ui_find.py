@@ -26,7 +26,9 @@ from hrono.server import find
 from hrono.server.app import create_app
 from tests.server import test_map_at_scale as at_scale
 from tests.server.test_ui_ask import KEY, TREE, Panel
+from tests.server.test_ui_ask import _world as _world  # noqa: PLC0414
 from tests.server.test_ui_ask import panel as panel  # noqa: PLC0414
+from tests.server.test_ui_ask import tmp_path as tmp_path  # noqa: PLC0414
 
 
 def page(p: Panel, route: str, **query: str) -> str:

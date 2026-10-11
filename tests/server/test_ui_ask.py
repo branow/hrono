@@ -23,6 +23,7 @@ from hrono.recall.brief_passages import store_brief
 from hrono.recall.engine import Hit
 from hrono.server.app import create_app
 from hrono.server.ui import ask, ask_history
+from tests import world
 from tests.context import job_context
 from tests.tree.test_maintain import (
     fake_build,
@@ -98,23 +99,39 @@ def stored(panel: Panel) -> list[dict[str, object]]:
     return json.loads(unquote(panel.client.cookies["hrono_asked"]))
 
 
+@pytest.fixture(scope="module")
+def _world(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    """The tree `maintain` builds over a twelve-file repo, built once."""
+    root = tmp_path_factory.mktemp("world")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.chdir(root)
+        url = make_repo(root / "src-repo", files=12)
+        database = Database.at(root / "hrono.db")
+        with database.connect() as conn, conn:
+            register(conn, url)
+        maintain(
+            job(),
+            job_context(database, root),
+            encoder_for=hashed,
+            client=Distinct(),
+            build=fake_build,
+        )
+        # the briefs' own passages are embedded by the next run's embed stage
+        embed(job(), job_context(database, root), encoder_for=hashed)
+        database.close()
+    return root, world.snapshot(root, tmp_path_factory.mktemp("copy"))
+
+
+@pytest.fixture
+def tmp_path(_world: tuple[Path, Path]) -> Path:
+    """Shadows pytest's: every test here starts in the built world."""
+    root, copy = _world
+    return world.restore(copy, root)
+
+
 @pytest.fixture
 def panel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Panel]:
     monkeypatch.chdir(tmp_path)
-    url = make_repo(tmp_path / "src-repo", files=12)
-    database = Database.at(tmp_path / "hrono.db")
-    with database.connect() as conn, conn:
-        register(conn, url)
-    maintain(
-        job(),
-        job_context(database, tmp_path),
-        encoder_for=hashed,
-        client=Distinct(),
-        build=fake_build,
-    )
-    # the briefs' own passages are embedded by the next run's embed stage
-    embed(job(), job_context(database, tmp_path), encoder_for=hashed)
-    database.close()
     monkeypatch.setattr("hrono.recall.ask._query_encode", hashed)
     conn = open_database(tmp_path / "hrono.db")
     reconcile(conn, KEY)

@@ -31,6 +31,7 @@ from hrono.registry.validation import connection_validation, model_validation
 from hrono.server.app import create_app
 from hrono.summarize import briefs
 from hrono.summarize.resolve import model_fingerprint, template_hash
+from tests.repo_template import memoized
 
 KEY = Fernet.generate_key()
 MODEL = "sonnet"
@@ -120,6 +121,7 @@ def _offline_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+@memoized
 def _repo(at: Path) -> str:
     at.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "--quiet", "--bare", str(at)], check=True)

@@ -5,6 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from tests.repo_template import memoized
+
 
 def _git(repo: Path, *args: str) -> str:
     return subprocess.run(
@@ -24,6 +26,7 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+@memoized
 def make_repo(path: Path) -> Path:
     """A repository on `main` with one commit."""
     path.mkdir()
@@ -44,6 +47,7 @@ def head_of(repo: Path) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
+@memoized
 def make_empty_repo(path: Path) -> Path:
     """A repository with nothing committed: it has no HEAD to report."""
     path.mkdir()
