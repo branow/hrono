@@ -296,14 +296,16 @@ def _default(name: str) -> str:
 # every topic above them — each made of its prompt's own words.
 ECHOED = {
     "brief": (
-        "This group covers State, what, group, condensations, whole, then. "
-        "It also touches surface, natural, groupings, actually, present, "
-        "never. The material is drawn from the source files listed below."
+        "This group covers Summarize, following, related, chunks, knowledge, "
+        "reader. It also touches opening, domain, technology, format, "
+        "apparent, natural. The material is drawn from the source files "
+        "listed below."
     ),
     "brief-upper": (
-        "This group covers Summarize, child, briefs, below, into, higher. It "
-        "also touches level, brief, parent, node, Keep, concrete. The "
-        "material is drawn from the source files listed below."
+        "This group covers abstraction, higher, texts, requirements, "
+        "recognizable, conventions. It also touches recurring, emergent, "
+        "invariants, decisions, restating, hazards. The material is drawn "
+        "from the source files listed below."
     ),
 }
 
