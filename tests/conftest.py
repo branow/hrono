@@ -77,6 +77,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     browsers = 0
     for item in items:
         module = item.nodeid.split("::")[0]
+        if module == _BROWSER_MODULE or module in _UMAP_MODULES:
+            # real Chromium or the real UMAP recipe: `-m "not slow"` leaves
+            # them out of a quick local run; CI and the gate run everything
+            item.add_marker(pytest.mark.slow)
         if module == _BROWSER_MODULE:
             group = f"browser-{browsers % 2}"
             item.add_marker(pytest.mark.xdist_group(group))

@@ -109,3 +109,6 @@ testpaths = ["tests"]
 # loadgroup keeps the "umap" groups of tests/conftest.py on one worker; without
 # -n it changes nothing.
 addopts = "--dist loadgroup"
+markers = [
+    "slow: drives a real browser or runs the real UMAP recipe (tests/conftest.py)",
+]
