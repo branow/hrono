@@ -38,6 +38,16 @@ OPEN_DEPTH = 2
 # present and empty — which is exactly what the Collapse link sends.
 NO_OPEN = "\x00"
 
+# The two ways the map draws the same topics. Circles show the shape of a
+# small tree at a glance; past a few dozen topics a row of circles is wider
+# than any window and its names are cut to a slot, so a big tree opens as the
+# list, where every name is whole and a thousand rows still scroll.
+VIEWS = {
+    "circles": "Each topic a circle under its parent; best for a small tree",
+    "list": "Each topic a row, indented under its parent; best for a big tree",
+}
+LIST_AT = 60
+
 
 def _down_to(conn: object, tree: str, depth: int) -> set[int]:
     """Every topic shallow enough that opening it is still worth the room.
@@ -212,6 +222,7 @@ def graph_page(
     done: str = "",
     focus: str = "",
     arcs: str = "",
+    view: str = "",
 ) -> Response:
     """The tree, drawn — and every view of it is a URL.
 
@@ -227,14 +238,22 @@ def graph_page(
     kinds = overlays.parse(edges)
     wanted = int(focus) if focus.strip().isdigit() else 0
     alone = int(arcs) if arcs.strip().isdigit() else 0
+    # only a view the reader CHOSE rides in the links; an unchosen one is the
+    # default again on the next page, so the URLs stay as short as they were
+    picked = view if view in VIEWS else ""
     with request.app.state.db.connect() as conn:
         opened = (
             chosen if chosen is not None else _down_to(conn, tree, OPEN_DEPTH)
         )
         trees = _trees(conn)
+        shown = picked or _default_view(conn, tree)
         drawn = graph.build(conn, tree, sorted(opened))
+        # the list draws no arcs, so it asks for none
         overlay = overlays.build(
-            conn, tree, [node.id for node in drawn.nodes], kinds
+            conn,
+            tree,
+            [node.id for node in drawn.nodes],
+            kinds if shown == "circles" else [],
         )
         branches = _branches(conn, tree)
         focused = panel.build(conn, tree, wanted) if wanted else None
@@ -247,9 +266,13 @@ def graph_page(
             "user": user,
             "trees": trees,
             "tree": tree,
+            "view": shown,
+            "views": _view_switch(tree, open, edges, focus, shown),
             "graph": {
                 "nodes": [
-                    _with_toggle(node, tree, opened, open, edges, wanted)
+                    _with_toggle(
+                        node, tree, opened, open, edges, wanted, picked
+                    )
                     for node in drawn.nodes
                 ],
                 "edges": drawn.edges,
@@ -260,34 +283,64 @@ def graph_page(
                 # ONE control, not two: a map is either all open or it is
                 # not, and two mutually exclusive buttons sitting side by side
                 # make the reader work out which one is already true
-                "fold": _folding(tree, opened, branches, edges, focus),
+                "fold": _folding(tree, opened, branches, edges, focus, picked),
             },
             "overlay": {
                 "links": links,
                 "chips": _chips(
-                    drawn, arcs_drawn.unseen, tree, open, edges, focus
+                    drawn, arcs_drawn.unseen, tree, open, edges, focus, picked
                 ),
-                "only": _only(drawn, alone, tree, open, edges, focus),
+                "only": _only(drawn, alone, tree, open, edges, focus, picked),
                 "unavailable": overlay.unavailable,
-                "toggles": _edge_toggles(tree, open, kinds, focus),
+                "toggles": _edge_toggles(tree, open, kinds, focus, picked),
             },
             "panel": focused,
             # a child in the panel is a link back onto the map, and it has to
             # be the map the reader is ON, expand state and overlays kept, or
             # clicking a child collapses the board under the reader
             "reads": {
-                part.id: _graph_url(tree, open, edges, focus=str(part.id))
+                part.id: _graph_url(
+                    tree, open, edges, focus=str(part.id), view=picked
+                )
                 for part in (focused.parts if focused else ())
             },
             # closing the panel is the same map without it, which keeps the
             # expand state and the overlays the reader had set up
-            "unfocus": _graph_url(tree, open, edges),
+            "unfocus": _graph_url(tree, open, edges, view=picked),
             # a dissolve lands here rather than on the topic it just retired,
             # so this page is where its outcome has to be said
             "done": done,
             "can_write": user.role in {"writer", "admin"},
         },
     )
+
+
+def _default_view(conn: object, tree: str) -> str:
+    """Circles for a tree small enough to see whole, the list past that."""
+    count = conn.execute(  # type: ignore[attr-defined]
+        "SELECT COUNT(*) FROM nodes WHERE tree = ?", (tree,)
+    ).fetchone()[0]
+    return "list" if int(count) > LIST_AT else "circles"
+
+
+def _view_switch(
+    tree: str, open: str, edges: str, focus: str, shown: str
+) -> list[dict[str, object]]:
+    """One link per view, keeping everything else the reader set up.
+
+    A switch link always names its view, so the choice survives a tree
+    growing past `LIST_AT` while the reader is on it.
+    """
+    return [
+        {
+            "name": name,
+            "label": name.capitalize(),
+            "says": says,
+            "on": name == shown,
+            "href": _graph_url(tree, open, edges, focus=focus, view=name),
+        }
+        for name, says in VIEWS.items()
+    ]
 
 
 def _chips(
@@ -297,6 +350,7 @@ def _chips(
     open: str,
     edges: str,
     focus: str,
+    view: str = "",
 ) -> list[dict[str, object]]:
     """A count beside each topic that has arcs the map did not draw, linking to
     that topic's arcs alone."""
@@ -310,7 +364,7 @@ def _chips(
                 "Open them on their own."
             ),
             "href": _graph_url(
-                tree, open, edges, focus=focus, arcs=str(node.id)
+                tree, open, edges, focus=focus, arcs=str(node.id), view=view
             ),
         }
         for node in drawn.nodes
@@ -329,6 +383,7 @@ def _only(
     open: str,
     edges: str,
     focus: str,
+    view: str = "",
 ) -> dict[str, str] | None:
     """The way back from one topic's arcs to the whole map's."""
     node = next((node for node in drawn.nodes if node.id == alone), None)
@@ -336,7 +391,7 @@ def _only(
         return None
     return {
         "name": node.label,
-        "href": _graph_url(tree, open, edges, focus=focus),
+        "href": _graph_url(tree, open, edges, focus=focus, view=view),
     }
 
 
@@ -400,6 +455,7 @@ def _folding(
     branches: set[int],
     edges: str,
     focus: str,
+    view: str = "",
 ) -> dict[str, str]:
     """The one fold control: what it would do, and where it goes.
 
@@ -420,12 +476,18 @@ def _folding(
             "" if wide_open else _every(branches),
             edges,
             focus=focus,
+            view=view,
         ),
     }
 
 
 def _graph_url(
-    tree: str, opened: str, edges: str, focus: str = "", arcs: str = ""
+    tree: str,
+    opened: str,
+    edges: str,
+    focus: str = "",
+    arcs: str = "",
+    view: str = "",
 ) -> str:
     """A link to one view of the map.
 
@@ -445,6 +507,7 @@ def _graph_url(
                 ("edges", edges),
                 ("focus", focus),
                 ("arcs", arcs),
+                ("view", view),
             )
             if value or (key == "open" and opened != NO_OPEN)
         },
@@ -698,7 +761,11 @@ _ALONG = (0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8)
 
 
 def _edge_toggles(
-    tree: str, open: str, kinds: Sequence[str], focus: str = ""
+    tree: str,
+    open: str,
+    kinds: Sequence[str],
+    focus: str = "",
+    view: str = "",
 ) -> list[dict[str, object]]:
     """One on/off link per overlay, keeping the expand state.
 
@@ -723,7 +790,9 @@ def _edge_toggles(
             {
                 "kind": kind,
                 "on": kind in kinds,
-                "href": _graph_url(tree, open, ",".join(rest), focus=focus),
+                "href": _graph_url(
+                    tree, open, ",".join(rest), focus=focus, view=view
+                ),
             }
         )
     return toggles
@@ -749,6 +818,7 @@ def _with_toggle(
     open: str,
     edges: str,
     focused: int,
+    view: str = "",
 ) -> dict[str, object]:
     """Each node carries the URL that opens it, and the one that reads it.
 
@@ -772,6 +842,7 @@ def _with_toggle(
         "holds": node.holds,  # type: ignore[attr-defined]
         "holds_what": node.holds_what,  # type: ignore[attr-defined]
         "level": node.level,  # type: ignore[attr-defined]
+        "depth": node.depth,  # type: ignore[attr-defined]
         "stale": node.stale,  # type: ignore[attr-defined]
         "has_children": node.has_children,  # type: ignore[attr-defined]
         "has_hidden_children": node.has_hidden_children,  # type: ignore[attr-defined]
@@ -783,9 +854,9 @@ def _with_toggle(
         # hand-built URL dropped `edges`, and opening a topic turned off the
         # overlay the reader had opened it to look at
         "toggle": _graph_url(
-            tree, query, edges, focus=str(focused) if focused else ""
+            tree, query, edges, focus=str(focused) if focused else "", view=view
         ),
         # clicking the focused topic again closes its panel, so the disc is a
         # toggle like everything else on this page
-        "read": _graph_url(tree, open, edges, focus=focus),
+        "read": _graph_url(tree, open, edges, focus=focus, view=view),
     }

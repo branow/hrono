@@ -84,8 +84,10 @@ class Scale:
         )
 
     def page(self, query: str) -> str:
+        # the circles by name: a tree this size opens as the list, which
+        # draws no arcs
         return self.client.get(
-            f"/ui/trees/{TREE}/graph?open={self.root},"
+            f"/ui/trees/{TREE}/graph?view=circles&open={self.root},"
             f"{','.join(map(str, self.uppers))}&{query}"
         ).text
 
@@ -320,8 +322,8 @@ def test_a_topic_with_arcs_left_out_says_how_many_and_opens_them(
     alone = scale.client.get(href).text
     mine = re.findall(r'<path d="[^"]+" class="link', alone)
     assert 0 < len(mine) <= ARC_CAP
-    assert "Only this topic" in alone  # and the way back to the whole map
-    tip = re.search(r'data-tip="([^"]*)"[^>]*>Only this topic', alone)
+    assert "All arcs" in alone  # and the way back to the whole map
+    tip = re.search(r'data-tip="([^"]*)"[^>]*>All arcs', alone)
     assert tip, "the way back has no tooltip"
     # Topic names end in a full stop; the copy must not stack another on it.
     assert ".." not in tip.group(1)
