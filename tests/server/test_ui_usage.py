@@ -103,7 +103,7 @@ def test_every_role_can_open_the_usage_page(panel: Panel, role: str) -> None:
 
     page = panel.get("/ui/usage?tree=default")
 
-    assert "Each model" in page and "Costliest runs" in page
+    assert "By model" in page and "Costliest runs" in page
     assert ">Usage</a>" in page  # the tab
 
 
@@ -128,7 +128,7 @@ def test_the_page_answers_which_model_which_run_who_and_how_long(
     assert by_model.count("1.00h") == 2  # an hour of model time each
     people = page.split('id="by-person"')[1]
     assert 'data-person="ana"' in people and 'data-person="bo"' in people
-    assert "6,000,000 in" in page
+    assert 'title="6,000,000"' in page  # the exact figure behind 6.00M
 
 
 def test_a_subscription_only_install_never_shows_money_spent(
@@ -384,7 +384,7 @@ def test_the_agent_chips_count_only_the_newest_window_and_say_so(
     page = panel.get("/ui/usage?tree=default")
 
     asked = page.split('id="asked"')[1].split("</section>")[0]
-    assert f"Last {DAYS} days" in asked
+    assert f"last {DAYS} days" in asked
     assert f"{DAYS} calls" in asked and "0% not confident" in asked
     assert asked.count("data-asked-day") == DAYS
     assert str(first) not in asked

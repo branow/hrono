@@ -246,7 +246,7 @@ details.reveal .hint { margin-top: var(--s2); }
 .treepick > summary:hover { background: var(--sunken); }
 .treepick[open] > summary { border-color: var(--accent); }
 .treepick .key {
-  font: 600 .625rem/1 var(--mono);
+  font: 600 .6875rem/1 var(--mono);
   letter-spacing: .08em; text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -891,9 +891,13 @@ table.topics {
   width: 100%;
   max-width: 76rem;
   margin: 0 auto;
-  border-collapse: collapse;
+  border-collapse: separate; border-spacing: 0;
   table-layout: fixed;
-  font-size: .8125rem;
+  font-size: .875rem;
+  background: var(--surface);
+  border: 1px solid var(--rule); border-radius: var(--r3);
+  box-shadow: var(--shadow);
+  padding: var(--s2) var(--s3);
 }
 table.topics thead th {
   padding: .4rem .5rem;
@@ -903,11 +907,9 @@ table.topics thead th {
   color: var(--ink-faint);
   border-bottom: 1px solid var(--rule-firm);
 }
-table.topics th.col-holds { width: 7.5rem; text-align: right; }
-table.topics th.col-where { width: 16rem; }
-table.topics th.col-brief { width: 6rem; }
-table.topics tbody tr { border-bottom: 1px solid var(--rule); }
-table.topics tbody tr:hover { background: var(--sunken); }
+table.topics col.col-brief { width: 7.5rem; }
+table.topics tbody th, table.topics tbody td { border-bottom: 0; }
+table.topics tbody tr:hover > * { background: var(--sunken); }
 table.topics tbody th,
 table.topics tbody td {
   padding: .3rem .5rem;
@@ -950,16 +952,18 @@ table.topics tbody th {
   background: var(--rule-firm);
 }
 .topics a.name {
-  min-width: 0;
+  flex: 0 1 auto; min-width: 6rem;
   overflow: hidden; text-overflow: ellipsis;
-  font: 560 .8125rem/1.6 var(--mono);
-  color: var(--ink);
+  font-weight: 540; line-height: 1.7;
+  color: var(--accent);
 }
-.topics a.name:hover { color: var(--accent); }
-.topics td.col-holds { text-align: right; color: var(--ink-soft); }
-.topics td.col-where { font: .75rem/1.6 var(--mono); color: var(--ink-faint); }
-.topics td.col-brief .needs { color: var(--warn); }
-.topics td.col-brief .fine { color: var(--ink-faint); }
+.topics .meta {
+  flex: 0 1000 auto; min-width: 0; margin-left: .35rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .78125rem; color: var(--ink-faint);
+}
+.topics .meta .mono { font-size: .75rem; }
+.topics td.col-brief .needs { font-size: .78125rem; font-weight: 560; color: var(--warn); }
 /* The row the panel is showing, tied to it the way the ringed circle is. */
 .topics tr.reading { background: var(--accent-wash); }
 .topics tr.reading:hover { background: var(--accent-wash); }
@@ -972,9 +976,8 @@ table.topics tbody th {
    own colour rather than in a column. */
 @media (max-width: 40rem) {
   table.topics { --step: .875rem; }
-  table.topics .col-where, table.topics .col-brief { display: none; }
-  table.topics th.col-holds { width: 3rem; }
-  .topics td.col-holds .unit { display: none; }
+  table.topics .col-brief, .topics .meta .where { display: none; }
+  table.topics col.col-brief { width: 0; }
   .topics tr.stale a.name { color: var(--warn); }
   main.bleed .canvas.listing { padding-inline: var(--s2); }
 }
@@ -1154,15 +1157,6 @@ ul.kids a {
 ul.kids a:hover { border-color: var(--accent); background: var(--accent-wash); text-decoration: none; }
 ul.kids .who-holds { font-family: var(--mono); font-size: .8125rem; }
 
-/* ---------------------------------------------------------- edit drawer */
-.actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); align-items: flex-start; }
-.actions .menu { flex: 1 1 100%; border-top: 0; }
-.actions .menu > summary { padding: 0 .75rem; }
-.actions .menu > summary { display: inline-flex; align-items: center; gap: var(--s2); list-style: none; cursor: pointer; }
-.actions .menu > summary::-webkit-details-marker { display: none; }
-.actions .menu[open] { border: 1px solid var(--rule); border-radius: var(--r2, 8px); background: var(--surface, transparent); }
-.actions .menu[open] > summary { margin: var(--s2); }
-.actions .menu:not([open]) { flex: none; }
 .section-filter { margin-bottom: var(--s3); }
 .section-filter input.line { width: 100%; max-width: 24rem; }
 .filter-count { margin: 0 0 var(--s2); }
@@ -1170,39 +1164,6 @@ ul.kids .who-holds { font-family: var(--mono); font-size: .8125rem; }
 .members .where-in .heading { color: var(--ink-soft, inherit); overflow-wrap: anywhere; }
 .pager { gap: var(--s2); align-items: center; margin-top: var(--s3); }
 details.hashes { margin-top: var(--s3); }
-.surgery { border-top: 1px solid var(--rule); }
-.surgery > summary {
-  display: flex; align-items: center; gap: var(--s2);
-  padding: var(--s3) var(--s4);
-  cursor: pointer;
-  font-weight: 600;
-}
-.surgery > summary:hover { background: var(--sunken); }
-.surgery[open] > summary { border-bottom: 1px solid var(--rule); }
-.surgery .tools { padding: 0 var(--s4); }
-
-/* A form, laid out like one: what the field IS on the left, the control and
-   the button that commits it on the right. Every row starts at the same
-   column, so the drawer reads as one form rather than as five stacked ones —
-   and a name gets a name-sized box instead of the full width of the card. */
-.tool {
-  display: grid;
-  grid-template-columns: 9.5rem minmax(0, 1fr);
-  gap: var(--s2) var(--s4);
-  align-items: start;
-  margin: 0; padding: var(--s4) 0;
-}
-.tool + .tool { border-top: 1px solid var(--rule); }
-.tool .tool-label { padding-top: .35rem; }
-.tool label, .tool .as-label { font-weight: 560; }
-.tool .tool-field { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2); }
-/* a textarea takes the row and its button wraps beneath it, left-aligned with
-   the field rather than floating off the end of a paragraph */
-.tool textarea { flex: 1 1 100%; width: 100%; }
-.tool input.line { flex: 0 1 24rem; min-width: 12rem; }
-.tool .pinned-now { flex: 1 1 100%; display: flex; gap: var(--s1) var(--s3); flex-wrap: wrap;
-  padding-top: .35rem; font-size: .8125rem; color: var(--ink-soft); }
-
 /* --------------------------------------------------- topic: quiet facts */
 /* What a topic IS (its size, level and number) is read, not clicked, so it
    is one muted line of text rather than a row of boxes that look like
@@ -1214,8 +1175,6 @@ details.hashes { margin-top: var(--s3); }
 }
 .topic-meta > span + span::before { content: "\00b7"; margin-right: .5rem; color: var(--rule-firm); }
 .topic-meta .held-note { color: var(--accent); cursor: help; }
-.actions .menu > summary.btn { min-height: 2rem; }
-.actions .menu-note { margin: 0 var(--s4) var(--s2); }
 ul.kids .kid-meta { font-size: .75rem; color: var(--ink-faint); }
 .warn-text { color: var(--warn); }
 
@@ -1249,79 +1208,81 @@ ul.members summary .fit.warn-text { color: var(--warn); }
 .section-more form.move select { flex: 0 1 32rem; min-width: 0; height: 2rem; }
 .section-more form.move .btn { height: 2rem; }
 
-/* A candidate topic is not its row id: the path its sections live under, what
-   it holds, what it says, and a link that opens it in a new tab so an operator
-   can look before they merge. */
-.picker {
-  flex: 1 1 100%;
-  max-height: 16rem; overflow: auto;
-  border: 1px solid var(--rule-firm); border-radius: var(--r2);
-  background: var(--surface);
+/* A candidate topic is not its row id: what it holds and a link that opens
+   it in a new tab, so an operator can look before they merge. One line each,
+   so a list of five hundred stays a list. */
+.picker { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; }
+.picker-filter { width: 100%; }
+.picker-list {
+  max-height: 13rem; overflow: auto;
+  border: 1px solid var(--rule-firm); border-radius: var(--r2); background: var(--surface);
 }
 .picker .candidate {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center; gap: .15rem var(--s2);
-  padding: .35rem var(--s2);
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center;
+  gap: var(--s2); padding: .3rem .6rem; cursor: pointer; font-weight: 400;
   border-bottom: 1px solid var(--rule);
-  font-weight: 400; cursor: pointer;
 }
+.picker .candidate[hidden] { display: none; }
 .picker .candidate:last-child { border-bottom: 0; }
 .picker .candidate:hover { background: var(--sunken); }
 .picker .candidate:has(input:checked) { background: var(--accent-wash); }
-.picker input { flex: none; margin: 0; }
-.picker .who-holds { font-family: var(--mono); font-size: .8125rem; overflow-wrap: anywhere; }
-.picker .about {
-  grid-column: 2 / -1;
-  color: var(--ink-soft); font-size: .78125rem;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.picker input { margin: 0; accent-color: var(--accent); }
+.picker .who-holds { font-size: .8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker .holds { font-size: .75rem; color: var(--ink-faint); white-space: nowrap; }
+.picker .peek { font: .75rem var(--mono); color: var(--ink-faint); }
+.picker .peek:hover { color: var(--accent); }
+
+/* A confirmation is a sentence the person ticks, not a second button. */
+.confirm {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .8125rem; font-weight: 500; color: var(--ink-soft); cursor: pointer; white-space: nowrap;
 }
-.picker .peek {
-  display: inline-flex; align-items: center; gap: .25rem;
-  font: 560 .75rem/1.5 var(--mono); white-space: nowrap;
+.confirm input { margin: 0; accent-color: var(--danger); }
+
+/* ---------------------------------------------------------- topic: manage */
+/* Changing a topic sits below reading it, as one form of rows: the name of
+   the change, what it takes, and the button that does it. Reshaping comes
+   last and its buttons say so in red text, not in an alarm box. */
+.manage-link { font-size: .8125rem; }
+.topic-meta > .manage-link::before { content: "\00b7"; margin-right: .5rem; color: var(--rule-firm); }
+.manage { display: flex; flex-direction: column; }
+.mrow {
+  display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; gap: var(--s2) var(--s4);
+  align-items: start; margin: 0; padding: var(--s3) 0; border-bottom: 1px solid var(--rule);
+}
+.manage > .mrow:last-child { border-bottom: 0; }
+.mlabel { font-weight: 560; font-size: .875rem; padding-top: .45rem; }
+.mfield { min-width: 0; }
+.mfield input[type=text], .mfield textarea { width: 100%; }
+.mtext { margin: 0; padding-top: .45rem; font-size: .8125rem; color: var(--ink-soft); }
+.mtext.mb { padding-top: 0; margin-bottom: var(--s2); }
+.mact { display: flex; align-items: center; gap: var(--s3); min-height: 2.25rem; }
+.mact .btn { min-width: 5.5rem; }
+.manage-sub {
+  margin: var(--s5) 0 0; padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
+  font-size: .8125rem; color: var(--ink-soft);
+}
+.btn.risky { color: var(--danger); }
+.btn.risky:hover { background: var(--danger-wash); border-color: var(--danger); }
+@media (max-width: 720px) {
+  .mrow { grid-template-columns: minmax(0, 1fr); }
+  .mlabel, .mtext { padding-top: 0; }
 }
 
-/* Its own room, not the same stack behind a red line: a header that names it,
-   then one row per action — what it does on the left, what it takes to do it
-   on the right. */
-.danger-zone {
-  margin: 0 var(--s4) var(--s4);
-  border: 1px solid var(--danger);
-  border-radius: var(--r3);
-  overflow: hidden;
-}
-.danger-zone .zone-head {
-  display: flex; align-items: center; gap: .4rem;
-  padding: var(--s2) var(--s4);
-  background: var(--danger-wash); color: var(--danger);
-  border-bottom: 1px solid var(--danger);
-  font-weight: 640;
-}
-.risk {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: var(--s3) var(--s4); flex-wrap: wrap;
-  margin: 0; padding: var(--s3) var(--s4);
-}
-.risk + .risk { border-top: 1px solid var(--rule); }
-.risk .what { flex: 1 1 20rem; display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
-.risk .what .name { font-weight: 600; }
-.risk .act { flex: none; display: flex; align-items: center; gap: var(--s2); }
-.confirm {
-  display: inline-flex; align-items: center; gap: .4rem;
-  padding: .25rem .5rem;
-  border: 1px solid var(--danger);
-  border-radius: var(--r2);
-  background: var(--surface);
-  font-size: .8125rem; font-weight: 560;
-}
+/* The brief is edited where it is read: the card swaps its text for the box. */
+.edit-switch { position: absolute; opacity: 0; pointer-events: none; }
+.brief-card .brief-edit { display: none; }
+.edit-switch:checked ~ .brief-edit { display: flex; }
+.edit-switch:checked ~ .brief-view { display: none; }
+.brief-edit textarea { width: 100%; font: .8125rem/1.55 var(--mono); }
+.edit-toggle .when-open { display: none; }
+.edit-switch:checked ~ .card-head .edit-toggle .when-shut { display: none; }
+.edit-switch:checked ~ .card-head .edit-toggle .when-open { display: inline; }
+.edit-switch:focus-visible ~ .card-head .edit-toggle { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 form.move { display: flex; gap: var(--s2); align-items: flex-end; flex-wrap: wrap; margin-top: var(--s3); }
 form.move select { max-width: 32rem; }
 
-@media (max-width: 720px) {
-  .tool { grid-template-columns: minmax(0, 1fr); }
-  .tool .tool-label { padding-top: 0; }
-}
 
 /* --------------------------------------------------------------- checks */
 ul.checks { list-style: none; margin: 0; padding: 0; }

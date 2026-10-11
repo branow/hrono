@@ -18,21 +18,21 @@
 {%- endmacro %}
 
 {% macro picker(field, options, chosen) %}
-<div class="picker">
+<div class="picker" data-picker>
+  {% if options|length > 6 %}<input class="picker-filter" type="search" placeholder="Filter {{ options|length }} topics" aria-label="filter the topics below" hidden>{% endif %}
+  <div class="picker-list">
   {% for option in options %}
-  <label class="candidate">
+  <label class="candidate" title="{{ topic_name(option) }}{% if option.where %} — in {{ option.where }}{% endif %}">
     <input type="radio" name="{{ field }}" value="{{ option.id }}"{% if option.id == chosen %} checked{% endif %}>
     <span class="who-holds">{{ topic_name(option) }}</span>
-    <span class="chip num nowrap">{{ option.holds|counted(option.holds_what) }}</span>
+    <span class="holds num">{{ option.holds|counted(option.holds_what) }}</span>
     <a class="peek" href="/ui/trees/{{ tree }}/nodes/{{ option.id }}?tree={{ tree }}"
        target="_blank" rel="noopener"
        aria-label="Open topic {{ option.id }} in a new tab"
-       title="Open topic {{ option.id }} in a new tab">topic {{ option.id }}
-      <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.4 1h5.6v5.6M9 1 1 9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </a>
-    {% if option.where %}<span class="about">in {{ option.where }}</span>{% endif %}
+       title="Open topic {{ option.id }} in a new tab">#{{ option.id }}</a>
   </label>
   {% endfor %}
+  </div>
 </div>
 {% endmacro %}
 
@@ -59,148 +59,34 @@
     <span class="num">level {{ node.level }}</span>
     <span class="num">#{{ node.id }}</span>
     {% if node.pin_kinds %}<span class="held-note" data-tip="{% for kind in node.pin_kinds %}{{ pin_says.get(kind, kind) }}. {% endfor %}">held by hand</span>{% endif %}
+    {% if can_edit %}<a class="manage-link" href="#manage">Manage</a>{% endif %}
   </p>
-  {% if can_edit %}
-  <div class="actions">
-    <details class="surgery menu">
-      <summary class="btn">Edit</summary>
-      <p class="hint menu-note">Every change here is pinned, so the next run leaves it alone.</p>
-      <div class="tools">
-        <form class="tool" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/rename">
-          <div class="tool-label">
-            <label for="topic-name">Name</label><span class="tip" tabindex="0" role="note" data-tip="Replaces the name shown on the map and in the export">?</span>
-          </div>
-          <div class="tool-field">
-            <input class="line" type="text" id="topic-name" name="title" value="{{ node.title }}" maxlength="200">
-            <button class="btn primary" type="submit">Save name</button>
-          </div>
-        </form>
-
-        <form class="tool" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/brief">
-          <div class="tool-label">
-            <label for="brief-text">Brief</label><span class="tip" tabindex="0" role="note" data-tip="Your words replace the generated summary; regeneration skips this topic">?</span>
-          </div>
-          <div class="tool-field">
-            <textarea id="brief-text" name="text" rows="6">{{ node.brief or "" }}</textarea>
-            <button class="btn primary" type="submit">Save brief</button>
-          </div>
-        </form>
-
-        <form class="tool" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/note">
-          <div class="tool-label">
-            <label for="note-text">Note</label><span class="tip" tabindex="0" role="note" data-tip="Shown beside the brief, never instead of it, and never overwritten">?</span>
-          </div>
-          <div class="tool-field">
-            <textarea id="note-text" name="text" rows="3" maxlength="4000"></textarea>
-            <button class="btn primary" type="submit">Add note</button>
-          </div>
-        </form>
-
-        {% if node.undo %}
-        <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/undo">
-          <input type="hidden" name="edit" value="{{ node.undo.id }}">
-          <div class="what">
-            <span class="name">Undo {{ node.undo.label }}<span class="tip" tabindex="0" role="note" data-tip="Puts back what the last edit by hand replaced. Only the latest edit can be undone, and only once">?</span></span>
-            <p class="hint">{{ node.undo.will }} Made by {{ node.undo.who }}, {{ node.undo.when }}.</p>
-          </div>
-          <div class="act">
-            <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
-            <button class="btn danger" type="submit">Undo</button>
-          </div>
-        </form>
-        {% endif %}
-
-        {% if node.pin_kinds %}
-        <form class="tool" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
-          <div class="tool-label">
-            <span class="as-label">Held by hand</span><span class="tip" tabindex="0" role="note" data-tip="Hands it back to automation: drops the pins ({{ node.pin_kinds|join(', ') }}) so the next run may rename, rewrite and move it again">?</span>
-          </div>
-          <div class="tool-field">
-            <p class="pinned-now">{% for pin in node.pins %}<span class="chip accent">{{ pin.kind }}</span>{% endfor %}</p>
-            <button class="btn" type="submit">Release {{ node.pin_kinds|length }} pin{{ "" if node.pin_kinds|length == 1 else "s" }}</button>
-          </div>
-        </form>
-        {% endif %}
-      </div>
-
-    </details>
-    <details class="surgery menu">
-      <summary class="btn">Structure</summary>
-      <div class="tools">
-        {% if candidates.parents %}
-        <form class="tool" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/reparent">
-          <div class="tool-label">
-            <span class="as-label">Parent</span><span class="tip" tabindex="0" role="note" data-tip="Changes which topic this one sits beneath; nothing inside it changes. Open a candidate to see what it holds">?</span>
-          </div>
-          <div class="tool-field">
-            {{ picker("to", candidates.parents, node.parent.id if node.parent else 0) }}
-            <button class="btn primary" type="submit">Move under</button>
-          </div>
-        </form>
-        {% endif %}
-
-      </div>
-      <div class="danger-zone">
-        <div class="zone-head">
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M8 1.5 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-            <path d="M8 6v4M8 11.6v.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          Danger zone
-          <span class="tip" tabindex="0" role="note" data-tip="These reshape the tree and cannot be undone here. Your source files are never touched">?</span>
-        </div>
-
-        {% if candidates.siblings %}
-        <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/merge">
-          <div class="what">
-            <span class="name">Merge into another topic<span class="tip" tabindex="0" role="note" data-tip="One topic holds everything both held; the lower-numbered one survives">?</span></span>
-            <p class="hint">Folds this topic ({{ held|counted(held_what) }}) and the one you pick into one topic. The lower-numbered one survives; the other is gone.</p>
-            {{ picker("with", candidates.siblings, 0) }}
-          </div>
-          <div class="act">
-            <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
-            <button class="btn danger" type="submit">Merge</button>
-          </div>
-        </form>
-        {% endif %}
-
-        <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
-          <div class="what">
-            <span class="name">Remove this topic<span class="tip" tabindex="0" role="note" data-tip="This topic goes; what it holds ({{ held|counted(held_what) }}) is re-filed under the nearest remaining topic. The CLI calls it a dissolve">?</span></span>
-            <p class="hint">This topic goes. Its {{ held|counted(held_what) }} are re-filed under the nearest remaining topic.</p>
-          </div>
-          <div class="act">
-            <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
-            <button class="btn danger" type="submit">Remove</button>
-          </div>
-        </form>
-
-        <form class="risk" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
-          <div class="what">
-            <span class="name">Split into narrower topics<span class="tip" tabindex="0" role="note" data-tip="Regroups what this holds into narrower topics that take its place">?</span></span>
-            <p class="hint">This topic is replaced by narrower ones that regroup its {{ held|counted(held_what) }}.</p>
-          </div>
-          <div class="act">
-            <label class="confirm"><input type="checkbox" name="confirm" value="yes"> confirm</label>
-            <button class="btn danger" type="submit">Split</button>
-          </div>
-        </form>
-      </div>
-    </details>
-  </div>
-  {% endif %}
 </div>
 
 
 <div class="topic-layout">
 <div class="topic-main stack">
-  <section class="card">
+  <section class="card brief-card">
+    {% if can_edit %}<input type="checkbox" class="edit-switch" id="edit-brief" aria-label="edit the brief">{% endif %}
     <div class="card-head">
       <h2>Brief<span class="tip" tabindex="0" role="note" data-tip="The summary an agent reads to decide whether to come in here">?</span></h2>
-      {% if node.stale %}<span class="chip warn" title="Its contents changed after it was written; the next run rewrites it">needs rewriting</span>
-      {% elif "brief" in node.pin_kinds %}<span class="chip accent">by hand</span>{% endif %}
+      <div class="row">
+        {% if node.stale %}<span class="chip warn" title="Its contents changed after it was written; the next run rewrites it">needs rewriting</span>
+        {% elif "brief" in node.pin_kinds %}<span class="chip accent">by hand</span>{% endif %}
+        {% if can_edit %}<label for="edit-brief" class="btn small edit-toggle"><span class="when-shut">Edit</span><span class="when-open">Cancel</span></label>{% endif %}
+      </div>
     </div>
-    <div class="card-body stack">
+    {% if can_edit %}
+    <form class="card-body stack brief-edit" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/brief">
+      <label class="visually-hidden" for="brief-text">Brief</label>
+      <textarea id="brief-text" name="text" rows="14">{{ node.brief or "" }}</textarea>
+      <div class="row">
+        <button class="btn primary" type="submit">Save brief</button>
+        <span class="hint">Markdown. A brief you save is kept: runs stop rewriting it until you release it below.</span>
+      </div>
+    </form>
+    {% endif %}
+    <div class="card-body stack brief-view">
       {% if node.brief %}
       {{ prose.text(node.brief, "brief", "brief", fold=true) }}
       {% else %}
@@ -335,6 +221,89 @@
       </div>
     </div>
   </section>
+  {% endif %}
+
+  {% if can_edit %}
+  <section class="card" id="manage">
+    <div class="card-head"><h2>Manage<span class="tip" tabindex="0" role="note" data-tip="A change made here stays: the next run leaves it alone">?</span></h2></div>
+    <div class="card-body">
+      <div class="manage">
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/rename">
+          <label class="mlabel" for="topic-name">Name</label>
+          <div class="mfield"><input type="text" id="topic-name" name="title" value="{{ node.title }}" maxlength="200" placeholder="{{ node.name }}"></div>
+          <div class="mact"><button class="btn" type="submit">Rename</button></div>
+        </form>
+
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/note">
+          <label class="mlabel" for="note-text">Note<span class="tip" tabindex="0" role="note" data-tip="Shown beside the brief, never instead of it, and never overwritten">?</span></label>
+          <div class="mfield"><textarea id="note-text" name="text" rows="2" maxlength="4000" placeholder="Something a reader should know"></textarea></div>
+          <div class="mact"><button class="btn" type="submit">Add note</button></div>
+        </form>
+
+        {% if candidates.parents %}
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/reparent">
+          <span class="mlabel">Parent<span class="tip" tabindex="0" role="note" data-tip="Changes which topic this one sits beneath; nothing inside it changes">?</span></span>
+          <div class="mfield">{{ picker("to", candidates.parents, node.parent.id if node.parent else 0) }}</div>
+          <div class="mact"><button class="btn" type="submit">Move</button></div>
+        </form>
+        {% endif %}
+
+        {% if node.pin_kinds %}
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
+          <span class="mlabel">Held<span class="tip" tabindex="0" role="note" data-tip="Hands it back to automation: the next run may rename, rewrite and move it again">?</span></span>
+          <div class="mfield"><p class="mtext">{% for kind in node.pin_kinds %}{{ pin_words.get(kind, kind) }}{{ ", " if not loop.last }}{% endfor %}</p></div>
+          <div class="mact"><button class="btn" type="submit">Release</button></div>
+        </form>
+        {% endif %}
+
+        {% if node.undo %}
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/undo">
+          <input type="hidden" name="edit" value="{{ node.undo.id }}">
+          <span class="mlabel">Undo<span class="tip" tabindex="0" role="note" data-tip="Puts back what the last edit by hand replaced. Only the latest edit can be undone, and only once">?</span></span>
+          <div class="mfield"><p class="mtext">Undo {{ node.undo.label }}: {{ node.undo.will }} By {{ node.undo.who }}, {{ node.undo.when }}.</p></div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Undo</button></div>
+        </form>
+        {% endif %}
+      </div>
+
+      <h3 class="manage-sub">Reshape<span class="tip" tabindex="0" role="note" data-tip="These change the tree and cannot be undone here. Source files are never touched">?</span></h3>
+      <div class="manage">
+        {% if candidates.siblings %}
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/merge">
+          <span class="mlabel">Merge<span class="tip" tabindex="0" role="note" data-tip="This topic and the one you pick become one; the lower-numbered one survives">?</span></span>
+          <div class="mfield"><p class="mtext mb">Folds this topic and the one you pick into one; the lower-numbered one survives.</p>{{ picker("with", candidates.siblings, 0) }}</div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Merge</button></div>
+        </form>
+        {% endif %}
+
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
+          <span class="mlabel">Split</span>
+          <div class="mfield"><p class="mtext">Replaced by narrower topics that regroup its {{ held|counted(held_what) }}.</p></div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Split</button></div>
+        </form>
+
+        <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
+          <span class="mlabel">Remove<span class="tip" tabindex="0" role="note" data-tip="The CLI calls this a dissolve">?</span></span>
+          <div class="mfield"><p class="mtext">This topic goes; its {{ held|counted(held_what) }} are re-filed under the nearest remaining topic.</p></div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Remove</button></div>
+        </form>
+      </div>
+    </div>
+  </section>
+  <script>
+  // Long topic lists filter as you type; without script the list just scrolls.
+  document.querySelectorAll("[data-picker]").forEach((picker) => {
+    const box = picker.querySelector(".picker-filter");
+    if (!box) return;
+    box.hidden = false;
+    box.addEventListener("input", () => {
+      const words = box.value.toLowerCase();
+      picker.querySelectorAll(".candidate").forEach((row) => {
+        row.hidden = words && !row.textContent.toLowerCase().includes(words);
+      });
+    });
+  });
+  </script>
   {% endif %}
 </div>
 

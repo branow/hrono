@@ -1,17 +1,14 @@
 {% extends "base.html" %}
 {% from "_parts.html" import money %}
 {% block title %}hrono — {{ tree }} usage{% endblock %}
+{# Token counts read as their size (4.79M); the exact figure is the title. #}
+{% macro count(n) -%}
+<span title="{{ '{:,}'.format(n) }}">{{ n|compact }}</span>
+{%- endmacro %}
+{% set many_people = people|length > 1 %}
 {% block main %}
 <div class="page-head">
   <h1>Usage<span class="tip" tabindex="0" role="note" data-tip="Every model call is recorded when it is made. Money billed per token is shown as spend; a model billed through a subscription is shown as an estimate and is never added to it">?</span></h1>
-  {% if total %}
-  <p class="where-note row mt-2">
-    {{ money(total) }}
-    <span class="chip plain num">{{ total.tokens }}</span>
-    {% if total.cached %}<span class="chip plain num">{{ total.cached }}</span>{% endif %}
-    <span class="chip plain num">{{ total.calls|string ~ (" call" if total.calls == 1 else " calls") }}, {{ total.time }} of model time</span>
-  </p>
-  {% endif %}
 </div>
 
 <div class="stack">
@@ -24,15 +21,24 @@
   </div>
 </div>
 {% else %}
+  <dl class="totals" id="totals">
+    <div><dt>Cost</dt><dd>{{ money(total, true) }}</dd></div>
+    <div><dt>Calls</dt><dd class="num">{{ "{:,}".format(total.calls) }}</dd></div>
+    <div><dt>Tokens in</dt><dd class="num">{{ count(total.tokens_in) }}</dd></div>
+    <div><dt>Tokens out</dt><dd class="num">{{ count(total.tokens_out) }}</dd></div>
+    {% if total.tokens_cached %}<div><dt>Cached</dt><dd class="num">{{ count(total.tokens_cached) }}</dd></div>{% endif %}
+    <div><dt>Model time</dt><dd class="num">{{ total.time }}</dd></div>
+  </dl>
+
   <section class="card" id="over-time">
-    <div class="card-head"><h2>Over time<span class="tip" tabindex="0" role="note" data-tip="One bar a day, as long as that day's tokens are to the busiest day's">?</span></h2></div>
+    <div class="card-head"><h2>By day<span class="tip" tabindex="0" role="note" data-tip="Each bar is that day's tokens against the busiest day's">?</span></h2></div>
     <div class="card-body">
       <ul class="daily">
         {% for day in days %}
         <li data-day="{{ day.key }}">
           <span class="num">{{ day.key }}</span>
           <span class="bar wide"><span style="width:{{ day.share }}%"></span></span>
-          <span class="num faint">{{ day.tokens }}</span>
+          <span class="num faint">{{ count(day.tokens_in + day.tokens_out) }} tokens</span>
           <span>{{ money(day, true) }}</span>
         </li>
         {% endfor %}
@@ -41,105 +47,105 @@
   </section>
 
   <section class="card" id="by-model">
-    <div class="card-head"><h2>Each model</h2></div>
-    <div class="card-body">
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Model</th><th>Runs on</th><th>Provider</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
-          <tbody>
-            {% for row in models %}
-            <tr data-model="{{ row.key }}">
-              <td><code>{{ row.key }}</code></td>
-              <td><code>{{ row.upstream }}</code></td>
-              <td>{{ row.providers }}</td>
-              <td class="num">{{ row.calls }}</td>
-              <td class="num">{{ row.tokens }}{% if row.cached %}<br><span class="faint">{{ row.cached }}</span>{% endif %}</td>
-              <td class="num">{{ row.time }}</td>
-              <td>{{ money(row, true) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    <div class="card-head"><h2>By model</h2></div>
+    <div class="card-body table-wrap">
+      <table class="usage">
+        <thead><tr><th>Role</th><th>Model</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Cached</th><th class="count">Time</th><th>Cost</th></tr></thead>
+        <tbody>
+          {% for row in models %}
+          <tr data-model="{{ row.key }}">
+            <td><code>{{ row.key }}</code></td>
+            <td class="faint small" title="via {{ row.providers }}">{{ row.upstream }}</td>
+            <td class="count">{{ "{:,}".format(row.calls) }}</td>
+            <td class="count">{{ count(row.tokens_in) }}</td>
+            <td class="count">{{ count(row.tokens_out) }}</td>
+            <td class="count faint">{% if row.tokens_cached %}{{ count(row.tokens_cached) }}{% else %}—{% endif %}</td>
+            <td class="count">{{ row.time }}</td>
+            <td>{{ money(row, true) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
 
   <section class="card" id="costliest">
     <div class="card-head"><h2>Costliest runs</h2><a class="small" href="/ui/jobs?tree={{ tree }}">All runs</a></div>
-    <div class="card-body">
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Run</th><th>Started by</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
-          <tbody>
-            {% for row in runs %}
-            <tr data-run="{{ row.key }}">
-              <td>{% if row.key %}<a href="/ui/jobs/{{ row.key }}?tree={{ tree }}"><code>{{ row.run.op or "run" }}</code></a> <span class="faint">{{ row.run.created_at[:16]|replace("T", " ") if row.run.created_at else "" }}</span>{% else %}<span class="faint">outside a run</span>{% endif %}</td>
-              <td>{{ row.run.started_by or "not recorded" }}</td>
-              <td class="num">{{ row.calls }}</td>
-              <td class="num">{{ row.tokens }}</td>
-              <td class="num">{{ row.time }}</td>
-              <td>{{ money(row, true) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    <div class="card-body table-wrap">
+      <table class="usage">
+        <thead><tr><th>Run</th><th>Started</th>{% if many_people %}<th>By</th>{% endif %}<th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th>Cost</th></tr></thead>
+        <tbody>
+          {% for row in runs %}
+          <tr data-run="{{ row.key }}">
+            <td>{% if row.key %}<a href="/ui/jobs/{{ row.key }}?tree={{ tree }}"><code>{{ row.run.op or "run" }}</code></a>{% else %}<span class="faint">outside a run</span>{% endif %}</td>
+            <td class="faint num nowrap">{{ row.run.created_at[:16]|replace("T", " ") if row.key and row.run.created_at else "" }}</td>
+            {% if many_people %}<td>{{ row.run.started_by or "not recorded" }}</td>{% endif %}
+            <td class="count">{{ "{:,}".format(row.calls) }}</td>
+            <td class="count">{{ count(row.tokens_in) }}</td>
+            <td class="count">{{ count(row.tokens_out) }}</td>
+            <td class="count">{{ row.time }}</td>
+            <td>{{ money(row, true) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if not many_people and people %}<p class="hint mt-2">Every run was started by {{ people[0].key or "someone not recorded" }}.</p>{% endif %}
     </div>
   </section>
 
+  {% if many_people %}
   <section class="card" id="by-person">
-    <div class="card-head"><h2>Each person</h2></div>
-    <div class="card-body">
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Started by</th><th>Calls</th><th>Tokens</th><th>Model time</th><th>Cost</th></tr></thead>
-          <tbody>
-            {% for row in people %}
-            <tr data-person="{{ row.key or '' }}">
-              <td>{{ row.key or "not recorded" }}</td>
-              <td class="num">{{ row.calls }}</td>
-              <td class="num">{{ row.tokens }}</td>
-              <td class="num">{{ row.time }}</td>
-              <td>{{ money(row, true) }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    <div class="card-head"><h2>By person</h2></div>
+    <div class="card-body table-wrap">
+      <table class="usage">
+        <thead><tr><th>Person</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th>Cost</th></tr></thead>
+        <tbody>
+          {% for row in people %}
+          <tr data-person="{{ row.key or '' }}">
+            <td>{{ row.key or "not recorded" }}</td>
+            <td class="count">{{ "{:,}".format(row.calls) }}</td>
+            <td class="count">{{ count(row.tokens_in) }}</td>
+            <td class="count">{{ count(row.tokens_out) }}</td>
+            <td class="count">{{ row.time }}</td>
+            <td>{{ money(row, true) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
+  {% endif %}
 {% endif %}
   {% if asked is not none %}
   <section class="card" id="asked">
-    <div class="card-head"><h2>Agent questions<span class="tip" tabindex="0" role="note" data-tip="Every recall an agent makes through the API. Asking on the Ask page is not counted">?</span></h2></div>
+    <div class="card-head"><h2>Agent questions<span class="tip" tabindex="0" role="note" data-tip="Every recall an agent makes through the API, over the last {{ window }} days. Asking on the Ask page is not counted">?</span></h2>
+      {% if asked.calls %}<span class="small faint">{{ asked.calls }} call{{ "" if asked.calls == 1 else "s" }} in the last {{ window }} days · {{ asked.unsure_share }}% not confident</span>{% endif %}
+    </div>
     <div class="card-body stack">
       {% if not asked.calls %}
       <p class="hint" data-empty>No agent has asked this tree anything yet.</p>
       {% else %}
-      <p class="where-note row">
-        <span class="faint">Last {{ window }} days</span>
-        <span class="chip plain num">{{ asked.calls|string ~ (" call" if asked.calls == 1 else " calls") }}</span>
-        <span class="chip plain num">{{ asked.unsure_share }}% not confident</span>
-      </p>
+      {% if asked.days|length > 1 %}
       <ul class="daily">
         {% for day in asked.days %}
         <li data-asked-day="{{ day.day }}">
           <span class="num">{{ day.day }}</span>
-          <span class="num">{{ day.calls|string ~ (" call" if day.calls == 1 else " calls") }}</span>
+          <span class="num">{{ day.calls }} asked</span>
           <span class="num faint">{{ day.unsure }} not confident</span>
         </li>
         {% endfor %}
       </ul>
+      {% endif %}
       <div class="table-wrap">
-        <table>
-          <thead><tr><th>Question</th><th>Asked by</th><th>Hits</th><th>When</th></tr></thead>
+        <table class="usage">
+          <thead><tr><th>Question</th><th>By</th><th class="count">Hits</th><th>When</th></tr></thead>
           <tbody>
             {% for row in asked.questions %}
             <tr data-question>
-              <td>{% if not row.confident %}<a href="{{ row.link }}">{{ row.question }}</a>{% else %}{{ row.question }}{% endif %}</td>
+              <td>{% if not row.confident %}<a href="{{ row.link }}" title="Not confident: open it to see why">{{ row.question }}</a>{% else %}{{ row.question }}{% endif %}</td>
               <td>{{ row.user }}</td>
-              <td class="num">{{ row.hits }}</td>
-              <td class="num">{{ row.asked_at[:16]|replace("T", " ") }}</td>
+              <td class="count">{{ row.hits }}</td>
+              <td class="faint num nowrap">{{ row.asked_at[:16]|replace("T", " ") }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -151,6 +157,13 @@
   {% endif %}
 </div>
 <style>
+.totals { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s6); margin: 0 0 var(--s2); }
+.totals dt { font-size: .75rem; color: var(--ink-faint); }
+.totals dd { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.totals dd .chip { font-size: 1.125rem; padding: 0; background: none; color: var(--ink); font-family: var(--sans); font-weight: 600; }
+table.usage td code { font-size: .8125rem; }
+table.usage td.small { font-size: .78125rem; }
+table.usage .chip.plain { padding: 0; }
 .daily { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
 .daily li { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) minmax(0, auto) minmax(0, auto); gap: var(--s3); align-items: center; }
 .daily .bar { margin-top: 0; }
