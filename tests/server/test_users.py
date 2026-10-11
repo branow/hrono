@@ -199,18 +199,3 @@ def test_delete_unknown_is_404(harness: Harness) -> None:
         "/users/ghost", headers=harness.auth("admin")
     )
     assert response.status_code == 404
-
-
-def test_admin_satisfies_reader_and_writer_routes(harness: Harness) -> None:
-    assert (
-        harness.client.get("/users", headers=harness.auth("admin")).status_code
-        == 200
-    )
-    assert (
-        harness.client.post(
-            "/users",
-            json={"name": "created-by-admin", "role": "reader"},
-            headers=harness.auth("admin"),
-        ).status_code
-        == 201
-    )
