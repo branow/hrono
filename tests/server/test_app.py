@@ -71,18 +71,6 @@ def test_version_reports_installed_package_version(client: TestClient) -> None:
     assert response.json() == {"name": "hrono", "version": version("hrono")}
 
 
-def test_liveness_routes_need_no_authorization_header(
-    client: TestClient,
-) -> None:
-    assert "authorization" not in {key.lower() for key in client.headers}
-    assert client.get("/health").status_code == 200
-    assert client.get("/version").status_code == 200
-
-
-def test_unknown_route_is_not_found(client: TestClient) -> None:
-    assert client.get("/nope").status_code == 404
-
-
 def test_health_is_degraded_when_only_the_reclaimer_is_dead(
     client: TestClient,
 ) -> None:

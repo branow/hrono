@@ -76,32 +76,16 @@ def test_a_domain_failure_keeps_its_code_and_its_message(
     body = response.json()["error"]
     assert body["code"] == code
     assert fragment in body["message"]
-
-
-def test_a_subclass_answers_with_its_own_code_not_its_family_s(
-    raising: TestClient,
-) -> None:
-    """`TooFewPoints` is a `ClusterError` and does NOT answer as one.
-
-    The family's code is the natural expectation and the wrong one: each
-    class declares its own, and `TooFewPoints` declares one deliberately
-    because it is the one clustering failure that is not a failure — a caller
-    may answer it by COLLECTING. A client that could not tell it from a broken
-    clusterer would have to guess at exactly the distinction the type exists
-    to make.
-    """
-    assert issubclass(TooFewPoints, ClusterError)
-    assert ClusterError.code == "cluster-error"
-
-    assert raising.get("/cluster").json()["error"]["code"] == "too-few-points"
-
-
-def test_an_app_error_is_untouched(raising: TestClient) -> None:
-    # the existing path must not change: Invalid is a 422 with its own code.
-    response = raising.get("/invalid")
-
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "validation-error"
+    if path == "/cluster":
+        # `TooFewPoints` is a `ClusterError` and does NOT answer as one. The
+        # family's code is the natural expectation and the wrong one: each
+        # class declares its own, and `TooFewPoints` declares one deliberately
+        # because it is the one clustering failure that is not a failure; a
+        # caller may answer it by COLLECTING. A client that could not tell it
+        # from a broken clusterer would have to guess at exactly the
+        # distinction the type exists to make.
+        assert issubclass(TooFewPoints, ClusterError)
+        assert ClusterError.code == "cluster-error"
 
 
 def test_a_foreign_exception_still_says_nothing(raising: TestClient) -> None:

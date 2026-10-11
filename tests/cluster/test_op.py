@@ -16,7 +16,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import Worker
 from tests.cluster.test_build import structureless
 
@@ -101,10 +101,6 @@ def db(tmp_path: object) -> Iterator[Database]:
     database.close()
 
 
-def test_cluster_is_registered() -> None:
-    assert "cluster" in OPS
-
-
 def test_builds_and_persists_a_bottom_level(db: Database) -> None:
     cluster_op.cluster(cluster_job(), JobContext(db), build=fake_build({}))
     with db.connect() as conn:
@@ -117,20 +113,15 @@ def test_builds_and_persists_a_bottom_level(db: Database) -> None:
         coords = conn.execute(
             "SELECT COUNT(*) FROM section_coords WHERE tree='default'"
         ).fetchone()[0]
-    assert nodes == 2
-    assert members == 6  # every embedded section is a member of exactly one
-    assert coords == 6
-
-
-def test_every_section_in_exactly_one_node(db: Database) -> None:
-    cluster_op.cluster(cluster_job(), JobContext(db), build=fake_build({}))
-    with db.connect() as conn:
-        rows = conn.execute(
+        per_section = conn.execute(
             "SELECT section_id, COUNT(*) c FROM node_members "
             "GROUP BY section_id"
         ).fetchall()
-    assert rows
-    assert all(row["c"] == 1 for row in rows)
+    assert nodes == 2
+    assert members == 6  # every embedded section is a member of exactly one
+    assert coords == 6
+    assert per_section
+    assert all(row["c"] == 1 for row in per_section)
 
 
 def test_warm_init_uses_stored_coords_on_rebuild(db: Database) -> None:

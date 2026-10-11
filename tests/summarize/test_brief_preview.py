@@ -14,7 +14,7 @@ import pytest
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import enqueue
 from hrono.llm.client import LLMError
 from hrono.summarize import briefs
@@ -94,10 +94,6 @@ def snapshot(database: Database) -> dict[str, list[tuple[object, ...]]]:
             ]
             for table in ("nodes", "node_members", "briefs", "registry")
         }
-
-
-def test_it_is_registered() -> None:
-    assert "brief-preview" in OPS
 
 
 def test_it_writes_the_reply_under_the_unsaved_template(db: Database) -> None:

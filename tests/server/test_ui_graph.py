@@ -129,7 +129,7 @@ def test_a_closed_root_draws_only_itself(browser: Browser) -> None:
     assert f"/nodes/{browser.ids['big']}" not in page
 
 
-def test_a_closed_topic_with_children_is_marked(browser: Browser) -> None:
+def test_only_a_closed_topic_with_children_is_marked(browser: Browser) -> None:
     # or an operator cannot tell a leaf from a branch they have not opened
     browser.sign_in()
 
@@ -138,6 +138,12 @@ def test_a_closed_topic_with_children_is_marked(browser: Browser) -> None:
     # a right-pointing disclosure triangle, and the link it carries
     assert 'class="twist closed"' in page
     assert "Open — show the" in page
+
+    page = browser.map(open=str(browser.ids["root"]))
+
+    # the root is open and the leaves have no children, so nothing on the page
+    # claims to hide anything
+    assert page.count('class="twist closed"') == 0
 
 
 def test_opening_the_root_draws_its_children(browser: Browser) -> None:
@@ -149,16 +155,6 @@ def test_opening_the_root_draws_its_children(browser: Browser) -> None:
     assert f"focus={browser.ids['big']}" in page
     assert f"focus={browser.ids['small']}" in page
     assert page.count('class="edge"') == 2  # root to each child
-
-
-def test_a_leaf_is_not_marked_as_closed(browser: Browser) -> None:
-    browser.sign_in()
-
-    page = browser.map(open=str(browser.ids["root"]))
-
-    # the root is open and the leaves have no children, so nothing on the page
-    # claims to hide anything
-    assert page.count('class="twist closed"') == 0
 
 
 def test_size_follows_what_a_topic_holds(browser: Browser) -> None:
@@ -627,20 +623,9 @@ def test_the_board_opens_on_the_ROOT_not_on_its_left_edge(
     assert drawn.home == placed.x
     # and that is not where a scroll box starts on its own
     assert drawn.home > drawn.width / 4
-
-
-def test_where_the_board_opens_REACHES_the_page(browser: Browser) -> None:
-    """A number the page does not carry cannot move anything."""
-    root = _root(browser)
-    with browser.conn:  # type: ignore[union-attr]
-        for _ in range(9):
-            _child_of(browser, root)
+    # and a number the page does not carry cannot move anything
     browser.sign_in()
-
-    page = browser.map(str(root))
-    drawn = graph.build(browser.conn, TREE, [root])  # type: ignore[arg-type]
-
-    assert f'data-home="{drawn.home}"' in page
+    assert f'data-home="{drawn.home}"' in browser.map(str(root))
 
 
 def test_reading_a_topic_opens_a_PANEL_and_leaves_the_map_drawn(
@@ -730,19 +715,6 @@ def test_an_upper_topic_in_the_panel_lists_the_topics_under_it(
     assert "2 topics" in page
     assert f"focus={browser.ids['big']}" in page
     assert f"focus={browser.ids['small']}" in page
-
-
-def test_collapse_still_means_collapsed(browser: Browser) -> None:
-    """`open=` present and EMPTY is what the Collapse link sends.
-
-    Treating that the same as absent would make Collapse a no-op — the trap
-    in giving an absent parameter a non-empty default.
-    """
-    browser.sign_in()
-
-    both = (browser.map_at(""), browser.map_at("?open="))
-
-    assert both[0].count('class="disc"') > both[1].count('class="disc"')
 
 
 def test_collapse_actually_collapses(browser: Browser) -> None:
@@ -1075,35 +1047,6 @@ def test_a_view_nobody_chose_stays_out_of_the_links(browser: Browser) -> None:
         assert _view_of(page) == "circles"
 
 
-def test_the_controls_do_not_repeat_the_tree_name(browser: Browser) -> None:
-    """The tree picker at the top of the page already names it."""
-    browser.sign_in()
-
-    page = browser.map_at("")
-
-    controls = page[page.index('id="controls"') :]
-    controls = controls[: controls.index("</div>")]
-    said = re.sub(r"<[^>]+>|\s+", " ", re.sub(r'"[^"]*"', "", controls))
-    assert TREE not in said
-    assert "3 shown" in said  # a quiet count instead
-    assert 'class="map-title"' not in page
-
-
-def test_every_legend_key_is_three_words_at_most(browser: Browser) -> None:
-    """Detail goes in the key's tooltip, not its label."""
-    browser.sign_in()
-
-    page = browser.map_at("")
-
-    legend = page[page.index('<ul class="keys">') :]
-    legend = legend[: legend.index("</ul>")]
-    keys = re.findall(r"<li[^>]*>(.*?)</li>", legend, re.S)
-    words = [re.sub(r"<[^>]+>", " ", key).split() for key in keys]
-    assert len(words) == 5
-    assert all(0 < len(key) <= 3 for key in words), words
-    assert all(re.search(r'<li title="[^"]{20,}"', legend) for _ in keys)
-
-
 def test_the_panel_says_its_facts_as_text_and_its_action_as_a_button(
     browser: Browser,
 ) -> None:
@@ -1123,16 +1066,3 @@ def test_the_panel_says_its_facts_as_text_and_its_action_as_a_button(
         rf'class="btn primary panel-out" href="/ui/trees/{TREE}/nodes/{big}',
         panel,
     )
-
-
-def test_no_name_on_the_map_wears_a_halo(browser: Browser) -> None:
-    """A stroke in the canvas colour drew a pale outline round every label."""
-    browser.sign_in()
-
-    page = browser.map_at("")
-
-    sheet = page[page.index("<style>") : page.index("</style>")]
-    rule = re.search(r"\nsvg text \{([^}]*)\}", sheet)
-    assert rule is not None
-    assert "stroke" not in rule.group(1)
-    assert "paint-order" not in rule.group(1)

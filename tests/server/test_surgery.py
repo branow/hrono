@@ -581,9 +581,14 @@ def test_surgery_is_admin_only(harness: tuple[Harness, dict]) -> None:
         (f"/trees/{TREE}/nodes/{ids['third']}/reparent", {"to": 1}),
         (f"/trees/{TREE}/nodes/merge", {"ids": [1, 2]}),
         (f"/trees/{TREE}/nodes/{ids['third']}/dissolve", None),
+        (
+            f"/trees/{TREE}/sections/{ids['gamma']}/move",
+            {"to_node": ids["first"]},
+        ),
     ):
         response = h.client.post(path, json=body, headers=headers)
         assert response.status_code == 403
+    assert _members(h, ids["third"]) == {ids["gamma"]}
 
 
 def test_an_id_this_tree_does_not_hold_is_not_found(
@@ -837,20 +842,6 @@ def test_a_section_move_refuses_what_this_tree_does_not_hold(
     assert pins.pinned(h.conn, pins.MEMBERSHIP) == frozenset()
     assert incubator_count(h.conn, OTHER_TREE) == 1  # still theirs
     assert parked_elsewhere not in _members(h, ids["first"])
-
-
-def test_a_section_move_is_admin_only(harness: tuple[Harness, dict]) -> None:
-    h, ids = harness
-    writer = create_user(h.conn, "writer2", "writer")[1]
-
-    response = h.client.post(
-        f"/trees/{TREE}/sections/{ids['gamma']}/move",
-        json={"to_node": ids["first"]},
-        headers={"Authorization": f"Bearer {writer}"},
-    )
-
-    assert response.status_code == 403
-    assert _members(h, ids["third"]) == {ids["gamma"]}
 
 
 def test_a_move_that_empties_a_topic_says_so(

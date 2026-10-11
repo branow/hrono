@@ -181,24 +181,17 @@ def test_a_blank_title_is_refused_and_said_so(browser: Browser) -> None:
     assert "at least 1 character" in answer.text
 
 
-def test_a_reader_sees_no_forms(browser: Browser) -> None:
-    browser.sign_in("reader")
+@pytest.mark.parametrize("role", ["reader", "writer"])
+def test_a_reader_or_a_writer_sees_no_forms(
+    browser: Browser, role: str
+) -> None:
+    # the API's floor for these is ADMIN; the page may not be a softer door
+    browser.sign_in(role)
 
     page = browser.page()
 
     # the drawer AND the thing it holds: a label can be renamed, a form action
     # is what the control actually is
-    assert "Correct this topic by hand" not in page
-    assert f"/nodes/{browser.node}/rename" not in page
-    assert f"/nodes/{browser.node}/dissolve" not in page
-
-
-def test_a_writer_sees_no_forms_either(browser: Browser) -> None:
-    # the API's floor for these is ADMIN; the page may not be a softer door
-    browser.sign_in("writer")
-
-    page = browser.page()
-
     assert "Correct this topic by hand" not in page
     assert f"/nodes/{browser.node}/rename" not in page
     assert f"/nodes/{browser.node}/dissolve" not in page
@@ -369,12 +362,19 @@ def _brief(browser: Browser) -> str:
     return str(briefs.get(browser.conn, browser.node)["text"])  # type: ignore[arg-type,index]
 
 
+def _offered(browser: Browser) -> str:
+    return edits.latest_edit(browser.conn, browser.node)["kind"]  # type: ignore[arg-type,index]
+
+
 def test_each_manual_edit_records_what_it_replaced(browser: Browser) -> None:
     browser.sign_in()
 
     browser.post("rename", title="First name")
     browser.post("rename", title="Second name")
+    # the newest edit is the one offered for undo
+    assert _offered(browser) == "rename"
     browser.post("brief", text="Hand text.")
+    assert _offered(browser) == "brief"
     browser.post("note", text="A remark")
 
     assert _log(browser) == [
@@ -383,38 +383,6 @@ def test_each_manual_edit_records_what_it_replaced(browser: Browser) -> None:
         ("brief", "The summary the model wrote.", "admin"),
         ("note", None, "admin"),
     ]
-
-
-@pytest.mark.parametrize(
-    ("edits_made", "kind", "before"),
-    [
-        (
-            (("rename", "First name"), ("rename", "Second name")),
-            "rename",
-            "First name",
-        ),
-        (
-            (("rename", "A name"), ("brief", "Hand text.")),
-            "brief",
-            "The summary the model wrote.",
-        ),
-    ],
-    ids=["two-renames", "rename-then-brief"],
-)
-def test_the_log_keeps_every_edit_and_offers_the_newest(
-    browser: Browser,
-    edits_made: tuple[tuple[str, str], ...],
-    kind: str,
-    before: str,
-) -> None:
-    browser.sign_in()
-
-    for route, value in edits_made:
-        browser.post(route, **{"title" if route == "rename" else "text": value})
-
-    assert _log(browser)[-1] == (kind, before, "admin")
-    assert len(_log(browser)) == 2
-    assert edits.latest_edit(browser.conn, browser.node)["kind"] == kind  # type: ignore[arg-type,index]
 
 
 @pytest.mark.parametrize(

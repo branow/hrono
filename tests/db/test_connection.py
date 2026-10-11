@@ -49,12 +49,6 @@ def test_a_write_opens_an_immediate_transaction(tmp_path: Path) -> None:
     conn.commit()
 
 
-def test_rows_are_mappings(tmp_path: Path) -> None:
-    conn = connect(tmp_path / "hrono.db", extensions=False)
-    row = conn.execute("SELECT 1 AS answer").fetchone()
-    assert row["answer"] == 1
-
-
 def test_loads_sqlite_vec(tmp_path: Path) -> None:
     conn = connect(tmp_path / "hrono.db", extensions=True)
     version = conn.execute("SELECT vec_version()").fetchone()[0]

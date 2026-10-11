@@ -15,7 +15,6 @@ from hrono.export import store as export_store
 from hrono.export.collapse import collapse
 from hrono.export.render import render
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.summarize import store as condensations
@@ -231,10 +230,6 @@ def _node_ids(db: Database) -> list[int]:
         )
 
 
-def test_update_is_registered() -> None:
-    assert "update" in OPS
-
-
 def test_update_swaps_changed_file_and_leaves_untouched_alone(
     built: tuple[Database, Path],
     tmp_path: Path,
@@ -256,6 +251,7 @@ def test_update_with_no_change_is_a_noop(
 ) -> None:
     db, _origin = built
     nodes_before = _node_ids(db)
+    batch_before = _batch(db)
     with db.connect() as conn:
         sections_before = int(
             conn.execute("SELECT COUNT(*) FROM sections").fetchone()[0]
@@ -269,6 +265,7 @@ def test_update_with_no_change_is_a_noop(
         )
     assert sections_after == sections_before
     assert _node_ids(db) == nodes_before
+    assert _batch(db) == batch_before  # a run with no changes keeps the counter
 
 
 def alien_encoder(model_id: str):
@@ -478,15 +475,6 @@ def test_a_run_over_two_changed_sources_bumps_the_counter_once(
             ).fetchall()
         }
     assert changed == {"repo", "second"}
-
-
-def test_a_run_with_no_changes_leaves_the_counter_alone(
-    built: tuple[Database, Path], tmp_path: Path
-) -> None:
-    db, _origin = built
-    before = _batch(db)
-    run_update(db, tmp_path)
-    assert _batch(db) == before
 
 
 def test_ageing_measures_runs_not_changed_sources(

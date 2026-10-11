@@ -10,7 +10,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import Worker
 from hrono.llm import providers
 from hrono.llm.client import (
@@ -135,10 +135,6 @@ def db(tmp_path: object) -> Iterator[Database]:
         add_section(conn, "b.py", b"def b(): return 2\n", 1)
     yield database
     database.close()
-
-
-def test_condense_is_registered() -> None:
-    assert "condense" in OPS
 
 
 def test_condenses_each_section_and_records_tokens(db: Database) -> None:

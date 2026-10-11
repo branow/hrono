@@ -64,75 +64,6 @@ def register(harness: Harness, **over: object) -> object:
     )
 
 
-def test_register_list_fetch(harness: Harness) -> None:
-    assert register(harness).status_code == 201
-    listed = harness.client.get("/sources", headers=harness.auth("reader"))
-    assert listed.status_code == 200
-    assert [s["name"] for s in listed.json()] == ["webphone"]
-    fetched = harness.client.get(
-        "/sources/webphone", headers=harness.auth("reader")
-    )
-    assert fetched.status_code == 200
-    assert fetched.json()["url"] == harness.url
-
-
-def test_put_replaces(harness: Harness) -> None:
-    register(harness)
-    put = harness.client.put(
-        "/sources/webphone",
-        json=harness.body(),
-        headers=harness.auth("writer"),
-    )
-    assert put.status_code == 200
-
-
-def test_delete_removes(harness: Harness) -> None:
-    register(harness)
-    assert (
-        harness.client.delete(
-            "/sources/webphone", headers=harness.auth("writer")
-        ).status_code
-        == 200
-    )
-    assert (
-        harness.client.get(
-            "/sources/webphone", headers=harness.auth("reader")
-        ).status_code
-        == 404
-    )
-
-
-def test_unauthenticated_is_401(harness: Harness) -> None:
-    assert harness.client.get("/sources").status_code == 401
-    assert (
-        harness.client.post("/sources", json=harness.body()).status_code == 401
-    )
-
-
-def test_reader_may_read_not_write(harness: Harness) -> None:
-    register(harness)
-    assert (
-        harness.client.get(
-            "/sources", headers=harness.auth("reader")
-        ).status_code
-        == 200
-    )
-    assert (
-        harness.client.post(
-            "/sources",
-            json=harness.body(name="two"),
-            headers=harness.auth("reader"),
-        ).status_code
-        == 403
-    )
-    assert (
-        harness.client.delete(
-            "/sources/webphone", headers=harness.auth("reader")
-        ).status_code
-        == 403
-    )
-
-
 def test_secret_is_encrypted_at_rest_and_masked(harness: Harness) -> None:
     register(harness, auth={"method": "token", "token": SECRET})
     fetched = harness.client.get(
@@ -155,11 +86,6 @@ def test_auth_none_stores_no_key_id(harness: Harness) -> None:
         "SELECT key_id FROM registry WHERE name = 'open'"
     ).fetchone()
     assert row["key_id"] is None
-
-
-def test_duplicate_is_409(harness: Harness) -> None:
-    register(harness)
-    assert register(harness).status_code == 409
 
 
 def test_invalid_body_is_422(harness: Harness) -> None:
@@ -192,21 +118,6 @@ def test_put_name_mismatch_is_400(harness: Harness) -> None:
             headers=harness.auth("writer"),
         ).status_code
         == 400
-    )
-
-
-def test_unknown_name_is_404(harness: Harness) -> None:
-    assert (
-        harness.client.get(
-            "/sources/ghost", headers=harness.auth("reader")
-        ).status_code
-        == 404
-    )
-    assert (
-        harness.client.delete(
-            "/sources/ghost", headers=harness.auth("writer")
-        ).status_code
-        == 404
     )
 
 

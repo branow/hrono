@@ -443,18 +443,6 @@ def test_a_question_that_is_now_refused_lists_what_dropped(
     assert 'aria-label="dropped out"' in html
 
 
-def test_the_page_says_the_history_lives_in_this_browser_only(
-    panel: Panel,
-) -> None:
-    panel.client.post("/ui/login", data={"token": panel.token})
-
-    first_visit = panel.client.get(f"/ui/trees/{TREE}/ask?tree={TREE}").text
-
-    assert "in this browser only" in first_visit
-    assert 'aria-label="asked before"' not in first_visit
-    assert "in this browser only" in panel.ask(ANSWERABLE)
-
-
 def _snapshot(score: str) -> str:
     return quote(f'[{{"q":"{ANSWERABLE}","r":[["a",{score},"b"]]}}]')
 

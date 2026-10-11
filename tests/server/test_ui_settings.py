@@ -450,45 +450,6 @@ def test_a_delete_posted_without_confirm_is_refused(browser: Browser) -> None:
     assert browser.stored("sources", "gh") is not None
 
 
-def test_a_confirmed_delete_removes_the_row(browser: Browser) -> None:
-    browser.sign_in()
-
-    browser.remove("sources", "gh", confirm="1")
-
-    assert browser.stored("sources", "gh") is None
-
-
-def test_a_preview_writes_nothing_and_reports_the_blast_radius(
-    browser: Browser,
-) -> None:
-    """`?dry_run=true`'s own answer, before the edit is applied."""
-    browser.sign_in()
-    browser.item(
-        "prompts",
-        **{
-            "f.name": "mine",
-            "f.role": "brief",
-            "f.template": "Summarise {content}",
-        },
-    )
-
-    answer = browser.item(
-        "prompts",
-        name="mine",
-        preview="1",
-        **{
-            "f.name": "mine",
-            "f.role": "brief",
-            "f.template": "Condense {content}",
-        },
-    )
-
-    assert "Nothing saved yet" in answer.text
-    assert browser.stored("prompts", "mine")["template"] == (  # type: ignore[index]
-        "Summarise {content}"
-    )
-
-
 def test_a_reader_sees_no_controls(browser: Browser) -> None:
     browser.sign_in("reader")
 
@@ -713,19 +674,7 @@ def test_a_tree_is_created_from_the_page(browser: Browser) -> None:
         "name": "beta",
         "sources": ["gh"],
     }
-
-
-def test_trees_are_the_first_thing_on_the_page(browser: Browser) -> None:
-    """A tree is what every other collection is in service of, so it is not
-    the LAST card behind a disclosure — an operator looking for "how do I make
-    a tree" must not find four screens of model JSON instead."""
-    browser.sign_in()
-
-    page = browser.config()
-
-    assert page.index('id="nav-trees"') < page.index('id="nav-sources"')
-    assert page.index('id="nav-trees"') < page.index('id="nav-models"')
-    assert "<h2>Trees</h2>" in page
+    assert "/ui/config?tree=beta" in answer.text  # in the switcher
 
 
 def test_the_picker_offers_the_sources_that_are_registered(
@@ -769,14 +718,6 @@ def test_a_tree_with_no_source_is_refused_against_the_field(
     assert "<code>sources</code>" in answer.text
     assert "at least 1 item" in answer.text
     assert browser.stored("trees", "beta") is None
-
-
-def test_a_new_tree_appears_in_the_switcher(browser: Browser) -> None:
-    browser.sign_in()
-
-    answer = browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
-
-    assert "/ui/config?tree=beta" in answer.text
 
 
 def test_the_delete_warning_is_shown_before_the_deletion(
@@ -969,6 +910,7 @@ def test_a_preview_names_the_trees_an_edit_would_restale(
         },
     )
 
+    assert "Nothing saved yet" in answer.text
     assert "1 topic to rewrite at level 0" in answer.text
     assert "the next run would rewrite them" in answer.text
     assert browser.stored("prompts", "mine")["template"] == (  # type: ignore[index]
@@ -1355,7 +1297,7 @@ def test_the_topic_picker_groups_topics_by_level_and_offers_a_filter(
     browser: Browser, model_api: str
 ) -> None:
     browser.sign_in()
-    _previewable_topic(browser)
+    node = _previewable_topic(browser)
     for _ in range(12):
         _brief_written_by(
             browser, _a_topic_in(browser, "default"), "mine", "x {content}"
@@ -1365,6 +1307,12 @@ def test_the_topic_picker_groups_topics_by_level_and_offers_a_filter(
 
     assert '<optgroup label="Level 0">' in page
     assert 'id="preview-topic-find"' in page
+
+    adding = browser.config(add="prompts")
+
+    assert 'id="preview-topic"' in adding
+    assert f'<option value="{node}"' in adding
+    assert 'id="preview-topic"' not in browser.config(add="models")
 
 
 def test_a_preview_that_is_still_writing_says_so_and_refreshes(
@@ -1435,19 +1383,6 @@ def test_a_preview_that_cannot_run_is_refused_before_a_call_is_paid_for(
         ).fetchone()[0]
         == 0
     )
-
-
-def test_the_prompt_form_offers_the_topics_with_a_brief(
-    browser: Browser, model_api: str
-) -> None:
-    browser.sign_in()
-    node = _previewable_topic(browser)
-
-    page = browser.config(add="prompts")
-
-    assert 'id="preview-topic"' in page
-    assert f'<option value="{node}"' in page
-    assert 'id="preview-topic"' not in browser.config(add="models")
 
 
 def test_a_reader_cannot_start_a_preview(

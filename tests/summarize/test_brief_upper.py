@@ -6,7 +6,7 @@ import pytest
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
@@ -138,10 +138,6 @@ def _parents(db: Database) -> list[int]:
                 "SELECT id FROM nodes WHERE level = 1 ORDER BY id"
             ).fetchall()
         ]
-
-
-def test_brief_upper_is_registered() -> None:
-    assert "brief-upper" in OPS
 
 
 def test_writes_a_parent_brief_from_child_briefs(

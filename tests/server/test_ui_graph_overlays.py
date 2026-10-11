@@ -183,29 +183,7 @@ def test_the_default_graph_draws_no_overlay(browser: Browser) -> None:
     assert 'class="link' not in page
 
 
-def test_a_pull_edge_points_at_the_topic_that_is_nearer(
-    browser: Browser,
-) -> None:
-    a, b, _ = browser.leaves
-
-    pulls = browser.links("pull")
-
-    assert [(link.source, link.target) for link in pulls] == [(a, b)]
-    assert pulls[0].label == "1 section nearer"
-
-
-def test_proximity_joins_near_siblings_and_not_distant_ones(
-    browser: Browser,
-) -> None:
-    a, b, c = browser.leaves
-
-    pairs = {(link.source, link.target) for link in browser.links("proximity")}
-
-    assert pairs == {(b, c)}
-    assert (a, b) not in pairs
-
-
-def test_proximity_does_not_join_topics_under_different_parents(
+def test_proximity_joins_near_siblings_only_under_one_parent(
     browser: Browser,
 ) -> None:
     """Near is not the same as adjacent, and the edge means "merge these".
@@ -213,9 +191,12 @@ def test_proximity_does_not_join_topics_under_different_parents(
     D sits on top of B and under another parent. Merging them would be a
     reparent as well as a merge, which is not what this edge offers.
     """
-    _, b, c = browser.leaves
+    a, b, c = browser.leaves
     d = browser.elsewhere
 
+    siblings = {
+        (link.source, link.target) for link in browser.links("proximity")
+    }
     pairs = {
         (link.source, link.target)
         for link in browser.links(
@@ -223,6 +204,9 @@ def test_proximity_does_not_join_topics_under_different_parents(
         )
     }
 
+    # near siblings join and distant ones do not
+    assert siblings == {(b, c)}
+    assert (a, b) not in siblings
     assert pairs == {(b, c)}
 
 
@@ -238,6 +222,7 @@ def test_the_candidate_set_is_what_is_drawn(browser: Browser) -> None:
     pulls = browser.links("pull")
 
     assert [(link.source, link.target) for link in pulls] == [(a, b)]
+    assert pulls[0].label == "1 section nearer"
 
 
 def test_a_propagation_edge_comes_from_the_update_log(
@@ -289,14 +274,10 @@ def test_the_overlay_rides_in_the_url(browser: Browser) -> None:
     # on Activity beside the decisions it is made of
     assert "edges=propagation" not in page
 
+    both = browser.map("pull,proximity")
 
-def test_two_overlays_at_once(browser: Browser) -> None:
-    browser.sign_in()
-
-    page = browser.map("pull,proximity")
-
-    assert 'class="link pull"' in page
-    assert 'class="link proximity"' in page
+    assert 'class="link pull"' in both
+    assert 'class="link proximity"' in both
 
 
 def test_without_an_embedding_model_the_tree_still_draws(

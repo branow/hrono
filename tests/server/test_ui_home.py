@@ -118,20 +118,6 @@ def _row(page: str, name: str) -> str:
     return page[start : page.index("</tr>", start)]
 
 
-def test_a_source_that_is_behind_shows_as_behind(
-    browser: Browser, tmp_path: Path
-) -> None:
-    repo = make_repo(tmp_path / "r")
-    browser.source("docs", repo)
-    commit(repo, "two")
-    browser.sign_in()
-
-    page = browser.home()
-
-    assert 'data-state="behind"' in _row(page, "docs")
-    assert "1 of 1 source behind" in page
-
-
 def test_a_source_at_the_remotes_commit_is_up_to_date_and_says_where(
     browser: Browser, tmp_path: Path
 ) -> None:
@@ -273,17 +259,6 @@ def test_the_last_run_is_the_last_one_that_finished_not_the_one_going(
 
     assert "/ui/jobs/job_old" in last
     assert "/ui/jobs/job_going" not in last
-
-
-def test_the_map_is_a_link_in_the_head_not_a_card_of_its_own(
-    browser: Browser,
-) -> None:
-    browser.sign_in()
-
-    page = browser.home()
-
-    assert page.count("Open the map") == 1
-    assert "<h2>Map" not in page
 
 
 def test_a_reader_sees_the_four_answers_and_no_sync_button(

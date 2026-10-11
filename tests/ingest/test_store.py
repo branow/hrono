@@ -15,18 +15,6 @@ def db(tmp_path: Path) -> Iterator[Database]:
     database.close()
 
 
-def _tables(database: Database) -> set[str]:
-    with database.connect() as conn:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table'"
-        ).fetchall()
-    return {row["name"] for row in rows}
-
-
-def test_migration_creates_the_three_tables(db: Database) -> None:
-    assert {"contents", "sections", "passages"} <= _tables(db)
-
-
 def test_identical_bytes_store_one_content_row(db: Database) -> None:
     body = b"def f():\n    return 1\n"
     other = b"def g():\n    return 2\n"

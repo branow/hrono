@@ -280,14 +280,26 @@ def test_a_merge_folds_the_topics_and_lands_on_the_survivor(
     assert answer.url.path.endswith(f"/nodes/{survivor}")
 
 
-def test_a_merge_without_the_tick_changes_nothing(browser: Browser) -> None:
+def test_a_merge_dissolve_or_split_without_the_tick_changes_nothing(
+    browser: Browser,
+) -> None:
+    # the tick is checked before a split's recipe runs, so any topic will do
     a, b, _ = browser.leaves
     browser.sign_in()
 
-    answer = browser.post(f"nodes/{b}/merge", **{"with": str(a)})
+    wrong = []
+    for op, fields in (
+        ("merge", {"with": str(a)}),
+        ("dissolve", {}),
+        ("split", {}),
+    ):
+        answer = browser.post(f"nodes/{b}/{op}", **fields)
+        if not (browser.exists(a) and browser.exists(b)):
+            wrong.append(f"{op}: a topic went")
+        if "tick the box" not in answer.text:
+            wrong.append(f"{op}: no word about the tick")
 
-    assert browser.exists(a) and browser.exists(b)
-    assert "tick the box" in answer.text
+    assert wrong == []
 
 
 def test_a_dissolve_retires_the_topic_and_loses_no_chunk(
@@ -317,18 +329,6 @@ def _parked(browser: Browser) -> set[int]:
         section_id
         for section_id, _, _, _ in incubator.pending(browser.conn, TREE)  # type: ignore[arg-type]
     }
-
-
-def test_a_dissolve_without_the_tick_changes_nothing(
-    browser: Browser,
-) -> None:
-    _, b, _ = browser.leaves
-    browser.sign_in()
-
-    answer = browser.post(f"nodes/{b}/dissolve")
-
-    assert browser.exists(b)
-    assert "tick the box" in answer.text
 
 
 def test_dissolving_the_only_topic_at_its_level_is_refused(
@@ -487,18 +487,6 @@ def test_a_split_divides_a_topic_and_lands_somewhere_that_exists(
     landed = int(answer.url.path.rsplit("/", 1)[1])
     assert browser.exists(landed)
     assert browser.members_of(landed) < held  # a part of it, not all of it
-
-
-def test_a_split_without_the_tick_changes_nothing(
-    divisible: tuple[Browser, int],
-) -> None:
-    browser, node = divisible
-    browser.sign_in()
-
-    answer = browser.post(f"nodes/{node}/split")
-
-    assert browser.exists(node)
-    assert "tick the box" in answer.text
 
 
 def test_a_split_too_small_to_divide_says_so(browser: Browser) -> None:

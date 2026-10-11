@@ -13,13 +13,6 @@ def test_bootstrap_mints_one_admin_and_returns_a_token(tmp_path: Path) -> None:
     assert len(users) == 1
     assert users[0].name == BOOTSTRAP_ADMIN
     assert users[0].role == "admin"
-    conn.close()
-
-
-def test_bootstrapped_token_authenticates_the_admin(tmp_path: Path) -> None:
-    conn = open_database(tmp_path / "hrono.db")
-    token = bootstrap_admin(conn)
-    assert token is not None
     user = authenticate(conn, token)
     assert user is not None
     assert user.name == BOOTSTRAP_ADMIN

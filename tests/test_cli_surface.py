@@ -55,17 +55,7 @@ def test_tree_sync_posts_the_operator_verb(
 
     assert result.exit_code == 0
     assert client.calls == [("POST", "/trees/default/sync", {})]
-    assert "j1" in result.stdout
-
-
-def test_the_lifecycle_stages_are_not_commands() -> None:
-    # stages must run in one order, and a wrong order produces a map that
-    # looks right and is quietly wrong. They live behind an admin HTTP door,
-    # not a CLI verb anyone can reach for.
-    listing = runner.invoke(app, ["tree", "--help"]).stdout
-
-    for stage in ("propagate", "repair", "monitor", "settle", "update"):
-        assert stage not in listing
+    assert "hrono jobs watch j1" in result.stdout
 
 
 @pytest.mark.parametrize(
@@ -231,13 +221,18 @@ def test_the_bootstrap_hint_addresses_the_server_that_was_started() -> None:
 def test_there_is_no_command_that_runs_a_single_stage() -> None:
     # the service door is HTTP and admin-only, deliberately. A debugging
     # tool that looks like a product feature invites users to build workflows
-    # on stages that are only safe in one order.
+    # on stages that are only safe in one order. Stages must run in one
+    # order, and a wrong order produces a map that looks right and is quietly
+    # wrong.
     top = runner.invoke(app, ["--help"]).stdout
     jobs = runner.invoke(app, ["jobs", "--help"]).stdout
+    tree = runner.invoke(app, ["tree", "--help"]).stdout
 
     assert "run" not in jobs.split("Commands")[-1]
     for stage in ("propagate", "repair", "settle", "monitor"):
         assert stage not in top
+    for stage in ("propagate", "repair", "monitor", "settle", "update"):
+        assert stage not in tree
 
 
 def test_rm_says_whether_the_config_is_gone_or_reset(
@@ -487,16 +482,6 @@ def test_jobs_get_exits_nonzero_for_a_failed_job(
 
     assert client.calls == [("GET", "/jobs/j1", None)]
     assert result.exit_code == 1
-
-
-def test_tree_sync_says_how_to_follow_the_job(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch(monkeypatch, "hrono.tree.commands", FakeClient({"job_id": "j9"}))
-
-    result = runner.invoke(app, ["tree", "sync", "default"])
-
-    assert "hrono jobs watch j9" in result.stdout
 
 
 def test_tree_sync_with_no_job_id_fails_instead_of_printing_none(

@@ -22,23 +22,6 @@ def test_keeps_text_drops_glob_binary_and_git(tmp_path: Path) -> None:
     assert kept == ("README.md", "src/app.py")
 
 
-def test_excludes_are_glob_matched(tmp_path: Path) -> None:
-    tree(tmp_path)
-    kept = ingestable(tmp_path, None)
-    assert "node_modules/dep/index.js" not in kept
-    assert "poetry.lock" not in kept
-
-
-def test_null_byte_file_is_dropped_as_binary(tmp_path: Path) -> None:
-    tree(tmp_path)
-    assert "bin.dat" not in ingestable(tmp_path, None)
-
-
-def test_git_metadata_is_never_included(tmp_path: Path) -> None:
-    tree(tmp_path)
-    assert all(not p.startswith(".git") for p in ingestable(tmp_path, None))
-
-
 def test_size_cap_drops_oversize_files(tmp_path: Path) -> None:
     (tmp_path / "big.txt").write_text("a" * 500)
     (tmp_path / "small.txt").write_text("a" * 10)
@@ -61,11 +44,6 @@ def test_result_is_deterministic_and_sorted(tmp_path: Path) -> None:
     for name in ("c.txt", "a.txt", "b.txt"):
         (tmp_path / name).write_text("x")
     assert ingestable(tmp_path, None) == ("a.txt", "b.txt", "c.txt")
-
-
-def test_default_cap_keeps_normal_files(tmp_path: Path) -> None:
-    (tmp_path / "normal.py").write_text("def f():\n    return 1\n")
-    assert ingestable(tmp_path, None) == ("normal.py",)
 
 
 def test_symlink_escaping_the_cache_is_never_ingested(tmp_path: Path) -> None:

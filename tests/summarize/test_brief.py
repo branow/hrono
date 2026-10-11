@@ -11,7 +11,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job, serialize_scope
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import Worker
 from hrono.llm import providers
 from hrono.llm.client import (
@@ -138,10 +138,6 @@ def _node_ids(db: Database) -> list[int]:
         ]
 
 
-def test_brief_is_registered() -> None:
-    assert "brief" in OPS
-
-
 def test_writes_one_brief_per_node_with_provenance(db: Database) -> None:
     client = FakeCompletion()
     brief(job(), JobContext(db), client=client)
@@ -194,8 +190,11 @@ def test_prompt_is_rendered_over_the_condensations(db: Database) -> None:
 def test_rerun_makes_zero_llm_calls(db: Database) -> None:
     brief(job(), JobContext(db), client=FakeCompletion())
     second = FakeCompletion()
-    brief(job(), JobContext(db), client=second)
+    again = brief(job(), JobContext(db), client=second)
     assert second.calls == 0
+    # a run with nothing to brief reports no tokens
+    assert again["briefed"] == 0
+    assert "tokens" not in again
 
 
 def test_a_failing_node_keeps_earlier_progress_then_rerun_fills_gap(
@@ -257,9 +256,7 @@ def test_prompt_template_change_marks_all_briefs_stale(db: Database) -> None:
     assert resumed.calls == 2  # every brief stale under the new prompt hash
 
 
-def test_unchanged_inputs_keep_briefs_fresh_and_counts_readable(
-    db: Database,
-) -> None:
+def test_counts_read_fresh_until_a_membership_changes(db: Database) -> None:
     brief(job(), JobContext(db), client=FakeCompletion())
     with db.connect() as conn:
         _, template = resolve_prompt(conn, "brief")
@@ -268,9 +265,6 @@ def test_unchanged_inputs_keep_briefs_fresh_and_counts_readable(
         )
     assert (fresh, stale) == (2, 0)
 
-
-def test_membership_change_shows_in_counts(db: Database) -> None:
-    brief(job(), JobContext(db), client=FakeCompletion())
     nodes = _node_ids(db)
     with db.connect() as conn, conn:
         new_section = add_condensed_section(conn, "f.py", b"fff\n", 9)
@@ -280,31 +274,33 @@ def test_membership_change_shows_in_counts(db: Database) -> None:
             (nodes[0], new_section),
         )
     with db.connect() as conn:
-        _, template = resolve_prompt(conn, "brief")
         fresh, stale = briefs.counts(
             conn, TREE, 0, template_hash(template), MODEL
         )
     assert (fresh, stale) == (1, 1)
 
 
+class _FabricatesForA(FakeCompletion):
+    """Invents an identifier for the node holding a.py, and only for it."""
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.calls += 1
+        if "a.py" in request.content:
+            return CompletionResult("fabricatedToken x", Usage(40, 12))
+        return CompletionResult("a plain summary", Usage(40, 12))
+
+
 def test_faithfulness_gate_flags_but_does_not_block(db: Database) -> None:
     # a fabricated identifier in the LLM output is flagged, yet the brief is
-    # still stored (flag policy, not hard fail).
-    brief(
-        job(), JobContext(db), client=FakeCompletion(text="fabricatedToken x")
-    )
+    # still stored (flag policy, not hard fail); a faithful brief beside it
+    # records no unfaithful tokens at all.
+    brief(job(), JobContext(db), client=_FabricatesForA())
     with db.connect() as conn:
         rows = conn.execute("SELECT unfaithful FROM briefs").fetchall()
-    assert rows  # briefs were stored despite the fabrication
-    flagged = [json.loads(r["unfaithful"]) for r in rows]
-    assert any("fabricatedToken" in tokens for tokens in flagged)
-
-
-def test_faithful_brief_records_no_unfaithful_tokens(db: Database) -> None:
-    brief(job(), JobContext(db), client=FakeCompletion(text="a plain summary"))
-    with db.connect() as conn:
-        rows = conn.execute("SELECT unfaithful FROM briefs").fetchall()
-    assert rows and all(r["unfaithful"] == "[]" for r in rows)
+    flagged = sorted((json.loads(r["unfaithful"]) for r in rows), key=len)
+    assert len(flagged) == 2  # both stored despite the fabrication
+    assert flagged[0] == []
+    assert "fabricatedToken" in flagged[1]
 
 
 def test_runs_as_a_job_through_the_worker(
@@ -484,15 +480,6 @@ def test_the_run_reports_the_tokens_it_spent(db: Database) -> None:
     outcome = brief(job(), JobContext(db), client=FakeCompletion())
 
     assert outcome["tokens"] == {"input": 80, "output": 24}  # two nodes
-
-
-def test_a_run_with_nothing_to_brief_reports_no_tokens(db: Database) -> None:
-    brief(job(), JobContext(db), client=FakeCompletion())
-
-    again = brief(job(), JobContext(db), client=FakeCompletion())
-
-    assert again["briefed"] == 0
-    assert "tokens" not in again
 
 
 def test_the_nodes_are_briefed_concurrently(db: Database) -> None:
