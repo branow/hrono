@@ -211,7 +211,9 @@
       <a class="small" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}">Health</a>
     </div>
     <div class="card-body">
-      {% if clean %}
+      {% if not checked %}
+      <p class="hint">Not checked yet. The checks run after every sync, or now from <a href="/ui/trees/{{ tree }}/triage?tree={{ tree }}">Health</a>.</p>
+      {% elif clean %}
       <div class="callout ok">
         <div class="body"><div class="title">All clear</div></div>
       </div>

@@ -92,6 +92,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "setup_started": started,
             "attention": [item for item in attention if item.count],
             "clean": kept is not None and triage.clean(attention),
+            "checked": kept is not None,
             "running": [run for run in runs if run["live"]],
             "last": next((run for run in runs if not run["live"]), None),
             "source_states": sources,

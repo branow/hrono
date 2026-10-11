@@ -14,18 +14,38 @@
 {% block title %}hrono — {{ tree }} triage{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Needs attention<span class="tip" tabindex="0" role="note" data-tip="Five checks over this tree, run at the end of every sync, maintain and settle. A zero is reported too, so you can tell nothing-wrong from not-checked">?</span></h1>
-  <div class="act-row">
-    <p class="hint">{% if checked_at %}Checked {{ checked_at }}{% else %}Not checked yet{% endif %}</p>
-    {% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn small" type="submit">Recheck</button></form>{% endif %}
+  <div class="spread">
+    <h1>Needs attention<span class="tip" tabindex="0" role="note" data-tip="Five checks over this tree, run at the end of every sync, maintain and settle. A zero is reported too, so you can tell nothing-wrong from not-checked">?</span></h1>
+    <div class="check-state" id="check-state"{% if checking %} data-job="{{ checking }}"{% endif %}>
+      {% if checking %}
+      <span class="checking"><span class="spinner" aria-hidden="true"></span>Checking…</span>
+      {% elif checked %}
+      <span class="faint small">Checked {{ checked_at }}</span>
+      {% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn small" type="submit">Recheck</button></form>{% endif %}
+      {% endif %}
+    </div>
   </div>
 </div>
 
+{% if not checked %}
+<section class="card" id="not-checked">
+  <div class="card-body empty">
+    {% if checking %}
+    <div class="title">Checking this tree</div>
+    <p class="hint">This page fills in by itself when the checks finish.</p>
+    {% else %}
+    <div class="title">Not checked yet</div>
+    <p class="hint">The checks run after every sync{% if can_write %}, or run them now{% endif %}.</p>
+    {% if can_write %}<form class="mt-3" method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn primary" type="submit">Check now</button></form>{% endif %}
+    {% endif %}
+  </div>
+</section>
+{% else %}
 {% if clean %}
 <div class="callout ok mb-4">
   <div class="body">
     <div class="title">All clear</div>
-    <p class="hint">Every check passes — nothing needs attention in {{ tree }}.</p>
+    <p class="hint">Every check passes — nothing needs attention.</p>
   </div>
 </div>
 {% endif %}
@@ -142,4 +162,22 @@
     {% endif %}
   </div>
 </section>
+{% endif %}
+{% if checking %}
+<script>
+// The checks run as a background job; when it ends, show what it found.
+(() => {
+  const job = document.getElementById("check-state").dataset.job;
+  const source = new EventSource("/jobs/" + job + "/events");
+  source.addEventListener("state", (event) => {
+    const state = JSON.parse(event.data);
+    if (["succeeded", "failed", "canceled"].includes(state.status)) {
+      source.close();
+      location.reload();
+    }
+  });
+  source.onerror = () => { source.close(); setTimeout(() => location.reload(), 2000); };
+})();
+</script>
+{% endif %}
 {% endblock %}

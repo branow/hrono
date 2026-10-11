@@ -159,7 +159,7 @@ def test_a_clean_tree_says_it_is_clean(clean_tree: Browser) -> None:
 
     page = clean_tree.triage()
 
-    assert "nothing needs attention in default." in page
+    assert "nothing needs attention." in page
     # a zero is shown rather than hidden
     assert page.count('class="ok"') == 5  # every kind, all at zero
     assert "No run has failed" in page
@@ -351,9 +351,14 @@ def test_recheck_starts_a_health_run(clean_tree: Browser) -> None:
         f"/ui/trees/{TREE}/triage/recheck", follow_redirects=False
     )
     job = clean_tree.conn.execute(  # type: ignore[attr-defined]
-        "SELECT op, tree FROM jobs WHERE op = 'health'"
+        "SELECT id, op, tree FROM jobs WHERE op = 'health'"
     ).fetchone()
+    page = clean_tree.client.get(f"/ui/trees/{TREE}/triage").text
 
     assert answer.status_code == 303
+    assert (
+        "Refresh" not in answer.headers["location"]
+    )  # no chore for the reader
     assert (job["op"], job["tree"]) == ("health", TREE)
-    assert "Checked " in clean_tree.triage()  # a refreshed report is dated
+    # while it runs, the page says so and follows the run to reload itself
+    assert "Checking" in page and f'data-job="{job["id"]}"' in page
