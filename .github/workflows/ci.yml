@@ -51,3 +51,6 @@ jobs:
       # be visible, because a shrinking suite looks as green as a full one.
       - name: Test
         run: uv run pytest -q -rs -n auto
+
+      - name: Test the Claude Code plugin
+        run: node --test "plugins/hrono/scripts/tests/*.test.js"

@@ -148,6 +148,20 @@ stored tree is, the export is at most `--levels` hops from root to a leaf's
 sources. The dashboard's Export page has ready-to-paste commands for wiring an
 agent to a tree.
 
+## Use it from Claude Code
+
+The repository ships a Claude Code plugin in [`plugins/hrono`](plugins/hrono):
+it attaches recalled passages to every prompt, tells each session where the
+map is, and gives Claude a skill for walking it.
+
+```
+/plugin marketplace add branow/hrono
+/plugin install hrono@hrono
+```
+
+Then, in a repository, set its tree (`hrono-config`) and export its map
+(`hrono-export`). See [`plugins/hrono/README.md`](plugins/hrono/README.md).
+
 ## The dashboard
 
 <!-- screenshot: docs/images/dashboard.png -->

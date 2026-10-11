@@ -142,8 +142,12 @@ def test_reader_can_recall_and_gets_ranked_hits(harness: Harness) -> None:
         "start",
         "end",
         "topic",
+        "path",
+        "source",
     }
     assert hit["kind"] == "source"
+    # a plain file path an agent can open, not only the internal address
+    assert hit["path"] and hit["path"] in hit["uri"]
     assert "bearer tokens" in hit["body"]
 
 

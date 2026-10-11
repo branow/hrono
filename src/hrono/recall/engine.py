@@ -32,6 +32,8 @@ class Hit:
     start: int  # byte range of the passage in its file
     end: int
     topic: int | None  # the topic holding it; a brief's own topic
+    path: str = ""  # the file, relative to its source's repository
+    source: str = ""  # the source it was read from
 
 
 @dataclass(frozen=True)
@@ -108,7 +110,8 @@ def _render(
     row = conn.execute(
         "SELECT p.uri AS uri, p.sp_paths AS sp_paths, p.source_type AS "
         "source_type, p.source AS source, p.section_id AS section_id, "
-        "p.byte_start AS start, p.byte_end AS end, c.body AS body "
+        "p.byte_start AS start, p.byte_end AS end, p.path AS path, "
+        "c.body AS body "
         "FROM passages p "
         "JOIN contents c ON c.content_hash = p.content_hash WHERE p.id = ?",
         (passage_id,),
@@ -125,6 +128,8 @@ def _render(
         start=int(row["start"]),
         end=int(row["end"]),
         topic=_topic(conn, row, tree),
+        path=str(row["path"] or ""),
+        source=str(row["source"] or ""),
     )
 
 

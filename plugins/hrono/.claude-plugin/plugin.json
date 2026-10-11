@@ -1,0 +1,6 @@
+{
+  "name": "hrono",
+  "version": "0.1.0",
+  "description": "Gives Claude Code the hrono map of the repository it is working in. Every prompt is matched against the map and the relevant passages are attached automatically; for questions about how the code is organised, Claude walks the exported map from the overview down to the source files.",
+  "skills": "./skills/"
+}
