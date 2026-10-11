@@ -62,6 +62,16 @@ _UMAP_MODULES = frozenset(
 _BROWSER_MODULE = "tests/server/test_ui_browser.py"
 
 
+# A module that builds its world once (tests/world.py) builds it again on every
+# worker that draws one of its tests. These run on one worker each; the find
+# page borrows the ask page's world, so they share one.
+_WORLD_GROUPS = {
+    "tests/server/test_ui_ask.py": "ask-world",
+    "tests/server/test_ui_find.py": "ask-world",
+    "tests/tree/test_sync_chain.py": "sync-chain-world",
+}
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     browsers = 0
@@ -71,6 +81,8 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
             group = f"browser-{browsers % 2}"
             item.add_marker(pytest.mark.xdist_group(group))
             browsers += 1
+        elif module in _WORLD_GROUPS:
+            item.add_marker(pytest.mark.xdist_group(_WORLD_GROUPS[module]))
         elif module in _UMAP_MODULES:
             # Two groups, not one: the tree tests alone are about half the
             # warm work, and one worker holding all of it is the whole run.
