@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/session-start.js"
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/session-start.js"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/recall.js",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/scripts/hooks/recall.js",
             "timeout": 20
           }
         ]

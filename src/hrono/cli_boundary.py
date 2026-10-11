@@ -44,7 +44,7 @@ from hrono.client.http import (
 )
 from hrono.client.http import message as client_message
 from hrono.errors import AppError, cli_message
-from hrono.tree.commands import UnsafePath
+from hrono.tree.commands import NotAnExport, UnsafePath
 
 EXIT_CODE = 1
 
@@ -53,6 +53,7 @@ RENDERERS: Mapping[type[Exception], Callable[[Exception], str]] = {
     AppError: lambda exc: cli_message(exc),  # type: ignore[arg-type]
     json.JSONDecodeError: lambda exc: f"config is not valid JSON: {exc}",
     UnsafePath: str,  # an export payload that tried to escape its folder
+    NotAnExport: str,  # --replace pointed at a folder of other files
     PermissionError: lambda exc: (
         f"permission denied: {getattr(exc, 'filename', None) or exc}"
     ),

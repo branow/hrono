@@ -5,13 +5,13 @@
     "url": "https://github.com/branow/hrono"
   },
   "metadata": {
-    "description": "A hierarchical, incrementally updated map of a codebase for coding agents: briefs from the whole system down to its source files, kept current as the code changes.",
+    "description": "A hierarchical, incrementally updated knowledge base for coding agents: briefs over repositories, documentation and other sources, kept current as they change.",
     "version": "0.1.0"
   },
   "plugins": [
     {
       "name": "hrono",
-      "description": "Gives Claude Code the hrono map of the repository it is working in. Every prompt is matched against the map and the relevant passages are attached automatically; for questions about how the code is organised, Claude walks the exported map from the overview down to the source files. Configured per repository: which tree, which export folder, and whether automatic recall is on.",
+      "description": "Gives Claude Code the hrono map of a project: briefs of everything its sources hold - repositories, documentation, wikis - from one overview down to the files. Passages that match each prompt are attached automatically, every session is told where the map is, and Claude walks it for questions about how the project fits together.",
       "source": "./plugins/hrono",
       "version": "0.1.0"
     }

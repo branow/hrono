@@ -1,27 +1,19 @@
 ---
 name: hrono-export
-description: Use when the user asks to export, refresh or update the hrono map of this repository, or when the hrono map is missing or out of date. Writes the repository's hrono tree into its export folder.
-allowed-tools: [Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/export.js*), Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/config.js show*)]
+description: Use when the user asks to export or refresh the hrono map of this project, or the map is missing.
+allowed-tools: [Read, Bash(hrono tree export*)]
 ---
 
 # hrono - export the map
 
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/export.js
-```
-
-Writes this repository's tree into its export folder with
-`hrono tree export`, at the configured number of levels. The new export
-replaces the old one only when it is complete, so a failure leaves the
-previous map in place.
-
-It needs a tree set for this repository and the hrono CLI signed in to a
-server (`hrono profile`). If the command says no tree is set, use the
-hrono-config skill. If it fails to reach the server, say so and show the
-error; do not try another way.
-
-To see which tree, folder and levels it uses:
+Read this project's entry in `~/.hrono/agent.json` (see hrono-config) for its
+`tree`, `folder` (default `~/.hrono/exports/<tree>`) and `levels` (default 4),
+then:
 
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/config.js show
+hrono tree export <tree> --out <folder> --levels <levels> --replace
 ```
+
+`--replace` swaps the new export in only when it is complete and drops pages
+of topics that no longer exist. If the command cannot reach the server, show
+the error; the CLI needs a signed-in profile (`hrono profile current`).
