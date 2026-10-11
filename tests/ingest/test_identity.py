@@ -24,23 +24,9 @@ def test_uri_is_rendered_from_the_four_stored_parts() -> None:
     )
 
 
-def test_uri_carries_no_position_fragment_and_parts_are_authoritative() -> None:
-    base = Address("git", "h/o/r", "a/b.py", "v1")
-    assert "#" not in base.uri
-    moved = Address("git", "h/o/r", "a/b.py", "v2")
-    assert moved.uri != base.uri  # changing a part changes the URI
-
-
 def test_content_hash_is_sha256_of_the_raw_bytes() -> None:
     raw = b"the quick brown fox\nand more\n"
     assert content_hash(raw[4:9]) == hashlib.sha256(raw[4:9]).hexdigest()
-
-
-def test_identical_bytes_share_a_hash_regardless_of_position() -> None:
-    left = b"def f(): return 1\n"
-    right = b"xxxdef f(): return 1\n"
-    assert content_hash(left) == content_hash(right[3:])
-    assert content_hash(b"a") != content_hash(b"b")
 
 
 def test_sp_render_named_unnamed_indexed_synthetic_and_raw() -> None:

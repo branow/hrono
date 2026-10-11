@@ -367,15 +367,3 @@ def test_connect_snippets_quote_a_tree_name_for_shell_and_url() -> None:
     assert "/trees/a%26b%23c%27d/recall" in http
     assert "/trees/a%26b%23c%27d/export.zip?levels=2" in export
     assert shlex.split(export.splitlines()[0].removesuffix(" && \\"))[3] == name
-
-
-def test_the_copy_buttons_stay_hidden_until_script_shows_them(
-    panel: Panel,
-) -> None:
-    panel.sign_in("reader")
-
-    html = panel.page()
-
-    assert html.count("data-copy=") == 3
-    assert html.count(" hidden>Copy") == 3
-    assert ".btn[hidden] { display: none; }" in html

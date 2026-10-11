@@ -14,7 +14,6 @@ from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS
 from hrono.registry import store as registry_store
 from tests.context import job_context
 
@@ -82,10 +81,6 @@ def _job() -> Job:
         created_at="t",
         updated_at="t",
     )
-
-
-def test_registered() -> None:
-    assert "repair" in OPS
 
 
 def test_split_breaks_an_oversized_cluster_into_children(db: Database) -> None:

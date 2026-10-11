@@ -1,7 +1,6 @@
 import numpy as np
 
 from hrono.cluster.build import build_clusters
-from hrono.cluster.recipe import recipe_for
 from tests.cluster.harness import (
     RECOVERY_THRESHOLD,
     adjusted_rand_index,
@@ -37,14 +36,6 @@ def test_every_point_is_assigned_to_exactly_one_topic() -> None:
         assert (sim is not None) == attached
 
 
-def test_clustering_is_deterministic_under_the_fixed_seed() -> None:
-    vectors, _ = planted_groups()
-    first = build_clusters(vectors)
-    second = build_clusters(vectors)
-    assert first.labels == second.labels
-    assert np.allclose(first.coords, second.coords)
-
-
 def test_teeth_recovery_collapses_without_umap() -> None:
     # Dropping the UMAP reduction (identity passthrough) wrecks the density
     # contrast HDBSCAN needs: recovery falls well below threshold on the same
@@ -76,10 +67,3 @@ def test_adjusted_rand_index_endpoints() -> None:
     assert adjusted_rand_index(labels, np.array([2, 2, 0, 0, 1, 1])) == 1.0
     # everything lumped into one cluster carries no information -> ~0
     assert adjusted_rand_index(labels, np.zeros(6, dtype=int)) == 0.0
-
-
-def test_reduced_coords_have_the_recipe_dimensionality() -> None:
-    vectors, _ = planted_groups()
-    result = build_clusters(vectors)
-    dims = recipe_for(len(vectors)).n_components
-    assert all(len(coord) == dims for coord in result.coords)

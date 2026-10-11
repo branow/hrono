@@ -13,7 +13,6 @@ import types
 import typing
 from collections.abc import Iterator
 
-import pytest
 from pydantic import BaseModel
 
 from hrono.registry.collections import COLLECTIONS
@@ -46,7 +45,7 @@ def _nested(annotation: object) -> list[type[BaseModel]]:
 
 
 FIELDS = [
-    pytest.param(model, name, id=f"{d.collection}.{model.__name__}.{name}")
+    (f"{d.collection}.{model.__name__}.{name}", model, name)
     for d in COLLECTIONS
     for model in _models(d.model)
     for name in model.model_fields
@@ -56,18 +55,22 @@ FIELDS = [
 
 def test_the_walk_reaches_nested_and_union_models() -> None:
     """A walk that stopped at the RootModel would check nothing at all."""
-    names = {param.values[0].__name__ for param in FIELDS}  # type: ignore[union-attr]
+    names = {model.__name__ for _, model, _ in FIELDS}
 
     assert {"GitSource", "GitAuth", "GitFilter", "Selector"} <= names
     assert {"ClaudeCodeConnection", "ModelPrice", "Prompt", "Tree"} <= names
 
 
-@pytest.mark.parametrize(("model", "name"), FIELDS)
-def test_every_field_has_a_label_and_help(
-    model: type[BaseModel], name: str
-) -> None:
-    info = model.model_fields[name]
+def test_every_field_has_a_label_and_help() -> None:
+    # one pass over every field, naming each one that falls short
+    failures = []
+    for where, model, name in FIELDS:
+        info = model.model_fields[name]
+        if not info.title:
+            failures.append(f"{where} has no title")
+        elif info.title == name:
+            failures.append(f"{where}: a label that is the key says nothing")
+        if not info.description:
+            failures.append(f"{where} has no description")
 
-    assert info.title, f"{model.__name__}.{name} has no title"
-    assert info.description, f"{model.__name__}.{name} has no description"
-    assert info.title != name, "a label that is the key says nothing new"
+    assert not failures, "\n".join(failures)

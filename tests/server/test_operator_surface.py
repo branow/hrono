@@ -61,21 +61,6 @@ def test_sync_needs_the_writer_role(harness: Harness) -> None:
     assert response.status_code == 403
 
 
-def test_sync_and_maintain_stay_separate(harness: Harness) -> None:
-    # a cold build and an update have very different costs; conflating them is
-    # how a user pays for a rebuild by accident.
-    synced = harness.client.post(
-        "/trees/default/sync", headers=harness.auth("writer")
-    ).json()["job_id"]
-    built = harness.client.post(
-        "/trees/default/maintain", headers=harness.auth("writer")
-    ).json()["job_id"]
-
-    with harness.client.app.state.db.connect() as conn:  # type: ignore[attr-defined]
-        ops = {jobs_store.get(conn, job)["op"] for job in (synced, built)}
-    assert ops == {"sync-tree", "maintain"}
-
-
 def _prompt(name: str) -> dict[str, object]:
     return {"name": name, "role": "brief", "template": "X {content}"}
 

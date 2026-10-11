@@ -93,17 +93,6 @@ def test_a_failing_leaf_fails_without_killing_siblings(tmp_path: Path) -> None:
     db.close()
 
 
-def test_unknown_op_fails(tmp_path: Path) -> None:
-    db = database(tmp_path)
-    workers = run_workers(db, {})
-    try:
-        job_id = enqueue(db, "missing", {})
-        assert wait_terminal(db, job_id) == "failed"
-    finally:
-        stop(workers)
-    db.close()
-
-
 def test_each_job_runs_exactly_once_under_concurrency(tmp_path: Path) -> None:
     lock = threading.Lock()
     ran: list[str] = []

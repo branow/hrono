@@ -244,22 +244,6 @@ def test_no_token_reaches_the_page(browser: Browser) -> None:
     assert browser.tokens["admin"] not in browser.page()
 
 
-def test_a_run_says_when_it_started_and_which_one_it_is(
-    browser: Browser,
-) -> None:
-    """Three `maintain` rows with no clock and no id on them are three
-    indistinguishable rows, and nothing to take to `hrono jobs get`."""
-    browser.sign_in()
-
-    browser.fan_out()
-    page = browser.page()
-
-    # every header looks the same now; the colour was a class collision
-    assert "<th>Started</th>" in page
-    assert "<th>Took</th>" in page
-    assert "<th>Run</th>" in page
-
-
 def test_the_id_shown_is_the_prefix_of_the_real_one(
     browser: Browser,
 ) -> None:

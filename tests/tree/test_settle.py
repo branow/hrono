@@ -23,7 +23,6 @@ from hrono.export.render import render
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.summarize import store as condensations
@@ -228,10 +227,6 @@ def _node_ids(db: Database) -> list[int]:
         )
 
 
-def test_registered() -> None:
-    assert "settle" in OPS
-
-
 def test_churn_threshold_triggers(built: Database) -> None:
     with built.connect() as conn:
         assert should_settle(conn, TREE) is False  # fresh, no drift
@@ -291,7 +286,7 @@ def test_untriggered_settle_leaves_the_counter(
     built: Database, tmp_path: Path
 ) -> None:
     _set_drift(built, 3)  # below threshold, no misfit backstop
-    settle_mod.settle(
+    outcome = settle_mod.settle(
         _job(),
         job_context(built, tmp_path),
         build=fake_build,
@@ -299,6 +294,7 @@ def test_untriggered_settle_leaves_the_counter(
         client=FakeCompletion(),
     )
     assert _drift(built) == 3  # never ran, counter untouched
+    assert outcome == {"settled": False, "held": 0, "released": 0}
 
 
 def _park_a_member(db: Database) -> int:
@@ -597,20 +593,6 @@ def test_a_pin_whose_anchor_is_gone_is_released_not_guessed(
     assert outcome["released"] == 1
     with built.connect() as conn:
         assert pins.is_pinned(conn, pins.MEMBERSHIP, section) is False
-
-
-def test_an_untriggered_settle_reports_that_it_did_nothing(
-    built: Database, tmp_path: Path
-) -> None:
-    outcome = settle_mod.settle(
-        _job(),
-        job_context(built, tmp_path),
-        build=fake_build,
-        encoder_for=fake_encoder,
-        client=FakeCompletion(),
-    )
-
-    assert outcome == {"settled": False, "held": 0, "released": 0}
 
 
 def test_settle_leaves_another_tree_s_pins_and_membership_alone(

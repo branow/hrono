@@ -93,21 +93,8 @@ def test_a_rename_is_what_the_export_shows(
 
     assert response.status_code == 200
     assert heading(h.conn, node) == "Deploys (platform-owned)"
-
-
-def test_a_rename_pins_the_brief_it_was_derived_from(
-    harness: tuple[Harness, int],
-) -> None:
-    # without this the next regeneration rewrites the line the title came
+    # without the pin the next regeneration rewrites the line the title came
     # from, and the operator's name is quietly back in the model's hands.
-    h, node = harness
-
-    h.client.patch(
-        f"/trees/{TREE}/nodes/{node}",
-        json={"title": "Deploys"},
-        headers=h.auth("admin"),
-    )
-
     assert pins.is_pinned(h.conn, pins.BRIEF, node) is True
 
 

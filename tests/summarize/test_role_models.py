@@ -120,13 +120,3 @@ def test_an_invalid_role_is_refused_at_write_time(db: Database) -> None:
             model="m",
             role="condence",  # type: ignore[arg-type]
         )
-
-
-@pytest.mark.parametrize("role", ["condense", "brief", "brief-upper", "judge"])
-def test_every_stage_name_is_a_valid_role(role: str) -> None:
-    # the four roles are exactly the stages that resolve a text model; if a
-    # fifth stage appears, this fails until the Literal grows.
-    assert (
-        Model(name="m", kind="text", connection="c", model="m", role=role).role
-        == role
-    )

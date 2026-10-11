@@ -148,33 +148,39 @@ def test_only_an_admin_is_offered_the_access_tab(
     assert labels == LABELS
 
 
-@pytest.mark.parametrize(
-    ("path", "current"),
-    [
-        ("/ui", "Home"),
-        (f"/ui/trees/{TREE}/graph", "Map"),
-        (f"/ui/trees/{TREE}/find", "Find"),
-        (f"/ui/trees/{TREE}/outline", "Find"),
-        (f"/ui/trees/{TREE}/ask", "Ask"),
-        ("/ui/jobs", "Runs"),
-        ("/ui/jobs/finished", "Runs"),
-        (f"/ui/trees/{TREE}/activity", "Runs"),
-        (f"/ui/trees/{TREE}/triage", "Health"),
-        (f"/ui/trees/{TREE}/export", "Export"),
-        ("/ui/config", "Settings"),
-        ("/ui/access", "Access"),
-        ("/ui/guide", "Guide"),
-    ],
+TABS = (
+    ("/ui", "Home"),
+    (f"/ui/trees/{TREE}/graph", "Map"),
+    (f"/ui/trees/{TREE}/find", "Find"),
+    (f"/ui/trees/{TREE}/outline", "Find"),
+    (f"/ui/trees/{TREE}/ask", "Ask"),
+    ("/ui/jobs", "Runs"),
+    ("/ui/jobs/finished", "Runs"),
+    (f"/ui/trees/{TREE}/activity", "Runs"),
+    (f"/ui/trees/{TREE}/triage", "Health"),
+    (f"/ui/trees/{TREE}/export", "Export"),
+    ("/ui/config", "Settings"),
+    ("/ui/access", "Access"),
+    ("/ui/guide", "Guide"),
 )
-def test_every_page_marks_exactly_its_own_tab(
-    browser: Browser, path: str, current: str
-) -> None:
+
+
+def test_every_page_marks_exactly_its_own_tab(browser: Browser) -> None:
+    # one app for every page: each one is a read, and a failure names its path
     _job(browser.conn, "finished", "succeeded")
     browser.sign_in()
 
-    marked = [n for n, here in _read(browser.get(path)).tabs if here]
+    wrong = {}
+    for path, current in TABS:
+        answer = browser.client.get(path, follow_redirects=False)
+        if answer.status_code != 200:
+            wrong[path] = answer.status_code
+            continue
+        marked = [n for n, here in _read(answer.text).tabs if here]
+        if marked != [current]:
+            wrong[path] = marked
 
-    assert marked == [current]
+    assert wrong == {}
 
 
 def test_a_topic_page_is_not_the_map_and_says_what_it_is(
@@ -224,21 +230,41 @@ EMPTY_PAGES = (
 )
 
 
-@pytest.mark.parametrize("role", ["admin", "reader"])
-@pytest.mark.parametrize("path", EMPTY_PAGES)
-def test_every_empty_state_offers_a_button_not_a_command(
-    browser: Browser, path: str, role: str
-) -> None:
+def _commands_or_dead_ends(browser: Browser, role: str) -> dict:
+    """What each empty page gets wrong for `role`: an empty state with no
+    button (only an admin is offered one), or a command to type instead."""
     browser.sign_in(role)
+    wrong = {}
+    for path in EMPTY_PAGES:
+        answer = browser.client.get(path, follow_redirects=False)
+        if answer.status_code != 200:
+            wrong[path] = answer.status_code
+            continue
+        page = answer.text
+        empties = _read(page).empties
+        said = []
+        if role == "admin" and not empties:
+            said.append("this page was meant to be empty")
+        if role == "admin" and not all(actions for actions in empties):
+            said.append("an empty state without a button")
+        said += [
+            command
+            for command in ("hrono sync", "hrono sources add")
+            if command in page
+        ]
+        if said:
+            wrong[path] = said
+    return wrong
 
-    page = browser.get(path)
-    empties = _read(page).empties
 
-    if role == "admin":
-        assert empties, "this page was meant to be empty"
-        assert all(actions for actions in empties), page
-    assert "hrono sync" not in page
-    assert "hrono sources add" not in page
+def test_every_empty_state_offers_an_admin_a_button_not_a_command(
+    browser: Browser,
+) -> None:
+    assert _commands_or_dead_ends(browser, "admin") == {}
+
+
+def test_no_empty_state_offers_a_reader_a_command(browser: Browser) -> None:
+    assert _commands_or_dead_ends(browser, "reader") == {}
 
 
 def test_an_empty_overview_walks_through_the_two_steps_as_buttons(

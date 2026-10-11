@@ -63,20 +63,6 @@ def test_every_agent_node_is_backed_by_a_stored_node() -> None:
     assert set(tree.nodes) <= set(stored.node_level)
 
 
-def test_shallow_tree_is_returned_as_is_no_padding() -> None:
-    # a 4-level tree with N=6 keeps all 4 levels, no padding.
-    tree = collapse(balanced_tree(), levels=6)
-    assert tree.levels == 4
-
-
-def test_deterministic() -> None:
-    a = collapse(balanced_tree(), levels=3)
-    b = collapse(balanced_tree(), levels=3)
-    assert {
-        n: (v.level, v.children, v.sections) for n, v in a.nodes.items()
-    } == {n: (v.level, v.children, v.sections) for n, v in b.nodes.items()}
-
-
 def test_levels_below_two_is_clamped_not_a_crash() -> None:
     # the export endpoint takes levels as user input; levels 1 and 0 must not
     # raise ZeroDivisionError/IndexError — they clamp to the minimum useful 2

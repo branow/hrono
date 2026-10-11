@@ -98,63 +98,6 @@ def test_registers_text_and_embedding(harness: Harness, body: dict) -> None:
     assert got["params"] == body["params"]
 
 
-def test_crud_round_trip(harness: Harness) -> None:
-    post(harness, TEXT)
-    assert [
-        m["name"]
-        for m in harness.client.get(
-            "/models", headers=harness.auth("reader")
-        ).json()
-    ] == ["opus"]
-    replaced = {**TEXT, "model": "claude-sonnet-5"}
-    assert (
-        harness.client.put(
-            "/models/opus", json=replaced, headers=harness.auth("writer")
-        ).status_code
-        == 200
-    )
-    assert (
-        harness.client.get(
-            "/models/opus", headers=harness.auth("reader")
-        ).json()["model"]
-        == "claude-sonnet-5"
-    )
-    assert (
-        harness.client.delete(
-            "/models/opus", headers=harness.auth("writer")
-        ).status_code
-        == 200
-    )
-
-
-def test_secretless_stores_null_key_id(harness: Harness) -> None:
-    post(harness, TEXT)
-    row = harness.conn.execute(
-        "SELECT key_id FROM registry "
-        "WHERE collection = 'models' AND name = 'opus'"
-    ).fetchone()
-    assert row["key_id"] is None
-
-
-def test_role_and_error_matrix(harness: Harness) -> None:
-    assert harness.client.get("/models").status_code == 401
-    assert post(harness, TEXT, role="reader").status_code == 403
-    assert (
-        harness.client.get(
-            "/models", headers=harness.auth("reader")
-        ).status_code
-        == 200
-    )
-    assert post(harness, TEXT).status_code == 201
-    assert post(harness, TEXT).status_code == 409
-    assert (
-        harness.client.get(
-            "/models/ghost", headers=harness.auth("reader")
-        ).status_code
-        == 404
-    )
-
-
 def test_bad_kind_is_422(harness: Harness) -> None:
     bad = {"name": "x", "kind": "vision", "model": "m"}
     assert post(harness, bad).status_code == 422

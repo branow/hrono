@@ -95,17 +95,25 @@ def test_another_trees_text_is_not_found(panel: Panel) -> None:
     assert "Nothing contains all of those words" in html
 
 
-@pytest.mark.parametrize(
-    "query",
-    ['"', "module OR", "module*", "NEAR(", "a:b", "^x", "module -"],
-)
-def test_fts_syntax_in_a_query_is_only_words(panel: Panel, query: str) -> None:
+def test_fts_syntax_in_a_query_is_only_words(panel: Panel) -> None:
     p = panel
     p.client.post("/ui/login", data={"token": p.token})
 
-    answer = p.client.get(f"/ui/trees/{TREE}/find", params={"q": query})
+    refused = {}
+    for query in [
+        '"',
+        "module OR",
+        "module*",
+        "NEAR(",
+        "a:b",
+        "^x",
+        "module -",
+    ]:
+        answer = p.client.get(f"/ui/trees/{TREE}/find", params={"q": query})
+        if answer.status_code != 200:
+            refused[query] = answer.status_code
 
-    assert answer.status_code == 200
+    assert refused == {}
 
 
 def test_a_snippet_cannot_carry_markup() -> None:
@@ -267,13 +275,7 @@ def test_the_outline_holds_five_hundred_topics(big: TestClient) -> None:
     assert "526 topics" in html
     assert html.count("/nodes/") >= 526
     assert "src/g0" in html
-
-
-def test_a_five_hundred_topic_outline_rolls_sections_up(
-    big: TestClient,
-) -> None:
-    html = big.get(f"/ui/trees/{TREE}/outline?tree={TREE}").text
-
+    # and the sections are rolled up under the topics that hold them
     assert "500 sections beneath this topic" in html
     assert "20 sections beneath this topic" in html
 

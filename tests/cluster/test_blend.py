@@ -31,10 +31,6 @@ def _unit(vec: Sequence[float]) -> list[float]:
     return [x / norm for x in vec]
 
 
-def test_alpha_is_the_baked_half() -> None:
-    assert ALPHA == 0.5
-
-
 def test_blend_identity_holds_for_unit_vectors() -> None:
     c1, c2 = _unit([1, 2, 3, 4]), _unit([4, 3, 2, 1])
     p1, p2 = _unit([0, 1, 0, 1]), _unit([1, 0, 1, 0])

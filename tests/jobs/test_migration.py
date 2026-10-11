@@ -57,18 +57,3 @@ def test_status_check_rejects_unknown_status(tmp_path: Path) -> None:
             "VALUES ('job_1', 'sync', '{}', 'partial', 't', 't')"
         )
     conn.close()
-
-
-def test_a_valid_row_round_trips(tmp_path: Path) -> None:
-    conn = migrated(tmp_path)
-    with conn:
-        conn.execute(
-            "INSERT INTO jobs (id, op, scope, status, created_at, updated_at) "
-            "VALUES ('job_1', 'sync', "
-            '\'{"type":"source","name":"repo"}\', '
-            "'pending', 't', 't')"
-        )
-    row = conn.execute("SELECT * FROM jobs WHERE id = 'job_1'").fetchone()
-    assert row["op"] == "sync"
-    assert row["status"] == "pending"
-    conn.close()

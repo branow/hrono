@@ -329,42 +329,27 @@ def test_the_scan_sees_a_banned_word_in_text_and_in_a_tooltip() -> None:
 def test_no_page_says_a_word_the_glossary_does_not_use(
     browser: Browser, role: str
 ) -> None:
+    """One read of every page, three checks on what a person reads: no
+    banned word, no ticket number, and no "1 topics"."""
     browser.sign_in(role)
     said = {}
     for path in browser.paths:
         response = browser.client.get(path)
         assert response.status_code == 200, path
-        found = offences(response.text)
-        if found:
-            said[path] = found
-
-    assert said == {}
-
-
-def test_no_page_quotes_a_ticket_number(browser: Browser) -> None:
-    # "(#191)" means nothing to the person reading a tooltip
-    browser.sign_in()
-    quoted = {}
-    for path in browser.paths:
+        lines = readable(response.text)
         found = [
-            line
-            for line in readable(browser.client.get(path).text)
-            if re.search(r"#\d{2,}", line)
-        ]
-        if found:
-            quoted[path] = found
-
-    assert quoted == {}
-
-
-def test_no_page_says_one_topics_or_one_sections(browser: Browser) -> None:
-    browser.sign_in()
-    said = {}
-    for path in browser.paths:
-        found = [
-            line
-            for line in readable(browser.client.get(path).text)
-            if re.search(r"\b1 (topics|sections|runs)\b", line)
+            *(f"banned: {line}" for line in lines if banned(line)),
+            # "(#191)" means nothing to the person reading a tooltip
+            *(
+                f"ticket: {line}"
+                for line in lines
+                if re.search(r"#\d{2,}", line)
+            ),
+            *(
+                f"one-plural: {line}"
+                for line in lines
+                if re.search(r"\b1 (topics|sections|runs)\b", line)
+            ),
         ]
         if found:
             said[path] = found
@@ -432,8 +417,11 @@ def test_a_refused_source_name_names_its_prefix_as_an_identifier(
     )
 
     assert response.status_code == 200
-    assert "<code>node-</code>" in response.text
-    assert "is reserved for" in response.text
+    # only the prefix is set as code, not the sentence around it
+    assert re.search(
+        r"<code>node-</code> is reserved for hrono&#39;s own briefs",
+        response.text,
+    )
     assert "Value error" not in response.text
     assert offences(response.text) == []
 
@@ -457,21 +445,3 @@ def test_idents_wraps_only_the_backticked_parts_in_code() -> None:
     )
     assert str(idents("no ticks")) == "no ticks"
     assert str(idents("one ` tick")) == "one ` tick"
-
-
-def test_the_refusal_sets_only_the_prefix_as_code(empty: Browser) -> None:
-    empty.sign_in()
-    response = empty.client.post(
-        "/ui/config/sources/item",
-        data={
-            "variant": "git",
-            "f.name": "node-x",
-            "f.url": "https://example.com/r.git",
-            "f.auth.method": "none",
-        },
-    )
-
-    assert re.search(
-        r"<code>node-</code> is reserved for hrono&#39;s own briefs",
-        response.text,
-    )

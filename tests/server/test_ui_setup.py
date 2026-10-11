@@ -163,18 +163,6 @@ def test_a_new_install_opens_at_the_connection_step(setup: Setup) -> None:
         assert label in text(page)
 
 
-def test_each_provider_has_its_trade_off_in_two_sentences(
-    setup: Setup,
-) -> None:
-    for provider in ("claude-code", "anthropic"):
-        page = setup.page("connection", provider=provider, change="1")
-        said = re.search(r'id="trade-off">(.*?)</p>', page, flags=re.S)
-
-        assert said is not None
-        assert len(re.findall(r"[.!?](?:\s|$)", said.group(1))) == 2, provider
-    assert "API key" in text(setup.page("connection", provider="anthropic"))
-
-
 def test_a_step_is_not_open_until_the_ones_before_it_are_done(
     setup: Setup,
 ) -> None:

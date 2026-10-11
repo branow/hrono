@@ -78,18 +78,6 @@ def test_a_parent_mid_run_reports_partial_and_its_progress(
     assert answer["progress"] == {"done": 1, "total": 3}
 
 
-def test_a_parent_whose_children_all_succeeded_succeeds(
-    harness: Harness,
-) -> None:
-    for job_id in ("job_one", "job_two", "job_three"):
-        _finish(harness, job_id, "succeeded")
-
-    answer = harness.get("/jobs/job_parent")
-
-    assert answer["status"] == "succeeded"
-    assert answer["progress"] == {"done": 3, "total": 3}
-
-
 def test_one_failed_child_fails_the_parent(harness: Harness) -> None:
     _finish(harness, "job_one", "succeeded")
     _finish(harness, "job_two", "failed")
@@ -112,7 +100,9 @@ def test_the_parents_own_stored_row_is_not_what_is_reported(
 
     assert stored is not None
     assert stored["status"] == "pending"  # the stale second source of truth
-    assert harness.get("/jobs/job_parent")["status"] == "succeeded"
+    answer = harness.get("/jobs/job_parent")
+    assert answer["status"] == "succeeded"
+    assert answer["progress"] == {"done": 3, "total": 3}
 
 
 def test_a_leaf_answers_for_itself_with_no_progress(harness: Harness) -> None:

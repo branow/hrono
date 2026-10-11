@@ -183,40 +183,25 @@ def harness(tmp_path: Path) -> Iterator[Harness]:
     conn.close()
 
 
+@pytest.mark.parametrize(
+    ("provider", "runner"),
+    [("anthropic", "_get"), ("openai", "_bearer_get")],
+)
 def test_write_rejected_when_provider_rejects_key(
-    harness: Harness, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        connection_validation, "_get", lambda url, key, timeout: 401
-    )
-    response = harness.client.post(
-        "/connections", json=anthropic(), headers=harness.headers
-    )
-    assert response.status_code == 400
-    assert (
-        harness.conn.execute(
-            "SELECT count(*) FROM registry WHERE collection = 'connections'"
-        ).fetchone()[0]
-        == 0
-    )
-
-
-def test_an_openai_write_is_rejected_when_the_key_is_refused(
-    harness: Harness, monkeypatch: pytest.MonkeyPatch
+    harness: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: str,
+    runner: str,
 ) -> None:
     # the end this exists for: a dead connection must not register and fail
     # hours later at condense time.
     monkeypatch.setattr(
-        connection_validation, "_bearer_get", lambda url, key, timeout: 401
+        connection_validation, runner, lambda url, key, timeout: 401
     )
 
     response = harness.client.post(
         "/connections",
-        json={
-            "name": "o",
-            "provider": "openai",
-            "auth": {"method": "api-key", "key": API_KEY},
-        },
+        json=anthropic(provider=provider),
         headers=harness.headers,
     )
 

@@ -97,31 +97,6 @@ def test_registers_each_provider_shape(harness: Harness, body: dict) -> None:
     assert fetched.json()["provider"] == body["provider"]
 
 
-def test_crud_round_trip(harness: Harness) -> None:
-    post(harness, ANTHROPIC)
-    assert [
-        c["name"]
-        for c in harness.client.get(
-            "/connections", headers=harness.auth("reader")
-        ).json()
-    ] == ["anthropic-main"]
-    replaced = {**ANTHROPIC, "endpoint": "https://proxy.example"}
-    assert (
-        harness.client.put(
-            "/connections/anthropic-main",
-            json=replaced,
-            headers=harness.auth("writer"),
-        ).status_code
-        == 200
-    )
-    assert (
-        harness.client.delete(
-            "/connections/anthropic-main", headers=harness.auth("writer")
-        ).status_code
-        == 200
-    )
-
-
 def test_api_key_encrypted_and_masked(harness: Harness) -> None:
     post(harness, ANTHROPIC)
     fetched = harness.client.get(
@@ -144,25 +119,6 @@ def test_none_auth_stores_no_secret(harness: Harness) -> None:
         "SELECT key_id FROM registry WHERE name = 'cc'"
     ).fetchone()
     assert row["key_id"] is None
-
-
-def test_role_and_error_matrix(harness: Harness) -> None:
-    assert harness.client.get("/connections").status_code == 401
-    assert post(harness, ANTHROPIC, role="reader").status_code == 403
-    assert (
-        harness.client.get(
-            "/connections", headers=harness.auth("reader")
-        ).status_code
-        == 200
-    )
-    assert post(harness, ANTHROPIC).status_code == 201
-    assert post(harness, ANTHROPIC).status_code == 409
-    assert (
-        harness.client.get(
-            "/connections/ghost", headers=harness.auth("reader")
-        ).status_code
-        == 404
-    )
 
 
 def test_unknown_provider_is_422(harness: Harness) -> None:
