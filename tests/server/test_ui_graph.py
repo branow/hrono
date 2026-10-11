@@ -973,3 +973,166 @@ def test_a_reply_that_is_not_a_brief_draws_as_needing_one(
     by_id = {node.id: node for node in drawn.nodes}
 
     assert by_id[browser.ids["big"]].stale is True
+
+
+# ------------------------------------------------------------ the two views
+
+
+def _view_of(page: str) -> str:
+    found = re.search(r'id="board"[^>]*data-view="([a-z]+)"', page)
+    assert found is not None, "no board on the page"
+    return found.group(1)
+
+
+def test_a_small_tree_opens_as_circles_and_a_big_one_as_the_list(
+    browser: Browser, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Circles show a small tree whole; past a few dozen topics they are a
+    row wider than any window, so the default flips to the list."""
+    from hrono.server.ui import views
+
+    browser.sign_in()
+    assert _view_of(browser.map_at("")) == "circles"
+
+    monkeypatch.setattr(views, "LIST_AT", 2)  # the fixture has three topics
+
+    assert _view_of(browser.map_at("")) == "list"
+    # and a view the reader chose beats the default either way
+    assert _view_of(browser.map_at("?view=circles")) == "circles"
+
+
+def test_the_list_is_one_row_per_shown_topic_indented_under_its_parent(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    root, big, small = (browser.ids[k] for k in ("root", "big", "small"))
+
+    page = browser.map_at(f"?view=list&open={root}")
+
+    rows = re.findall(
+        r'<tr[^>]*style="--depth: (\d+)">.*?focus=(\d+)', page, re.S
+    )
+    assert [(int(d), int(n)) for d, n in rows] == [
+        (0, root),
+        (1, big),
+        (1, small),
+    ]
+    assert 'class="disc"' not in page  # no circles drawn under the list
+    # the open root says so, to a screen reader as well as by its chevron
+    drawn = graph.build(browser.conn, TREE, [root])  # type: ignore[arg-type]
+    assert 'aria-expanded="true"' in page
+    assert f'aria-label="Close {html.escape(drawn.nodes[0].name)}"' in page
+
+
+def test_a_closed_topic_in_the_list_opens_to_its_children(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    closed = browser.map_at("?view=list&open=")
+    chevron = re.search(
+        r'<a class="fold" href="([^"]*)"\s+aria-expanded="false"', closed
+    )
+
+    assert closed.count("<tr") == 2  # the header row and the root
+    opened = browser.client.get(_href(chevron)).text
+    assert opened.count("<tr") == 4
+    assert _view_of(opened) == "list"
+
+
+def test_every_map_link_in_the_list_keeps_the_list(browser: Browser) -> None:
+    """A chevron, a name, the fold control, a child in the panel and the
+    panel's close all go back to the map: each must land on the SAME view,
+    or reading a topic flips the reader back to circles."""
+    browser.sign_in()
+    root, big = browser.ids["root"], browser.ids["big"]
+
+    page = browser.map_at(f"?view=list&open={root}&focus={root}")
+
+    # the map's own links: the header's way TO the map is not one of them
+    mapped = page[page.index('id="controls"') :]
+    graph_links = [
+        html.unescape(href)
+        for href in re.findall(r'href="(/ui/trees/[^"]*/graph\?[^"]*)"', mapped)
+    ]
+    switch = [link for link in graph_links if "view=circles" in link]
+    rest = [link for link in graph_links if link not in switch]
+    assert len(switch) == 1  # the one way over to the circles
+    assert rest and all("view=list" in link for link in rest), rest
+    assert any(f"focus={big}" in link for link in rest)  # a panel child
+
+
+def test_a_view_nobody_chose_stays_out_of_the_links(browser: Browser) -> None:
+    """Only the switch names a view when the reader has not picked one, so
+    the URLs every other test pins stay what they were; a made-up view is
+    the same as none."""
+    browser.sign_in()
+
+    for query in ("", "?view=bogus"):
+        page = browser.map_at(query)
+        named = re.findall(r'href="[^"]*/graph\?[^"]*view=(\w+)', page)
+        assert sorted(named) == ["circles", "list"], query
+        assert _view_of(page) == "circles"
+
+
+def test_the_controls_do_not_repeat_the_tree_name(browser: Browser) -> None:
+    """The tree picker at the top of the page already names it."""
+    browser.sign_in()
+
+    page = browser.map_at("")
+
+    controls = page[page.index('id="controls"') :]
+    controls = controls[: controls.index("</div>")]
+    said = re.sub(r"<[^>]+>|\s+", " ", re.sub(r'"[^"]*"', "", controls))
+    assert TREE not in said
+    assert "3 shown" in said  # a quiet count instead
+    assert 'class="map-title"' not in page
+
+
+def test_every_legend_key_is_three_words_at_most(browser: Browser) -> None:
+    """Detail goes in the key's tooltip, not its label."""
+    browser.sign_in()
+
+    page = browser.map_at("")
+
+    legend = page[page.index('<ul class="keys">') :]
+    legend = legend[: legend.index("</ul>")]
+    keys = re.findall(r"<li[^>]*>(.*?)</li>", legend, re.S)
+    words = [re.sub(r"<[^>]+>", " ", key).split() for key in keys]
+    assert len(words) == 5
+    assert all(0 < len(key) <= 3 for key in words), words
+    assert all(re.search(r'<li title="[^"]{20,}"', legend) for _ in keys)
+
+
+def test_the_panel_says_its_facts_as_text_and_its_action_as_a_button(
+    browser: Browser,
+) -> None:
+    """A count in a bordered chip reads as a button and is not one; the one
+    action, to the topic page, is drawn as the primary button."""
+    browser.sign_in()
+    big = browser.ids["big"]
+
+    page = browser.client.get(f"/ui/trees/{TREE}/graph?focus={big}").text
+
+    panel = page[page.index('<aside class="panel"') :]
+    panel = panel[: panel.index("<h3>")]
+    assert "chip" not in panel
+    assert "<dt>Holds</dt>" in panel and "6 sections" in panel
+    assert "%" not in panel  # no unexplained shares of folders
+    assert re.search(
+        rf'class="btn primary panel-out" href="/ui/trees/{TREE}/nodes/{big}',
+        panel,
+    )
+
+
+def test_no_name_on_the_map_wears_a_halo(browser: Browser) -> None:
+    """A stroke in the canvas colour drew a pale outline round every label."""
+    browser.sign_in()
+
+    page = browser.map_at("")
+
+    sheet = page[page.index("<style>") : page.index("</style>")]
+    rule = re.search(r"\nsvg text \{([^}]*)\}", sheet)
+    assert rule is not None
+    assert "stroke" not in rule.group(1)
+    assert "paint-order" not in rule.group(1)

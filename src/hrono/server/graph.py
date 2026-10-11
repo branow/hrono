@@ -70,6 +70,7 @@ class Node:
 
     id: int
     level: int
+    depth: int  # steps below the drawn root it hangs from, for the list
     name: str  # what it is called: `hrono.naming`, the same everywhere
     label: str  # `name`, cut to fit its slot
     where: str  # the directory its sections live in
@@ -258,10 +259,12 @@ def _lay_out(
     placed, edges, width, height = _place(tops, boxes, drawn_kids, radii, tall)
     blank = where_module.Where("", "")
     tint = _branches(tops, drawn_kids)
+    depth = _depths(tops, drawn_kids)
     drawn = tuple(
         Node(
             id=node,
             level=int(rows[node]["level"]),
+            depth=depth[node],
             name=called.get(node, f"topic {node}"),
             label=shown_as[node],
             where=wheres.get(node, blank).label,
@@ -297,6 +300,24 @@ def _lay_out(
         height=height,
         home=_home(tops, placed),
     )
+
+
+def _depths(
+    tops: Sequence[int], drawn_kids: dict[int, list[int]]
+) -> dict[int, int]:
+    """How far below its drawn root each topic hangs.
+
+    Counted down the DRAWN tree, not read from ``level``: a level counts from
+    the leaves, so two siblings of different heights carry different levels,
+    and indenting by it would put them at different depths in the list.
+    """
+    out: dict[int, int] = {}
+    stack = [(top, 0) for top in tops]
+    while stack:
+        node, steps = stack.pop()
+        out[node] = steps
+        stack.extend((kid, steps + 1) for kid in drawn_kids[node])
+    return out
 
 
 def _home(tops: Sequence[int], placed: dict[int, tuple[float, float]]) -> float:
