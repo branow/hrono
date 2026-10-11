@@ -46,19 +46,18 @@
 
 <section class="card mt-3" id="waiting">
   <div class="card-body">
-    <h2>Waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read and embedded, but in no topic yet. A section you place stays where you put it">?</span></h2>
+    <h2>Waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read and embedded, but in no topic yet. A sync files these by itself once {{ min_points }} are waiting, or after {{ max_age }} runs. Place one now to skip the wait; a section you place stays where you put it">?</span></h2>
     {% if parked_total == 0 %}
     <p class="hint">No sections are waiting for a topic.</p>
     {% else %}
-    <p class="hint">A sync files these by itself once {{ min_points }} are waiting, or after {{ max_age }} runs. Place one now to skip the wait; a placement is held by hand and a sync leaves it there.</p>
     <div class="table-wrap"><table class="settings-table">
-      <thead><tr><th>Section</th><th>Nearest topic</th>{% if can_write %}<th>Place in</th>{% endif %}</tr></thead>
+      <thead><tr><th>Section</th><th>{{ "Place in" if can_write else "Nearest topic" }}<span class="tip" tabindex="0" role="note" data-tip="The topic it fits best comes first, with how closely it fits (1.00 is a perfect fit)">?</span></th><th class="count">Fit</th></tr></thead>
       <tbody>
       {% for row in parked %}
         <tr>
           <td class="mono path">{{ row.path }}</td>
-          <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">no score yet</span>{% endif %}</td>
-          {% if can_write %}<td>{{ place(tree, row, topics) }}</td>{% endif %}
+          <td>{% if can_write %}{{ place(tree, row, topics) }}{% elif row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a>{% else %}<span class="hint">no score yet</span>{% endif %}</td>
+          <td class="count faint">{% if row.nearest %}<span title="nearest: {{ row.nearest_name }}">{{ "%.2f"|format(row.score) }}</span>{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

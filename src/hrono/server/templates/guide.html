@@ -3,8 +3,7 @@
 {% block title %}hrono — how it works{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>How hrono works</h1>
-  <p class="said">Every number on this page is this install's, so a step that has not run yet reads as a zero rather than as prose.</p>
+  <h1>How hrono works<span class="tip" tabindex="0" role="note" data-tip="Every number on this page is this install's, so a step that has not run yet reads as a zero rather than as prose">?</span></h1>
 </div>
 
 <section class="card mb-4">
@@ -99,8 +98,8 @@
   </div>
 </section>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>The shape of this tree</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>The shape of this tree</h2></summary>
   <div class="card-body">
     {% if not shape %}
     <div class="empty"><div class="title">Nothing built yet</div><div class="mt-3">{{ start_sync(tree, user) }}</div></div>
@@ -123,10 +122,10 @@
     <p class="hint mt-3">An agent starts at the root and reads one brief per step. That is the point of the levels: it never reads the corpus to find out what is in it.</p>
     {% endif %}
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>Who writes what</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>Who writes what</h2></summary>
   <div class="card-body">
     <p class="hint">Each stage calls the model configured for its role in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>. Point the brief or brief-upper role at another model, or edit its prompt, and the briefs it wrote are rewritten the next time briefs are written; a new key for the same connection rewrites nothing. Settings says how many topics a change would redo, and roughly what that costs, before you save it, and can show what an edited prompt writes for one topic beside its current brief first.</p>
     <div class="table-wrap">
@@ -149,26 +148,26 @@
     </div>
     <p class="hint mt-2">Condensations are kept under the condense model's name: an edit to that model's upstream string keeps them, and a differently named model condenses everything again.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>What recall does</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>What recall does</h2></summary>
   <div class="card-body">
     <p class="hint">Recall answers a question with the passages that answer it, and says where each came from. It embeds the question, scores every passage in the tree against it, and keeps only the passages that stand well clear of the rest for that question. Up to {{ recall.cap }} come back, and no one document takes more than {{ recall.share }}% of them while another document still has a passage that qualified.</p>
     <p class="hint">When nothing stands clear it says <em>{{ recall.refusal }}</em> and hands over to the map, because a plausible passage that does not answer the question is worse for an agent than none. That is the design working, not a fault. Recall never calls a language model, so it costs nothing per question.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>What export produces</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>What export produces</h2></summary>
   <div class="card-body">
     <p class="hint">A folder of Markdown an agent reads without hrono running: <code>root.md</code> first, then one link per level down to the source text. The stored tree can be deeper than an agent should have to walk, so the export flattens it to a hop limit, {{ export.hops }} by default, choosing the levels that keep the widest page shortest. A page aims to list at most {{ export.width }} topics, about as much to read as one section.</p>
     <p class="hint">Export is built from what is stored, with no model call. It comes from the <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export page</a> as a zip, or from the command line with <code>hrono tree export</code>. Topics with no usable brief are listed there first, because an agent reads those pages first. The same page has a <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}#connect">Connect an agent</a> block: ready-to-paste commands for the command line, a <code>curl</code> call to recall, and the export, filled with this server and tree.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>What it fixes by itself</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>What it fixes by itself</h2></summary>
   <div class="card-body">
     <p class="hint">
       This is the part the map does not show, and the part worth knowing before reading the map's overlays.
@@ -220,10 +219,10 @@
       </div>
     </div>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>The three overlays on the map</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>The three overlays on the map</h2></summary>
   <div class="card-body">
     <p class="hint">Lines the tree itself cannot draw. Each answers one question and suggests one repair.</p>
     <ul class="overlay-keys">
@@ -273,18 +272,18 @@
     </ul>
     <p class="hint">On a large tree the map draws only the strongest few arcs, and never one that would run through a topic's name. A topic with arcs left out says so beside its circle, as <em>+3 arcs</em>; click it to see that topic's arcs on their own.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>What a pin does</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>What a pin does</h2></summary>
   <div class="card-body">
     <p class="hint">Edit a topic by hand and the edit is <em>pinned</em>: the pipeline treats it as fixed and works around it. Three things can be held. A <em>brief</em> you rewrote is never regenerated. A <em>section</em> you filed under a topic is never moved by a repair. A <em>topic</em> you hung under a parent is never re-attached elsewhere. A rename and a note stay as you wrote them, too.</p>
     <p class="hint">A pin lasts until you release it, on the topic page or from the list of hand edits on Health. A run reports how many hand edits it left alone, so you can see the pipeline respecting them.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>Who may do what</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>Who may do what</h2></summary>
   <div class="card-body">
     <div class="table-wrap">
       <table class="accounts">
@@ -298,18 +297,18 @@
     </div>
     <p class="hint mt-2">The server decides from the account, not the page: a button that is hidden from you is also refused if you send the request yourself.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>Where the cost comes from</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>Where the cost comes from</h2></summary>
   <div class="card-body">
     <p class="hint">Only model calls cost anything, and only a few stages make them: one call to condense each new section, one to write each brief that needs writing, and a panel of {{ rule.panel }} judge calls for each changed topic. Reading the map, recall, ask, and export call no language model.</p>
     <p class="hint">That is why a sync is cheap and a first build is not: a sync pays for what changed, a first build or a settle pays for everything it touches. A first build is <em>maintain</em>, and the <a href="/ui/setup?tree={{ tree }}">Set up</a> page says what it will cost before it starts: model calls, tokens, time and money, counted from the files it will read. A full rebuild from nothing is <em>build-tree</em>, which pays twice over. Home shows what the tree has spent and what the last run did. Each run's page shows its tokens, cost and model time, split by stage, and the <a href="/ui/usage?tree={{ tree }}">Usage</a> page adds them up by day, model, run and person (<code>hrono usage</code> does the same from a terminal). A run from before spend was recorded reads <em>not recorded</em>, never free. A model billed through a subscription is shown as an estimate, never as spend, and the two are never added.</p>
   </div>
-</section>
+</details>
 
-<section class="card mb-4">
-  <div class="card-head"><h2>Questions</h2></div>
+<details class="card mb-4 guide-part">
+  <summary class="card-head"><h2>Questions</h2></summary>
   <div class="card-body stack">
     <details class="reveal">
       <summary class="twisty">If it repairs itself, why can I edit anything by hand?</summary>
@@ -336,10 +335,10 @@
       <p class="hint">Yes. A tree is a name plus the sources it maps, so one database can hold a tree per product, per team, or per question. Make one in <a href="/ui/config?tree={{ tree }}">Settings</a>; the bar at the top switches between them.</p>
     </details>
   </div>
-</section>
+</details>
 
-<section class="card">
-  <div class="card-head"><h2>Words</h2></div>
+<details class="card guide-part">
+  <summary class="card-head"><h2>Words</h2></summary>
   <div class="card-body">
     <dl class="terms">
       <dt>topic</dt>
@@ -368,5 +367,5 @@
       <strong>Chunk</strong> was an earlier name for a section. <strong>Node</strong> is the database's word for a topic. <strong>Paragraph</strong> is not a unit here: sections are cut by structure and size.
     </p>
   </div>
-</section>
+</details>
 {% endblock %}

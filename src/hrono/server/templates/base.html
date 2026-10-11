@@ -508,6 +508,11 @@ td.count, th.count { text-align: right; font-variant-numeric: tabular-nums; }
 table.spend tbody th { text-align: left; font-weight: 560; padding: .45rem var(--s3) .45rem 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 table.spend tbody tr:last-child th { border-bottom: 0; }
 table.spend .chip.plain { padding: 0; }
+@media (max-width: 40rem) {
+  table.spend th:nth-child(4), table.spend td:nth-child(4),
+  table.spend th:nth-child(6), table.spend td:nth-child(6) { display: none; }
+  table.sources th:nth-child(3), table.sources td:nth-child(3) { display: none; }
+}
 
 /* ------------------------------------------------------- empty + notices */
 .empty {
@@ -657,15 +662,14 @@ main:has(.board) { max-width: 1480px; }
 .panel-head .min { min-width: 0; flex: 1; }
 .panel h2 {
   margin: 0;
-  font: 620 .9375rem/1.4 var(--mono);
+  font-size: 1rem; font-weight: 640; line-height: 1.35;
   letter-spacing: -.01em;
   overflow-wrap: anywhere;
 }
 .panel h3 {
   margin: var(--s4) 0 var(--s2);
-  font: 600 .6875rem/1 var(--mono);
-  text-transform: uppercase; letter-spacing: .1em;
-  color: var(--ink-faint);
+  font-size: .8125rem; font-weight: 620;
+  color: var(--ink-soft);
   padding-bottom: .35rem;
   border-bottom: 1px solid var(--rule);
 }
@@ -1661,7 +1665,7 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 .card-head .hint { margin: .2rem 0 0; }
 
 .env { margin-top: var(--s5); }
-.env h2 { font: 600 .6875rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--ink-faint); margin: 0 0 var(--s2); }
+.env h2 { font-size: .875rem; font-weight: 620; color: var(--ink-soft); margin: 0 0 var(--s2); }
 .env dl { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5); margin: 0; }
 .env dt { font-size: .75rem; color: var(--ink-soft); }
 .env dd { margin: 0; overflow-wrap: anywhere; }
@@ -1696,14 +1700,31 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 fieldset.fields { border: 0; margin: 0; padding: 0; min-width: 0; }
 fieldset.fields + fieldset.fields { padding-top: var(--s3); border-top: 1px solid var(--rule); }
 .fields legend {
-  grid-column: 1 / -1; padding: 0; margin-bottom: var(--s2);
-  font: 600 .6875rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .07em;
-  color: var(--ink-faint);
+  grid-column: 1 / -1; padding: 0; margin-bottom: var(--s1);
+  font-size: .875rem; font-weight: 620; color: var(--ink);
 }
-.fields code.key { color: var(--ink-faint); font-size: .6875rem; font-weight: 400; margin-left: .3rem; }
-.fields .label-line { line-height: 1; }
 .fields .hint { font-size: .75rem; margin: 0; }
 .needed { color: var(--accent); margin-left: .15rem; }
+#steps .chip { font: 560 .8125rem/1.5 var(--sans); }
+/* A row of totals: label over figure, the way a receipt reads. */
+.totals { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s6); margin: 0 0 var(--s2); }
+.totals dt { font-size: .75rem; color: var(--ink-faint); }
+.totals dd { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.totals dd .chip { font-size: 1.125rem; padding: 0; background: none; color: var(--ink); font-family: var(--sans); font-weight: 600; }
+table.usage td code { font-size: .8125rem; }
+table.usage td.small { font-size: .78125rem; }
+table.usage .chip.plain { padding: 0; }
+details.guide-part:not([open]) > summary.card-head { padding-bottom: var(--s3); border-bottom: 0; }
+details.guide-part > summary { cursor: pointer; list-style: none; }
+details.guide-part > summary::-webkit-details-marker { display: none; }
+details.guide-part > summary h2::before {
+  content: ""; display: inline-block; width: .45rem; height: .45rem; margin: 0 .6rem .12rem .1rem;
+  border-right: 1.6px solid var(--ink-faint); border-bottom: 1.6px solid var(--ink-faint);
+  transform: rotate(-45deg); transition: transform .15s ease-out;
+}
+details.guide-part[open] > summary h2::before { transform: rotate(45deg); }
+details.guide-part:not([open]) > summary { border-bottom: 0; }
+details.guide-part > summary:hover h2 { color: var(--accent); }
 .fields input.line, .fields select, .fields textarea { width: 100%; }
 
 textarea.code { width: 100%; font: 400 .8125rem/1.5 var(--mono); }

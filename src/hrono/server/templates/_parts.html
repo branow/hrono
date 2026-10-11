@@ -84,14 +84,14 @@
     {% for field in fields %}
     {% set id = "f-" ~ scope ~ "-" ~ field.path|replace(".", "-") %}
     <div class="field{% if field.kind in ('roomy', 'json', 'lines', 'multi') %} wide{% endif %}">
+      {% set says = (field.help ~ " " if field.help else "") ~ "Key: `" ~ field.path ~ "`" %}
       {% if field.kind != "toggle" %}
-      <label for="{{ id }}">{{ field.label or field.path }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %} <code class="key">{{ field.path }}</code></label>
-      {% else %}
-      <span class="label-line"><code class="key">{{ field.path }}</code></span>
-      {% endif %}
+      <label for="{{ id }}">{{ field.label or field.path }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %}<span class="tip" tabindex="0" role="note" data-tip="{{ says }}">?</span></label>
       {{ input_for(field, id) }}
-      {% if field.help %}<p class="hint">{{ field.help|idents }}</p>{% endif %}
-      {% if field.kind == "secret" and field.value == "***" %}<p class="hint">Leave it as <code>***</code> to keep the credential already stored.</p>{% endif %}
+      {% else %}
+      <div class="row">{{ input_for(field, id) }}<span class="tip" tabindex="0" role="note" data-tip="{{ says }}">?</span></div>
+      {% endif %}
+      {% if field.kind == "secret" and field.value == "***" %}<p class="hint">Leave <code>***</code> to keep the stored one.</p>{% endif %}
     </div>
     {% endfor %}
   </fieldset>

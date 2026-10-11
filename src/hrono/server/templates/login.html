@@ -13,7 +13,7 @@
     <span>hrono</span>
   </div>
   <form class="card gate-form" method="post" action="/ui/login">
-    {% if error %}
+    {% if rejected %}
     <p class="gate-error" role="alert">That token was not accepted.</p>
     {% endif %}
     <div class="field">

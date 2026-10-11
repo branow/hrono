@@ -253,7 +253,7 @@ def test_the_form_is_the_default_view(browser: Browser) -> None:
     assert "Add a tree" in browser.config()
     # the JSON is one click away, labelled as the advanced alternative
     assert "/ui/config?tree=default&amp;section=models&amp;view=json" in page
-    assert "Edit as JSON (advanced)" in page
+    assert "Edit the whole list as JSON" in page
 
 
 def test_the_fields_come_from_the_collection_s_own_model(
@@ -834,8 +834,9 @@ def test_a_field_reads_by_its_label_and_help_not_its_config_path(
     browser: Browser,
 ) -> None:
     """Labels are not raw config paths like `auth.method` or `filter.only`,
-    and every field says what it does. Both come from the model's own field,
-    with the path kept, secondary, for the CLI and the JSON view."""
+    and every field says what it does, in its hint. Both come from the
+    model's own field, with the path kept in the hint for the CLI and the
+    JSON view."""
     browser.sign_in()
 
     page = browser.config(add="sources", variant="git")
@@ -843,7 +844,7 @@ def test_a_field_reads_by_its_label_and_help_not_its_config_path(
     assert "Repository URL" in page
     assert "What git clone takes" in page  # the url's help line
     assert "Only these paths" in page and "Sign-in method" in page
-    assert '<code class="key">filter.only</code>' in page
+    assert "Key: `filter.only`" in page  # in the hint, not beside the label
 
 
 def test_source_fields_are_grouped_location_access_which_files(

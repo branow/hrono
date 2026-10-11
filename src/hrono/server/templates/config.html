@@ -7,6 +7,13 @@
   "models": "The models themselves: one for embedding sections, and one per writing job (condense, brief, judge).",
   "prompts": "The instructions sent with each writing job. Changing one makes every brief it wrote stale."
 } %}
+{% set kinds = {
+  "git": "Git repository",
+  "github-user": "GitHub account",
+  "bitbucket-workspace": "Bitbucket workspace",
+  "confluence": "Confluence",
+  "notion": "Notion"
+} %}
 {% set singular = {
   "sources": "source",
   "connections": "connection",
@@ -183,7 +190,7 @@
   </div>
 </div>
 {% else %}
-<p class="hint mb-3" id="missing"><span class="chip ok">ready to build</span> Every role has a model and a prompt, and every model's connection is registered.</p>
+<p class="mb-3" id="missing"><span class="chip ok" data-tip="Every role has a model and a prompt, and every model's connection is registered" tabindex="0">ready to build</span></p>
 {% endif %}
 
 <nav class="subnav" aria-label="settings">
@@ -212,14 +219,18 @@
     <p class="hint">What kind of {{ singular[c.name] }}?</p>
     <ul class="pick">
       {% for shape in c.form.variants %}
-      <li><a class="btn small" href="/ui/config?tree={{ tree }}&amp;add={{ c.name }}&amp;variant={{ shape.name }}">{{ shape.name }}</a></li>
+      <li><a class="btn" href="/ui/config?tree={{ tree }}&amp;add={{ c.name }}&amp;variant={{ shape.name }}" title="{{ shape.name }}">{{ kinds.get(shape.name, shape.name) }}</a></li>
       {% endfor %}
     </ul>
     <p class="act-row"><a class="btn quiet" href="{{ listing }}">Cancel</a></p>
   {% elif c.mode == "frozen" %}
     {% if c.draft and c.draft.errors %}{{ problems(c.draft.errors, "Not saved — nothing was changed") }}{% endif %}
-    <p class="hint">Shipped with hrono, so it cannot be edited here. Reset it to what shipped, or add your own beside it.</p>
-    <pre class="preview">{{ c.rows|selectattr("name", "equalto", c.editing)|map(attribute="config")|first }}</pre>
+    {% set shipped = (c.rows|selectattr("name", "equalto", c.editing)|first).config|fromjson %}
+    <p class="hint">Shipped with hrono, so it cannot be edited here. Add your own beside it to change what a role sends.</p>
+    <dl class="facts">
+      {% for key, value in shipped.items() if key != "template" %}<dt>{{ key }}</dt><dd><code>{{ value }}</code></dd>{% endfor %}
+    </dl>
+    {% if shipped.template %}<pre class="passage">{{ shipped.template }}</pre>{% endif %}
     <p class="act-row"><a class="btn quiet" href="{{ listing }}">Back to {{ c.name }}</a></p>
   {% elif c.mode == "delete" %}
     {% if c.doomed.is_default %}
@@ -252,15 +263,14 @@
 {% else %}
   <div class="card-head">
     <div>
-      <h2>{{ c.name|capitalize }}</h2>
-      <p class="hint">{{ about[c.name] }}</p>
+      <div class="row"><h2>{{ c.name|capitalize }}</h2><span class="tip" tabindex="0" role="note" data-tip="{{ about[c.name] }}">?</span></div>
     </div>
     <div class="row">
       {% if view == "json" %}
       <a class="btn small quiet" href="{{ listing }}">Back to the table</a>
       {% else %}
-      <a class="btn small quiet" href="{{ listing }}&amp;view=json">Edit as JSON (advanced)</a>
-      {% if c.can_write and c.name == "sources" %}<a class="btn small" id="guided-source" href="/ui/setup?tree={{ tree }}&amp;step=source&amp;new=1" title="Adds a git repository and shows what it would read before anything is built">Add a git source with a preview</a>{% endif %}
+      <a class="btn small quiet" href="{{ listing }}&amp;view=json" title="Edit the whole list as JSON">JSON</a>
+      {% if c.can_write and c.name == "sources" %}<a class="btn small" id="guided-source" href="/ui/setup?tree={{ tree }}&amp;step=source&amp;new=1" title="Adds a git repository and shows what it would read before anything is built">Add with preview</a>{% endif %}
       {% if c.can_write %}<a class="btn small primary" href="/ui/config?tree={{ tree }}&amp;add={{ c.name }}">Add a {{ singular[c.name] }}</a>{% endif %}
       {% endif %}
     </div>
@@ -340,7 +350,7 @@
 </section>
 
 <section class="env" aria-labelledby="env-head">
-  <h2 id="env-head">Set by the server's environment<span class="tip" tabindex="0" role="note" data-tip="Read-only here: these come from how hrono serve was started, not from anything saved on this page">?</span></h2>
+  <h2 id="env-head">Server<span class="tip" tabindex="0" role="note" data-tip="Read-only here: these come from how hrono serve was started, not from anything saved on this page">?</span></h2>
   <dl>
     {% for label, value in environment %}
     <div><dt>{{ label }}</dt><dd><code>{{ value }}</code></dd></div>
