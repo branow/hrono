@@ -46,7 +46,7 @@
 
 <section class="card mt-3" id="waiting">
   <div class="card-body">
-    <h2>Waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read and embedded, but in no topic yet. A sync files these by itself once {{ min_points }} are waiting, or after {{ max_age }} runs. Place one now to skip the wait; a section you place stays where you put it">?</span></h2>
+    <h2>Waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read, but in no topic: a sync files every section it can place, so only one it cannot place yet waits here, such as one with no vector or a tree with no topics. Place one by hand; a section you place stays where you put it">?</span></h2>
     {% if parked_total == 0 %}
     <p class="hint">No sections are waiting for a topic.</p>
     {% else %}

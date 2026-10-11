@@ -87,6 +87,8 @@ def settle(
     with context.database.connect() as conn:
         model = str(resolve_embedding_model(conn, job.scope)["name"])
     incubator.drain(context.database, tree, model)
+    with context.database.write() as conn:
+        incubator.home(conn, tree, model)
     brief(_stage(tree, "brief"), context, client=client)
     build_tree(
         _stage(tree, "build-tree"),

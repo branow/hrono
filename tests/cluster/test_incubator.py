@@ -1,4 +1,4 @@
-"""The incubator pending pool — park, drain, force-assign, aging."""
+"""The incubator pending pool — park, drain, home, sweep."""
 
 from collections.abc import Iterator
 from threading import Thread
@@ -90,8 +90,9 @@ def test_park_pending_and_unpark(db: Database) -> None:
 
 
 def test_a_re_park_keeps_the_original_wait(db: Database) -> None:
-    # ON CONFLICT DO NOTHING: re-parking the same section must not restart its
-    # age clock (a plain INSERT would raise, an upsert would reset the batch).
+    # ON CONFLICT DO NOTHING: re-parking the same section keeps the batch it
+    # was first parked at (a plain INSERT would raise, an upsert would reset
+    # the batch).
     with db.connect() as conn, conn:
         section_id = add_section(conn, b"parked twice\n", unit(1))
         incubator.park(conn, TREE, section_id, batch=1)
@@ -134,34 +135,49 @@ def test_drain_emits_cores_and_force_assigns_residual(db: Database) -> None:
     assert _members(db, existing_node) == 2  # original + forced residual
 
 
-def test_aging_force_assigns_an_old_pending_chunk(db: Database) -> None:
+def test_home_force_assigns_every_placeable_pending_chunk(
+    db: Database,
+) -> None:
+    # no wait threshold: a chunk parked this very run is homed as surely as
+    # one parked long ago, so the pool never outlives the run that filled it.
     with db.connect() as conn, conn:
         old = add_section(conn, b"old pending\n", unit(0))
         incubator.park(conn, TREE, old, batch=1)
+        fresh = add_section(conn, b"fresh pending\n", unit(0))
+        incubator.park(conn, TREE, fresh, batch=10)
     with db.connect() as conn, conn:
-        # batch 10 vs parked at 1, max_age 5 -> aged out, pool below min
-        forced = incubator.age(conn, TREE, MODEL, current_batch=10, max_age=5)
-    assert forced == 1
+        forced = incubator.home(conn, TREE, MODEL)
+    assert forced == 2
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 0  # no longer pending
         assert (
             conn.execute(
                 "SELECT COUNT(*) FROM node_members WHERE forced = 1"
             ).fetchone()[0]
-            == 1
+            == 2
         )
+    assert_pool_invariant(db, TREE, MODEL)
 
 
-def test_young_pending_chunk_is_not_aged_out(db: Database) -> None:
-    with db.connect() as conn, conn:
-        d = add_section(conn, b"young\n", unit(0))
-        incubator.park(conn, TREE, d, batch=8)
-    with db.connect() as conn, conn:
-        assert (
-            incubator.age(conn, TREE, MODEL, current_batch=10, max_age=5) == 0
-        )
-    with db.connect() as conn:
-        assert incubator.count(conn, TREE) == 1  # still waiting
+def test_home_leaves_a_chunk_parked_when_the_tree_has_no_cluster(
+    tmp_path: object,
+) -> None:
+    # no level-0 node to fall back on: forcing it somewhere is not an option
+    # that exists, so the chunk stays pending rather than vanishing.
+    database = Database.at(tmp_path / "empty.db")  # type: ignore[operator]
+    try:
+        with database.connect() as conn, conn:
+            register_path_bodies(conn, [PATH])
+            upsert_vector(conn, content_hash(path_body(PATH)), MODEL, unit(2))
+            lone = add_section(conn, b"lone\n", unit(0))
+            incubator.park(conn, TREE, lone, batch=1)
+        with database.connect() as conn, conn:
+            assert incubator.home(conn, TREE, MODEL) == 0
+        with database.connect() as conn:
+            assert [e[0] for e in incubator.pending(conn, TREE)] == [lone]
+        assert_pool_invariant(database, TREE, MODEL)
+    finally:
+        database.close()
 
 
 def test_a_pool_the_clusterer_cannot_reduce_does_not_raise(
@@ -242,20 +258,20 @@ def test_the_real_mini_pipeline_drains_a_planted_pool(
     assert _log(planted).count(("drain", "core")) == 2
 
 
-def test_drain_and_age_are_written_to_the_update_log(db: Database) -> None:
+def test_home_is_written_to_the_update_log(db: Database) -> None:
     with db.connect() as conn, conn:
         old = add_section(conn, b"old pending\n", unit(0))
         incubator.park(conn, TREE, old, batch=1)
     with db.connect() as conn, conn:
-        incubator.age(conn, TREE, MODEL, current_batch=10)
-    assert _log(db) == [("age", "forced")]
+        incubator.home(conn, TREE, MODEL)
+    assert _log(db) == [("home", "forced")]
 
 
-def test_age_empties_a_pool_the_clusterer_can_never_reduce(
+def test_home_leaves_only_chunks_with_no_vector(
     db: Database,
 ) -> None:
-    # the age gate is the DRAINABLE size, so a pool that is big enough to
-    # look full but has no usable vectors still ages out instead of stranding.
+    # a pool big enough to look full but with no usable vectors: home places
+    # the one placeable chunk and leaves the rest, which nothing can place.
     with db.connect() as conn, conn:
         for i in range(MIN_POINTS + 3):
             body = f"blind{i}\n".encode()
@@ -267,13 +283,13 @@ def test_age_empties_a_pool_the_clusterer_can_never_reduce(
         placeable = add_section(conn, b"placeable\n", unit(0))
         incubator.park(conn, TREE, placeable, batch=1)
     with db.connect() as conn, conn:
-        assert incubator.age(conn, TREE, MODEL, current_batch=10) == 1
+        assert incubator.home(conn, TREE, MODEL) == 1
     with db.connect() as conn:
         assert incubator.pending(conn, TREE) and all(
             entry[0] != placeable for entry in incubator.pending(conn, TREE)
         )
-    # the rows that stay are UNPLACEABLE (no vector at all), the one bound the
-    # invariant's time limit carries: ageing rescued everything it could.
+    # the rows that stay are UNPLACEABLE (no vector at all), the one exception
+    # the invariant allows: home placed everything it could.
     assert_pool_invariant(db, TREE, MODEL)
 
 
@@ -338,10 +354,13 @@ def test_sweep_keeps_the_row_of_a_twin_the_rebuild_did_not_home(
         assert incubator.sweep(conn, TREE) == 0
     with db.connect() as conn:
         assert incubator.pending(conn, TREE)[0][0] == parked
+    # the kept row is what lets the run's home pass still place the twin
+    with db.connect() as conn, conn:
+        assert incubator.home(conn, TREE, MODEL) == 1
     assert_pool_invariant(db, TREE, MODEL)
 
 
-def test_ageing_forces_only_the_parked_twin(db: Database) -> None:
+def test_home_forces_only_the_parked_twin(db: Database) -> None:
     # the parked twin's nearest centroid is a node its homed twin is NOT in, so
     # force-assigning by content hash drags the homed one into a SECOND node.
     with db.connect() as conn, conn:
@@ -355,7 +374,7 @@ def test_ageing_forces_only_the_parked_twin(db: Database) -> None:
         cluster_store.add_member(conn, 1, homed, forced=False, similarity=0.9)
         incubator.park(conn, TREE, parked, batch=1)
     with db.connect() as conn, conn:
-        assert incubator.age(conn, TREE, MODEL, current_batch=10) == 1
+        assert incubator.home(conn, TREE, MODEL) == 1
     with db.connect() as conn:
         assert incubator.count(conn, TREE) == 0
         forced = conn.execute(

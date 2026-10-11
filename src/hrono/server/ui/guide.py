@@ -28,7 +28,6 @@ import sqlite3
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response
 
-from hrono.cluster.incubator import MAX_AGE
 from hrono.cluster.placement import TAU
 from hrono.cluster.repair import MAX_CAP, MISFIT_THRESHOLD
 from hrono.export.collapse import WIDTH
@@ -93,7 +92,6 @@ def guide_page(request: Request, user: Reader, tree: str = "") -> Response:
                 "tau": TAU,
                 "cap": MAX_CAP,
                 "misfit": int(MISFIT_THRESHOLD * 100),
-                "max_age": MAX_AGE,
                 "churn": CHURN_THRESHOLD,
                 "factor": MISFIT_FACTOR,
                 "climb": D_MAX,
