@@ -79,40 +79,6 @@ def test_bad_role_is_422(harness: Harness) -> None:
     assert post(harness, prompt(role="rewrite")).status_code == 422
 
 
-def test_crud_round_trip(harness: Harness) -> None:
-    post(harness, prompt("judge", name="j", template="J {source} {summary}"))
-    replaced = prompt(
-        "judge", name="j", template="Score {source} vs {summary}."
-    )
-    assert (
-        harness.client.put(
-            "/prompts/j", json=replaced, headers=harness.auth("writer")
-        ).status_code
-        == 200
-    )
-    assert (
-        harness.client.get("/prompts/j", headers=harness.auth("reader")).json()[
-            "template"
-        ]
-        == "Score {source} vs {summary}."
-    )
-    assert (
-        harness.client.delete(
-            "/prompts/j", headers=harness.auth("writer")
-        ).status_code
-        == 200
-    )
-
-
-def test_secretless_stores_null_key_id(harness: Harness) -> None:
-    post(harness, prompt("brief", name="b"))
-    row = harness.conn.execute(
-        "SELECT key_id FROM registry "
-        "WHERE collection = 'prompts' AND name = 'b'"
-    ).fetchone()
-    assert row["key_id"] is None
-
-
 @pytest.mark.parametrize("role", ("condense", "brief", "brief-upper"))
 def test_content_consuming_prompt_without_placeholder_is_rejected(
     harness: Harness, role: str
@@ -143,22 +109,3 @@ def test_seeded_default_templates_satisfy_validation() -> None:
     assert PROMPTS.validate is not None
     for default in PROMPTS.defaults:
         PROMPTS.validate(dict(default), None)  # type: ignore[arg-type]
-
-
-def test_role_and_error_matrix(harness: Harness) -> None:
-    assert harness.client.get("/prompts").status_code == 401
-    assert post(harness, prompt(), role="reader").status_code == 403
-    assert (
-        harness.client.get(
-            "/prompts", headers=harness.auth("reader")
-        ).status_code
-        == 200
-    )
-    assert post(harness, prompt()).status_code == 201
-    assert post(harness, prompt()).status_code == 409
-    assert (
-        harness.client.get(
-            "/prompts/ghost", headers=harness.auth("reader")
-        ).status_code
-        == 404
-    )

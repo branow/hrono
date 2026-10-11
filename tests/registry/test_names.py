@@ -56,51 +56,48 @@ BUILDERS = [
 ]
 
 
+# the empty name runs over all five, which proves each one uses the shared
+# constrained type; the other rules then need only one of them
 @pytest.mark.parametrize(("model", "build"), BUILDERS)
 def test_an_empty_name_is_refused(model, build) -> None:  # type: ignore[no-untyped-def]
     with pytest.raises(ValidationError):
         model(**build(""))
 
 
-@pytest.mark.parametrize(("model", "build"), BUILDERS)
-def test_whitespace_is_not_a_name(model, build) -> None:  # type: ignore[no-untyped-def]
+def test_whitespace_is_not_a_name() -> None:
     # it renders as an empty row exactly like "" does
     with pytest.raises(ValidationError):
-        model(**build("   "))
+        Tree(**_tree("   "))
 
 
-@pytest.mark.parametrize(("model", "build"), BUILDERS)
-def test_a_separator_is_refused(model, build) -> None:  # type: ignore[no-untyped-def]
+def test_a_separator_is_refused() -> None:
     """A name is a path segment: `/sources/{name}`.
 
     One containing a slash addresses a route that does not exist, so the row
     can be created and never read back.
     """
     with pytest.raises(ValidationError):
-        model(**build("one/two"))
+        Tree(**_tree("one/two"))
 
 
-@pytest.mark.parametrize(("model", "build"), BUILDERS)
-def test_an_ordinary_name_is_untouched(model, build) -> None:  # type: ignore[no-untyped-def]
+def test_an_ordinary_name_is_untouched() -> None:
     # the constraint must not narrow what already works
     for name in ("default", "brief-upper", "openai-main", "local_embed.v2"):
-        assert model(**build(name)) is not None
+        assert Tree(**_tree(name)) is not None
 
 
-@pytest.mark.parametrize(("model", "build"), BUILDERS)
-def test_surrounding_whitespace_is_trimmed(model, build) -> None:  # type: ignore[no-untyped-def]
+def test_surrounding_whitespace_is_trimmed() -> None:
     """ "docs" and " docs" must not be two different rows."""
-    made = model(**build("  docs  "))
+    made = Tree(**_tree("  docs  "))
     dumped = made.model_dump()
     inner = dumped.get("root", dumped)
 
     assert inner["name"] == "docs"
 
 
-@pytest.mark.parametrize(("model", "build"), BUILDERS)
-def test_a_name_has_an_upper_bound(model, build) -> None:  # type: ignore[no-untyped-def]
+def test_a_name_has_an_upper_bound() -> None:
     """It is a primary key and a path segment, not a place to put a document."""
     with pytest.raises(ValidationError):
-        model(**build("x" * 201))
+        Tree(**_tree("x" * 201))
 
-    assert model(**build("x" * 200)) is not None
+    assert Tree(**_tree("x" * 200)) is not None

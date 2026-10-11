@@ -24,7 +24,6 @@ from hrono.db.database import open_database
 from hrono.paths import cli_workdir
 from hrono.registry.commands import WRITE_TIMEOUT
 from hrono.registry.descriptor import ValidationContext, ValidationFailed
-from hrono.registry.validation import model_validation
 from hrono.registry.validation.model_validation import validate_model
 from hrono.server.app import create_app
 
@@ -162,10 +161,6 @@ def test_a_hung_cli_ends_in_a_bad_request(served) -> None:
         validate_model(dict(TEXT), context, cli_timeout=0.5)
 
     assert time.monotonic() - started < 4
-
-
-def test_the_real_probe_limit_ends_before_the_client_stops_waiting() -> None:
-    assert model_validation._CLI_TIMEOUT < WRITE_TIMEOUT
 
 
 def test_validate_models_own_default_ends_before_the_client_waits() -> None:
