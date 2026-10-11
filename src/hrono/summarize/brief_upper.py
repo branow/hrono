@@ -46,7 +46,7 @@ from hrono.summarize.shape import answer, brief_gate
 _CONTENT_PLACEHOLDER = "{content}"
 _DEFAULT_LEVEL = 1
 # node, its children's briefs, those children's ids, member signature
-Pending = tuple[int, tuple[str, ...], tuple[int, ...], str]
+Pending = tuple[int, tuple[tuple[str, str], ...], tuple[int, ...], str]
 
 
 class Written(NamedTuple):
@@ -76,7 +76,7 @@ def brief_upper(
         pending = [
             (
                 node_id,
-                briefs.child_briefs(conn, node_id),
+                briefs.child_inputs(conn, node_id),
                 briefs.child_ids(conn, node_id),
                 briefs.member_signature(conn, node_id),
             )
@@ -97,7 +97,7 @@ def brief_upper(
     completion = client_for(context, model, "brief-upper", client=client)
 
     def call(entry: Pending) -> Written:
-        source = "\n\n".join(entry[1])
+        source = briefs.labeled(entry[1])
         rendered = template.replace(_CONTENT_PLACEHOLDER, source)
         result, flagged = answer(
             completion,

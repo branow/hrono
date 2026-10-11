@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -171,10 +172,10 @@ def material(conn: sqlite3.Connection, node_id: int) -> str:
     echo would read as a different one and be re-paid.
     """
     source = condense_model(conn, node_id)
-    texts = member_condensations(conn, node_id, source) or child_briefs(
-        conn, node_id
-    )
-    return "\n\n".join(texts)
+    inputs = reduce_input(conn, node_id, source)
+    if inputs.texts:
+        return inputs.rendered
+    return labeled(child_inputs(conn, node_id))
 
 
 def condense_model(conn: sqlite3.Connection, node_id: int) -> str:
@@ -384,6 +385,29 @@ class ReduceInput:
     texts: tuple[str, ...]
     uris: tuple[str, ...]
     dropped: int
+    labels: tuple[str, ...] = ()  # each text's file path, aligned with texts
+
+    @property
+    def rendered(self) -> str:
+        """The texts as the prompt receives them: grouped under their file."""
+        return labeled(zip(self.labels, self.texts, strict=True))
+
+
+def labeled(pairs: Iterable[tuple[str, str]]) -> str:
+    """Texts under ``=== label ===`` headers, consecutive equal labels merged.
+
+    The research prompts read their inputs this way: a model told which file
+    or which group each text comes from can name it, and a file split into
+    several sections reads as one file.
+    """
+    blocks: list[str] = []
+    current = None
+    for label, text in pairs:
+        if label != current:
+            blocks.append(f"=== {label} ===")
+            current = label
+        blocks.append(text)
+    return "\n\n".join(blocks)
 
 
 def reduce_input(
@@ -391,7 +415,8 @@ def reduce_input(
 ) -> ReduceInput:
     """A node's condensations and the URIs of exactly those condensations."""
     rows = conn.execute(
-        "SELECT d.text AS text, s.uri AS uri FROM node_members m "
+        "SELECT d.text AS text, s.uri AS uri, s.path AS path "
+        "FROM node_members m "
         "JOIN sections s ON s.id = m.section_id "
         "JOIN condensations d ON d.content_hash = s.content_hash "
         "AND d.model_name = ? WHERE m.node_id = ? ORDER BY s.uri, s.id",
@@ -410,6 +435,7 @@ def reduce_input(
         texts=tuple(row["text"] for row in rows),
         uris=tuple(seen),
         dropped=members - len(rows),
+        labels=tuple(row["path"] for row in rows),
     )
 
 
@@ -429,6 +455,35 @@ def child_briefs(conn: sqlite3.Connection, node_id: int) -> tuple[str, ...]:
         (node_id,),
     ).fetchall()
     return tuple(row["text"] for row in rows)
+
+
+def child_inputs(
+    conn: sqlite3.Connection, node_id: int
+) -> tuple[tuple[str, str], ...]:
+    """An upper node's child briefs, each with its title, for the prompt.
+
+    The title is the child's own name (its stored title, else its brief's
+    first line), never its id: an id in the input is copied into the output
+    and means nothing to a reader.
+    """
+    rows = conn.execute(
+        "SELECT n.title AS title, b.text AS text FROM node_children c "
+        "JOIN briefs b ON b.node_id = c.child_id "
+        "JOIN nodes n ON n.id = c.child_id WHERE c.parent_id = ? "
+        "ORDER BY c.child_id",
+        (node_id,),
+    ).fetchall()
+    return tuple(
+        (row["title"] or _first_line(row["text"]), row["text"]) for row in rows
+    )
+
+
+def _first_line(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip().strip("#*").strip()
+        if stripped:
+            return stripped[:120]
+    return "untitled"
 
 
 def child_ids(conn: sqlite3.Connection, node_id: int) -> tuple[int, ...]:
