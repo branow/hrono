@@ -13,7 +13,6 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono import edits
-from hrono.cluster.incubator import MAX_AGE
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.embed.model import resolve_embedding_model
 from hrono.errors import AppError, DomainError
@@ -61,7 +60,6 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
             "clean": triage.clean(items),
             "can_write": user.role == "admin",
             "shown": attention.SHOWN,
-            "max_age": MAX_AGE,
             "min_points": MIN_POINTS,
             **context,
         },

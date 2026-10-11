@@ -204,8 +204,9 @@ Updates never re-run the build pipeline. Full rules:
 - **`update`** (`tree/update.py`) syncs, diffs files by content hash, re-splits
   only changed files, embeds and condenses only new bytes, and places changed
   sections against the pre-batch centroids. Untouched sections never move.
-  Sections too novel for any topic wait in an incubator until enough gather to
-  form a topic.
+  Sections too novel for any topic are parked for the rest of the run; at its
+  end they form new topics if there are enough of them, and the rest join
+  their nearest topic, flagged `forced` for the monitor to re-check.
 - **`propagate`** asks a judge whether a leaf's new content changes what its
   stored brief says; `minor` or `major` marks ancestor briefs stale and adds
   drift.
@@ -220,7 +221,7 @@ Invariants:
 1. An update never moves a section whose content did not change.
 2. Every placement outside build and settle is deterministic given the stored
    state.
-3. Every section is in exactly one topic, or in the incubator.
+3. Every section is in exactly one topic once a run ends.
 4. Every membership change marks the affected brief stale; briefs regenerate
    from staleness only.
 5. Embeddings and condensations are content-addressed; nothing is computed

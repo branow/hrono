@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster.build import ClusterResult
-from hrono.cluster.incubator import MAX_AGE, pending
+from hrono.cluster.incubator import pending
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.export import store as export_store
@@ -325,10 +325,13 @@ def _forced_node(db: Database, path: str) -> int | None:
     return None if row is None else int(row["node_id"])
 
 
-def test_update_parks_an_alien_chunk_then_ages_it_in(
+def test_update_homes_an_alien_chunk_in_the_run_that_parks_it(
     built: tuple[Database, Path],
     tmp_path: Path,
 ) -> None:
+    # sub-TAU, so it parks; the pool is too small to cluster, so the end of
+    # the SAME run force-assigns it to its nearest topic. Nothing waits for a
+    # later run.
     db, origin = built
     add_alien(origin, "zz.txt")
     update(
@@ -338,25 +341,13 @@ def test_update_parks_an_alien_chunk_then_ages_it_in(
         client=FakeCompletion(),
     )
 
-    assert _pending(db) == [("alien/zz.txt", 1)]  # sub-TAU, parked
+    assert _pending(db) == []  # homed, never stranded
+    assert _forced_node(db, "alien/zz.txt") is not None
+    assert ("home", "forced") in _log(db)
     assert_pool_invariant(db, "default", "emb")
 
-    for i in range(MAX_AGE + 1):  # batches 2..6 carry it past MAX_AGE
-        edit(origin, "f1.txt", f"module 1 revision {i}\n")
-        update(
-            _job("update"),
-            job_context(db, tmp_path),
-            encoder_for=alien_encoder,
-            client=FakeCompletion(),
-        )
-        assert_pool_invariant(db, "default", "emb")
 
-    assert _pending(db) == []  # aged out, never stranded
-    assert _forced_node(db, "alien/zz.txt") is not None
-    assert ("age", "forced") in _log(db)
-
-
-def test_update_drains_a_full_pool_in_the_same_batch(
+def test_update_drains_a_full_pool_in_the_same_run(
     built: tuple[Database, Path],
     tmp_path: Path,
 ) -> None:
@@ -371,7 +362,7 @@ def test_update_drains_a_full_pool_in_the_same_batch(
         client=FakeCompletion(),
     )
 
-    # a pool the real mini-pipeline can reduce never survives its own batch:
+    # a pool the real mini-pipeline can reduce never survives its own run:
     # cores emit as leaf nodes, residual noise is force-assigned.
     assert _pending(db) == []
     assert [entry for entry in _log(db) if entry[0] == "drain"]
@@ -385,7 +376,8 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
     # duplicate content, different paths: one content hash but two sections,
     # and the ALPHA-0.5 path blend gives them different combined vectors, so
     # g9.txt clears TAU while alien/g9.txt parks. The pool is keyed by SECTION
-    # precisely so it can hold one without claiming the other is homeless.
+    # precisely so it can hold one without claiming the other is homeless, and
+    # the run's home pass forces only the parked twin.
     db, origin = built
     add_twins(origin, "g9.txt")
     update(
@@ -395,20 +387,8 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
         client=FakeCompletion(),
     )
 
-    assert _pending(db) == [("alien/g9.txt", 1)]
-    assert_pool_invariant(db, "default", "emb")
-
-    for i in range(MAX_AGE + 1):  # batches 2..7 carry the twin past MAX_AGE
-        edit(origin, "f1.txt", f"module 1 revision {i}\n")
-        update(
-            _job("update"),
-            job_context(db, tmp_path),
-            encoder_for=alien_encoder,
-            client=FakeCompletion(),
-        )
-        assert_pool_invariant(db, "default", "emb")
-
     assert _pending(db) == []
+    assert_pool_invariant(db, "default", "emb")
     assert _forced_node(db, "alien/g9.txt") is not None
     assert _forced_node(db, "g9.txt") is None  # its homed twin never moved
 
@@ -452,9 +432,8 @@ def test_n_update_runs_advance_the_batch_counter_by_exactly_n(
 def test_a_run_over_two_changed_sources_bumps_the_counter_once(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # the batch counter must advance once per run, not once per source: a run
-    # over three changed sources counting three batches would age parked
-    # chunks that much faster than MAX_AGE intends.
+    # the batch counter must advance once per run, not once per source: the
+    # batch a run stamps on the chunks it parks names that run.
     db, origin = built
     second = tmp_path / "second-repo"
     add_source(db, "second", make_repo(second, files=4))
@@ -475,54 +454,6 @@ def test_a_run_over_two_changed_sources_bumps_the_counter_once(
             ).fetchall()
         }
     assert changed == {"repo", "second"}
-
-
-def test_ageing_measures_runs_not_changed_sources(
-    built: tuple[Database, Path], tmp_path: Path
-) -> None:
-    # the boundary the re-run watches: a chunk parked at batch B is forced only
-    # once current - B > MAX_AGE. With the counter bumping per SOURCE, two
-    # changed sources per run reached that in half the runs.
-    db, origin = built
-    second = tmp_path / "second-repo"
-    add_source(db, "second", make_repo(second, files=4))
-    add_alien(origin, "zz.txt")
-    update(
-        _job("update"),
-        job_context(db, tmp_path),
-        encoder_for=alien_encoder,
-        client=FakeCompletion(),
-    )
-    parked = _pending(db)
-    assert parked == [("alien/zz.txt", _batch(db))]
-    parked_at = parked[0][1]
-
-    for i in range(MAX_AGE):  # MAX_AGE runs, each touching BOTH sources
-        edit(origin, "f1.txt", f"first source revision {i}\n")
-        edit(second, "f1.txt", f"second source revision {i}\n")
-        update(
-            _job("update"),
-            job_context(db, tmp_path),
-            encoder_for=alien_encoder,
-            client=FakeCompletion(),
-        )
-        assert_pool_invariant(db, "default", "emb")
-
-    assert _batch(db) - parked_at == MAX_AGE  # exactly at the boundary
-    assert _pending(db) == [("alien/zz.txt", parked_at)]  # not forced yet
-
-    edit(origin, "f1.txt", "one run past the boundary\n")
-    edit(second, "f1.txt", "one run past the boundary\n")
-    update(
-        _job("update"),
-        job_context(db, tmp_path),
-        encoder_for=alien_encoder,
-        client=FakeCompletion(),
-    )
-
-    assert _batch(db) - parked_at == MAX_AGE + 1
-    assert _pending(db) == []  # forced only now
-    assert _forced_node(db, "alien/zz.txt") is not None
 
 
 def rename(origin: Path, old: str, new: str) -> None:
@@ -609,12 +540,11 @@ def test_a_rename_that_changes_the_grammar_is_a_normal_change(
     assert_pool_invariant(db, "default", "emb")
 
 
-def test_renaming_a_parked_chunk_keeps_the_wait_it_has_served(
+def test_renaming_a_force_homed_chunk_leaves_nothing_pending(
     built: tuple[Database, Path], tmp_path: Path
 ) -> None:
-    # a parked chunk has no membership to preserve, so it takes the placement
-    # rule again; if it parks once more it must keep its ORIGINAL batch, or a
-    # rename would postpone ageing for ever and strand it.
+    # the alien is parked and homed by force in its first run; renaming it
+    # later must not strand it outside the tree either.
     db, origin = built
     add_alien(origin, "zz.txt")
     update(
@@ -623,15 +553,8 @@ def test_renaming_a_parked_chunk_keeps_the_wait_it_has_served(
         encoder_for=alien_encoder,
         client=FakeCompletion(),
     )
-    assert _pending(db) == [("alien/zz.txt", 1)]
+    assert _forced_node(db, "alien/zz.txt") is not None
 
-    edit(origin, "f1.txt", "an unrelated edit to advance the batch\n")
-    update(
-        _job("update"),
-        job_context(db, tmp_path),
-        encoder_for=alien_encoder,
-        client=FakeCompletion(),
-    )
     rename(origin, "alien/zz.txt", "alien/renamed-zz.txt")
     update(
         _job("update"),
@@ -640,7 +563,8 @@ def test_renaming_a_parked_chunk_keeps_the_wait_it_has_served(
         client=FakeCompletion(),
     )
 
-    assert _pending(db) == [("alien/renamed-zz.txt", 1)]  # still batch 1
+    assert _pending(db) == []
+    assert _node_of(db, "alien/renamed-zz.txt")[0] is not None
     assert_pool_invariant(db, "default", "emb")
 
 

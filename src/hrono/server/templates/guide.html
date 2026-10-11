@@ -190,7 +190,7 @@
       </li>
       <li>
         <span class="when">a new file</span>
-        <span class="then">Placed in the topic whose centre it is closest to, if that is {{ rule.tau }} or better. If nothing is close enough it is <em>parked</em>. Parked sections form a topic of their own once there are enough of them to be one; if too few have gathered, one that waits more than {{ rule.max_age }} syncs is filed in the nearest topic anyway, marked as placed without a score.</span>
+        <span class="then">Placed in the topic whose centre it is closest to, if that is {{ rule.tau }} or better. If nothing is close enough it is <em>parked</em>. At the end of the sync, parked sections form a topic of their own if there are enough of them to be one; the rest are filed in the nearest topic anyway, marked as placed by force, so a later check can move them once similar sections arrive.</span>
       </li>
       <li>
         <span class="when">a topic past {{ rule.cap }} sections</span>

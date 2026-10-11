@@ -24,7 +24,6 @@ All baked in code, not config.
 | `MAX_CAP` | 30 members | `cluster/repair.py` | The edge of one faithful brief (~500 tokens × 30 ≈ 15k input tokens). It sits above the organic leaf sizes (5–28, median ~10), so it only catches pathological growth. |
 | `MISFIT_THRESHOLD` | 0.25 | `cluster/repair.py` | Per-topic misfit share that triggers a migrate. |
 | `SAMPLE_SIZE` | 32 topics | `cluster/monitor.py` | Bounded re-check per batch beyond the dirty topics. |
-| `MAX_AGE` | 5 update runs | `cluster/incubator.py` | Longest a placeable section waits in the incubator. |
 | `CHURN_THRESHOLD` | 50 drift points | `tree/settle.py` | When a settle is due. |
 | `MISFIT_FACTOR` | 2.0 | `tree/settle.py` | Global misfit above 2× the post-build baseline also makes a settle due. |
 
@@ -87,14 +86,16 @@ Pinned members (`src/hrono/pins.py`) are never moved by placement or repair.
 
 ## Incubator
 
-`cluster/incubator.py`. A parked section is in no topic but stays queryable as
-pending. At the end of every update run the pool is aged, then drained:
+`cluster/incubator.py`. The pool is temporary storage inside one run, as in
+the research (`research.ipynb` steps 21–23): a section placed below `TAU` is
+parked while the run places the rest, and at the end of the run the pool is
+emptied:
 
-- **Drain**, once the pool has `MIN_POINTS` (12) sections: the scoped
+- **Drain**, when the pool has `MIN_POINTS` (12) sections: the scoped
   mini-pipeline over the pool. Only density-core clusters become new topics;
   stragglers are never married to each other.
-- **Force-assign** residual noise, and anything older than `MAX_AGE` runs, to
-  the nearest existing topic, ignoring `TAU`. `TAU` is the "clearly needs no
+- **Home** everything left, drain noise or a pool too small to cluster, to the
+  nearest existing topic, ignoring `TAU`. `TAU` is the "clearly needs no
   new topic" bar, not an admission gate: a section outside the tree is
   unfindable, which is worse than one alien member in a brief. Forced members
   carry a `forced` flag so the monitor re-checks them and a pioneer migrates

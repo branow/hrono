@@ -8,11 +8,10 @@ content-hash cache re-embeds nothing unchanged), then applies the placement rule
 against the PRE-BATCH cluster centroids. UMAP/HDBSCAN never run, so untouched
 chunks never move: churn = changed content.
 
-Placement is also the batch's pool pass: whatever it parks in the
-incubator is immediately aged — anything past ``MAX_AGE`` batches is
-force-assigned — and then drained, so a chunk is never pending for longer than
-the pool can justify. Age runs first: the drain re-homes the whole pool anyway,
-so ageing after it would only re-decide chunks the drain already placed.
+Placement is also the batch's pool pass: whatever it parks in the incubator
+is drained (a pool big enough to cluster forms new topics) and then homed
+(everything left joins its nearest topic, flagged ``forced``), so no section
+is left outside the tree when the run ends.
 
 A leaf the drain emits here is NOT parented, and not briefed either: both need
 the brief pass this op deliberately does not run (``update`` makes no LLM calls
@@ -55,17 +54,12 @@ promise is that work is proportional to the change, not that the op is free —
 and the alternative left a leaf with no condensation, therefore no brief,
 therefore no brief vector, therefore no parent.
 
-ONE BATCH NUMBER PER RUN, not per source. ``tree_batch.batch`` is the clock
-incubator ageing measures against (``current_batch - parked_at > MAX_AGE``), so
-counting a run over three changed sources as three batches ages parked chunks
-three times too fast — and premature forcing is hard to undo. The number is
-allocated LAZILY, by the first source that actually has changes, so a run over
-an unchanged corpus leaves the counter alone; every later source in the same run
-reuses it. A RETRIED run — the worker reclaims a job stranded by a dead worker —
-is a fresh run and allocates another batch: a retry genuinely is another pass
-over the corpus, and per-job allocation state would be real machinery for
-semantics that already read correctly, bounded at one extra tick against a
-MAX_AGE tolerance of 5.
+ONE BATCH NUMBER PER RUN, not per source: ``tree_batch.batch`` stamps the
+chunks a run parks, so one run over three changed sources is one batch. The
+number is allocated LAZILY, by the first source that actually has changes, so a
+run over an unchanged corpus leaves the counter alone; every later source in the
+same run reuses it. A RETRIED run — the worker reclaims a job stranded by a dead
+worker — is a fresh run and allocates another batch.
 
 Lock discipline like the other ops: the diff + centroid snapshot + section
 reconcile run under one write lock (so the centroids are consistently
@@ -235,7 +229,6 @@ def _update_source(
 
     with context.database.write() as conn:
         placement.place(conn, tree, deltas, centroids, model_name, current)
-        incubator.age(conn, tree, model_name, current)
     deferred = _drain(context, tree, model_name)
     with context.database.write() as conn:
         cluster_store.backfill_coords(conn, tree, model_name)
@@ -243,23 +236,25 @@ def _update_source(
 
 
 def _drain(context: JobContext, tree: str, model_name: str) -> int:
-    """Drain the pool, deferring (not failing) a degenerate one.
+    """Drain the pool, then home what is left; count a deferred drain.
 
     ``drain``'s mini-pipeline raises ``ClusterError`` on input UMAP cannot
-    reduce — tied or identical vectors. It must not propagate out of ``update``:
-    placement and ageing have already committed, so it would fail the whole sync
-    at a stage that had already done its work, on every later run too, since the
-    pool stays exactly as degenerate. A pool that cannot drain is a pool that
-    waits: ageing force-assigns anything past ``MAX_AGE``, so deferral is
-    bounded, and the outcome says it happened.
+    reduce — tied or identical vectors. It must not propagate out of
+    ``update``: placement has already committed, so it would fail the whole
+    sync at a stage that had already done its work, on every later run too,
+    since the pool stays exactly as degenerate. A pool that cannot be
+    clustered is homed instead, and the outcome says the drain was deferred.
     """
+    deferred = 0
     try:
         incubator.drain(context.database, tree, model_name)
     except TooFewPoints:
         raise
     except ClusterError:
-        return 1
-    return 0
+        deferred = 1
+    with context.database.write() as conn:
+        incubator.home(conn, tree, model_name)
+    return deferred
 
 
 def _rescue(
@@ -280,8 +275,8 @@ def _rescue(
     and the next run's diff sees stored == current and reports nothing to do.
     Those sections were in no node and no pool, permanently, and only a full
     maintain would have found them. Parking them re-enters them through the
-    pool's own ageing and drain, so every run heals whatever an earlier run
-    left homeless.
+    pool's drain and home, so every run heals whatever an earlier run left
+    homeless.
     """
     if not sources:
         return 0, batch
@@ -303,8 +298,6 @@ def _rescue(
         for section_id in homeless:
             incubator.park(conn, tree, section_id, current)
     embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
-    with context.database.write() as conn:
-        incubator.age(conn, tree, model_name, current)
     _drain(context, tree, model_name)
     return len(homeless), current
 
