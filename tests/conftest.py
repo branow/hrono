@@ -56,11 +56,22 @@ _UMAP_MODULES = frozenset(
 )
 
 
+# Each worker that runs a browser test launches Chromium and a live server
+# for the module, a second or two each. Left to xdist, all eight workers did.
+# Two groups pay it twice and still split the module's work in half.
+_BROWSER_MODULE = "tests/server/test_ui_browser.py"
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    browsers = 0
     for item in items:
         module = item.nodeid.split("::")[0]
-        if module in _UMAP_MODULES:
+        if module == _BROWSER_MODULE:
+            group = f"browser-{browsers % 2}"
+            item.add_marker(pytest.mark.xdist_group(group))
+            browsers += 1
+        elif module in _UMAP_MODULES:
             # Two groups, not one: the tree tests alone are about half the
             # warm work, and one worker holding all of it is the whole run.
             group = "umap-tree" if module.startswith("tests/tree/") else "umap"
