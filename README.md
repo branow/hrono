@@ -159,7 +159,7 @@ map is, and gives Claude a skill for walking it.
 /plugin install hrono@hrono
 ```
 
-Then, in a repository, set its tree (`hrono-config`) and export its map
+Then, in a project, set its tree (`hrono-config`) and export its map
 (`hrono-export`). See [`plugins/hrono/README.md`](plugins/hrono/README.md).
 
 ## The dashboard

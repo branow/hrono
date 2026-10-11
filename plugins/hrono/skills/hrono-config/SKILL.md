@@ -1,37 +1,35 @@
 ---
 name: hrono-config
-description: Use when the user wants to connect this repository to an hrono tree, change where its map is exported, or turn automatic hrono recall on or off.
-allowed-tools: [Bash(node ${CLAUDE_PLUGIN_ROOT}/scripts/config.js*), Bash(hrono profile current*), Bash(hrono tree config list*)]
+description: Use when the user wants to connect this project to an hrono tree, change where its map is exported, or turn automatic hrono recall on or off.
+allowed-tools: [Read, Edit, Write, Bash(git rev-parse --show-toplevel), Bash(hrono profile current*), Bash(hrono tree config list*)]
 ---
 
-# hrono - configure this repository
+# hrono - configure this project
 
-Settings are per repository, kept in `~/.hrono/agent.json`.
+Settings live in `~/.hrono/agent.json` (`$HRONO_HOME/agent.json` if set),
+one entry per project, keyed by its git root (`git rev-parse
+--show-toplevel`). Edit the file directly:
 
-```bash
-node ${CLAUDE_PLUGIN_ROOT}/scripts/config.js show
-node ${CLAUDE_PLUGIN_ROOT}/scripts/config.js set key=value [key=value ...]
+```json
+{
+  "projects": {
+    "/path/to/project": { "tree": "bcreg", "recall": true }
+  }
+}
 ```
 
 | Key | Default | Meaning |
 |---|---|---|
-| `tree` | none | The hrono tree that maps this repository. Nothing happens until it is set. |
-| `export_dir` | `~/.hrono/exports/<tree>` | Where the map is exported and read from. |
-| `recall` | `on` | Attach recalled passages to every prompt (`on` / `off`). |
-| `limit` | `5` | Passages attached per prompt. |
+| `tree` | none | The tree that maps this project. Nothing runs until it is set. |
+| `folder` | `~/.hrono/exports/<tree>` | Where the map is exported and read. |
+| `recall` | `true` | Attach recalled passages to every prompt. |
+| `limit` | `5` | Passages per prompt. |
 | `levels` | `4` | Hops from `root.md` to a leaf in the export. |
-| `min_chars` | `20` | Prompts shorter than this get no recall. |
-| `max_chars` | `12000` | The most recalled text attached to one prompt. |
+| `shortest` | `20` | Prompts shorter than this get no recall. |
+| `longest` | `12000` | The most recalled text attached to a prompt. |
 | `bin` | `hrono` | The hrono command. |
 
-## Connecting a repository for the first time
-
-1. Check the CLI is signed in: `hrono profile current`. If not, the user adds
-   a profile with the server URL and a token (`hrono profile add`).
-2. List the trees: `hrono tree config list`, and ask which one maps this
-   repository.
-3. `config.js set tree=<name>`, then export the map with the hrono-export
-   skill.
-
-Changes apply from the next prompt; the export path in the session's opening
-note applies from the next session.
+To connect a project: check the CLI is signed in (`hrono profile current`),
+list the trees (`hrono tree config list`), ask which one maps this project,
+set `tree`, then export with hrono-export. Recall changes apply from the next
+prompt; the session note from the next session.

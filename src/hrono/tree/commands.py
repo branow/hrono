@@ -19,6 +19,7 @@ rerooting the export, and a refused entry costs only itself.
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,10 @@ app = typer.Typer(add_completion=False, help="Build and maintain trees.")
 
 class UnsafePath(Exception):
     """A payload path tried to escape the output directory."""
+
+
+class NotAnExport(Exception):
+    """``--replace`` was pointed at a folder that holds something else."""
 
 
 @app.command("maintain")
@@ -100,12 +105,23 @@ def export(
             "section (at least 2).",
         ),
     ] = 4,
+    replace: Annotated[
+        bool,
+        typer.Option(
+            "--replace",
+            help="Replace an earlier export in --out instead of writing over "
+            "it, so pages of topics that no longer exist go too.",
+        ),
+    ] = False,
 ) -> None:
     """Materialize a tree's rendered map into a folder under ``--out``."""
 
     result = from_profile().get(f"/trees/{name}/export?levels={levels}")
     files = result.get("files", []) if isinstance(result, dict) else []
-    written, refused = _materialize(out, files)
+    if replace:
+        written, refused = _replace(out, files)
+    else:
+        written, refused = _materialize(out, files)
     plural = "file" if written == 1 else "files"
     typer.echo(f"Wrote {written} {plural} to {out}.")
     shape = result.get("shape") if isinstance(result, dict) else None
@@ -168,6 +184,29 @@ def _refusal(out: Path, total: int, refused: Sequence[Refusal]) -> str:
         for reason, paths in sorted(kinds.items())
     ]
     return f"refused {len(refused)} of {total} files: " + "; ".join(parts)
+
+
+def _replace(
+    out: Path, files: list[dict[str, str]]
+) -> tuple[int, tuple[Refusal, ...]]:
+    """Write the export beside ``out`` and swap it in once it is complete.
+
+    A failed write leaves the earlier export untouched. Only an earlier export
+    (a folder holding ``root.md``) or an empty folder is replaced: ``--out``
+    pointed at a folder of other files is refused rather than emptied.
+    """
+    if out.exists() and any(out.iterdir()) and not (out / "root.md").exists():
+        raise NotAnExport(f"{out} holds files but no root.md; not replacing it")
+    fresh = out.with_name(f"{out.name}.new")
+    old = out.with_name(f"{out.name}.old")
+    shutil.rmtree(fresh, ignore_errors=True)
+    result = _materialize(fresh, files)
+    shutil.rmtree(old, ignore_errors=True)
+    if out.exists():
+        out.rename(old)
+    fresh.rename(out)
+    shutil.rmtree(old, ignore_errors=True)
+    return result
 
 
 def _materialize(

@@ -196,3 +196,46 @@ def test_the_refusal_message_says_which_kind_each_was(
     assert "collide with a path already written under" in message
     assert "write outside" in message
     assert "refused 2 of 3" in message
+
+
+def _export(
+    out: Path, monkeypatch: pytest.MonkeyPatch, files: list[dict[str, str]]
+) -> object:
+    monkeypatch.setattr(
+        "hrono.tree.commands.from_profile", lambda: FakeClient(files)
+    )
+    return runner.invoke(
+        cli.app, ["tree", "export", "acme", "-o", str(out), "--replace"]
+    )
+
+
+def test_replace_drops_pages_the_new_export_no_longer_has(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "map"
+    out.mkdir()
+    (out / "root.md").write_text("OLD ROOT")
+    (out / "retired-7").mkdir()
+    (out / "retired-7" / "brief.md").write_text("A TOPIC THAT IS GONE")
+
+    result = _export(out, monkeypatch, [{"path": "root.md", "content": "NEW"}])
+
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert (out / "root.md").read_text() == "NEW"
+    assert not (out / "retired-7").exists()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["map"]  # no leftovers
+
+
+def test_replace_refuses_a_folder_that_is_not_an_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "project"
+    out.mkdir()
+    (out / "main.py").write_text("print('mine')")
+
+    result = _export(out, monkeypatch, [{"path": "root.md", "content": "NEW"}])
+
+    assert result.exit_code == 1  # type: ignore[attr-defined]
+    assert "no root.md" in result.output  # type: ignore[attr-defined]
+    assert (out / "main.py").read_text() == "print('mine')"
+    assert not (out / "root.md").exists()
