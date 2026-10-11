@@ -41,6 +41,7 @@ from collections.abc import Mapping
 from hrono.cluster.levels import attach_orphans
 from hrono.cluster.monitor import monitor
 from hrono.cluster.repair import repair
+from hrono.health import report
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages
@@ -103,6 +104,7 @@ def sync(
         "adopt",
         lambda: _adopt(tree, context, encoder_for=encoder_for, client=client),
     )
+    run.run("health", lambda: report.refresh(context.database, tree))
     with context.database.connect() as conn:
         settle_due = should_settle(conn, tree)
         changed = changes.since(conn, tree, before)

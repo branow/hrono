@@ -17,6 +17,8 @@ from hrono import pins
 from hrono.cluster import incubator
 from hrono.cluster import store as cluster_store
 from hrono.cluster.repair import migrate
+from hrono.db.database import Database
+from hrono.health import report
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from tests.server.test_ui_surgery import (  # noqa: F401
@@ -32,6 +34,8 @@ browser = _surgery_browser
 
 
 def _health(browser: Browser) -> str:
+    """The page after the report is refreshed, as a sync would leave it."""
+    report.refresh(Database.adopt(browser.conn), TREE)  # type: ignore[arg-type]
     return browser.client.get(f"/ui/trees/{TREE}/triage").text
 
 
@@ -386,7 +390,7 @@ def test_the_pages_centroids_are_the_ones_the_monitor_uses(
 ) -> None:
     """The page computes centroids in one matrix pass for speed; it must
     still name the nearest topic the pipeline would, so they match."""
-    from hrono.server import attention
+    from hrono.health import attention
 
     ids, matrix = attention._centroids(browser.conn, TREE, MODEL)  # type: ignore[arg-type]
     monitor = cluster_store.node_centroids(browser.conn, TREE, MODEL)  # type: ignore[arg-type]

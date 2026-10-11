@@ -19,12 +19,12 @@ from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.cluster.incubator import park
 from hrono.crypto.masterkey import reconcile
-from hrono.db.database import open_database
+from hrono.db.database import Database, open_database
+from hrono.health import report, triage
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs import store as job_store
 from hrono.registry import store as registry_store
-from hrono.server import triage
 from hrono.server.app import create_app
 from hrono.summarize import briefs
 from tests.summarize.test_shape import ECHOED, _default
@@ -58,6 +58,8 @@ class Browser:
         self.client.post("/ui/login", data={"token": self.token})
 
     def triage(self, tree: str = TREE) -> str:
+        """The page after the report is refreshed, as a sync would leave it."""
+        report.refresh(Database.adopt(self.conn), tree)  # type: ignore[arg-type]
         return self.client.get(f"/ui/trees/{tree}/triage").text
 
     def survey(self, tree: str = TREE) -> dict[str, int]:
@@ -326,3 +328,32 @@ def test_a_settled_echo_does_not_promise_a_sync(clean_tree: Browser) -> None:
 
     assert "sync" not in detail
     assert "2 need a person" in detail
+
+
+def test_opening_the_page_works_nothing_out(clean_tree: Browser) -> None:
+    # the checks run when the tree changes and on Recheck, never on opening
+    clean_tree.sign_in()
+
+    page = clean_tree.client.get(f"/ui/trees/{TREE}/triage").text
+
+    assert "Not checked yet" in page
+    assert "nothing needs attention" not in page  # unchecked is not clean
+    stored = clean_tree.conn.execute(  # type: ignore[attr-defined]
+        "SELECT count(*) FROM tree_health"
+    ).fetchone()[0]
+    assert stored == 0
+
+
+def test_recheck_starts_a_health_run(clean_tree: Browser) -> None:
+    clean_tree.sign_in()
+
+    answer = clean_tree.client.post(
+        f"/ui/trees/{TREE}/triage/recheck", follow_redirects=False
+    )
+    job = clean_tree.conn.execute(  # type: ignore[attr-defined]
+        "SELECT op, tree FROM jobs WHERE op = 'health'"
+    ).fetchone()
+
+    assert answer.status_code == 303
+    assert (job["op"], job["tree"]) == ("health", TREE)
+    assert "Checked " in clean_tree.triage()  # a refreshed report is dated

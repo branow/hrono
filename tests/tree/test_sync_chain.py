@@ -206,6 +206,7 @@ def test_the_result_says_what_the_run_did(
         "monitor",
         "repair",
         "adopt",
+        "health",
     ]
     assert all(stage["seconds"] >= 0 for stage in outcome["stages"])
     assert outcome["incomplete"] is False

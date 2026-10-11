@@ -46,6 +46,7 @@ from hrono.cluster import incubator, monitor, store
 from hrono.cluster.op import cluster
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
+from hrono.health import report
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry.collections.trees import DEFAULT_TREE
@@ -104,6 +105,7 @@ def settle(
             conn, tree, model, sorted(store.node_centroids(conn, tree, model))
         )
         _reset_drift(conn, tree)
+    report.refresh(context.database, tree)
     return {"settled": True, "held": held, "released": released}
 
 

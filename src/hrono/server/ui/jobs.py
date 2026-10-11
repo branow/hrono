@@ -67,6 +67,8 @@ MEANS = {
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
     "settle": "place the sections that were still waiting",
+    "health": "check what needs attention in the tree and keep the report "
+    "for the Health page",
     "export": "write the tree out as the Markdown files an agent reads, and "
     "keep them for the Export page",
     "noop": "do nothing — a health check of the worker",
