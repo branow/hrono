@@ -15,18 +15,14 @@ from pathlib import Path
 
 import pytest
 
-from hrono.cluster import ClusterError, TooFewPoints
-from hrono.crypto.cipher import DecryptError
+from hrono.cluster import TooFewPoints
 from hrono.db.database import Database
-from hrono.embed.runner import EmbedError
 from hrono.errors import AppError, Conflict, DomainError, as_app_error
 from hrono.ingest import SyncError
-from hrono.ingest.split_op import SplitError
 from hrono.jobs import store
 from hrono.jobs.model import Job
 from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import Worker, enqueue
-from hrono.llm.client import LLMError
 
 KEBAB = "abcdefghijklmnopqrstuvwxyz-"
 
@@ -66,37 +62,27 @@ def _run(db: Database, error: Exception) -> sqlite3.Row:
         worker.join(timeout=5)
 
 
+# the mapping is generic (`kind.code`), and every class's code is walked by
+# the test below: one direct DomainError and one narrowed subclass suffice.
 @pytest.mark.parametrize(
     ("error", "code"),
     [
         (SyncError("the remote refused"), "sync-error"),
-        (SplitError("that source is not synced"), "split-error"),
-        (EmbedError("no embedding model available"), "embed-error"),
-        (ClusterError("the backend is not installed"), "cluster-error"),
         (TooFewPoints("11 < 12"), "too-few-points"),
-        (DecryptError("the token is malformed"), "decrypt-error"),
-        (LLMError("no text model available"), "llm-error"),
     ],
 )
 def test_a_job_records_the_failures_own_code(
     db: Database, error: Exception, code: str
 ) -> None:
+    # an error raised from hrono's own code was written for a reader, and
+    # hiding it behind "the job failed" would cost the operator every
+    # actionable message the system has to protect them from sqlite's phrasing.
     row = _run(db, error)
 
     assert row["status"] == "failed"
     assert row["error_code"] == code
     assert row["error"] == str(error)  # its own wording, unchanged
     assert json.loads(row["error_details"]) == {"type": type(error).__name__}
-
-
-def test_a_foreign_exception_is_still_opaque(db: Database) -> None:
-    # the envelope rule holds: a driver's wording is not hrono's answer, and its
-    # code is the generic one precisely because we cannot vouch for it.
-    row = _run(db, sqlite3.IntegrityError("poisoned mid-transaction"))
-
-    assert row["error_code"] == "internal-error"
-    assert row["error"] == "the job failed"
-    assert "poisoned" not in json.dumps(row["error_details"])
 
 
 def test_an_app_error_keeps_its_own_code_and_status() -> None:

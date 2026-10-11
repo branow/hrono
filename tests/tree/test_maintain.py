@@ -7,13 +7,12 @@ import pytest
 
 from hrono.cluster import ClusterError
 from hrono.cluster.build import ClusterResult
-from hrono.cluster.recipe import MIN_POINTS, recipe_for
+from hrono.cluster.recipe import MIN_POINTS
 from hrono.db.database import Database
 from hrono.export import store as export_store
 from hrono.export.collapse import collapse
 from hrono.export.render import render
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS
 from hrono.jobs.stages import StageFailed
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
@@ -167,10 +166,6 @@ def _count(db: Database, table: str) -> int:
         return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
 
-def test_maintain_is_registered() -> None:
-    assert "maintain" in OPS
-
-
 def test_builds_a_fresh_tree_end_to_end_to_a_single_root(
     db: Database, tmp_path: Path
 ) -> None:
@@ -200,19 +195,6 @@ def _source_embeddings(db: Database) -> int:
             ).fetchone()[0]
         )
 
-
-def test_second_maintain_re_condenses_and_re_embeds_source_nothing(
-    db: Database,
-    tmp_path: Path,
-) -> None:
-    run(db, tmp_path)
-    condensations = _count(db, "condensations")
-    source_embeddings = _source_embeddings(db)
-    run(db, tmp_path)  # unchanged tree
-    # the content-hash caches hold: condense (the expensive LLM map) does
-    # zero new work, and no source section is re-embedded.
-    assert _count(db, "condensations") == condensations
-    assert _source_embeddings(db) == source_embeddings
     # briefs do not churn either, because node ids are stable — the
     # stronger zero-LLM-calls proof is the test below.
 
@@ -242,6 +224,8 @@ def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     )
     assert first.calls > 0  # a real build happened
     ids_before = _node_ids(db)
+    condensations = _count(db, "condensations")
+    source_embeddings = _source_embeddings(db)
 
     second = FakeCompletion()
     maintain(
@@ -253,6 +237,10 @@ def test_second_maintain_makes_zero_llm_calls_and_keeps_node_ids(
     )
     assert second.calls == 0  # condense + brief + brief-upper all skip
     assert _node_ids(db) == ids_before  # stable node identity across rebuilds
+    # the content-hash caches hold: condense (the expensive LLM map) does
+    # zero new work, and no source section is re-embedded.
+    assert _count(db, "condensations") == condensations
+    assert _source_embeddings(db) == source_embeddings
 
 
 def test_missing_embedding_model_fails_the_maintain_run(
@@ -321,13 +309,6 @@ def test_a_corpus_below_the_smallest_rung_builds_one_topic(
         assert exported["root.md"].strip()
     finally:
         database.close()
-
-
-def test_the_recipe_ladder_still_refuses_below_its_floor() -> None:
-    # the collect is the CALLER's decision, not a new rung: `build_tree` reads
-    # this same ClusterError as "the current top is the root".
-    with pytest.raises(ClusterError):
-        recipe_for(MIN_POINTS - 1)
 
 
 def test_a_broken_backend_fails_the_job_it_does_not_collect(

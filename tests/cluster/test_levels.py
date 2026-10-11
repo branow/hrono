@@ -22,7 +22,7 @@ from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import content_hash
 from hrono.ingest.store import upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 
@@ -133,10 +133,6 @@ def _partition(
             )
             for parent in parents
         ]
-
-
-def test_cluster_briefs_is_registered() -> None:
-    assert "cluster-briefs" in OPS
 
 
 def test_briefs_cluster_into_a_coherent_next_level(

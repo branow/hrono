@@ -125,23 +125,6 @@ def test_an_unknown_op_says_which_op(db: Database) -> None:
     assert row["error"] == "unknown op: no-such-op"
 
 
-def test_hronos_own_wording_survives(db: Database) -> None:
-    # the other side of the rule: an error raised from hrono's own code was
-    # written for a reader, and hiding it behind "the job failed" would cost
-    # the operator every actionable message the system has (a missing model,
-    # an unreachable source) to protect them from sqlite's phrasing.
-    from hrono.ingest.sync import SyncError
-
-    def op(job: Job, context: JobContext) -> None:
-        raise SyncError("no text model is registered for this tree")
-
-    row = _run(db, "ours", op)
-
-    assert row["error_code"] == "sync-error"  # its own code
-    assert row["error"] == "no text model is registered for this tree"
-    assert json.loads(row["error_details"]) == {"type": "SyncError"}
-
-
 def test_an_op_raising_an_app_error_keeps_its_own_code(db: Database) -> None:
     # the other half: an error that already IS ours passes through intact,
     # message and details included, so a client can act on the distinction.

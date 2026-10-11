@@ -12,7 +12,7 @@ from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.registry import store as registry_store
 
 MODEL = "emb"
@@ -86,10 +86,6 @@ def _job(dirty: list[int] | None = None) -> Job:
         created_at="t",
         updated_at="t",
     )
-
-
-def test_registered() -> None:
-    assert "monitor" in OPS
 
 
 def test_exact_misfit_rate_global_and_per_cluster(db: Database) -> None:

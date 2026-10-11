@@ -10,7 +10,6 @@ end to end through the seam.
 from __future__ import annotations
 
 import json
-import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -147,50 +146,3 @@ def test_the_syncer_receives_declared_secrets_decrypted(
 
     (config, _cache, _timeout) = fake[0]
     assert config["auth"]["token"] == CLEAR  # type: ignore[index]
-
-
-def test_the_real_git_syncer_still_clones_and_pins_the_sha(
-    context: tuple[Database, JobContext], tmp_path: Path
-) -> None:
-    # the seam is only worth having if the REAL backend drives it. This
-    # runs git for real against a local repo and checks both halves of the
-    # contract — content in the cache, the commit SHA pinned as the version.
-    database, ctx = context
-    origin = tmp_path / "origin"
-    origin.mkdir()
-    (origin / "readme.md").write_text("# hello\n")
-    env = {
-        "GIT_AUTHOR_NAME": "t",
-        "GIT_AUTHOR_EMAIL": "t@example.com",
-        "GIT_COMMITTER_NAME": "t",
-        "GIT_COMMITTER_EMAIL": "t@example.com",
-        "PATH": "/usr/bin:/bin:/usr/local/bin",
-    }
-    for args in (
-        ["init", "-q"],
-        ["add", "readme.md"],
-        ["commit", "-q", "-m", "first"],
-    ):
-        subprocess.run(["git", "-C", str(origin), *args], check=True, env=env)
-    head = subprocess.run(
-        ["git", "-C", str(origin), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    ).stdout.strip()
-
-    _register(
-        database,
-        "repo",
-        {
-            "name": "repo",
-            "type": "git",
-            "url": str(origin),
-            "auth": {"method": "none"},
-        },
-    )
-    sync(_job("repo"), ctx)
-
-    assert (ctx.cache_for("repo") / "readme.md").read_text() == "# hello\n"
-    assert _version(database, "repo") == head

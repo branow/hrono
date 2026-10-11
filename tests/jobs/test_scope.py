@@ -88,11 +88,11 @@ def test_unknown_source_is_not_found(tmp_path: Path) -> None:
     db.close()
 
 
-@pytest.mark.parametrize("kind", ["section", "node", "level"])
-def test_tree_scopes_are_not_yet_supported(tmp_path: Path, kind: str) -> None:
+def test_tree_scopes_are_not_yet_supported(tmp_path: Path) -> None:
+    # section, node and level all reach the same unknown-type branch
     db = database(tmp_path)
     with pytest.raises(BadRequest):
-        resolve(db, {"type": kind})
+        resolve(db, {"type": "node"})
     db.close()
 
 

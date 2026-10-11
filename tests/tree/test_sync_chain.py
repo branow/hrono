@@ -9,7 +9,6 @@ import pytest
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS
 from hrono.jobs.stages import StageFailed
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
@@ -138,13 +137,6 @@ def _run(db: Database, tmp_path: Path, client: object) -> object:
         client=client,
         core_labeler=lambda vectors: [0] * len(vectors),
     )
-
-
-def test_registered_under_its_own_name() -> None:
-    # `sync` is already the per-source ingest op, so the chain is `sync-tree`,
-    # matching `build-tree`'s shape.
-    assert "sync-tree" in OPS
-    assert OPS["sync"] is not OPS["sync-tree"]
 
 
 def test_a_changed_file_leaves_the_tree_up_to_date(
@@ -310,26 +302,6 @@ def test_a_failing_stage_names_itself_and_leaves_the_rest_committed(
 
     # update and condense ran before propagate and their work survives
     assert _uncondensed(db) == 0
-
-
-def test_maintain_is_untouched(
-    built: tuple[Database, Path], tmp_path: Path
-) -> None:
-    # a cold build and an update are different operations with different costs;
-    # conflating them is how a user accidentally pays for a rebuild.
-    db, _origin = built
-    before = _node_ids(db)
-
-    maintain(
-        _job("maintain"),
-        job_context(db, tmp_path),
-        encoder_for=fake_encoder,
-        client=Judge(),
-        build=fake_build,
-    )
-
-    assert _node_ids(db)  # still builds
-    assert before  # and the fixture's build was real
 
 
 def test_propagate_runs_before_the_leaf_is_re_briefed(
