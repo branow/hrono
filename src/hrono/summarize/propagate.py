@@ -24,6 +24,7 @@ freshness). Every judged topic and every propagate/skip decision is written to
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import string
 from collections.abc import Mapping, Sequence
@@ -55,7 +56,7 @@ _JUDGE_MAX_TOKENS = 16  # a verdict is one word; prose replies stay cheap
 @dataclass(frozen=True)
 class _Topic:
     node_id: int
-    source: str  # the leaf's new content (member condensations)
+    source: str  # the change: condensations added or changed, and removed
     summary: str  # its stored brief text
     signature: str  # the member set being judged (the re-run marker)
 
@@ -132,11 +133,70 @@ def _changed_leaves(
             continue
         if signature == brief["judged_signature"]:
             continue  # already judged at this exact member set
-        source = "\n\n".join(
-            briefs.member_condensations(conn, node_id, model_name)
-        )
+        source = _change(conn, node_id, model_name, brief["members"])
         topics.append(_Topic(node_id, source, brief["text"], signature))
     return tuple(topics)
+
+
+def _change(
+    conn: sqlite3.Connection, node_id: int, model_name: str, stored: object
+) -> str:
+    """What changed in a leaf since its brief, as the judge reads it.
+
+    The research judge was shown the summary and the CHANGE, not the whole
+    topic: asked about everything, a judge re-reviews the summary instead of
+    the edit. A member is a file version (its URI), so a changed file reads
+    as its new version added and its old one removed. A brief that recorded
+    no members falls back to the whole current content.
+    """
+    now = briefs.reduce_input(conn, node_id, model_name)
+    before = set(json.loads(stored)) if isinstance(stored, str) else set()
+    if not before:
+        return now.rendered
+    current = set(now.uris)
+    added = [
+        (label, text)
+        for label, text, uri in zip(
+            now.labels,
+            now.texts,
+            _row_uris(conn, node_id, model_name),
+            strict=True,
+        )
+        if uri not in before
+    ]
+    gone = sorted(before - current)
+    removed = conn.execute(
+        "SELECT s.path AS path, d.text AS text FROM sections s "
+        "JOIN condensations d ON d.content_hash = s.content_hash "
+        "AND d.model_name = ? "
+        "WHERE s.uri IN (SELECT value FROM json_each(?)) ORDER BY s.uri, s.id",
+        (model_name, json.dumps(gone)),
+    ).fetchall()
+    parts = []
+    if added:
+        parts.append("ADDED OR CHANGED:\n\n" + briefs.labeled(added))
+    if removed:
+        parts.append(
+            "REMOVED:\n\n"
+            + briefs.labeled((row["path"], row["text"]) for row in removed)
+        )
+    return "\n\n".join(parts) or now.rendered
+
+
+def _row_uris(
+    conn: sqlite3.Connection, node_id: int, model_name: str
+) -> list[str]:
+    """Each reduce-input row's URI, in the order ``reduce_input`` reads them."""
+    return [
+        row["uri"]
+        for row in conn.execute(
+            "SELECT s.uri AS uri FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id "
+            "JOIN condensations d ON d.content_hash = s.content_hash "
+            "AND d.model_name = ? WHERE m.node_id = ? ORDER BY s.uri, s.id",
+            (model_name, node_id),
+        )
+    ]
 
 
 def _judge(

@@ -21,11 +21,8 @@ then to the lower levels, so the answer is a function of the tree alone.
 An entry is a title (80 chars), a one-line summary (160) and a link, about 250
 bytes at the most; 40 of them are 10 KB, the size of one SECTION — the
 traversal unit the whole design is sized on (`ingest.split.constants`). So an
-index page costs an agent no more to read than one section does. The renderer
-adds a line naming up to three source files to each entry of a page below
-the root (about 150 bytes each), and only as many per entry as keep the page
-within that one SECTION: a page at full WIDTH carries none. The root carries
-none at all. When no selection fits, the hop limit holds and the
+index page costs an agent no more to read than one section does. When no
+selection fits, the hop limit holds and the
 shape says so: ``Shape.within_budget`` is False.
 
 A stored edge that JUMPS a level (an orphan attached straight to a higher

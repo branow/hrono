@@ -1,7 +1,6 @@
 """Render the collapsed tree to markdown files."""
 
 import json
-import re
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -9,7 +8,6 @@ import pytest
 
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
-from hrono.export import render as render_module
 from hrono.export.collapse import StoredTree, collapse
 from hrono.export.render import render
 from hrono.export.store import load
@@ -138,7 +136,7 @@ def test_leaf_lists_its_sources_and_carries_caution(
     alpha = files[f"alpha-topic-{ids['n0']}/brief.md"]
     assert "Caution: none." in alpha  # the stored Caution rendered as-is
     sources = alpha.split("## Sources\n", 1)[1].split()
-    assert " ".join(sources) == "- `a.py` — repo @ v1"
+    assert " ".join(sources) == "repo @ v1: - `a.py`"
 
 
 def test_no_section_copy_is_written(
@@ -379,7 +377,7 @@ def test_a_leaf_lists_each_source_file_once(tmp_path: object) -> None:
     sources = [
         line for line in leaf.split("## Sources\n", 1)[1].splitlines() if line
     ]
-    assert sources == ["- `big/x.py` — repo @ v1", "- `big/y.py` — repo @ v1"]
+    assert sources == ["repo @ v1:", "- `big/x.py`", "- `big/y.py`"]
 
 
 def test_a_childless_upper_node_still_skips_its_references(
@@ -638,26 +636,8 @@ def _page(node_id: int) -> str:
     return f"root-{node_id}/brief.md"
 
 
-def _entry_sources(files: dict[str, str], page: str, entry: str) -> list[str]:
-    """The source files an index entry's Sources line names on ``page``."""
-    lines = files[page].splitlines()
-    at = next(n for n, line in enumerate(lines) if entry in line)
-    following = lines[at + 1] if at + 1 < len(lines) else ""
-    if not following.startswith("  Sources: "):
-        return []
-    return re.findall(r"`([^`]+)`", following)
-
-
-def _sources_line(page: str) -> str:
-    return next(
-        line for line in page.splitlines() if line.startswith("  Sources:")
-    )
-
-
-def test_an_index_entry_names_the_source_files_beneath_it(
-    tmp_path: object,
-) -> None:
-    # an agent that has chosen a branch opens the answer in its repository
+def test_index_pages_name_no_sources(tmp_path: object) -> None:
+    # a source file is named once, on its leaf, not sampled again above it
     database, ids = _grove(
         tmp_path,
         [[["src/deep/a/x1.py", "src/deep/a/x2.py"]], [["b/y1.py"]]],
@@ -674,81 +654,13 @@ def test_an_index_entry_names_the_source_files_beneath_it(
         files = _files(database, hops=4)
     finally:
         database.close()
-    page = _page(ids["root"])
-    assert _entry_sources(files, page, "[Mid A]") == [
-        "src/deep/a/x1.py",
-        "src/deep/a/x2.py",
-    ]  # the repo-relative path, as a plain name, not a link
-    assert _entry_sources(files, page, "[Mid B]") == ["b/y1.py"]
-    assert "](src/" not in files[page]
-    mid = f"root-{ids['root']}/mid-a-{ids['m0']}/brief.md"
-    assert len(_entry_sources(files, mid, "[Leaf A]")) == 2
-    assert "more" not in files[page]
-
-
-def test_the_root_page_names_no_sources(tmp_path: object) -> None:
-    # every turn of every session reads root.md, and naming sources there
-    # cost the grep arm more than it saved the walk arm
-    database, ids = _grove(
-        tmp_path,
-        [[["a/x1.py"], ["b/y1.py"]]],
-        {
-            "root": "# Root\n\nAll.",
-            "m0": "# Mid\n\nThings.",
-            "l0.0": "# Leaf A\n\nOne.",
-            "l0.1": "# Leaf B\n\nTwo.",
-        },
-        apex=True,
-    )
-    try:
-        files = _files(database, hops=4)
-    finally:
-        database.close()
-    assert "[Root](" in files["root.md"]  # it still lists its children
-    assert "Sources:" not in files["root.md"]
-    assert "Sources:" in files[_page(ids["root"])]  # a page below does
-
-
-def test_an_entry_over_many_sections_samples_each_leaf_and_counts_the_rest(
-    tmp_path: object,
-) -> None:
-    database, ids = _grove(
-        tmp_path,
-        [[["p/a1.py", "p/a2.py", "p/a3.py"], ["q/b1.py", "q/b2.py"]]],
-        {
-            "root": "# Root\n\nAll.",
-            "m0": "# Mid\n\nThings.",
-            "l0.0": "# Leaf A\n\nOne.",
-            "l0.1": "# Leaf B\n\nTwo.",
-        },
-        apex=True,
-    )
-    try:
-        files = _files(database, hops=4)
-    finally:
-        database.close()
-    line = _sources_line(files[_page(ids["root"])])
-    # taken in turn from each leaf, so the second is not crowded out
-    assert line == "  Sources: `p/a1.py`, `q/b1.py`, `p/a2.py` and 2 more"
-
-
-def test_a_file_split_into_sections_is_named_once(tmp_path: object) -> None:
-    database, ids = _grove(
-        tmp_path,
-        [[["big/x.py", "big/x.py", "big/y.py"]]],
-        {
-            "root": "# Root\n\nAll.",
-            "m0": "# Mid\n\nThings.",
-            "l0.0": "# Leaf\n\nOne.",
-        },
-        apex=True,
-    )
-    try:
-        files = _files(database, hops=4)
-    finally:
-        database.close()
-    line = _sources_line(files[_page(ids["root"])])
-    assert line == "  Sources: `big/x.py`, `big/y.py`"
+    index = [page for page in files.values() if "## Children" in page]
+    leaves = [page for page in files.values() if "## Sources" in page]
+    assert index and leaves
+    assert not any("Sources" in page or "`" in page for page in index)
+    named = "".join(leaves)
+    for path in ("src/deep/a/x1.py", "src/deep/a/x2.py", "b/y1.py"):
+        assert named.count(f"`{path}`") == 1
 
 
 def test_a_page_links_its_children_from_its_own_directory(
@@ -886,121 +798,3 @@ def test_an_index_page_at_full_width_stays_within_one_section(
     root = files[_page(ids["root"])]
     assert root.count("](") >= middles
     assert len(root.encode()) <= section_budget(Path("index.md"))
-
-
-def test_a_narrow_index_page_names_as_many_sources_as_allowed(
-    tmp_path: object,
-) -> None:
-    database, ids = _grove(
-        tmp_path,
-        [[["a/x.py", "a/y.py", "a/z.py", "a/w.py"]], [["b/q.py"]]],
-        {
-            "root": "# Root\n\nAll.",
-            "m0": "# Mid A\n\nAlpha.",
-            "m1": "# Mid B\n\nBeta.",
-            "l0.0": "# Leaf A\n\nOne.",
-            "l1.0": "# Leaf B\n\nTwo.",
-        },
-        apex=True,
-    )
-    try:
-        files = _files(database, hops=4)
-    finally:
-        database.close()
-    assert _sources_line(files[_page(ids["root"])]) == (
-        "  Sources: `a/x.py`, `a/y.py`, `a/z.py` and 1 more"
-    )
-
-
-def _sources_at_budget(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    leads: int,
-    budget: int,
-    note: str | None = None,
-) -> tuple[int, int]:
-    """(Mid A's source names, its page's bytes) at the ladder and budget."""
-    tmp_path.mkdir()
-    database, ids = _grove(
-        tmp_path,
-        [[["a/x.py", "a/y.py", "a/z.py", "a/w.py"]], [["b/q.py"]]],
-        {
-            "root": "# Root\n\nAll.",
-            "m0": "# Mid A\n\nAlpha.",
-            "m1": "# Mid B\n\nBeta.",
-            "l0.0": "# Leaf A\n\nOne.",
-            "l1.0": "# Leaf B\n\nTwo.",
-        },
-        apex=True,
-    )
-    monkeypatch.setattr(render_module, "_LEADS", leads)
-    monkeypatch.setattr(render_module, "_PAGE_BYTES", budget)
-    try:
-        files = _files(database, {ids["root"]: note} if note else None, hops=4)
-    finally:
-        database.close()
-    return (
-        files[_page(ids["root"])]
-        .split("[Mid A]")[1]
-        .split("[Mid B]")[0]
-        .count("`")
-        // 2,
-        len(files[_page(ids["root"])].encode()),
-    )
-
-
-@pytest.mark.parametrize("fitting", [3, 2, 1])
-def test_an_entry_takes_the_most_source_names_the_budget_allows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fitting: int
-) -> None:
-    # the ladder 3, 2, 1, 0 stops at the first step that fits, and the
-    # bound is the page as written, not a page a few bytes shorter
-    _, size = _sources_at_budget(
-        tmp_path / "a", monkeypatch, leads=fitting, budget=10**9
-    )
-    named, _ = _sources_at_budget(
-        tmp_path / "b", monkeypatch, leads=3, budget=size
-    )
-    assert named == fitting  # a page of exactly this size fits
-    named, written = _sources_at_budget(
-        tmp_path / "c", monkeypatch, leads=3, budget=size - 1
-    )
-    assert named == fitting - 1  # one byte less drops a step
-    assert written <= size - 1
-
-
-def test_a_human_note_counts_against_the_sources_budget(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # the note is on the page, so the source names leave room for it
-    note = "kept by hand " * 20
-    _, size = _sources_at_budget(
-        tmp_path / "a", monkeypatch, leads=3, budget=10**9, note=note
-    )
-    named, written = _sources_at_budget(
-        tmp_path / "b", monkeypatch, leads=3, budget=size, note=note
-    )
-    assert (named, written) == (3, size)  # exactly fits, note in
-    named, written = _sources_at_budget(
-        tmp_path / "c", monkeypatch, leads=3, budget=size - 1, note=note
-    )
-    assert named == 2
-    assert written <= size - 1
-    assert note.strip() in _note_page(tmp_path / "d", monkeypatch, note)
-
-
-def _note_page(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, note: str
-) -> str:
-    database, ids = _grove(
-        tmp_path,
-        [[["a/x.py"]]],
-        {"root": "# Root\n\nAll.", "m0": "# Mid\n\nA.", "l0.0": "# L\n\nB."},
-        apex=True,
-    )
-    try:
-        files = _files(database, {ids["root"]: note}, hops=4)
-        return files[_page(ids["root"])]
-    finally:
-        database.close()

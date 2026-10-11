@@ -168,9 +168,13 @@ def test_prompt_template_is_rendered_over_the_section_content(
 ) -> None:
     client = FakeCompletion()
     condense(job(), JobContext(db), client=client)
-    # the seeded template's {content} was replaced with the real section body,
-    # and no summarisation vocabulary was hardcoded — it came from the template.
-    assert any("Condense this: def a(): return 1" in c for c in client.contents)
+    # the seeded template's {content} was replaced with the section's file
+    # and body, and no summarisation vocabulary was hardcoded — it came from
+    # the template.
+    assert any(
+        "Condense this: File: a.py\n\ndef a(): return 1" in c
+        for c in client.contents
+    )
     assert all("{content}" not in c for c in client.contents)
 
 
