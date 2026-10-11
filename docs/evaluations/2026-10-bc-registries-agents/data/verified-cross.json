@@ -1,0 +1,1058 @@
+{
+ "kept": [
+  {
+   "kind": "flow",
+   "question": "When a business user files a fee-bearing filing (say an annual report) from the business dashboard, what happens end to end, from submission through fee calculation, online payment and confirmation, until the filing is actually applied to the business record?",
+   "facts": [
+    {
+     "fact": "The UI view saves the filing to legal-api. In the v2 saving_filings endpoint, ListFilingResource.complete_filing runs for non-draft filings. It calls get_filing_types, which turns each filing into pay fee codes using the per-legal-type 'codes' map in Filing.FILINGS (for example annualReport becomes BCANN or OTANN).",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "ListFilingResource.create_invoice POSTs businessInfo, filingInfo.filingTypes and optional accountInfo (routing slip, BCOL or DAT number for staff) to PAYMENT_SVC_URL using the user's token. It stores the returned invoice id as filing.payment_token and returns isPaymentActionRequired, which is merged into the filing header.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/config.py"
+     ]
+    },
+    {
+     "fact": "In pay-api, post_invoice first runs check_auth with contains_role=make_payment. PaymentService.create_invoice prices each filing type through _calculate_fees and FeeSchedule.find_by_corp_type_and_filing_type, applying priority, futureEffective and waiveFees. PaymentService itself builds the Invoice and PaymentLineItem rows. It then hands them to the payment-method-specific PaymentSystemService (chosen by PaymentSystemFactory), whose create_invoice registers the invoice in the external payment system.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/auth.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "Invoice._add_dynamic_fields sets is_payment_action_required only when the invoice is CREATED and the payment method is DIRECT_PAY, CC or ONLINE_BANKING. In that case the filing UI navigates to auth-web's '/makepayment/:paymentId/:redirectUrl' route instead of going back to the dashboard.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/invoice.py",
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "sbc-auth/auth-web/src/routes/router.ts"
+     ]
+    },
+    {
+     "fact": "After the payment provider returns, auth-web's PaymentReturnView PATCHes pay-api 'payment-requests/{id}/transactions/{txId}'. PaymentTransaction.update_transaction then calls publish_status, which sends a PAYMENT cloud event (payload from create_event_payload: id, statusCode, filingIdentifier, corpTypeCode) to the topic chosen by get_topic_for_corp_type (BUSINESS_PAY_TOPIC for BUSINESS products).",
+     "files": [
+      "sbc-auth/auth-web/src/views/pay/PaymentReturnView.vue",
+      "sbc-auth/auth-web/src/services/payment.services.ts",
+      "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+      "sbc-pay/pay-api/src/pay_api/utils/util.py",
+      "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py"
+     ]
+    },
+    {
+     "fact": "PAD, BCOL, EFT, EJV and internal pay services publish the same COMPLETED event through BaseService._release_payment. Online banking is different: it is a redirect (action-required) method, and only its apply_credit path calls _release_payment.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/bcol_service.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The lear business-pay worker accepts 'bc.registry.payment' cloud events with status COMPLETED and looks up the filing by payment token. It sets payment_completion_date and PAID status, then publishes {'filing': {'id': ...}} to the filer subject when the effective date has arrived and an email message to the emailer subject. The older NATS-based entity-pay worker does the same.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+     ]
+    },
+    {
+     "fact": "entity-filer's process_filing applies the filing, marks it processed and then publishes a business event on NATS ('entity.events') and on GCP BUSINESS_EVENTS_TOPIC. Future-effective filings are pushed to the filer later by the future-effective-filings job, which polls legal-api '/internal/filings/future_effective'.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/config.py",
+      "lear/jobs/future-effective-filings/file_future_effective.py"
+     ]
+    }
+   ],
+   "qid": "cross-0",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "In pay-api, post_invoice first runs check_auth with contains_role=make_payment. PaymentService.create_invoice prices each filing type through _calculate_fees and FeeSchedule.find_by_corp_type_and_filing_type, applying priority, futureEffective and waiveFees. PaymentService itself builds the Invoice and PaymentLineItem rows. It then hands them to the payment-method-specific PaymentSystemService (chosen by PaymentSystemFactory), whose create_invoice registers the invoice in the external payment system."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "PAD, BCOL, EFT, EJV and internal pay services publish the same COMPLETED event through BaseService._release_payment. Online banking is different: it is a redirect (action-required) method, and only its apply_credit path calls _release_payment."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does a brand-new business (incorporation, registration, amalgamation or continuation) become linked to the user's account in the account/auth system, starting from the temporary draft and ending once the real business number exists?",
+   "facts": [
+    {
+     "fact": "The legal-api v2 businesses POST (post_businesses) accepts only CoreFiling.NEW_BUSINESS_FILING_TYPES. It calls RegistrationBootstrapService.create_bootstrap, which saves a RegistrationBootstrap with a random 'T'-prefixed temporary identifier containing at least one digit, as auth-api requires.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py",
+      "lear/legal-api/src/legal_api/core/filing.py"
+     ]
+    },
+    {
+     "fact": "register_bootstrap calls AccountService.create_affiliation with a service-account token. That POSTs an entity to auth '/entities' using the filing's temporaryCorpTypeCode (TMP, RTMP, ATMP or CTMP from Filing.FILINGS) and then POSTs to '/orgs/{account}/affiliations'. If this fails, it calls delete_affiliation.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/bootstrap.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "In auth-api, Affiliation.create_affiliation checks the org and entity, enforces passcode or firm-party checks through is_authorized, and saves the AffiliationModel. It publishes an activity-log event only when the corp type is not a temporary type (TMP, RTMP, ATMP or CTMP).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py"
+     ]
+    },
+    {
+     "fact": "Once the filing is processed, entity-filer's worker calls business_profile.update_affiliation for new-business filings except conversion. That function affiliates the real identifier to the bootstrap's account, passing entityDetails (bootstrapIdentifier, identifier, nrNumber) and, for registrations, a firm passcode. It then renames the bootstrap entity in auth via AccountService.update_entity.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+     ]
+    },
+    {
+     "fact": "When auth-api receives entityDetails on the affiliation POST, it calls Affiliation.fix_stale_affiliations (system callers only). This moves other orgs' affiliations from the NR entity to the new business entity.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "Deleting a draft temporary-registration filing in legal-api calls RegistrationBootstrapService.deregister_bootstrap and delete_bootstrap. These remove the auth affiliation and entity and the local bootstrap row.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py"
+     ]
+    },
+    {
+     "fact": "Separately, auth-queue's process_name_events auto-affiliates DRAFT name requests. It looks up the paying account through pay-api '/payment-requests?businessIdentifier=' and creates the Affiliation directly, unless the org is a GOVM account.",
+     "files": [
+      "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+     ]
+    }
+   ],
+   "qid": "cross-1",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How are a user's permissions on a specific business (who can view it, edit/file for it, or pay for it) modeled, and how do the legal, payment and UI layers each enforce them?",
+   "facts": [
+    {
+     "fact": "Permitted actions such as 'edit', 'view', 'make_payment' and 'generate_invoice' are rows in auth-api's permissions table, keyed by membership_type_code (ADMIN, COORDINATOR, USER, SYSTEM) and org_status_code. They are seeded by an Alembic migration that also defines authorizations_view, which joins membership, org, affiliation and entity.",
+     "files": [
+      "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py",
+      "sbc-auth/auth-api/src/auth_api/models/permissions.py",
+      "sbc-auth/auth-api/src/auth_api/models/views/authorization.py"
+     ]
+    },
+    {
+     "fact": "auth-api's GET '/entities/{id}/authorizations' (get_entity_authorizations) calls Authorization.get_user_authorizations_for_entity. Staff get their token roles, system accounts are matched by the product_code claim, and other users are matched through affiliation and membership. Roles come from PermissionsService.get_permissions_for_membership.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+     ]
+    },
+    {
+     "fact": "legal-api's authz.authorized() returns true immediately for staff, system and colin JWT roles, and for view-only access by account_identity or CA_SEARCH. Basic and public users go through _call_auth_api('entities/{id}/authorizations') and must hold every requested action. 'add_comment' is staff-only.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py"
+     ]
+    },
+    {
+     "fact": "legal-api endpoints request specific actions: filing save, delete and payment-cancel use action=['edit'] (save also checks is_allowed for state and legal type), and read endpoints such as directors, addresses, parties and share classes use ['view'].",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_directors.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_parties.py"
+     ]
+    },
+    {
+     "fact": "pay-api's check_auth calls auth-api 'orgs/{account}/authorizations?expanded=true' or 'entities/{id}/authorizations?expanded=true' and aborts with 403 if the role is missing. Invoice creation requires contains_role='make_payment'. System accounts with the editor role are authorized. The auth call is skipped only for system (service-account) users whose token product_code is not BUSINESS, not for every non-BUSINESS product.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/auth.py",
+      "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+      "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "In business-filings-ui, App.vue's fetchData calls AuthServices.fetchAuthorizations ('entities/{id}/authorizations') and stores the roles with setAuthRoles, showing an auth error dialog if there are none. rootStore exposes isRoleEdit and isRoleView from those roles.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/auth-services.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    }
+   ],
+   "qid": "cross-2",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "pay-api's check_auth calls auth-api 'orgs/{account}/authorizations?expanded=true' or 'entities/{id}/authorizations?expanded=true' and aborts with 403 if the role is missing. Invoice creation requires contains_role='make_payment'. System accounts with the editor role are authorized. The auth call is skipped only for system (service-account) users whose token product_code is not BUSINESS, not for every non-BUSINESS product."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How do customer email notifications about filings work across the services: what triggers them, where do recipients and receipts come from, and what actually sends the email?",
+   "facts": [
+    {
+     "fact": "Filing email requests share one message shape, {'email': {'filingId', 'type', 'option'}}, built by entity_queue_common.messages.create_email_msg or publish_email_message and by business-pay's create_email_msg (option 'PAID'). They are published to the emailer subject (default 'entity.email').",
+     "files": [
+      "lear/queue_services/common/src/entity_queue_common/messages.py",
+      "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+      "lear/queue_services/business-pay/src/business_pay/config.py"
+     ]
+    },
+    {
+     "fact": "These messages are produced at several lifecycle points: business-pay or entity-pay on payment (PAID), entity-filer after processing (with filing status, plus an 'mras' message for incorporation, amalgamation and continuation), and legal-api's staff review save_review (with the review outcome status).",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+     ]
+    },
+    {
+     "fact": "The entity-emailer worker's process_email dispatches by cloud-event type ('bc.registry.names.request', 'bc.registry.affiliation', 'bc.registry.bnmove', 'bc.registry.dissolution') or by the filing type and option inside 'email', and passes each to a specific email_processors module.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+     ]
+    },
+    {
+     "fact": "Email processors get recipients and links from auth-api: get_recipient_from_auth reads the business contact from AUTH_URL '/entities/{id}', get_user_email_from_auth reads '/users/{username}', and get_entity_dashboard_url resolves the account through '/orgs?affiliation=' for temporary identifiers.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/config.py"
+     ]
+    },
+    {
+     "fact": "Processors that attach receipts fetch them from pay-api at PAY_API_URL '/{payment_token}/receipts' (for example the dissolution, registration and restoration notifications).",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/dissolution_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/registration_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/restoration_notification.py"
+     ]
+    },
+    {
+     "fact": "send_email POSTs the composed email to NOTIFY_API_URL with a service-account token from AccountService.get_bearer_token, and raises EmailException on any non-200 response so the message is retried.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py"
+     ]
+    },
+    {
+     "fact": "The business contact email that the emailer later reads is written into auth-api by entity-filer's business_profile.update_business_profile. It POSTs contactPoint to ACCOUNT_SVC_ENTITY_URL '/{identifier}/contacts' and falls back to a PUT when the response says DATA_ALREADY_EXISTS.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+      "lear/queue_services/entity-filer/src/entity_filer/config.py"
+     ]
+    }
+   ],
+   "qid": "cross-3",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want amalgamation applications, like continuations today, to go to registry staff for review after they are paid, instead of being applied right away. Where is this decided, and what else in the pipeline would the change touch?",
+   "facts": [
+    {
+     "fact": "The post-payment branching is hardcoded in business-pay's worker: staff_review_required = ['continuationIn'] sends matching filings to create_staff_review, which creates a Review in AWAITING_REVIEW and sets the filing to AWAITING_REVIEW. All other filings go to publish_to_filer. The new filing type must be added to that list.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/database/review.py"
+     ]
+    },
+    {
+     "fact": "legal-api's Filing.FILINGS flags continuationIn with 'staffApprovalRequired': True, but no code reads this flag; review routing is decided only by business-pay's hardcoded list. Adding the flag to amalgamationApplication would be for consistency only and would have no functional effect.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "create_staff_review reads nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' from the filing JSON. Amalgamation filings have no foreignJurisdiction, so that field would be empty.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+     ]
+    },
+    {
+     "fact": "Staff decisions go through legal-api's admin save_review (POST '/reviews/{id}', staff only). It records a ReviewResult, maps the decision to a filing status, publishes an email message, and publishes {'filing': {'id'}} to NATS_FILER_SUBJECT only when the decision is APPROVED and the effective date has passed.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+     ]
+    },
+    {
+     "fact": "When a submitter resubmits after CHANGE_REQUESTED, saving_filings calls resubmit_filing_for_review instead of complete_filing, so no new invoice is created. That path also has to work for amalgamations.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "The older NATS entity-pay worker has no review branch: it publishes every completed payment straight to the filer. If that worker is still deployed it would bypass review, so it needs the same check.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+     ]
+    },
+    {
+     "fact": "The business list in auth reads draftStatus and draftType from legal-api's businesses search. Paid amalgamations would now show AWAITING_REVIEW or CHANGE_REQUESTED statuses there, and the entity-emailer needs templates for those review status options.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+     ]
+    }
+   ],
+   "qid": "cross-4",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "legal-api's Filing.FILINGS flags continuationIn with 'staffApprovalRequired': True, but no code reads this flag; review routing is decided only by business-pay's hardcoded list. Adding the flag to amalgamationApplication would be for consistency only and would have no functional effect."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "Product wants the list of businesses on a user's account page (in the account/auth app) to show an extra piece of business information that only the legal registry knows. Where does that list's data come from, and what would need to change on each side?",
+   "facts": [
+    {
+     "fact": "auth-api's org affiliations GET with new=true loads AffiliationModel.find_affiliations_by_org_id and runs AffiliationService.get_affiliation_details, so the extra detail is fetched live rather than stored in auth.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "get_affiliation_details sends each identifier to LEAR_AFFILIATION_DETAILS_URL (legal-api v2 '/businesses/search') or, for NR entities, to NAMEX_AFFILIATION_DETAILS_URL. It POSTs {'identifiers': [...]} in parallel using an ENTITY_SVC_CLIENT_ID service-account token.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/config.py"
+     ]
+    },
+    {
+     "fact": "On the legal side, search_businesses (SYSTEM role only) returns {'businessEntities': [business.json(slim=True), ...], 'draftEntities': [...]}. Drafts are temporary-registration filings with no business_id. A new field must be added to Business.json(slim=True) or to the draft dict built there.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ]
+    },
+    {
+     "fact": "auth-api merges the responses in Affiliation._group_details, which reads the 'businessEntities' and 'draftEntities' keys, and in _combine_nrs, which pairs drafts with NRs via 'nrNumber' and adjusts draftType for amalgamation NRs. A renamed or restructured key would need matching changes there.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "The slim business JSON is also what auth sees for SP and GP firms, where search_businesses adds alternateNames. Expensive per-business lookups are deliberately limited to firms there for performance, so a new field should follow that pattern.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py"
+     ]
+    },
+    {
+     "fact": "Basic data that auth itself stores (name, corp type, state) is pushed from lear to auth separately. After filings such as alteration, dissolution, put back on or restoration, entity-filer calls business_profile.update_entity, which PATCHes '/entities/{id}', and auth-api's EntityService.update_entity maps 'state' to the entity status. Data that auth should store must use this path, not the live search.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+      "sbc-auth/auth-api/src/auth_api/services/entity.py",
+      "sbc-auth/auth-api/src/auth_api/schemas/schemas/entity.json"
+     ]
+    }
+   ],
+   "qid": "cross-5",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ],
+ "all": [
+  {
+   "kind": "flow",
+   "question": "When a business user files a fee-bearing filing (say an annual report) from the business dashboard, what happens end to end, from submission through fee calculation, online payment and confirmation, until the filing is actually applied to the business record?",
+   "facts": [
+    {
+     "fact": "The UI view saves the filing to legal-api. In the v2 saving_filings endpoint, ListFilingResource.complete_filing runs for non-draft filings. It calls get_filing_types, which turns each filing into pay fee codes using the per-legal-type 'codes' map in Filing.FILINGS (for example annualReport becomes BCANN or OTANN).",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "ListFilingResource.create_invoice POSTs businessInfo, filingInfo.filingTypes and optional accountInfo (routing slip, BCOL or DAT number for staff) to PAYMENT_SVC_URL using the user's token. It stores the returned invoice id as filing.payment_token and returns isPaymentActionRequired, which is merged into the filing header.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/config.py"
+     ]
+    },
+    {
+     "fact": "In pay-api, post_invoice first runs check_auth with contains_role=make_payment. PaymentService.create_invoice prices each filing type through _calculate_fees and FeeSchedule.find_by_corp_type_and_filing_type, applying priority, futureEffective and waiveFees. PaymentService itself builds the Invoice and PaymentLineItem rows. It then hands them to the payment-method-specific PaymentSystemService (chosen by PaymentSystemFactory), whose create_invoice registers the invoice in the external payment system.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/auth.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "Invoice._add_dynamic_fields sets is_payment_action_required only when the invoice is CREATED and the payment method is DIRECT_PAY, CC or ONLINE_BANKING. In that case the filing UI navigates to auth-web's '/makepayment/:paymentId/:redirectUrl' route instead of going back to the dashboard.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/invoice.py",
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "sbc-auth/auth-web/src/routes/router.ts"
+     ]
+    },
+    {
+     "fact": "After the payment provider returns, auth-web's PaymentReturnView PATCHes pay-api 'payment-requests/{id}/transactions/{txId}'. PaymentTransaction.update_transaction then calls publish_status, which sends a PAYMENT cloud event (payload from create_event_payload: id, statusCode, filingIdentifier, corpTypeCode) to the topic chosen by get_topic_for_corp_type (BUSINESS_PAY_TOPIC for BUSINESS products).",
+     "files": [
+      "sbc-auth/auth-web/src/views/pay/PaymentReturnView.vue",
+      "sbc-auth/auth-web/src/services/payment.services.ts",
+      "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+      "sbc-pay/pay-api/src/pay_api/utils/util.py",
+      "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py"
+     ]
+    },
+    {
+     "fact": "PAD, BCOL, EFT, EJV and internal pay services publish the same COMPLETED event through BaseService._release_payment. Online banking is different: it is a redirect (action-required) method, and only its apply_credit path calls _release_payment.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/bcol_service.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The lear business-pay worker accepts 'bc.registry.payment' cloud events with status COMPLETED and looks up the filing by payment token. It sets payment_completion_date and PAID status, then publishes {'filing': {'id': ...}} to the filer subject when the effective date has arrived and an email message to the emailer subject. The older NATS-based entity-pay worker does the same.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+     ]
+    },
+    {
+     "fact": "entity-filer's process_filing applies the filing, marks it processed and then publishes a business event on NATS ('entity.events') and on GCP BUSINESS_EVENTS_TOPIC. Future-effective filings are pushed to the filer later by the future-effective-filings job, which polls legal-api '/internal/filings/future_effective'.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/config.py",
+      "lear/jobs/future-effective-filings/file_future_effective.py"
+     ]
+    }
+   ],
+   "qid": "cross-0",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "In pay-api, post_invoice first runs check_auth with contains_role=make_payment. PaymentService.create_invoice prices each filing type through _calculate_fees and FeeSchedule.find_by_corp_type_and_filing_type, applying priority, futureEffective and waiveFees. PaymentService itself builds the Invoice and PaymentLineItem rows. It then hands them to the payment-method-specific PaymentSystemService (chosen by PaymentSystemFactory), whose create_invoice registers the invoice in the external payment system."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "PAD, BCOL, EFT, EJV and internal pay services publish the same COMPLETED event through BaseService._release_payment. Online banking is different: it is a redirect (action-required) method, and only its apply_credit path calls _release_payment."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does a brand-new business (incorporation, registration, amalgamation or continuation) become linked to the user's account in the account/auth system, starting from the temporary draft and ending once the real business number exists?",
+   "facts": [
+    {
+     "fact": "The legal-api v2 businesses POST (post_businesses) accepts only CoreFiling.NEW_BUSINESS_FILING_TYPES. It calls RegistrationBootstrapService.create_bootstrap, which saves a RegistrationBootstrap with a random 'T'-prefixed temporary identifier containing at least one digit, as auth-api requires.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py",
+      "lear/legal-api/src/legal_api/core/filing.py"
+     ]
+    },
+    {
+     "fact": "register_bootstrap calls AccountService.create_affiliation with a service-account token. That POSTs an entity to auth '/entities' using the filing's temporaryCorpTypeCode (TMP, RTMP, ATMP or CTMP from Filing.FILINGS) and then POSTs to '/orgs/{account}/affiliations'. If this fails, it calls delete_affiliation.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/bootstrap.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "In auth-api, Affiliation.create_affiliation checks the org and entity, enforces passcode or firm-party checks through is_authorized, and saves the AffiliationModel. It publishes an activity-log event only when the corp type is not a temporary type (TMP, RTMP, ATMP or CTMP).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py"
+     ]
+    },
+    {
+     "fact": "Once the filing is processed, entity-filer's worker calls business_profile.update_affiliation for new-business filings except conversion. That function affiliates the real identifier to the bootstrap's account, passing entityDetails (bootstrapIdentifier, identifier, nrNumber) and, for registrations, a firm passcode. It then renames the bootstrap entity in auth via AccountService.update_entity.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+     ]
+    },
+    {
+     "fact": "When auth-api receives entityDetails on the affiliation POST, it calls Affiliation.fix_stale_affiliations (system callers only). This moves other orgs' affiliations from the NR entity to the new business entity.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "Deleting a draft temporary-registration filing in legal-api calls RegistrationBootstrapService.deregister_bootstrap and delete_bootstrap. These remove the auth affiliation and entity and the local bootstrap row.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py"
+     ]
+    },
+    {
+     "fact": "Separately, auth-queue's process_name_events auto-affiliates DRAFT name requests. It looks up the paying account through pay-api '/payment-requests?businessIdentifier=' and creates the Affiliation directly, unless the org is a GOVM account.",
+     "files": [
+      "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+     ]
+    }
+   ],
+   "qid": "cross-1",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How are a user's permissions on a specific business (who can view it, edit/file for it, or pay for it) modeled, and how do the legal, payment and UI layers each enforce them?",
+   "facts": [
+    {
+     "fact": "Permitted actions such as 'edit', 'view', 'make_payment' and 'generate_invoice' are rows in auth-api's permissions table, keyed by membership_type_code (ADMIN, COORDINATOR, USER, SYSTEM) and org_status_code. They are seeded by an Alembic migration that also defines authorizations_view, which joins membership, org, affiliation and entity.",
+     "files": [
+      "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py",
+      "sbc-auth/auth-api/src/auth_api/models/permissions.py",
+      "sbc-auth/auth-api/src/auth_api/models/views/authorization.py"
+     ]
+    },
+    {
+     "fact": "auth-api's GET '/entities/{id}/authorizations' (get_entity_authorizations) calls Authorization.get_user_authorizations_for_entity. Staff get their token roles, system accounts are matched by the product_code claim, and other users are matched through affiliation and membership. Roles come from PermissionsService.get_permissions_for_membership.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+     ]
+    },
+    {
+     "fact": "legal-api's authz.authorized() returns true immediately for staff, system and colin JWT roles, and for view-only access by account_identity or CA_SEARCH. Basic and public users go through _call_auth_api('entities/{id}/authorizations') and must hold every requested action. 'add_comment' is staff-only.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py"
+     ]
+    },
+    {
+     "fact": "legal-api endpoints request specific actions: filing save, delete and payment-cancel use action=['edit'] (save also checks is_allowed for state and legal type), and read endpoints such as directors, addresses, parties and share classes use ['view'].",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_directors.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_parties.py"
+     ]
+    },
+    {
+     "fact": "pay-api's check_auth calls auth-api 'orgs/{account}/authorizations?expanded=true' or 'entities/{id}/authorizations?expanded=true' and aborts with 403 if the role is missing. Invoice creation requires contains_role='make_payment'. System accounts with the editor role are authorized. The auth call is skipped only for system (service-account) users whose token product_code is not BUSINESS, not for every non-BUSINESS product.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/auth.py",
+      "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+      "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "In business-filings-ui, App.vue's fetchData calls AuthServices.fetchAuthorizations ('entities/{id}/authorizations') and stores the roles with setAuthRoles, showing an auth error dialog if there are none. rootStore exposes isRoleEdit and isRoleView from those roles.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/auth-services.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    }
+   ],
+   "qid": "cross-2",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "pay-api's check_auth calls auth-api 'orgs/{account}/authorizations?expanded=true' or 'entities/{id}/authorizations?expanded=true' and aborts with 403 if the role is missing. Invoice creation requires contains_role='make_payment'. System accounts with the editor role are authorized. The auth call is skipped only for system (service-account) users whose token product_code is not BUSINESS, not for every non-BUSINESS product."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How do customer email notifications about filings work across the services: what triggers them, where do recipients and receipts come from, and what actually sends the email?",
+   "facts": [
+    {
+     "fact": "Filing email requests share one message shape, {'email': {'filingId', 'type', 'option'}}, built by entity_queue_common.messages.create_email_msg or publish_email_message and by business-pay's create_email_msg (option 'PAID'). They are published to the emailer subject (default 'entity.email').",
+     "files": [
+      "lear/queue_services/common/src/entity_queue_common/messages.py",
+      "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+      "lear/queue_services/business-pay/src/business_pay/config.py"
+     ]
+    },
+    {
+     "fact": "These messages are produced at several lifecycle points: business-pay or entity-pay on payment (PAID), entity-filer after processing (with filing status, plus an 'mras' message for incorporation, amalgamation and continuation), and legal-api's staff review save_review (with the review outcome status).",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+     ]
+    },
+    {
+     "fact": "The entity-emailer worker's process_email dispatches by cloud-event type ('bc.registry.names.request', 'bc.registry.affiliation', 'bc.registry.bnmove', 'bc.registry.dissolution') or by the filing type and option inside 'email', and passes each to a specific email_processors module.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+     ]
+    },
+    {
+     "fact": "Email processors get recipients and links from auth-api: get_recipient_from_auth reads the business contact from AUTH_URL '/entities/{id}', get_user_email_from_auth reads '/users/{username}', and get_entity_dashboard_url resolves the account through '/orgs?affiliation=' for temporary identifiers.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/config.py"
+     ]
+    },
+    {
+     "fact": "Processors that attach receipts fetch them from pay-api at PAY_API_URL '/{payment_token}/receipts' (for example the dissolution, registration and restoration notifications).",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/dissolution_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/registration_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/restoration_notification.py"
+     ]
+    },
+    {
+     "fact": "send_email POSTs the composed email to NOTIFY_API_URL with a service-account token from AccountService.get_bearer_token, and raises EmailException on any non-200 response so the message is retried.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py"
+     ]
+    },
+    {
+     "fact": "The business contact email that the emailer later reads is written into auth-api by entity-filer's business_profile.update_business_profile. It POSTs contactPoint to ACCOUNT_SVC_ENTITY_URL '/{identifier}/contacts' and falls back to a PUT when the response says DATA_ALREADY_EXISTS.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+      "lear/queue_services/entity-filer/src/entity_filer/config.py"
+     ]
+    }
+   ],
+   "qid": "cross-3",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want amalgamation applications, like continuations today, to go to registry staff for review after they are paid, instead of being applied right away. Where is this decided, and what else in the pipeline would the change touch?",
+   "facts": [
+    {
+     "fact": "The post-payment branching is hardcoded in business-pay's worker: staff_review_required = ['continuationIn'] sends matching filings to create_staff_review, which creates a Review in AWAITING_REVIEW and sets the filing to AWAITING_REVIEW. All other filings go to publish_to_filer. The new filing type must be added to that list.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/database/review.py"
+     ]
+    },
+    {
+     "fact": "legal-api's Filing.FILINGS flags continuationIn with 'staffApprovalRequired': True, but no code reads this flag; review routing is decided only by business-pay's hardcoded list. Adding the flag to amalgamationApplication would be for consistency only and would have no functional effect.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "create_staff_review reads nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' from the filing JSON. Amalgamation filings have no foreignJurisdiction, so that field would be empty.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+     ]
+    },
+    {
+     "fact": "Staff decisions go through legal-api's admin save_review (POST '/reviews/{id}', staff only). It records a ReviewResult, maps the decision to a filing status, publishes an email message, and publishes {'filing': {'id'}} to NATS_FILER_SUBJECT only when the decision is APPROVED and the effective date has passed.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+     ]
+    },
+    {
+     "fact": "When a submitter resubmits after CHANGE_REQUESTED, saving_filings calls resubmit_filing_for_review instead of complete_filing, so no new invoice is created. That path also has to work for amalgamations.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "The older NATS entity-pay worker has no review branch: it publishes every completed payment straight to the filer. If that worker is still deployed it would bypass review, so it needs the same check.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+     ]
+    },
+    {
+     "fact": "The business list in auth reads draftStatus and draftType from legal-api's businesses search. Paid amalgamations would now show AWAITING_REVIEW or CHANGE_REQUESTED statuses there, and the entity-emailer needs templates for those review status options.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+     ]
+    }
+   ],
+   "qid": "cross-4",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "legal-api's Filing.FILINGS flags continuationIn with 'staffApprovalRequired': True, but no code reads this flag; review routing is decided only by business-pay's hardcoded list. Adding the flag to amalgamationApplication would be for consistency only and would have no functional effect."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "Product wants the list of businesses on a user's account page (in the account/auth app) to show an extra piece of business information that only the legal registry knows. Where does that list's data come from, and what would need to change on each side?",
+   "facts": [
+    {
+     "fact": "auth-api's org affiliations GET with new=true loads AffiliationModel.find_affiliations_by_org_id and runs AffiliationService.get_affiliation_details, so the extra detail is fetched live rather than stored in auth.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "get_affiliation_details sends each identifier to LEAR_AFFILIATION_DETAILS_URL (legal-api v2 '/businesses/search') or, for NR entities, to NAMEX_AFFILIATION_DETAILS_URL. It POSTs {'identifiers': [...]} in parallel using an ENTITY_SVC_CLIENT_ID service-account token.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/config.py"
+     ]
+    },
+    {
+     "fact": "On the legal side, search_businesses (SYSTEM role only) returns {'businessEntities': [business.json(slim=True), ...], 'draftEntities': [...]}. Drafts are temporary-registration filings with no business_id. A new field must be added to Business.json(slim=True) or to the draft dict built there.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ]
+    },
+    {
+     "fact": "auth-api merges the responses in Affiliation._group_details, which reads the 'businessEntities' and 'draftEntities' keys, and in _combine_nrs, which pairs drafts with NRs via 'nrNumber' and adjusts draftType for amalgamation NRs. A renamed or restructured key would need matching changes there.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "The slim business JSON is also what auth sees for SP and GP firms, where search_businesses adds alternateNames. Expensive per-business lookups are deliberately limited to firms there for performance, so a new field should follow that pattern.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py"
+     ]
+    },
+    {
+     "fact": "Basic data that auth itself stores (name, corp type, state) is pushed from lear to auth separately. After filings such as alteration, dissolution, put back on or restoration, entity-filer calls business_profile.update_entity, which PATCHes '/entities/{id}', and auth-api's EntityService.update_entity maps 'state' to the entity status. Data that auth should store must use this path, not the live search.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+      "sbc-auth/auth-api/src/auth_api/services/entity.py",
+      "sbc-auth/auth-api/src/auth_api/schemas/schemas/entity.json"
+     ]
+    }
+   ],
+   "qid": "cross-5",
+   "area": "cross",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ]
+}

@@ -32,7 +32,8 @@ dashboard before the next starts.
    hrono.
 
 Status as of this commit: stage 1 done (cold build plus one incremental
-sync). Stages 2–4 not started.
+sync). Stages 3 and 4 were run on the stage 1 tree as their own evaluation,
+`../2026-10-bc-registries-agents/`. Stage 2 not started.
 
 ## Corpus
 

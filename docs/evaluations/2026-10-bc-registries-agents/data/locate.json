@@ -1,0 +1,836 @@
+[
+ {
+  "repo": "lear",
+  "sha": "363b55db8c941e99167caabc838bbed980029b4f",
+  "date": "2024-10-01",
+  "subject": "21752 restoration filing sync (#3016)",
+  "modified": [
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/corp_party.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/models/office.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/alteration.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py"
+  ],
+  "added": [],
+  "n_dirs": 5,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature that syncs restoration filings from the new system into COLIN, with small supporting fixes for numbered-name generation and party middle names that serve the same flow.",
+  "task": "When a company restoration (full, limited, limited extension, or limited-to-full conversion) is completed in the new business registry, it must also be written back to the legacy COLIN system so both records stay consistent. The legacy API should accept restoration filings and record them with the correct legacy filing type for each restoration kind. Processing a restoration should close out the company's custodial office and any current custodian. It should set the company's state to active, or to limited restoration for limited and extension filings, recording the expiry date as the event trigger date for limited ones. It should apply any name change. For registrar-approved restorations, the applicant party should be recorded with its application date as the office notification date and the notice date as its appointment date. Numbered company names and continued-in company types should be derived correctly when syncing back, and a party's middle initial should be used when no middle name is present.",
+  "qid": "loc-00"
+ },
+ {
+  "repo": "lear",
+  "sha": "9cb623d11b69e7404582fef1b823d2f27eb631fd",
+  "date": "2025-02-10",
+  "subject": "22411 btr lear filing integration (#3208)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/validation.py",
+   "queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+  ],
+  "added": [
+   "legal-api/src/legal_api/services/filings/validations/transparency_register.py"
+  ],
+  "n_dirs": 7,
+  "verdict": "KEEP",
+  "reason": "The commit adds one coherent feature: a new Transparency Register filing type that flows through the legal API (types, fees, permissions, validation, payment corp type, history exclusion) and the payment queue handling.",
+  "task": "Add support in the legal API for a new Transparency Register filing (significant individuals register) that corporations can submit in three flavours: an initial filing, a change filing, and an annual filing. All BC and continued-in corporation types (including benefit, unlimited liability and community contribution companies) should be allowed to file it, unless the business is frozen or has a pending future-effective incorporation, and each flavour should be charged the significant-individuals register fee. These filings come from the separate transparency register product, so their payments should be billed under that product's own corp type, and they should be marked as originating from that system. They should not create legal-filing entries or appear in the public feed of filings sent to other systems. When the payment service's queue listener receives payment completions for this product, it should process them like other business filings instead of ignoring them. Bump the business schemas to the version that defines this filing.",
+  "qid": "loc-01"
+ },
+ {
+  "repo": "lear",
+  "sha": "aba054816cc76919a3a5b1ea917ae30e9d91b920",
+  "date": "2025-01-13",
+  "subject": "24479 - Tombstone pipeline - amalgamation & legal-api adjustment (#3163)",
+  "modified": [
+   "data-tool/scripts/colin_corps_extract_postgres_ddl",
+   "data-tool/scripts/transfer_cprd_corps.sql",
+   "legal-api/src/legal_api/models/amalgamating_business.py",
+   "legal-api/src/legal_api/models/amalgamation.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/reports/business_document.py"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature: migrating amalgamation history for tombstoned COLIN corporations, plus matching legal API changes so business documents work for those businesses.",
+  "task": "Extend the COLIN-to-LEAR tombstone migration pipeline so that amalgamation history is carried over. When a migrated corporation's history includes an amalgamation application, record the amalgamation itself (date, court approval, and type: regular, vertical or horizontal) linked to that placeholder filing. Also record each amalgamating party with its role (amalgamating or holding). Foreign or extra-provincial parties should be stored by their foreign jurisdiction, name and number. Parties that are local corporations should be linked to their business record, creating or updating it so it shows as dissolved by that amalgamation. The business's current state filing should only be the filing that matches its current COLIN state event, and an existing pre-loaded business should be updated rather than skipped. The batch delete tool should also clean up amalgamation records. In the legal API, add a tombstone filing status. Businesses that carry it should read amalgamation data directly, without version history. They should show 'Not Available' placeholders for amalgamation details in business summaries and documents, and treat amalgamations before the tombstone date as imported from COLIN. Address formatting should also cope with a missing city or country.",
+  "qid": "loc-02"
+ },
+ {
+  "repo": "lear",
+  "sha": "cfc3a3a9c4e173681312ef563a919bdf71b52d15",
+  "date": "2025-02-25",
+  "subject": "25188 - court order filing added (#3203)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "Single coherent behavior change: court order filings move from a free staff-only fee to a per-entity-type court fee and now produce output documents (receipt, filing PDF, uploaded court order) once paid.",
+  "task": "Court order filings are currently treated as free staff filings that produce no output documents, but the business wants them to be charged a dedicated court order fee for every entity type (sole proprietorships, general partnerships, cooperatives, BC companies, benefit companies, community contribution companies, unlimited liability companies, and their continued-in equivalents). Update the legal API so the fee for a court order is looked up by the business's entity type, the same way other paid filings are, instead of the flat no-fee staff code. Also, once a court order filing has been paid, the documents listing should include the filing output and a receipt like other paid filings, plus the uploaded court order file when one was attached.",
+  "qid": "loc-03"
+ },
+ {
+  "repo": "lear",
+  "sha": "b032dc390b608f53e32eef7892997dd22328a672",
+  "date": "2025-02-27",
+  "subject": "API/Filer - TR todo logic (#3246)",
+  "modified": [
+   "legal-api/src/legal_api/config.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_tasks.py",
+   "queue_services/entity-filer/src/entity_filer/worker.py"
+  ],
+  "added": [
+   "queue_services/entity-filer/src/entity_filer/filing_processors/transparency_register.py"
+  ],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is a single coherent feature: it adds to-do items for Transparency Register filings to the legal API, tracks the year of each business's last annual register filing, and has the filer record that year.",
+  "task": "Businesses now have to file a Transparency Register (the registry of significant individuals). Starting from a configurable program start date, the legal API's business to-do list should show register filing tasks for active businesses other than sole proprietorships, general partnerships and cooperatives. An initial register filing is due six months after incorporation for businesses founded after the program start, or six months after a restoration. An annual register filing is due two months after each incorporation anniversary. Annual tasks should appear once they are within two months of their due date, and any overdue years should also be listed. Each register task should be placed right after the annual report task for the same year, and only the first outstanding register task should be enabled. When the filer processes an annual register filing, it should record the year of the business's last annual register filing so the next due date can be calculated. Register filings should also be allowed to have an effective date earlier than their payment date, as annual reports already are.",
+  "qid": "loc-04"
+ },
+ {
+  "repo": "lear",
+  "sha": "9ac76f6752552d1390e28c24e5c477509065f605",
+  "date": "2025-02-05",
+  "subject": "25467 colin sync - effective date should be same as filing date if not future effective (#3204)",
+  "modified": [
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent change to how filings completed in the new system are synchronized back to COLIN: it sets the effective date correctly for non-future-effective filings and drops a remote lookup used when deciding whether to freeze a business.",
+  "task": "When filings completed in the new business registry are synchronized back to the legacy COLIN system, COLIN currently always records the effective date sent from the legal API. For filings that are not future-effective, this causes small mismatches between the effective date and the filing date. The legal API should tell the sync process whether each completed filing is future-effective, meaning its effective date is later than its payment completion. COLIN should keep the supplied effective date only for future-effective filings and otherwise use the filing date. Also, when COLIN decides whether to freeze a business against legacy edits, it should rely on whether the filing came from the new system, rather than calling back to the legal API to check whether the business exists there; that callback and its supporting client code can be removed.",
+  "qid": "loc-05"
+ },
+ {
+  "repo": "lear",
+  "sha": "ca967ae22284000d2f3bcf10a2bdd2111100e972",
+  "date": "2025-04-25",
+  "subject": "Jobs - updated for gcp db connection (#3421)",
+  "modified": [
+   ".gitignore",
+   "jobs/sftp-gazette/notebook/generate_files.ipynb",
+   "jobs/sftp-gazette/notebook/update_database.ipynb",
+   "jobs/sftp-gazette/sftpgazette.py",
+   "jobs/sftp-icbc-report/notebook/generate_files.ipynb",
+   "jobs/sftp-icbc-report/sftpicbc.py",
+   "jobs/sftp-nuans-report/notebook/generate_files.ipynb",
+   "jobs/sftp-nuans-report/sftpnuans.py"
+  ],
+  "added": [],
+  "n_dirs": 7,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent change: the three SFTP reporting jobs move their database connection to Google Cloud SQL with IAM authentication, keeping a local Postgres fallback, plus the supporting dependencies and sample config.",
+  "task": "The scheduled SFTP jobs that produce the Gazette file, the ICBC report and the NUANS report connect to the business database with a plain username/password Postgres connection string. That will stop working now that the database is moving to Google Cloud. Update each job's report-generation notebooks to connect through the Cloud SQL connector using IAM-based authentication with service-account credentials whenever a Cloud SQL instance connection name is configured. When no instance name is set, they should fall back to a direct local Postgres connection. Have the notebooks load their settings from a local environment file, provide a sample environment file for each job, and pin the libraries needed for the new connection approach.",
+  "qid": "loc-06"
+ },
+ {
+  "repo": "lear",
+  "sha": "3efc8f4369dd3ee6f967da0067aedaebba21e308",
+  "date": "2025-04-09",
+  "subject": "27072 - Consent to Amalgamation Out Emailer (#3386)",
+  "modified": [
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py"
+  ],
+  "added": [
+   "legal-api/report-templates/consentAmalgamationOut.html",
+   "legal-api/report-templates/letterOfConsentAmalgamationOut.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/consent_amalgamation_out_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CAO-COMPLETED.html"
+  ],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "Coherent feature adding a confirmation email for the consent-to-amalgamate-out filing, plus a dedicated letter-of-consent document in the legal API's report generation.",
+  "task": "When a company completes a consent to amalgamate out of British Columbia, the business registry currently sends no confirmation email. Add a confirmation email to the notification service for completed filings. The email should attach the 6-month consent filing document, a letter of consent, and the payment receipt, and should go to the business contact and, when staff filed it, the optional document email from the filing. The letter of consent for amalgamation out needs its own wording, distinct from the continuation-out letter. It should state that the company was authorized to amalgamate with foreign corporations under section 284 of the Business Corporations Act, give the consent expiry date, and ask for the foreign jurisdiction's record so the company can be removed from the register. The legal API should generate this letter as the filing's output document, and completed amalgamation-out messages should be tracked for duplicate handling the same way continuation-out ones are.",
+  "qid": "loc-07"
+ },
+ {
+  "repo": "lear",
+  "sha": "0a24b49b289ed1c161b4f4cfe649af4671039600",
+  "date": "2024-11-08",
+  "subject": "23958 update fe date issue (#3067)",
+  "modified": [
+   "legal-api/report-templates/template-parts/amalgamation/effectiveDate.html",
+   "legal-api/report-templates/template-parts/common/effectiveDate.html",
+   "legal-api/report-templates/template-parts/continuation/effectiveDate.html",
+   "legal-api/report-templates/template-parts/incorporation-application/effectiveDate.html"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "A single coherent fix to how future effective dates are worded in generated filing PDFs (amalgamation, incorporation, alteration, continuation), findable by understanding the report generation.",
+  "task": "The PDF documents the legal API generates for filings are showing the wrong text for the effective date section when a filing is future-effective. For amalgamation and incorporation applications, the output shows a bare (and sometimes empty) date value instead of a full sentence stating that the amalgamation or incorporation is to take effect on the given date and time. Alteration documents always say the change takes effect when filed, even when a future effective date was chosen; they should state the future date when one applies. Also, continuation documents filed without a future date incorrectly say \"the incorporation\" takes effect on filing; that wording should refer to the continuation.",
+  "qid": "loc-08"
+ },
+ {
+  "repo": "lear",
+  "sha": "f0387546d12f49c04d973643ed00addbc6d342be",
+  "date": "2024-11-04",
+  "subject": "24153 fixes in colin sync (#3057)",
+  "modified": [
+   "colin-api/src/colin_api/models/address.py",
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/corp_party.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/business.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "jobs/update-colin-filings/update_colin_filings.py",
+   "jobs/update-legal-filings/update_legal_filings.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v1/business/business_filings.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 7,
+  "verdict": "KEEP",
+  "reason": "All changes serve one goal, making the filing synchronization from the new registry system back to COLIN reliable, across the legal API, the COLIN API and the sync jobs.",
+  "task": "The job that pushes completed filings from the legal API back to COLIN keeps stalling and failing on real data, so make the synchronization robust. The legal API's endpoint for completed filings awaiting COLIN sync should use a limit and offset instead of page numbers. It should order filings by effective date, leave out epoch filings at the query level, and stop special-casing corrections. The sync job should page through results with an offset that advances only past filings it skipped or failed to sync, and stop when no filings come back. On the COLIN side, several things need fixing: business numbers with the BC prefix are truncated to their last seven digits, which breaks longer numbers, so only the prefix should be removed. Missing address region, second address line, delivery instructions or officer email should not cause errors. Filing dates should be stored as date-only values. After saving a filing, COLIN should return just the new event IDs rather than rebuilding the whole filing. Also, the job that checks COLIN for manual filings should only look at cooperatives, and the lookup for businesses missing a business number should fetch only their identifiers.",
+  "qid": "loc-09"
+ },
+ {
+  "repo": "lear",
+  "sha": "291684dfccaa76ccaec6b664c9ccfdb24972b020",
+  "date": "2024-11-19",
+  "subject": "22757 - Remove Completing Party Section (#3085)",
+  "modified": [
+   "legal-api/report-templates/amalgamationApplication.html",
+   "legal-api/report-templates/changeOfRegistration.html",
+   "legal-api/report-templates/correction.html",
+   "legal-api/report-templates/dissolution.html",
+   "legal-api/report-templates/firmCorrection.html",
+   "legal-api/report-templates/registration.html",
+   "legal-api/src/legal_api/reports/report.py"
+  ],
+  "added": [],
+  "n_dirs": 2,
+  "verdict": "KEEP",
+  "reason": "A single coherent behavior change that removes the completing party section and its certification statement from several generated filing PDFs, along with the unused template parts and their registration in the report generator.",
+  "task": "The PDF documents the legal API generates for business filings should no longer show the completing party. Today, the outputs for amalgamation applications, registrations of firms, changes of registration, client corrections (for both corporations and firms), and dissolutions of sole proprietorships and general partnerships include a section listing the completing party's name and mailing address. They also include a statement certifying that this person has relevant knowledge of the business and is authorized to make the filing. Remove both the section and the statement from these reports, and clean up the now-unused report pieces so the report generator no longer loads them.",
+  "qid": "loc-10"
+ },
+ {
+  "repo": "lear",
+  "sha": "9f33aad24c6e6067cafdd3eaf6254aeabdc81f91",
+  "date": "2025-01-08",
+  "subject": "24195 tweaks on filing queries (#3166)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business.py",
+   "legal-api/src/legal_api/services/filings/validations/restoration.py",
+   "legal-api/src/legal_api/services/warnings/business/business_checks/firms.py"
+  ],
+  "added": [],
+  "n_dirs": 5,
+  "verdict": "KEEP",
+  "reason": "The commit makes one coherent change: the legal API now treats a business's most recent and previous completed filings as the ones last processed, rather than ordering by effective or filing date, and consolidates the lookups that relied on this.",
+  "task": "The legal API currently decides which filing is a business's 'most recent' or 'previous completed' filing by effective date or submission date. This gives wrong answers when filings are future-effective, backdated, or still pending. Change these lookups to use the order in which completed filings were actually applied to the business's history. Use this single rule everywhere: the latest-filing summary on the business, the limited-restoration extension/conversion validation, and the firm completing-party warning check. A filing still pending should have no position in that history, so its previous completed filing is simply the latest one applied. Also fix the lookup by a specific filing so it really restricts to that filing, and stop returning a 'last modified' date in the business details response.",
+  "qid": "loc-11"
+ },
+ {
+  "repo": "lear",
+  "sha": "5750c0710ebe5b50c09f7779819f92b75f661923",
+  "date": "2025-04-29",
+  "subject": "27115 - Create Amalgamated Out Business Summary Output (#3418)",
+  "modified": [
+   "legal-api/report-templates/businessSummary.html",
+   "legal-api/report-templates/template-parts/common/businessDetails.html",
+   "legal-api/report-templates/template-parts/common/courtOrder.html",
+   "legal-api/report-templates/template-parts/common/footerMOCS.html",
+   "legal-api/report-templates/template-parts/common/style.html",
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/reports/business_document.py",
+   "legal-api/src/legal_api/reports/report.py"
+  ],
+  "added": [
+   "legal-api/report-templates/template-parts/business-summary/amalgamationOut.html"
+  ],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature: it shows amalgamation-out details in the business summary document and fixes the related filing-status and consent-document behavior.",
+  "task": "When a BC company has amalgamated out to another jurisdiction, its business summary PDF should include an 'Amalgamation Out Information' section. The section should show the new jurisdiction (region and country names, or just the country when the region is federal), the business name in the new jurisdiction, and the effective date. The business details header for such a historical company should read 'Amalgamation out on <date>' after its state. Amalgamation-out and consent-to-amalgamate-out filings should be treated as filings without a legal output, like their continuation-out counterparts, in the filing document listings. The unused 6-month consent filing PDF should no longer be generated or attached to the consent notification email, which should only carry the letter of consent.",
+  "qid": "loc-12"
+ },
+ {
+  "repo": "lear",
+  "sha": "5360c65278c0180f971d8318903083476a42b87c",
+  "date": "2024-10-15",
+  "subject": "23522-23562 continuation in workflow change (#3026)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/models/review.py",
+   "legal-api/src/legal_api/resources/v2/admin/reviews.py",
+   "legal-api/src/legal_api/resources/v2/business/business.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/continuation_in.py",
+   "queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+   "queue_services/entity-bn/src/entity_bn/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 10,
+  "verdict": "KEEP",
+  "reason": "The commit reworks one feature: the staff-review workflow for continuation-in filings. It changes how the filing is submitted for review, how approval flows into payment, the review record, deletion rules and blocker rules.",
+  "task": "Rework the continuation-in staff review workflow so that a filer submits a draft continuation-in for staff review directly from the draft, with no payment, and gets an email notification. The same path should handle resubmission after staff request changes. Once staff approve, the filing should go back into the filer's hands in an approved state so they can complete and pay for it. The authorization, name request and foreign jurisdiction details must stay locked to the approved values, and approval alone must no longer trigger the filer. The review record should capture the filer's contact email instead of the completing party's name, and staff should be able to search and sort reviews by it. Filings that are awaiting review, have changes requested, or are approved should block other filings on the business. Only true drafts may be deleted, and the uploaded continuation-in documents should be cleaned up on deletion.",
+  "qid": "loc-13"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "851f8bbc6bea9fa8ac6eb459849fe2bbc0ae1304",
+  "date": "2025-03-12",
+  "subject": "Add in App-Name to headers (#3298)",
+  "modified": [
+   "auth-web/src/stores/business.ts",
+   "auth-web/src/stores/codes.ts",
+   "auth-web/src/util/http-util.ts",
+   "auth-web/vite.config.ts"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The core change is one coherent feature: every outgoing HTTP request from the account management web app now carries a header naming the calling application, with the name injected at build time; the remaining edits are incidental noise.",
+  "task": "Backend services such as the auth API and the payment service need to know which front-end application sent each request, for logging, analytics and troubleshooting. Update the account management web app so that every outbound API call carries a header identifying the calling application. The value should be the app's configured display name, taken from the project's package metadata and baked in at build time, not hard-coded. While there, make the loading of product payment methods tolerate an empty response from the codes lookup without throwing.",
+  "qid": "loc-14"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "a3a0739daf75a8b9adaee6796d11ca101758d81e",
+  "date": "2025-02-11",
+  "subject": "25746 & 25895 - Add in handling for multiple users changing product / payments & bug fixes (#3244)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/components/pay/OutstandingBalances.vue",
+   "auth-web/src/services/org.services.ts",
+   "auth-web/src/stores/org.ts",
+   "auth-web/src/stores/user.ts"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The core of the commit is one coherent behavior change: detecting concurrent edits by other users to an account's products or payment method before saving. The extra bits are small related fixes such as the outstanding-balance redirect and typo corrections.",
+  "task": "On the account settings page for products and payment methods, two account admins can edit at the same time and silently overwrite each other's changes. Before saving a product subscription change or a payment method change, the auth web app should re-fetch the account's current products and payment method from the server. If either differs from what the user originally loaded, the save should be aborted and a 'Conflict Detected' message shown saying another user has updated the product/payment. The page should then refresh to the latest products and payment method and exit edit mode. The unsaved-payment-method-change flag should also be tracked as account (organization) state rather than user state. Separately, the outstanding balances page should only send the user back when the total amount due, statements plus invoices, is zero, not just when invoices are zero.",
+  "qid": "loc-15"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "a5ee0849588b4f8437ef347e42968833d62b546b",
+  "date": "2024-11-14",
+  "subject": "24383 - Remove FAS-UI widget (#3146)",
+  "modified": [
+   "auth-web/src/assets/scss/theme.scss",
+   "auth-web/src/components/auth/common/StaffAccountsTable.vue",
+   "auth-web/src/components/auth/staff/account-management/StaffPendingAccountsTable.vue",
+   "auth-web/src/components/auth/staff/account-management/StaffRejectedAccountsTable.vue",
+   "auth-web/src/components/auth/staff/continuation-application/ContinuationApplicationTable.vue",
+   "auth-web/src/main.ts",
+   "auth-web/src/util/config-helper.ts",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue",
+   "auth-web/vite.config.ts"
+  ],
+  "added": [
+   "auth-web/src/assets/scss/search.scss"
+  ],
+  "n_dirs": 8,
+  "verdict": "KEEP",
+  "reason": "The commit removes one embedded feature, the fee accounting widget, from the auth web app and drops its dependency. That is a coherent behavior change, not just a routine dependency bump.",
+  "task": "The staff side of the account management web app currently embeds the fee accounting system's search widget (routing slip lookup) by pulling in that application as a bundled package. Remove this embedded widget and every place the app wires it up or renders it. Staff should use the standalone fee accounting application for that work. Drop the package dependency so the app no longer ships the extra code and its outdated transitive libraries. Update the CI build to the newer Node runtime now that the old package no longer pins the app to an older one.",
+  "qid": "loc-16"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "6da93368c447640d7c515cbb9a5fa3f64c56ca78",
+  "date": "2025-02-11",
+  "subject": "25550 - Remove BCOL if feature flag is toggled and payment method i\u2026 (#3247)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/components/auth/account-settings/transaction/Transactions.vue",
+   "auth-web/src/components/auth/common/PaymentMethods.vue",
+   "auth-web/src/util/constants.ts"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is mainly one coherent feature: a feature-flagged phase-out of BC Online as a payment option in account settings, with a warning when switching away from it; a few minor tweaks ride along.",
+  "task": "We are phasing out BC Online as a payment method, controlled by a new feature flag. When the flag is on, accounts not currently paying through BC Online should no longer see it as a payment option, either in the account payment method settings or in the payment options offered when requesting products. Accounts still on BC Online keep seeing it. When such an account picks a different method, show an alert explaining that once they save, BC Online will no longer be available to them. Also make sure the product and payment settings page re-renders properly after switching accounts, so a user who moves from a regular member account to an admin account does not see the page stuck as disabled.",
+  "qid": "loc-17"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "826e8c463ff73e7abefcc700a39f1294e12ac8ae",
+  "date": "2025-03-06",
+  "subject": "26014 - auth-api permissions updates for staff / external staff users (#3287)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/resources/v1/permissions.py",
+   "auth-api/src/auth_api/services/activity_log.py",
+   "auth-api/src/auth_api/services/authorization.py",
+   "auth-api/src/auth_api/services/invitation.py",
+   "auth-api/src/auth_api/services/membership.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-api/src/auth_api/services/permissions.py",
+   "auth-api/src/auth_api/services/products.py",
+   "auth-api/src/auth_api/utils/roles.py",
+   "auth-api/src/auth_api/utils/user_context.py",
+   "auth-api/src/auth_api/utils/util.py"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature: read-only access and permission handling for staff and external staff users, plus small supporting fixes for boolean query parameters.",
+  "task": "Introduce a distinct read-only external staff role (used by contact centre and Maximus staff) that replaces the old contact centre staff role. Today that role is treated as full staff, so external staff need their own definition. External staff should be able to view any account's details, login options, members, products (including hidden ones), activity logs and business authorizations without being a member of the account. Viewing pending member invitations should be allowed for staff or for anyone holding a dedicated 'view members' pending invitations' role. Add a way for the membership permissions lookup to optionally return all of a staff or external staff user's permissions: on top of the normal membership-based actions, include the actions granted by the type of each active staff organization they belong to, and seed the action lists for the staff, contact centre staff and Maximus staff organization types. Also fix boolean query parameters such as 'include members' so the string 'false' is read as false instead of true.",
+  "qid": "loc-18"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "2253ddaf164b99068a49562b7818f7941778b06c",
+  "date": "2024-11-14",
+  "subject": "24170 - Dealer Staff Review Updates (#3145)",
+  "modified": [
+   "auth-web/src/components/auth/staff/review-task/QsApplication.vue",
+   "auth-web/src/locales/en.json",
+   "auth-web/src/models/external.ts",
+   "auth-web/src/resources/QualifiedSupplierAccessResource.ts"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature that extends staff review and access-request handling of qualified supplier applications to home dealers; the launch tile layout tweak and version bump are incidental.",
+  "task": "When BC Registries staff review a manufactured home Qualified Supplier access request from a home dealer, the review page should show the dealer's business location address, just as it already does for home manufacturers. Dealer applications send this address under a different field than manufacturer applications, so the review screen must handle either one. Also, the product description for the Home Dealers supplier type should list 'Transfer due to Sale or Gift' as an allowed activity. The dealer access requirements should add a new condition: all filed documents are kept for 7 years, and on request a copy or certified copy (such as the Bill of Sale or other signed forms) is provided within 7 business days at the fee set by the Registrar.",
+  "qid": "loc-19"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "914fab6f0d388846aacb8ba9660e7451ee14dd6e",
+  "date": "2024-11-26",
+  "subject": "23652- Allow users to edit mailing address (#3153)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-api/src/auth_api/utils/roles.py",
+   "auth-web/src/components/auth/account-settings/account-info/AccountInfo.vue",
+   "auth-web/src/services/org.services.ts",
+   "auth-web/src/stores/org.ts"
+  ],
+  "added": [],
+  "n_dirs": 6,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature: regular account members can now edit an account's mailing address. It adds a dedicated backend endpoint, a permission, and front-end wiring.",
+  "task": "Regular members of an account (not just account administrators) should be able to update the account's mailing address from the account info settings page. Today, address changes go through the general account update, which only admins may use, so non-admin members see a message that the account info is incomplete and that an administrator must fix it. Add a separate way to save only the mailing address. It should allow account members, admins and staff, record the address-change activity as before, and be granted through a new change-address permission for the regular member role. In the UI, saving the address section should use this new path independently of saving the account name and details. The incomplete-info warning should always invite the user to update the missing details themselves.",
+  "qid": "loc-20"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "83879c7ca400585398c11eb03bcf8e0d97ca723e",
+  "date": "2025-02-18",
+  "subject": "25595 - Add More Payment Error Handling to Create/Update Org (#3265)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/util/common-util.ts"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent change: payment-account errors raised while creating or updating an organization are now passed through the auth API to the account UI with more detail and readable formatting.",
+  "task": "When creating or updating an account fails because the payment service rejects the payment account setup, users currently see a vague or empty error. The payment service reports errors in several shapes, using different fields for the error code and its description. The auth API should pick up whichever code and description fields are present, and include the detail in its error response for account creation and update. The account payment-method settings screen should then show a clear error for both conflict and bad-request failures, with a title and the error code plus detail on separate lines. Any upper-case, underscore-separated codes should be converted into readable title-case words.",
+  "qid": "loc-21"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "c1ca171f6415dd1adc5aee8ae506568df7d54d7b",
+  "date": "2025-02-06",
+  "subject": "25223 - Manage EFT to pay web, remove manage eft from auth (#3246)",
+  "modified": [
+   "auth-web/src/models/refund.ts",
+   "auth-web/src/resources/BreadcrumbResources.ts",
+   "auth-web/src/routes/router.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/stores/org.ts",
+   "auth-web/src/util/config-helper.ts",
+   "auth-web/src/util/constants.ts",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue"
+  ],
+  "added": [],
+  "n_dirs": 7,
+  "verdict": "KEEP",
+  "reason": "The commit makes one coherent product change: it moves EFT short-name management out of the auth web app into the separate payment web app, removing the old screens and pointing staff to the new location.",
+  "task": "Staff management of electronic funds transfer (EFT) payments, including viewing bank short names, linking short names to accounts, viewing short-name details, and seeing EFT-enabled accounts, now lives in a dedicated payment web application. Remove these EFT management screens, their supporting tables, lookups, dialogs and routes from the account management web app. Wherever staff previously opened EFT management, send them to the corresponding page in the payment web application instead. Add a configurable base address for the payment web application, alongside the other external web app addresses, so each environment can point to the right deployment.",
+  "qid": "loc-22"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "634f085707ec607af25bcdee66b4394c5454fbd5",
+  "date": "2025-04-01",
+  "subject": "26547 - feature remove minio from auth api (#3329)",
+  "modified": [
+   ".gitignore",
+   "auth-api/src/auth_api/config.py",
+   "auth-api/src/auth_api/resources/v1/documents.py",
+   "auth-api/src/auth_api/services/__init__.py",
+   "auth-api/src/auth_api/services/affidavit.py",
+   "auth-api/src/auth_api/services/simple_org.py",
+   "auth-web/src/services/document.services.ts",
+   "auth-web/src/stores/user.ts",
+   "auth-web/src/util/http-util.ts"
+  ],
+  "added": [
+   "auth-api/src/auth_api/services/google_store.py"
+  ],
+  "n_dirs": 7,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent infrastructure-backed behavior change: the auth API's document storage (affidavit uploads and signed URLs) moves from MinIO to Google Cloud Storage, along with matching config and dependency updates.",
+  "task": "The auth API currently stores account documents, such as affidavits uploaded during account setup, in a self-hosted MinIO object store. As part of the move to Google Cloud, these documents should be stored in a Google Cloud Storage bucket instead. Keep the existing behavior: the front end asks for a pre-signed upload URL for a file and then uploads directly to it, and staff or users viewing an affidavit get a time-limited signed download link. The bucket should come from a single environment setting rather than the old MinIO endpoint and credentials. All MinIO configuration and the MinIO client dependency should be removed.",
+  "qid": "loc-23"
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "bfb63d331e1241f9fc9cd833b406bcb288eacef7",
+  "date": "2024-12-10",
+  "subject": "24491 - EFT Instructions download update (#3175)",
+  "modified": [
+   "auth-web/src/composables/downloader.ts",
+   "auth-web/src/services/document.services.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/util/constants.ts"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit makes one coherent change: the EFT instructions PDF in the account UI is now fetched from the payment API's documents endpoint instead of a static file server, with the version bump only incidental.",
+  "task": "In the account management web app, the download for electronic funds transfer (EFT) payment instructions currently pulls a static PDF directly from the public file server. Change it so the PDF is requested from the payment API's document retrieval endpoint, asking for the EFT instructions document type. This keeps the instructions centrally managed by the payment service. Remove the old direct file-server download path, and keep the downloaded file's name and loading/error behaviour the same for users.",
+  "qid": "loc-24"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "53a77bcc59155e8af7b6d9d8dcfebd7d8548412e",
+  "date": "2024-11-01",
+  "subject": "20346 - Refactor Oracle to point at Datawarehouse instead of CPRD (#1804)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/invoke_jobs.py",
+   "jobs/payment-jobs/services/__init__.py",
+   "jobs/payment-jobs/tasks/bcol_refund_confirmation_task.py"
+  ],
+  "added": [
+   "jobs/payment-jobs/services/data_warehouse.py"
+  ],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent behavior change: the BCOL refund confirmation job now reads refund billing records from a PostgreSQL financial data warehouse instead of the legacy Oracle database.",
+  "task": "The nightly job that confirms BC Online refunds currently looks up refunded billing records by connecting directly to the legacy Oracle registry database. That direct dependency is being retired. Change the job to read the same refund billing records (entries recorded as negative-quantity reversals) from the financial data warehouse, which is a PostgreSQL instance hosted on Cloud SQL. The connection must work both through the Cloud SQL connector when deployed and over a plain host and port connection locally. Replace the Oracle connection settings and driver with data warehouse settings sourced from the secrets vault. Because the old per-query limit no longer applies, the batch size for invoice lookups can be increased.",
+  "qid": "loc-25"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "a619db43390092ccc1e137f582fe70a623295649",
+  "date": "2024-10-24",
+  "subject": "19361 - Add refund status to routing slip (#1793)",
+  "modified": [
+   "pay-api/src/pay_api/models/routing_slip.py",
+   "pay-api/src/pay_api/services/fas/routing_slip.py",
+   "pay-api/src/pay_api/services/fas/routing_slip_status_transition_service.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-queue/src/pay_queue/services/cgi_reconciliations.py"
+  ],
+  "added": [],
+  "n_dirs": 5,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature: it adds a separate refund-tracking status to routing slips, makes it searchable, updatable and set during refund approval, and renames the final refund state.",
+  "task": "Finance staff need to track a routing slip's refund after it has been approved, separately from the slip's main lifecycle status. Add a new refund progress indicator to routing slips with the values processing, processed, and cheque undeliverable. Store it in the database and return it in routing slip responses. Make it filterable in routing slip search, and allow staff to change it through the existing routing slip update endpoint with a new update action. When a refund decision is recorded, set the indicator to processing, or clear it if the refund was rejected and the slip goes back to active. Also rename the final 'refund completed' slip status to 'refund processed' everywhere, including existing data and the allowed status transitions.",
+  "qid": "loc-26"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "cfbd18dcaed79bdfc46b831e9f7a41e80c1aa79f",
+  "date": "2024-10-11",
+  "subject": "Small fixes and tweaks for partner reversals (#1775)",
+  "modified": [
+   "jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+   "pay-api/src/pay_api/services/__init__.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_service.py",
+   "pay-api/src/pay_api/utils/enums.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/services/partner_disbursements.py"
+  ],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent behavior change: it centralizes partner disbursement creation and reversal for EFT invoices, cancelling pending rows instead of adding duplicate reversals, creating disbursements when credits fully pay an invoice, and renaming the pending status with a data migration.",
+  "task": "Partner disbursements for EFT invoices are being recorded inconsistently. Duplicate payment entries can appear when an invoice is created and later paid from credits. Reversals are always added as new entries, even when the original disbursement was never sent to the partner. Change the payment service so it adds a disbursement entry when an EFT invoice is created or becomes fully paid by applying short name credits, but only if no active non-reversal entry already exists. When an invoice is cancelled or its statement payment is reversed, cancel the pending disbursement if the nightly distribution job has not yet picked it up; otherwise add a reversal entry, and log an error if there is nothing to reverse or a reversal already exists. Also rename the 'waiting for receipt' status to a clearer 'waiting for the job' status, migrate existing records to it, and update the partner distribution job to pick up records in the new status.",
+  "qid": "loc-27"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "83380c125353bc5789153182991bb421a76403b7",
+  "date": "2024-10-02",
+  "subject": "22263 - EFT Refund AP Job Implementation (#1719)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ap.py",
+   "jobs/payment-jobs/tasks/common/cgi_ejv.py",
+   "jobs/payment-jobs/utils/enums.py",
+   "pay-api/src/pay_api/models/eft_refund.py"
+  ],
+  "added": [],
+  "n_dirs": 5,
+  "verdict": "KEEP",
+  "reason": "The commit adds one coherent feature: the accounts-payable job now produces and uploads payable files for approved EFT short-name refunds, backed by a new disbursement-tracking field on the refund record.",
+  "task": "Approved refunds for electronic funds transfer (EFT) short names are never paid out right now. Extend the nightly accounts-payable job so it picks up approved EFT refunds with a positive amount that have not been sent yet and writes them in batches into a CGI accounts-payable file uploaded over SFTP. Each refund should be paid by EFT to the refund's own CAS supplier number rather than a single configured vendor, with its own configurable supplier location and distribution account, and should carry a comment line combining the short name and the refund comment. Track a disbursement status on each EFT refund, and set it to uploaded once the refund is included in a file so it is not sent twice.",
+  "qid": "loc-28"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "0682b08891580a00066b9c75457ea2dcfc890d9c",
+  "date": "2024-12-23",
+  "subject": "Override Sandbox DIRECT_PAY / ONLINE_BANKING to PAD payment method (#1868)",
+  "modified": [
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/resources/v1/account_statements.py",
+   "pay-api/src/pay_api/services/payment_service.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-api/src/pay_api/utils/user_context.py"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit implements one coherent business rule about which payment methods are allowed in sandbox versus API-client contexts; the formatting tweaks are incidental.",
+  "task": "In the sandbox environment, when a new payment account is created with direct credit card payment or online banking as its payment method, the payment service should quietly switch it to pre-authorized debit and log that it did so, because those methods can't be used in sandbox. Also, when an external API-client user (identified by a dedicated API-user role) creates an invoice outside the sandbox, the payment service should reject direct credit card payment and online banking as invalid payment methods. Add support for recognizing this API-user role in the current user's context so the service can apply the rule.",
+  "qid": "loc-29"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "8aa3084b95c0fff5f83cbb4c2f4296066d13aab5",
+  "date": "2024-11-22",
+  "subject": "24454 - EFT TDI17 Processing updates (#1830)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_file.py",
+   "pay-queue/src/pay_queue/config.py",
+   "pay-queue/src/pay_queue/services/eft/eft_base.py",
+   "pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+   "pay-queue/src/pay_queue/services/eft/eft_record.py"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent change to how the payment queue classifies incoming EFT deposit records: description patterns move into configuration, unmatched records get a fallback rule, and stored trailer totals are removed.",
+  "task": "When the payment queue processes the bank's daily EFT deposit file, the description prefixes that mark a line as a wire transfer or an EFT payment are currently hard-coded. Make both lists of prefixes configurable per environment as comma-separated values. Classify each line by the first configured prefix it starts with, and strip that prefix to get the payer name. Any deposit that matches no prefix should still be handled: treat it as an EFT with an auto-generated short name, instead of using the special-cased federal payment rule. Processing should stop and report an error if the location filter or either prefix list is missing from configuration, and we no longer need to store the file trailer's detail count and deposit total on the EFT file record.",
+  "qid": "loc-30"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "aeb832069e876803f723a912db388216e5e330c8",
+  "date": "2025-04-09",
+  "subject": "27109 - Allow sandbox users to use account-ui to update their pad details (#1941)",
+  "modified": [
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/resources/v1/bank_accounts.py",
+   "pay-api/src/pay_api/services/base_payment_system.py",
+   "pay-api/src/pay_api/services/pad_service.py",
+   "pay-api/src/pay_api/services/payment_service.py",
+   "pay-api/src/pay_api/utils/user_context.py"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "A single coherent change: sandbox behavior in the payment API now keys off a deployment-level environment setting instead of a token role, and the external bank system calls for pre-authorized debit (PAD) bank validation and updates are mocked in sandbox so sandbox users can manage PAD details.",
+  "task": "Sandbox users cannot update their pre-authorized debit bank details through the account management UI. Today the payment service only recognizes sandbox through a special role on the caller's token or a query flag that requires a sandbox-creation role, and regular account UI users have neither. Change the payment service so it decides it is running in sandbox from a configurable deployment environment name (defaulting to local), and drop the token-role check entirely. Everywhere sandbox behavior applies (skipping invoice creation with the government finance system, auto-completing payments, allowing restricted payment methods, blocking certain methods at account creation), use the environment check instead. In sandbox, also skip the real calls to the government finance system: bank account validation should return a mocked successful response that echoes back the submitted bank details, and updating PAD bank details should use a placeholder payment instrument instead of calling the finance system.",
+  "qid": "loc-31"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "e33b888909933dfcfa3d0d4de008890dba70f716",
+  "date": "2024-10-18",
+  "subject": "Tweaks for send_email (#1786)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/services/auth.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/email_service.py"
+  ],
+  "added": [],
+  "n_dirs": 2,
+  "verdict": "KEEP",
+  "reason": "The commit fixes EFT refund handling in the payment API: notification recipients are now passed as proper lists, and refund lookups now combine their filters correctly.",
+  "task": "EFT refund notification emails in the payment API are not reaching recipients reliably. Approver addresses are passed to the email sender as one comma-joined string, and the client's refund address is passed as a bare string, when the sender expects a list of individual addresses. Change this so the approver lookup returns a list of addresses, including when a feature-flag override supplies a comma-separated list for testing, and so the client's address is wrapped in a list before sending. Also, when staff look up EFT refunds by both status and short name, only the last filter is applied; make the filters combine so both criteria narrow the results.",
+  "qid": "loc-32"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "06d4efe49f488af1261468dd8189c849602544b6",
+  "date": "2025-01-22",
+  "subject": "23812 - EFT TDI17 deposit/transaction date timezone (#1878)",
+  "modified": [
+   "pay-api/src/pay_api/models/custom_query.py",
+   "pay-api/src/pay_api/models/eft_short_names.py",
+   "pay-api/src/pay_api/models/eft_transaction.py",
+   "pay-api/src/pay_api/resources/v1/eft_short_names.py",
+   "pay-api/src/pay_api/services/eft_short_name_summaries.py",
+   "pay-api/src/pay_api/utils/constants.py",
+   "pay-api/src/pay_api/utils/util.py",
+   "pay-queue/src/pay_queue/services/eft/eft_base.py",
+   "pay-queue/src/pay_queue/services/eft/eft_record.py"
+  ],
+  "added": [],
+  "n_dirs": 5,
+  "verdict": "KEEP",
+  "reason": "Despite dependency noise, the core is one coherent fix: EFT deposit and transaction dates from the bank's TDI17 file are interpreted as Pacific time, stored timezone-aware in UTC with existing data migrated, and the short-name summary search and output adjusted to use full timestamps.",
+  "task": "EFT deposit and transaction dates read from the bank's daily TDI17 deposit file are in Pacific (Vancouver) local time, but we currently save them as if they were UTC with no timezone information, so times shown to staff are off by several hours. Update the payment queue's EFT file parser so both the deposit date-time and the transaction date are treated as Vancouver local time and converted to UTC. Store these values timezone-aware in the database, and add a migration that changes the column types and corrects existing rows by reinterpreting them from Vancouver time to UTC. In the payment API's EFT short name summary endpoint, accept the 'payment received' start and end filters as full ISO date-time strings and compare them against the exact timestamp instead of only the calendar date. Return the last payment received date as a full ISO timestamp that includes the timezone offset.",
+  "qid": "loc-33"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "10eeaa9d085e34e9b6c93d4672d6e95e85417a8b",
+  "date": "2024-12-05",
+  "subject": "24695 - EFT add cas supplier site - backend changes (#1848)",
+  "modified": [
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ap.py",
+   "jobs/payment-jobs/tasks/common/dataclasses.py",
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/models/eft_short_names.py",
+   "pay-api/src/pay_api/schemas/schemas/eft_short_name.json",
+   "pay-api/src/pay_api/schemas/schemas/refund_shortname.json",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_short_names.py"
+  ],
+  "added": [],
+  "n_dirs": 5,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent feature that captures a CAS supplier site for EFT short names and EFT refunds and uses it in the accounts-payable refund file instead of a fixed configured location.",
+  "task": "EFT refunds are currently sent to the government's accounts-payable system with a single fixed supplier location for every recipient. Finance staff need to record a CAS supplier site alongside the existing CAS supplier number. The supplier site should be stored on each EFT short name, editable through the short name update endpoint, and returned in short name listings. It must also be a required field when submitting an EFT refund request and saved with the refund. The nightly AP refund job should then write each refund's own supplier number and supplier site into the header, invoice line and comment records of the AP feed file, rather than using a global configured location.",
+  "qid": "loc-34"
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "514160f90c607d03c8736d7ea8d48acb9cdabb1b",
+  "date": "2024-10-21",
+  "subject": "23942 - Small tweaks to invoice creation flow for skipPayment - for STRR/NRO and other various sandbox users (#1791)",
+  "modified": [
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/resources/v1/invoice.py",
+   "pay-api/src/pay_api/schemas/schemas/payment_request.json",
+   "pay-api/src/pay_api/services/payment_service.py"
+  ],
+  "added": [],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit adds one coherent feature: an environment-gated option to skip payment on invoice creation, mark the invoice paid and release it downstream, touching config, the request schema and the payment service.",
+  "task": "In development, test and sandbox environments, some callers (for example the short-term rental registry and name request teams) need to create invoices without going through a real payment step. Let a payment request include an optional flag asking to skip payment. When the flag is set and the environment has explicitly enabled this behaviour through a configuration setting that is off by default, the invoice should be marked as paid in full right away, and the usual payment-completed notification should be sent downstream so the requesting system proceeds as if payment succeeded. Otherwise, the normal invoice completion flow should run unchanged, and production must never honour the flag unless the setting is enabled.",
+  "qid": "loc-35"
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "e50e8a71776924f11df12d09315f17946a63e6ad",
+  "date": "2025-03-13",
+  "subject": "26495 - Correct Amalgamation Out Filing Typos and Labels (#733)",
+  "modified": [
+   "src/components/EntityInfo.vue",
+   "src/components/common/EffectiveDate.vue",
+   "src/views/AmalgamationOut.vue",
+   "src/views/ContinuationOut.vue"
+  ],
+  "added": [],
+  "n_dirs": 3,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent fix to the amalgamation-out filing page: it corrects wording copied from continuation out, fixes draft-loading of the detail comment, and shows the business header on the amalgamation-out screens.",
+  "task": "The amalgamation-out filing screen in the filing UI was cloned from the continuation-out screen and still shows continuation-out wording. The effective date section's heading, its date field label and its required-date error message all mention continuation out. The documents-delivery note and the unsaved-changes exit dialog do too. Update these so the amalgamation-out filing refers to amalgamation out, while the continuation-out filing keeps its current text. Also fix resuming a saved amalgamation-out draft, which fails to restore the detail comment because it reads the wrong section of the filing. Finally, show the business information header on the amalgamation-out and consent-to-amalgamate-out pages, as other filing pages already do.",
+  "qid": "loc-36"
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "8f568dc7b796dd7637760de28f8addb209876606",
+  "date": "2024-11-15",
+  "subject": "22639 - Update Certify Section Wording (#704)",
+  "modified": [
+   "src/components/common/Certify.vue",
+   "src/resources/BC.ts",
+   "src/resources/BEN.ts",
+   "src/resources/CC.ts",
+   "src/resources/ULC.ts"
+  ],
+  "added": [],
+  "n_dirs": 2,
+  "verdict": "KEEP",
+  "reason": "The commit makes one coherent change to the certification statement shown on filings: staff get third-person wording, the generic fallback becomes 'business', and the per-entity display names that fed the statement are removed for the corporation types.",
+  "task": "Reword the certification statement that users must check before submitting a filing in the filing UI. When a staff member files on a client's behalf, the statement should be in the third person: the named certifier certifies that they know the business and are authorized to file. Everyone else should keep the first-person 'I certify' form, with slightly reworded grammar. When no entity description is available, the statement should refer generically to the business rather than to an association. Also stop supplying the special descriptive names (for example the benefit company or unlimited liability company label) that the corporation business types currently use in this statement, so those companies fall back to the standard wording.",
+  "qid": "loc-37"
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "cfdf2226dd1ec3c2029f344fba2eb308c346b035",
+  "date": "2024-12-19",
+  "subject": "24953 - Update NoW Filing Page (#708)",
+  "modified": [
+   "src/assets/styles/theme.scss",
+   "src/components/common/index.ts",
+   "src/enums/effectOfOrderTypes.ts",
+   "src/services/enum-utilities.ts"
+  ],
+  "added": [
+   "src/components/common/MessageBox.vue"
+  ],
+  "n_dirs": 4,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent rework of the Notice of Withdrawal filing page: it moves the plan-of-arrangement questions into the record-to-be-withdrawn section, blocks submission when arrangement terms have taken effect, and switches to the shared court order component.",
+  "task": "On the Notice of Withdrawal filing page in the filing UI, move the plan of arrangement questions out of the court order section and into the section that describes the record being withdrawn. That section should ask whether the record is part of a plan of arrangement and, only if it is, whether at least one of the arrangement's terms has taken effect. If terms have taken effect, show a red warning box explaining that all related records must be withdrawn before any provisions take effect, and prevent the filing from being submitted. The court order section should use the standard shared court order and plan of arrangement input used on other filings, with an explanatory note and an optional court order number. Save and reload the two new answers as part of the withdrawal data sent to the legal API, drop the old 'arrangement has come into effect' court order value, read drafts from the correctly named withdrawal object, and return to the business dashboard when the identifier of the filing being withdrawn is missing or invalid.",
+  "qid": "loc-38"
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "5cc4b75655897ad604706672eea61cde9e9609aa",
+  "date": "2024-10-18",
+  "subject": "Fix 23520 - Dashboard Updates for Continuation States (#697)",
+  "modified": [
+   "src/App.vue",
+   "src/components/Dashboard/FilingHistoryList/bodies/BodyFutureEffective.vue",
+   "src/components/Dashboard/FilingHistoryList/bodies/BodyFutureEffectivePending.vue",
+   "src/components/Dashboard/FilingHistoryList/subtitles/SubtitleFutureEffectivePaid.vue",
+   "src/components/Dashboard/FilingHistoryList/subtitles/SubtitleRejected.vue",
+   "src/components/Dashboard/PendingList/PendingTemplate.vue",
+   "src/components/Dashboard/PendingList/filings/ContinuationIn.vue",
+   "src/components/Dashboard/TodoList.vue",
+   "src/mixins/date-mixin.ts",
+   "src/services/enum-utilities.ts",
+   "src/stores/rootStore.ts"
+  ],
+  "added": [],
+  "n_dirs": 9,
+  "verdict": "KEEP",
+  "reason": "The commit is one coherent behavior change: it updates how continuation-in filings are labelled and described across their lifecycle states (draft, awaiting review, change requested, approved, rejected, future effective) on the business dashboard.",
+  "task": "Update the business dashboard so continuation-in filings read correctly at every stage. While the filing is a draft, awaiting staff review, or has changes requested, call it a Continuation Authorization rather than a Continuation Application. In those states the to-do and pending items should show who submitted it and when, plus the approved name request and its expiry wording, and should load the name request for pending filings too. Approved items should say the continuation authorization was approved, should only show name request details when a name request exists and hasn't expired, and should open the business in its temporary-business context instead of the completed-business view. Change-requested and pending items should use friendlier staff-review wording, a 5-business-day review estimate, and registry contact information. Rejected and future-effective continuation entries in the filing history should say \"continuation\" and \"submitted\" rather than \"incorporation\" and \"paid\".",
+  "qid": "loc-39"
+ }
+]

@@ -1,0 +1,3111 @@
+[
+ {
+  "kind": "flow",
+  "question": "Walk me through what happens when someone submits a brand-new incorporation application for a company that doesn't exist yet. How does it get a temporary identity, how is it validated and charged, and when and where do the real business record and registration number get created?",
+  "facts": [
+   {
+    "fact": "Creating a new-business filing goes to post_businesses (POST /businesses) in the v2 business resource. It calls RegistrationBootstrapService.create_bootstrap to save a RegistrationBootstrap with a random 10-character identifier starting with 'T', then register_bootstrap affiliates it with the account in auth using the filing type's temporaryCorpTypeCode, and finally it hands off to saving_filings with the T identifier.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "For an identifier starting with 'T', saving_filings validates against the RegistrationBootstrap instead of a Business. save_filing creates a Filing with temp_reg set to the bootstrap identifier and writes that identifier into filing.business.identifier in the JSON.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "Validation starts with validate() in the validations package. It first checks the JSON against the registry 'filing' schema (validate_against_schema, which returns 422 on failure), then sends the incorporationApplication key to incorporation_application.validate.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/filings/validations/validation.py",
+     "lear/legal-api/src/legal_api/services/filings/validations/schemas.py",
+     "lear/legal-api/src/legal_api/services/filings/validations/incorporation_application.py"
+    ]
+   },
+   {
+    "fact": "complete_filing calls check_and_update_nr, which may extend the name request through namex for future-effective filings. It then builds fee codes with get_filing_types from Filing.FILINGS, using the legal type from nameRequest for new-business filings. create_invoice POSTs to PAYMENT_SVC_URL and stores the returned id as filing.payment_token.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/services/namex.py"
+    ]
+   },
+   {
+    "fact": "The Business row is only created in the entity-filer's incorporation_filing.process. It raises if a business already exists, reserves a number with business_info.get_next_corp_num (the local BusinessIdentifier sequence, or a fallback POST to COLIN_API), sets the state to ACTIVE, adds offices, parties, shares and aliases, and writes the new identifier and foundingDate back into the filing JSON.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/incorporation_filing.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py",
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+    ]
+   },
+   {
+    "fact": "After the commit, for new-business filing types the filer worker sets filing.business_id. It then calls business_profile.update_affiliation, which affiliates the real identifier to the bootstrap's account and renames the bootstrap entity in auth, followed by name_request.consume_nr (PATCH to NAMEX_API), update_business_profile, and an 'mras' email message.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py"
+    ]
+   }
+  ],
+  "qid": "lear-filings-0",
+  "area": "lear-filings",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "Once a filing's invoice has been paid, how does the payment confirmation make the filing actually get applied to the business, and what's different for filings dated to take effect in the future?",
+  "facts": [
+   {
+    "fact": "Payment completion arrives in a queue listener: either the NATS-based entity-pay worker (process_payment) or the GCP cloud-event business-pay service (pay_filer.worker). Both look up the filing with Filing.get_filing_by_payment_token, ignore duplicates, and set payment_completion_date.",
+    "files": [
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/database/filings.py"
+    ]
+   },
+   {
+    "fact": "In legal-api, filing status is mostly derived. The before_insert/before_update listener receive_before_change sets EPOCH for lear_epoch filings, COMPLETED when transaction_id is set, PAID when payment_completion_date is set (or the source is COLIN), PENDING when only a payment_token exists, and DRAFT otherwise. It does nothing for AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, for APPROVED until there is a transaction_id, or when skip_status_listener is set. Some code also sets _status directly: set_review_decision, resubmit_filing_to_awaiting_review, reset_filing_to_draft, and the filing_json setter (PENDING).",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The pay listeners only publish {'filing': {'id': ...}} to the filer subject when the effective date is not in the future (effective_date <= now in entity-pay, effective_date <= payment_completion_date in business-pay). Either way they also publish an email message to the emailer subject.",
+    "files": [
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/common/src/entity_queue_common/messages.py"
+    ]
+   },
+   {
+    "fact": "Future-effective filings are picked up later by the future-effective-filings job. It gets a service token, calls legal-api GET /api/v2/internal/filings/future_effective (Filing.get_future_effective_filing_ids: status PAID or APPROVED and effective_date <= now), and publishes each id to NATS_FILER_SUBJECT.",
+    "files": [
+     "lear/jobs/future-effective-filings/file_future_effective.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "entity-filer's process_filing loads the filing through core Filing.find_by_id and skips it if already COMPLETED. It opens a sqlalchemy-continuum transaction and sends each legal_filings() section (for example changeOfAddress, dissolution, annualReport) to its module in filing_processors.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/legal-api/src/legal_api/core/filing.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/change_of_address.py"
+    ]
+   },
+   {
+    "fact": "The filer marks completion by setting filing_submission.transaction_id and calling set_processed, which sets completion_date and moves effective_date up to the payment date where needed (not for AR/COD on CP or BEN). It stores FilingMeta in _meta_data and commits. It then publishes an email message, a NATS entity event (bc.registry.business.<type>), and a GCP BUSINESS_EVENTS_TOPIC cloud event.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_meta.py"
+    ]
+   },
+   {
+    "fact": "For non-COOP change-of-address filings, legal-api's set_effective_date (called from complete_filing) forces the effective date to one minute after midnight tomorrow (legislation time) and writes futureEffectiveDate into the header. These filings usually wait for the future-effective job. If payment completes after that time, the pay listener still publishes them straight to the filer, because its check is effective_date <= now or <= payment_completion_date. So it is not 'always'.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/utils/legislation_datetime.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py"
+    ],
+    "fixed": true
+   }
+  ],
+  "qid": "lear-filings-1",
+  "area": "lear-filings",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "In legal-api, filing status is mostly derived. The before_insert/before_update listener receive_before_change sets EPOCH for lear_epoch filings, COMPLETED when transaction_id is set, PAID when payment_completion_date is set (or the source is COLIN), PENDING when only a payment_token exists, and DRAFT otherwise. It does nothing for AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, for APPROVED until there is a transaction_id, or when skip_status_listener is set. Some code also sets _status directly: set_review_decision, resubmit_filing_to_awaiting_review, reset_filing_to_draft, and the filing_json setter (PENDING)."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "For non-COOP change-of-address filings, legal-api's set_effective_date (called from complete_filing) forces the effective date to one minute after midnight tomorrow (legislation time) and writes futureEffectiveDate into the header. These filings usually wait for the future-effective job. If payment completes after that time, the pay listener still publishes them straight to the filer, because its check is effective_date <= now or <= payment_completion_date. So it is not 'always'."
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How is a filing's status lifecycle (draft, pending, paid, completed, staff review states) modeled, and what stops a filing from being edited or deleted once money is involved?",
+  "facts": [
+   {
+    "fact": "Filing.Status in the legal-api model lists DRAFT, PENDING, PAID, COMPLETED, CORRECTED, EPOCH, ERROR, PENDING_CORRECTION and WITHDRAWN, plus the review states APPROVED, AWAITING_REVIEW, CHANGE_REQUESTED and REJECTED. The status property reports CORRECTED when a COMPLETED filing has a COMPLETED parent filing.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "The receive_before_change listener recomputes status from column values (transaction_id, payment_completion_date, payment_token, source). It leaves review states alone, and APPROVED only until a transaction_id exists, so these states are never overwritten.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "Filing.locked is true when the filing is deletion_locked, has a persisted payment_token, or has COLIN event ids. The setters for filing_json, payment_token and payment_status_code raise a 403 BusinessException ('Filings cannot be changed after the invoice is created'), and delete() plus a before_delete listener block deletion.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/exceptions/__init__.py"
+    ]
+   },
+   {
+    "fact": "The filings endpoint's DELETE handler returns create_deletion_locked_response for locked filings. The PATCH handler cancels the invoice with DELETE {PAYMENT_SVC_URL}/{payment_token} and then calls filing.reset_filing_to_draft, which clears the token and sets DRAFT so the filing can be edited again.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "Staff review states are entered from business-pay's create_staff_review, which creates a Review and sets AWAITING_REVIEW for continuationIn after payment. The staff endpoint POST /admin/reviews/<id> then records a ReviewResult and calls Filing.set_review_decision with CHANGE_REQUESTED, APPROVED or REJECTED.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+     "lear/legal-api/src/legal_api/models/review.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "A CHANGE_REQUESTED filing stays editable (the filing_json setter allows in_change_requested_status). When it is resubmitted through saving_filings, resubmit_filing_for_review sets the Review to RESUBMITTED and calls Filing.resubmit_filing_to_awaiting_review instead of creating a new invoice.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/models/review_result.py"
+    ]
+   },
+   {
+    "fact": "Readers depend on these statuses. The ledger lists only COMPLETED and PAID filings. Core Filing.get_document_list returns nothing for DRAFT, PENDING or PAPER_ONLY. While a filing is PAID or in a review state, it returns the receipt (when payment_completion_date is set) plus a single legalFilings entry for the filing type, except for some types such as registration, AGM and continuation-out filings, and SP/GP dissolutions. It does not add the 'additional' outputs. The GET single-filing handler polls pay for isPaymentActionRequired while a filing is PENDING.",
+    "files": [
+     "lear/legal-api/src/legal_api/core/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "fixed": true
+   }
+  ],
+  "qid": "lear-filings-2",
+  "area": "lear-filings",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "Readers depend on these statuses. The ledger lists only COMPLETED and PAID filings. Core Filing.get_document_list returns nothing for DRAFT, PENDING or PAPER_ONLY. While a filing is PAID or in a review state, it returns the receipt (when payment_completion_date is set) plus a single legalFilings entry for the filing type, except for some types such as registration, AGM and continuation-out filings, and SP/GP dissolutions. It does not add the 'additional' outputs. The GET single-filing handler polls pay for isPaymentActionRequired while a filing is PENDING."
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How does the system decide which filings a given user may submit for a given business (for example, not allowing a change while another filing is pending, or when the company is not in good standing), and where is that decision enforced and surfaced?",
+  "facts": [
+   {
+    "fact": "The rules are one nested dictionary, get_allowable_filings_dict in services/authz.py. It is keyed by user role ('staff' or 'general'), then Business.State, then filing type (or sub-types such as dissolution or amalgamation kinds). Each entry lists allowed legalTypes, optional businessRequirement, and blockerChecks.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/core/filing.py"
+    ]
+   },
+   {
+    "fact": "business_blocker_check works out business-level blockers. DEFAULT/DRAFT_PENDING are set by has_blocker_filing when PENDING, PAID, ERROR, PENDING_CORRECTION or DRAFT filings exist, or an incomplete alteration or correction. BUSINESS_FROZEN comes from admin_freeze, NOT_IN_GOOD_STANDING from Business.good_standing, plus AMALGAMATING_BUSINESS and IN_DISSOLUTION.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/models/business.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "has_blocker also checks filing-level conditions: required or forbidden state filings (validStateFilings/invalidStateFilings against business.state_filing_id), completedFilings, futureEffectiveFilings (PENDING or PAID with an effective_date in the future), and warningTypes from business.warnings.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/models/business.py"
+    ]
+   },
+   {
+    "fact": "On submission, ListFilingResource.check_authorization runs both authorized(identifier, jwt, ['edit']) and is_allowed(...). authorized lets staff, system and colin roles through and otherwise calls the auth API's entities/{identifier}/authorizations. is_allowed rejects edits to filings that are not DRAFT or CHANGE_REQUESTED, and rejects amalgamation for continued-in types (C, CBEN, CUL, CCC).",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ]
+   },
+   {
+    "fact": "The same rules feed the UI. The GET business handler calls get_allowable_actions, which uses get_allowed_filings and attaches the result to Business.allowable_actions. Business.json then serialises it as 'allowedActions', and each filing type carries displayName from core FilingMeta and feeCode from Filing.get_fee_code.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/legal-api/src/legal_api/models/business.py",
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/core/meta/filing.py"
+    ]
+   },
+   {
+    "fact": "When an existing DRAFT is being re-saved (filing_id given), is_allowed passes is_ignore_draft_blockers=True so the draft does not block itself. In that mode has_blocker_filing leaves DRAFT out of the blocking statuses.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   }
+  ],
+  "qid": "lear-filings-3",
+  "area": "lear-filings",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We need to add support for a brand-new type of business filing that is paid, changes business data, and produces a PDF. Which places in the API and the background services would I need to touch so it can be submitted, charged, applied, and shown with its documents?",
+  "facts": [
+   {
+    "fact": "Register the type in the Filing.FILINGS dictionary in models/filing.py, which maps the filing name to fee codes per legal type. get_filing_types uses it to build invoice filingTypes, and legal_filings() uses it to pick which JSON sections to process. Also add the type to core Filing.FilingTypes.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/core/filing.py"
+    ]
+   },
+   {
+    "fact": "Add a validator module under services/filings/validations/ and an elif branch in the dispatcher validate() in validation.py. Schema validation through rsbc_schemas 'filing' also has to accept the new section, otherwise validate_against_schema returns 422.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/filings/validations/validation.py",
+     "lear/legal-api/src/legal_api/services/filings/validations/schemas.py",
+     "lear/legal-api/src/legal_api/services/filings/validations/change_of_address.py"
+    ]
+   },
+   {
+    "fact": "Add an entry under the right role and state in get_allowable_filings_dict (services/authz.py) with legalTypes and blockerChecks. Without it, is_allowed rejects the submission with 401 and it never appears in allowedActions.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "In entity-filer, add a filing_processors/<type>.py with a process() function and an elif branch in worker.process_filing. If the filing should update auth or namex, also add it to the post-commit lists that call business_profile.update_entity or name_request.consume_nr.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/dissolution.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+    ]
+   },
+   {
+    "fact": "For outputs, add display name and 'additional' outputs in core/meta/filing.py (used by FilingMeta.get_all_outputs inside core Filing.get_document_list). Add a ReportMeta.reports entry plus an HTML template under report-templates, which Report._get_template reads from REPORT_TEMPLATE_PATH before POSTing to REPORT_SVC_URL.",
+    "files": [
+     "lear/legal-api/src/legal_api/core/meta/filing.py",
+     "lear/legal-api/src/legal_api/core/filing.py",
+     "lear/legal-api/src/legal_api/reports/report.py",
+     "lear/legal-api/report-templates/dissolution.html"
+    ]
+   },
+   {
+    "fact": "Notifications are routed by filing type in entity-emailer's process_email. A new type needs either a dedicated module under email_processors/ or an entry in filing_notification.FILING_TYPE_CONVERTER, otherwise the PAID/COMPLETED email messages published by the pay and filer workers produce no email.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+     "lear/queue_services/common/src/entity_queue_common/messages.py"
+    ]
+   }
+  ],
+  "qid": "lear-filings-4",
+  "area": "lear-filings",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "Today only continuation-in applications go to a registry staff member for review after payment. If we wanted amalgamation applications to also require staff approval before they take effect, where would that change go and which other parts of the flow would it affect?",
+  "facts": [
+   {
+    "fact": "Only business-pay decides that a filing needs review: pay_filer.worker has a hard-coded staff_review_required = ['continuationIn'] and calls create_staff_review instead of publish_to_filer. Adding amalgamationApplication there creates a Review (AWAITING_REVIEW) and sets the filing to AWAITING_REVIEW after payment.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/database/review.py",
+     "lear/queue_services/business-pay/src/business_pay/database/filings.py"
+    ]
+   },
+   {
+    "fact": "The legacy NATS entity-pay worker has no review branch. It always publishes non-future-effective paid filings to the filer, so it would also need changing if it still handles payments.",
+    "files": [
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+    ]
+   },
+   {
+    "fact": "create_staff_review reads nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' from filing_json[filing_type]['parties']. An amalgamation's JSON must provide parties, otherwise a KeyError is raised.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "Staff act through POST /admin/reviews/<id> in resources/v2/admin/reviews.py. It calls Filing.set_review_decision, publishes an email with the new status, and puts the filing on NATS_FILER_SUBJECT right away only if it is APPROVED and the effective date has passed.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/services/queue.py"
+    ]
+   },
+   {
+    "fact": "Approved future-effective amalgamations are released later by the future-effective-filings job, because Filing.get_future_effective_filing_ids includes APPROVED as well as PAID. receive_before_change keeps APPROVED until the filer sets transaction_id.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py"
+    ]
+   },
+   {
+    "fact": "If changes are requested, the submitter resubmits through saving_filings. In that case resubmit_filing_for_review and check_and_update_nr run instead of complete_filing, so there is no new invoice.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/review.py",
+     "lear/legal-api/src/legal_api/models/review_result.py"
+    ]
+   },
+   {
+    "fact": "Documents and email are also affected. While a filing is PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED, core Filing.get_document_list returns the receipt (once paid) plus the legalFilings document. _get_receipt in business_documents.py allows receipts in those states. Review-status emails (option = filing status) are sent to entity-emailer's amalgamation_notification by process_email. That processor only handles PAID and COMPLETED, and only AMALGA-PAID.html and AMALGA-COMPLETED.html templates exist, so it would need review-status handling and templates like continuation_in_notification has.",
+    "files": [
+     "lear/legal-api/src/legal_api/core/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/amalgamation_notification.py"
+    ],
+    "fixed": true
+   }
+  ],
+  "qid": "lear-filings-5",
+  "area": "lear-filings",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "Documents and email are also affected. While a filing is PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED, core Filing.get_document_list returns the receipt (once paid) plus the legalFilings document. _get_receipt in business_documents.py allows receipts in those states. Review-status emails (option = filing status) are sent to entity-emailer's amalgamation_notification by process_email. That processor only handles PAID and COMPLETED, and only AMALGA-PAID.html and AMALGA-COMPLETED.html templates exist, so it would need review-status handling and templates like continuation_in_notification has."
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "When a client pays for a filing that has a date set in the future, what happens end to end? How does it eventually get applied to the business, and which services and scheduled jobs are involved?",
+  "facts": [
+   {
+    "fact": "In the legal-api, ListFilingResource.complete_filing creates a pay-api invoice through create_invoice and stores the returned id as filing.payment_token. Before that, set_effective_date may push a non-COOP change of address to one minute after midnight tomorrow.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "The entity-pay NATS worker (process_payment) looks up the filing by payment token and sets payment_completion_date. It publishes a PAID email message, but it only publishes {'filing': {'id': ...}} to the filer subject when effective_date is not in the future.",
+    "files": [
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/common/src/entity_queue_common/messages.py"
+    ]
+   },
+   {
+    "fact": "The newer GCP-based business-pay worker does the same. It marks the filing PAID and sends it to the filer only if effective_date <= payment_completion_date. For continuationIn filings it creates a staff Review (AWAITING_REVIEW) instead of sending to the filer.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ]
+   },
+   {
+    "fact": "The future-effective-filings job (file_future_effective.py) gets a service-account token and calls GET /api/v2/internal/filings/future_effective. It then publishes each returned id to NATS_FILER_SUBJECT through ServiceWorker.publish.",
+    "files": [
+     "lear/jobs/future-effective-filings/file_future_effective.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py"
+    ]
+   },
+   {
+    "fact": "That endpoint requires the system role. It returns Filing.get_future_effective_filing_ids, which selects filings in PAID or APPROVED status whose effective_date <= now.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "The entity-filer worker's process_filing skips filings that are already COMPLETED. Otherwise it sends each legal filing to its filing_processors module, sets the filing processed with the versioning transaction id, and commits. It then publishes an email message, a NATS entity event and a GCP business event.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+    ]
+   },
+   {
+    "fact": "For staff-reviewed filings, the legal-api review endpoint (save_review) publishes to the filer subject right away only if the review is APPROVED and effective_date <= now. Approved filings dated in the future are left for the future-effective job.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+    ]
+   }
+  ],
+  "qid": "lear-async-0",
+  "area": "lear-async",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "How are filings kept in sync in both directions between the new registry system and the legacy COLIN Oracle system? What runs the sync, and how does it avoid re-sending or skipping filings?",
+  "facts": [
+   {
+    "fact": "The update-colin-filings job pages through GET /businesses/internal/filings in the legal-api. It POSTs each filing to the colin-api at /{legalType}/{identifier}/filings/{filingType}. It then PATCHes /businesses/internal/filings/{id} with the returned colinIds.",
+    "files": [
+     "lear/jobs/update-colin-filings/update_colin_filings.py",
+     "lear/colin-api/src/colin_api/resources/filing.py"
+    ]
+   },
+   {
+    "fact": "Filing.get_completed_filings_for_colin returns only COMPLETED filings with no colin_event_ids. It excludes SP/GP firms and adminFreeze, courtOrder, registrarsNotation and registrarsOrder filings. The colin_sync endpoint adds extra data: business revision data, the correctedFilingColinId for corrections, and holding/primary business data for horizontal or vertical amalgamations.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+    ]
+   },
+   {
+    "fact": "The PATCH handler update_colin_id appends ColinEventId rows to the filing. Once a filing has colin event ids, it no longer appears in the pending-for-COLIN query. If a business has one failed filing, the job skips that business's later filings in the same run.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+     "lear/legal-api/src/legal_api/models/colin_event_id.py",
+     "lear/jobs/update-colin-filings/update_colin_filings.py"
+    ]
+   },
+   {
+    "fact": "In the other direction, the update-legal-filings job reads the last processed COLIN event id from GET /internal/filings/colin_id, which reads the colin_last_update table. It asks the colin-api /event/{corp_type}/{last_event_id} for newer events for CP, BC, ULC and CC, and adds the 'BC' prefix for the BC/ULC/CC corp types.",
+    "files": [
+     "lear/jobs/update-legal-filings/update_legal_filings.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+     "lear/colin-api/src/colin_api/resources/event.py"
+    ]
+   },
+   {
+    "fact": "For each event whose id is not yet in LEAR, the job fetches the filing from the colin-api and POSTs it to /businesses/{corp_num}/filings. It then records a new high-water mark through POST /internal/filings/colin_id/{id}. If any event failed, that mark is set to the first failed id minus one, so the failure is retried on the next run.",
+    "files": [
+     "lear/jobs/update-legal-filings/update_legal_filings.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+    ]
+   },
+   {
+    "fact": "In the legal-api, filings with source COLIN have their header colinIds saved as ColinEventId rows (_save_colin_event_ids). complete_filing then calls process_colin_filing, which either attaches the filing to the epoch transaction (filings before the epoch) or publishes it to the entity-filer queue through QueueService.publish_json.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/services/queue.py"
+    ]
+   }
+  ],
+  "qid": "lear-async-1",
+  "area": "lear-async",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "How does a company that falls behind on its annual reports end up dissolved automatically? Which jobs, notices and queue messages are involved at each stage?",
+  "facts": [
+   {
+    "fact": "Both the involuntary-dissolutions job and the furnishings job run only when the 'enable-involuntary-dissolution' flag is on. Each stage runs only on days that match the cron strings stored in the Configuration table (DISSOLUTIONS_STAGE_1/2/3_SCHEDULE), checked with croniter.",
+    "files": [
+     "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+     "lear/jobs/furnishings/src/furnishings/worker.py",
+     "lear/legal-api/src/legal_api/models/configuration.py"
+    ]
+   },
+   {
+    "fact": "Stage 1 of the involuntary-dissolutions job uses InvoluntaryDissolutionService.get_businesses_eligible, limited by NUM_DISSOLUTIONS_ALLOWED. It creates an INVOLUNTARY_DISSOLUTION Batch and BatchProcessing rows at step WARNING_LEVEL_1, with overdueARs/overdueTransition metadata.",
+    "files": [
+     "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+     "lear/legal-api/src/legal_api/services/involuntary_dissolution.py",
+     "lear/legal-api/src/legal_api/models/batch_processing.py"
+    ]
+   },
+   {
+    "fact": "Stage one of the furnishings job creates EMAIL Furnishing rows. It publishes a 'bc.registry.dissolution' cloud event to the emailer subject. If the business has no contact email, or the email was sent and the business is still not in good standing after a few business days, it creates MAIL furnishings, merges them into PDF letters and uploads them over SFTP to BC Mail+.",
+    "files": [
+     "lear/jobs/furnishings/src/furnishings/stage_processors/stage_one.py",
+     "lear/legal-api/src/legal_api/models/furnishing.py"
+    ]
+   },
+   {
+    "fact": "The entity-emailer sends 'bc.registry.dissolution' messages to involuntary_dissolution_stage_1_notification. That module attaches the furnishing PDF from the legal-api /businesses/{id}/furnishings/{fid}/document endpoint. Its post_process marks the Furnishing PROCESSED, or FAILED if sending failed.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/involuntary_dissolution_stage_1_notification.py"
+    ]
+   },
+   {
+    "fact": "Stage 2 moves BatchProcessing to WARNING_LEVEL_2 only if an EMAIL or MAIL furnishing is PROCESSED and the business is still eligible. Otherwise it marks the row ERROR, or WITHDRAWN if the business is back in good standing. Furnishings stages two and three then create GAZETTE furnishings (INTENT_TO_DISSOLVE, then CORP_DISSOLVED). The post_processor renders these into a gazette XML that is sent over SFTP to BC Laws and saved as XmlPayload/FurnishingGroup.",
+    "files": [
+     "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+     "lear/jobs/furnishings/src/furnishings/stage_processors/stage_two.py",
+     "lear/jobs/furnishings/src/furnishings/stage_processors/stage_three.py",
+     "lear/jobs/furnishings/src/furnishings/stage_processors/post_processor.py"
+    ]
+   },
+   {
+    "fact": "Stage 3 of the involuntary-dissolutions job requires a PROCESSED GAZETTE furnishing. It creates a dissolution Filing with sub-type involuntary, marks the BatchProcessing QUEUED at step DISSOLUTION, and publishes the filing id to NATS_FILER_SUBJECT.",
+    "files": [
+     "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py"
+    ]
+   },
+   {
+    "fact": "The entity-filer dissolution processor sets the business HISTORICAL. When the flag is on, it moves QUEUED BatchProcessing rows for that filing to COMPLETED. When pushing this filing to COLIN, colin_sync adds the BatchProcessing meta_data to the involuntary dissolution JSON.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/dissolution.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+    ]
+   }
+  ],
+  "qid": "lear-async-2",
+  "area": "lear-async",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "Queue messages can be delivered more than once. How does the system stop the same notification email being sent twice, and how is retrying versus dropping a message decided across the queue workers?",
+  "facts": [
+   {
+    "fact": "The entity-emailer's cb_subscription_handler calls the message_tracker. get_message_context_properties builds a deterministic message_id for each message kind (for example '{type}_{option}_{filingId}', 'annualReport_reminder_{arYear}_{businessId}', 'businessNumber_{identifier}'). Cloud-event names-request messages use source plus id instead.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+    ]
+   },
+   {
+    "fact": "Tracking state is stored in the MessageProcessing model (message_processing table on the 'tracker' database bind). It has a unique message_id, status PROCESSING/FAILED/COMPLETE, message_seen_count and last_error.",
+    "files": [
+     "lear/queue_services/entity-emailer/tracker/models/message_processing.py",
+     "lear/queue_services/entity-emailer/tracker/services/message_processing_service.py"
+    ]
+   },
+   {
+    "fact": "is_processable_message processes a message only if it has never been seen or its last status is FAILED, and only while message_seen_count is at most MSG_RETRY_NUM. COMPLETE or in-flight messages are skipped.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+    ]
+   },
+   {
+    "fact": "In the emailer, OperationalError and EmailException (a non-200 from the Notify API in send_email) are re-raised so the message goes back on the queue. Other exceptions are logged and the tracker row is marked FAILED.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+    ]
+   },
+   {
+    "fact": "The entity-filer and entity-pay workers handle duplicates using the filing itself, without a tracker table. process_filing returns early if the filing is already COMPLETED. process_payment skips filings that are already COMPLETED, and business-pay drops messages whose filing already has a payment_completion_date.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ]
+   },
+   {
+    "fact": "The entity-bn worker uses RequestTracker rows with retry_number. While retries remain below BN_HUB_MAX_RETRY it raises BNException, which is re-raised so the message is redelivered. After that it raises BNRetryExceededException, which is logged and the message is dropped.",
+    "files": [
+     "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py",
+     "lear/queue_services/entity-bn/src/entity_bn/worker.py"
+    ]
+   }
+  ],
+  "qid": "lear-async-3",
+  "area": "lear-async",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How does a business get its CRA business number (tax id), depending on the kind of entity? Once the number arrives, which downstream notifications and updates does it trigger?",
+  "facts": [
+   {
+    "fact": "For corporations synced with COLIN, the update-legal-filings job's update_business_nos gets businesses without a tax id from the legal-api GET /businesses/internal/tax_ids. It looks those up in batches of 20 through the colin-api /internal/tax_ids and writes the results back with POST /businesses/internal/tax_ids.",
+    "files": [
+     "lear/jobs/update-legal-filings/update_legal_filings.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+     "lear/colin-api/src/colin_api/resources/business.py"
+    ]
+   },
+   {
+    "fact": "Business.get_all_by_no_tax_id excludes COOP, SP and GP legal types. Coops do not get a business number, and SP/GP firms get theirs through entity-bn rather than COLIN.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/business.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+    ]
+   },
+   {
+    "fact": "The entity-bn worker listens to entity events published by the entity-filer (for example 'bc.registry.business.registration'). registration.process sends an XML request to CRA through the BN Hub (_inform_cra). It then fetches the program account through the colin-api /programAccount/{identifier}/{transactionId} and stores the BN15 in business.tax_id.",
+    "files": [
+     "lear/queue_services/entity-bn/src/entity_bn/worker.py",
+     "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py",
+     "lear/colin-api/src/colin_api/resources/program_account.py",
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+    ]
+   },
+   {
+    "fact": "Both paths publish an email message {'email': {'type': 'businessNumber', 'option': 'bn', 'identifier': ...}} to the emailer subject. Both also publish a 'bc.registry.business.bn' cloud event to the entity events subject.",
+    "files": [
+     "lear/jobs/update-legal-filings/update_legal_filings.py",
+     "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py"
+    ]
+   },
+   {
+    "fact": "The entity-emailer sends 'businessNumber' messages to bn_notification.process. It renders the BC-BN.html template and picks recipients from the business's founding filing (incorporation, amalgamation, continuation-in or registration).",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/bn_notification.py"
+    ]
+   },
+   {
+    "fact": "The entity-digital-credentials worker handles 'bc.registry.business.bn' events with business_number.process, which revokes and reissues the business's digital credential.",
+    "files": [
+     "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/worker.py",
+     "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/business_number.py"
+    ]
+   },
+   {
+    "fact": "When CRA moves a BN, the legal-api POST /api/v2/internal/bnmove updates tax_id and creates a registrarsNotation filing. It publishes a 'bc.registry.bnmove' event to the emailer, which is handled by bn_notification.process_bn_move, and a 'bc.registry.business.bn' event.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/bn_notification.py"
+    ]
+   }
+  ],
+  "qid": "lear-async-4",
+  "area": "lear-async",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We want to send annual report reminder emails to cooperatives as well, and to stop sending a confirmation email when a change of directors completes. Where would these changes go, and what else would be affected?",
+  "facts": [
+   {
+    "fact": "The reminder entity types are hard-coded in find_and_send_ar_reminder in the email-reminder job: BEN and the continued-in types (CBEN, C, CUL, CCC), plus BC/CC/ULC when the 'enable-bc-ccc-ulc' flag is on. Adding COOP means extending that list. get_ar_fee looks up Filing.FILINGS['annualReport']['codes'][legal_type], which already has 'CP': 'OTANN', so the pay-api fee lookup needs no new code.",
+    "files": [
+     "lear/jobs/email-reminder/email_reminder.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "get_businesses selects ACTIVE businesses with send_ar_ind true and no restoration_expiry_date, using a founding-date/last_ar_reminder_year anniversary rule. The job then updates business.last_ar_reminder_year after queuing each email.",
+    "files": [
+     "lear/jobs/email-reminder/email_reminder.py",
+     "lear/legal-api/src/legal_api/models/business.py"
+    ]
+   },
+   {
+    "fact": "The job publishes {'email': {'type': 'annualReport', 'option': 'reminder', businessId, arFee, arYear}} to NATS_EMAILER_SUBJECT. The entity-emailer worker sends this to ar_reminder_notification.process with the 'disable-specific-service-provider' flag. The tracker deduplicates it as 'annualReport_reminder_{arYear}_{businessId}'.",
+    "files": [
+     "lear/jobs/email-reminder/email_reminder.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+    ]
+   },
+   {
+    "fact": "ar_reminder_notification gets recipients from the auth API (get_recipient_from_auth \u2192 AUTH_URL/entities/{identifier}) and renders AR-REMINDER.html. Coops therefore need auth contacts, and the template's wording may need changing for them.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/ar_reminder_notification.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_templates/AR-REMINDER.html"
+    ]
+   },
+   {
+    "fact": "Change-of-directors emails are generic filing emails. The entity-filer publishes {'email': {filingId, type, option: status}} after processing (publish_email_message). The emailer sends any type listed in filing_notification.FILING_TYPE_CONVERTER (where 'changeOfDirectors' maps to 'COD') to filing_notification.process.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/common/src/entity_queue_common/messages.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py"
+    ]
+   },
+   {
+    "fact": "filing_notification picks the template BC-{code}-{status}.html, so a completed change of directors renders BC-COD-COMPLETED.html. To suppress it, add a 'changeOfDirectors'/COMPLETED skip in the emailer worker's dispatch, as already exists for 'annualReport'/COMPLETED, rather than just deleting the template file.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_templates/BC-COD-COMPLETED.html"
+    ]
+   }
+  ],
+  "qid": "lear-async-5",
+  "area": "lear-async",
+  "verdicts": [
+   {
+    "verdict": "partly",
+    "fix": "The reminder entity types are hard-coded in find_and_send_ar_reminder in the email-reminder job: BEN and the continued-in types (CBEN, C, CUL, CCC), plus BC/CC/ULC when the 'enable-bc-ccc-ulc' flag is on. Adding COOP means extending that list. get_ar_fee looks up Filing.FILINGS['annualReport']['codes'][legal_type], which already has 'CP': 'OTANN', so the pay-api fee lookup needs no new code."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "Walk me through what happens end to end when an account administrator invites a new team member by email. How is the invitation created and emailed, what link does the invitee click, and what happens when the invitee accepts it and becomes a member?",
+  "facts": [
+   {
+    "fact": "The auth-web InvitationService posts new invitations to POST /invitations. The API's post_invitation endpoint validates the 'invitation' JSON schema and calls Invitation.create_invitation. That method uses check_auth to require the inviter to be ADMIN, COORDINATOR or STAFF on the org.",
+    "files": [
+     "sbc-auth/auth-web/src/services/invitation.services.ts",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ]
+   },
+   {
+    "fact": "create_invitation picks the invitation type and the required login source from the org's access type: ANONYMOUS\u2192BCROS, GOVM\u2192IDIR/STAFF, otherwise the org's AccountLoginOptions or BCSC/BCEID. It then signs a confirmation token containing the invitation id and type with an itsdangerous URLSafeTimedSerializer (generate_confirmation_token).",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/models/invitation.py"
+    ]
+   },
+   {
+    "fact": "send_invitation builds a '<orgName>/validatetoken/<loginSource>/<token>' URL and calls publish_to_mailer. publish_to_mailer wraps the data in a SimpleCloudEvent (such as BUSINESS_INVITATION or GOVM_MEMBER_INVITATION) and publishes it to the ACCOUNT_MAILER_TOPIC GCP Pub/Sub topic.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+    ]
+   },
+   {
+    "fact": "In auth-web, the route '/:orgName/validatetoken/:loginSource/:token' renders AcceptInviteLandingView, which validates the token. AcceptInviteView then calls the org store's acceptInvitation, which issues PUT /invitations/tokens/<token>.",
+    "files": [
+     "sbc-auth/auth-web/src/routes/router.ts",
+     "sbc-auth/auth-web/src/views/auth/AcceptInviteLandingView.vue",
+     "sbc-auth/auth-web/src/views/auth/AcceptInviteView.vue",
+     "sbc-auth/auth-web/src/stores/org.ts"
+    ]
+   },
+   {
+    "fact": "validate_token rejects tokens older than TOKEN_EXPIRY_PERIOD days (7 days by default) and invitations already ACCEPTED or EXPIRED. accept_invitation enforces that STAFF (IDIR) invitations are accepted with the same login source.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py"
+    ]
+   },
+   {
+    "fact": "accept_invitation creates a Membership whose status depends on the org and user. GOVM orgs get ACTIVE immediately. An unverified BCeID ADMIN gets PENDING_STAFF_REVIEW plus a BCEID_ADMIN affidavit-review Task. Everyone else gets PENDING_APPROVAL, and the account admins are notified via an ADMIN_NOTIFICATION email.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/services/task.py",
+     "sbc-auth/auth-api/src/auth_api/models/membership.py"
+    ]
+   },
+   {
+    "fact": "After acceptance, the user is added to Keycloak groups through KeycloakService.join_users_group and join_account_holders_group, and product groups are synced by ProductService.update_users_products_keycloak_groups.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/services/keycloak.py",
+     "sbc-auth/auth-api/src/auth_api/services/products.py"
+    ]
+   }
+  ],
+  "qid": "auth-0",
+  "area": "auth",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How are fine-grained permissions (for example, who can change the account address or invite members) modeled and enforced for a team member, depending on their role and on the account's status? Where do these rules live, and how does the web front end learn about them?",
+  "facts": [
+   {
+    "fact": "Permissions are rows in a 'permissions' table keyed by membership_type_code and org_status_code, with an 'actions' string (the Permissions model). They are seeded and changed through Alembic migrations, for example one that inserts ('ADMIN', 'view_address').",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/models/permissions.py",
+     "sbc-auth/auth-api/migrations/versions/2024_05_30_39b4f331c003_admin_view_address_permission.py"
+    ]
+   },
+   {
+    "fact": "Permissions.build_all_permission_cache loads every row into the Flask cache keyed by (org_status, membership_type). It runs once at app startup from build_cache in the auth_api package init.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+     "sbc-auth/auth-api/src/auth_api/__init__.py"
+    ]
+   },
+   {
+    "fact": "Permissions.get_permissions_for_membership treats every org status except NSF_SUSPENDED, PENDING_STAFF_REVIEW and SUSPENDED as None (normal), then reads the actions from the cache or the database.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+     "sbc-auth/auth-api/src/auth_api/utils/enums.py"
+    ]
+   },
+   {
+    "fact": "The Authorization service reads the authorizations_view database view (the AuthorizationView model) to find the caller's org_membership and the org status_code. It attaches the resulting permission list as 'roles' in the responses of GET /entities/<id>/authorizations and the org authorizations endpoint.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+     "sbc-auth/auth-api/src/auth_api/models/views/authorization.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org_authorizations.py"
+    ]
+   },
+   {
+    "fact": "Server-side role checks inside services use check_auth with one_of_roles, disabled_roles or equals_role against the caller's org membership, and return 403 via abort. Endpoint-level Keycloak role gating uses the _jwt.has_one_of_roles decorator.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/services/membership.py"
+    ]
+   },
+   {
+    "fact": "In auth-web, the org store's syncMembership calls PermissionService.getPermissions, which issues GET /permissions/<orgStatus>/<role>?case=upper (served by get_membership_permissions), and stores the result in state.permissions. For staff it instead uses the hard-coded lists in CommonUtils.getAdminPermissions and getViewOnlyPermissions.",
+    "files": [
+     "sbc-auth/auth-web/src/stores/org.ts",
+     "sbc-auth/auth-web/src/services/permission.services.ts",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/permissions.py",
+     "sbc-auth/auth-web/src/util/common-util.ts"
+    ]
+   },
+   {
+    "fact": "UI components gate features by checking the Permission enum against the store's permissions. For example, AccountInfo uses CHANGE_ADDRESS and VIEW_ADMIN_CONTACT, and AccountPaymentMethods uses VIEW_PAYMENT_METHODS and MAKE_PAYMENT.",
+    "files": [
+     "sbc-auth/auth-web/src/util/constants.ts",
+     "sbc-auth/auth-web/src/components/auth/account-settings/account-info/AccountInfo.vue",
+     "sbc-auth/auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue"
+    ]
+   }
+  ],
+  "qid": "auth-1",
+  "area": "auth",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "How does a user add an existing business or a name request to their account's business list, and how is the claim verified? What happens on the reverse path, when a business is removed from the account?",
+  "facts": [
+   {
+    "fact": "The auth-web business store's addBusiness and addNameRequest call OrgService.createAffiliation and createNRAffiliation. These POST to /orgs/<id>/affiliations, with ?newBusiness=true for name requests.",
+    "files": [
+     "sbc-auth/auth-web/src/stores/business.ts",
+     "sbc-auth/auth-web/src/services/org.services.ts"
+    ]
+   },
+   {
+    "fact": "The post_organization_affiliation endpoint validates the 'affiliation' schema and requires at least one digit in the identifier. It then routes to Affiliation.create_new_business_affiliation for name requests or Affiliation.create_affiliation for existing businesses, and optionally calls fix_stale_affiliations.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ]
+   },
+   {
+    "fact": "Affiliation.is_authorized lets staff through. For SP/GP firms it checks the supplied party name against the entity service using a service-account token (_validate_firms_party). For other businesses it compares the passcode with the bcrypt hash via utils/passcode.validate_passcode.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/utils/passcode.py",
+     "sbc-auth/auth-api/src/auth_api/services/rest_service.py"
+    ]
+   },
+   {
+    "fact": "For name requests, create_new_business_affiliation fetches the NR from the Names API (NAMEX_API_URL /requests/<nr>; the docstring wrongly says legal-api) and requires an APPROVED, CONDITIONAL, DRAFT or INPROGRESS state. DRAFT NRs must have a COMPLETED invoice from pay-api's /payment-requests. Non-staff users must supply an email or phone that matches the NR applicant, and if no Entity exists one is created with corp type NR.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/services/entity.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "A successful affiliation saves the Affiliation model, marks the entity's passcode as claimed (except for SP/GP on the passcode path), and publishes a CREATE_AFFILIATION activity through ActivityLogPublisher (skipped for the temporary corp types TMP, RTMP, ATMP and CTMP).",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/models/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py"
+    ]
+   },
+   {
+    "fact": "Removal goes through OrgService.removeAffiliation, which issues DELETE /orgs/<id>/affiliations/<identifier> with passcodeResetEmail, resetPasscode and logDeleteDraft. Affiliation.delete_affiliation deletes related affiliation invitations and optionally calls Entity.reset_passcode, which generates a new 9-digit bcrypt-hashed passcode and emails it via a RESET_PASSCODE mailer event. It then sets pass_code_claimed back to False.",
+    "files": [
+     "sbc-auth/auth-web/src/services/org.services.ts",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/services/entity.py"
+    ]
+   },
+   {
+    "fact": "In the auth-queue worker, process_name_events also auto-affiliates NRs: when a DRAFT NR event arrives with no existing affiliation, it looks up the paying account in pay-api's payment-requests and creates the Affiliation and a CREATE_AFFILIATION ActivityLog row directly.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ]
+   }
+  ],
+  "qid": "auth-2",
+  "area": "auth",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "For name requests, create_new_business_affiliation fetches the NR from the Names API (NAMEX_API_URL /requests/<nr>; the docstring wrongly says legal-api) and requires an APPROVED, CONDITIONAL, DRAFT or INPROGRESS state. DRAFT NRs must have a COMPLETED invoice from pay-api's /payment-requests. Non-staff users must supply an email or phone that matches the NR applicant, and if no Entity exists one is created with corp type NR."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "Some new accounts and some new administrators must be reviewed by registry staff before they become usable. How is this staff-review concept modeled, what creates a review item, and what happens when staff approve, reject or put a review on hold?",
+  "facts": [
+   {
+    "fact": "Org.create_org decides whether staff review is needed. It is needed for GOVN accounts, and for EXTRA_PROVINCIAL or REGULAR_BCEID accounts whose user has no approved affidavit. In that case _create_staff_review_task sets the org status to PENDING_STAFF_REVIEW, creates an ORG-relationship Task (GOVN_REVIEW or NEW_ACCOUNT_STAFF_REVIEW, with action AFFIDAVIT_REVIEW for BCeID users and ACCOUNT_REVIEW otherwise), and emails staff a STAFF_REVIEW_ACCOUNT reminder.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/task.py",
+     "sbc-auth/auth-api/src/auth_api/models/task.py"
+    ]
+   },
+   {
+    "fact": "When an unverified BCeID user accepts an ADMIN invitation, Invitation._create_affidavit_review_task creates a USER-relationship Task (type BCEID_ADMIN, action AFFIDAVIT_REVIEW) and the membership is set to PENDING_STAFF_REVIEW.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+     "sbc-auth/auth-api/src/auth_api/utils/enums.py"
+    ]
+   },
+   {
+    "fact": "Staff resolve tasks through PUT /tasks/<id>, which is limited to the STAFF role. It calls Task.update_task, which records the decision and dispatches on relationship_type in _update_relationship (ORG, PRODUCT or USER).",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/task.py",
+     "sbc-auth/auth-api/src/auth_api/services/task.py"
+    ]
+   },
+   {
+    "fact": "For ORG tasks, Org.approve_or_reject approves or rejects the affidavit through AffidavitService when the action is AFFIDAVIT_REVIEW and sets the org status to ACTIVE or REJECTED. It then emails the account admins with access-type-specific notifications (BCeID/extra-provincial versus GOVM/GOVN).",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/affidavit.py"
+    ]
+   },
+   {
+    "fact": "For USER tasks, Task._update_bceid_admin sets the user to ACTIVE or INACTIVE and the membership to ACTIVE or REJECTED, and calls Affidavit.approve_or_reject_bceid_admin. An approved AFFIDAVIT_REVIEW also sets user.verified to True.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/task.py",
+     "sbc-auth/auth-api/src/auth_api/services/affidavit.py",
+     "sbc-auth/auth-api/src/auth_api/models/membership.py"
+    ]
+   },
+   {
+    "fact": "Putting a task on HOLD is allowed for ORG tasks only when the action is AFFIDAVIT_REVIEW (otherwise it raises INVALID_INPUT). _notify_admin_about_hold publishes a RESUBMIT_BCEID_ORG_NOTIFICATION or RESUBMIT_BCEID_ADMIN_NOTIFICATION mailer event containing a link back to the BCeID setup route.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/task.py",
+     "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+    ]
+   },
+   {
+    "fact": "PENDING_STAFF_REVIEW is also an org status that Permissions.get_permissions_for_membership keeps when looking up permissions, so members of an account under review get a distinct permission set.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+     "sbc-auth/auth-api/migrations/versions/5397c5a5b0ca_staff_pending_status_permissions.py"
+    ]
+   }
+  ],
+  "qid": "auth-3",
+  "area": "auth",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We want to guarantee that an account can never be left without an active administrator: no admin should be able to leave the team, or be removed, if they are the last one. Where is the 'only administrator' rule enforced today, where are the gaps, and what would we need to touch in the API and the web app?",
+  "facts": [
+   {
+    "fact": "On the server, the rule exists only in Membership.update_membership, which serves PATCH /orgs/<id>/members/<membership_id>. It raises CHANGE_ROLE_FAILED_ONLY_OWNER, defined in exceptions/errors.py as a 400, when an ADMIN is being set INACTIVE or downgraded and get_owner_count returns 1. auth-web also has a client-side check: MemberDataTable.confirmLeaveTeam emits 'single-owner-error' when an admin tries to leave and ownerCount() over the active members is 1, and that check can be bypassed.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/membership.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/exceptions/errors.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "get_owner_count counts every ADMIN in org.members, the relationship on the Org model, without filtering by membership status. Inactive or pending admins are therefore counted, and the check should use something like MembershipModel.get_count_active_owner_org_id, which filters on ACTIVE status.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/membership.py",
+     "sbc-auth/auth-api/src/auth_api/models/org.py",
+     "sbc-auth/auth-api/src/auth_api/models/membership.py"
+    ]
+   },
+   {
+    "fact": "Membership.deactivate_membership, which serves DELETE /orgs/<id>/members/<membership_id>, has no last-admin check. It only uses check_auth to require COORDINATOR or ADMIN when removing someone else, and ADMIN when removing an admin.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/membership.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ]
+   },
+   {
+    "fact": "In auth-web, TeamManagementMixin.leave and dissolve both call the org store's leaveTeam, which calls OrgService.leaveOrg (the DELETE endpoint). removeMember and changeRole instead call updateMember, which sends PATCH with role, status and notifyUser. A new server-side check on DELETE would therefore also block the 'dissolve account' path, which needs separate handling.",
+    "files": [
+     "sbc-auth/auth-web/src/components/auth/mixins/TeamManagementMixin.vue",
+     "sbc-auth/auth-web/src/stores/org.ts",
+     "sbc-auth/auth-web/src/services/org.services.ts"
+    ]
+   },
+   {
+    "fact": "Both membership paths call Membership._add_or_remove_group after saving. It removes the user from the Keycloak account_holders group only when the user has no other valid org memberships, and resyncs product groups through ProductService.update_users_products_keycloak_groups. A new guard must run before the save so that Keycloak stays consistent.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/membership.py",
+     "sbc-auth/auth-api/src/auth_api/services/keycloak.py",
+     "sbc-auth/auth-api/src/auth_api/services/products.py"
+    ]
+   },
+   {
+    "fact": "Both paths also publish REMOVE_TEAM_MEMBER activities via ActivityLogPublisher, and update_membership sends TEAM_MODIFIED and ADMIN_REMOVED mailer events when staff make the change. These side effects should not fire when the guard rejects the request.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/membership.py",
+     "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+     "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+    ]
+   }
+  ],
+  "qid": "auth-4",
+  "area": "auth",
+  "verdicts": [
+   {
+    "verdict": "partly",
+    "fix": "On the server, the rule exists only in Membership.update_membership, which serves PATCH /orgs/<id>/members/<membership_id>. It raises CHANGE_ROLE_FAILED_ONLY_OWNER, defined in exceptions/errors.py as a 400, when an ADMIN is being set INACTIVE or downgraded and get_owner_count returns 1. auth-web also has a client-side check: MemberDataTable.confirmLeaveTeam emits 'single-owner-error' when an admin tries to leave and ownerCount() over the active members is 1, and that check can be bypassed."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We want account administrators to see a new kind of entry in their account's activity history, for example when an API key is created. How do activity entries get from the place where an action happens into the history shown to the user, and what would we need to add for a new action type?",
+  "facts": [
+   {
+    "fact": "Services record actions by calling ActivityLogPublisher.publish_activity with an Activity dataclass (org_id, action, name, id, value), as Org, Membership, Invitation and Affiliation do. The action values come from the ActivityAction enum in utils/enums.py, so a new action needs a new enum member there.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+     "sbc-auth/auth-api/src/auth_api/models/dataclass.py",
+     "sbc-auth/auth-api/src/auth_api/utils/enums.py",
+     "sbc-auth/auth-api/src/auth_api/services/org.py"
+    ]
+   },
+   {
+    "fact": "publish_activity fills in actor_id from the JWT user and remoteAddr, wraps the data in a SimpleCloudEvent of type ACTIVITY_LOG with itemType 'ACCOUNT', and publishes it to the AUTH_EVENT_TOPIC Pub/Sub topic. Failures are only logged and reported to Sentry, so the request is never blocked.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+     "sbc-auth/auth-api/src/auth_api/config.py"
+    ]
+   },
+   {
+    "fact": "The auth-queue worker endpoint de-duplicates events through the PubSubMessageProcessing model. For ACTIVITY_LOG events, process_activity_log persists an ActivityLog model row.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py",
+     "sbc-auth/auth-api/src/auth_api/models/pubsub_message_processing.py",
+     "sbc-auth/auth-api/src/auth_api/models/activity_log.py"
+    ]
+   },
+   {
+    "fact": "GET /orgs/<org_id>/activity-logs calls ActivityLog.fetch_activity_logs, which uses check_auth to restrict access to ADMIN or STAFF. _build_string maps each ActivityAction to a formatter such as _adding_a_business_affilliation. A new action needs its own formatter there, or the raw action code is shown.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/activity_log.py",
+     "sbc-auth/auth-api/src/auth_api/services/activity_log.py",
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ]
+   },
+   {
+    "fact": "The auth-web activity log service calls GET /orgs/<orgId>/activity-logs with filter parameters, using the ActivityLog model types, to render the history in the front end.",
+    "files": [
+     "sbc-auth/auth-web/src/services/activityLog.services.ts",
+     "sbc-auth/auth-web/src/models/activityLog.ts"
+    ]
+   },
+   {
+    "fact": "Viewing the activity history is itself a permission: migrations add activity-log permission actions to the permissions table, which the web app receives through the /permissions endpoint.",
+    "files": [
+     "sbc-auth/auth-api/migrations/versions/1a46fdc4d630_permissons_for_activity_log.py",
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+    ]
+   }
+  ],
+  "qid": "auth-5",
+  "area": "auth",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "When a business filing app asks the payment system to charge for a filing, what happens end to end, from the incoming request to the filing app being told the payment is done?",
+  "facts": [
+   {
+    "fact": "The POST endpoint on the payment-requests blueprint validates the body against the 'payment_request' JSON schema, runs check_auth with the MAKE_PAYMENT role, and then calls PaymentService.create_invoice.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py"
+    ]
+   },
+   {
+    "fact": "PaymentService.create_invoice picks the payment method from the request's paymentInfo/methodOfPayment, falling back to the payment account's method and then DIRECT_PAY. _calculate_fees then calls FeeSchedule.find_by_corp_type_and_filing_type once per filing type, charging the service fee only once per request.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+    ]
+   },
+   {
+    "fact": "The fee comes from a FeeSchedule row that is valid for the corp type, filing type and date (fee_start_date/fee_end_date). It is adjusted by AccountFee overrides (apply_filing_fees, service_fee), by priority and future-effective fees, and by the waive_fees flag. Staff users and system users with EXCLUDE_SERVICE_FEES pay no service fees.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/models/fee_schedule.py",
+     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+    ]
+   },
+   {
+    "fact": "PaymentSystemFactory.create returns InternalPayService for a zero total. For staff it returns BcolService if a BC Online account number is given, otherwise InternalPayService. A SYSTEM-role user who supplies a bcolAccountNumber also gets BcolService. All other cases go through create_from_payment_method (DirectPay, Paybc, Bcol, Internal, OnlineBanking, Pad, Eft, EjvPay). _validate_and_throw_error then raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD for PAD during the confirmation period.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Each fee becomes a payment line item through PaymentLineItem.create. That call attaches the active distribution (GL) code for the fee schedule via DistributionCode.find_by_active_for_fee_schedule, and raises FEE_OVERRIDE_NOT_ALLOWED if fees are waived by someone who is not staff.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+     "sbc-pay/pay-api/src/pay_api/models/distribution_code.py"
+    ]
+   },
+   {
+    "fact": "The invoice's starting status comes from the payment system's get_default_invoice_status: CREATED by default, APPROVED for PAD, EFT, EJV and internal payments. The invoice is then handed to pay_service.create_invoice and complete_post_invoice, which are defined on the abstract PaymentSystemService.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py"
+    ]
+   },
+   {
+    "fact": "For methods that settle immediately or on credit (e.g. BC Online, PAD, EFT, internal), complete_post_invoice calls PaymentSystemService._release_payment. That method publishes a PAYMENT cloud event through gcp_queue_publisher.publish_to_queue to a topic picked by get_topic_for_corp_type (NAMEX, BUSINESS or STRR pay topic), and skips the CSO, RPT, PPR and VS corp types.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py",
+     "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+     "sbc-pay/pay-api/src/pay_api/services/bcol_service.py"
+    ]
+   }
+  ],
+  "qid": "pay-0",
+  "area": "pay",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "PaymentSystemFactory.create returns InternalPayService for a zero total. For staff it returns BcolService if a BC Online account number is given, otherwise InternalPayService. A SYSTEM-role user who supplies a bcolAccountNumber also gets BcolService. All other cases go through create_from_payment_method (DirectPay, Paybc, Bcol, Internal, OnlineBanking, Pad, Eft, EjvPay). _validate_and_throw_error then raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD for PAD during the confirmation period."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "Walk me through the lifecycle of a pre-authorized debit customer: from entering bank details, through the confirmation period and the daily batching of their purchases, to the bank settlement file that marks those purchases paid.",
+  "facts": [
+   {
+    "fact": "PadService.create_account stores the bank institution, transit and account numbers on a new CfsAccount with status PENDING and payment method PAD. PaymentAccount._calculate_activation_date sets pad_activation_date to PAD_CONFIRMATION_PERIOD_IN_DAYS (default 3) + 1 days ahead, rounded to the start of the day.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_account.py",
+     "sbc-pay/pay-api/src/pay_api/config.py"
+    ]
+   },
+   {
+    "fact": "The CREATE_CFS_ACCOUNTS job (CreateAccountTask.create_accounts) creates the CAS customer with CFSService.create_cfs_account and receipt method RECEIPT_METHOD_PAD_DAILY. It sets the account to PENDING_PAD_ACTIVATION while pad_activation_date is in the future, otherwise ACTIVE. For invalid bank details it publishes PAD_SETUP_FAILED and marks the account INACTIVE.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_account_task.py",
+     "sbc-pay/jobs/payment-jobs/invoke_jobs.py"
+    ]
+   },
+   {
+    "fact": "While the account is in the confirmation period, PaymentSystemFactory._validate_and_throw_error raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD. The ACTIVATE_PAD_ACCOUNTS job (ActivatePadAccountTask) later flips PENDING_PAD_ACTIVATION accounts to ACTIVE and publishes a CONFIRMATION_PERIOD_OVER mailer event.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py",
+     "sbc-pay/jobs/payment-jobs/tasks/activate_pad_account_task.py"
+    ]
+   },
+   {
+    "fact": "A PAD purchase creates no CAS invoice right away. PadService.create_invoice only checks payment blockers and deducts account credit, and the invoice stays APPROVED.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+    ]
+   },
+   {
+    "fact": "The CREATE_INVOICES job's CreateInvoiceTask._create_pad_invoices rolls up all APPROVED PAD invoices per non-frozen account into one CAS invoice (CFSService.create_account_invoice). It publishes PAD_INVOICE_CREATED and creates an ACTIVE InvoiceReference for each invoice under the shared CAS invoice number.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+    ]
+   },
+   {
+    "fact": "The ftp-poller's CASPollerFtpTask copies CAS settlement CSVs from SFTP to MinIO and moves them to a backup folder. utils.publish_to_queue then emits a CAS_MESSAGE_TYPE event on FTP_POLLER_TOPIC.",
+    "files": [
+     "sbc-pay/jobs/ftp-poller/tasks/cas_poller_ftp.py",
+     "sbc-pay/jobs/ftp-poller/utils/utils.py"
+    ]
+   },
+   {
+    "fact": "The pay-queue worker sends CAS messages to reconcile_payments. That function skips files already recorded in CasSettlement and handles PAD/PADR/PAYR rows through _process_consolidated_invoices. For PAID rows, _process_paid_invoices sets invoice references COMPLETED, invoices PAID, and creates Receipt rows.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+     "sbc-pay/pay-queue/src/pay_queue/enums.py"
+    ]
+   }
+  ],
+  "qid": "pay-1",
+  "area": "pay",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "How does money a customer sends by electronic funds transfer to the government bank account end up paying their outstanding statement invoices, both in our database and in the government's receivables system?",
+  "facts": [
+   {
+    "fact": "EFTPollerFtpTask uploads TDI17 bank files to MinIO and publishes an EFT_FILE_UPLOADED message through the shared ftp-poller publish_to_queue helper.",
+    "files": [
+     "sbc-pay/jobs/ftp-poller/tasks/eft_poller_ftp.py",
+     "sbc-pay/jobs/ftp-poller/utils/utils.py"
+    ]
+   },
+   {
+    "fact": "The pay-queue worker passes EFT_FILE_UPLOADED to reconcile_eft_payments. That function tracks the file in EFTFile (skipping files already IN_PROGRESS or COMPLETED), parses it with EFTHeader, EFTRecord and EFTTrailer, filters rows by EFT_TDI17_LOCATION_ID, and fails the whole file on any parse error.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+     "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+     "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_record.py"
+    ]
+   },
+   {
+    "fact": "_process_eft_credits groups deposits by short name and creates EFTCredit rows (amount and remaining_amount) along with a 'funds received' short-name history entry.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_short_name_historical.py"
+    ]
+   },
+   {
+    "fact": "_apply_eft_pending_payments calls EFTShortnames.process_payment_action with APPLY_CREDITS for each linked account whose amount owing is covered by the credit balance. EftService.process_owing_statements then walks the owing statements, and apply_eft_credit creates PENDING EFTCreditInvoiceLink rows while reducing EFTCredit.remaining_amount.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_short_names.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_service.py"
+    ]
+   },
+   {
+    "fact": "The EFT job's EFTTask.link_electronic_funds_transfers_cfs takes the PENDING links. It creates a CAS receipt named EFTCIL<id> (CFSService.create_cfs_receipt), applies it to the invoice (CFSService.apply_receipt), writes Receipt and Payment rows, sets the invoice to PAID, and moves the links to COMPLETED.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+     "sbc-pay/jobs/payment-jobs/invoke_jobs.py"
+    ]
+   },
+   {
+    "fact": "If a paid invoice had been OVERDUE, EFTTask.unlock_overdue_accounts clears payment_account.has_overdue_invoices once no overdue invoices remain, and publishes an unlock event via AuthEvent.publish_unlock_account_event.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+     "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+    ]
+   }
+  ],
+  "qid": "pay-2",
+  "area": "pay",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How is an account 'freeze' or 'lock' (after a bounced bank debit or an overdue electronic-transfer statement) modeled, where is it set, what blocks new charges while it is in place, and how does it get lifted?",
+  "facts": [
+   {
+    "fact": "The lock is stored as two nullable timestamp columns on PaymentAccount: has_nsf_invoices and has_overdue_invoices. The CAS-side PAD state is CfsAccountStatus.FREEZE on the CfsAccount.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/models/payment_account.py",
+     "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+    ]
+   },
+   {
+    "fact": "When a PAD settlement row is NOT PAID or a reversal (PADR/PAYR), the pay-queue's _process_failed_payments sets the CfsAccount to FREEZE, stamps has_nsf_invoices, and calls CFSService.update_site_receipt_method with RECEIPT_METHOD_PAD_STOP. It then reverts the invoices to SETTLEMENT_SCHEDULED, creates an NSF fee invoice from the BCR/NSF fee schedule, and adds an NSF adjustment in CAS. If it returns True, its caller _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC through _publish_account_events.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+     "sbc-pay/pay-api/src/pay_api/services/non_sufficient_funds.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "For EFT accounts, StatementDueTask stamps has_overdue_invoices when a monthly statement becomes overdue, publishes a lock event through AuthEvent.publish_lock_account_event, and records the account in the non-sufficient-funds table.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/statement_due_task.py",
+     "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+    ]
+   },
+   {
+    "fact": "New charges are blocked by PaymentSystemService.ensure_no_payment_blockers, which raises PAD_CURRENTLY_NSF or EFT_INVOICES_OVERDUE. PadService.create_invoice and EftService.create_invoice call it. The batch job CreateInvoiceTask._create_pad_invoices also skips CFS accounts in FREEZE.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+    ]
+   },
+   {
+    "fact": "Unlocking happens when a credit card transaction completes. PaymentTransaction.update_transaction calls PaymentAccount.unlock_frozen_accounts. That function restores RECEIPT_METHOD_PAD_DAILY in CAS, clears has_nsf_invoices and sets the CfsAccount back to ACTIVE, or for EFT reverses the original CAS invoices and clears has_overdue_invoices. It then publishes NSF_UNLOCK_ACCOUNT to AUTH_EVENT_TOPIC.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_account.py"
+    ]
+   },
+   {
+    "fact": "PadService.update_account keeps a new CfsAccount in FREEZE if the previous one was frozen when bank details change, so changing banks does not lift the lock.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+    ]
+   }
+  ],
+  "qid": "pay-3",
+  "area": "pay",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "When a PAD settlement row is NOT PAID or a reversal (PADR/PAYR), the pay-queue's _process_failed_payments sets the CfsAccount to FREEZE, stamps has_nsf_invoices, and calls CFSService.update_site_receipt_method with RECEIPT_METHOD_PAD_STOP. It then reverts the invoices to SETTLEMENT_SCHEDULED, creates an NSF fee invoice from the BCR/NSF fee schedule, and adds an NSF adjustment in CAS. If it returns True, its caller _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC through _publish_account_events."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How are refunds handled differently for each way a customer can pay, and how does a refund move from 'requested' to confirmed for card and BC Online payments?",
+  "facts": [
+   {
+    "fact": "The refunds endpoint under /payment-requests/<invoice_id> needs the SYSTEM, CREATE_CREDITS or FAS_REFUND role and calls RefundService.create_refund. That method only accepts PAID, APPROVED or UPDATE_REVENUE_ACCOUNT invoices, gates partial refunds behind the 'enable-partial-refunds' flag, and dispatches to process_cfs_refund on the payment-method implementation from PaymentSystemFactory.create_from_payment_method.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/refund.py",
+     "sbc-pay/pay-api/src/pay_api/services/refund.py",
+     "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+    ]
+   },
+   {
+    "fact": "If process_cfs_refund returns no status, RefundService sets the invoice to REFUND_REQUESTED. It stamps refund_date only for REFUNDED, CANCELLED or CREDITED, and picks the user message from REFUND_SUCCESS_MESSAGES using '<method>.<status>'.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/refund.py",
+     "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+    ]
+   },
+   {
+    "fact": "PAD (and Online Banking) refunds never return money to the bank. PadService.process_cfs_refund calls _refund_and_create_credit_memo, which creates a CAS credit memo and a Credit row and raises payment_account.credit, giving CREDITED status. An APPROVED invoice with no active reference just becomes CANCELLED.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py"
+    ]
+   },
+   {
+    "fact": "DirectPayService.process_cfs_refund posts an automated refund to the PayBC refund API. Later the DIRECT_PAY_REFUND job (DirectPayAutomatedRefundTask) polls the PayBC order status: refundglstatus PAID or CMPLT moves the invoice and payment to REFUNDED (CMPLT also sets refund.gl_posted), and RJCT/DECLINED records refund.gl_error.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+     "sbc-pay/jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py"
+    ]
+   },
+   {
+    "fact": "BcolService.process_cfs_refund publishes a REFUND_DRAWDOWN_REQUEST mailer event and marks the payment REFUNDED. The BCOL_REFUND_CONFIRMATION job (BcolRefundConfirmationTask) then queries bconline_billing_record in the COLIN Oracle DB for qty = -1 rows and confirms REFUND_REQUESTED invoices.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+     "sbc-pay/jobs/payment-jobs/tasks/bcol_refund_confirmation_task.py",
+     "sbc-pay/jobs/payment-jobs/services/oracle.py"
+    ]
+   },
+   {
+    "fact": "Internal (routing slip) refunds add the invoice total back to routing_slip.remaining_amount (reactivating a COMPLETE slip) and set REFUND_REQUESTED. CreateInvoiceTask._cancel_rs_invoices then unapplies the receipt and reverses the invoice in CAS and sets the invoice to REFUNDED. EFT refunds are delegated to EFTRefundService.handle_invoice_refund, and consolidated invoices are rejected.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py",
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_refund.py"
+    ]
+   }
+  ],
+  "qid": "pay-4",
+  "area": "pay",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We need to add a new payment method where purchases are recorded immediately but invoiced in the government receivables system later by a batch, and settled through the bank settlement file. Where would this be implemented and what else would need updating?",
+  "facts": [
+   {
+    "fact": "The new method code goes in the PaymentMethod enum, and its starting invoice state in InvoiceStatus (existing deferred methods use APPROVED).",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+    ]
+   },
+   {
+    "fact": "Add a PaymentSystemService subclass that implements the abstract create_invoice, get_payment_system_code and get_payment_method_code. Override get_default_invoice_status, complete_post_invoice (calling _release_payment) and process_cfs_refund, as PadService and EftService do.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/eft_service.py"
+    ]
+   },
+   {
+    "fact": "Register the new service in PaymentSystemFactory.create_from_payment_method, which is used by create_invoice, delete, refund and settlement paths. Add any eligibility checks next to _validate_and_throw_error.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/refund.py"
+    ]
+   },
+   {
+    "fact": "The deferred CAS invoicing step belongs in CreateInvoiceTask.create_invoices next to _create_pad_invoices and _create_eft_invoices. Those methods select APPROVED invoices per CFS account, call CFSService.create_account_invoice, and create ACTIVE InvoiceReference rows.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+     "sbc-pay/pay-api/src/pay_api/services/cfs_service.py"
+    ]
+   },
+   {
+    "fact": "If CAS account creation differs, CreateAccountTask._create_cfs_account needs a branch, since it already switches on EFT vs PAD vs regular accounts and receipt methods.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_account_task.py"
+    ]
+   },
+   {
+    "fact": "Settlement handling in the pay-queue switches on the CAS record type (PAD/PADR/PAYR, BOLP, EFTP, ONAC/CMAP/DRWP) in _process_file_content and _create_payment_records. A new settlement record type would need a RecordType/SourceTransaction enum value and a branch there, including _convert_payment_method.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+     "sbc-pay/pay-queue/src/pay_queue/enums.py"
+    ]
+   },
+   {
+    "fact": "Partner GL disbursement selects invoices by excluding INTERNAL, DRAWDOWN and EFT methods in get_invoices_for_disbursement and get_invoices_for_refund_reversal. The new method must be added to or left out of those filters on purpose. Refund user messages also need entries in REFUND_SUCCESS_MESSAGES.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+     "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+    ]
+   }
+  ],
+  "qid": "pay-5",
+  "area": "pay",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "When a user opens a business's dashboard URL in this front end, what happens from page load to the point where the business info, to-dos and filing history are on screen? How does the app learn which business to load and where the API is, and how does it decide whether the user may see the business?",
+  "facts": [
+   {
+    "fact": "At startup, main.ts calls the configuration store's loadConfiguration, which saves the env config, writes session variables, and sets the shared axios instance's baseURL to the Legal API URL plus version (getLegalApiUrl \u2192 setAxiosBaseUrl). It then calls setBaseRouteAndBusinessId and initializes LaunchDarkly, Keycloak and the router.",
+    "files": [
+     "business-filings-ui/src/main.ts",
+     "business-filings-ui/src/stores/configurationStore.ts",
+     "business-filings-ui/src/axios-auth.ts"
+    ]
+   },
+   {
+    "fact": "setBaseRouteAndBusinessId reads the first path segment after the base URL. If it matches /^(BC|C|CP|FM)\\d{7}$/ it stores it as BUSINESS_ID and removes TEMP_REG_NUMBER; if it starts with 'T' it stores it as TEMP_REG_NUMBER and removes BUSINESS_ID; otherwise it throws. It sets VUE_ROUTER_BASE (base URL + id + '/'), which getVueRouter uses as the history-mode base. It also sets BASE_URL (origin + router base), but that is used for returning from redirects, not by the router.",
+    "files": [
+     "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+     "business-filings-ui/src/router.ts"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The axios-auth instance has a request interceptor that adds 'Authorization: Bearer <Keycloak token>' from sessionStorage to every request except those to minio URLs. The router's beforeEach sends routes with meta.requiresAuth to the Signin route when there is no token.",
+    "files": [
+     "business-filings-ui/src/axios-auth.ts",
+     "business-filings-ui/src/router.ts",
+     "business-filings-ui/src/routes.ts"
+    ]
+   },
+   {
+    "fact": "App.vue's fetchData runs on mount, on every reroute to the dashboard, and on the 'reloadData' root event. It parses Keycloak roles from the JWT, then calls AuthServices.fetchAuthorizations (GET <authApi>entities/{id}/authorizations, served by sbc-auth's entity resource) and storeAuthorizations throws if no roles come back, which shows an auth error dialog.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/auth-services.ts",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py"
+    ]
+   },
+   {
+    "fact": "For a real business, fetchBusinessData runs five calls in parallel with Promise.all: AuthServices.fetchEntityInfo, businessStore.loadBusinessInfo (GET businesses/{id}), LegalServices.fetchTasks (GET businesses/{id}/tasks), filingHistoryListStore.loadFilings (GET businesses/{id}/filings) and LegalServices.fetchParties. It then stores the tasks and parties, loads the state filing, and stores the entity-type config object.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/stores/businessStore.ts",
+     "business-filings-ui/src/stores/filingHistoryListStore.ts",
+     "business-filings-ui/src/services/legal-services.ts",
+     "business-filings-ui/src/stores/rootStore.ts"
+    ]
+   },
+   {
+    "fact": "Office addresses are fetched separately by fetchStoreAddressData (GET businesses/{id}/addresses). A 404 'address not found' is accepted and stored as a null business office; any other failure throws 'Incomplete business data', which opens the dashboard-unavailable dialog and reports to Sentry.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/legal-services.ts"
+    ]
+   },
+   {
+    "fact": "The Dashboard view gives its TodoList, PendingList and FilingHistoryList children the filing_id query parameter as highlightId. TodoList rebuilds its items through a watcher on the root store's tasks, and FilingHistoryList renders the store's validated getFilings list.",
+    "files": [
+     "business-filings-ui/src/views/Dashboard.vue",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+     "business-filings-ui/src/stores/filingHistoryListStore.ts"
+    ]
+   }
+  ],
+  "qid": "ui-0",
+  "area": "ui",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "setBaseRouteAndBusinessId reads the first path segment after the base URL. If it matches /^(BC|C|CP|FM)\\d{7}$/ it stores it as BUSINESS_ID and removes TEMP_REG_NUMBER; if it starts with 'T' it stores it as TEMP_REG_NUMBER and removes BUSINESS_ID; otherwise it throws. It sets VUE_ROUTER_BASE (base URL + id + '/'), which getVueRouter uses as the history-mode base. It also sets BASE_URL (origin + router base), but that is used for returning from redirects, not by the router."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "Walk me through the life of an in-app draft filing such as an annual report. How does it show up as a to-do, how is it resumed, saved as a draft, then filed and paid, and how does the dashboard notice afterwards that the filing has been processed?",
+  "facts": [
+   {
+    "fact": "The Legal API's tasks endpoint (construct_task_list) returns DRAFT, PENDING, PENDING_CORRECTION and ERROR filings as 'filing' tasks, plus generated annual-report 'todo' tasks. A due annual report is enabled only when there are no pending filings and it is for the earliest due year.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_tasks.py",
+     "business-filings-ui/src/services/legal-services.ts"
+    ]
+   },
+   {
+    "fact": "TodoList.loadData splits tasks into todo items (loadTodoItem \u2192 loadAnnualReportTodo, with filingId -1) and filing items (loadFilingItem, a switch on the header name such as loadAnnualReport). Each filing item looks up a payment error description with PayServices.getPayErrorObj, which calls the Pay API's codes/errors/{code} endpoint.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/services/pay-services.ts",
+     "sbc-pay/pay-api/src/pay_api/resources/v1/code.py"
+    ]
+   },
+   {
+    "fact": "doFileNow and doResumeFiling route to the in-app Annual Report view with filingId=0 for a new filing or the draft's id for a resume. Filings handled by other apps (incorporation, alteration, correction, dissolution and so on) are opened with navigate() to Create UI or Edit UI URLs.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/routes.ts",
+     "business-filings-ui/src/utils/navigate.ts"
+    ]
+   },
+   {
+    "fact": "AnnualReport.vue's fetchDraftFiling loads the draft with LegalServices.fetchFiling and rejects it unless it is an annualReport in DRAFT status for the current business. saveFiling builds the header, business and annualReport sections (plus changeOfAddress or changeOfDirectors when those fee codes are present), then calls LegalServices.updateFiling (PUT) when filingId > 0 or createFiling (POST) otherwise, adding ?draft=true when saving a draft.",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "business-filings-ui/src/services/legal-services.ts",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "For a new filing, saveFiling first calls LegalServices.hasPendingTasks and refuses to save if any task is not in NEW status ('Another draft filing already exists').",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "business-filings-ui/src/services/legal-services.ts"
+    ]
+   },
+   {
+    "fact": "Fees come from the filingData list kept by FilingMixin.updateFilingData and hasFilingCode. That list is passed to SbcFeeSummary together with the Pay API URL. A 402 response opens a payment error dialog; when the response header has isPaymentActionRequired, onClickFilePayFinish redirects to auth-web's makepayment/{paymentToken}/{returnUrl}, with a return URL that carries ?filing_id.",
+    "files": [
+     "business-filings-ui/src/mixins/filing-mixin.ts",
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "business-filings-ui/src/stores/configurationStore.ts"
+    ]
+   },
+   {
+    "fact": "If no payment action is needed, CommonMixin.navigateToBusinessDashboard returns to the dashboard with filing_id, either through the in-app router or through the external business dashboard when 'use-business-dashboard' is on. TodoList.highlightTask then polls the filing up to 5 times, once per second, in checkIfProcessed, and emits 'reloadData' once the status is PAID, COMPLETED or AWAITING_REVIEW.",
+    "files": [
+     "business-filings-ui/src/mixins/common-mixin.ts",
+     "business-filings-ui/src/views/Dashboard.vue",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/App.vue"
+    ]
+   },
+   {
+    "fact": "From the to-do list, users can delete a draft (DELETE businesses/{id}/filings/{filingId}) or cancel a pending payment and revert the filing to draft (PATCH on the same URL). Both emit 'reloadData', which makes App.vue clear the tasks, pending list and filings and fetch everything again.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/App.vue",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   }
+  ],
+  "qid": "ui-1",
+  "area": "ui",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How does the UI decide which filings and actions a user may start for a business (for example, why a menu item is greyed out)? Where do the rules come from, and how are they combined with feature toggles on the client?",
+  "facts": [
+   {
+    "fact": "The rules are computed on the server. legal-api's get_allowable_actions in authz.py builds {filing: {filingSubmissionLink, filingTypes}, digitalBusinessCard, viewAll}. filingTypes comes from get_allowed_filings, which uses user role, business state, legal type and blockers. For competent-authority (CA_SEARCH) users it is an empty list and viewAll is true. The v2 business resource attaches the result to the business, and Business.json serializes it as 'allowedActions'.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/legal-api/src/legal_api/models/business.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The front end stores the whole business object with businessStore.loadBusinessInfo \u2192 LegalServices.fetchBusiness \u2192 setBusinessInfo and reads the allowed actions back through the getAllowedActions getter.",
+    "files": [
+     "business-filings-ui/src/stores/businessStore.ts",
+     "business-filings-ui/src/services/legal-services.ts"
+    ]
+   },
+   {
+    "fact": "AllowableActionsMixin.isAllowed is a switch over the AllowableActions enum. Most cases check allowedActions.filing.filingTypes, by filing name and optional subtype, through the private isAllowedFiling. Some cases do not: BUSINESS_SUMMARY, DETAIL_COMMENT and STAFF_COMMENT use flags or roles plus BUSINESS_ID, and DIGITAL_CREDENTIALS uses the flag plus allowedActions.digitalBusinessCard. Some actions are entity-specific: for firms, address or director changes map to changeOfRegistration. Business-information changes map to specialResolution for coops (which also needs the 'special-resolution-ui-enabled' flag), changeOfRegistration for firms, and alteration otherwise.",
+    "files": [
+     "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+     "business-filings-ui/src/enums/allowableActions.ts"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Many actions also require a LaunchDarkly flag, such as 'supported-dissolution-entities', 'supported-correction-entities', 'supported-restoration-entities' or 'enable-digital-credentials'. GetFeatureFlag reads these from the LD client, or from a default set (empty lists or false) when LaunchDarkly is not available.",
+    "files": [
+     "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+     "business-filings-ui/src/utils/feature-flags.ts"
+    ]
+   },
+   {
+    "fact": "Staff and detail comments do not depend on the server: they are allowed only when there is a BUSINESS_ID in sessionStorage and the user has the Keycloak 'staff' role (rootStore.isRoleStaff).",
+    "files": [
+     "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+     "business-filings-ui/src/stores/rootStore.ts"
+    ]
+   },
+   {
+    "fact": "isAllowed is used by EntityMenu (AGM extension, consent to continue out, amalgamate and so on, with a separate LD entity-list flag deciding whether each item is shown at all), by Dashboard (address and director change buttons), by StaffNotation, and by TodoList (the File Annual Report button).",
+    "files": [
+     "business-filings-ui/src/components/EntityInfo/EntityMenu.vue",
+     "business-filings-ui/src/views/Dashboard.vue",
+     "business-filings-ui/src/components/Dashboard/StaffNotation.vue",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue"
+    ]
+   },
+   {
+    "fact": "The router adds its own toggle check: beforeEach redirects the digital credentials route to the dashboard when the 'enable-digital-credentials' flag is off.",
+    "files": [
+     "business-filings-ui/src/router.ts",
+     "business-filings-ui/src/enums/routes.ts"
+    ]
+   }
+  ],
+  "qid": "ui-2",
+  "area": "ui",
+  "verdicts": [
+   {
+    "verdict": "partly",
+    "fix": "The rules are computed on the server. legal-api's get_allowable_actions in authz.py builds {filing: {filingSubmissionLink, filingTypes}, digitalBusinessCard, viewAll}. filingTypes comes from get_allowed_filings, which uses user role, business state, legal type and blockers. For competent-authority (CA_SEARCH) users it is an empty list and viewAll is true. The v2 business resource attaches the result to the business, and Business.json serializes it as 'allowedActions'."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "AllowableActionsMixin.isAllowed is a switch over the AllowableActions enum. Most cases check allowedActions.filing.filingTypes, by filing name and optional subtype, through the private isAllowedFiling. Some cases do not: BUSINESS_SUMMARY, DETAIL_COMMENT and STAFF_COMMENT use flags or roles plus BUSINESS_ID, and DIGITAL_CREDENTIALS uses the flag plus allowedActions.digitalBusinessCard. Some actions are entity-specific: for firms, address or director changes map to changeOfRegistration. Business-information changes map to specialResolution for coops (which also needs the 'special-resolution-ui-enabled' flag), changeOfRegistration for firms, and alteration otherwise."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "Some dashboards belong to a business that does not exist yet, such as a draft incorporation, registration, amalgamation or continuation-in application. How is this 'temporary business' modeled in the front end, and how does the app make it look like a business on the dashboard?",
+  "facts": [
+   {
+    "fact": "A temporary business is any URL id starting with 'T'. setBaseRouteAndBusinessId stores it as TEMP_REG_NUMBER and removes BUSINESS_ID. Components such as TodoList, FilingHistoryList and AllowableActionsMixin read these sessionStorage keys to tell a business from a temporary registration.",
+    "files": [
+     "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+     "business-filings-ui/src/mixins/allowable-actions-mixin.ts"
+    ]
+   },
+   {
+    "fact": "For a temporary business, App.fetchData skips the business calls and instead uses LegalServices.fetchBootstrapFiling (GET businesses/{T-number}/filings, which returns one filing). storeBootstrapItem checks that the header, business and nameRequest are present and that the legal type is supported, then fills the business store with the identifier, legal type, legal name and goodStanding=true.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/legal-services.ts",
+     "business-filings-ui/src/stores/businessStore.ts"
+    ]
+   },
+   {
+    "fact": "The root store sorts the bootstrap filing by type and status using getters such as isAmalgamationTodo, isContinuationInPending and isIncorporationApplicationFiling, which feed isBootstrapTodo, isBootstrapPending and isBootstrapFiling. For example, DRAFT or PENDING goes to the to-do list, a continuation-in AWAITING_REVIEW goes to the pending list, and COMPLETED or PAID goes to the filing history.",
+    "files": [
+     "business-filings-ui/src/stores/rootStore.ts"
+    ]
+   },
+   {
+    "fact": "Based on that classification, App.vue builds a synthetic item: storeBootstrapTodo creates a single task with order 1 via setTasks, storeBootstrapPending fills the pending list, and storeBootstrapFiling builds an ApiFilingIF for the filing history store. The last two also load offices and parties from the filing body.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/stores/filingHistoryListStore.ts",
+     "business-filings-ui/src/stores/rootStore.ts"
+    ]
+   },
+   {
+    "fact": "For a bootstrap to-do with a name request, App.vue calls LegalServices.fetchNameRequest (GET nameRequests/{nr}/validate). storeNrData checks that the NR's legal type matches and, unless the application is completed, that the NR state is APPROVED or CONDITIONAL; it then sets the legal name to the approved name.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/legal-services.ts",
+     "business-filings-ui/src/mixins/name-request-mixin.ts"
+    ]
+   },
+   {
+    "fact": "In the to-do list, bootstrap applications cannot be edited in this app. doResumeFiling sends incorporation, registration, amalgamation and continuation-in applications to the Create UI using ?id=<temp reg number>, and confirmDeleteApplication deletes the draft and then leaves for My Business Registry or the businesses home page.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/stores/configurationStore.ts"
+    ]
+   }
+  ],
+  "qid": "ui-3",
+  "area": "ui",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We need to support a new business entity type on the dashboard, with its own legal certification wording, director-compliance warnings and voluntary-dissolution dialog text. Where do these per-entity texts and rules live, how are they selected at runtime, and what else would have to change?",
+  "facts": [
+   {
+    "fact": "Each entity type has a resource object in src/resources/<TYPE>.ts (for example BusinessConfigCp) containing entityType, displayName, a 'flows' array of {feeCode, displayName, certifyText, warnings}, dissolutionConfirmation and todoList. A new type needs its own file, and that file must be added to the ConfigJson array in business-config.ts.",
+    "files": [
+     "business-filings-ui/src/resources/CP.ts",
+     "business-filings-ui/src/resources/business-config.ts",
+     "business-filings-ui/src/resources/index.ts"
+    ]
+   },
+   {
+    "fact": "At runtime, App.vue's storeConfigObject picks the entry with ConfigJson.find(x => x.entityType === getLegalType) after business data loads and saves it with rootStore.setConfigObject. Root store getters getDissolutionConfirmationResource and getTodoListResource read from that object.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/stores/rootStore.ts"
+    ]
+   },
+   {
+    "fact": "ResourceLookupMixin reads the config object: certifyText(feeCode) finds a flow by fee code, and directorWarning(directors) applies the flow's bcResident, canadianResident and minDirectors warnings, choosing DIRECTOR_CHANGE_BC or DIRECTOR_CHANGE_OT depending on isBaseCompany.",
+    "files": [
+     "business-filings-ui/src/mixins/resource-lookup-mixin.ts",
+     "business-filings-ui/src/stores/businessStore.ts"
+    ]
+   },
+   {
+    "fact": "certifyText is used by the filing views (AnnualReport, StandaloneDirectorsFiling, StandaloneOfficeAddressFiling, AgmExtension, ContinuationOut and others), and directorWarning is used by the shared Directors component. The new type's flows therefore need fee codes that match the codes these views pass in.",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "business-filings-ui/src/views/StandaloneDirectorsFiling.vue",
+     "business-filings-ui/src/views/AgmExtension.vue",
+     "business-filings-ui/src/components/common/Directors.vue"
+    ]
+   },
+   {
+    "fact": "The dissolution texts are shown by ConfirmDissolutionDialog and by the DissolutionVoluntary filing-history item, both through getDissolutionConfirmationResource. TodoList uses getTodoListResource().title as the title of a dissolution to-do.",
+    "files": [
+     "business-filings-ui/src/components/dialogs/ConfirmDissolutionDialog.vue",
+     "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/DissolutionVoluntary.vue",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue"
+    ]
+   },
+   {
+    "fact": "Entity-type behaviour is also hard-coded in businessStore getters (isBaseCompany, isEntityFirm, isDisableNonBenCorps and others) and in the business-ID regex in setBaseRouteAndBusinessId (BC|C|CP|FM), so a new type may need changes there as well as in LaunchDarkly entity lists such as 'supported-dissolution-entities'.",
+    "files": [
+     "business-filings-ui/src/stores/businessStore.ts",
+     "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+     "business-filings-ui/src/utils/feature-flags.ts"
+    ]
+   }
+  ],
+  "qid": "ui-4",
+  "area": "ui",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "Suppose the back end adds a new filing type that users should start from the business menu, save as a draft and resume, and later see in the filing history. Which parts of the front end would need to change so it shows up correctly as an action, a to-do and a history entry?",
+  "facts": [
+   {
+    "fact": "Starting the filing would need a new value in the AllowableActions enum and a case in AllowableActionsMixin.isAllowed that maps it to the server's allowed filing types (isAllowedFiling with the shared FilingTypes value), plus a menu item in EntityMenu that is disabled when !isAllowed(...).",
+    "files": [
+     "business-filings-ui/src/enums/allowableActions.ts",
+     "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+     "business-filings-ui/src/components/EntityInfo/EntityMenu.vue"
+    ]
+   },
+   {
+    "fact": "An in-app filing page would need a view registered in routes.ts with requiresAuth and a breadcrumb, plus a name in the Routes enum. Existing menu items open such a view with $router.push({ name, query: { filingId: '0' } }), where 0 means a new filing.",
+    "files": [
+     "business-filings-ui/src/routes.ts",
+     "business-filings-ui/src/enums/routes.ts",
+     "business-filings-ui/src/components/EntityInfo/EntityMenu.vue"
+    ]
+   },
+   {
+    "fact": "The view itself would follow the AnnualReport and AgmExtension pattern: check hasPendingTasks, call LegalServices.createFiling or updateFiling with the isDraft flag, track fees through FilingMixin.updateFilingData and SbcFeeSummary, and finish with a payment redirect or navigateToBusinessDashboard(identifier, filingId).",
+    "files": [
+     "business-filings-ui/src/views/AgmExtension.vue",
+     "business-filings-ui/src/services/legal-services.ts",
+     "business-filings-ui/src/mixins/filing-mixin.ts",
+     "business-filings-ui/src/mixins/common-mixin.ts"
+    ]
+   },
+   {
+    "fact": "Since legal-api returns every DRAFT, PENDING or ERROR filing as a task, TodoList.loadFilingItem needs a new case that builds a TodoItemIF (title, draftTitle, payErrorObj and so on); otherwise the filing goes to loadDefaultTask. doResumeFiling also needs a case, or it only logs 'invalid filing type'.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_tasks.py"
+    ]
+   },
+   {
+    "fact": "EnumUtilities would need an isTypeX predicate, which FilingHistoryList.is() and TodoList use. A filingTypeToName case is optional: without one, it falls back to camelCaseToWords(type). filingTypeToName is used by TodoList, by App.vue's bootstrap items and by filingHistoryListStore.loadDocuments to build document titles.",
+    "files": [
+     "business-filings-ui/src/services/enum-utilities.ts",
+     "business-filings-ui/src/stores/filingHistoryListStore.ts"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "For a custom history entry, FilingHistoryList.is() needs a case that returns a component name, and that component must be added to FilingHistoryList/filings/index.ts, whose exports are spread into the list's components. Without this, the filing renders as 'default-filing'. Entries without name, displayName, effectiveDate, submittedDate or status, or with displayLedger === false, are filtered out by the store's getFilings getter.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+     "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/index.ts",
+     "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/DefaultFiling.vue",
+     "business-filings-ui/src/stores/filingHistoryListStore.ts"
+    ]
+   }
+  ],
+  "qid": "ui-5",
+  "area": "ui",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "EnumUtilities would need an isTypeX predicate, which FilingHistoryList.is() and TodoList use. A filingTypeToName case is optional: without one, it falls back to camelCaseToWords(type). filingTypeToName is used by TodoList, by App.vue's bootstrap items and by filingHistoryListStore.loadDocuments to build document titles."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "When a business user files a fee-bearing filing (say an annual report) from the business dashboard, what happens end to end, from submission through fee calculation, online payment and confirmation, until the filing is actually applied to the business record?",
+  "facts": [
+   {
+    "fact": "The UI view saves the filing to legal-api. In the v2 saving_filings endpoint, ListFilingResource.complete_filing runs for non-draft filings. It calls get_filing_types, which turns each filing into pay fee codes using the per-legal-type 'codes' map in Filing.FILINGS (for example annualReport becomes BCANN or OTANN).",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "ListFilingResource.create_invoice POSTs businessInfo, filingInfo.filingTypes and optional accountInfo (routing slip, BCOL or DAT number for staff) to PAYMENT_SVC_URL using the user's token. It stores the returned invoice id as filing.payment_token and returns isPaymentActionRequired, which is merged into the filing header.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/config.py"
+    ]
+   },
+   {
+    "fact": "In pay-api, post_invoice first runs check_auth with contains_role=make_payment. PaymentService.create_invoice prices each filing type through _calculate_fees and FeeSchedule.find_by_corp_type_and_filing_type, applying priority, futureEffective and waiveFees. PaymentService itself builds the Invoice and PaymentLineItem rows. It then hands them to the payment-method-specific PaymentSystemService (chosen by PaymentSystemFactory), whose create_invoice registers the invoice in the external payment system.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/auth.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Invoice._add_dynamic_fields sets is_payment_action_required only when the invoice is CREATED and the payment method is DIRECT_PAY, CC or ONLINE_BANKING. In that case the filing UI navigates to auth-web's '/makepayment/:paymentId/:redirectUrl' route instead of going back to the dashboard.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/invoice.py",
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "sbc-auth/auth-web/src/routes/router.ts"
+    ]
+   },
+   {
+    "fact": "After the payment provider returns, auth-web's PaymentReturnView PATCHes pay-api 'payment-requests/{id}/transactions/{txId}'. PaymentTransaction.update_transaction then calls publish_status, which sends a PAYMENT cloud event (payload from create_event_payload: id, statusCode, filingIdentifier, corpTypeCode) to the topic chosen by get_topic_for_corp_type (BUSINESS_PAY_TOPIC for BUSINESS products).",
+    "files": [
+     "sbc-auth/auth-web/src/views/pay/PaymentReturnView.vue",
+     "sbc-auth/auth-web/src/services/payment.services.ts",
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py",
+     "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py"
+    ]
+   },
+   {
+    "fact": "PAD, BCOL, EFT, EJV and internal pay services publish the same COMPLETED event through BaseService._release_payment. Online banking is different: it is a redirect (action-required) method, and only its apply_credit path calls _release_payment.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/bcol_service.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The lear business-pay worker accepts 'bc.registry.payment' cloud events with status COMPLETED and looks up the filing by payment token. It sets payment_completion_date and PAID status, then publishes {'filing': {'id': ...}} to the filer subject when the effective date has arrived and an email message to the emailer subject. The older NATS-based entity-pay worker does the same.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+    ]
+   },
+   {
+    "fact": "entity-filer's process_filing applies the filing, marks it processed and then publishes a business event on NATS ('entity.events') and on GCP BUSINESS_EVENTS_TOPIC. Future-effective filings are pushed to the filer later by the future-effective-filings job, which polls legal-api '/internal/filings/future_effective'.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/config.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py"
+    ]
+   }
+  ],
+  "qid": "cross-0",
+  "area": "cross",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "In pay-api, post_invoice first runs check_auth with contains_role=make_payment. PaymentService.create_invoice prices each filing type through _calculate_fees and FeeSchedule.find_by_corp_type_and_filing_type, applying priority, futureEffective and waiveFees. PaymentService itself builds the Invoice and PaymentLineItem rows. It then hands them to the payment-method-specific PaymentSystemService (chosen by PaymentSystemFactory), whose create_invoice registers the invoice in the external payment system."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "PAD, BCOL, EFT, EJV and internal pay services publish the same COMPLETED event through BaseService._release_payment. Online banking is different: it is a redirect (action-required) method, and only its apply_credit path calls _release_payment."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "flow",
+  "question": "How does a brand-new business (incorporation, registration, amalgamation or continuation) become linked to the user's account in the account/auth system, starting from the temporary draft and ending once the real business number exists?",
+  "facts": [
+   {
+    "fact": "The legal-api v2 businesses POST (post_businesses) accepts only CoreFiling.NEW_BUSINESS_FILING_TYPES. It calls RegistrationBootstrapService.create_bootstrap, which saves a RegistrationBootstrap with a random 'T'-prefixed temporary identifier containing at least one digit, as auth-api requires.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py",
+     "lear/legal-api/src/legal_api/core/filing.py"
+    ]
+   },
+   {
+    "fact": "register_bootstrap calls AccountService.create_affiliation with a service-account token. That POSTs an entity to auth '/entities' using the filing's temporaryCorpTypeCode (TMP, RTMP, ATMP or CTMP from Filing.FILINGS) and then POSTs to '/orgs/{account}/affiliations'. If this fails, it calls delete_affiliation.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/bootstrap.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "In auth-api, Affiliation.create_affiliation checks the org and entity, enforces passcode or firm-party checks through is_authorized, and saves the AffiliationModel. It publishes an activity-log event only when the corp type is not a temporary type (TMP, RTMP, ATMP or CTMP).",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py"
+    ]
+   },
+   {
+    "fact": "Once the filing is processed, entity-filer's worker calls business_profile.update_affiliation for new-business filings except conversion. That function affiliates the real identifier to the bootstrap's account, passing entityDetails (bootstrapIdentifier, identifier, nrNumber) and, for registrations, a firm passcode. It then renames the bootstrap entity in auth via AccountService.update_entity.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+    ]
+   },
+   {
+    "fact": "When auth-api receives entityDetails on the affiliation POST, it calls Affiliation.fix_stale_affiliations (system callers only). This moves other orgs' affiliations from the NR entity to the new business entity.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ]
+   },
+   {
+    "fact": "Deleting a draft temporary-registration filing in legal-api calls RegistrationBootstrapService.deregister_bootstrap and delete_bootstrap. These remove the auth affiliation and entity and the local bootstrap row.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py"
+    ]
+   },
+   {
+    "fact": "Separately, auth-queue's process_name_events auto-affiliates DRAFT name requests. It looks up the paying account through pay-api '/payment-requests?businessIdentifier=' and creates the Affiliation directly, unless the org is a GOVM account.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ]
+   }
+  ],
+  "qid": "cross-1",
+  "area": "cross",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How are a user's permissions on a specific business (who can view it, edit/file for it, or pay for it) modeled, and how do the legal, payment and UI layers each enforce them?",
+  "facts": [
+   {
+    "fact": "Permitted actions such as 'edit', 'view', 'make_payment' and 'generate_invoice' are rows in auth-api's permissions table, keyed by membership_type_code (ADMIN, COORDINATOR, USER, SYSTEM) and org_status_code. They are seeded by an Alembic migration that also defines authorizations_view, which joins membership, org, affiliation and entity.",
+    "files": [
+     "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py",
+     "sbc-auth/auth-api/src/auth_api/models/permissions.py",
+     "sbc-auth/auth-api/src/auth_api/models/views/authorization.py"
+    ]
+   },
+   {
+    "fact": "auth-api's GET '/entities/{id}/authorizations' (get_entity_authorizations) calls Authorization.get_user_authorizations_for_entity. Staff get their token roles, system accounts are matched by the product_code claim, and other users are matched through affiliation and membership. Roles come from PermissionsService.get_permissions_for_membership.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+    ]
+   },
+   {
+    "fact": "legal-api's authz.authorized() returns true immediately for staff, system and colin JWT roles, and for view-only access by account_identity or CA_SEARCH. Basic and public users go through _call_auth_api('entities/{id}/authorizations') and must hold every requested action. 'add_comment' is staff-only.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ]
+   },
+   {
+    "fact": "legal-api endpoints request specific actions: filing save, delete and payment-cancel use action=['edit'] (save also checks is_allowed for state and legal type), and read endpoints such as directors, addresses, parties and share classes use ['view'].",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_directors.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_parties.py"
+    ]
+   },
+   {
+    "fact": "pay-api's check_auth calls auth-api 'orgs/{account}/authorizations?expanded=true' or 'entities/{id}/authorizations?expanded=true' and aborts with 403 if the role is missing. Invoice creation requires contains_role='make_payment'. System accounts with the editor role are authorized. The auth call is skipped only for system (service-account) users whose token product_code is not BUSINESS, not for every non-BUSINESS product.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/auth.py",
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "In business-filings-ui, App.vue's fetchData calls AuthServices.fetchAuthorizations ('entities/{id}/authorizations') and stores the roles with setAuthRoles, showing an auth error dialog if there are none. rootStore exposes isRoleEdit and isRoleView from those roles.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/auth-services.ts",
+     "business-filings-ui/src/stores/rootStore.ts"
+    ]
+   }
+  ],
+  "qid": "cross-2",
+  "area": "cross",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "pay-api's check_auth calls auth-api 'orgs/{account}/authorizations?expanded=true' or 'entities/{id}/authorizations?expanded=true' and aborts with 403 if the role is missing. Invoice creation requires contains_role='make_payment'. System accounts with the editor role are authorized. The auth call is skipped only for system (service-account) users whose token product_code is not BUSINESS, not for every non-BUSINESS product."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "concept",
+  "question": "How do customer email notifications about filings work across the services: what triggers them, where do recipients and receipts come from, and what actually sends the email?",
+  "facts": [
+   {
+    "fact": "Filing email requests share one message shape, {'email': {'filingId', 'type', 'option'}}, built by entity_queue_common.messages.create_email_msg or publish_email_message and by business-pay's create_email_msg (option 'PAID'). They are published to the emailer subject (default 'entity.email').",
+    "files": [
+     "lear/queue_services/common/src/entity_queue_common/messages.py",
+     "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+     "lear/queue_services/business-pay/src/business_pay/config.py"
+    ]
+   },
+   {
+    "fact": "These messages are produced at several lifecycle points: business-pay or entity-pay on payment (PAID), entity-filer after processing (with filing status, plus an 'mras' message for incorporation, amalgamation and continuation), and legal-api's staff review save_review (with the review outcome status).",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+    ]
+   },
+   {
+    "fact": "The entity-emailer worker's process_email dispatches by cloud-event type ('bc.registry.names.request', 'bc.registry.affiliation', 'bc.registry.bnmove', 'bc.registry.dissolution') or by the filing type and option inside 'email', and passes each to a specific email_processors module.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+    ]
+   },
+   {
+    "fact": "Email processors get recipients and links from auth-api: get_recipient_from_auth reads the business contact from AUTH_URL '/entities/{id}', get_user_email_from_auth reads '/users/{username}', and get_entity_dashboard_url resolves the account through '/orgs?affiliation=' for temporary identifiers.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/config.py"
+    ]
+   },
+   {
+    "fact": "Processors that attach receipts fetch them from pay-api at PAY_API_URL '/{payment_token}/receipts' (for example the dissolution, registration and restoration notifications).",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/dissolution_notification.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/registration_notification.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/restoration_notification.py"
+    ]
+   },
+   {
+    "fact": "send_email POSTs the composed email to NOTIFY_API_URL with a service-account token from AccountService.get_bearer_token, and raises EmailException on any non-200 response so the message is retried.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py"
+    ]
+   },
+   {
+    "fact": "The business contact email that the emailer later reads is written into auth-api by entity-filer's business_profile.update_business_profile. It POSTs contactPoint to ACCOUNT_SVC_ENTITY_URL '/{identifier}/contacts' and falls back to a PUT when the response says DATA_ALREADY_EXISTS.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "lear/queue_services/entity-filer/src/entity_filer/config.py"
+    ]
+   }
+  ],
+  "qid": "cross-3",
+  "area": "cross",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "We want amalgamation applications, like continuations today, to go to registry staff for review after they are paid, instead of being applied right away. Where is this decided, and what else in the pipeline would the change touch?",
+  "facts": [
+   {
+    "fact": "The post-payment branching is hardcoded in business-pay's worker: staff_review_required = ['continuationIn'] sends matching filings to create_staff_review, which creates a Review in AWAITING_REVIEW and sets the filing to AWAITING_REVIEW. All other filings go to publish_to_filer. The new filing type must be added to that list.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/database/review.py"
+    ]
+   },
+   {
+    "fact": "legal-api's Filing.FILINGS flags continuationIn with 'staffApprovalRequired': True, but no code reads this flag; review routing is decided only by business-pay's hardcoded list. Adding the flag to amalgamationApplication would be for consistency only and would have no functional effect.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "create_staff_review reads nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' from the filing JSON. Amalgamation filings have no foreignJurisdiction, so that field would be empty.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ]
+   },
+   {
+    "fact": "Staff decisions go through legal-api's admin save_review (POST '/reviews/{id}', staff only). It records a ReviewResult, maps the decision to a filing status, publishes an email message, and publishes {'filing': {'id'}} to NATS_FILER_SUBJECT only when the decision is APPROVED and the effective date has passed.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+    ]
+   },
+   {
+    "fact": "When a submitter resubmits after CHANGE_REQUESTED, saving_filings calls resubmit_filing_for_review instead of complete_filing, so no new invoice is created. That path also has to work for amalgamations.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "The older NATS entity-pay worker has no review branch: it publishes every completed payment straight to the filer. If that worker is still deployed it would bypass review, so it needs the same check.",
+    "files": [
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+    ]
+   },
+   {
+    "fact": "The business list in auth reads draftStatus and draftType from legal-api's businesses search. Paid amalgamations would now show AWAITING_REVIEW or CHANGE_REQUESTED statuses there, and the entity-emailer needs templates for those review status options.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+    ]
+   }
+  ],
+  "qid": "cross-4",
+  "area": "cross",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "legal-api's Filing.FILINGS flags continuationIn with 'staffApprovalRequired': True, but no code reads this flag; review routing is decided only by business-pay's hardcoded list. Adding the flag to amalgamationApplication would be for consistency only and would have no functional effect."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ },
+ {
+  "kind": "change",
+  "question": "Product wants the list of businesses on a user's account page (in the account/auth app) to show an extra piece of business information that only the legal registry knows. Where does that list's data come from, and what would need to change on each side?",
+  "facts": [
+   {
+    "fact": "auth-api's org affiliations GET with new=true loads AffiliationModel.find_affiliations_by_org_id and runs AffiliationService.get_affiliation_details, so the extra detail is fetched live rather than stored in auth.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ]
+   },
+   {
+    "fact": "get_affiliation_details sends each identifier to LEAR_AFFILIATION_DETAILS_URL (legal-api v2 '/businesses/search') or, for NR entities, to NAMEX_AFFILIATION_DETAILS_URL. It POSTs {'identifiers': [...]} in parallel using an ENTITY_SVC_CLIENT_ID service-account token.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "sbc-auth/auth-api/src/auth_api/config.py"
+    ]
+   },
+   {
+    "fact": "On the legal side, search_businesses (SYSTEM role only) returns {'businessEntities': [business.json(slim=True), ...], 'draftEntities': [...]}. Drafts are temporary-registration filings with no business_id. A new field must be added to Business.json(slim=True) or to the draft dict built there.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/legal-api/src/legal_api/models/business.py"
+    ]
+   },
+   {
+    "fact": "auth-api merges the responses in Affiliation._group_details, which reads the 'businessEntities' and 'draftEntities' keys, and in _combine_nrs, which pairs drafts with NRs via 'nrNumber' and adjusts draftType for amalgamation NRs. A renamed or restructured key would need matching changes there.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ]
+   },
+   {
+    "fact": "The slim business JSON is also what auth sees for SP and GP firms, where search_businesses adds alternateNames. Expensive per-business lookups are deliberately limited to firms there for performance, so a new field should follow that pattern.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py"
+    ]
+   },
+   {
+    "fact": "Basic data that auth itself stores (name, corp type, state) is pushed from lear to auth separately. After filings such as alteration, dissolution, put back on or restoration, entity-filer calls business_profile.update_entity, which PATCHes '/entities/{id}', and auth-api's EntityService.update_entity maps 'state' to the entity status. Data that auth should store must use this path, not the live search.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "sbc-auth/auth-api/src/auth_api/services/entity.py",
+     "sbc-auth/auth-api/src/auth_api/schemas/schemas/entity.json"
+    ]
+   }
+  ],
+  "qid": "cross-5",
+  "area": "cross",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   }
+  ]
+ }
+]

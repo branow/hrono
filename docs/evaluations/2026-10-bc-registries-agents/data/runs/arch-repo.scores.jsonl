@@ -1,0 +1,36 @@
+{"qid": "lear-filings-3", "arm": "repo", "coverage": 0.8333333333333334, "fact_scores": [0.5, 1.0, 1.0, 1.0, 0.5, 1.0], "errors": 0}
+{"qid": "lear-filings-2", "arm": "repo", "coverage": 0.2857142857142857, "fact_scores": [0.5, 0.0, 1.0, 0.5, 0.0, 0.0, 0.0], "errors": 0}
+{"qid": "lear-filings-1", "arm": "repo", "coverage": 0.5714285714285714, "fact_scores": [0.5, 0.0, 1.0, 1.0, 0.5, 1.0, 0.0], "errors": 0}
+{"qid": "lear-filings-0", "arm": "repo", "coverage": 0.75, "fact_scores": [1.0, 1.0, 0.5, 0.5, 1.0, 0.5], "errors": 0}
+{"qid": "lear-filings-5", "arm": "repo", "coverage": 0.5714285714285714, "fact_scores": [1.0, 0.0, 0.5, 1.0, 0.5, 0.5, 0.5], "errors": 0}
+{"qid": "lear-filings-4", "arm": "repo", "coverage": 0.8333333333333334, "fact_scores": [1.0, 1.0, 1.0, 0.5, 1.0, 0.5], "errors": 0}
+{"qid": "lear-async-0", "arm": "repo", "coverage": 0.6428571428571429, "fact_scores": [0.5, 1.0, 0.0, 1.0, 0.5, 1.0, 0.5], "errors": 0}
+{"qid": "lear-async-1", "arm": "repo", "coverage": 0.75, "fact_scores": [1.0, 0.5, 1.0, 1.0, 1.0, 0.0], "errors": 0}
+{"qid": "lear-async-2", "arm": "repo", "coverage": 0.6428571428571429, "fact_scores": [0.5, 0.5, 1.0, 0.5, 1.0, 1.0, 0.0], "errors": 0}
+{"qid": "lear-async-3", "arm": "repo", "coverage": 0.75, "fact_scores": [1.0, 1.0, 1.0, 1.0, 0.5, 0.0], "errors": 0}
+{"qid": "lear-async-5", "arm": "repo", "coverage": 0.75, "fact_scores": [0.5, 0.5, 1.0, 0.5, 1.0, 1.0], "errors": 0}
+{"qid": "lear-async-4", "arm": "repo", "coverage": 0.8571428571428571, "fact_scores": [1.0, 0.5, 1.0, 1.0, 0.5, 1.0, 1.0], "errors": 0}
+{"qid": "auth-0", "arm": "repo", "coverage": 0.8571428571428571, "fact_scores": [1.0, 0.5, 1.0, 0.5, 1.0, 1.0, 1.0], "errors": 0}
+{"qid": "auth-1", "arm": "repo", "coverage": 0.7142857142857143, "fact_scores": [1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0], "errors": 0}
+{"qid": "auth-2", "arm": "repo", "coverage": 0.7857142857142857, "fact_scores": [0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0], "errors": 0}
+{"qid": "auth-3", "arm": "repo", "coverage": 0.7857142857142857, "fact_scores": [0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0], "errors": 0}
+{"qid": "auth-4", "arm": "repo", "coverage": 0.5, "fact_scores": [0.5, 1.0, 1.0, 0.5, 0.0, 0.0], "errors": 0}
+{"qid": "auth-5", "arm": "repo", "coverage": 0.75, "fact_scores": [1.0, 1.0, 1.0, 1.0, 0.5, 0.0], "errors": 0}
+{"qid": "pay-0", "arm": "repo", "coverage": 0.35714285714285715, "fact_scores": [0.5, 0.5, 0.0, 0.5, 0.5, 0.5, 0.0], "errors": 1}
+{"qid": "pay-1", "arm": "repo", "coverage": 0.6428571428571429, "fact_scores": [0.5, 1.0, 0.5, 0.5, 1.0, 0.0, 1.0], "errors": 0}
+{"qid": "pay-2", "arm": "repo", "coverage": 0.75, "fact_scores": [0.5, 0.5, 0.5, 1.0, 1.0, 1.0], "errors": 0}
+{"qid": "pay-3", "arm": "repo", "coverage": 1.0, "fact_scores": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "errors": 0}
+{"qid": "pay-4", "arm": "repo", "coverage": 0.75, "fact_scores": [0.5, 0.5, 1.0, 1.0, 1.0, 0.5], "errors": 1}
+{"qid": "pay-5", "arm": "repo", "coverage": 0.5, "fact_scores": [0.5, 0.5, 1.0, 0.5, 0.5, 0.5, 0.0], "errors": 1}
+{"qid": "ui-0", "arm": "repo", "coverage": 0.8571428571428571, "fact_scores": [1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.5], "errors": 0}
+{"qid": "ui-2", "arm": "repo", "coverage": 0.6428571428571429, "fact_scores": [1.0, 0.5, 1.0, 0.5, 1.0, 0.5, 0.0], "errors": 0}
+{"qid": "ui-3", "arm": "repo", "coverage": 0.5, "fact_scores": [0.5, 1.0, 0.5, 0.5, 0.5, 0.0], "errors": 0}
+{"qid": "ui-1", "arm": "repo", "coverage": 0.5625, "fact_scores": [0.5, 1.0, 0.5, 0.5, 0.0, 0.5, 1.0, 0.5], "errors": 0}
+{"qid": "ui-4", "arm": "repo", "coverage": 0.75, "fact_scores": [1.0, 1.0, 1.0, 0.5, 0.5, 0.5], "errors": 0}
+{"qid": "ui-5", "arm": "repo", "coverage": 0.8333333333333334, "fact_scores": [1.0, 1.0, 0.5, 1.0, 0.5, 1.0], "errors": 0}
+{"qid": "cross-1", "arm": "repo", "coverage": 0.7857142857142857, "fact_scores": [1.0, 1.0, 0.5, 1.0, 1.0, 1.0, 0.0], "errors": 0}
+{"qid": "cross-3", "arm": "repo", "coverage": 0.7142857142857143, "fact_scores": [1.0, 0.5, 1.0, 0.5, 1.0, 1.0, 0.0], "errors": 0}
+{"qid": "cross-2", "arm": "repo", "coverage": 0.75, "fact_scores": [0.5, 1.0, 1.0, 0.5, 0.5, 1.0], "errors": 0}
+{"qid": "cross-0", "arm": "repo", "coverage": 0.5625, "fact_scores": [0.5, 1.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.5], "errors": 0}
+{"qid": "cross-4", "arm": "repo", "coverage": 0.5714285714285714, "fact_scores": [1.0, 0.0, 1.0, 1.0, 0.5, 0.0, 0.5], "errors": 0}
+{"qid": "cross-5", "arm": "repo", "coverage": 0.75, "fact_scores": [1.0, 1.0, 1.0, 0.5, 1.0, 0.0], "errors": 1}

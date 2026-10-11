@@ -1,0 +1,1064 @@
+{
+ "kept": [
+  {
+   "kind": "flow",
+   "question": "Walk me through what happens end to end when an account administrator invites a new team member by email. How is the invitation created and emailed, what link does the invitee click, and what happens when the invitee accepts it and becomes a member?",
+   "facts": [
+    {
+     "fact": "The auth-web InvitationService posts new invitations to POST /invitations. The API's post_invitation endpoint validates the 'invitation' JSON schema and calls Invitation.create_invitation. That method uses check_auth to require the inviter to be ADMIN, COORDINATOR or STAFF on the org.",
+     "files": [
+      "sbc-auth/auth-web/src/services/invitation.services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+     ]
+    },
+    {
+     "fact": "create_invitation picks the invitation type and the required login source from the org's access type: ANONYMOUS\u2192BCROS, GOVM\u2192IDIR/STAFF, otherwise the org's AccountLoginOptions or BCSC/BCEID. It then signs a confirmation token containing the invitation id and type with an itsdangerous URLSafeTimedSerializer (generate_confirmation_token).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/models/invitation.py"
+     ]
+    },
+    {
+     "fact": "send_invitation builds a '<orgName>/validatetoken/<loginSource>/<token>' URL and calls publish_to_mailer. publish_to_mailer wraps the data in a SimpleCloudEvent (such as BUSINESS_INVITATION or GOVM_MEMBER_INVITATION) and publishes it to the ACCOUNT_MAILER_TOPIC GCP Pub/Sub topic.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+     ]
+    },
+    {
+     "fact": "In auth-web, the route '/:orgName/validatetoken/:loginSource/:token' renders AcceptInviteLandingView, which validates the token. AcceptInviteView then calls the org store's acceptInvitation, which issues PUT /invitations/tokens/<token>.",
+     "files": [
+      "sbc-auth/auth-web/src/routes/router.ts",
+      "sbc-auth/auth-web/src/views/auth/AcceptInviteLandingView.vue",
+      "sbc-auth/auth-web/src/views/auth/AcceptInviteView.vue",
+      "sbc-auth/auth-web/src/stores/org.ts"
+     ]
+    },
+    {
+     "fact": "validate_token rejects tokens older than TOKEN_EXPIRY_PERIOD days (7 days by default) and invitations already ACCEPTED or EXPIRED. accept_invitation enforces that STAFF (IDIR) invitations are accepted with the same login source.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py"
+     ]
+    },
+    {
+     "fact": "accept_invitation creates a Membership whose status depends on the org and user. GOVM orgs get ACTIVE immediately. An unverified BCeID ADMIN gets PENDING_STAFF_REVIEW plus a BCEID_ADMIN affidavit-review Task. Everyone else gets PENDING_APPROVAL, and the account admins are notified via an ADMIN_NOTIFICATION email.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/models/membership.py"
+     ]
+    },
+    {
+     "fact": "After acceptance, the user is added to Keycloak groups through KeycloakService.join_users_group and join_account_holders_group, and product groups are synced by ProductService.update_users_products_keycloak_groups.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/keycloak.py",
+      "sbc-auth/auth-api/src/auth_api/services/products.py"
+     ]
+    }
+   ],
+   "qid": "auth-0",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How are fine-grained permissions (for example, who can change the account address or invite members) modeled and enforced for a team member, depending on their role and on the account's status? Where do these rules live, and how does the web front end learn about them?",
+   "facts": [
+    {
+     "fact": "Permissions are rows in a 'permissions' table keyed by membership_type_code and org_status_code, with an 'actions' string (the Permissions model). They are seeded and changed through Alembic migrations, for example one that inserts ('ADMIN', 'view_address').",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/models/permissions.py",
+      "sbc-auth/auth-api/migrations/versions/2024_05_30_39b4f331c003_admin_view_address_permission.py"
+     ]
+    },
+    {
+     "fact": "Permissions.build_all_permission_cache loads every row into the Flask cache keyed by (org_status, membership_type). It runs once at app startup from build_cache in the auth_api package init.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+      "sbc-auth/auth-api/src/auth_api/__init__.py"
+     ]
+    },
+    {
+     "fact": "Permissions.get_permissions_for_membership treats every org status except NSF_SUSPENDED, PENDING_STAFF_REVIEW and SUSPENDED as None (normal), then reads the actions from the cache or the database.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+      "sbc-auth/auth-api/src/auth_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "The Authorization service reads the authorizations_view database view (the AuthorizationView model) to find the caller's org_membership and the org status_code. It attaches the resulting permission list as 'roles' in the responses of GET /entities/<id>/authorizations and the org authorizations endpoint.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/models/views/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org_authorizations.py"
+     ]
+    },
+    {
+     "fact": "Server-side role checks inside services use check_auth with one_of_roles, disabled_roles or equals_role against the caller's org membership, and return 403 via abort. Endpoint-level Keycloak role gating uses the _jwt.has_one_of_roles decorator.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/membership.py"
+     ]
+    },
+    {
+     "fact": "In auth-web, the org store's syncMembership calls PermissionService.getPermissions, which issues GET /permissions/<orgStatus>/<role>?case=upper (served by get_membership_permissions), and stores the result in state.permissions. For staff it instead uses the hard-coded lists in CommonUtils.getAdminPermissions and getViewOnlyPermissions.",
+     "files": [
+      "sbc-auth/auth-web/src/stores/org.ts",
+      "sbc-auth/auth-web/src/services/permission.services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/permissions.py",
+      "sbc-auth/auth-web/src/util/common-util.ts"
+     ]
+    },
+    {
+     "fact": "UI components gate features by checking the Permission enum against the store's permissions. For example, AccountInfo uses CHANGE_ADDRESS and VIEW_ADMIN_CONTACT, and AccountPaymentMethods uses VIEW_PAYMENT_METHODS and MAKE_PAYMENT.",
+     "files": [
+      "sbc-auth/auth-web/src/util/constants.ts",
+      "sbc-auth/auth-web/src/components/auth/account-settings/account-info/AccountInfo.vue",
+      "sbc-auth/auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue"
+     ]
+    }
+   ],
+   "qid": "auth-1",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does a user add an existing business or a name request to their account's business list, and how is the claim verified? What happens on the reverse path, when a business is removed from the account?",
+   "facts": [
+    {
+     "fact": "The auth-web business store's addBusiness and addNameRequest call OrgService.createAffiliation and createNRAffiliation. These POST to /orgs/<id>/affiliations, with ?newBusiness=true for name requests.",
+     "files": [
+      "sbc-auth/auth-web/src/stores/business.ts",
+      "sbc-auth/auth-web/src/services/org.services.ts"
+     ]
+    },
+    {
+     "fact": "The post_organization_affiliation endpoint validates the 'affiliation' schema and requires at least one digit in the identifier. It then routes to Affiliation.create_new_business_affiliation for name requests or Affiliation.create_affiliation for existing businesses, and optionally calls fix_stale_affiliations.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "Affiliation.is_authorized lets staff through. For SP/GP firms it checks the supplied party name against the entity service using a service-account token (_validate_firms_party). For other businesses it compares the passcode with the bcrypt hash via utils/passcode.validate_passcode.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/utils/passcode.py",
+      "sbc-auth/auth-api/src/auth_api/services/rest_service.py"
+     ]
+    },
+    {
+     "fact": "For name requests, create_new_business_affiliation fetches the NR from the Names API (NAMEX_API_URL /requests/<nr>; the docstring wrongly says legal-api) and requires an APPROVED, CONDITIONAL, DRAFT or INPROGRESS state. DRAFT NRs must have a COMPLETED invoice from pay-api's /payment-requests. Non-staff users must supply an email or phone that matches the NR applicant, and if no Entity exists one is created with corp type NR.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/services/entity.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "A successful affiliation saves the Affiliation model, marks the entity's passcode as claimed (except for SP/GP on the passcode path), and publishes a CREATE_AFFILIATION activity through ActivityLogPublisher (skipped for the temporary corp types TMP, RTMP, ATMP and CTMP).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/models/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py"
+     ]
+    },
+    {
+     "fact": "Removal goes through OrgService.removeAffiliation, which issues DELETE /orgs/<id>/affiliations/<identifier> with passcodeResetEmail, resetPasscode and logDeleteDraft. Affiliation.delete_affiliation deletes related affiliation invitations and optionally calls Entity.reset_passcode, which generates a new 9-digit bcrypt-hashed passcode and emails it via a RESET_PASSCODE mailer event. It then sets pass_code_claimed back to False.",
+     "files": [
+      "sbc-auth/auth-web/src/services/org.services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/services/entity.py"
+     ]
+    },
+    {
+     "fact": "In the auth-queue worker, process_name_events also auto-affiliates NRs: when a DRAFT NR event arrives with no existing affiliation, it looks up the paying account in pay-api's payment-requests and creates the Affiliation and a CREATE_AFFILIATION ActivityLog row directly.",
+     "files": [
+      "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+     ]
+    }
+   ],
+   "qid": "auth-2",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "For name requests, create_new_business_affiliation fetches the NR from the Names API (NAMEX_API_URL /requests/<nr>; the docstring wrongly says legal-api) and requires an APPROVED, CONDITIONAL, DRAFT or INPROGRESS state. DRAFT NRs must have a COMPLETED invoice from pay-api's /payment-requests. Non-staff users must supply an email or phone that matches the NR applicant, and if no Entity exists one is created with corp type NR."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "Some new accounts and some new administrators must be reviewed by registry staff before they become usable. How is this staff-review concept modeled, what creates a review item, and what happens when staff approve, reject or put a review on hold?",
+   "facts": [
+    {
+     "fact": "Org.create_org decides whether staff review is needed. It is needed for GOVN accounts, and for EXTRA_PROVINCIAL or REGULAR_BCEID accounts whose user has no approved affidavit. In that case _create_staff_review_task sets the org status to PENDING_STAFF_REVIEW, creates an ORG-relationship Task (GOVN_REVIEW or NEW_ACCOUNT_STAFF_REVIEW, with action AFFIDAVIT_REVIEW for BCeID users and ACCOUNT_REVIEW otherwise), and emails staff a STAFF_REVIEW_ACCOUNT reminder.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/models/task.py"
+     ]
+    },
+    {
+     "fact": "When an unverified BCeID user accepts an ADMIN invitation, Invitation._create_affidavit_review_task creates a USER-relationship Task (type BCEID_ADMIN, action AFFIDAVIT_REVIEW) and the membership is set to PENDING_STAFF_REVIEW.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "Staff resolve tasks through PUT /tasks/<id>, which is limited to the STAFF role. It calls Task.update_task, which records the decision and dispatches on relationship_type in _update_relationship (ORG, PRODUCT or USER).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/task.py",
+      "sbc-auth/auth-api/src/auth_api/services/task.py"
+     ]
+    },
+    {
+     "fact": "For ORG tasks, Org.approve_or_reject approves or rejects the affidavit through AffidavitService when the action is AFFIDAVIT_REVIEW and sets the org status to ACTIVE or REJECTED. It then emails the account admins with access-type-specific notifications (BCeID/extra-provincial versus GOVM/GOVN).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affidavit.py"
+     ]
+    },
+    {
+     "fact": "For USER tasks, Task._update_bceid_admin sets the user to ACTIVE or INACTIVE and the membership to ACTIVE or REJECTED, and calls Affidavit.approve_or_reject_bceid_admin. An approved AFFIDAVIT_REVIEW also sets user.verified to True.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/services/affidavit.py",
+      "sbc-auth/auth-api/src/auth_api/models/membership.py"
+     ]
+    },
+    {
+     "fact": "Putting a task on HOLD is allowed for ORG tasks only when the action is AFFIDAVIT_REVIEW (otherwise it raises INVALID_INPUT). _notify_admin_about_hold publishes a RESUBMIT_BCEID_ORG_NOTIFICATION or RESUBMIT_BCEID_ADMIN_NOTIFICATION mailer event containing a link back to the BCeID setup route.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+     ]
+    },
+    {
+     "fact": "PENDING_STAFF_REVIEW is also an org status that Permissions.get_permissions_for_membership keeps when looking up permissions, so members of an account under review get a distinct permission set.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+      "sbc-auth/auth-api/migrations/versions/5397c5a5b0ca_staff_pending_status_permissions.py"
+     ]
+    }
+   ],
+   "qid": "auth-3",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want to guarantee that an account can never be left without an active administrator: no admin should be able to leave the team, or be removed, if they are the last one. Where is the 'only administrator' rule enforced today, where are the gaps, and what would we need to touch in the API and the web app?",
+   "facts": [
+    {
+     "fact": "On the server, the rule exists only in Membership.update_membership, which serves PATCH /orgs/<id>/members/<membership_id>. It raises CHANGE_ROLE_FAILED_ONLY_OWNER, defined in exceptions/errors.py as a 400, when an ADMIN is being set INACTIVE or downgraded and get_owner_count returns 1. auth-web also has a client-side check: MemberDataTable.confirmLeaveTeam emits 'single-owner-error' when an admin tries to leave and ownerCount() over the active members is 1, and that check can be bypassed.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/exceptions/errors.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "get_owner_count counts every ADMIN in org.members, the relationship on the Org model, without filtering by membership status. Inactive or pending admins are therefore counted, and the check should use something like MembershipModel.get_count_active_owner_org_id, which filters on ACTIVE status.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/models/org.py",
+      "sbc-auth/auth-api/src/auth_api/models/membership.py"
+     ]
+    },
+    {
+     "fact": "Membership.deactivate_membership, which serves DELETE /orgs/<id>/members/<membership_id>, has no last-admin check. It only uses check_auth to require COORDINATOR or ADMIN when removing someone else, and ADMIN when removing an admin.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+     ]
+    },
+    {
+     "fact": "In auth-web, TeamManagementMixin.leave and dissolve both call the org store's leaveTeam, which calls OrgService.leaveOrg (the DELETE endpoint). removeMember and changeRole instead call updateMember, which sends PATCH with role, status and notifyUser. A new server-side check on DELETE would therefore also block the 'dissolve account' path, which needs separate handling.",
+     "files": [
+      "sbc-auth/auth-web/src/components/auth/mixins/TeamManagementMixin.vue",
+      "sbc-auth/auth-web/src/stores/org.ts",
+      "sbc-auth/auth-web/src/services/org.services.ts"
+     ]
+    },
+    {
+     "fact": "Both membership paths call Membership._add_or_remove_group after saving. It removes the user from the Keycloak account_holders group only when the user has no other valid org memberships, and resyncs product groups through ProductService.update_users_products_keycloak_groups. A new guard must run before the save so that Keycloak stays consistent.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/services/keycloak.py",
+      "sbc-auth/auth-api/src/auth_api/services/products.py"
+     ]
+    },
+    {
+     "fact": "Both paths also publish REMOVE_TEAM_MEMBER activities via ActivityLogPublisher, and update_membership sends TEAM_MODIFIED and ADMIN_REMOVED mailer events when staff make the change. These side effects should not fire when the guard rejects the request.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+      "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+     ]
+    }
+   ],
+   "qid": "auth-4",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "partly",
+     "fix": "On the server, the rule exists only in Membership.update_membership, which serves PATCH /orgs/<id>/members/<membership_id>. It raises CHANGE_ROLE_FAILED_ONLY_OWNER, defined in exceptions/errors.py as a 400, when an ADMIN is being set INACTIVE or downgraded and get_owner_count returns 1. auth-web also has a client-side check: MemberDataTable.confirmLeaveTeam emits 'single-owner-error' when an admin tries to leave and ownerCount() over the active members is 1, and that check can be bypassed."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want account administrators to see a new kind of entry in their account's activity history, for example when an API key is created. How do activity entries get from the place where an action happens into the history shown to the user, and what would we need to add for a new action type?",
+   "facts": [
+    {
+     "fact": "Services record actions by calling ActivityLogPublisher.publish_activity with an Activity dataclass (org_id, action, name, id, value), as Org, Membership, Invitation and Affiliation do. The action values come from the ActivityAction enum in utils/enums.py, so a new action needs a new enum member there.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+      "sbc-auth/auth-api/src/auth_api/models/dataclass.py",
+      "sbc-auth/auth-api/src/auth_api/utils/enums.py",
+      "sbc-auth/auth-api/src/auth_api/services/org.py"
+     ]
+    },
+    {
+     "fact": "publish_activity fills in actor_id from the JWT user and remoteAddr, wraps the data in a SimpleCloudEvent of type ACTIVITY_LOG with itemType 'ACCOUNT', and publishes it to the AUTH_EVENT_TOPIC Pub/Sub topic. Failures are only logged and reported to Sentry, so the request is never blocked.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+      "sbc-auth/auth-api/src/auth_api/config.py"
+     ]
+    },
+    {
+     "fact": "The auth-queue worker endpoint de-duplicates events through the PubSubMessageProcessing model. For ACTIVITY_LOG events, process_activity_log persists an ActivityLog model row.",
+     "files": [
+      "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py",
+      "sbc-auth/auth-api/src/auth_api/models/pubsub_message_processing.py",
+      "sbc-auth/auth-api/src/auth_api/models/activity_log.py"
+     ]
+    },
+    {
+     "fact": "GET /orgs/<org_id>/activity-logs calls ActivityLog.fetch_activity_logs, which uses check_auth to restrict access to ADMIN or STAFF. _build_string maps each ActivityAction to a formatter such as _adding_a_business_affilliation. A new action needs its own formatter there, or the raw action code is shown.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/activity_log.py",
+      "sbc-auth/auth-api/src/auth_api/services/activity_log.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+     ]
+    },
+    {
+     "fact": "The auth-web activity log service calls GET /orgs/<orgId>/activity-logs with filter parameters, using the ActivityLog model types, to render the history in the front end.",
+     "files": [
+      "sbc-auth/auth-web/src/services/activityLog.services.ts",
+      "sbc-auth/auth-web/src/models/activityLog.ts"
+     ]
+    },
+    {
+     "fact": "Viewing the activity history is itself a permission: migrations add activity-log permission actions to the permissions table, which the web app receives through the /permissions endpoint.",
+     "files": [
+      "sbc-auth/auth-api/migrations/versions/1a46fdc4d630_permissons_for_activity_log.py",
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+     ]
+    }
+   ],
+   "qid": "auth-5",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ],
+ "all": [
+  {
+   "kind": "flow",
+   "question": "Walk me through what happens end to end when an account administrator invites a new team member by email. How is the invitation created and emailed, what link does the invitee click, and what happens when the invitee accepts it and becomes a member?",
+   "facts": [
+    {
+     "fact": "The auth-web InvitationService posts new invitations to POST /invitations. The API's post_invitation endpoint validates the 'invitation' JSON schema and calls Invitation.create_invitation. That method uses check_auth to require the inviter to be ADMIN, COORDINATOR or STAFF on the org.",
+     "files": [
+      "sbc-auth/auth-web/src/services/invitation.services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+     ]
+    },
+    {
+     "fact": "create_invitation picks the invitation type and the required login source from the org's access type: ANONYMOUS\u2192BCROS, GOVM\u2192IDIR/STAFF, otherwise the org's AccountLoginOptions or BCSC/BCEID. It then signs a confirmation token containing the invitation id and type with an itsdangerous URLSafeTimedSerializer (generate_confirmation_token).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/models/invitation.py"
+     ]
+    },
+    {
+     "fact": "send_invitation builds a '<orgName>/validatetoken/<loginSource>/<token>' URL and calls publish_to_mailer. publish_to_mailer wraps the data in a SimpleCloudEvent (such as BUSINESS_INVITATION or GOVM_MEMBER_INVITATION) and publishes it to the ACCOUNT_MAILER_TOPIC GCP Pub/Sub topic.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+     ]
+    },
+    {
+     "fact": "In auth-web, the route '/:orgName/validatetoken/:loginSource/:token' renders AcceptInviteLandingView, which validates the token. AcceptInviteView then calls the org store's acceptInvitation, which issues PUT /invitations/tokens/<token>.",
+     "files": [
+      "sbc-auth/auth-web/src/routes/router.ts",
+      "sbc-auth/auth-web/src/views/auth/AcceptInviteLandingView.vue",
+      "sbc-auth/auth-web/src/views/auth/AcceptInviteView.vue",
+      "sbc-auth/auth-web/src/stores/org.ts"
+     ]
+    },
+    {
+     "fact": "validate_token rejects tokens older than TOKEN_EXPIRY_PERIOD days (7 days by default) and invitations already ACCEPTED or EXPIRED. accept_invitation enforces that STAFF (IDIR) invitations are accepted with the same login source.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py"
+     ]
+    },
+    {
+     "fact": "accept_invitation creates a Membership whose status depends on the org and user. GOVM orgs get ACTIVE immediately. An unverified BCeID ADMIN gets PENDING_STAFF_REVIEW plus a BCEID_ADMIN affidavit-review Task. Everyone else gets PENDING_APPROVAL, and the account admins are notified via an ADMIN_NOTIFICATION email.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/models/membership.py"
+     ]
+    },
+    {
+     "fact": "After acceptance, the user is added to Keycloak groups through KeycloakService.join_users_group and join_account_holders_group, and product groups are synced by ProductService.update_users_products_keycloak_groups.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/keycloak.py",
+      "sbc-auth/auth-api/src/auth_api/services/products.py"
+     ]
+    }
+   ],
+   "qid": "auth-0",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How are fine-grained permissions (for example, who can change the account address or invite members) modeled and enforced for a team member, depending on their role and on the account's status? Where do these rules live, and how does the web front end learn about them?",
+   "facts": [
+    {
+     "fact": "Permissions are rows in a 'permissions' table keyed by membership_type_code and org_status_code, with an 'actions' string (the Permissions model). They are seeded and changed through Alembic migrations, for example one that inserts ('ADMIN', 'view_address').",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/models/permissions.py",
+      "sbc-auth/auth-api/migrations/versions/2024_05_30_39b4f331c003_admin_view_address_permission.py"
+     ]
+    },
+    {
+     "fact": "Permissions.build_all_permission_cache loads every row into the Flask cache keyed by (org_status, membership_type). It runs once at app startup from build_cache in the auth_api package init.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+      "sbc-auth/auth-api/src/auth_api/__init__.py"
+     ]
+    },
+    {
+     "fact": "Permissions.get_permissions_for_membership treats every org status except NSF_SUSPENDED, PENDING_STAFF_REVIEW and SUSPENDED as None (normal), then reads the actions from the cache or the database.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+      "sbc-auth/auth-api/src/auth_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "The Authorization service reads the authorizations_view database view (the AuthorizationView model) to find the caller's org_membership and the org status_code. It attaches the resulting permission list as 'roles' in the responses of GET /entities/<id>/authorizations and the org authorizations endpoint.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/models/views/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org_authorizations.py"
+     ]
+    },
+    {
+     "fact": "Server-side role checks inside services use check_auth with one_of_roles, disabled_roles or equals_role against the caller's org membership, and return 403 via abort. Endpoint-level Keycloak role gating uses the _jwt.has_one_of_roles decorator.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/services/membership.py"
+     ]
+    },
+    {
+     "fact": "In auth-web, the org store's syncMembership calls PermissionService.getPermissions, which issues GET /permissions/<orgStatus>/<role>?case=upper (served by get_membership_permissions), and stores the result in state.permissions. For staff it instead uses the hard-coded lists in CommonUtils.getAdminPermissions and getViewOnlyPermissions.",
+     "files": [
+      "sbc-auth/auth-web/src/stores/org.ts",
+      "sbc-auth/auth-web/src/services/permission.services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/permissions.py",
+      "sbc-auth/auth-web/src/util/common-util.ts"
+     ]
+    },
+    {
+     "fact": "UI components gate features by checking the Permission enum against the store's permissions. For example, AccountInfo uses CHANGE_ADDRESS and VIEW_ADMIN_CONTACT, and AccountPaymentMethods uses VIEW_PAYMENT_METHODS and MAKE_PAYMENT.",
+     "files": [
+      "sbc-auth/auth-web/src/util/constants.ts",
+      "sbc-auth/auth-web/src/components/auth/account-settings/account-info/AccountInfo.vue",
+      "sbc-auth/auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue"
+     ]
+    }
+   ],
+   "qid": "auth-1",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does a user add an existing business or a name request to their account's business list, and how is the claim verified? What happens on the reverse path, when a business is removed from the account?",
+   "facts": [
+    {
+     "fact": "The auth-web business store's addBusiness and addNameRequest call OrgService.createAffiliation and createNRAffiliation. These POST to /orgs/<id>/affiliations, with ?newBusiness=true for name requests.",
+     "files": [
+      "sbc-auth/auth-web/src/stores/business.ts",
+      "sbc-auth/auth-web/src/services/org.services.ts"
+     ]
+    },
+    {
+     "fact": "The post_organization_affiliation endpoint validates the 'affiliation' schema and requires at least one digit in the identifier. It then routes to Affiliation.create_new_business_affiliation for name requests or Affiliation.create_affiliation for existing businesses, and optionally calls fix_stale_affiliations.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+     ]
+    },
+    {
+     "fact": "Affiliation.is_authorized lets staff through. For SP/GP firms it checks the supplied party name against the entity service using a service-account token (_validate_firms_party). For other businesses it compares the passcode with the bcrypt hash via utils/passcode.validate_passcode.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/utils/passcode.py",
+      "sbc-auth/auth-api/src/auth_api/services/rest_service.py"
+     ]
+    },
+    {
+     "fact": "For name requests, create_new_business_affiliation fetches the NR from the Names API (NAMEX_API_URL /requests/<nr>; the docstring wrongly says legal-api) and requires an APPROVED, CONDITIONAL, DRAFT or INPROGRESS state. DRAFT NRs must have a COMPLETED invoice from pay-api's /payment-requests. Non-staff users must supply an email or phone that matches the NR applicant, and if no Entity exists one is created with corp type NR.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/services/entity.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "A successful affiliation saves the Affiliation model, marks the entity's passcode as claimed (except for SP/GP on the passcode path), and publishes a CREATE_AFFILIATION activity through ActivityLogPublisher (skipped for the temporary corp types TMP, RTMP, ATMP and CTMP).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/models/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py"
+     ]
+    },
+    {
+     "fact": "Removal goes through OrgService.removeAffiliation, which issues DELETE /orgs/<id>/affiliations/<identifier> with passcodeResetEmail, resetPasscode and logDeleteDraft. Affiliation.delete_affiliation deletes related affiliation invitations and optionally calls Entity.reset_passcode, which generates a new 9-digit bcrypt-hashed passcode and emails it via a RESET_PASSCODE mailer event. It then sets pass_code_claimed back to False.",
+     "files": [
+      "sbc-auth/auth-web/src/services/org.services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+      "sbc-auth/auth-api/src/auth_api/services/entity.py"
+     ]
+    },
+    {
+     "fact": "In the auth-queue worker, process_name_events also auto-affiliates NRs: when a DRAFT NR event arrives with no existing affiliation, it looks up the paying account in pay-api's payment-requests and creates the Affiliation and a CREATE_AFFILIATION ActivityLog row directly.",
+     "files": [
+      "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+     ]
+    }
+   ],
+   "qid": "auth-2",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "For name requests, create_new_business_affiliation fetches the NR from the Names API (NAMEX_API_URL /requests/<nr>; the docstring wrongly says legal-api) and requires an APPROVED, CONDITIONAL, DRAFT or INPROGRESS state. DRAFT NRs must have a COMPLETED invoice from pay-api's /payment-requests. Non-staff users must supply an email or phone that matches the NR applicant, and if no Entity exists one is created with corp type NR."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "Some new accounts and some new administrators must be reviewed by registry staff before they become usable. How is this staff-review concept modeled, what creates a review item, and what happens when staff approve, reject or put a review on hold?",
+   "facts": [
+    {
+     "fact": "Org.create_org decides whether staff review is needed. It is needed for GOVN accounts, and for EXTRA_PROVINCIAL or REGULAR_BCEID accounts whose user has no approved affidavit. In that case _create_staff_review_task sets the org status to PENDING_STAFF_REVIEW, creates an ORG-relationship Task (GOVN_REVIEW or NEW_ACCOUNT_STAFF_REVIEW, with action AFFIDAVIT_REVIEW for BCeID users and ACCOUNT_REVIEW otherwise), and emails staff a STAFF_REVIEW_ACCOUNT reminder.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/models/task.py"
+     ]
+    },
+    {
+     "fact": "When an unverified BCeID user accepts an ADMIN invitation, Invitation._create_affidavit_review_task creates a USER-relationship Task (type BCEID_ADMIN, action AFFIDAVIT_REVIEW) and the membership is set to PENDING_STAFF_REVIEW.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/invitation.py",
+      "sbc-auth/auth-api/src/auth_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "Staff resolve tasks through PUT /tasks/<id>, which is limited to the STAFF role. It calls Task.update_task, which records the decision and dispatches on relationship_type in _update_relationship (ORG, PRODUCT or USER).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/task.py",
+      "sbc-auth/auth-api/src/auth_api/services/task.py"
+     ]
+    },
+    {
+     "fact": "For ORG tasks, Org.approve_or_reject approves or rejects the affidavit through AffidavitService when the action is AFFIDAVIT_REVIEW and sets the org status to ACTIVE or REJECTED. It then emails the account admins with access-type-specific notifications (BCeID/extra-provincial versus GOVM/GOVN).",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/affidavit.py"
+     ]
+    },
+    {
+     "fact": "For USER tasks, Task._update_bceid_admin sets the user to ACTIVE or INACTIVE and the membership to ACTIVE or REJECTED, and calls Affidavit.approve_or_reject_bceid_admin. An approved AFFIDAVIT_REVIEW also sets user.verified to True.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/services/affidavit.py",
+      "sbc-auth/auth-api/src/auth_api/models/membership.py"
+     ]
+    },
+    {
+     "fact": "Putting a task on HOLD is allowed for ORG tasks only when the action is AFFIDAVIT_REVIEW (otherwise it raises INVALID_INPUT). _notify_admin_about_hold publishes a RESUBMIT_BCEID_ORG_NOTIFICATION or RESUBMIT_BCEID_ADMIN_NOTIFICATION mailer event containing a link back to the BCeID setup route.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/task.py",
+      "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+     ]
+    },
+    {
+     "fact": "PENDING_STAFF_REVIEW is also an org status that Permissions.get_permissions_for_membership keeps when looking up permissions, so members of an account under review get a distinct permission set.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+      "sbc-auth/auth-api/migrations/versions/5397c5a5b0ca_staff_pending_status_permissions.py"
+     ]
+    }
+   ],
+   "qid": "auth-3",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want to guarantee that an account can never be left without an active administrator: no admin should be able to leave the team, or be removed, if they are the last one. Where is the 'only administrator' rule enforced today, where are the gaps, and what would we need to touch in the API and the web app?",
+   "facts": [
+    {
+     "fact": "On the server, the rule exists only in Membership.update_membership, which serves PATCH /orgs/<id>/members/<membership_id>. It raises CHANGE_ROLE_FAILED_ONLY_OWNER, defined in exceptions/errors.py as a 400, when an ADMIN is being set INACTIVE or downgraded and get_owner_count returns 1. auth-web also has a client-side check: MemberDataTable.confirmLeaveTeam emits 'single-owner-error' when an admin tries to leave and ownerCount() over the active members is 1, and that check can be bypassed.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/exceptions/errors.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "get_owner_count counts every ADMIN in org.members, the relationship on the Org model, without filtering by membership status. Inactive or pending admins are therefore counted, and the check should use something like MembershipModel.get_count_active_owner_org_id, which filters on ACTIVE status.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/models/org.py",
+      "sbc-auth/auth-api/src/auth_api/models/membership.py"
+     ]
+    },
+    {
+     "fact": "Membership.deactivate_membership, which serves DELETE /orgs/<id>/members/<membership_id>, has no last-admin check. It only uses check_auth to require COORDINATOR or ADMIN when removing someone else, and ADMIN when removing an admin.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+     ]
+    },
+    {
+     "fact": "In auth-web, TeamManagementMixin.leave and dissolve both call the org store's leaveTeam, which calls OrgService.leaveOrg (the DELETE endpoint). removeMember and changeRole instead call updateMember, which sends PATCH with role, status and notifyUser. A new server-side check on DELETE would therefore also block the 'dissolve account' path, which needs separate handling.",
+     "files": [
+      "sbc-auth/auth-web/src/components/auth/mixins/TeamManagementMixin.vue",
+      "sbc-auth/auth-web/src/stores/org.ts",
+      "sbc-auth/auth-web/src/services/org.services.ts"
+     ]
+    },
+    {
+     "fact": "Both membership paths call Membership._add_or_remove_group after saving. It removes the user from the Keycloak account_holders group only when the user has no other valid org memberships, and resyncs product groups through ProductService.update_users_products_keycloak_groups. A new guard must run before the save so that Keycloak stays consistent.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/services/keycloak.py",
+      "sbc-auth/auth-api/src/auth_api/services/products.py"
+     ]
+    },
+    {
+     "fact": "Both paths also publish REMOVE_TEAM_MEMBER activities via ActivityLogPublisher, and update_membership sends TEAM_MODIFIED and ADMIN_REMOVED mailer events when staff make the change. These side effects should not fire when the guard rejects the request.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/membership.py",
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+      "sbc-auth/auth-api/src/auth_api/utils/account_mailer.py"
+     ]
+    }
+   ],
+   "qid": "auth-4",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "partly",
+     "fix": "On the server, the rule exists only in Membership.update_membership, which serves PATCH /orgs/<id>/members/<membership_id>. It raises CHANGE_ROLE_FAILED_ONLY_OWNER, defined in exceptions/errors.py as a 400, when an ADMIN is being set INACTIVE or downgraded and get_owner_count returns 1. auth-web also has a client-side check: MemberDataTable.confirmLeaveTeam emits 'single-owner-error' when an admin tries to leave and ownerCount() over the active members is 1, and that check can be bypassed."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want account administrators to see a new kind of entry in their account's activity history, for example when an API key is created. How do activity entries get from the place where an action happens into the history shown to the user, and what would we need to add for a new action type?",
+   "facts": [
+    {
+     "fact": "Services record actions by calling ActivityLogPublisher.publish_activity with an Activity dataclass (org_id, action, name, id, value), as Org, Membership, Invitation and Affiliation do. The action values come from the ActivityAction enum in utils/enums.py, so a new action needs a new enum member there.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+      "sbc-auth/auth-api/src/auth_api/models/dataclass.py",
+      "sbc-auth/auth-api/src/auth_api/utils/enums.py",
+      "sbc-auth/auth-api/src/auth_api/services/org.py"
+     ]
+    },
+    {
+     "fact": "publish_activity fills in actor_id from the JWT user and remoteAddr, wraps the data in a SimpleCloudEvent of type ACTIVITY_LOG with itemType 'ACCOUNT', and publishes it to the AUTH_EVENT_TOPIC Pub/Sub topic. Failures are only logged and reported to Sentry, so the request is never blocked.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/services/activity_log_publisher.py",
+      "sbc-auth/auth-api/src/auth_api/config.py"
+     ]
+    },
+    {
+     "fact": "The auth-queue worker endpoint de-duplicates events through the PubSubMessageProcessing model. For ACTIVITY_LOG events, process_activity_log persists an ActivityLog model row.",
+     "files": [
+      "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py",
+      "sbc-auth/auth-api/src/auth_api/models/pubsub_message_processing.py",
+      "sbc-auth/auth-api/src/auth_api/models/activity_log.py"
+     ]
+    },
+    {
+     "fact": "GET /orgs/<org_id>/activity-logs calls ActivityLog.fetch_activity_logs, which uses check_auth to restrict access to ADMIN or STAFF. _build_string maps each ActivityAction to a formatter such as _adding_a_business_affilliation. A new action needs its own formatter there, or the raw action code is shown.",
+     "files": [
+      "sbc-auth/auth-api/src/auth_api/resources/v1/activity_log.py",
+      "sbc-auth/auth-api/src/auth_api/services/activity_log.py",
+      "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+     ]
+    },
+    {
+     "fact": "The auth-web activity log service calls GET /orgs/<orgId>/activity-logs with filter parameters, using the ActivityLog model types, to render the history in the front end.",
+     "files": [
+      "sbc-auth/auth-web/src/services/activityLog.services.ts",
+      "sbc-auth/auth-web/src/models/activityLog.ts"
+     ]
+    },
+    {
+     "fact": "Viewing the activity history is itself a permission: migrations add activity-log permission actions to the permissions table, which the web app receives through the /permissions endpoint.",
+     "files": [
+      "sbc-auth/auth-api/migrations/versions/1a46fdc4d630_permissons_for_activity_log.py",
+      "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+     ]
+    }
+   ],
+   "qid": "auth-5",
+   "area": "auth",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ]
+}
