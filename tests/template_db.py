@@ -16,6 +16,8 @@ every schema itself.
 
 from __future__ import annotations
 
+import atexit
+import shutil
 import sqlite3
 import tempfile
 import threading
@@ -68,4 +70,10 @@ def _source() -> sqlite3.Connection:
         made = connect(folder / "template.db")
         migrate(made)
         _template = made
+        atexit.register(_discard, made, folder)
     return _template
+
+
+def _discard(made: sqlite3.Connection, folder: Path) -> None:
+    made.close()
+    shutil.rmtree(folder, ignore_errors=True)
