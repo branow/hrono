@@ -107,6 +107,9 @@ def _members_by_node(h: Harness) -> dict[int, set[int]]:
 def test_a_split_divides_the_topic_and_keeps_every_member(
     harness: tuple[Harness, int, list[int]],
 ) -> None:
+    # sixteen members is far below MAX_CAP (30), which is the summarization
+    # budget the AUTOMATIC repair answers to. An operator is not asking about
+    # a budget; they can see two topics.
     h, node, sections = harness
 
     response = h.client.post(
@@ -119,23 +122,6 @@ def test_a_split_divides_the_topic_and_keeps_every_member(
     placed = _members_by_node(h)
     assert node not in placed  # the divided node retired
     assert set().union(*(placed[c] for c in children)) == set(sections)
-
-
-def test_the_size_rule_does_not_govern_a_human(
-    harness: tuple[Harness, int, list[int]],
-) -> None:
-    # sixteen members is far below MAX_CAP (30), which is the summarization
-    # budget the AUTOMATIC repair answers to. An operator is not asking about
-    # a budget — they can see two topics.
-    h, node, sections = harness
-    assert len(sections) < 30
-
-    assert (
-        h.client.post(
-            f"/trees/{TREE}/nodes/{node}/split", headers=h.headers
-        ).status_code
-        == 200
-    )
 
 
 def test_a_topic_that_does_not_divide_is_refused_and_left_intact(

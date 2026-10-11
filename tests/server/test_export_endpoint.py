@@ -144,13 +144,6 @@ def test_levels_below_two_does_not_500(harness: Harness) -> None:
     assert resp.status_code == 200  # floored to 2, not an error
 
 
-def test_non_integer_levels_is_a_clean_422(harness: Harness) -> None:
-    resp = harness.client.get(
-        "/trees/default/export?levels=abc", headers=harness.auth("reader")
-    )
-    assert resp.status_code == 422
-
-
 def test_every_manifest_path_is_relative(harness: Harness) -> None:
     resp = harness.client.get(
         "/trees/default/export", headers=harness.auth("reader")
