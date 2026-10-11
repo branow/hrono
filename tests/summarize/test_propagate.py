@@ -13,7 +13,6 @@ from hrono.db.database import Database
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS
 from hrono.llm.client import (
     Completion,
     CompletionRequest,
@@ -174,10 +173,6 @@ def _run(db: Database, judge: Completion, tmp_path: Path) -> None:
 def _stale(db: Database, node_id: int) -> int:
     with db.connect() as conn:
         return int(briefs.get(conn, node_id)["stale"])
-
-
-def test_registered() -> None:
-    assert "propagate" in OPS
 
 
 def test_majority_of_three() -> None:

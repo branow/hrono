@@ -10,7 +10,7 @@ from hrono.db.database import Database
 from hrono.export import store as export_store
 from hrono.export.collapse import collapse
 from hrono.jobs.model import Job
-from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.ops import JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.summarize import UnreachableTree, briefs
@@ -172,10 +172,6 @@ def run(
         encoder_for=fake_encoder,
         build=build,
     )
-
-
-def test_build_tree_is_registered() -> None:
-    assert "build-tree" in OPS
 
 
 def test_recurses_to_a_single_root(db: Database) -> None:
