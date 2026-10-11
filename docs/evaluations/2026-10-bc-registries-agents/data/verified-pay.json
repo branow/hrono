@@ -1,0 +1,1008 @@
+{
+ "kept": [
+  {
+   "kind": "flow",
+   "question": "When a business filing app asks the payment system to charge for a filing, what happens end to end, from the incoming request to the filing app being told the payment is done?",
+   "facts": [
+    {
+     "fact": "The POST endpoint on the payment-requests blueprint validates the body against the 'payment_request' JSON schema, runs check_auth with the MAKE_PAYMENT role, and then calls PaymentService.create_invoice.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py"
+     ]
+    },
+    {
+     "fact": "PaymentService.create_invoice picks the payment method from the request's paymentInfo/methodOfPayment, falling back to the payment account's method and then DIRECT_PAY. _calculate_fees then calls FeeSchedule.find_by_corp_type_and_filing_type once per filing type, charging the service fee only once per request.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+     ]
+    },
+    {
+     "fact": "The fee comes from a FeeSchedule row that is valid for the corp type, filing type and date (fee_start_date/fee_end_date). It is adjusted by AccountFee overrides (apply_filing_fees, service_fee), by priority and future-effective fees, and by the waive_fees flag. Staff users and system users with EXCLUDE_SERVICE_FEES pay no service fees.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/models/fee_schedule.py",
+      "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+     ]
+    },
+    {
+     "fact": "PaymentSystemFactory.create returns InternalPayService for a zero total. For staff it returns BcolService if a BC Online account number is given, otherwise InternalPayService. A SYSTEM-role user who supplies a bcolAccountNumber also gets BcolService. All other cases go through create_from_payment_method (DirectPay, Paybc, Bcol, Internal, OnlineBanking, Pad, Eft, EjvPay). _validate_and_throw_error then raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD for PAD during the confirmation period.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "Each fee becomes a payment line item through PaymentLineItem.create. That call attaches the active distribution (GL) code for the fee schedule via DistributionCode.find_by_active_for_fee_schedule, and raises FEE_OVERRIDE_NOT_ALLOWED if fees are waived by someone who is not staff.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+      "sbc-pay/pay-api/src/pay_api/models/distribution_code.py"
+     ]
+    },
+    {
+     "fact": "The invoice's starting status comes from the payment system's get_default_invoice_status: CREATED by default, APPROVED for PAD, EFT, EJV and internal payments. The invoice is then handed to pay_service.create_invoice and complete_post_invoice, which are defined on the abstract PaymentSystemService.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py"
+     ]
+    },
+    {
+     "fact": "For methods that settle immediately or on credit (e.g. BC Online, PAD, EFT, internal), complete_post_invoice calls PaymentSystemService._release_payment. That method publishes a PAYMENT cloud event through gcp_queue_publisher.publish_to_queue to a topic picked by get_topic_for_corp_type (NAMEX, BUSINESS or STRR pay topic), and skips the CSO, RPT, PPR and VS corp types.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/utils/util.py",
+      "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+      "sbc-pay/pay-api/src/pay_api/services/bcol_service.py"
+     ]
+    }
+   ],
+   "qid": "pay-0",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "PaymentSystemFactory.create returns InternalPayService for a zero total. For staff it returns BcolService if a BC Online account number is given, otherwise InternalPayService. A SYSTEM-role user who supplies a bcolAccountNumber also gets BcolService. All other cases go through create_from_payment_method (DirectPay, Paybc, Bcol, Internal, OnlineBanking, Pad, Eft, EjvPay). _validate_and_throw_error then raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD for PAD during the confirmation period."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "Walk me through the lifecycle of a pre-authorized debit customer: from entering bank details, through the confirmation period and the daily batching of their purchases, to the bank settlement file that marks those purchases paid.",
+   "facts": [
+    {
+     "fact": "PadService.create_account stores the bank institution, transit and account numbers on a new CfsAccount with status PENDING and payment method PAD. PaymentAccount._calculate_activation_date sets pad_activation_date to PAD_CONFIRMATION_PERIOD_IN_DAYS (default 3) + 1 days ahead, rounded to the start of the day.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_account.py",
+      "sbc-pay/pay-api/src/pay_api/config.py"
+     ]
+    },
+    {
+     "fact": "The CREATE_CFS_ACCOUNTS job (CreateAccountTask.create_accounts) creates the CAS customer with CFSService.create_cfs_account and receipt method RECEIPT_METHOD_PAD_DAILY. It sets the account to PENDING_PAD_ACTIVATION while pad_activation_date is in the future, otherwise ACTIVE. For invalid bank details it publishes PAD_SETUP_FAILED and marks the account INACTIVE.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_account_task.py",
+      "sbc-pay/jobs/payment-jobs/invoke_jobs.py"
+     ]
+    },
+    {
+     "fact": "While the account is in the confirmation period, PaymentSystemFactory._validate_and_throw_error raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD. The ACTIVATE_PAD_ACCOUNTS job (ActivatePadAccountTask) later flips PENDING_PAD_ACTIVATION accounts to ACTIVE and publishes a CONFIRMATION_PERIOD_OVER mailer event.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py",
+      "sbc-pay/jobs/payment-jobs/tasks/activate_pad_account_task.py"
+     ]
+    },
+    {
+     "fact": "A PAD purchase creates no CAS invoice right away. PadService.create_invoice only checks payment blockers and deducts account credit, and the invoice stays APPROVED.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+     ]
+    },
+    {
+     "fact": "The CREATE_INVOICES job's CreateInvoiceTask._create_pad_invoices rolls up all APPROVED PAD invoices per non-frozen account into one CAS invoice (CFSService.create_account_invoice). It publishes PAD_INVOICE_CREATED and creates an ACTIVE InvoiceReference for each invoice under the shared CAS invoice number.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+     ]
+    },
+    {
+     "fact": "The ftp-poller's CASPollerFtpTask copies CAS settlement CSVs from SFTP to MinIO and moves them to a backup folder. utils.publish_to_queue then emits a CAS_MESSAGE_TYPE event on FTP_POLLER_TOPIC.",
+     "files": [
+      "sbc-pay/jobs/ftp-poller/tasks/cas_poller_ftp.py",
+      "sbc-pay/jobs/ftp-poller/utils/utils.py"
+     ]
+    },
+    {
+     "fact": "The pay-queue worker sends CAS messages to reconcile_payments. That function skips files already recorded in CasSettlement and handles PAD/PADR/PAYR rows through _process_consolidated_invoices. For PAID rows, _process_paid_invoices sets invoice references COMPLETED, invoices PAID, and creates Receipt rows.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+      "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+      "sbc-pay/pay-queue/src/pay_queue/enums.py"
+     ]
+    }
+   ],
+   "qid": "pay-1",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does money a customer sends by electronic funds transfer to the government bank account end up paying their outstanding statement invoices, both in our database and in the government's receivables system?",
+   "facts": [
+    {
+     "fact": "EFTPollerFtpTask uploads TDI17 bank files to MinIO and publishes an EFT_FILE_UPLOADED message through the shared ftp-poller publish_to_queue helper.",
+     "files": [
+      "sbc-pay/jobs/ftp-poller/tasks/eft_poller_ftp.py",
+      "sbc-pay/jobs/ftp-poller/utils/utils.py"
+     ]
+    },
+    {
+     "fact": "The pay-queue worker passes EFT_FILE_UPLOADED to reconcile_eft_payments. That function tracks the file in EFTFile (skipping files already IN_PROGRESS or COMPLETED), parses it with EFTHeader, EFTRecord and EFTTrailer, filters rows by EFT_TDI17_LOCATION_ID, and fails the whole file on any parse error.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_record.py"
+     ]
+    },
+    {
+     "fact": "_process_eft_credits groups deposits by short name and creates EFTCredit rows (amount and remaining_amount) along with a 'funds received' short-name history entry.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_short_name_historical.py"
+     ]
+    },
+    {
+     "fact": "_apply_eft_pending_payments calls EFTShortnames.process_payment_action with APPLY_CREDITS for each linked account whose amount owing is covered by the credit balance. EftService.process_owing_statements then walks the owing statements, and apply_eft_credit creates PENDING EFTCreditInvoiceLink rows while reducing EFTCredit.remaining_amount.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_short_names.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py"
+     ]
+    },
+    {
+     "fact": "The EFT job's EFTTask.link_electronic_funds_transfers_cfs takes the PENDING links. It creates a CAS receipt named EFTCIL<id> (CFSService.create_cfs_receipt), applies it to the invoice (CFSService.apply_receipt), writes Receipt and Payment rows, sets the invoice to PAID, and moves the links to COMPLETED.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+      "sbc-pay/jobs/payment-jobs/invoke_jobs.py"
+     ]
+    },
+    {
+     "fact": "If a paid invoice had been OVERDUE, EFTTask.unlock_overdue_accounts clears payment_account.has_overdue_invoices once no overdue invoices remain, and publishes an unlock event via AuthEvent.publish_unlock_account_event.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+      "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+     ]
+    }
+   ],
+   "qid": "pay-2",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How is an account 'freeze' or 'lock' (after a bounced bank debit or an overdue electronic-transfer statement) modeled, where is it set, what blocks new charges while it is in place, and how does it get lifted?",
+   "facts": [
+    {
+     "fact": "The lock is stored as two nullable timestamp columns on PaymentAccount: has_nsf_invoices and has_overdue_invoices. The CAS-side PAD state is CfsAccountStatus.FREEZE on the CfsAccount.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/models/payment_account.py",
+      "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "When a PAD settlement row is NOT PAID or a reversal (PADR/PAYR), the pay-queue's _process_failed_payments sets the CfsAccount to FREEZE, stamps has_nsf_invoices, and calls CFSService.update_site_receipt_method with RECEIPT_METHOD_PAD_STOP. It then reverts the invoices to SETTLEMENT_SCHEDULED, creates an NSF fee invoice from the BCR/NSF fee schedule, and adds an NSF adjustment in CAS. If it returns True, its caller _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC through _publish_account_events.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+      "sbc-pay/pay-api/src/pay_api/services/non_sufficient_funds.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "For EFT accounts, StatementDueTask stamps has_overdue_invoices when a monthly statement becomes overdue, publishes a lock event through AuthEvent.publish_lock_account_event, and records the account in the non-sufficient-funds table.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/statement_due_task.py",
+      "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+     ]
+    },
+    {
+     "fact": "New charges are blocked by PaymentSystemService.ensure_no_payment_blockers, which raises PAD_CURRENTLY_NSF or EFT_INVOICES_OVERDUE. PadService.create_invoice and EftService.create_invoice call it. The batch job CreateInvoiceTask._create_pad_invoices also skips CFS accounts in FREEZE.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+     ]
+    },
+    {
+     "fact": "Unlocking happens when a credit card transaction completes. PaymentTransaction.update_transaction calls PaymentAccount.unlock_frozen_accounts. That function restores RECEIPT_METHOD_PAD_DAILY in CAS, clears has_nsf_invoices and sets the CfsAccount back to ACTIVE, or for EFT reverses the original CAS invoices and clears has_overdue_invoices. It then publishes NSF_UNLOCK_ACCOUNT to AUTH_EVENT_TOPIC.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_account.py"
+     ]
+    },
+    {
+     "fact": "PadService.update_account keeps a new CfsAccount in FREEZE if the previous one was frozen when bank details change, so changing banks does not lift the lock.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+     ]
+    }
+   ],
+   "qid": "pay-3",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "When a PAD settlement row is NOT PAID or a reversal (PADR/PAYR), the pay-queue's _process_failed_payments sets the CfsAccount to FREEZE, stamps has_nsf_invoices, and calls CFSService.update_site_receipt_method with RECEIPT_METHOD_PAD_STOP. It then reverts the invoices to SETTLEMENT_SCHEDULED, creates an NSF fee invoice from the BCR/NSF fee schedule, and adds an NSF adjustment in CAS. If it returns True, its caller _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC through _publish_account_events."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How are refunds handled differently for each way a customer can pay, and how does a refund move from 'requested' to confirmed for card and BC Online payments?",
+   "facts": [
+    {
+     "fact": "The refunds endpoint under /payment-requests/<invoice_id> needs the SYSTEM, CREATE_CREDITS or FAS_REFUND role and calls RefundService.create_refund. That method only accepts PAID, APPROVED or UPDATE_REVENUE_ACCOUNT invoices, gates partial refunds behind the 'enable-partial-refunds' flag, and dispatches to process_cfs_refund on the payment-method implementation from PaymentSystemFactory.create_from_payment_method.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/resources/v1/refund.py",
+      "sbc-pay/pay-api/src/pay_api/services/refund.py",
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+     ]
+    },
+    {
+     "fact": "If process_cfs_refund returns no status, RefundService sets the invoice to REFUND_REQUESTED. It stamps refund_date only for REFUNDED, CANCELLED or CREDITED, and picks the user message from REFUND_SUCCESS_MESSAGES using '<method>.<status>'.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/refund.py",
+      "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+     ]
+    },
+    {
+     "fact": "PAD (and Online Banking) refunds never return money to the bank. PadService.process_cfs_refund calls _refund_and_create_credit_memo, which creates a CAS credit memo and a Credit row and raises payment_account.credit, giving CREDITED status. An APPROVED invoice with no active reference just becomes CANCELLED.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py"
+     ]
+    },
+    {
+     "fact": "DirectPayService.process_cfs_refund posts an automated refund to the PayBC refund API. Later the DIRECT_PAY_REFUND job (DirectPayAutomatedRefundTask) polls the PayBC order status: refundglstatus PAID or CMPLT moves the invoice and payment to REFUNDED (CMPLT also sets refund.gl_posted), and RJCT/DECLINED records refund.gl_error.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py"
+     ]
+    },
+    {
+     "fact": "BcolService.process_cfs_refund publishes a REFUND_DRAWDOWN_REQUEST mailer event and marks the payment REFUNDED. The BCOL_REFUND_CONFIRMATION job (BcolRefundConfirmationTask) then queries bconline_billing_record in the COLIN Oracle DB for qty = -1 rows and confirms REFUND_REQUESTED invoices.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/bcol_refund_confirmation_task.py",
+      "sbc-pay/jobs/payment-jobs/services/oracle.py"
+     ]
+    },
+    {
+     "fact": "Internal (routing slip) refunds add the invoice total back to routing_slip.remaining_amount (reactivating a COMPLETE slip) and set REFUND_REQUESTED. CreateInvoiceTask._cancel_rs_invoices then unapplies the receipt and reverses the invoice in CAS and sets the invoice to REFUNDED. EFT refunds are delegated to EFTRefundService.handle_invoice_refund, and consolidated invoices are rejected.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_refund.py"
+     ]
+    }
+   ],
+   "qid": "pay-4",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We need to add a new payment method where purchases are recorded immediately but invoiced in the government receivables system later by a batch, and settled through the bank settlement file. Where would this be implemented and what else would need updating?",
+   "facts": [
+    {
+     "fact": "The new method code goes in the PaymentMethod enum, and its starting invoice state in InvoiceStatus (existing deferred methods use APPROVED).",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "Add a PaymentSystemService subclass that implements the abstract create_invoice, get_payment_system_code and get_payment_method_code. Override get_default_invoice_status, complete_post_invoice (calling _release_payment) and process_cfs_refund, as PadService and EftService do.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py"
+     ]
+    },
+    {
+     "fact": "Register the new service in PaymentSystemFactory.create_from_payment_method, which is used by create_invoice, delete, refund and settlement paths. Add any eligibility checks next to _validate_and_throw_error.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/refund.py"
+     ]
+    },
+    {
+     "fact": "The deferred CAS invoicing step belongs in CreateInvoiceTask.create_invoices next to _create_pad_invoices and _create_eft_invoices. Those methods select APPROVED invoices per CFS account, call CFSService.create_account_invoice, and create ACTIVE InvoiceReference rows.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+      "sbc-pay/pay-api/src/pay_api/services/cfs_service.py"
+     ]
+    },
+    {
+     "fact": "If CAS account creation differs, CreateAccountTask._create_cfs_account needs a branch, since it already switches on EFT vs PAD vs regular accounts and receipt methods.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_account_task.py"
+     ]
+    },
+    {
+     "fact": "Settlement handling in the pay-queue switches on the CAS record type (PAD/PADR/PAYR, BOLP, EFTP, ONAC/CMAP/DRWP) in _process_file_content and _create_payment_records. A new settlement record type would need a RecordType/SourceTransaction enum value and a branch there, including _convert_payment_method.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+      "sbc-pay/pay-queue/src/pay_queue/enums.py"
+     ]
+    },
+    {
+     "fact": "Partner GL disbursement selects invoices by excluding INTERNAL, DRAWDOWN and EFT methods in get_invoices_for_disbursement and get_invoices_for_refund_reversal. The new method must be added to or left out of those filters on purpose. Refund user messages also need entries in REFUND_SUCCESS_MESSAGES.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+      "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+     ]
+    }
+   ],
+   "qid": "pay-5",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ],
+ "all": [
+  {
+   "kind": "flow",
+   "question": "When a business filing app asks the payment system to charge for a filing, what happens end to end, from the incoming request to the filing app being told the payment is done?",
+   "facts": [
+    {
+     "fact": "The POST endpoint on the payment-requests blueprint validates the body against the 'payment_request' JSON schema, runs check_auth with the MAKE_PAYMENT role, and then calls PaymentService.create_invoice.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py"
+     ]
+    },
+    {
+     "fact": "PaymentService.create_invoice picks the payment method from the request's paymentInfo/methodOfPayment, falling back to the payment account's method and then DIRECT_PAY. _calculate_fees then calls FeeSchedule.find_by_corp_type_and_filing_type once per filing type, charging the service fee only once per request.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+     ]
+    },
+    {
+     "fact": "The fee comes from a FeeSchedule row that is valid for the corp type, filing type and date (fee_start_date/fee_end_date). It is adjusted by AccountFee overrides (apply_filing_fees, service_fee), by priority and future-effective fees, and by the waive_fees flag. Staff users and system users with EXCLUDE_SERVICE_FEES pay no service fees.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/models/fee_schedule.py",
+      "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+     ]
+    },
+    {
+     "fact": "PaymentSystemFactory.create returns InternalPayService for a zero total. For staff it returns BcolService if a BC Online account number is given, otherwise InternalPayService. A SYSTEM-role user who supplies a bcolAccountNumber also gets BcolService. All other cases go through create_from_payment_method (DirectPay, Paybc, Bcol, Internal, OnlineBanking, Pad, Eft, EjvPay). _validate_and_throw_error then raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD for PAD during the confirmation period.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "Each fee becomes a payment line item through PaymentLineItem.create. That call attaches the active distribution (GL) code for the fee schedule via DistributionCode.find_by_active_for_fee_schedule, and raises FEE_OVERRIDE_NOT_ALLOWED if fees are waived by someone who is not staff.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+      "sbc-pay/pay-api/src/pay_api/models/distribution_code.py"
+     ]
+    },
+    {
+     "fact": "The invoice's starting status comes from the payment system's get_default_invoice_status: CREATED by default, APPROVED for PAD, EFT, EJV and internal payments. The invoice is then handed to pay_service.create_invoice and complete_post_invoice, which are defined on the abstract PaymentSystemService.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py"
+     ]
+    },
+    {
+     "fact": "For methods that settle immediately or on credit (e.g. BC Online, PAD, EFT, internal), complete_post_invoice calls PaymentSystemService._release_payment. That method publishes a PAYMENT cloud event through gcp_queue_publisher.publish_to_queue to a topic picked by get_topic_for_corp_type (NAMEX, BUSINESS or STRR pay topic), and skips the CSO, RPT, PPR and VS corp types.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/utils/util.py",
+      "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+      "sbc-pay/pay-api/src/pay_api/services/bcol_service.py"
+     ]
+    }
+   ],
+   "qid": "pay-0",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "PaymentSystemFactory.create returns InternalPayService for a zero total. For staff it returns BcolService if a BC Online account number is given, otherwise InternalPayService. A SYSTEM-role user who supplies a bcolAccountNumber also gets BcolService. All other cases go through create_from_payment_method (DirectPay, Paybc, Bcol, Internal, OnlineBanking, Pad, Eft, EjvPay). _validate_and_throw_error then raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD for PAD during the confirmation period."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "Walk me through the lifecycle of a pre-authorized debit customer: from entering bank details, through the confirmation period and the daily batching of their purchases, to the bank settlement file that marks those purchases paid.",
+   "facts": [
+    {
+     "fact": "PadService.create_account stores the bank institution, transit and account numbers on a new CfsAccount with status PENDING and payment method PAD. PaymentAccount._calculate_activation_date sets pad_activation_date to PAD_CONFIRMATION_PERIOD_IN_DAYS (default 3) + 1 days ahead, rounded to the start of the day.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_account.py",
+      "sbc-pay/pay-api/src/pay_api/config.py"
+     ]
+    },
+    {
+     "fact": "The CREATE_CFS_ACCOUNTS job (CreateAccountTask.create_accounts) creates the CAS customer with CFSService.create_cfs_account and receipt method RECEIPT_METHOD_PAD_DAILY. It sets the account to PENDING_PAD_ACTIVATION while pad_activation_date is in the future, otherwise ACTIVE. For invalid bank details it publishes PAD_SETUP_FAILED and marks the account INACTIVE.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_account_task.py",
+      "sbc-pay/jobs/payment-jobs/invoke_jobs.py"
+     ]
+    },
+    {
+     "fact": "While the account is in the confirmation period, PaymentSystemFactory._validate_and_throw_error raises ACCOUNT_IN_PAD_CONFIRMATION_PERIOD. The ACTIVATE_PAD_ACCOUNTS job (ActivatePadAccountTask) later flips PENDING_PAD_ACTIVATION accounts to ACTIVE and publishes a CONFIRMATION_PERIOD_OVER mailer event.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py",
+      "sbc-pay/jobs/payment-jobs/tasks/activate_pad_account_task.py"
+     ]
+    },
+    {
+     "fact": "A PAD purchase creates no CAS invoice right away. PadService.create_invoice only checks payment blockers and deducts account credit, and the invoice stays APPROVED.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+     ]
+    },
+    {
+     "fact": "The CREATE_INVOICES job's CreateInvoiceTask._create_pad_invoices rolls up all APPROVED PAD invoices per non-frozen account into one CAS invoice (CFSService.create_account_invoice). It publishes PAD_INVOICE_CREATED and creates an ACTIVE InvoiceReference for each invoice under the shared CAS invoice number.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+     ]
+    },
+    {
+     "fact": "The ftp-poller's CASPollerFtpTask copies CAS settlement CSVs from SFTP to MinIO and moves them to a backup folder. utils.publish_to_queue then emits a CAS_MESSAGE_TYPE event on FTP_POLLER_TOPIC.",
+     "files": [
+      "sbc-pay/jobs/ftp-poller/tasks/cas_poller_ftp.py",
+      "sbc-pay/jobs/ftp-poller/utils/utils.py"
+     ]
+    },
+    {
+     "fact": "The pay-queue worker sends CAS messages to reconcile_payments. That function skips files already recorded in CasSettlement and handles PAD/PADR/PAYR rows through _process_consolidated_invoices. For PAID rows, _process_paid_invoices sets invoice references COMPLETED, invoices PAID, and creates Receipt rows.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+      "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+      "sbc-pay/pay-queue/src/pay_queue/enums.py"
+     ]
+    }
+   ],
+   "qid": "pay-1",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does money a customer sends by electronic funds transfer to the government bank account end up paying their outstanding statement invoices, both in our database and in the government's receivables system?",
+   "facts": [
+    {
+     "fact": "EFTPollerFtpTask uploads TDI17 bank files to MinIO and publishes an EFT_FILE_UPLOADED message through the shared ftp-poller publish_to_queue helper.",
+     "files": [
+      "sbc-pay/jobs/ftp-poller/tasks/eft_poller_ftp.py",
+      "sbc-pay/jobs/ftp-poller/utils/utils.py"
+     ]
+    },
+    {
+     "fact": "The pay-queue worker passes EFT_FILE_UPLOADED to reconcile_eft_payments. That function tracks the file in EFTFile (skipping files already IN_PROGRESS or COMPLETED), parses it with EFTHeader, EFTRecord and EFTTrailer, filters rows by EFT_TDI17_LOCATION_ID, and fails the whole file on any parse error.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_record.py"
+     ]
+    },
+    {
+     "fact": "_process_eft_credits groups deposits by short name and creates EFTCredit rows (amount and remaining_amount) along with a 'funds received' short-name history entry.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_short_name_historical.py"
+     ]
+    },
+    {
+     "fact": "_apply_eft_pending_payments calls EFTShortnames.process_payment_action with APPLY_CREDITS for each linked account whose amount owing is covered by the credit balance. EftService.process_owing_statements then walks the owing statements, and apply_eft_credit creates PENDING EFTCreditInvoiceLink rows while reducing EFTCredit.remaining_amount.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_short_names.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py"
+     ]
+    },
+    {
+     "fact": "The EFT job's EFTTask.link_electronic_funds_transfers_cfs takes the PENDING links. It creates a CAS receipt named EFTCIL<id> (CFSService.create_cfs_receipt), applies it to the invoice (CFSService.apply_receipt), writes Receipt and Payment rows, sets the invoice to PAID, and moves the links to COMPLETED.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+      "sbc-pay/jobs/payment-jobs/invoke_jobs.py"
+     ]
+    },
+    {
+     "fact": "If a paid invoice had been OVERDUE, EFTTask.unlock_overdue_accounts clears payment_account.has_overdue_invoices once no overdue invoices remain, and publishes an unlock event via AuthEvent.publish_unlock_account_event.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+      "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+     ]
+    }
+   ],
+   "qid": "pay-2",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How is an account 'freeze' or 'lock' (after a bounced bank debit or an overdue electronic-transfer statement) modeled, where is it set, what blocks new charges while it is in place, and how does it get lifted?",
+   "facts": [
+    {
+     "fact": "The lock is stored as two nullable timestamp columns on PaymentAccount: has_nsf_invoices and has_overdue_invoices. The CAS-side PAD state is CfsAccountStatus.FREEZE on the CfsAccount.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/models/payment_account.py",
+      "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "When a PAD settlement row is NOT PAID or a reversal (PADR/PAYR), the pay-queue's _process_failed_payments sets the CfsAccount to FREEZE, stamps has_nsf_invoices, and calls CFSService.update_site_receipt_method with RECEIPT_METHOD_PAD_STOP. It then reverts the invoices to SETTLEMENT_SCHEDULED, creates an NSF fee invoice from the BCR/NSF fee schedule, and adds an NSF adjustment in CAS. If it returns True, its caller _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC through _publish_account_events.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+      "sbc-pay/pay-api/src/pay_api/services/non_sufficient_funds.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "For EFT accounts, StatementDueTask stamps has_overdue_invoices when a monthly statement becomes overdue, publishes a lock event through AuthEvent.publish_lock_account_event, and records the account in the non-sufficient-funds table.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/statement_due_task.py",
+      "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+     ]
+    },
+    {
+     "fact": "New charges are blocked by PaymentSystemService.ensure_no_payment_blockers, which raises PAD_CURRENTLY_NSF or EFT_INVOICES_OVERDUE. PadService.create_invoice and EftService.create_invoice call it. The batch job CreateInvoiceTask._create_pad_invoices also skips CFS accounts in FREEZE.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+     ]
+    },
+    {
+     "fact": "Unlocking happens when a credit card transaction completes. PaymentTransaction.update_transaction calls PaymentAccount.unlock_frozen_accounts. That function restores RECEIPT_METHOD_PAD_DAILY in CAS, clears has_nsf_invoices and sets the CfsAccount back to ACTIVE, or for EFT reverses the original CAS invoices and clears has_overdue_invoices. It then publishes NSF_UNLOCK_ACCOUNT to AUTH_EVENT_TOPIC.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_account.py"
+     ]
+    },
+    {
+     "fact": "PadService.update_account keeps a new CfsAccount in FREEZE if the previous one was frozen when bank details change, so changing banks does not lift the lock.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+     ]
+    }
+   ],
+   "qid": "pay-3",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "When a PAD settlement row is NOT PAID or a reversal (PADR/PAYR), the pay-queue's _process_failed_payments sets the CfsAccount to FREEZE, stamps has_nsf_invoices, and calls CFSService.update_site_receipt_method with RECEIPT_METHOD_PAD_STOP. It then reverts the invoices to SETTLEMENT_SCHEDULED, creates an NSF fee invoice from the BCR/NSF fee schedule, and adds an NSF adjustment in CAS. If it returns True, its caller _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC through _publish_account_events."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How are refunds handled differently for each way a customer can pay, and how does a refund move from 'requested' to confirmed for card and BC Online payments?",
+   "facts": [
+    {
+     "fact": "The refunds endpoint under /payment-requests/<invoice_id> needs the SYSTEM, CREATE_CREDITS or FAS_REFUND role and calls RefundService.create_refund. That method only accepts PAID, APPROVED or UPDATE_REVENUE_ACCOUNT invoices, gates partial refunds behind the 'enable-partial-refunds' flag, and dispatches to process_cfs_refund on the payment-method implementation from PaymentSystemFactory.create_from_payment_method.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/resources/v1/refund.py",
+      "sbc-pay/pay-api/src/pay_api/services/refund.py",
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+     ]
+    },
+    {
+     "fact": "If process_cfs_refund returns no status, RefundService sets the invoice to REFUND_REQUESTED. It stamps refund_date only for REFUNDED, CANCELLED or CREDITED, and picks the user message from REFUND_SUCCESS_MESSAGES using '<method>.<status>'.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/refund.py",
+      "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+     ]
+    },
+    {
+     "fact": "PAD (and Online Banking) refunds never return money to the bank. PadService.process_cfs_refund calls _refund_and_create_credit_memo, which creates a CAS credit memo and a Credit row and raises payment_account.credit, giving CREDITED status. An APPROVED invoice with no active reference just becomes CANCELLED.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py"
+     ]
+    },
+    {
+     "fact": "DirectPayService.process_cfs_refund posts an automated refund to the PayBC refund API. Later the DIRECT_PAY_REFUND job (DirectPayAutomatedRefundTask) polls the PayBC order status: refundglstatus PAID or CMPLT moves the invoice and payment to REFUNDED (CMPLT also sets refund.gl_posted), and RJCT/DECLINED records refund.gl_error.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py"
+     ]
+    },
+    {
+     "fact": "BcolService.process_cfs_refund publishes a REFUND_DRAWDOWN_REQUEST mailer event and marks the payment REFUNDED. The BCOL_REFUND_CONFIRMATION job (BcolRefundConfirmationTask) then queries bconline_billing_record in the COLIN Oracle DB for qty = -1 rows and confirms REFUND_REQUESTED invoices.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/bcol_refund_confirmation_task.py",
+      "sbc-pay/jobs/payment-jobs/services/oracle.py"
+     ]
+    },
+    {
+     "fact": "Internal (routing slip) refunds add the invoice total back to routing_slip.remaining_amount (reactivating a COMPLETE slip) and set REFUND_REQUESTED. CreateInvoiceTask._cancel_rs_invoices then unapplies the receipt and reverses the invoice in CAS and sets the invoice to REFUNDED. EFT refunds are delegated to EFTRefundService.handle_invoice_refund, and consolidated invoices are rejected.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py",
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_refund.py"
+     ]
+    }
+   ],
+   "qid": "pay-4",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We need to add a new payment method where purchases are recorded immediately but invoiced in the government receivables system later by a batch, and settled through the bank settlement file. Where would this be implemented and what else would need updating?",
+   "facts": [
+    {
+     "fact": "The new method code goes in the PaymentMethod enum, and its starting invoice state in InvoiceStatus (existing deferred methods use APPROVED).",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+     ]
+    },
+    {
+     "fact": "Add a PaymentSystemService subclass that implements the abstract create_invoice, get_payment_system_code and get_payment_method_code. Override get_default_invoice_status, complete_post_invoice (calling _release_payment) and process_cfs_refund, as PadService and EftService do.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+      "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/eft_service.py"
+     ]
+    },
+    {
+     "fact": "Register the new service in PaymentSystemFactory.create_from_payment_method, which is used by create_invoice, delete, refund and settlement paths. Add any eligibility checks next to _validate_and_throw_error.",
+     "files": [
+      "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py",
+      "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+      "sbc-pay/pay-api/src/pay_api/services/refund.py"
+     ]
+    },
+    {
+     "fact": "The deferred CAS invoicing step belongs in CreateInvoiceTask.create_invoices next to _create_pad_invoices and _create_eft_invoices. Those methods select APPROVED invoices per CFS account, call CFSService.create_account_invoice, and create ACTIVE InvoiceReference rows.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+      "sbc-pay/pay-api/src/pay_api/services/cfs_service.py"
+     ]
+    },
+    {
+     "fact": "If CAS account creation differs, CreateAccountTask._create_cfs_account needs a branch, since it already switches on EFT vs PAD vs regular accounts and receipt methods.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/cfs_create_account_task.py"
+     ]
+    },
+    {
+     "fact": "Settlement handling in the pay-queue switches on the CAS record type (PAD/PADR/PAYR, BOLP, EFTP, ONAC/CMAP/DRWP) in _process_file_content and _create_payment_records. A new settlement record type would need a RecordType/SourceTransaction enum value and a branch there, including _convert_payment_method.",
+     "files": [
+      "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+      "sbc-pay/pay-queue/src/pay_queue/enums.py"
+     ]
+    },
+    {
+     "fact": "Partner GL disbursement selects invoices by excluding INTERNAL, DRAWDOWN and EFT methods in get_invoices_for_disbursement and get_invoices_for_refund_reversal. The new method must be added to or left out of those filters on purpose. Refund user messages also need entries in REFUND_SUCCESS_MESSAGES.",
+     "files": [
+      "sbc-pay/jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+      "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+     ]
+    }
+   ],
+   "qid": "pay-5",
+   "area": "pay",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ]
+}

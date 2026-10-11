@@ -1,0 +1,1002 @@
+{
+ "kept": [
+  {
+   "kind": "flow",
+   "question": "When a client pays for a filing that has a date set in the future, what happens end to end? How does it eventually get applied to the business, and which services and scheduled jobs are involved?",
+   "facts": [
+    {
+     "fact": "In the legal-api, ListFilingResource.complete_filing creates a pay-api invoice through create_invoice and stores the returned id as filing.payment_token. Before that, set_effective_date may push a non-COOP change of address to one minute after midnight tomorrow.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "The entity-pay NATS worker (process_payment) looks up the filing by payment token and sets payment_completion_date. It publishes a PAID email message, but it only publishes {'filing': {'id': ...}} to the filer subject when effective_date is not in the future.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py"
+     ]
+    },
+    {
+     "fact": "The newer GCP-based business-pay worker does the same. It marks the filing PAID and sends it to the filer only if effective_date <= payment_completion_date. For continuationIn filings it creates a staff Review (AWAITING_REVIEW) instead of sending to the filer.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+     ]
+    },
+    {
+     "fact": "The future-effective-filings job (file_future_effective.py) gets a service-account token and calls GET /api/v2/internal/filings/future_effective. It then publishes each returned id to NATS_FILER_SUBJECT through ServiceWorker.publish.",
+     "files": [
+      "lear/jobs/future-effective-filings/file_future_effective.py",
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py"
+     ]
+    },
+    {
+     "fact": "That endpoint requires the system role. It returns Filing.get_future_effective_filing_ids, which selects filings in PAID or APPROVED status whose effective_date <= now.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "The entity-filer worker's process_filing skips filings that are already COMPLETED. Otherwise it sends each legal filing to its filing_processors module, sets the filing processed with the versioning transaction id, and commits. It then publishes an email message, a NATS entity event and a GCP business event.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+     ]
+    },
+    {
+     "fact": "For staff-reviewed filings, the legal-api review endpoint (save_review) publishes to the filer subject right away only if the review is APPROVED and effective_date <= now. Approved filings dated in the future are left for the future-effective job.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-0",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How are filings kept in sync in both directions between the new registry system and the legacy COLIN Oracle system? What runs the sync, and how does it avoid re-sending or skipping filings?",
+   "facts": [
+    {
+     "fact": "The update-colin-filings job pages through GET /businesses/internal/filings in the legal-api. It POSTs each filing to the colin-api at /{legalType}/{identifier}/filings/{filingType}. It then PATCHes /businesses/internal/filings/{id} with the returned colinIds.",
+     "files": [
+      "lear/jobs/update-colin-filings/update_colin_filings.py",
+      "lear/colin-api/src/colin_api/resources/filing.py"
+     ]
+    },
+    {
+     "fact": "Filing.get_completed_filings_for_colin returns only COMPLETED filings with no colin_event_ids. It excludes SP/GP firms and adminFreeze, courtOrder, registrarsNotation and registrarsOrder filings. The colin_sync endpoint adds extra data: business revision data, the correctedFilingColinId for corrections, and holding/primary business data for horizontal or vertical amalgamations.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    },
+    {
+     "fact": "The PATCH handler update_colin_id appends ColinEventId rows to the filing. Once a filing has colin event ids, it no longer appears in the pending-for-COLIN query. If a business has one failed filing, the job skips that business's later filings in the same run.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+      "lear/legal-api/src/legal_api/models/colin_event_id.py",
+      "lear/jobs/update-colin-filings/update_colin_filings.py"
+     ]
+    },
+    {
+     "fact": "In the other direction, the update-legal-filings job reads the last processed COLIN event id from GET /internal/filings/colin_id, which reads the colin_last_update table. It asks the colin-api /event/{corp_type}/{last_event_id} for newer events for CP, BC, ULC and CC, and adds the 'BC' prefix for the BC/ULC/CC corp types.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+      "lear/colin-api/src/colin_api/resources/event.py"
+     ]
+    },
+    {
+     "fact": "For each event whose id is not yet in LEAR, the job fetches the filing from the colin-api and POSTs it to /businesses/{corp_num}/filings. It then records a new high-water mark through POST /internal/filings/colin_id/{id}. If any event failed, that mark is set to the first failed id minus one, so the failure is retried on the next run.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    },
+    {
+     "fact": "In the legal-api, filings with source COLIN have their header colinIds saved as ColinEventId rows (_save_colin_event_ids). complete_filing then calls process_colin_filing, which either attaches the filing to the epoch transaction (filings before the epoch) or publishes it to the entity-filer queue through QueueService.publish_json.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/services/queue.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-1",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does a company that falls behind on its annual reports end up dissolved automatically? Which jobs, notices and queue messages are involved at each stage?",
+   "facts": [
+    {
+     "fact": "Both the involuntary-dissolutions job and the furnishings job run only when the 'enable-involuntary-dissolution' flag is on. Each stage runs only on days that match the cron strings stored in the Configuration table (DISSOLUTIONS_STAGE_1/2/3_SCHEDULE), checked with croniter.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+      "lear/jobs/furnishings/src/furnishings/worker.py",
+      "lear/legal-api/src/legal_api/models/configuration.py"
+     ]
+    },
+    {
+     "fact": "Stage 1 of the involuntary-dissolutions job uses InvoluntaryDissolutionService.get_businesses_eligible, limited by NUM_DISSOLUTIONS_ALLOWED. It creates an INVOLUNTARY_DISSOLUTION Batch and BatchProcessing rows at step WARNING_LEVEL_1, with overdueARs/overdueTransition metadata.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+      "lear/legal-api/src/legal_api/services/involuntary_dissolution.py",
+      "lear/legal-api/src/legal_api/models/batch_processing.py"
+     ]
+    },
+    {
+     "fact": "Stage one of the furnishings job creates EMAIL Furnishing rows. It publishes a 'bc.registry.dissolution' cloud event to the emailer subject. If the business has no contact email, or the email was sent and the business is still not in good standing after a few business days, it creates MAIL furnishings, merges them into PDF letters and uploads them over SFTP to BC Mail+.",
+     "files": [
+      "lear/jobs/furnishings/src/furnishings/stage_processors/stage_one.py",
+      "lear/legal-api/src/legal_api/models/furnishing.py"
+     ]
+    },
+    {
+     "fact": "The entity-emailer sends 'bc.registry.dissolution' messages to involuntary_dissolution_stage_1_notification. That module attaches the furnishing PDF from the legal-api /businesses/{id}/furnishings/{fid}/document endpoint. Its post_process marks the Furnishing PROCESSED, or FAILED if sending failed.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/involuntary_dissolution_stage_1_notification.py"
+     ]
+    },
+    {
+     "fact": "Stage 2 moves BatchProcessing to WARNING_LEVEL_2 only if an EMAIL or MAIL furnishing is PROCESSED and the business is still eligible. Otherwise it marks the row ERROR, or WITHDRAWN if the business is back in good standing. Furnishings stages two and three then create GAZETTE furnishings (INTENT_TO_DISSOLVE, then CORP_DISSOLVED). The post_processor renders these into a gazette XML that is sent over SFTP to BC Laws and saved as XmlPayload/FurnishingGroup.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+      "lear/jobs/furnishings/src/furnishings/stage_processors/stage_two.py",
+      "lear/jobs/furnishings/src/furnishings/stage_processors/stage_three.py",
+      "lear/jobs/furnishings/src/furnishings/stage_processors/post_processor.py"
+     ]
+    },
+    {
+     "fact": "Stage 3 of the involuntary-dissolutions job requires a PROCESSED GAZETTE furnishing. It creates a dissolution Filing with sub-type involuntary, marks the BatchProcessing QUEUED at step DISSOLUTION, and publishes the filing id to NATS_FILER_SUBJECT.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py"
+     ]
+    },
+    {
+     "fact": "The entity-filer dissolution processor sets the business HISTORICAL. When the flag is on, it moves QUEUED BatchProcessing rows for that filing to COMPLETED. When pushing this filing to COLIN, colin_sync adds the BatchProcessing meta_data to the involuntary dissolution JSON.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/dissolution.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-2",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "Queue messages can be delivered more than once. How does the system stop the same notification email being sent twice, and how is retrying versus dropping a message decided across the queue workers?",
+   "facts": [
+    {
+     "fact": "The entity-emailer's cb_subscription_handler calls the message_tracker. get_message_context_properties builds a deterministic message_id for each message kind (for example '{type}_{option}_{filingId}', 'annualReport_reminder_{arYear}_{businessId}', 'businessNumber_{identifier}'). Cloud-event names-request messages use source plus id instead.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+     ]
+    },
+    {
+     "fact": "Tracking state is stored in the MessageProcessing model (message_processing table on the 'tracker' database bind). It has a unique message_id, status PROCESSING/FAILED/COMPLETE, message_seen_count and last_error.",
+     "files": [
+      "lear/queue_services/entity-emailer/tracker/models/message_processing.py",
+      "lear/queue_services/entity-emailer/tracker/services/message_processing_service.py"
+     ]
+    },
+    {
+     "fact": "is_processable_message processes a message only if it has never been seen or its last status is FAILED, and only while message_seen_count is at most MSG_RETRY_NUM. COMPLETE or in-flight messages are skipped.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+     ]
+    },
+    {
+     "fact": "In the emailer, OperationalError and EmailException (a non-200 from the Notify API in send_email) are re-raised so the message goes back on the queue. Other exceptions are logged and the tracker row is marked FAILED.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+     ]
+    },
+    {
+     "fact": "The entity-filer and entity-pay workers handle duplicates using the filing itself, without a tracker table. process_filing returns early if the filing is already COMPLETED. process_payment skips filings that are already COMPLETED, and business-pay drops messages whose filing already has a payment_completion_date.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+     ]
+    },
+    {
+     "fact": "The entity-bn worker uses RequestTracker rows with retry_number. While retries remain below BN_HUB_MAX_RETRY it raises BNException, which is re-raised so the message is redelivered. After that it raises BNRetryExceededException, which is logged and the message is dropped.",
+     "files": [
+      "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py",
+      "lear/queue_services/entity-bn/src/entity_bn/worker.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-3",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How does a business get its CRA business number (tax id), depending on the kind of entity? Once the number arrives, which downstream notifications and updates does it trigger?",
+   "facts": [
+    {
+     "fact": "For corporations synced with COLIN, the update-legal-filings job's update_business_nos gets businesses without a tax id from the legal-api GET /businesses/internal/tax_ids. It looks those up in batches of 20 through the colin-api /internal/tax_ids and writes the results back with POST /businesses/internal/tax_ids.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+      "lear/colin-api/src/colin_api/resources/business.py"
+     ]
+    },
+    {
+     "fact": "Business.get_all_by_no_tax_id excludes COOP, SP and GP legal types. Coops do not get a business number, and SP/GP firms get theirs through entity-bn rather than COLIN.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/business.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    },
+    {
+     "fact": "The entity-bn worker listens to entity events published by the entity-filer (for example 'bc.registry.business.registration'). registration.process sends an XML request to CRA through the BN Hub (_inform_cra). It then fetches the program account through the colin-api /programAccount/{identifier}/{transactionId} and stores the BN15 in business.tax_id.",
+     "files": [
+      "lear/queue_services/entity-bn/src/entity_bn/worker.py",
+      "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py",
+      "lear/colin-api/src/colin_api/resources/program_account.py",
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+     ]
+    },
+    {
+     "fact": "Both paths publish an email message {'email': {'type': 'businessNumber', 'option': 'bn', 'identifier': ...}} to the emailer subject. Both also publish a 'bc.registry.business.bn' cloud event to the entity events subject.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py"
+     ]
+    },
+    {
+     "fact": "The entity-emailer sends 'businessNumber' messages to bn_notification.process. It renders the BC-BN.html template and picks recipients from the business's founding filing (incorporation, amalgamation, continuation-in or registration).",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/bn_notification.py"
+     ]
+    },
+    {
+     "fact": "The entity-digital-credentials worker handles 'bc.registry.business.bn' events with business_number.process, which revokes and reissues the business's digital credential.",
+     "files": [
+      "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/worker.py",
+      "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/business_number.py"
+     ]
+    },
+    {
+     "fact": "When CRA moves a BN, the legal-api POST /api/v2/internal/bnmove updates tax_id and creates a registrarsNotation filing. It publishes a 'bc.registry.bnmove' event to the emailer, which is handled by bn_notification.process_bn_move, and a 'bc.registry.business.bn' event.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/bn_notification.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-4",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want to send annual report reminder emails to cooperatives as well, and to stop sending a confirmation email when a change of directors completes. Where would these changes go, and what else would be affected?",
+   "facts": [
+    {
+     "fact": "The reminder entity types are hard-coded in find_and_send_ar_reminder in the email-reminder job: BEN and the continued-in types (CBEN, C, CUL, CCC), plus BC/CC/ULC when the 'enable-bc-ccc-ulc' flag is on. Adding COOP means extending that list. get_ar_fee looks up Filing.FILINGS['annualReport']['codes'][legal_type], which already has 'CP': 'OTANN', so the pay-api fee lookup needs no new code.",
+     "files": [
+      "lear/jobs/email-reminder/email_reminder.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "get_businesses selects ACTIVE businesses with send_ar_ind true and no restoration_expiry_date, using a founding-date/last_ar_reminder_year anniversary rule. The job then updates business.last_ar_reminder_year after queuing each email.",
+     "files": [
+      "lear/jobs/email-reminder/email_reminder.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ]
+    },
+    {
+     "fact": "The job publishes {'email': {'type': 'annualReport', 'option': 'reminder', businessId, arFee, arYear}} to NATS_EMAILER_SUBJECT. The entity-emailer worker sends this to ar_reminder_notification.process with the 'disable-specific-service-provider' flag. The tracker deduplicates it as 'annualReport_reminder_{arYear}_{businessId}'.",
+     "files": [
+      "lear/jobs/email-reminder/email_reminder.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+     ]
+    },
+    {
+     "fact": "ar_reminder_notification gets recipients from the auth API (get_recipient_from_auth \u2192 AUTH_URL/entities/{identifier}) and renders AR-REMINDER.html. Coops therefore need auth contacts, and the template's wording may need changing for them.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/ar_reminder_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_templates/AR-REMINDER.html"
+     ]
+    },
+    {
+     "fact": "Change-of-directors emails are generic filing emails. The entity-filer publishes {'email': {filingId, type, option: status}} after processing (publish_email_message). The emailer sends any type listed in filing_notification.FILING_TYPE_CONVERTER (where 'changeOfDirectors' maps to 'COD') to filing_notification.process.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py"
+     ]
+    },
+    {
+     "fact": "filing_notification picks the template BC-{code}-{status}.html, so a completed change of directors renders BC-COD-COMPLETED.html. To suppress it, add a 'changeOfDirectors'/COMPLETED skip in the emailer worker's dispatch, as already exists for 'annualReport'/COMPLETED, rather than just deleting the template file.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_templates/BC-COD-COMPLETED.html"
+     ]
+    }
+   ],
+   "qid": "lear-async-5",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "partly",
+     "fix": "The reminder entity types are hard-coded in find_and_send_ar_reminder in the email-reminder job: BEN and the continued-in types (CBEN, C, CUL, CCC), plus BC/CC/ULC when the 'enable-bc-ccc-ulc' flag is on. Adding COOP means extending that list. get_ar_fee looks up Filing.FILINGS['annualReport']['codes'][legal_type], which already has 'CP': 'OTANN', so the pay-api fee lookup needs no new code."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ],
+ "all": [
+  {
+   "kind": "flow",
+   "question": "When a client pays for a filing that has a date set in the future, what happens end to end? How does it eventually get applied to the business, and which services and scheduled jobs are involved?",
+   "facts": [
+    {
+     "fact": "In the legal-api, ListFilingResource.complete_filing creates a pay-api invoice through create_invoice and stores the returned id as filing.payment_token. Before that, set_effective_date may push a non-COOP change of address to one minute after midnight tomorrow.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "The entity-pay NATS worker (process_payment) looks up the filing by payment token and sets payment_completion_date. It publishes a PAID email message, but it only publishes {'filing': {'id': ...}} to the filer subject when effective_date is not in the future.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py"
+     ]
+    },
+    {
+     "fact": "The newer GCP-based business-pay worker does the same. It marks the filing PAID and sends it to the filer only if effective_date <= payment_completion_date. For continuationIn filings it creates a staff Review (AWAITING_REVIEW) instead of sending to the filer.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+     ]
+    },
+    {
+     "fact": "The future-effective-filings job (file_future_effective.py) gets a service-account token and calls GET /api/v2/internal/filings/future_effective. It then publishes each returned id to NATS_FILER_SUBJECT through ServiceWorker.publish.",
+     "files": [
+      "lear/jobs/future-effective-filings/file_future_effective.py",
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py"
+     ]
+    },
+    {
+     "fact": "That endpoint requires the system role. It returns Filing.get_future_effective_filing_ids, which selects filings in PAID or APPROVED status whose effective_date <= now.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "The entity-filer worker's process_filing skips filings that are already COMPLETED. Otherwise it sends each legal filing to its filing_processors module, sets the filing processed with the versioning transaction id, and commits. It then publishes an email message, a NATS entity event and a GCP business event.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+     ]
+    },
+    {
+     "fact": "For staff-reviewed filings, the legal-api review endpoint (save_review) publishes to the filer subject right away only if the review is APPROVED and effective_date <= now. Approved filings dated in the future are left for the future-effective job.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-0",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How are filings kept in sync in both directions between the new registry system and the legacy COLIN Oracle system? What runs the sync, and how does it avoid re-sending or skipping filings?",
+   "facts": [
+    {
+     "fact": "The update-colin-filings job pages through GET /businesses/internal/filings in the legal-api. It POSTs each filing to the colin-api at /{legalType}/{identifier}/filings/{filingType}. It then PATCHes /businesses/internal/filings/{id} with the returned colinIds.",
+     "files": [
+      "lear/jobs/update-colin-filings/update_colin_filings.py",
+      "lear/colin-api/src/colin_api/resources/filing.py"
+     ]
+    },
+    {
+     "fact": "Filing.get_completed_filings_for_colin returns only COMPLETED filings with no colin_event_ids. It excludes SP/GP firms and adminFreeze, courtOrder, registrarsNotation and registrarsOrder filings. The colin_sync endpoint adds extra data: business revision data, the correctedFilingColinId for corrections, and holding/primary business data for horizontal or vertical amalgamations.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    },
+    {
+     "fact": "The PATCH handler update_colin_id appends ColinEventId rows to the filing. Once a filing has colin event ids, it no longer appears in the pending-for-COLIN query. If a business has one failed filing, the job skips that business's later filings in the same run.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+      "lear/legal-api/src/legal_api/models/colin_event_id.py",
+      "lear/jobs/update-colin-filings/update_colin_filings.py"
+     ]
+    },
+    {
+     "fact": "In the other direction, the update-legal-filings job reads the last processed COLIN event id from GET /internal/filings/colin_id, which reads the colin_last_update table. It asks the colin-api /event/{corp_type}/{last_event_id} for newer events for CP, BC, ULC and CC, and adds the 'BC' prefix for the BC/ULC/CC corp types.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+      "lear/colin-api/src/colin_api/resources/event.py"
+     ]
+    },
+    {
+     "fact": "For each event whose id is not yet in LEAR, the job fetches the filing from the colin-api and POSTs it to /businesses/{corp_num}/filings. It then records a new high-water mark through POST /internal/filings/colin_id/{id}. If any event failed, that mark is set to the first failed id minus one, so the failure is retried on the next run.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    },
+    {
+     "fact": "In the legal-api, filings with source COLIN have their header colinIds saved as ColinEventId rows (_save_colin_event_ids). complete_filing then calls process_colin_filing, which either attaches the filing to the epoch transaction (filings before the epoch) or publishes it to the entity-filer queue through QueueService.publish_json.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/services/queue.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-1",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "How does a company that falls behind on its annual reports end up dissolved automatically? Which jobs, notices and queue messages are involved at each stage?",
+   "facts": [
+    {
+     "fact": "Both the involuntary-dissolutions job and the furnishings job run only when the 'enable-involuntary-dissolution' flag is on. Each stage runs only on days that match the cron strings stored in the Configuration table (DISSOLUTIONS_STAGE_1/2/3_SCHEDULE), checked with croniter.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+      "lear/jobs/furnishings/src/furnishings/worker.py",
+      "lear/legal-api/src/legal_api/models/configuration.py"
+     ]
+    },
+    {
+     "fact": "Stage 1 of the involuntary-dissolutions job uses InvoluntaryDissolutionService.get_businesses_eligible, limited by NUM_DISSOLUTIONS_ALLOWED. It creates an INVOLUNTARY_DISSOLUTION Batch and BatchProcessing rows at step WARNING_LEVEL_1, with overdueARs/overdueTransition metadata.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+      "lear/legal-api/src/legal_api/services/involuntary_dissolution.py",
+      "lear/legal-api/src/legal_api/models/batch_processing.py"
+     ]
+    },
+    {
+     "fact": "Stage one of the furnishings job creates EMAIL Furnishing rows. It publishes a 'bc.registry.dissolution' cloud event to the emailer subject. If the business has no contact email, or the email was sent and the business is still not in good standing after a few business days, it creates MAIL furnishings, merges them into PDF letters and uploads them over SFTP to BC Mail+.",
+     "files": [
+      "lear/jobs/furnishings/src/furnishings/stage_processors/stage_one.py",
+      "lear/legal-api/src/legal_api/models/furnishing.py"
+     ]
+    },
+    {
+     "fact": "The entity-emailer sends 'bc.registry.dissolution' messages to involuntary_dissolution_stage_1_notification. That module attaches the furnishing PDF from the legal-api /businesses/{id}/furnishings/{fid}/document endpoint. Its post_process marks the Furnishing PROCESSED, or FAILED if sending failed.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/involuntary_dissolution_stage_1_notification.py"
+     ]
+    },
+    {
+     "fact": "Stage 2 moves BatchProcessing to WARNING_LEVEL_2 only if an EMAIL or MAIL furnishing is PROCESSED and the business is still eligible. Otherwise it marks the row ERROR, or WITHDRAWN if the business is back in good standing. Furnishings stages two and three then create GAZETTE furnishings (INTENT_TO_DISSOLVE, then CORP_DISSOLVED). The post_processor renders these into a gazette XML that is sent over SFTP to BC Laws and saved as XmlPayload/FurnishingGroup.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+      "lear/jobs/furnishings/src/furnishings/stage_processors/stage_two.py",
+      "lear/jobs/furnishings/src/furnishings/stage_processors/stage_three.py",
+      "lear/jobs/furnishings/src/furnishings/stage_processors/post_processor.py"
+     ]
+    },
+    {
+     "fact": "Stage 3 of the involuntary-dissolutions job requires a PROCESSED GAZETTE furnishing. It creates a dissolution Filing with sub-type involuntary, marks the BatchProcessing QUEUED at step DISSOLUTION, and publishes the filing id to NATS_FILER_SUBJECT.",
+     "files": [
+      "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py"
+     ]
+    },
+    {
+     "fact": "The entity-filer dissolution processor sets the business HISTORICAL. When the flag is on, it moves QUEUED BatchProcessing rows for that filing to COMPLETED. When pushing this filing to COLIN, colin_sync adds the BatchProcessing meta_data to the involuntary dissolution JSON.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/dissolution.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-2",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "Queue messages can be delivered more than once. How does the system stop the same notification email being sent twice, and how is retrying versus dropping a message decided across the queue workers?",
+   "facts": [
+    {
+     "fact": "The entity-emailer's cb_subscription_handler calls the message_tracker. get_message_context_properties builds a deterministic message_id for each message kind (for example '{type}_{option}_{filingId}', 'annualReport_reminder_{arYear}_{businessId}', 'businessNumber_{identifier}'). Cloud-event names-request messages use source plus id instead.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+     ]
+    },
+    {
+     "fact": "Tracking state is stored in the MessageProcessing model (message_processing table on the 'tracker' database bind). It has a unique message_id, status PROCESSING/FAILED/COMPLETE, message_seen_count and last_error.",
+     "files": [
+      "lear/queue_services/entity-emailer/tracker/models/message_processing.py",
+      "lear/queue_services/entity-emailer/tracker/services/message_processing_service.py"
+     ]
+    },
+    {
+     "fact": "is_processable_message processes a message only if it has never been seen or its last status is FAILED, and only while message_seen_count is at most MSG_RETRY_NUM. COMPLETE or in-flight messages are skipped.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+     ]
+    },
+    {
+     "fact": "In the emailer, OperationalError and EmailException (a non-200 from the Notify API in send_email) are re-raised so the message goes back on the queue. Other exceptions are logged and the tracker row is marked FAILED.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+     ]
+    },
+    {
+     "fact": "The entity-filer and entity-pay workers handle duplicates using the filing itself, without a tracker table. process_filing returns early if the filing is already COMPLETED. process_payment skips filings that are already COMPLETED, and business-pay drops messages whose filing already has a payment_completion_date.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+     ]
+    },
+    {
+     "fact": "The entity-bn worker uses RequestTracker rows with retry_number. While retries remain below BN_HUB_MAX_RETRY it raises BNException, which is re-raised so the message is redelivered. After that it raises BNRetryExceededException, which is logged and the message is dropped.",
+     "files": [
+      "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py",
+      "lear/queue_services/entity-bn/src/entity_bn/worker.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-3",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How does a business get its CRA business number (tax id), depending on the kind of entity? Once the number arrives, which downstream notifications and updates does it trigger?",
+   "facts": [
+    {
+     "fact": "For corporations synced with COLIN, the update-legal-filings job's update_business_nos gets businesses without a tax id from the legal-api GET /businesses/internal/tax_ids. It looks those up in batches of 20 through the colin-api /internal/tax_ids and writes the results back with POST /businesses/internal/tax_ids.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+      "lear/colin-api/src/colin_api/resources/business.py"
+     ]
+    },
+    {
+     "fact": "Business.get_all_by_no_tax_id excludes COOP, SP and GP legal types. Coops do not get a business number, and SP/GP firms get theirs through entity-bn rather than COLIN.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/business.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+     ]
+    },
+    {
+     "fact": "The entity-bn worker listens to entity events published by the entity-filer (for example 'bc.registry.business.registration'). registration.process sends an XML request to CRA through the BN Hub (_inform_cra). It then fetches the program account through the colin-api /programAccount/{identifier}/{transactionId} and stores the BN15 in business.tax_id.",
+     "files": [
+      "lear/queue_services/entity-bn/src/entity_bn/worker.py",
+      "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py",
+      "lear/colin-api/src/colin_api/resources/program_account.py",
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+     ]
+    },
+    {
+     "fact": "Both paths publish an email message {'email': {'type': 'businessNumber', 'option': 'bn', 'identifier': ...}} to the emailer subject. Both also publish a 'bc.registry.business.bn' cloud event to the entity events subject.",
+     "files": [
+      "lear/jobs/update-legal-filings/update_legal_filings.py",
+      "lear/queue_services/entity-bn/src/entity_bn/bn_processors/registration.py"
+     ]
+    },
+    {
+     "fact": "The entity-emailer sends 'businessNumber' messages to bn_notification.process. It renders the BC-BN.html template and picks recipients from the business's founding filing (incorporation, amalgamation, continuation-in or registration).",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/bn_notification.py"
+     ]
+    },
+    {
+     "fact": "The entity-digital-credentials worker handles 'bc.registry.business.bn' events with business_number.process, which revokes and reissues the business's digital credential.",
+     "files": [
+      "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/worker.py",
+      "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/business_number.py"
+     ]
+    },
+    {
+     "fact": "When CRA moves a BN, the legal-api POST /api/v2/internal/bnmove updates tax_id and creates a registrarsNotation filing. It publishes a 'bc.registry.bnmove' event to the emailer, which is handled by bn_notification.process_bn_move, and a 'bc.registry.business.bn' event.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/bn_notification.py"
+     ]
+    }
+   ],
+   "qid": "lear-async-4",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We want to send annual report reminder emails to cooperatives as well, and to stop sending a confirmation email when a change of directors completes. Where would these changes go, and what else would be affected?",
+   "facts": [
+    {
+     "fact": "The reminder entity types are hard-coded in find_and_send_ar_reminder in the email-reminder job: BEN and the continued-in types (CBEN, C, CUL, CCC), plus BC/CC/ULC when the 'enable-bc-ccc-ulc' flag is on. Adding COOP means extending that list. get_ar_fee looks up Filing.FILINGS['annualReport']['codes'][legal_type], which already has 'CP': 'OTANN', so the pay-api fee lookup needs no new code.",
+     "files": [
+      "lear/jobs/email-reminder/email_reminder.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "get_businesses selects ACTIVE businesses with send_ar_ind true and no restoration_expiry_date, using a founding-date/last_ar_reminder_year anniversary rule. The job then updates business.last_ar_reminder_year after queuing each email.",
+     "files": [
+      "lear/jobs/email-reminder/email_reminder.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ]
+    },
+    {
+     "fact": "The job publishes {'email': {'type': 'annualReport', 'option': 'reminder', businessId, arFee, arYear}} to NATS_EMAILER_SUBJECT. The entity-emailer worker sends this to ar_reminder_notification.process with the 'disable-specific-service-provider' flag. The tracker deduplicates it as 'annualReport_reminder_{arYear}_{businessId}'.",
+     "files": [
+      "lear/jobs/email-reminder/email_reminder.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py"
+     ]
+    },
+    {
+     "fact": "ar_reminder_notification gets recipients from the auth API (get_recipient_from_auth \u2192 AUTH_URL/entities/{identifier}) and renders AR-REMINDER.html. Coops therefore need auth contacts, and the template's wording may need changing for them.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/ar_reminder_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_templates/AR-REMINDER.html"
+     ]
+    },
+    {
+     "fact": "Change-of-directors emails are generic filing emails. The entity-filer publishes {'email': {filingId, type, option: status}} after processing (publish_email_message). The emailer sends any type listed in filing_notification.FILING_TYPE_CONVERTER (where 'changeOfDirectors' maps to 'COD') to filing_notification.process.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py"
+     ]
+    },
+    {
+     "fact": "filing_notification picks the template BC-{code}-{status}.html, so a completed change of directors renders BC-COD-COMPLETED.html. To suppress it, add a 'changeOfDirectors'/COMPLETED skip in the emailer worker's dispatch, as already exists for 'annualReport'/COMPLETED, rather than just deleting the template file.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_templates/BC-COD-COMPLETED.html"
+     ]
+    }
+   ],
+   "qid": "lear-async-5",
+   "area": "lear-async",
+   "verdicts": [
+    {
+     "verdict": "partly",
+     "fix": "The reminder entity types are hard-coded in find_and_send_ar_reminder in the email-reminder job: BEN and the continued-in types (CBEN, C, CUL, CCC), plus BC/CC/ULC when the 'enable-bc-ccc-ulc' flag is on. Adding COOP means extending that list. get_ar_fee looks up Filing.FILINGS['annualReport']['codes'][legal_type], which already has 'CP': 'OTANN', so the pay-api fee lookup needs no new code."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ]
+}

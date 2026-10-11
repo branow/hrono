@@ -1,0 +1,1080 @@
+{
+ "kept": [
+  {
+   "kind": "flow",
+   "question": "When a user opens a business's dashboard URL in this front end, what happens from page load to the point where the business info, to-dos and filing history are on screen? How does the app learn which business to load and where the API is, and how does it decide whether the user may see the business?",
+   "facts": [
+    {
+     "fact": "At startup, main.ts calls the configuration store's loadConfiguration, which saves the env config, writes session variables, and sets the shared axios instance's baseURL to the Legal API URL plus version (getLegalApiUrl \u2192 setAxiosBaseUrl). It then calls setBaseRouteAndBusinessId and initializes LaunchDarkly, Keycloak and the router.",
+     "files": [
+      "business-filings-ui/src/main.ts",
+      "business-filings-ui/src/stores/configurationStore.ts",
+      "business-filings-ui/src/axios-auth.ts"
+     ]
+    },
+    {
+     "fact": "setBaseRouteAndBusinessId reads the first path segment after the base URL. If it matches /^(BC|C|CP|FM)\\d{7}$/ it stores it as BUSINESS_ID and removes TEMP_REG_NUMBER; if it starts with 'T' it stores it as TEMP_REG_NUMBER and removes BUSINESS_ID; otherwise it throws. It sets VUE_ROUTER_BASE (base URL + id + '/'), which getVueRouter uses as the history-mode base. It also sets BASE_URL (origin + router base), but that is used for returning from redirects, not by the router.",
+     "files": [
+      "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+      "business-filings-ui/src/router.ts"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The axios-auth instance has a request interceptor that adds 'Authorization: Bearer <Keycloak token>' from sessionStorage to every request except those to minio URLs. The router's beforeEach sends routes with meta.requiresAuth to the Signin route when there is no token.",
+     "files": [
+      "business-filings-ui/src/axios-auth.ts",
+      "business-filings-ui/src/router.ts",
+      "business-filings-ui/src/routes.ts"
+     ]
+    },
+    {
+     "fact": "App.vue's fetchData runs on mount, on every reroute to the dashboard, and on the 'reloadData' root event. It parses Keycloak roles from the JWT, then calls AuthServices.fetchAuthorizations (GET <authApi>entities/{id}/authorizations, served by sbc-auth's entity resource) and storeAuthorizations throws if no roles come back, which shows an auth error dialog.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/auth-services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py"
+     ]
+    },
+    {
+     "fact": "For a real business, fetchBusinessData runs five calls in parallel with Promise.all: AuthServices.fetchEntityInfo, businessStore.loadBusinessInfo (GET businesses/{id}), LegalServices.fetchTasks (GET businesses/{id}/tasks), filingHistoryListStore.loadFilings (GET businesses/{id}/filings) and LegalServices.fetchParties. It then stores the tasks and parties, loads the state filing, and stores the entity-type config object.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/stores/businessStore.ts",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "Office addresses are fetched separately by fetchStoreAddressData (GET businesses/{id}/addresses). A 404 'address not found' is accepted and stored as a null business office; any other failure throws 'Incomplete business data', which opens the dashboard-unavailable dialog and reports to Sentry.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "The Dashboard view gives its TodoList, PendingList and FilingHistoryList children the filing_id query parameter as highlightId. TodoList rebuilds its items through a watcher on the root store's tasks, and FilingHistoryList renders the store's validated getFilings list.",
+     "files": [
+      "business-filings-ui/src/views/Dashboard.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts"
+     ]
+    }
+   ],
+   "qid": "ui-0",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "setBaseRouteAndBusinessId reads the first path segment after the base URL. If it matches /^(BC|C|CP|FM)\\d{7}$/ it stores it as BUSINESS_ID and removes TEMP_REG_NUMBER; if it starts with 'T' it stores it as TEMP_REG_NUMBER and removes BUSINESS_ID; otherwise it throws. It sets VUE_ROUTER_BASE (base URL + id + '/'), which getVueRouter uses as the history-mode base. It also sets BASE_URL (origin + router base), but that is used for returning from redirects, not by the router."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "Walk me through the life of an in-app draft filing such as an annual report. How does it show up as a to-do, how is it resumed, saved as a draft, then filed and paid, and how does the dashboard notice afterwards that the filing has been processed?",
+   "facts": [
+    {
+     "fact": "The Legal API's tasks endpoint (construct_task_list) returns DRAFT, PENDING, PENDING_CORRECTION and ERROR filings as 'filing' tasks, plus generated annual-report 'todo' tasks. A due annual report is enabled only when there are no pending filings and it is for the earliest due year.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_tasks.py",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "TodoList.loadData splits tasks into todo items (loadTodoItem \u2192 loadAnnualReportTodo, with filingId -1) and filing items (loadFilingItem, a switch on the header name such as loadAnnualReport). Each filing item looks up a payment error description with PayServices.getPayErrorObj, which calls the Pay API's codes/errors/{code} endpoint.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/services/pay-services.ts",
+      "sbc-pay/pay-api/src/pay_api/resources/v1/code.py"
+     ]
+    },
+    {
+     "fact": "doFileNow and doResumeFiling route to the in-app Annual Report view with filingId=0 for a new filing or the draft's id for a resume. Filings handled by other apps (incorporation, alteration, correction, dissolution and so on) are opened with navigate() to Create UI or Edit UI URLs.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/routes.ts",
+      "business-filings-ui/src/utils/navigate.ts"
+     ]
+    },
+    {
+     "fact": "AnnualReport.vue's fetchDraftFiling loads the draft with LegalServices.fetchFiling and rejects it unless it is an annualReport in DRAFT status for the current business. saveFiling builds the header, business and annualReport sections (plus changeOfAddress or changeOfDirectors when those fee codes are present), then calls LegalServices.updateFiling (PUT) when filingId > 0 or createFiling (POST) otherwise, adding ?draft=true when saving a draft.",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "For a new filing, saveFiling first calls LegalServices.hasPendingTasks and refuses to save if any task is not in NEW status ('Another draft filing already exists').",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "Fees come from the filingData list kept by FilingMixin.updateFilingData and hasFilingCode. That list is passed to SbcFeeSummary together with the Pay API URL. A 402 response opens a payment error dialog; when the response header has isPaymentActionRequired, onClickFilePayFinish redirects to auth-web's makepayment/{paymentToken}/{returnUrl}, with a return URL that carries ?filing_id.",
+     "files": [
+      "business-filings-ui/src/mixins/filing-mixin.ts",
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/stores/configurationStore.ts"
+     ]
+    },
+    {
+     "fact": "If no payment action is needed, CommonMixin.navigateToBusinessDashboard returns to the dashboard with filing_id, either through the in-app router or through the external business dashboard when 'use-business-dashboard' is on. TodoList.highlightTask then polls the filing up to 5 times, once per second, in checkIfProcessed, and emits 'reloadData' once the status is PAID, COMPLETED or AWAITING_REVIEW.",
+     "files": [
+      "business-filings-ui/src/mixins/common-mixin.ts",
+      "business-filings-ui/src/views/Dashboard.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/App.vue"
+     ]
+    },
+    {
+     "fact": "From the to-do list, users can delete a draft (DELETE businesses/{id}/filings/{filingId}) or cancel a pending payment and revert the filing to draft (PATCH on the same URL). Both emit 'reloadData', which makes App.vue clear the tasks, pending list and filings and fetch everything again.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/App.vue",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    }
+   ],
+   "qid": "ui-1",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How does the UI decide which filings and actions a user may start for a business (for example, why a menu item is greyed out)? Where do the rules come from, and how are they combined with feature toggles on the client?",
+   "facts": [
+    {
+     "fact": "The rules are computed on the server. legal-api's get_allowable_actions in authz.py builds {filing: {filingSubmissionLink, filingTypes}, digitalBusinessCard, viewAll}. filingTypes comes from get_allowed_filings, which uses user role, business state, legal type and blockers. For competent-authority (CA_SEARCH) users it is an empty list and viewAll is true. The v2 business resource attaches the result to the business, and Business.json serializes it as 'allowedActions'.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The front end stores the whole business object with businessStore.loadBusinessInfo \u2192 LegalServices.fetchBusiness \u2192 setBusinessInfo and reads the allowed actions back through the getAllowedActions getter.",
+     "files": [
+      "business-filings-ui/src/stores/businessStore.ts",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "AllowableActionsMixin.isAllowed is a switch over the AllowableActions enum. Most cases check allowedActions.filing.filingTypes, by filing name and optional subtype, through the private isAllowedFiling. Some cases do not: BUSINESS_SUMMARY, DETAIL_COMMENT and STAFF_COMMENT use flags or roles plus BUSINESS_ID, and DIGITAL_CREDENTIALS uses the flag plus allowedActions.digitalBusinessCard. Some actions are entity-specific: for firms, address or director changes map to changeOfRegistration. Business-information changes map to specialResolution for coops (which also needs the 'special-resolution-ui-enabled' flag), changeOfRegistration for firms, and alteration otherwise.",
+     "files": [
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/enums/allowableActions.ts"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "Many actions also require a LaunchDarkly flag, such as 'supported-dissolution-entities', 'supported-correction-entities', 'supported-restoration-entities' or 'enable-digital-credentials'. GetFeatureFlag reads these from the LD client, or from a default set (empty lists or false) when LaunchDarkly is not available.",
+     "files": [
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/utils/feature-flags.ts"
+     ]
+    },
+    {
+     "fact": "Staff and detail comments do not depend on the server: they are allowed only when there is a BUSINESS_ID in sessionStorage and the user has the Keycloak 'staff' role (rootStore.isRoleStaff).",
+     "files": [
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "isAllowed is used by EntityMenu (AGM extension, consent to continue out, amalgamate and so on, with a separate LD entity-list flag deciding whether each item is shown at all), by Dashboard (address and director change buttons), by StaffNotation, and by TodoList (the File Annual Report button).",
+     "files": [
+      "business-filings-ui/src/components/EntityInfo/EntityMenu.vue",
+      "business-filings-ui/src/views/Dashboard.vue",
+      "business-filings-ui/src/components/Dashboard/StaffNotation.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue"
+     ]
+    },
+    {
+     "fact": "The router adds its own toggle check: beforeEach redirects the digital credentials route to the dashboard when the 'enable-digital-credentials' flag is off.",
+     "files": [
+      "business-filings-ui/src/router.ts",
+      "business-filings-ui/src/enums/routes.ts"
+     ]
+    }
+   ],
+   "qid": "ui-2",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "partly",
+     "fix": "The rules are computed on the server. legal-api's get_allowable_actions in authz.py builds {filing: {filingSubmissionLink, filingTypes}, digitalBusinessCard, viewAll}. filingTypes comes from get_allowed_filings, which uses user role, business state, legal type and blockers. For competent-authority (CA_SEARCH) users it is an empty list and viewAll is true. The v2 business resource attaches the result to the business, and Business.json serializes it as 'allowedActions'."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "AllowableActionsMixin.isAllowed is a switch over the AllowableActions enum. Most cases check allowedActions.filing.filingTypes, by filing name and optional subtype, through the private isAllowedFiling. Some cases do not: BUSINESS_SUMMARY, DETAIL_COMMENT and STAFF_COMMENT use flags or roles plus BUSINESS_ID, and DIGITAL_CREDENTIALS uses the flag plus allowedActions.digitalBusinessCard. Some actions are entity-specific: for firms, address or director changes map to changeOfRegistration. Business-information changes map to specialResolution for coops (which also needs the 'special-resolution-ui-enabled' flag), changeOfRegistration for firms, and alteration otherwise."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "Some dashboards belong to a business that does not exist yet, such as a draft incorporation, registration, amalgamation or continuation-in application. How is this 'temporary business' modeled in the front end, and how does the app make it look like a business on the dashboard?",
+   "facts": [
+    {
+     "fact": "A temporary business is any URL id starting with 'T'. setBaseRouteAndBusinessId stores it as TEMP_REG_NUMBER and removes BUSINESS_ID. Components such as TodoList, FilingHistoryList and AllowableActionsMixin read these sessionStorage keys to tell a business from a temporary registration.",
+     "files": [
+      "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts"
+     ]
+    },
+    {
+     "fact": "For a temporary business, App.fetchData skips the business calls and instead uses LegalServices.fetchBootstrapFiling (GET businesses/{T-number}/filings, which returns one filing). storeBootstrapItem checks that the header, business and nameRequest are present and that the legal type is supported, then fills the business store with the identifier, legal type, legal name and goodStanding=true.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/stores/businessStore.ts"
+     ]
+    },
+    {
+     "fact": "The root store sorts the bootstrap filing by type and status using getters such as isAmalgamationTodo, isContinuationInPending and isIncorporationApplicationFiling, which feed isBootstrapTodo, isBootstrapPending and isBootstrapFiling. For example, DRAFT or PENDING goes to the to-do list, a continuation-in AWAITING_REVIEW goes to the pending list, and COMPLETED or PAID goes to the filing history.",
+     "files": [
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "Based on that classification, App.vue builds a synthetic item: storeBootstrapTodo creates a single task with order 1 via setTasks, storeBootstrapPending fills the pending list, and storeBootstrapFiling builds an ApiFilingIF for the filing history store. The last two also load offices and parties from the filing body.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "For a bootstrap to-do with a name request, App.vue calls LegalServices.fetchNameRequest (GET nameRequests/{nr}/validate). storeNrData checks that the NR's legal type matches and, unless the application is completed, that the NR state is APPROVED or CONDITIONAL; it then sets the legal name to the approved name.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/mixins/name-request-mixin.ts"
+     ]
+    },
+    {
+     "fact": "In the to-do list, bootstrap applications cannot be edited in this app. doResumeFiling sends incorporation, registration, amalgamation and continuation-in applications to the Create UI using ?id=<temp reg number>, and confirmDeleteApplication deletes the draft and then leaves for My Business Registry or the businesses home page.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/stores/configurationStore.ts"
+     ]
+    }
+   ],
+   "qid": "ui-3",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We need to support a new business entity type on the dashboard, with its own legal certification wording, director-compliance warnings and voluntary-dissolution dialog text. Where do these per-entity texts and rules live, how are they selected at runtime, and what else would have to change?",
+   "facts": [
+    {
+     "fact": "Each entity type has a resource object in src/resources/<TYPE>.ts (for example BusinessConfigCp) containing entityType, displayName, a 'flows' array of {feeCode, displayName, certifyText, warnings}, dissolutionConfirmation and todoList. A new type needs its own file, and that file must be added to the ConfigJson array in business-config.ts.",
+     "files": [
+      "business-filings-ui/src/resources/CP.ts",
+      "business-filings-ui/src/resources/business-config.ts",
+      "business-filings-ui/src/resources/index.ts"
+     ]
+    },
+    {
+     "fact": "At runtime, App.vue's storeConfigObject picks the entry with ConfigJson.find(x => x.entityType === getLegalType) after business data loads and saves it with rootStore.setConfigObject. Root store getters getDissolutionConfirmationResource and getTodoListResource read from that object.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "ResourceLookupMixin reads the config object: certifyText(feeCode) finds a flow by fee code, and directorWarning(directors) applies the flow's bcResident, canadianResident and minDirectors warnings, choosing DIRECTOR_CHANGE_BC or DIRECTOR_CHANGE_OT depending on isBaseCompany.",
+     "files": [
+      "business-filings-ui/src/mixins/resource-lookup-mixin.ts",
+      "business-filings-ui/src/stores/businessStore.ts"
+     ]
+    },
+    {
+     "fact": "certifyText is used by the filing views (AnnualReport, StandaloneDirectorsFiling, StandaloneOfficeAddressFiling, AgmExtension, ContinuationOut and others), and directorWarning is used by the shared Directors component. The new type's flows therefore need fee codes that match the codes these views pass in.",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/views/StandaloneDirectorsFiling.vue",
+      "business-filings-ui/src/views/AgmExtension.vue",
+      "business-filings-ui/src/components/common/Directors.vue"
+     ]
+    },
+    {
+     "fact": "The dissolution texts are shown by ConfirmDissolutionDialog and by the DissolutionVoluntary filing-history item, both through getDissolutionConfirmationResource. TodoList uses getTodoListResource().title as the title of a dissolution to-do.",
+     "files": [
+      "business-filings-ui/src/components/dialogs/ConfirmDissolutionDialog.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/DissolutionVoluntary.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue"
+     ]
+    },
+    {
+     "fact": "Entity-type behaviour is also hard-coded in businessStore getters (isBaseCompany, isEntityFirm, isDisableNonBenCorps and others) and in the business-ID regex in setBaseRouteAndBusinessId (BC|C|CP|FM), so a new type may need changes there as well as in LaunchDarkly entity lists such as 'supported-dissolution-entities'.",
+     "files": [
+      "business-filings-ui/src/stores/businessStore.ts",
+      "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+      "business-filings-ui/src/utils/feature-flags.ts"
+     ]
+    }
+   ],
+   "qid": "ui-4",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "Suppose the back end adds a new filing type that users should start from the business menu, save as a draft and resume, and later see in the filing history. Which parts of the front end would need to change so it shows up correctly as an action, a to-do and a history entry?",
+   "facts": [
+    {
+     "fact": "Starting the filing would need a new value in the AllowableActions enum and a case in AllowableActionsMixin.isAllowed that maps it to the server's allowed filing types (isAllowedFiling with the shared FilingTypes value), plus a menu item in EntityMenu that is disabled when !isAllowed(...).",
+     "files": [
+      "business-filings-ui/src/enums/allowableActions.ts",
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/components/EntityInfo/EntityMenu.vue"
+     ]
+    },
+    {
+     "fact": "An in-app filing page would need a view registered in routes.ts with requiresAuth and a breadcrumb, plus a name in the Routes enum. Existing menu items open such a view with $router.push({ name, query: { filingId: '0' } }), where 0 means a new filing.",
+     "files": [
+      "business-filings-ui/src/routes.ts",
+      "business-filings-ui/src/enums/routes.ts",
+      "business-filings-ui/src/components/EntityInfo/EntityMenu.vue"
+     ]
+    },
+    {
+     "fact": "The view itself would follow the AnnualReport and AgmExtension pattern: check hasPendingTasks, call LegalServices.createFiling or updateFiling with the isDraft flag, track fees through FilingMixin.updateFilingData and SbcFeeSummary, and finish with a payment redirect or navigateToBusinessDashboard(identifier, filingId).",
+     "files": [
+      "business-filings-ui/src/views/AgmExtension.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/mixins/filing-mixin.ts",
+      "business-filings-ui/src/mixins/common-mixin.ts"
+     ]
+    },
+    {
+     "fact": "Since legal-api returns every DRAFT, PENDING or ERROR filing as a task, TodoList.loadFilingItem needs a new case that builds a TodoItemIF (title, draftTitle, payErrorObj and so on); otherwise the filing goes to loadDefaultTask. doResumeFiling also needs a case, or it only logs 'invalid filing type'.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_tasks.py"
+     ]
+    },
+    {
+     "fact": "EnumUtilities would need an isTypeX predicate, which FilingHistoryList.is() and TodoList use. A filingTypeToName case is optional: without one, it falls back to camelCaseToWords(type). filingTypeToName is used by TodoList, by App.vue's bootstrap items and by filingHistoryListStore.loadDocuments to build document titles.",
+     "files": [
+      "business-filings-ui/src/services/enum-utilities.ts",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "For a custom history entry, FilingHistoryList.is() needs a case that returns a component name, and that component must be added to FilingHistoryList/filings/index.ts, whose exports are spread into the list's components. Without this, the filing renders as 'default-filing'. Entries without name, displayName, effectiveDate, submittedDate or status, or with displayLedger === false, are filtered out by the store's getFilings getter.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/index.ts",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/DefaultFiling.vue",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts"
+     ]
+    }
+   ],
+   "qid": "ui-5",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "EnumUtilities would need an isTypeX predicate, which FilingHistoryList.is() and TodoList use. A filingTypeToName case is optional: without one, it falls back to camelCaseToWords(type). filingTypeToName is used by TodoList, by App.vue's bootstrap items and by filingHistoryListStore.loadDocuments to build document titles."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ],
+ "all": [
+  {
+   "kind": "flow",
+   "question": "When a user opens a business's dashboard URL in this front end, what happens from page load to the point where the business info, to-dos and filing history are on screen? How does the app learn which business to load and where the API is, and how does it decide whether the user may see the business?",
+   "facts": [
+    {
+     "fact": "At startup, main.ts calls the configuration store's loadConfiguration, which saves the env config, writes session variables, and sets the shared axios instance's baseURL to the Legal API URL plus version (getLegalApiUrl \u2192 setAxiosBaseUrl). It then calls setBaseRouteAndBusinessId and initializes LaunchDarkly, Keycloak and the router.",
+     "files": [
+      "business-filings-ui/src/main.ts",
+      "business-filings-ui/src/stores/configurationStore.ts",
+      "business-filings-ui/src/axios-auth.ts"
+     ]
+    },
+    {
+     "fact": "setBaseRouteAndBusinessId reads the first path segment after the base URL. If it matches /^(BC|C|CP|FM)\\d{7}$/ it stores it as BUSINESS_ID and removes TEMP_REG_NUMBER; if it starts with 'T' it stores it as TEMP_REG_NUMBER and removes BUSINESS_ID; otherwise it throws. It sets VUE_ROUTER_BASE (base URL + id + '/'), which getVueRouter uses as the history-mode base. It also sets BASE_URL (origin + router base), but that is used for returning from redirects, not by the router.",
+     "files": [
+      "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+      "business-filings-ui/src/router.ts"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The axios-auth instance has a request interceptor that adds 'Authorization: Bearer <Keycloak token>' from sessionStorage to every request except those to minio URLs. The router's beforeEach sends routes with meta.requiresAuth to the Signin route when there is no token.",
+     "files": [
+      "business-filings-ui/src/axios-auth.ts",
+      "business-filings-ui/src/router.ts",
+      "business-filings-ui/src/routes.ts"
+     ]
+    },
+    {
+     "fact": "App.vue's fetchData runs on mount, on every reroute to the dashboard, and on the 'reloadData' root event. It parses Keycloak roles from the JWT, then calls AuthServices.fetchAuthorizations (GET <authApi>entities/{id}/authorizations, served by sbc-auth's entity resource) and storeAuthorizations throws if no roles come back, which shows an auth error dialog.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/auth-services.ts",
+      "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py"
+     ]
+    },
+    {
+     "fact": "For a real business, fetchBusinessData runs five calls in parallel with Promise.all: AuthServices.fetchEntityInfo, businessStore.loadBusinessInfo (GET businesses/{id}), LegalServices.fetchTasks (GET businesses/{id}/tasks), filingHistoryListStore.loadFilings (GET businesses/{id}/filings) and LegalServices.fetchParties. It then stores the tasks and parties, loads the state filing, and stores the entity-type config object.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/stores/businessStore.ts",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "Office addresses are fetched separately by fetchStoreAddressData (GET businesses/{id}/addresses). A 404 'address not found' is accepted and stored as a null business office; any other failure throws 'Incomplete business data', which opens the dashboard-unavailable dialog and reports to Sentry.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "The Dashboard view gives its TodoList, PendingList and FilingHistoryList children the filing_id query parameter as highlightId. TodoList rebuilds its items through a watcher on the root store's tasks, and FilingHistoryList renders the store's validated getFilings list.",
+     "files": [
+      "business-filings-ui/src/views/Dashboard.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts"
+     ]
+    }
+   ],
+   "qid": "ui-0",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "setBaseRouteAndBusinessId reads the first path segment after the base URL. If it matches /^(BC|C|CP|FM)\\d{7}$/ it stores it as BUSINESS_ID and removes TEMP_REG_NUMBER; if it starts with 'T' it stores it as TEMP_REG_NUMBER and removes BUSINESS_ID; otherwise it throws. It sets VUE_ROUTER_BASE (base URL + id + '/'), which getVueRouter uses as the history-mode base. It also sets BASE_URL (origin + router base), but that is used for returning from redirects, not by the router."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "Walk me through the life of an in-app draft filing such as an annual report. How does it show up as a to-do, how is it resumed, saved as a draft, then filed and paid, and how does the dashboard notice afterwards that the filing has been processed?",
+   "facts": [
+    {
+     "fact": "The Legal API's tasks endpoint (construct_task_list) returns DRAFT, PENDING, PENDING_CORRECTION and ERROR filings as 'filing' tasks, plus generated annual-report 'todo' tasks. A due annual report is enabled only when there are no pending filings and it is for the earliest due year.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_tasks.py",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "TodoList.loadData splits tasks into todo items (loadTodoItem \u2192 loadAnnualReportTodo, with filingId -1) and filing items (loadFilingItem, a switch on the header name such as loadAnnualReport). Each filing item looks up a payment error description with PayServices.getPayErrorObj, which calls the Pay API's codes/errors/{code} endpoint.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/services/pay-services.ts",
+      "sbc-pay/pay-api/src/pay_api/resources/v1/code.py"
+     ]
+    },
+    {
+     "fact": "doFileNow and doResumeFiling route to the in-app Annual Report view with filingId=0 for a new filing or the draft's id for a resume. Filings handled by other apps (incorporation, alteration, correction, dissolution and so on) are opened with navigate() to Create UI or Edit UI URLs.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/routes.ts",
+      "business-filings-ui/src/utils/navigate.ts"
+     ]
+    },
+    {
+     "fact": "AnnualReport.vue's fetchDraftFiling loads the draft with LegalServices.fetchFiling and rejects it unless it is an annualReport in DRAFT status for the current business. saveFiling builds the header, business and annualReport sections (plus changeOfAddress or changeOfDirectors when those fee codes are present), then calls LegalServices.updateFiling (PUT) when filingId > 0 or createFiling (POST) otherwise, adding ?draft=true when saving a draft.",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "For a new filing, saveFiling first calls LegalServices.hasPendingTasks and refuses to save if any task is not in NEW status ('Another draft filing already exists').",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "Fees come from the filingData list kept by FilingMixin.updateFilingData and hasFilingCode. That list is passed to SbcFeeSummary together with the Pay API URL. A 402 response opens a payment error dialog; when the response header has isPaymentActionRequired, onClickFilePayFinish redirects to auth-web's makepayment/{paymentToken}/{returnUrl}, with a return URL that carries ?filing_id.",
+     "files": [
+      "business-filings-ui/src/mixins/filing-mixin.ts",
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/stores/configurationStore.ts"
+     ]
+    },
+    {
+     "fact": "If no payment action is needed, CommonMixin.navigateToBusinessDashboard returns to the dashboard with filing_id, either through the in-app router or through the external business dashboard when 'use-business-dashboard' is on. TodoList.highlightTask then polls the filing up to 5 times, once per second, in checkIfProcessed, and emits 'reloadData' once the status is PAID, COMPLETED or AWAITING_REVIEW.",
+     "files": [
+      "business-filings-ui/src/mixins/common-mixin.ts",
+      "business-filings-ui/src/views/Dashboard.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/App.vue"
+     ]
+    },
+    {
+     "fact": "From the to-do list, users can delete a draft (DELETE businesses/{id}/filings/{filingId}) or cancel a pending payment and revert the filing to draft (PATCH on the same URL). Both emit 'reloadData', which makes App.vue clear the tasks, pending list and filings and fetch everything again.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/App.vue",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    }
+   ],
+   "qid": "ui-1",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How does the UI decide which filings and actions a user may start for a business (for example, why a menu item is greyed out)? Where do the rules come from, and how are they combined with feature toggles on the client?",
+   "facts": [
+    {
+     "fact": "The rules are computed on the server. legal-api's get_allowable_actions in authz.py builds {filing: {filingSubmissionLink, filingTypes}, digitalBusinessCard, viewAll}. filingTypes comes from get_allowed_filings, which uses user role, business state, legal type and blockers. For competent-authority (CA_SEARCH) users it is an empty list and viewAll is true. The v2 business resource attaches the result to the business, and Business.json serializes it as 'allowedActions'.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The front end stores the whole business object with businessStore.loadBusinessInfo \u2192 LegalServices.fetchBusiness \u2192 setBusinessInfo and reads the allowed actions back through the getAllowedActions getter.",
+     "files": [
+      "business-filings-ui/src/stores/businessStore.ts",
+      "business-filings-ui/src/services/legal-services.ts"
+     ]
+    },
+    {
+     "fact": "AllowableActionsMixin.isAllowed is a switch over the AllowableActions enum. Most cases check allowedActions.filing.filingTypes, by filing name and optional subtype, through the private isAllowedFiling. Some cases do not: BUSINESS_SUMMARY, DETAIL_COMMENT and STAFF_COMMENT use flags or roles plus BUSINESS_ID, and DIGITAL_CREDENTIALS uses the flag plus allowedActions.digitalBusinessCard. Some actions are entity-specific: for firms, address or director changes map to changeOfRegistration. Business-information changes map to specialResolution for coops (which also needs the 'special-resolution-ui-enabled' flag), changeOfRegistration for firms, and alteration otherwise.",
+     "files": [
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/enums/allowableActions.ts"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "Many actions also require a LaunchDarkly flag, such as 'supported-dissolution-entities', 'supported-correction-entities', 'supported-restoration-entities' or 'enable-digital-credentials'. GetFeatureFlag reads these from the LD client, or from a default set (empty lists or false) when LaunchDarkly is not available.",
+     "files": [
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/utils/feature-flags.ts"
+     ]
+    },
+    {
+     "fact": "Staff and detail comments do not depend on the server: they are allowed only when there is a BUSINESS_ID in sessionStorage and the user has the Keycloak 'staff' role (rootStore.isRoleStaff).",
+     "files": [
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "isAllowed is used by EntityMenu (AGM extension, consent to continue out, amalgamate and so on, with a separate LD entity-list flag deciding whether each item is shown at all), by Dashboard (address and director change buttons), by StaffNotation, and by TodoList (the File Annual Report button).",
+     "files": [
+      "business-filings-ui/src/components/EntityInfo/EntityMenu.vue",
+      "business-filings-ui/src/views/Dashboard.vue",
+      "business-filings-ui/src/components/Dashboard/StaffNotation.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue"
+     ]
+    },
+    {
+     "fact": "The router adds its own toggle check: beforeEach redirects the digital credentials route to the dashboard when the 'enable-digital-credentials' flag is off.",
+     "files": [
+      "business-filings-ui/src/router.ts",
+      "business-filings-ui/src/enums/routes.ts"
+     ]
+    }
+   ],
+   "qid": "ui-2",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "partly",
+     "fix": "The rules are computed on the server. legal-api's get_allowable_actions in authz.py builds {filing: {filingSubmissionLink, filingTypes}, digitalBusinessCard, viewAll}. filingTypes comes from get_allowed_filings, which uses user role, business state, legal type and blockers. For competent-authority (CA_SEARCH) users it is an empty list and viewAll is true. The v2 business resource attaches the result to the business, and Business.json serializes it as 'allowedActions'."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "AllowableActionsMixin.isAllowed is a switch over the AllowableActions enum. Most cases check allowedActions.filing.filingTypes, by filing name and optional subtype, through the private isAllowedFiling. Some cases do not: BUSINESS_SUMMARY, DETAIL_COMMENT and STAFF_COMMENT use flags or roles plus BUSINESS_ID, and DIGITAL_CREDENTIALS uses the flag plus allowedActions.digitalBusinessCard. Some actions are entity-specific: for firms, address or director changes map to changeOfRegistration. Business-information changes map to specialResolution for coops (which also needs the 'special-resolution-ui-enabled' flag), changeOfRegistration for firms, and alteration otherwise."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "Some dashboards belong to a business that does not exist yet, such as a draft incorporation, registration, amalgamation or continuation-in application. How is this 'temporary business' modeled in the front end, and how does the app make it look like a business on the dashboard?",
+   "facts": [
+    {
+     "fact": "A temporary business is any URL id starting with 'T'. setBaseRouteAndBusinessId stores it as TEMP_REG_NUMBER and removes BUSINESS_ID. Components such as TodoList, FilingHistoryList and AllowableActionsMixin read these sessionStorage keys to tell a business from a temporary registration.",
+     "files": [
+      "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts"
+     ]
+    },
+    {
+     "fact": "For a temporary business, App.fetchData skips the business calls and instead uses LegalServices.fetchBootstrapFiling (GET businesses/{T-number}/filings, which returns one filing). storeBootstrapItem checks that the header, business and nameRequest are present and that the legal type is supported, then fills the business store with the identifier, legal type, legal name and goodStanding=true.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/stores/businessStore.ts"
+     ]
+    },
+    {
+     "fact": "The root store sorts the bootstrap filing by type and status using getters such as isAmalgamationTodo, isContinuationInPending and isIncorporationApplicationFiling, which feed isBootstrapTodo, isBootstrapPending and isBootstrapFiling. For example, DRAFT or PENDING goes to the to-do list, a continuation-in AWAITING_REVIEW goes to the pending list, and COMPLETED or PAID goes to the filing history.",
+     "files": [
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "Based on that classification, App.vue builds a synthetic item: storeBootstrapTodo creates a single task with order 1 via setTasks, storeBootstrapPending fills the pending list, and storeBootstrapFiling builds an ApiFilingIF for the filing history store. The last two also load offices and parties from the filing body.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "For a bootstrap to-do with a name request, App.vue calls LegalServices.fetchNameRequest (GET nameRequests/{nr}/validate). storeNrData checks that the NR's legal type matches and, unless the application is completed, that the NR state is APPROVED or CONDITIONAL; it then sets the legal name to the approved name.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/mixins/name-request-mixin.ts"
+     ]
+    },
+    {
+     "fact": "In the to-do list, bootstrap applications cannot be edited in this app. doResumeFiling sends incorporation, registration, amalgamation and continuation-in applications to the Create UI using ?id=<temp reg number>, and confirmDeleteApplication deletes the draft and then leaves for My Business Registry or the businesses home page.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "business-filings-ui/src/stores/configurationStore.ts"
+     ]
+    }
+   ],
+   "qid": "ui-3",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We need to support a new business entity type on the dashboard, with its own legal certification wording, director-compliance warnings and voluntary-dissolution dialog text. Where do these per-entity texts and rules live, how are they selected at runtime, and what else would have to change?",
+   "facts": [
+    {
+     "fact": "Each entity type has a resource object in src/resources/<TYPE>.ts (for example BusinessConfigCp) containing entityType, displayName, a 'flows' array of {feeCode, displayName, certifyText, warnings}, dissolutionConfirmation and todoList. A new type needs its own file, and that file must be added to the ConfigJson array in business-config.ts.",
+     "files": [
+      "business-filings-ui/src/resources/CP.ts",
+      "business-filings-ui/src/resources/business-config.ts",
+      "business-filings-ui/src/resources/index.ts"
+     ]
+    },
+    {
+     "fact": "At runtime, App.vue's storeConfigObject picks the entry with ConfigJson.find(x => x.entityType === getLegalType) after business data loads and saves it with rootStore.setConfigObject. Root store getters getDissolutionConfirmationResource and getTodoListResource read from that object.",
+     "files": [
+      "business-filings-ui/src/App.vue",
+      "business-filings-ui/src/stores/rootStore.ts"
+     ]
+    },
+    {
+     "fact": "ResourceLookupMixin reads the config object: certifyText(feeCode) finds a flow by fee code, and directorWarning(directors) applies the flow's bcResident, canadianResident and minDirectors warnings, choosing DIRECTOR_CHANGE_BC or DIRECTOR_CHANGE_OT depending on isBaseCompany.",
+     "files": [
+      "business-filings-ui/src/mixins/resource-lookup-mixin.ts",
+      "business-filings-ui/src/stores/businessStore.ts"
+     ]
+    },
+    {
+     "fact": "certifyText is used by the filing views (AnnualReport, StandaloneDirectorsFiling, StandaloneOfficeAddressFiling, AgmExtension, ContinuationOut and others), and directorWarning is used by the shared Directors component. The new type's flows therefore need fee codes that match the codes these views pass in.",
+     "files": [
+      "business-filings-ui/src/views/AnnualReport.vue",
+      "business-filings-ui/src/views/StandaloneDirectorsFiling.vue",
+      "business-filings-ui/src/views/AgmExtension.vue",
+      "business-filings-ui/src/components/common/Directors.vue"
+     ]
+    },
+    {
+     "fact": "The dissolution texts are shown by ConfirmDissolutionDialog and by the DissolutionVoluntary filing-history item, both through getDissolutionConfirmationResource. TodoList uses getTodoListResource().title as the title of a dissolution to-do.",
+     "files": [
+      "business-filings-ui/src/components/dialogs/ConfirmDissolutionDialog.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/DissolutionVoluntary.vue",
+      "business-filings-ui/src/components/Dashboard/TodoList.vue"
+     ]
+    },
+    {
+     "fact": "Entity-type behaviour is also hard-coded in businessStore getters (isBaseCompany, isEntityFirm, isDisableNonBenCorps and others) and in the business-ID regex in setBaseRouteAndBusinessId (BC|C|CP|FM), so a new type may need changes there as well as in LaunchDarkly entity lists such as 'supported-dissolution-entities'.",
+     "files": [
+      "business-filings-ui/src/stores/businessStore.ts",
+      "business-filings-ui/src/utils/set-base-route-and-business-id.ts",
+      "business-filings-ui/src/utils/feature-flags.ts"
+     ]
+    }
+   ],
+   "qid": "ui-4",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "Suppose the back end adds a new filing type that users should start from the business menu, save as a draft and resume, and later see in the filing history. Which parts of the front end would need to change so it shows up correctly as an action, a to-do and a history entry?",
+   "facts": [
+    {
+     "fact": "Starting the filing would need a new value in the AllowableActions enum and a case in AllowableActionsMixin.isAllowed that maps it to the server's allowed filing types (isAllowedFiling with the shared FilingTypes value), plus a menu item in EntityMenu that is disabled when !isAllowed(...).",
+     "files": [
+      "business-filings-ui/src/enums/allowableActions.ts",
+      "business-filings-ui/src/mixins/allowable-actions-mixin.ts",
+      "business-filings-ui/src/components/EntityInfo/EntityMenu.vue"
+     ]
+    },
+    {
+     "fact": "An in-app filing page would need a view registered in routes.ts with requiresAuth and a breadcrumb, plus a name in the Routes enum. Existing menu items open such a view with $router.push({ name, query: { filingId: '0' } }), where 0 means a new filing.",
+     "files": [
+      "business-filings-ui/src/routes.ts",
+      "business-filings-ui/src/enums/routes.ts",
+      "business-filings-ui/src/components/EntityInfo/EntityMenu.vue"
+     ]
+    },
+    {
+     "fact": "The view itself would follow the AnnualReport and AgmExtension pattern: check hasPendingTasks, call LegalServices.createFiling or updateFiling with the isDraft flag, track fees through FilingMixin.updateFilingData and SbcFeeSummary, and finish with a payment redirect or navigateToBusinessDashboard(identifier, filingId).",
+     "files": [
+      "business-filings-ui/src/views/AgmExtension.vue",
+      "business-filings-ui/src/services/legal-services.ts",
+      "business-filings-ui/src/mixins/filing-mixin.ts",
+      "business-filings-ui/src/mixins/common-mixin.ts"
+     ]
+    },
+    {
+     "fact": "Since legal-api returns every DRAFT, PENDING or ERROR filing as a task, TodoList.loadFilingItem needs a new case that builds a TodoItemIF (title, draftTitle, payErrorObj and so on); otherwise the filing goes to loadDefaultTask. doResumeFiling also needs a case, or it only logs 'invalid filing type'.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/TodoList.vue",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_tasks.py"
+     ]
+    },
+    {
+     "fact": "EnumUtilities would need an isTypeX predicate, which FilingHistoryList.is() and TodoList use. A filingTypeToName case is optional: without one, it falls back to camelCaseToWords(type). filingTypeToName is used by TodoList, by App.vue's bootstrap items and by filingHistoryListStore.loadDocuments to build document titles.",
+     "files": [
+      "business-filings-ui/src/services/enum-utilities.ts",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "For a custom history entry, FilingHistoryList.is() needs a case that returns a component name, and that component must be added to FilingHistoryList/filings/index.ts, whose exports are spread into the list's components. Without this, the filing renders as 'default-filing'. Entries without name, displayName, effectiveDate, submittedDate or status, or with displayLedger === false, are filtered out by the store's getFilings getter.",
+     "files": [
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList.vue",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/index.ts",
+      "business-filings-ui/src/components/Dashboard/FilingHistoryList/filings/DefaultFiling.vue",
+      "business-filings-ui/src/stores/filingHistoryListStore.ts"
+     ]
+    }
+   ],
+   "qid": "ui-5",
+   "area": "ui",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "EnumUtilities would need an isTypeX predicate, which FilingHistoryList.is() and TodoList use. A filingTypeToName case is optional: without one, it falls back to camelCaseToWords(type). filingTypeToName is used by TodoList, by App.vue's bootstrap items and by filingHistoryListStore.loadDocuments to build document titles."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  }
+ ]
+}

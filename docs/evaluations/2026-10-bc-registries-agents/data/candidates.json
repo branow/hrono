@@ -1,0 +1,2435 @@
+[
+ {
+  "repo": "lear",
+  "sha": "363b55db8c941e99167caabc838bbed980029b4f",
+  "date": "2024-10-01",
+  "subject": "21752 restoration filing sync (#3016)",
+  "modified": [
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/corp_party.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/models/office.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/alteration.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "lear",
+  "sha": "dbbbf8bdb88ad9464a68137f8d785f122bb9390c",
+  "date": "2024-10-15",
+  "subject": "23697 - fix stage1 to stage2 dissolution transition bug (#3028)",
+  "modified": [
+   "jobs/furnishings/flags.json",
+   "jobs/involuntary-dissolutions/flags.json",
+   "jobs/involuntary-dissolutions/involuntary_dissolutions.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "5360c65278c0180f971d8318903083476a42b87c",
+  "date": "2024-10-15",
+  "subject": "23522-23562 continuation in workflow change (#3026)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/models/review.py",
+   "legal-api/src/legal_api/resources/v2/admin/reviews.py",
+   "legal-api/src/legal_api/resources/v2/business/business.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/continuation_in.py",
+   "queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+   "queue_services/entity-bn/src/entity_bn/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 10
+ },
+ {
+  "repo": "lear",
+  "sha": "bcfa13a0423c6a1394a4654ba23974d472fc9578",
+  "date": "2024-10-25",
+  "subject": "23521 - update continuation emails (#3036)",
+  "modified": [
+   "queue_services/entity-emailer/q_cli.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/continuation_in_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-APPROVED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-CHANGE_REQUESTED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-COMPLETED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-PAID.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-REJECTED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-RESUBMITTED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/common/continuation-application-details.html"
+  ],
+  "added": [
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-AWAITING_REVIEW.html"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "7e24e5a83db063f804195ac199fb375e33597061",
+  "date": "2024-10-28",
+  "subject": "23819 - Continuation Application Outputs Update (#3038)",
+  "modified": [
+   "legal-api/report-templates/continuationApplication.html",
+   "legal-api/report-templates/incorporationApplication.html",
+   "legal-api/report-templates/template-parts/continuation/authorization.html",
+   "legal-api/report-templates/template-parts/continuation/effectiveDate.html",
+   "legal-api/report-templates/template-parts/continuation/exproRegistrationInBc.html",
+   "legal-api/report-templates/template-parts/continuation/foreignJurisdiction.html",
+   "legal-api/report-templates/template-parts/incorporation-application/benefitCompanyStmt.html",
+   "legal-api/src/legal_api/reports/report.py"
+  ],
+  "added": [
+   "legal-api/report-templates/template-parts/continuation/nameRequest.html"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "309e23b4756789c57ee4d3e349b22cb256dfb149",
+  "date": "2024-10-30",
+  "subject": "20908 Update corp data migration pipeline to work with prefect 3 and get things working again with IAs and ARs (#3040)",
+  "modified": [
+   "data-tool/flows/corps/corp_queries.py",
+   "data-tool/flows/custom_filer/corps_filer.py",
+   "data-tool/flows/migrate_corps_flow.py",
+   "data-tool/scripts/transfer_cprd_corps.sql"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "b8eff172cf6cbd35dd4bc2816d5c699da51a6aa6",
+  "date": "2024-11-04",
+  "subject": "23744 Script to delete migrated data (#3042)",
+  "modified": [
+   "data-tool/flows/common/event_filing_service.py",
+   "data-tool/flows/common/filing_data_cleaning_utils.py",
+   "data-tool/flows/config.py",
+   "data-tool/flows/corps/event_filing_service.py",
+   "data-tool/flows/corps/filing_data_cleaning_utils.py"
+  ],
+  "added": [
+   "data-tool/flows/batch_delete_flow.py"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "f0387546d12f49c04d973643ed00addbc6d342be",
+  "date": "2024-11-04",
+  "subject": "24153 fixes in colin sync (#3057)",
+  "modified": [
+   "colin-api/src/colin_api/models/address.py",
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/corp_party.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/business.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "jobs/update-colin-filings/update_colin_filings.py",
+   "jobs/update-legal-filings/update_legal_filings.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v1/business/business_filings.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "lear",
+  "sha": "b200653d70f8a84451ceeff9b1b596b239a14f78",
+  "date": "2024-11-06",
+  "subject": "24121 colin sync for correction filing (1 to many) (#3060)",
+  "modified": [
+   "colin-api/src/colin_api/models/address.py",
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/corp_party.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "jobs/update-colin-filings/update_colin_filings.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/__init__.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/shares.py"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "lear",
+  "sha": "0a24b49b289ed1c161b4f4cfe649af4671039600",
+  "date": "2024-11-08",
+  "subject": "23958 update fe date issue (#3067)",
+  "modified": [
+   "legal-api/report-templates/template-parts/amalgamation/effectiveDate.html",
+   "legal-api/report-templates/template-parts/common/effectiveDate.html",
+   "legal-api/report-templates/template-parts/continuation/effectiveDate.html",
+   "legal-api/report-templates/template-parts/incorporation-application/effectiveDate.html"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "94805f547e3577a8cd6b965b44d2f17d3c7ef2a3",
+  "date": "2024-11-08",
+  "subject": "24085 alteration BC to ULC fee code (#3070)",
+  "modified": [
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/models/review_result.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "c1a35d30727d2009a16bf50e902e6ef6c7047d57",
+  "date": "2024-11-14",
+  "subject": "24295 - Freeze all corporations when synchronizing to COLIN (#3076)",
+  "modified": [
+   "colin-api/flags.json",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/services/flags.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "fbc2c94271e8fe4ea4e95355b3a8f0163b8ca417",
+  "date": "2024-11-15",
+  "subject": "24361 - fix missing pdf continuation application (#3078)",
+  "modified": [
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/amalgamation_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/continuation_in_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-COMPLETED.html",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "cf2fc7274c88f876f309325728f59448f3373f40",
+  "date": "2024-11-18",
+  "subject": "24051 Tombstone pipeline (first cut) (#3077)",
+  "modified": [
+   "data-tool/flows/config.py",
+   "data-tool/scripts/colin_corps_extract_postgres_ddl",
+   "data-tool/scripts/transfer_cprd_corps.sql"
+  ],
+  "added": [
+   "data-tool/flows/common/init_utils.py",
+   "data-tool/flows/corps_tombstone_flow.py",
+   "data-tool/flows/tombstone/tombstone_base_data.py",
+   "data-tool/flows/tombstone/tombstone_queries.py",
+   "data-tool/flows/tombstone/tombstone_utils.py"
+  ],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "291684dfccaa76ccaec6b664c9ccfdb24972b020",
+  "date": "2024-11-19",
+  "subject": "22757 - Remove Completing Party Section (#3085)",
+  "modified": [
+   "legal-api/report-templates/amalgamationApplication.html",
+   "legal-api/report-templates/changeOfRegistration.html",
+   "legal-api/report-templates/correction.html",
+   "legal-api/report-templates/dissolution.html",
+   "legal-api/report-templates/firmCorrection.html",
+   "legal-api/report-templates/registration.html",
+   "legal-api/src/legal_api/reports/report.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "38b16c973301e1c41498fb78157a1d35db340a2e",
+  "date": "2024-11-27",
+  "subject": "24368 - Update BEN Statement in NOA (#3096)",
+  "modified": [
+   "legal-api/flags.json",
+   "legal-api/report-templates/template-parts/common/statement.html",
+   "legal-api/src/legal_api/reports/report.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "ccb986f596be41301ef5523015d163b64280fb09",
+  "date": "2024-12-10",
+  "subject": "24741 cease custodian while filing putbackon (#3118)",
+  "modified": [
+   "legal-api/src/legal_api/reports/report.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/put_back_on.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/restoration.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "71abcb923addc0ec1dc246153774d62dfc83e0ed",
+  "date": "2024-12-24",
+  "subject": "23350 - notice of withdrawal outputs - focus on NoW for existing businesses (#3148)",
+  "modified": [
+   "legal-api/report-templates/template-parts/common/businessDetails.html",
+   "legal-api/report-templates/template-parts/common/style.html",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py"
+  ],
+  "added": [
+   "legal-api/report-templates/noticeOfWithdrawal.html",
+   "legal-api/report-templates/template-parts/notice-of-withdrawal/recordToBeWithdrawn.html"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "80b86c34a59efc2ec3583ad5b5779a2b2097ddb6",
+  "date": "2024-12-27",
+  "subject": "25038 25039 putbackoff filing (#3151)",
+  "modified": [
+   "jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "legal-api/src/legal_api/resources/v2/internal_services.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/validation.py"
+  ],
+  "added": [
+   "legal-api/src/legal_api/services/filings/validations/put_back_off.py"
+  ],
+  "n_dirs": 8
+ },
+ {
+  "repo": "lear",
+  "sha": "0502c9f58eb736822485e937001760ca26c4dc21",
+  "date": "2025-01-02",
+  "subject": "25042 - put back off sync (#3157)",
+  "modified": [
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/filing.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "9f33aad24c6e6067cafdd3eaf6254aeabdc81f91",
+  "date": "2025-01-08",
+  "subject": "24195 tweaks on filing queries (#3166)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business.py",
+   "legal-api/src/legal_api/services/filings/validations/restoration.py",
+   "legal-api/src/legal_api/services/warnings/business/business_checks/firms.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "lear",
+  "sha": "aba054816cc76919a3a5b1ea917ae30e9d91b920",
+  "date": "2025-01-13",
+  "subject": "24479 - Tombstone pipeline - amalgamation & legal-api adjustment (#3163)",
+  "modified": [
+   "data-tool/scripts/colin_corps_extract_postgres_ddl",
+   "data-tool/scripts/transfer_cprd_corps.sql",
+   "legal-api/src/legal_api/models/amalgamating_business.py",
+   "legal-api/src/legal_api/models/amalgamation.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/reports/business_document.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "be4608719603df7227ca86a5441338c42d532157",
+  "date": "2025-01-28",
+  "subject": "Hotfix updates (#3187)",
+  "modified": [
+   "colin-api/src/colin_api/config.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "jobs/email-reminder/email_reminder.py"
+  ],
+  "added": [
+   "colin-api/src/colin_api/services/account.py",
+   "colin-api/src/colin_api/services/legal.py"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "48550e2a2f6811f2471ce75b3fa45d8c43e9017c",
+  "date": "2025-01-29",
+  "subject": "24988 now documents temp business (#3182)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "f6546a783cd3ff48600e89b267bda6e655b7e459",
+  "date": "2025-02-03",
+  "subject": "23351 - Notice of Withdrawal Emailer (#3195)",
+  "modified": [
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/common/style.html",
+   "queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py"
+  ],
+  "added": [
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/notice_of_withdrawal_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/NOW-COMPLETED.html"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "9ac76f6752552d1390e28c24e5c477509065f605",
+  "date": "2025-02-05",
+  "subject": "25467 colin sync - effective date should be same as filing date if not future effective (#3204)",
+  "modified": [
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "20321ae3bdbd7dcd25dbbb4598ddae84127f723c",
+  "date": "2025-02-07",
+  "subject": "25231, 25287 - update put back off sync for limited restoration expiration and update correction output (#3205)",
+  "modified": [
+   "colin-api/src/colin_api/models/business.py",
+   "colin-api/src/colin_api/models/filing.py",
+   "colin-api/src/colin_api/resources/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "9cb623d11b69e7404582fef1b823d2f27eb631fd",
+  "date": "2025-02-10",
+  "subject": "22411 btr lear filing integration (#3208)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/validation.py",
+   "queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+  ],
+  "added": [
+   "legal-api/src/legal_api/services/filings/validations/transparency_register.py"
+  ],
+  "n_dirs": 7
+ },
+ {
+  "repo": "lear",
+  "sha": "914b9989bde52af77e3475402d36d588b8a7e99c",
+  "date": "2025-02-11",
+  "subject": "24593 Tombstone pipeline - implement conversion (exclude liquidation, invol dissolution, cont out) (#3199)",
+  "modified": [
+   "legal-api/src/legal_api/models/amalgamation.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/models/jurisdiction.py",
+   "legal-api/src/legal_api/reports/business_document.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "c5992f517661759a2701d1af4c261e2ba69808d0",
+  "date": "2025-02-25",
+  "subject": "Merge feature-data-migration back to main branch (#3249)",
+  "modified": [
+   "data-tool/scripts/colin_corps_extract_postgres_ddl",
+   "data-tool/scripts/transfer_cprd_corps.sql",
+   "legal-api/src/legal_api/reports/business_document.py",
+   "legal-api/src/legal_api/services/warnings/business/business_checks/involuntary_dissolution.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "14b74a5a608cefa7eff053b2ab3609ae09031989",
+  "date": "2025-02-25",
+  "subject": "26151 - Rebase release branch and merge into main (#3251)",
+  "modified": [
+   "legal-api/report-templates/template-parts/amalgamation/amalgamationStmt.html",
+   "legal-api/report-templates/template-parts/business-summary/stateTransition.html",
+   "legal-api/report-templates/template-parts/common/businessDetails.html",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/reports/business_document.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+   "legal-api/src/legal_api/utils/legislation_datetime.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-APPROVED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-PAID.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CONT-IN-REJECTED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/common/continuation-application-details.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/common/cra-notice.html"
+  ],
+  "added": [],
+  "n_dirs": 9
+ },
+ {
+  "repo": "lear",
+  "sha": "cfc3a3a9c4e173681312ef563a919bdf71b52d15",
+  "date": "2025-02-25",
+  "subject": "25188 - court order filing added (#3203)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "b032dc390b608f53e32eef7892997dd22328a672",
+  "date": "2025-02-27",
+  "subject": "API/Filer - TR todo logic (#3246)",
+  "modified": [
+   "legal-api/src/legal_api/config.py",
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/resources/v2/business/business_tasks.py",
+   "queue_services/entity-filer/src/entity_filer/worker.py"
+  ],
+  "added": [
+   "queue_services/entity-filer/src/entity_filer/filing_processors/transparency_register.py"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "c6dad190a4de6b14b0fcb2cb191d6a1258df2713",
+  "date": "2025-02-27",
+  "subject": "25957 appoint_receiver_filing (#3252)",
+  "modified": [
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/models/party_role.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/validation.py"
+  ],
+  "added": [
+   "legal-api/src/legal_api/services/filings/validations/appoint_receiver.py"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "14f007b15cff4685ab7942a29aafbb2da136678e",
+  "date": "2025-03-04",
+  "subject": "26262 - change init_db importing approach (#3278)",
+  "modified": [
+   "jobs/email-reminder/email_reminder.py",
+   "jobs/furnishings/src/furnishings/worker.py",
+   "jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+   "queue_services/entity-bn/src/entity_bn/worker.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/worker.py",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py",
+   "queue_services/entity-filer/src/entity_filer/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "lear",
+  "sha": "ecaeb59005fbd1e3d513441269cab272150278ba",
+  "date": "2025-03-04",
+  "subject": "26189 Fix misc issue from tombstone prelim dry run & misc updates (#3275)",
+  "modified": [
+   "legal-api/src/legal_api/models/business.py",
+   "legal-api/src/legal_api/models/share_class.py",
+   "legal-api/src/legal_api/models/share_series.py",
+   "legal-api/src/legal_api/reports/business_document.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "10d0c0e0265ed08f9c41ca5f768076e1594326e2",
+  "date": "2025-03-06",
+  "subject": "26298 - Display Historical Date instead of Effective Date (#3280)",
+  "modified": [
+   "legal-api/report-templates/template-parts/business-summary/stateTransition.html",
+   "legal-api/src/legal_api/reports/business_document.py",
+   "legal-api/src/legal_api/utils/legislation_datetime.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "518044d33384dd1aee186dad7985c4f1cecf6ecb",
+  "date": "2025-03-11",
+  "subject": "25959 (#3293)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/filings/validations/validation.py"
+  ],
+  "added": [
+   "legal-api/src/legal_api/services/filings/validations/cease_receiver.py"
+  ],
+  "n_dirs": 5
+ },
+ {
+  "repo": "lear",
+  "sha": "96dc185af55c3fc7c4e5f6ada2d093466751350d",
+  "date": "2025-03-12",
+  "subject": "26476 - Support Save and Update Consent to Amalgamate Out draft (#3300)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/services/authz.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "5ac39b2cf87e863157b612cccab8f7a69df1b7ea",
+  "date": "2025-03-13",
+  "subject": "26472 Add App-Name as new allowable header and add error handling logging that includes new header when available (#3302)",
+  "modified": [
+   "legal-api/src/legal_api/errorhandlers.py",
+   "legal-api/src/legal_api/resources/endpoints.py",
+   "legal-api/src/legal_api/utils/util.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "9fe52de4a973834ae162aae0ecc1040b5945e03a",
+  "date": "2025-03-14",
+  "subject": "26487 - Support save amalgamation out draft (#3305)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/services/authz.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "edefca1ab38b0cf6bfe345623fefd2e17db61a16",
+  "date": "2025-03-19",
+  "subject": "25959 - Cease receiver filing",
+  "modified": [
+   "legal-api/report-templates/template-parts/common/businessDetails.html",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/services/bootstrap.py",
+   "legal-api/src/legal_api/services/filings/validations/change_of_name.py",
+   "legal-api/src/legal_api/services/filings/validations/validation.py",
+   "queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/incorporation_filing.py",
+   "queue_services/entity-filer/src/entity_filer/worker.py"
+  ],
+  "added": [
+   "legal-api/report-templates/ceaseReceiver.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/cease_receiver_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CEASE_RECVR.html",
+   "queue_services/entity-filer/src/entity_filer/filing_processors/cease_receiver.py"
+  ],
+  "n_dirs": 8
+ },
+ {
+  "repo": "lear",
+  "sha": "23f15ca649b9d657fd0c965fa5f218659bdb5344",
+  "date": "2025-03-25",
+  "subject": "Merge pull request #3336 from chenhongjing/26445",
+  "modified": [
+   "data-tool/flows/config.py",
+   "data-tool/scripts/colin_corps_extract_postgres_ddl",
+   "data-tool/scripts/transfer_cprd_corps.sql"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "lear",
+  "sha": "67cc9c452dcc602a9c0d740ebe059fd694180616",
+  "date": "2025-03-26",
+  "subject": "26570, 26720, 26685 Update business_details_version.py to return appropriate data for tombstone corps for offices and parties data (#3338)",
+  "modified": [
+   "legal-api/src/legal_api/models/filing.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "abe471c3e212e9cc5f38c9a56cb2a0b7e17d1112",
+  "date": "2025-04-02",
+  "subject": "26707 - exclude NOA for comment only corrections (#3358)",
+  "modified": [
+   "colin-api/src/colin_api/models/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+   "legal-api/src/legal_api/services/filings/validations/correction.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/correction_notification.py"
+  ],
+  "added": [],
+  "n_dirs": 6
+ },
+ {
+  "repo": "lear",
+  "sha": "91415814e49c6c003712767cb6d0ec552c534956",
+  "date": "2025-04-09",
+  "subject": "27054 Update get_business_revision to return fallback data for tombstone corps (#3380)",
+  "modified": [
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/reports/business_document.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "legal-api/src/legal_api/resources/v2/business/colin_sync.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "3efc8f4369dd3ee6f967da0067aedaebba21e308",
+  "date": "2025-04-09",
+  "subject": "27072 - Consent to Amalgamation Out Emailer (#3386)",
+  "modified": [
+   "legal-api/src/legal_api/core/meta/filing.py",
+   "legal-api/src/legal_api/reports/report.py",
+   "queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py"
+  ],
+  "added": [
+   "legal-api/report-templates/consentAmalgamationOut.html",
+   "legal-api/report-templates/letterOfConsentAmalgamationOut.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/consent_amalgamation_out_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/CAO-COMPLETED.html"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "764ea672dd43af6f367cf9deb44018a46b5247e2",
+  "date": "2025-04-10",
+  "subject": "26661 - Transition filing email and outputs (#3393)",
+  "modified": [
+   "legal-api/report-templates/noticeOfArticles.html",
+   "legal-api/report-templates/transitionApplication.html",
+   "legal-api/src/legal_api/reports/report.py",
+   "queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py"
+  ],
+  "added": [
+   "legal-api/report-templates/template-parts/transition/preExistingCompanyProvisions.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/transition_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/TRANSITION-COMPLETED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/TRANSITION-PAID.html"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "d57242a3a413cac84605655efbd58100f309659c",
+  "date": "2025-04-23",
+  "subject": "27268 - Remove NOA text from email templates (#3419)",
+  "modified": [
+   "queue_services/entity-emailer/src/entity_emailer/email_processors/correction_notification.py",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/BC-CRCTN-COMPLETED.html",
+   "queue_services/entity-emailer/src/entity_emailer/email_templates/BC-CRCTN-PAID.html",
+   "queue_services/entity-emailer/src/entity_emailer/worker.py",
+   "queue_services/entity-filer/src/entity_filer/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "4432b9d73358a9a697cc676b70c7b796c8074f89",
+  "date": "2025-04-24",
+  "subject": "27330 feat: DBC2 (#3215)",
+  "modified": [
+   "legal-api/src/legal_api/config.py",
+   "legal-api/src/legal_api/models/__init__.py",
+   "legal-api/src/legal_api/models/dc_connection.py",
+   "legal-api/src/legal_api/models/dc_definition.py",
+   "legal-api/src/legal_api/models/dc_revocation_reason.py",
+   "legal-api/src/legal_api/resources/v2/business/business_digital_credentials.py",
+   "legal-api/src/legal_api/services/__init__.py",
+   "legal-api/src/legal_api/services/authz.py",
+   "legal-api/src/legal_api/services/digital_credentials.py"
+  ],
+  "added": [
+   "legal-api/src/legal_api/models/dc_business_user.py",
+   "legal-api/src/legal_api/models/dc_credential.py",
+   "legal-api/src/legal_api/services/digital_credentials_auth.py",
+   "legal-api/src/legal_api/services/digital_credentials_helpers.py",
+   "legal-api/src/legal_api/services/digital_credentials_rules.py",
+   "legal-api/src/legal_api/services/digital_credentials_utils.py"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "lear",
+  "sha": "ca967ae22284000d2f3bcf10a2bdd2111100e972",
+  "date": "2025-04-25",
+  "subject": "Jobs - updated for gcp db connection (#3421)",
+  "modified": [
+   ".gitignore",
+   "jobs/sftp-gazette/notebook/generate_files.ipynb",
+   "jobs/sftp-gazette/notebook/update_database.ipynb",
+   "jobs/sftp-gazette/sftpgazette.py",
+   "jobs/sftp-icbc-report/notebook/generate_files.ipynb",
+   "jobs/sftp-icbc-report/sftpicbc.py",
+   "jobs/sftp-nuans-report/notebook/generate_files.ipynb",
+   "jobs/sftp-nuans-report/sftpnuans.py"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "lear",
+  "sha": "94f02388eb2081223e63711d37506b4f8e0bf1e6",
+  "date": "2025-04-25",
+  "subject": "27329 feat: DBC2 Queue Service (#3376)",
+  "modified": [
+   "queue_services/entity-digital-credentials/q_cli.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/admin_revoke.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/business_number.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/change_of_registration.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/dissolution.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/put_back_on.py",
+   "queue_services/entity-digital-credentials/src/entity_digital_credentials/helpers.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "lear",
+  "sha": "5750c0710ebe5b50c09f7779819f92b75f661923",
+  "date": "2025-04-29",
+  "subject": "27115 - Create Amalgamated Out Business Summary Output (#3418)",
+  "modified": [
+   "legal-api/report-templates/businessSummary.html",
+   "legal-api/report-templates/template-parts/common/businessDetails.html",
+   "legal-api/report-templates/template-parts/common/courtOrder.html",
+   "legal-api/report-templates/template-parts/common/footerMOCS.html",
+   "legal-api/report-templates/template-parts/common/style.html",
+   "legal-api/src/legal_api/core/filing.py",
+   "legal-api/src/legal_api/reports/business_document.py",
+   "legal-api/src/legal_api/reports/report.py"
+  ],
+  "added": [
+   "legal-api/report-templates/template-parts/business-summary/amalgamationOut.html"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "a590c0070c1e94ed627d046d2e4fd59bfeb29566",
+  "date": "2024-10-16",
+  "subject": "remove pubsub audience check (#3080)",
+  "modified": [
+   "queue_services/account-mailer/src/account_mailer/config.py",
+   "queue_services/account-mailer/src/account_mailer/resources/worker.py",
+   "queue_services/auth-queue/src/auth_queue/config.py",
+   "queue_services/auth-queue/src/auth_queue/resources/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "c6e3692b224eeebcf7e52d7dc11fd0633cf21327",
+  "date": "2024-10-21",
+  "subject": "21536 - Approval/rejection review (#3079)",
+  "modified": [
+   "auth-web/src/components/pay/ShortNameSummaryTable.vue",
+   "auth-web/src/components/pay/eft/ShortNamePaymentHistory.vue",
+   "auth-web/src/components/pay/eft/ShortNameRefund.vue",
+   "auth-web/src/models/eft-transaction.ts",
+   "auth-web/src/routes/router.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/util/constants.ts",
+   "auth-web/src/views/pay/eft/ShortNameDetailsView.vue",
+   "auth-web/src/views/pay/eft/ShortNameRefundView.vue"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "54de24db5476013d82772ad7f2251b5c59b0221a",
+  "date": "2024-10-23",
+  "subject": "23647 - Update Continuation Authorization Staff Review (#3088)",
+  "modified": [
+   "auth-web/src/components/auth/staff/continuation-application/HomeJurisdictionInformation.vue",
+   "auth-web/src/components/auth/staff/continuation-application/ReviewResult.vue",
+   "auth-web/src/views/auth/staff/ContinuationAuthorizationReview.vue"
+  ],
+  "added": [
+   "auth-web/src/components/auth/staff/continuation-application/AuthorizationContactInformation.vue"
+  ],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "94b8f2eef56c3f65a5c55fc088bc08132de05d3c",
+  "date": "2024-10-29",
+  "subject": "19182 - Changes to pad invoice email to consider credits (#3130)",
+  "modified": [
+   "queue_services/account-mailer/src/account_mailer/email_templates/pad_invoice_email.html",
+   "queue_services/account-mailer/src/account_mailer/enums.py",
+   "queue_services/account-mailer/src/account_mailer/resources/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "848f28217035cf8410dbf9db38333b3ce7f1234a",
+  "date": "2024-10-30",
+  "subject": "17950 - Display a credit being applied in transactions list (#3128)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/transaction/Transactions.vue",
+   "auth-web/src/components/auth/account-settings/transaction/TransactionsDataTable.vue",
+   "auth-web/src/composables/transactions-factory.ts",
+   "auth-web/src/models/transaction.ts",
+   "auth-web/src/resources/display-mappers/payment-type-display.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/util/constants.ts",
+   "auth-web/src/views/pay/RefundView.vue"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "d2bede5c940880050b3aaee3d84a7451658d523e",
+  "date": "2024-10-30",
+  "subject": "24004 - update paymentMethodChanged when settings bcolInfo, fix error handling (#3132)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/components/auth/create-account/BcolLogin.vue",
+   "auth-web/src/components/auth/create-account/PaymentMethodSelector.vue"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "e2c466d2ed0807db729657cd767cf76f46a712e9",
+  "date": "2024-11-01",
+  "subject": "22468 - Launch Tiles (#3134)",
+  "modified": [
+   "auth-web/src/components/index.ts",
+   "auth-web/src/util/config-helper.ts",
+   "auth-web/src/util/constants.ts",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue"
+  ],
+  "added": [
+   "auth-web/src/assets/img/icon-drs.svg",
+   "auth-web/src/assets/img/icon-involuntary-dissolution.svg",
+   "auth-web/src/components/LaunchTile.vue",
+   "auth-web/src/models/common.ts"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "2253ddaf164b99068a49562b7818f7941778b06c",
+  "date": "2024-11-14",
+  "subject": "24170 - Dealer Staff Review Updates (#3145)",
+  "modified": [
+   "auth-web/src/components/auth/staff/review-task/QsApplication.vue",
+   "auth-web/src/locales/en.json",
+   "auth-web/src/models/external.ts",
+   "auth-web/src/resources/QualifiedSupplierAccessResource.ts"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "a5ee0849588b4f8437ef347e42968833d62b546b",
+  "date": "2024-11-14",
+  "subject": "24383 - Remove FAS-UI widget (#3146)",
+  "modified": [
+   "auth-web/src/assets/scss/theme.scss",
+   "auth-web/src/components/auth/common/StaffAccountsTable.vue",
+   "auth-web/src/components/auth/staff/account-management/StaffPendingAccountsTable.vue",
+   "auth-web/src/components/auth/staff/account-management/StaffRejectedAccountsTable.vue",
+   "auth-web/src/components/auth/staff/continuation-application/ContinuationApplicationTable.vue",
+   "auth-web/src/main.ts",
+   "auth-web/src/util/config-helper.ts",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue",
+   "auth-web/vite.config.ts"
+  ],
+  "added": [
+   "auth-web/src/assets/scss/search.scss"
+  ],
+  "n_dirs": 8
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "914fab6f0d388846aacb8ba9660e7451ee14dd6e",
+  "date": "2024-11-26",
+  "subject": "23652- Allow users to edit mailing address (#3153)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-api/src/auth_api/utils/roles.py",
+   "auth-web/src/components/auth/account-settings/account-info/AccountInfo.vue",
+   "auth-web/src/services/org.services.ts",
+   "auth-web/src/stores/org.ts"
+  ],
+  "added": [],
+  "n_dirs": 6
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "ccec010451c8b9033a5f79b53fe7181a5113822b",
+  "date": "2024-11-29",
+  "subject": "23620 - Add in year filter (#3162)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/transaction/Transactions.vue",
+   "auth-web/src/components/auth/account-settings/transaction/TransactionsDataTable.vue",
+   "auth-web/src/composables/transactions-factory.ts"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "3cf05511fb522da8924d227e64d3c8ecaf8ed5dd",
+  "date": "2024-11-29",
+  "subject": "23620 - Small fixes (#3164)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/transaction/TransactionsDataTable.vue",
+   "auth-web/src/composables/transactions-factory.ts",
+   "auth-web/src/models/transaction.ts"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "2bdda0272634aaa2b66b624d3d2178e3cc5bed89",
+  "date": "2024-12-05",
+  "subject": "24695  - EFT Warranty - Add in Supplier Site (location in AP) EFT refund screen (#3167)",
+  "modified": [
+   "auth-web/src/components/pay/eft/ShortNameFinancialDialog.vue",
+   "auth-web/src/components/pay/eft/ShortNameRefund.vue",
+   "auth-web/src/models/pay/short-name.ts",
+   "auth-web/src/models/refund.ts",
+   "auth-web/src/views/pay/eft/ShortNameDetailsView.vue",
+   "auth-web/src/views/pay/eft/ShortNameRefundView.vue"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "8111ea29493745e72a28c020dcb988ae5e089a50",
+  "date": "2024-12-05",
+  "subject": "21429 - staff account search for members (#3169)",
+  "modified": [
+   "auth-api/src/auth_api/models/dataclass.py",
+   "auth-api/src/auth_api/models/org.py",
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/services/org.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "9f611e208a74071369ca4589deb492424038b253",
+  "date": "2024-12-09",
+  "subject": "24334-EFT refund fixes (#3174)",
+  "modified": [
+   "auth-web/src/components/auth/common/StaffAccountsTable.vue",
+   "auth-web/src/components/pay/eft/ShortNameRefund.vue",
+   "auth-web/src/views/pay/eft/ShortNameRefundView.vue"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "bfb63d331e1241f9fc9cd833b406bcb288eacef7",
+  "date": "2024-12-10",
+  "subject": "24491 - EFT Instructions download update (#3175)",
+  "modified": [
+   "auth-web/src/composables/downloader.ts",
+   "auth-web/src/services/document.services.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/util/constants.ts"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "ab84a093e00783efdb253bb5a5bf4f9ceaf77650",
+  "date": "2024-12-16",
+  "subject": "24811 - Remove transaction counts from transaction table (#3178)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/transaction/Transactions.vue",
+   "auth-web/src/components/auth/account-settings/transaction/TransactionsDataTable.vue",
+   "auth-web/src/components/datatable/BaseVDataTable.vue",
+   "auth-web/src/components/pay/eft/ShortNameRefund.vue",
+   "auth-web/src/composables/transactions-factory.ts",
+   "auth-web/src/models/transaction.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/views/pay/eft/ShortNameRefundView.vue"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "5c9737dc7fd9aec6c15d8d2400f9103c0e027320",
+  "date": "2024-12-18",
+  "subject": "24651 - updates for contact_centre_staff KC group (#3181)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/activity_log.py",
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/resources/v1/task.py",
+   "auth-api/src/auth_api/services/authorization.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-api/src/auth_api/utils/roles.py",
+   "auth-api/src/auth_api/utils/user_context.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "b9b7071ed2d738b90efee7106ae51869208096ee",
+  "date": "2024-12-18",
+  "subject": "Move staff check above GOV ACCOUNT USER (#3183)",
+  "modified": [
+   "auth-api/src/auth_api/models/user.py",
+   "auth-api/src/auth_api/resources/v1/user.py",
+   "auth-api/src/auth_api/services/keycloak.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "f7aa1c05d9de44285ef305763a8ffe445a7f81f1",
+  "date": "2024-12-23",
+  "subject": "24658 Implement Staff Search by Filing ID (#3186)",
+  "modified": [
+   "auth-web/src/services/business.services.ts",
+   "auth-web/src/stores/business.ts",
+   "auth-web/src/util/constants.ts",
+   "auth-web/src/views/auth/staff/IncorporationSearchResultView.vue",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "220720e35acb125a57ef739a8a5128e413202346",
+  "date": "2024-12-24",
+  "subject": "21131 - Basic STRR tile add to auth-web for account creation (#3187)",
+  "modified": [
+   "auth-web/src/assets/scss/base.scss",
+   "auth-web/src/locales/en.json",
+   "auth-web/src/resources/display-mappers/product-display.ts",
+   "auth-web/src/resources/table-headers/transactions-table/headers.ts",
+   "auth-web/src/util/constants.ts"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "85ff453933de0fbffaea6b9645c3f78773fee209",
+  "date": "2025-01-03",
+  "subject": "24920 - Redirect to new BRD based on FF and Query Param (#3192)",
+  "modified": [
+   "auth-web/src/routes/router.ts",
+   "auth-web/src/util/config-helper.ts",
+   "auth-web/src/util/constants.ts"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "66528faed552308515a933d4756a0657dd490840",
+  "date": "2025-01-09",
+  "subject": "25143 - remove product / add previously approved product support (#3200)",
+  "modified": [
+   "auth-api/src/auth_api/exceptions/errors.py",
+   "auth-api/src/auth_api/models/product_subscription.py",
+   "auth-api/src/auth_api/models/task.py",
+   "auth-api/src/auth_api/resources/v1/org_products.py",
+   "auth-api/src/auth_api/services/products.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "3723d7310ca9f62e3a59bf77681cda23ca4d2f8b",
+  "date": "2025-01-20",
+  "subject": "24576 - Updates to NSF messaging (#3207)",
+  "modified": [
+   "auth-web/src/assets/scss/layout.scss",
+   "auth-web/src/assets/scss/theme.scss",
+   "auth-web/src/components/auth/account-freeze/AccountOverviewNSF.vue",
+   "auth-web/src/components/auth/common/AccountSuspendAlert.vue",
+   "auth-web/src/models/invoice.ts",
+   "auth-web/src/stores/org.ts",
+   "auth-web/src/util/common-util.ts",
+   "auth-web/src/views/auth/AccountSettings.vue",
+   "auth-web/src/views/auth/account-freeze/AccountFreezeUnlockView.vue"
+  ],
+  "added": [],
+  "n_dirs": 8
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "0decdb9c56b2c12b151c73f910fd965c3a87ba9a",
+  "date": "2025-01-21",
+  "subject": "24648 - contact_centre_staff role fixes (#3210)",
+  "modified": [
+   "auth-web/src/components/auth/common/ProductTOS.vue",
+   "auth-web/src/components/auth/staff/review-task/AccountInformation.vue",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "e45bd8c63ba7ced1647d7e1809b0cbc0e1e40624",
+  "date": "2025-01-24",
+  "subject": "EFT - NSF / Outstanding balance flow fixes (#3215)",
+  "modified": [
+   "auth-web/src/components/pay/OutstandingBalances.vue",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/stores/org.ts",
+   "auth-web/src/views/auth/account-freeze/AccountFreezeUnlockView.vue"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "8ef1959645cbb0a7ec881bfd7ec84e3fb3523a71",
+  "date": "2025-02-04",
+  "subject": "25471 - Download Receipt in Transaction Table (#3240)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/transaction/Transactions.vue",
+   "auth-web/src/components/auth/account-settings/transaction/TransactionsDataTable.vue",
+   "auth-web/src/resources/table-headers/transactions-table/headers.ts",
+   "auth-web/src/resources/table-headers/transactions-table/index.ts",
+   "auth-web/src/services/payment.services.ts"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "c1ca171f6415dd1adc5aee8ae506568df7d54d7b",
+  "date": "2025-02-06",
+  "subject": "25223 - Manage EFT to pay web, remove manage eft from auth (#3246)",
+  "modified": [
+   "auth-web/src/models/refund.ts",
+   "auth-web/src/resources/BreadcrumbResources.ts",
+   "auth-web/src/routes/router.ts",
+   "auth-web/src/services/payment.services.ts",
+   "auth-web/src/stores/org.ts",
+   "auth-web/src/util/config-helper.ts",
+   "auth-web/src/util/constants.ts",
+   "auth-web/src/views/auth/staff/StaffDashboardView.vue"
+  ],
+  "added": [],
+  "n_dirs": 7
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "6da93368c447640d7c515cbb9a5fa3f64c56ca78",
+  "date": "2025-02-11",
+  "subject": "25550 - Remove BCOL if feature flag is toggled and payment method i\u2026 (#3247)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/components/auth/account-settings/transaction/Transactions.vue",
+   "auth-web/src/components/auth/common/PaymentMethods.vue",
+   "auth-web/src/util/constants.ts"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "a3a0739daf75a8b9adaee6796d11ca101758d81e",
+  "date": "2025-02-11",
+  "subject": "25746 & 25895 - Add in handling for multiple users changing product / payments & bug fixes (#3244)",
+  "modified": [
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/components/pay/OutstandingBalances.vue",
+   "auth-web/src/services/org.services.ts",
+   "auth-web/src/stores/org.ts",
+   "auth-web/src/stores/user.ts"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "83879c7ca400585398c11eb03bcf8e0d97ca723e",
+  "date": "2025-02-18",
+  "subject": "25595 - Add More Payment Error Handling to Create/Update Org (#3265)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-web/src/components/auth/account-settings/payment/AccountPaymentMethods.vue",
+   "auth-web/src/util/common-util.ts"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "27b6dc59be1e26268ee892ed6641f6afe81dbbab",
+  "date": "2025-02-21",
+  "subject": "25704 - Add org types for readonly staff (#3270)",
+  "modified": [
+   "auth-api/src/auth_api/exceptions/errors.py",
+   "auth-api/src/auth_api/models/org.py",
+   "auth-api/src/auth_api/utils/enums.py",
+   "auth-api/src/auth_api/utils/roles.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "55b9e35d54a377ae39955a51f39e927ce2b6bb53",
+  "date": "2025-02-24",
+  "subject": "Add in some org logging (#3274)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/services/affiliation.py",
+   "auth-api/src/auth_api/services/rest_service.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "014985a2fdd646c6a36bce3f85835820891882a4",
+  "date": "2025-03-03",
+  "subject": "Migration for org default (#3286)",
+  "modified": [
+   "auth-api/flags.json",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-api/src/auth_api/services/products.py",
+   "auth-api/src/auth_api/services/validators/payment_type.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "aa0c9cd13484db63d2e03e2c5aac5f95c32658ce",
+  "date": "2025-03-06",
+  "subject": "25249 - Add/remove Contact Centre Staff and Maximus Staff (#3276) (#3291)",
+  "modified": [
+   "auth-api/src/auth_api/exceptions/errors.py",
+   "auth-api/src/auth_api/models/membership.py",
+   "auth-api/src/auth_api/models/org.py",
+   "auth-api/src/auth_api/services/keycloak.py",
+   "auth-api/src/auth_api/services/membership.py",
+   "auth-api/src/auth_api/utils/constants.py",
+   "auth-api/src/auth_api/utils/enums.py",
+   "auth-web/src/components/auth/account-settings/team-management/UserManagement.vue"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "826e8c463ff73e7abefcc700a39f1294e12ac8ae",
+  "date": "2025-03-06",
+  "subject": "26014 - auth-api permissions updates for staff / external staff users (#3287)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/org.py",
+   "auth-api/src/auth_api/resources/v1/permissions.py",
+   "auth-api/src/auth_api/services/activity_log.py",
+   "auth-api/src/auth_api/services/authorization.py",
+   "auth-api/src/auth_api/services/invitation.py",
+   "auth-api/src/auth_api/services/membership.py",
+   "auth-api/src/auth_api/services/org.py",
+   "auth-api/src/auth_api/services/permissions.py",
+   "auth-api/src/auth_api/services/products.py",
+   "auth-api/src/auth_api/utils/roles.py",
+   "auth-api/src/auth_api/utils/user_context.py",
+   "auth-api/src/auth_api/utils/util.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "b9f6c0c3030d12a5a8942c6a9107c461a3bcdb13",
+  "date": "2025-03-12",
+  "subject": "26272 - use businessid from query string (#3296)",
+  "modified": [
+   "auth-web/src/routes/router.ts",
+   "auth-web/src/stores/business.ts",
+   "auth-web/src/views/auth/BusinessProfileView.vue"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "851f8bbc6bea9fa8ac6eb459849fe2bbc0ae1304",
+  "date": "2025-03-12",
+  "subject": "Add in App-Name to headers (#3298)",
+  "modified": [
+   "auth-web/src/stores/business.ts",
+   "auth-web/src/stores/codes.ts",
+   "auth-web/src/util/http-util.ts",
+   "auth-web/vite.config.ts"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "89905eb81778055d066c894afb23e977206f0974",
+  "date": "2025-03-14",
+  "subject": "26014 - permission fixes (#3304)",
+  "modified": [
+   "auth-api/src/auth_api/resources/v1/user.py",
+   "auth-api/src/auth_api/services/user.py",
+   "auth-api/src/auth_api/utils/roles.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "a4be6c3edda73a1d15d1c1a1717b319392345670",
+  "date": "2025-03-20",
+  "subject": "15674 - Enhancements to the daily PAD invoice email (#3310)",
+  "modified": [
+   "queue_services/account-mailer/src/account_mailer/auth_utils.py",
+   "queue_services/account-mailer/src/account_mailer/email_templates/pad_invoice_email.html",
+   "queue_services/account-mailer/src/account_mailer/resources/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "7602afd3efc4ac90bfa49ce85dd5dd661333d894",
+  "date": "2025-03-26",
+  "subject": "26556 - Add in user / membership row on API key creation (#3327)",
+  "modified": [
+   "auth-api/src/auth_api/models/membership.py",
+   "auth-api/src/auth_api/models/user.py",
+   "auth-api/src/auth_api/services/api_gateway.py",
+   "auth-api/src/auth_api/services/keycloak.py",
+   "auth-api/src/auth_api/services/membership.py",
+   "auth-api/src/auth_api/services/user.py",
+   "auth-api/src/auth_api/utils/api_gateway.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "634f085707ec607af25bcdee66b4394c5454fbd5",
+  "date": "2025-04-01",
+  "subject": "26547 - feature remove minio from auth api (#3329)",
+  "modified": [
+   ".gitignore",
+   "auth-api/src/auth_api/config.py",
+   "auth-api/src/auth_api/resources/v1/documents.py",
+   "auth-api/src/auth_api/services/__init__.py",
+   "auth-api/src/auth_api/services/affidavit.py",
+   "auth-api/src/auth_api/services/simple_org.py",
+   "auth-web/src/services/document.services.ts",
+   "auth-web/src/stores/user.ts",
+   "auth-web/src/util/http-util.ts"
+  ],
+  "added": [
+   "auth-api/src/auth_api/services/google_store.py"
+  ],
+  "n_dirs": 7
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "8b89d630471cc547034a06c37367c3c1870b8151",
+  "date": "2025-04-08",
+  "subject": "Auto approval for SANDBOX so BCEID don't need staff approval (#3358)",
+  "modified": [
+   "auth-api/src/auth_api/config.py",
+   "auth-api/src/auth_api/services/invitation.py",
+   "auth-api/src/auth_api/services/org.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "df031159b0b328f023901224d1c810abae8d2163",
+  "date": "2025-04-08",
+  "subject": "Remove loading complete before sbc-common-components SbcHeader completes requests (#3357)",
+  "modified": [
+   "auth-web/src/App.vue",
+   "auth-web/src/util/http-util.ts",
+   "auth-web/vite.config.ts"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "c8df60c6e5112acb0adf044fb5ef470ea6a597bd",
+  "date": "2025-04-09",
+  "subject": "27099 - Fix HTTP_ORIGIN issue for API users (#3360)",
+  "modified": [
+   "auth-api/src/auth_api/config.py",
+   "auth-api/src/auth_api/resources/v1/affiliation_invitation.py",
+   "auth-api/src/auth_api/schemas/schemas/user_settings_response.json"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-auth",
+  "sha": "6ec10358d6e5f0dde4b18115c37d5cc6a90061ce",
+  "date": "2025-04-29",
+  "subject": "27100 - fix enum referencing error (#3371)",
+  "modified": [
+   "auth-api/src/auth_api/services/membership.py",
+   "auth-api/src/auth_api/utils/enums.py",
+   "auth-api/src/auth_api/utils/roles.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "83380c125353bc5789153182991bb421a76403b7",
+  "date": "2024-10-02",
+  "subject": "22263 - EFT Refund AP Job Implementation (#1719)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ap.py",
+   "jobs/payment-jobs/tasks/common/cgi_ejv.py",
+   "jobs/payment-jobs/utils/enums.py",
+   "pay-api/src/pay_api/models/eft_refund.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "47237468bd290c26201e41fb6cd4e9c4d595f9c6",
+  "date": "2024-10-03",
+  "subject": "20787 - allow specific action overrides (#1763)",
+  "modified": [
+   "jobs/payment-jobs/invoke_jobs.py",
+   "jobs/payment-jobs/tasks/statement_due_task.py",
+   "jobs/payment-jobs/utils/mailer.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "1102953e58f47bc917174f0a014cb58824749c7a",
+  "date": "2024-10-03",
+  "subject": "21519 - Rework partner disbursement job so it works with multiple link and unlinking (#1637)",
+  "modified": [
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ejv.py",
+   "jobs/payment-jobs/tasks/common/dataclasses.py",
+   "jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+   "jobs/payment-jobs/tasks/ejv_payment_task.py",
+   "pay-api/src/pay_api/models/__init__.py",
+   "pay-api/src/pay_api/models/corp_type.py",
+   "pay-api/src/pay_api/models/refunds_partial.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_service.py",
+   "pay-api/src/pay_api/services/payment_transaction.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-api/src/pay_api/utils/errors.py",
+   "pay-queue/src/pay_queue/services/cgi_reconciliations.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/models/partner_disbursements.py"
+  ],
+  "n_dirs": 6
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "cfbd18dcaed79bdfc46b831e9f7a41e80c1aa79f",
+  "date": "2024-10-11",
+  "subject": "Small fixes and tweaks for partner reversals (#1775)",
+  "modified": [
+   "jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+   "pay-api/src/pay_api/services/__init__.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_service.py",
+   "pay-api/src/pay_api/utils/enums.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/services/partner_disbursements.py"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "0723edea2026566b0892eda1ec499c49b92f8eea",
+  "date": "2024-10-18",
+  "subject": "21536 - Passing short Name Id parameter to find refunds (#1783)",
+  "modified": [
+   "pay-api/src/pay_api/dtos/eft_shortname.py",
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_refund.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "aa16958f4d0cd79096f405a2135e072e2717e080",
+  "date": "2024-10-18",
+  "subject": "Small tweaks for EFT patch approve declined route + Add in get route for refund (#1785)",
+  "modified": [
+   "pay-api/src/pay_api/dtos/eft_shortname.py",
+   "pay-api/src/pay_api/models/base_model.py",
+   "pay-api/src/pay_api/resources/v1/eft_short_names.py",
+   "pay-api/src/pay_api/services/eft_refund.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "e33b888909933dfcfa3d0d4de008890dba70f716",
+  "date": "2024-10-18",
+  "subject": "Tweaks for send_email (#1786)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/services/auth.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/email_service.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "514160f90c607d03c8736d7ea8d48acb9cdabb1b",
+  "date": "2024-10-21",
+  "subject": "23942 - Small tweaks to invoice creation flow for skipPayment - for STRR/NRO and other various sandbox users (#1791)",
+  "modified": [
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/resources/v1/invoice.py",
+   "pay-api/src/pay_api/schemas/schemas/payment_request.json",
+   "pay-api/src/pay_api/services/payment_service.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "01687be00f70e7382b914f82b2307c205b8103fe",
+  "date": "2024-10-22",
+  "subject": "23154 partial refunds (#1792)",
+  "modified": [
+   "jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py",
+   "pay-api/src/pay_api/models/refunds_partial.py",
+   "pay-api/src/pay_api/services/direct_pay_service.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/errors.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "a619db43390092ccc1e137f582fe70a623295649",
+  "date": "2024-10-24",
+  "subject": "19361 - Add refund status to routing slip (#1793)",
+  "modified": [
+   "pay-api/src/pay_api/models/routing_slip.py",
+   "pay-api/src/pay_api/services/fas/routing_slip.py",
+   "pay-api/src/pay_api/services/fas/routing_slip_status_transition_service.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-queue/src/pay_queue/services/cgi_reconciliations.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "53a77bcc59155e8af7b6d9d8dcfebd7d8548412e",
+  "date": "2024-11-01",
+  "subject": "20346 - Refactor Oracle to point at Datawarehouse instead of CPRD (#1804)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/invoke_jobs.py",
+   "jobs/payment-jobs/services/__init__.py",
+   "jobs/payment-jobs/tasks/bcol_refund_confirmation_task.py"
+  ],
+  "added": [
+   "jobs/payment-jobs/services/data_warehouse.py"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "8e39f9622beb1abec9b296cf08cfd3704bede7eb",
+  "date": "2024-11-05",
+  "subject": "Sentry fixes + Disbursement job fix (#1811)",
+  "modified": [
+   "jobs/payment-jobs/tasks/bcol_refund_confirmation_task.py",
+   "jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+   "jobs/payment-jobs/tasks/ejv_partner_distribution_task.py",
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-queue/src/pay_queue/services/payment_reconciliations.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "efecf53fe4c0c0d9bb2efcf5c4769f426ee84ac8",
+  "date": "2024-11-07",
+  "subject": "20767 - Put in additional_headers for reverse proxy (#1813)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py",
+   "jobs/payment-jobs/tasks/distribution_task.py",
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/models/credit.py",
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/services/cfs_service.py",
+   "pay-api/src/pay_api/services/direct_pay_service.py",
+   "pay-api/src/pay_api/services/paybc_service.py"
+  ],
+  "added": [],
+  "n_dirs": 6
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "d09271a556c2b4a88cd4df8cbdc1ed7fcfdd7480",
+  "date": "2024-11-07",
+  "subject": "24111-EFT Federal Payments (#1814)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_short_names.py",
+   "pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+   "pay-queue/src/pay_queue/services/eft/eft_record.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "6dd34f648e52d9aceca8eaf5443b7fb15d8101d5",
+  "date": "2024-11-07",
+  "subject": "20767 - More additional header changes (#1815)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/tasks/cfs_bank_name_updater.py",
+   "jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py",
+   "jobs/payment-jobs/tasks/distribution_task.py",
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/services/cfs_service.py",
+   "pay-api/src/pay_api/services/direct_pay_service.py",
+   "pay-api/src/pay_api/services/paybc_service.py",
+   "pay-queue/src/pay_queue/config.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "8aa3084b95c0fff5f83cbb4c2f4296066d13aab5",
+  "date": "2024-11-22",
+  "subject": "24454 - EFT TDI17 Processing updates (#1830)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_file.py",
+   "pay-queue/src/pay_queue/config.py",
+   "pay-queue/src/pay_queue/services/eft/eft_base.py",
+   "pay-queue/src/pay_queue/services/eft/eft_reconciliation.py",
+   "pay-queue/src/pay_queue/services/eft/eft_record.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "14d1c894b833acfb3419f14facba843bfd5ff425",
+  "date": "2024-11-29",
+  "subject": "23620 - Get Transactions Query Optimization  (#1823)",
+  "modified": [
+   "pay-api/src/pay_api/__init__.py",
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/models/eft_file.py",
+   "pay-api/src/pay_api/models/invoice.py",
+   "pay-api/src/pay_api/models/payment.py",
+   "pay-api/src/pay_api/services/payment_transaction.py",
+   "pay-api/src/pay_api/utils/util.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/utils/sqlalchemy.py"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "10eeaa9d085e34e9b6c93d4672d6e95e85417a8b",
+  "date": "2024-12-05",
+  "subject": "24695 - EFT add cas supplier site - backend changes (#1848)",
+  "modified": [
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ap.py",
+   "jobs/payment-jobs/tasks/common/dataclasses.py",
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/models/eft_short_names.py",
+   "pay-api/src/pay_api/schemas/schemas/eft_short_name.json",
+   "pay-api/src/pay_api/schemas/schemas/refund_shortname.json",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_short_names.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "fd39f804a0086c17ad2a5e8823ba4ad10e54bf59",
+  "date": "2024-12-09",
+  "subject": "24335 -EFT Refund fixes (#1851)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/models/eft_short_names.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/eft_short_name_summaries.py",
+   "pay-api/src/pay_api/utils/errors.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "9602e3f6152394702932930ec71e767b39caefd6",
+  "date": "2024-12-09",
+  "subject": "Fix notebook report poetry (#1853)",
+  "modified": [
+   "jobs/notebook-report/config.py",
+   "jobs/notebook-report/notebookreport.py",
+   "jobs/notebook-report/setup.py",
+   "jobs/notebook-report/util/logging.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "43033a6c6a3ba6aed3d143ef425f6813d2283ad9",
+  "date": "2024-12-10",
+  "subject": "24491 - Pay documents route (#1855)",
+  "modified": [
+   "pay-api/src/pay_api/resources/v1/__init__.py",
+   "pay-api/src/pay_api/services/report_service.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-api/src/pay_api/utils/errors.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/dtos/documents.py",
+   "pay-api/src/pay_api/resources/v1/documents.py",
+   "pay-api/src/pay_api/services/documents_service.py"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "c1c5f035aa06501872810add4cb6e8395acab866",
+  "date": "2024-12-10",
+  "subject": "21559 - Fix notebook so it's more consistent, also make it so the queries wor\u2026 (#1854)",
+  "modified": [
+   "jobs/notebook-report/config.py",
+   "jobs/notebook-report/monthly/reconciliation_summary.ipynb",
+   "jobs/notebook-report/notebookreport.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "001a01eb9a287884099688833b0019e18b562c9b",
+  "date": "2024-12-10",
+  "subject": "More changes for notebook report",
+  "modified": [
+   "jobs/notebook-report/config.py",
+   "jobs/notebook-report/monthly/reconciliation_summary.ipynb",
+   "jobs/notebook-report/notebookreport.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "958f1c3f795a5fdec1caa727be2fce5264022209",
+  "date": "2024-12-12",
+  "subject": "Enhance logging to print traceback (#1858)",
+  "modified": [
+   "jobs/ftp-poller/tasks/cas_poller_ftp.py",
+   "jobs/ftp-poller/tasks/cgi_feeder_poller_task.py",
+   "jobs/ftp-poller/tasks/eft_poller_ftp.py",
+   "pay-queue/src/pay_queue/resources/worker.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "9835bbe7eff6a6906a92c47c9a15fc0d0144cfea",
+  "date": "2024-12-13",
+  "subject": "24811 - Add in new excludeCounts search filter while maintaining backwards compatability (#1861)",
+  "modified": [
+   "pay-api/src/pay_api/models/payment.py",
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/services/payment.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "fba9ff4543243c717acd270d175c270aa635971a",
+  "date": "2024-12-16",
+  "subject": "Notebook - Add in STRR (#1857)",
+  "modified": [
+   "jobs/notebook-report/config.py",
+   "jobs/notebook-report/monthly/reconciliation_summary.ipynb",
+   "jobs/notebook-report/notebookreport.py",
+   "jobs/notebook-report/weekly/pay.ipynb"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "5d60322ace2b3cf58b7fd5fbc289371f41c4f59d",
+  "date": "2024-12-17",
+  "subject": "Improve the reporting a bit, organize it, add more fields (#1864)",
+  "modified": [
+   "jobs/notebook-report/config.py",
+   "jobs/notebook-report/monthly/reconciliation_summary.ipynb",
+   "jobs/notebook-report/notebookreport.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "61e653df5ed0c61deb3fdecf6f1ff5085c220637",
+  "date": "2024-12-18",
+  "subject": "24652 - updates for KC group contact_centre_staff (#1865)",
+  "modified": [
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/resources/v1/account_statements.py",
+   "pay-api/src/pay_api/resources/v1/account_statements_notifications.py",
+   "pay-api/src/pay_api/resources/v1/account_statements_settings.py",
+   "pay-api/src/pay_api/utils/enums.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "0682b08891580a00066b9c75457ea2dcfc890d9c",
+  "date": "2024-12-23",
+  "subject": "Override Sandbox DIRECT_PAY / ONLINE_BANKING to PAD payment method (#1868)",
+  "modified": [
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/resources/v1/account_statements.py",
+   "pay-api/src/pay_api/services/payment_service.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-api/src/pay_api/utils/user_context.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "6dc698f19da3930c854be98cef20412aeba7f7ce",
+  "date": "2024-12-24",
+  "subject": "24871  - Add route return valid payment method for product (#1866)",
+  "modified": [
+   "pay-api/src/pay_api/models/corp_type.py",
+   "pay-api/src/pay_api/resources/v1/code.py",
+   "pay-api/src/pay_api/services/code.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "49e1c9bd87ae534cf61462ef9a72684de2543c38",
+  "date": "2024-12-24",
+  "subject": "24990 & 24991 - Use Google buckets instead of SFTP (#1867)",
+  "modified": [
+   "jobs/ftp-poller/config.py",
+   "jobs/ftp-poller/invoke_jobs.py",
+   "jobs/payment-jobs/config.py",
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ejv.py"
+  ],
+  "added": [
+   "jobs/ftp-poller/tasks/google_bucket_poller.py",
+   "jobs/payment-jobs/utils/google_bucket.py"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "f6265eac2185d8714d61ff31bde83ede1a029499",
+  "date": "2025-01-07",
+  "subject": "Remove unused code, add in check for system - service accounts have a\u2026 (#1872)",
+  "modified": [
+   "pay-api/src/pay_api/services/payment_service.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/user_context.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "06d4efe49f488af1261468dd8189c849602544b6",
+  "date": "2025-01-22",
+  "subject": "23812 - EFT TDI17 deposit/transaction date timezone (#1878)",
+  "modified": [
+   "pay-api/src/pay_api/models/custom_query.py",
+   "pay-api/src/pay_api/models/eft_short_names.py",
+   "pay-api/src/pay_api/models/eft_transaction.py",
+   "pay-api/src/pay_api/resources/v1/eft_short_names.py",
+   "pay-api/src/pay_api/services/eft_short_name_summaries.py",
+   "pay-api/src/pay_api/utils/constants.py",
+   "pay-api/src/pay_api/utils/util.py",
+   "pay-queue/src/pay_queue/services/eft/eft_base.py",
+   "pay-queue/src/pay_queue/services/eft/eft_record.py"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "6a08ee22dcd7713d02a03efc22235b802be750be",
+  "date": "2025-01-29",
+  "subject": "25334 - EFT Statement payment (#1882)",
+  "modified": [
+   "pay-api/src/pay_api/models/eft_short_name_links.py",
+   "pay-api/src/pay_api/models/statement.py",
+   "pay-api/src/pay_api/resources/v1/eft_short_names.py",
+   "pay-api/src/pay_api/services/__init__.py",
+   "pay-api/src/pay_api/services/eft_service.py",
+   "pay-api/src/pay_api/services/eft_short_names.py",
+   "pay-api/src/pay_api/services/statement.py",
+   "pay-api/src/pay_api/utils/errors.py",
+   "pay-queue/src/pay_queue/services/eft/eft_reconciliation.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/services/eft_short_name_links.py",
+   "pay-api/src/pay_api/services/eft_statements.py",
+   "pay-api/src/pay_api/utils/query_util.py"
+  ],
+  "n_dirs": 5
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "70d703ea90199b89493ce49f40666ae628909aeb",
+  "date": "2025-02-06",
+  "subject": "25223 - update EFT emails to point to pay web (#1891)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/services/eft_refund.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "dfa4a2e6da900685da25c69cf1e69a6bf81958e0",
+  "date": "2025-02-06",
+  "subject": "More changes for revenue letter, fix spacing, allow override (#1892)",
+  "modified": [
+   "jobs/notebook-report/config.py",
+   "jobs/notebook-report/monthly/reconciliation_summary.ipynb",
+   "jobs/notebook-report/notebookreport.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "83bf9a1bd2161d3a8eb2afcc733c15484ce27d31",
+  "date": "2025-02-13",
+  "subject": "Remove feature flag for enable eft (#1903)",
+  "modified": [
+   "jobs/payment-jobs/flags.json",
+   "jobs/payment-jobs/tasks/statement_notification_task.py",
+   "pay-api/flags.json",
+   "pay-api/src/pay_api/resources/v1/payment.py",
+   "pay-api/src/pay_api/services/payment_account.py",
+   "pay-queue/flags.json"
+  ],
+  "added": [],
+  "n_dirs": 6
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "600598331b3dbfa6beb1f6ebba5d2b6e06e37a18",
+  "date": "2025-02-19",
+  "subject": "24664 - Adding sbc-finance to PAD locking email (#1905)",
+  "modified": [
+   "jobs/payment-jobs/tasks/eft_task.py",
+   "pay-queue/src/pay_queue/config.py",
+   "pay-queue/src/pay_queue/services/payment_reconciliations.py"
+  ],
+  "added": [
+   "pay-api/src/pay_api/utils/auth_event.py"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "80d88d2e4876e339485ef03bfdf96967969c9fe8",
+  "date": "2025-03-10",
+  "subject": "Fix secret for topics (#1921)",
+  "modified": [
+   "jobs/payment-jobs/config.py",
+   "pay-queue/src/pay_queue/config.py",
+   "pay-queue/src/pay_queue/services/payment_reconciliations.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "d0e914aeeb6229ddebc59b289b8e7db70bfd9496",
+  "date": "2025-03-13",
+  "subject": "26465 - Backend changes to support new EFT refunds (#1927)",
+  "modified": [
+   "pay-api/src/pay_api/dtos/eft_shortname.py",
+   "pay-api/src/pay_api/models/eft_refund.py",
+   "pay-api/src/pay_api/resources/v1/eft_short_names.py",
+   "pay-api/src/pay_api/services/code.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/receipt.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/converter.py",
+   "pay-api/src/pay_api/utils/enums.py",
+   "pay-queue/src/pay_queue/services/cgi_reconciliations.py"
+  ],
+  "added": [],
+  "n_dirs": 6
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "f98faa9dd5ecec70dfad30b3a7c22b4624e5d77d",
+  "date": "2025-03-20",
+  "subject": "26465 - PAY-JOBS - EFT Refund cheque support (#1930)",
+  "modified": [
+   "jobs/payment-jobs/tasks/ap_task.py",
+   "jobs/payment-jobs/tasks/common/cgi_ap.py",
+   "jobs/payment-jobs/tasks/common/dataclasses.py"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "5f296dafb48ee51b0b6ef454a0d8ab0a8a58e150",
+  "date": "2025-03-20",
+  "subject": "26076-26073-26075-EFT Refund updates (#1931)",
+  "modified": [
+   "pay-api/src/pay_api/resources/v1/eft_short_names.py",
+   "pay-api/src/pay_api/services/eft_refund.py",
+   "pay-api/src/pay_api/services/email_service.py",
+   "pay-api/src/pay_api/templates/eft_refund_notification_client.html",
+   "pay-api/src/pay_api/utils/errors.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "fb3fc56d44bb010139e529c5249e8160712a8308",
+  "date": "2025-04-02",
+  "subject": "Change error, only allow DIRECT_PAY for partial refund (#1937)",
+  "modified": [
+   "pay-api/src/pay_api/factory/payment_system_factory.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/errors.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "aeb832069e876803f723a912db388216e5e330c8",
+  "date": "2025-04-09",
+  "subject": "27109 - Allow sandbox users to use account-ui to update their pad details (#1941)",
+  "modified": [
+   "pay-api/src/pay_api/config.py",
+   "pay-api/src/pay_api/resources/v1/account.py",
+   "pay-api/src/pay_api/resources/v1/bank_accounts.py",
+   "pay-api/src/pay_api/services/base_payment_system.py",
+   "pay-api/src/pay_api/services/pad_service.py",
+   "pay-api/src/pay_api/services/payment_service.py",
+   "pay-api/src/pay_api/utils/user_context.py"
+  ],
+  "added": [],
+  "n_dirs": 4
+ },
+ {
+  "repo": "sbc-pay",
+  "sha": "63152396ae13272edebb4ed0576562d82ed129ba",
+  "date": "2025-04-11",
+  "subject": "19543  - ONLINE BANKING / PAD Partial Refund as Credit (#1942)",
+  "modified": [
+   "pay-api/src/pay_api/models/payment_method.py",
+   "pay-api/src/pay_api/services/base_payment_system.py",
+   "pay-api/src/pay_api/services/direct_pay_service.py",
+   "pay-api/src/pay_api/services/online_banking_service.py",
+   "pay-api/src/pay_api/services/pad_service.py",
+   "pay-api/src/pay_api/services/refund.py",
+   "pay-api/src/pay_api/utils/errors.py"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "b5e22fbb8945288b42fd1f0e23d62a0479a8ac08",
+  "date": "2024-10-11",
+  "subject": "23520 - Handle Continuation Draft States (#696)",
+  "modified": [
+   "src/components/Dashboard/FilingHistoryList/filings/ContinuationIn.vue",
+   "src/components/Dashboard/PendingList/PendingTemplate.vue",
+   "src/components/Dashboard/PendingList/filings/ContinuationIn.vue",
+   "src/components/Dashboard/TodoList.vue",
+   "src/views/Dashboard.vue"
+  ],
+  "added": [],
+  "n_dirs": 5
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "5cc4b75655897ad604706672eea61cde9e9609aa",
+  "date": "2024-10-18",
+  "subject": "Fix 23520 - Dashboard Updates for Continuation States (#697)",
+  "modified": [
+   "src/App.vue",
+   "src/components/Dashboard/FilingHistoryList/bodies/BodyFutureEffective.vue",
+   "src/components/Dashboard/FilingHistoryList/bodies/BodyFutureEffectivePending.vue",
+   "src/components/Dashboard/FilingHistoryList/subtitles/SubtitleFutureEffectivePaid.vue",
+   "src/components/Dashboard/FilingHistoryList/subtitles/SubtitleRejected.vue",
+   "src/components/Dashboard/PendingList/PendingTemplate.vue",
+   "src/components/Dashboard/PendingList/filings/ContinuationIn.vue",
+   "src/components/Dashboard/TodoList.vue",
+   "src/mixins/date-mixin.ts",
+   "src/services/enum-utilities.ts",
+   "src/stores/rootStore.ts"
+  ],
+  "added": [],
+  "n_dirs": 9
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "8f568dc7b796dd7637760de28f8addb209876606",
+  "date": "2024-11-15",
+  "subject": "22639 - Update Certify Section Wording (#704)",
+  "modified": [
+   "src/components/common/Certify.vue",
+   "src/resources/BC.ts",
+   "src/resources/BEN.ts",
+   "src/resources/CC.ts",
+   "src/resources/ULC.ts"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "bc2da5802b00b26032e874451c6770579cf610c0",
+  "date": "2024-12-16",
+  "subject": "24657 - Notice of Withdrawal filing (#707)",
+  "modified": [
+   "src/components/Dashboard/FilingHistoryList.vue",
+   "src/components/EntityInfo.vue",
+   "src/components/common/Certify.vue",
+   "src/components/dialogs/index.ts",
+   "src/enums/effectOfOrderTypes.ts",
+   "src/enums/routes.ts",
+   "src/resources/BC.ts",
+   "src/resources/BEN.ts",
+   "src/resources/CC.ts",
+   "src/resources/CP.ts",
+   "src/resources/ULC.ts",
+   "src/routes.ts",
+   "src/services/enum-utilities.ts"
+  ],
+  "added": [
+   "src/components/NoticeOfWithdrawal/PlanOfArrangement.vue",
+   "src/components/NoticeOfWithdrawal/RecordToBeWithdrawn.vue",
+   "src/components/NoticeOfWithdrawal/StaffPayment.vue",
+   "src/components/dialogs/StaffRoleErrorDialog.vue",
+   "src/views/NoticeOfWithdrawal.vue"
+  ],
+  "n_dirs": 8
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "cfdf2226dd1ec3c2029f344fba2eb308c346b035",
+  "date": "2024-12-19",
+  "subject": "24953 - Update NoW Filing Page (#708)",
+  "modified": [
+   "src/assets/styles/theme.scss",
+   "src/components/common/index.ts",
+   "src/enums/effectOfOrderTypes.ts",
+   "src/services/enum-utilities.ts"
+  ],
+  "added": [
+   "src/components/common/MessageBox.vue"
+  ],
+  "n_dirs": 4
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "5cf66ef6d2ab8f1d30e3e02893c6559a4cf0a3a6",
+  "date": "2025-01-16",
+  "subject": "25294 - Submit NoW for Bootstrap Filing (#712)",
+  "modified": [
+   "src/App.vue",
+   "src/views/AmalgamationOut.vue",
+   "src/views/ConsentAmalgamationOut.vue",
+   "src/views/ConsentContinuationOut.vue",
+   "src/views/ContinuationOut.vue"
+  ],
+  "added": [],
+  "n_dirs": 2
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "840026fee97283312445850566333e1fdcfaf94e",
+  "date": "2025-02-07",
+  "subject": "25190 - Court Order Filings (#714)",
+  "modified": [
+   "src/components/EntityInfo.vue",
+   "src/enums/routes.ts",
+   "src/routes.ts"
+  ],
+  "added": [
+   "src/views/CourtOrder.vue"
+  ],
+  "n_dirs": 3
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "e50e8a71776924f11df12d09315f17946a63e6ad",
+  "date": "2025-03-13",
+  "subject": "26495 - Correct Amalgamation Out Filing Typos and Labels (#733)",
+  "modified": [
+   "src/components/EntityInfo.vue",
+   "src/components/common/EffectiveDate.vue",
+   "src/views/AmalgamationOut.vue",
+   "src/views/ContinuationOut.vue"
+  ],
+  "added": [],
+  "n_dirs": 3
+ },
+ {
+  "repo": "business-filings-ui",
+  "sha": "17db8bea8adc748d6a0d68b877fc5fd3cfe3423e",
+  "date": "2025-04-29",
+  "subject": "27042 remove address fetch error (#744)",
+  "modified": [
+   "src/components/common/OfficeAddresses.vue",
+   "src/mixins/common-mixin.ts",
+   "src/views/StandaloneOfficeAddressFiling.vue"
+  ],
+  "added": [],
+  "n_dirs": 3
+ }
+]

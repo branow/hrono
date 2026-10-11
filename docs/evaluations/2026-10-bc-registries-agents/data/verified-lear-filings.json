@@ -1,0 +1,1042 @@
+{
+ "kept": [
+  {
+   "kind": "flow",
+   "question": "Walk me through what happens when someone submits a brand-new incorporation application for a company that doesn't exist yet. How does it get a temporary identity, how is it validated and charged, and when and where do the real business record and registration number get created?",
+   "facts": [
+    {
+     "fact": "Creating a new-business filing goes to post_businesses (POST /businesses) in the v2 business resource. It calls RegistrationBootstrapService.create_bootstrap to save a RegistrationBootstrap with a random 10-character identifier starting with 'T', then register_bootstrap affiliates it with the account in auth using the filing type's temporaryCorpTypeCode, and finally it hands off to saving_filings with the T identifier.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "For an identifier starting with 'T', saving_filings validates against the RegistrationBootstrap instead of a Business. save_filing creates a Filing with temp_reg set to the bootstrap identifier and writes that identifier into filing.business.identifier in the JSON.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "Validation starts with validate() in the validations package. It first checks the JSON against the registry 'filing' schema (validate_against_schema, which returns 422 on failure), then sends the incorporationApplication key to incorporation_application.validate.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/filings/validations/validation.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/schemas.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/incorporation_application.py"
+     ]
+    },
+    {
+     "fact": "complete_filing calls check_and_update_nr, which may extend the name request through namex for future-effective filings. It then builds fee codes with get_filing_types from Filing.FILINGS, using the legal type from nameRequest for new-business filings. create_invoice POSTs to PAYMENT_SVC_URL and stores the returned id as filing.payment_token.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/services/namex.py"
+     ]
+    },
+    {
+     "fact": "The Business row is only created in the entity-filer's incorporation_filing.process. It raises if a business already exists, reserves a number with business_info.get_next_corp_num (the local BusinessIdentifier sequence, or a fallback POST to COLIN_API), sets the state to ACTIVE, adds offices, parties, shares and aliases, and writes the new identifier and foundingDate back into the filing JSON.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/incorporation_filing.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py",
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+     ]
+    },
+    {
+     "fact": "After the commit, for new-business filing types the filer worker sets filing.business_id. It then calls business_profile.update_affiliation, which affiliates the real identifier to the bootstrap's account and renames the bootstrap entity in auth, followed by name_request.consume_nr (PATCH to NAMEX_API), update_business_profile, and an 'mras' email message.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py"
+     ]
+    }
+   ],
+   "qid": "lear-filings-0",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "Once a filing's invoice has been paid, how does the payment confirmation make the filing actually get applied to the business, and what's different for filings dated to take effect in the future?",
+   "facts": [
+    {
+     "fact": "Payment completion arrives in a queue listener: either the NATS-based entity-pay worker (process_payment) or the GCP cloud-event business-pay service (pay_filer.worker). Both look up the filing with Filing.get_filing_by_payment_token, ignore duplicates, and set payment_completion_date.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/database/filings.py"
+     ]
+    },
+    {
+     "fact": "In legal-api, filing status is mostly derived. The before_insert/before_update listener receive_before_change sets EPOCH for lear_epoch filings, COMPLETED when transaction_id is set, PAID when payment_completion_date is set (or the source is COLIN), PENDING when only a payment_token exists, and DRAFT otherwise. It does nothing for AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, for APPROVED until there is a transaction_id, or when skip_status_listener is set. Some code also sets _status directly: set_review_decision, resubmit_filing_to_awaiting_review, reset_filing_to_draft, and the filing_json setter (PENDING).",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The pay listeners only publish {'filing': {'id': ...}} to the filer subject when the effective date is not in the future (effective_date <= now in entity-pay, effective_date <= payment_completion_date in business-pay). Either way they also publish an email message to the emailer subject.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py"
+     ]
+    },
+    {
+     "fact": "Future-effective filings are picked up later by the future-effective-filings job. It gets a service token, calls legal-api GET /api/v2/internal/filings/future_effective (Filing.get_future_effective_filing_ids: status PAID or APPROVED and effective_date <= now), and publishes each id to NATS_FILER_SUBJECT.",
+     "files": [
+      "lear/jobs/future-effective-filings/file_future_effective.py",
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "entity-filer's process_filing loads the filing through core Filing.find_by_id and skips it if already COMPLETED. It opens a sqlalchemy-continuum transaction and sends each legal_filings() section (for example changeOfAddress, dissolution, annualReport) to its module in filing_processors.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/change_of_address.py"
+     ]
+    },
+    {
+     "fact": "The filer marks completion by setting filing_submission.transaction_id and calling set_processed, which sets completion_date and moves effective_date up to the payment date where needed (not for AR/COD on CP or BEN). It stores FilingMeta in _meta_data and commits. It then publishes an email message, a NATS entity event (bc.registry.business.<type>), and a GCP BUSINESS_EVENTS_TOPIC cloud event.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_meta.py"
+     ]
+    },
+    {
+     "fact": "For non-COOP change-of-address filings, legal-api's set_effective_date (called from complete_filing) forces the effective date to one minute after midnight tomorrow (legislation time) and writes futureEffectiveDate into the header. These filings usually wait for the future-effective job. If payment completes after that time, the pay listener still publishes them straight to the filer, because its check is effective_date <= now or <= payment_completion_date. So it is not 'always'.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/utils/legislation_datetime.py",
+      "lear/jobs/future-effective-filings/file_future_effective.py"
+     ],
+     "fixed": true
+    }
+   ],
+   "qid": "lear-filings-1",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "In legal-api, filing status is mostly derived. The before_insert/before_update listener receive_before_change sets EPOCH for lear_epoch filings, COMPLETED when transaction_id is set, PAID when payment_completion_date is set (or the source is COLIN), PENDING when only a payment_token exists, and DRAFT otherwise. It does nothing for AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, for APPROVED until there is a transaction_id, or when skip_status_listener is set. Some code also sets _status directly: set_review_decision, resubmit_filing_to_awaiting_review, reset_filing_to_draft, and the filing_json setter (PENDING)."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "For non-COOP change-of-address filings, legal-api's set_effective_date (called from complete_filing) forces the effective date to one minute after midnight tomorrow (legislation time) and writes futureEffectiveDate into the header. These filings usually wait for the future-effective job. If payment completes after that time, the pay listener still publishes them straight to the filer, because its check is effective_date <= now or <= payment_completion_date. So it is not 'always'."
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How is a filing's status lifecycle (draft, pending, paid, completed, staff review states) modeled, and what stops a filing from being edited or deleted once money is involved?",
+   "facts": [
+    {
+     "fact": "Filing.Status in the legal-api model lists DRAFT, PENDING, PAID, COMPLETED, CORRECTED, EPOCH, ERROR, PENDING_CORRECTION and WITHDRAWN, plus the review states APPROVED, AWAITING_REVIEW, CHANGE_REQUESTED and REJECTED. The status property reports CORRECTED when a COMPLETED filing has a COMPLETED parent filing.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "The receive_before_change listener recomputes status from column values (transaction_id, payment_completion_date, payment_token, source). It leaves review states alone, and APPROVED only until a transaction_id exists, so these states are never overwritten.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "Filing.locked is true when the filing is deletion_locked, has a persisted payment_token, or has COLIN event ids. The setters for filing_json, payment_token and payment_status_code raise a 403 BusinessException ('Filings cannot be changed after the invoice is created'), and delete() plus a before_delete listener block deletion.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/exceptions/__init__.py"
+     ]
+    },
+    {
+     "fact": "The filings endpoint's DELETE handler returns create_deletion_locked_response for locked filings. The PATCH handler cancels the invoice with DELETE {PAYMENT_SVC_URL}/{payment_token} and then calls filing.reset_filing_to_draft, which clears the token and sets DRAFT so the filing can be edited again.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "Staff review states are entered from business-pay's create_staff_review, which creates a Review and sets AWAITING_REVIEW for continuationIn after payment. The staff endpoint POST /admin/reviews/<id> then records a ReviewResult and calls Filing.set_review_decision with CHANGE_REQUESTED, APPROVED or REJECTED.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+      "lear/legal-api/src/legal_api/models/review.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "A CHANGE_REQUESTED filing stays editable (the filing_json setter allows in_change_requested_status). When it is resubmitted through saving_filings, resubmit_filing_for_review sets the Review to RESUBMITTED and calls Filing.resubmit_filing_to_awaiting_review instead of creating a new invoice.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/models/review_result.py"
+     ]
+    },
+    {
+     "fact": "Readers depend on these statuses. The ledger lists only COMPLETED and PAID filings. Core Filing.get_document_list returns nothing for DRAFT, PENDING or PAPER_ONLY. While a filing is PAID or in a review state, it returns the receipt (when payment_completion_date is set) plus a single legalFilings entry for the filing type, except for some types such as registration, AGM and continuation-out filings, and SP/GP dissolutions. It does not add the 'additional' outputs. The GET single-filing handler polls pay for isPaymentActionRequired while a filing is PENDING.",
+     "files": [
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ],
+     "fixed": true
+    }
+   ],
+   "qid": "lear-filings-2",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "Readers depend on these statuses. The ledger lists only COMPLETED and PAID filings. Core Filing.get_document_list returns nothing for DRAFT, PENDING or PAPER_ONLY. While a filing is PAID or in a review state, it returns the receipt (when payment_completion_date is set) plus a single legalFilings entry for the filing type, except for some types such as registration, AGM and continuation-out filings, and SP/GP dissolutions. It does not add the 'additional' outputs. The GET single-filing handler polls pay for isPaymentActionRequired while a filing is PENDING."
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How does the system decide which filings a given user may submit for a given business (for example, not allowing a change while another filing is pending, or when the company is not in good standing), and where is that decision enforced and surfaced?",
+   "facts": [
+    {
+     "fact": "The rules are one nested dictionary, get_allowable_filings_dict in services/authz.py. It is keyed by user role ('staff' or 'general'), then Business.State, then filing type (or sub-types such as dissolution or amalgamation kinds). Each entry lists allowed legalTypes, optional businessRequirement, and blockerChecks.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/core/filing.py"
+     ]
+    },
+    {
+     "fact": "business_blocker_check works out business-level blockers. DEFAULT/DRAFT_PENDING are set by has_blocker_filing when PENDING, PAID, ERROR, PENDING_CORRECTION or DRAFT filings exist, or an incomplete alteration or correction. BUSINESS_FROZEN comes from admin_freeze, NOT_IN_GOOD_STANDING from Business.good_standing, plus AMALGAMATING_BUSINESS and IN_DISSOLUTION.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/models/business.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "has_blocker also checks filing-level conditions: required or forbidden state filings (validStateFilings/invalidStateFilings against business.state_filing_id), completedFilings, futureEffectiveFilings (PENDING or PAID with an effective_date in the future), and warningTypes from business.warnings.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ]
+    },
+    {
+     "fact": "On submission, ListFilingResource.check_authorization runs both authorized(identifier, jwt, ['edit']) and is_allowed(...). authorized lets staff, system and colin roles through and otherwise calls the auth API's entities/{identifier}/authorizations. is_allowed rejects edits to filings that are not DRAFT or CHANGE_REQUESTED, and rejects amalgamation for continued-in types (C, CBEN, CUL, CCC).",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/services/authz.py"
+     ]
+    },
+    {
+     "fact": "The same rules feed the UI. The GET business handler calls get_allowable_actions, which uses get_allowed_filings and attaches the result to Business.allowable_actions. Business.json then serialises it as 'allowedActions', and each filing type carries displayName from core FilingMeta and feeCode from Filing.get_fee_code.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/models/business.py",
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/core/meta/filing.py"
+     ]
+    },
+    {
+     "fact": "When an existing DRAFT is being re-saved (filing_id given), is_allowed passes is_ignore_draft_blockers=True so the draft does not block itself. In that mode has_blocker_filing leaves DRAFT out of the blocking statuses.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    }
+   ],
+   "qid": "lear-filings-3",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We need to add support for a brand-new type of business filing that is paid, changes business data, and produces a PDF. Which places in the API and the background services would I need to touch so it can be submitted, charged, applied, and shown with its documents?",
+   "facts": [
+    {
+     "fact": "Register the type in the Filing.FILINGS dictionary in models/filing.py, which maps the filing name to fee codes per legal type. get_filing_types uses it to build invoice filingTypes, and legal_filings() uses it to pick which JSON sections to process. Also add the type to core Filing.FilingTypes.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/core/filing.py"
+     ]
+    },
+    {
+     "fact": "Add a validator module under services/filings/validations/ and an elif branch in the dispatcher validate() in validation.py. Schema validation through rsbc_schemas 'filing' also has to accept the new section, otherwise validate_against_schema returns 422.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/filings/validations/validation.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/schemas.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/change_of_address.py"
+     ]
+    },
+    {
+     "fact": "Add an entry under the right role and state in get_allowable_filings_dict (services/authz.py) with legalTypes and blockerChecks. Without it, is_allowed rejects the submission with 401 and it never appears in allowedActions.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "In entity-filer, add a filing_processors/<type>.py with a process() function and an elif branch in worker.process_filing. If the filing should update auth or namex, also add it to the post-commit lists that call business_profile.update_entity or name_request.consume_nr.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/dissolution.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+     ]
+    },
+    {
+     "fact": "For outputs, add display name and 'additional' outputs in core/meta/filing.py (used by FilingMeta.get_all_outputs inside core Filing.get_document_list). Add a ReportMeta.reports entry plus an HTML template under report-templates, which Report._get_template reads from REPORT_TEMPLATE_PATH before POSTing to REPORT_SVC_URL.",
+     "files": [
+      "lear/legal-api/src/legal_api/core/meta/filing.py",
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/legal-api/src/legal_api/reports/report.py",
+      "lear/legal-api/report-templates/dissolution.html"
+     ]
+    },
+    {
+     "fact": "Notifications are routed by filing type in entity-emailer's process_email. A new type needs either a dedicated module under email_processors/ or an entry in filing_notification.FILING_TYPE_CONVERTER, otherwise the PAID/COMPLETED email messages published by the pay and filer workers produce no email.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py"
+     ]
+    }
+   ],
+   "qid": "lear-filings-4",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "Today only continuation-in applications go to a registry staff member for review after payment. If we wanted amalgamation applications to also require staff approval before they take effect, where would that change go and which other parts of the flow would it affect?",
+   "facts": [
+    {
+     "fact": "Only business-pay decides that a filing needs review: pay_filer.worker has a hard-coded staff_review_required = ['continuationIn'] and calls create_staff_review instead of publish_to_filer. Adding amalgamationApplication there creates a Review (AWAITING_REVIEW) and sets the filing to AWAITING_REVIEW after payment.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/database/review.py",
+      "lear/queue_services/business-pay/src/business_pay/database/filings.py"
+     ]
+    },
+    {
+     "fact": "The legacy NATS entity-pay worker has no review branch. It always publishes non-future-effective paid filings to the filer, so it would also need changing if it still handles payments.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+     ]
+    },
+    {
+     "fact": "create_staff_review reads nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' from filing_json[filing_type]['parties']. An amalgamation's JSON must provide parties, otherwise a KeyError is raised.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "Staff act through POST /admin/reviews/<id> in resources/v2/admin/reviews.py. It calls Filing.set_review_decision, publishes an email with the new status, and puts the filing on NATS_FILER_SUBJECT right away only if it is APPROVED and the effective date has passed.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/services/queue.py"
+     ]
+    },
+    {
+     "fact": "Approved future-effective amalgamations are released later by the future-effective-filings job, because Filing.get_future_effective_filing_ids includes APPROVED as well as PAID. receive_before_change keeps APPROVED until the filer sets transaction_id.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/jobs/future-effective-filings/file_future_effective.py"
+     ]
+    },
+    {
+     "fact": "If changes are requested, the submitter resubmits through saving_filings. In that case resubmit_filing_for_review and check_and_update_nr run instead of complete_filing, so there is no new invoice.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/review.py",
+      "lear/legal-api/src/legal_api/models/review_result.py"
+     ]
+    },
+    {
+     "fact": "Documents and email are also affected. While a filing is PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED, core Filing.get_document_list returns the receipt (once paid) plus the legalFilings document. _get_receipt in business_documents.py allows receipts in those states. Review-status emails (option = filing status) are sent to entity-emailer's amalgamation_notification by process_email. That processor only handles PAID and COMPLETED, and only AMALGA-PAID.html and AMALGA-COMPLETED.html templates exist, so it would need review-status handling and templates like continuation_in_notification has.",
+     "files": [
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/amalgamation_notification.py"
+     ],
+     "fixed": true
+    }
+   ],
+   "qid": "lear-filings-5",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "Documents and email are also affected. While a filing is PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED, core Filing.get_document_list returns the receipt (once paid) plus the legalFilings document. _get_receipt in business_documents.py allows receipts in those states. Review-status emails (option = filing status) are sent to entity-emailer's amalgamation_notification by process_email. That processor only handles PAID and COMPLETED, and only AMALGA-PAID.html and AMALGA-COMPLETED.html templates exist, so it would need review-status handling and templates like continuation_in_notification has."
+    }
+   ]
+  }
+ ],
+ "all": [
+  {
+   "kind": "flow",
+   "question": "Walk me through what happens when someone submits a brand-new incorporation application for a company that doesn't exist yet. How does it get a temporary identity, how is it validated and charged, and when and where do the real business record and registration number get created?",
+   "facts": [
+    {
+     "fact": "Creating a new-business filing goes to post_businesses (POST /businesses) in the v2 business resource. It calls RegistrationBootstrapService.create_bootstrap to save a RegistrationBootstrap with a random 10-character identifier starting with 'T', then register_bootstrap affiliates it with the account in auth using the filing type's temporaryCorpTypeCode, and finally it hands off to saving_filings with the T identifier.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/services/bootstrap.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "For an identifier starting with 'T', saving_filings validates against the RegistrationBootstrap instead of a Business. save_filing creates a Filing with temp_reg set to the bootstrap identifier and writes that identifier into filing.business.identifier in the JSON.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "Validation starts with validate() in the validations package. It first checks the JSON against the registry 'filing' schema (validate_against_schema, which returns 422 on failure), then sends the incorporationApplication key to incorporation_application.validate.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/filings/validations/validation.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/schemas.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/incorporation_application.py"
+     ]
+    },
+    {
+     "fact": "complete_filing calls check_and_update_nr, which may extend the name request through namex for future-effective filings. It then builds fee codes with get_filing_types from Filing.FILINGS, using the legal type from nameRequest for new-business filings. create_invoice POSTs to PAYMENT_SVC_URL and stores the returned id as filing.payment_token.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/services/namex.py"
+     ]
+    },
+    {
+     "fact": "The Business row is only created in the entity-filer's incorporation_filing.process. It raises if a business already exists, reserves a number with business_info.get_next_corp_num (the local BusinessIdentifier sequence, or a fallback POST to COLIN_API), sets the state to ACTIVE, adds offices, parties, shares and aliases, and writes the new identifier and foundingDate back into the filing JSON.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/incorporation_filing.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py",
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+     ]
+    },
+    {
+     "fact": "After the commit, for new-business filing types the filer worker sets filing.business_id. It then calls business_profile.update_affiliation, which affiliates the real identifier to the bootstrap's account and renames the bootstrap entity in auth, followed by name_request.consume_nr (PATCH to NAMEX_API), update_business_profile, and an 'mras' email message.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py"
+     ]
+    }
+   ],
+   "qid": "lear-filings-0",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "flow",
+   "question": "Once a filing's invoice has been paid, how does the payment confirmation make the filing actually get applied to the business, and what's different for filings dated to take effect in the future?",
+   "facts": [
+    {
+     "fact": "Payment completion arrives in a queue listener: either the NATS-based entity-pay worker (process_payment) or the GCP cloud-event business-pay service (pay_filer.worker). Both look up the filing with Filing.get_filing_by_payment_token, ignore duplicates, and set payment_completion_date.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/database/filings.py"
+     ]
+    },
+    {
+     "fact": "In legal-api, filing status is mostly derived. The before_insert/before_update listener receive_before_change sets EPOCH for lear_epoch filings, COMPLETED when transaction_id is set, PAID when payment_completion_date is set (or the source is COLIN), PENDING when only a payment_token exists, and DRAFT otherwise. It does nothing for AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, for APPROVED until there is a transaction_id, or when skip_status_listener is set. Some code also sets _status directly: set_review_decision, resubmit_filing_to_awaiting_review, reset_filing_to_draft, and the filing_json setter (PENDING).",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ],
+     "fixed": true
+    },
+    {
+     "fact": "The pay listeners only publish {'filing': {'id': ...}} to the filer subject when the effective date is not in the future (effective_date <= now in entity-pay, effective_date <= payment_completion_date in business-pay). Either way they also publish an email message to the emailer subject.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py"
+     ]
+    },
+    {
+     "fact": "Future-effective filings are picked up later by the future-effective-filings job. It gets a service token, calls legal-api GET /api/v2/internal/filings/future_effective (Filing.get_future_effective_filing_ids: status PAID or APPROVED and effective_date <= now), and publishes each id to NATS_FILER_SUBJECT.",
+     "files": [
+      "lear/jobs/future-effective-filings/file_future_effective.py",
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "entity-filer's process_filing loads the filing through core Filing.find_by_id and skips it if already COMPLETED. It opens a sqlalchemy-continuum transaction and sends each legal_filings() section (for example changeOfAddress, dissolution, annualReport) to its module in filing_processors.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/change_of_address.py"
+     ]
+    },
+    {
+     "fact": "The filer marks completion by setting filing_submission.transaction_id and calling set_processed, which sets completion_date and moves effective_date up to the payment date where needed (not for AR/COD on CP or BEN). It stores FilingMeta in _meta_data and commits. It then publishes an email message, a NATS entity event (bc.registry.business.<type>), and a GCP BUSINESS_EVENTS_TOPIC cloud event.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_meta.py"
+     ]
+    },
+    {
+     "fact": "For non-COOP change-of-address filings, legal-api's set_effective_date (called from complete_filing) forces the effective date to one minute after midnight tomorrow (legislation time) and writes futureEffectiveDate into the header. These filings usually wait for the future-effective job. If payment completes after that time, the pay listener still publishes them straight to the filer, because its check is effective_date <= now or <= payment_completion_date. So it is not 'always'.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/utils/legislation_datetime.py",
+      "lear/jobs/future-effective-filings/file_future_effective.py"
+     ],
+     "fixed": true
+    }
+   ],
+   "qid": "lear-filings-1",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "In legal-api, filing status is mostly derived. The before_insert/before_update listener receive_before_change sets EPOCH for lear_epoch filings, COMPLETED when transaction_id is set, PAID when payment_completion_date is set (or the source is COLIN), PENDING when only a payment_token exists, and DRAFT otherwise. It does nothing for AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, for APPROVED until there is a transaction_id, or when skip_status_listener is set. Some code also sets _status directly: set_review_decision, resubmit_filing_to_awaiting_review, reset_filing_to_draft, and the filing_json setter (PENDING)."
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "For non-COOP change-of-address filings, legal-api's set_effective_date (called from complete_filing) forces the effective date to one minute after midnight tomorrow (legislation time) and writes futureEffectiveDate into the header. These filings usually wait for the future-effective job. If payment completes after that time, the pay listener still publishes them straight to the filer, because its check is effective_date <= now or <= payment_completion_date. So it is not 'always'."
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How is a filing's status lifecycle (draft, pending, paid, completed, staff review states) modeled, and what stops a filing from being edited or deleted once money is involved?",
+   "facts": [
+    {
+     "fact": "Filing.Status in the legal-api model lists DRAFT, PENDING, PAID, COMPLETED, CORRECTED, EPOCH, ERROR, PENDING_CORRECTION and WITHDRAWN, plus the review states APPROVED, AWAITING_REVIEW, CHANGE_REQUESTED and REJECTED. The status property reports CORRECTED when a COMPLETED filing has a COMPLETED parent filing.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "The receive_before_change listener recomputes status from column values (transaction_id, payment_completion_date, payment_token, source). It leaves review states alone, and APPROVED only until a transaction_id exists, so these states are never overwritten.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "Filing.locked is true when the filing is deletion_locked, has a persisted payment_token, or has COLIN event ids. The setters for filing_json, payment_token and payment_status_code raise a 403 BusinessException ('Filings cannot be changed after the invoice is created'), and delete() plus a before_delete listener block deletion.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/exceptions/__init__.py"
+     ]
+    },
+    {
+     "fact": "The filings endpoint's DELETE handler returns create_deletion_locked_response for locked filings. The PATCH handler cancels the invoice with DELETE {PAYMENT_SVC_URL}/{payment_token} and then calls filing.reset_filing_to_draft, which clears the token and sets DRAFT so the filing can be edited again.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "Staff review states are entered from business-pay's create_staff_review, which creates a Review and sets AWAITING_REVIEW for continuationIn after payment. The staff endpoint POST /admin/reviews/<id> then records a ReviewResult and calls Filing.set_review_decision with CHANGE_REQUESTED, APPROVED or REJECTED.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+      "lear/legal-api/src/legal_api/models/review.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "A CHANGE_REQUESTED filing stays editable (the filing_json setter allows in_change_requested_status). When it is resubmitted through saving_filings, resubmit_filing_for_review sets the Review to RESUBMITTED and calls Filing.resubmit_filing_to_awaiting_review instead of creating a new invoice.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/models/review_result.py"
+     ]
+    },
+    {
+     "fact": "Readers depend on these statuses. The ledger lists only COMPLETED and PAID filings. Core Filing.get_document_list returns nothing for DRAFT, PENDING or PAPER_ONLY. While a filing is PAID or in a review state, it returns the receipt (when payment_completion_date is set) plus a single legalFilings entry for the filing type, except for some types such as registration, AGM and continuation-out filings, and SP/GP dissolutions. It does not add the 'additional' outputs. The GET single-filing handler polls pay for isPaymentActionRequired while a filing is PENDING.",
+     "files": [
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ],
+     "fixed": true
+    }
+   ],
+   "qid": "lear-filings-2",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "Readers depend on these statuses. The ledger lists only COMPLETED and PAID filings. Core Filing.get_document_list returns nothing for DRAFT, PENDING or PAPER_ONLY. While a filing is PAID or in a review state, it returns the receipt (when payment_completion_date is set) plus a single legalFilings entry for the filing type, except for some types such as registration, AGM and continuation-out filings, and SP/GP dissolutions. It does not add the 'additional' outputs. The GET single-filing handler polls pay for isPaymentActionRequired while a filing is PENDING."
+    }
+   ]
+  },
+  {
+   "kind": "concept",
+   "question": "How does the system decide which filings a given user may submit for a given business (for example, not allowing a change while another filing is pending, or when the company is not in good standing), and where is that decision enforced and surfaced?",
+   "facts": [
+    {
+     "fact": "The rules are one nested dictionary, get_allowable_filings_dict in services/authz.py. It is keyed by user role ('staff' or 'general'), then Business.State, then filing type (or sub-types such as dissolution or amalgamation kinds). Each entry lists allowed legalTypes, optional businessRequirement, and blockerChecks.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/core/filing.py"
+     ]
+    },
+    {
+     "fact": "business_blocker_check works out business-level blockers. DEFAULT/DRAFT_PENDING are set by has_blocker_filing when PENDING, PAID, ERROR, PENDING_CORRECTION or DRAFT filings exist, or an incomplete alteration or correction. BUSINESS_FROZEN comes from admin_freeze, NOT_IN_GOOD_STANDING from Business.good_standing, plus AMALGAMATING_BUSINESS and IN_DISSOLUTION.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/models/business.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    },
+    {
+     "fact": "has_blocker also checks filing-level conditions: required or forbidden state filings (validStateFilings/invalidStateFilings against business.state_filing_id), completedFilings, futureEffectiveFilings (PENDING or PAID with an effective_date in the future), and warningTypes from business.warnings.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/models/business.py"
+     ]
+    },
+    {
+     "fact": "On submission, ListFilingResource.check_authorization runs both authorized(identifier, jwt, ['edit']) and is_allowed(...). authorized lets staff, system and colin roles through and otherwise calls the auth API's entities/{identifier}/authorizations. is_allowed rejects edits to filings that are not DRAFT or CHANGE_REQUESTED, and rejects amalgamation for continued-in types (C, CBEN, CUL, CCC).",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/services/authz.py"
+     ]
+    },
+    {
+     "fact": "The same rules feed the UI. The GET business handler calls get_allowable_actions, which uses get_allowed_filings and attaches the result to Business.allowable_actions. Business.json then serialises it as 'allowedActions', and each filing type carries displayName from core FilingMeta and feeCode from Filing.get_fee_code.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+      "lear/legal-api/src/legal_api/models/business.py",
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/core/meta/filing.py"
+     ]
+    },
+    {
+     "fact": "When an existing DRAFT is being re-saved (filing_id given), is_allowed passes is_ignore_draft_blockers=True so the draft does not block itself. In that mode has_blocker_filing leaves DRAFT out of the blocking statuses.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/models/filing.py"
+     ]
+    }
+   ],
+   "qid": "lear-filings-3",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "We need to add support for a brand-new type of business filing that is paid, changes business data, and produces a PDF. Which places in the API and the background services would I need to touch so it can be submitted, charged, applied, and shown with its documents?",
+   "facts": [
+    {
+     "fact": "Register the type in the Filing.FILINGS dictionary in models/filing.py, which maps the filing name to fee codes per legal type. get_filing_types uses it to build invoice filingTypes, and legal_filings() uses it to pick which JSON sections to process. Also add the type to core Filing.FilingTypes.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/core/filing.py"
+     ]
+    },
+    {
+     "fact": "Add a validator module under services/filings/validations/ and an elif branch in the dispatcher validate() in validation.py. Schema validation through rsbc_schemas 'filing' also has to accept the new section, otherwise validate_against_schema returns 422.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/filings/validations/validation.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/schemas.py",
+      "lear/legal-api/src/legal_api/services/filings/validations/change_of_address.py"
+     ]
+    },
+    {
+     "fact": "Add an entry under the right role and state in get_allowable_filings_dict (services/authz.py) with legalTypes and blockerChecks. Without it, is_allowed rejects the submission with 401 and it never appears in allowedActions.",
+     "files": [
+      "lear/legal-api/src/legal_api/services/authz.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "In entity-filer, add a filing_processors/<type>.py with a process() function and an elif branch in worker.process_filing. If the filing should update auth or namex, also add it to the post-commit lists that call business_profile.update_entity or name_request.consume_nr.",
+     "files": [
+      "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/dissolution.py",
+      "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+     ]
+    },
+    {
+     "fact": "For outputs, add display name and 'additional' outputs in core/meta/filing.py (used by FilingMeta.get_all_outputs inside core Filing.get_document_list). Add a ReportMeta.reports entry plus an HTML template under report-templates, which Report._get_template reads from REPORT_TEMPLATE_PATH before POSTing to REPORT_SVC_URL.",
+     "files": [
+      "lear/legal-api/src/legal_api/core/meta/filing.py",
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/legal-api/src/legal_api/reports/report.py",
+      "lear/legal-api/report-templates/dissolution.html"
+     ]
+    },
+    {
+     "fact": "Notifications are routed by filing type in entity-emailer's process_email. A new type needs either a dedicated module under email_processors/ or an entry in filing_notification.FILING_TYPE_CONVERTER, otherwise the PAID/COMPLETED email messages published by the pay and filer workers produce no email.",
+     "files": [
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/filing_notification.py",
+      "lear/queue_services/common/src/entity_queue_common/messages.py"
+     ]
+    }
+   ],
+   "qid": "lear-filings-4",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    }
+   ]
+  },
+  {
+   "kind": "change",
+   "question": "Today only continuation-in applications go to a registry staff member for review after payment. If we wanted amalgamation applications to also require staff approval before they take effect, where would that change go and which other parts of the flow would it affect?",
+   "facts": [
+    {
+     "fact": "Only business-pay decides that a filing needs review: pay_filer.worker has a hard-coded staff_review_required = ['continuationIn'] and calls create_staff_review instead of publish_to_filer. Adding amalgamationApplication there creates a Review (AWAITING_REVIEW) and sets the filing to AWAITING_REVIEW after payment.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/queue_services/business-pay/src/business_pay/database/review.py",
+      "lear/queue_services/business-pay/src/business_pay/database/filings.py"
+     ]
+    },
+    {
+     "fact": "The legacy NATS entity-pay worker has no review branch. It always publishes non-future-effective paid filings to the filer, so it would also need changing if it still handles payments.",
+     "files": [
+      "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+     ]
+    },
+    {
+     "fact": "create_staff_review reads nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' from filing_json[filing_type]['parties']. An amalgamation's JSON must provide parties, otherwise a KeyError is raised.",
+     "files": [
+      "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+     ]
+    },
+    {
+     "fact": "Staff act through POST /admin/reviews/<id> in resources/v2/admin/reviews.py. It calls Filing.set_review_decision, publishes an email with the new status, and puts the filing on NATS_FILER_SUBJECT right away only if it is APPROVED and the effective date has passed.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/services/queue.py"
+     ]
+    },
+    {
+     "fact": "Approved future-effective amalgamations are released later by the future-effective-filings job, because Filing.get_future_effective_filing_ids includes APPROVED as well as PAID. receive_before_change keeps APPROVED until the filer sets transaction_id.",
+     "files": [
+      "lear/legal-api/src/legal_api/models/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+      "lear/jobs/future-effective-filings/file_future_effective.py"
+     ]
+    },
+    {
+     "fact": "If changes are requested, the submitter resubmits through saving_filings. In that case resubmit_filing_for_review and check_and_update_nr run instead of complete_filing, so there is no new invoice.",
+     "files": [
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+      "lear/legal-api/src/legal_api/models/review.py",
+      "lear/legal-api/src/legal_api/models/review_result.py"
+     ]
+    },
+    {
+     "fact": "Documents and email are also affected. While a filing is PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED, core Filing.get_document_list returns the receipt (once paid) plus the legalFilings document. _get_receipt in business_documents.py allows receipts in those states. Review-status emails (option = filing status) are sent to entity-emailer's amalgamation_notification by process_email. That processor only handles PAID and COMPLETED, and only AMALGA-PAID.html and AMALGA-COMPLETED.html templates exist, so it would need review-status handling and templates like continuation_in_notification has.",
+     "files": [
+      "lear/legal-api/src/legal_api/core/filing.py",
+      "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+      "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/amalgamation_notification.py"
+     ],
+     "fixed": true
+    }
+   ],
+   "qid": "lear-filings-5",
+   "area": "lear-filings",
+   "verdicts": [
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "correct",
+     "fix": ""
+    },
+    {
+     "verdict": "partly",
+     "fix": "Documents and email are also affected. While a filing is PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED, core Filing.get_document_list returns the receipt (once paid) plus the legalFilings document. _get_receipt in business_documents.py allows receipts in those states. Review-status emails (option = filing status) are sent to entity-emailer's amalgamation_notification by process_email. That processor only handles PAID and COMPLETED, and only AMALGA-PAID.html and AMALGA-COMPLETED.html templates exist, so it would need review-status handling and templates like continuation_in_notification has."
+    }
+   ]
+  }
+ ]
+}
