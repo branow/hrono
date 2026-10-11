@@ -25,6 +25,7 @@ ROUTES = (
     "/ui",
     "/ui/trees/default/triage",
     "/ui/trees/default/graph",
+    "/ui/trees/default/graph?view=list",
     "/ui/trees/default/ask",
     "/ui/trees/default/activity",
     "/ui/jobs",
@@ -757,6 +758,92 @@ def test_the_wheel_zooms_the_map_about_the_cursor(
     page.wait_for_function(f"{width} < {start}")  # type: ignore[attr-defined]
     # the page itself never scrolls: the wheel belongs to the map
     assert page.evaluate("window.scrollY") == 0  # type: ignore[attr-defined]
+
+
+def test_the_two_views_switch_in_place_and_keep_working(
+    page: object, live: Live
+) -> None:
+    """Switching swaps the board without a page load, the list's chevrons
+    open in place, and a name opens the same panel the circles do."""
+    page.set_viewport_size({"width": 1440, "height": 900})  # type: ignore[attr-defined]
+    page.goto(f"{live.base}/ui/trees/default/graph?view=circles")  # type: ignore[attr-defined]
+    page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
+    page.evaluate("window.stayed = true")  # type: ignore[attr-defined]
+    view = "document.getElementById('board').dataset.view"
+
+    page.click("nav.seg a:has-text('List')")  # type: ignore[attr-defined]
+    page.wait_for_function(f"{view} === 'list'")  # type: ignore[attr-defined]
+    assert "view=list" in page.url  # type: ignore[attr-defined]
+    assert page.locator("#keys, #overlays").count() == 0  # type: ignore[attr-defined]
+    rows = page.locator("table.topics tbody tr").count()  # type: ignore[attr-defined]
+    page.locator("table.topics a.fold.open").first.click()  # type: ignore[attr-defined]
+    page.wait_for_function(  # type: ignore[attr-defined]
+        f"document.querySelectorAll('table.topics tbody tr').length < {rows}"
+    )
+    page.locator("table.topics a.name").first.click()  # type: ignore[attr-defined]
+    page.wait_for_selector("#panel")  # type: ignore[attr-defined]
+
+    page.click("nav.seg a:has-text('Circles')")  # type: ignore[attr-defined]
+    page.wait_for_function(f"{view} === 'circles'")  # type: ignore[attr-defined]
+    assert page.locator("#panel").count() == 1  # type: ignore[attr-defined]
+    assert page.evaluate("window.stayed === true")  # type: ignore[attr-defined]
+
+
+def test_the_panel_widens_by_its_edge_and_remembers_it(
+    page: object, live: Live
+) -> None:
+    page.set_viewport_size({"width": 1440, "height": 900})  # type: ignore[attr-defined]
+    page.goto(f"{live.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
+    page.locator("svg g.node > a").first.click()  # type: ignore[attr-defined]
+    page.wait_for_selector("#panel")  # type: ignore[attr-defined]
+    wide = "document.getElementById('panel').getBoundingClientRect().width"
+    start = page.evaluate(wide)  # type: ignore[attr-defined]
+
+    grip = page.evaluate(  # type: ignore[attr-defined]
+        "(() => { const r = document.getElementById('grip')"
+        ".getBoundingClientRect(); return [r.left, r.top + r.height / 2]; })()"
+    )
+    page.mouse.move(grip[0], grip[1])  # type: ignore[attr-defined]
+    page.mouse.down()  # type: ignore[attr-defined]
+    page.mouse.move(grip[0] - 150, grip[1], steps=6)  # type: ignore[attr-defined]
+    page.mouse.up()  # type: ignore[attr-defined]
+    dragged = page.evaluate(wide)  # type: ignore[attr-defined]
+    assert dragged == pytest.approx(start + 150, abs=2)
+
+    page.focus("#grip")  # type: ignore[attr-defined]
+    page.keyboard.press("ArrowRight")  # type: ignore[attr-defined]
+    keyed = page.evaluate(wide)  # type: ignore[attr-defined]
+    assert keyed < dragged
+
+    page.reload()  # type: ignore[attr-defined]
+    page.wait_for_selector("#panel")  # type: ignore[attr-defined]
+    assert page.evaluate(wide) == pytest.approx(keyed, abs=1)  # type: ignore[attr-defined]
+    # never narrower than the floor, however far it is pushed
+    page.focus("#grip")  # type: ignore[attr-defined]
+    page.keyboard.press("Home")  # type: ignore[attr-defined]
+    assert page.evaluate(wide) >= 288  # type: ignore[attr-defined]
+
+
+def test_a_hovered_topic_grows_in_place_and_no_name_has_a_halo(
+    page: object, live: Live
+) -> None:
+    page.set_viewport_size({"width": 1440, "height": 900})  # type: ignore[attr-defined]
+    page.goto(f"{live.base}/ui/trees/default/graph")  # type: ignore[attr-defined]
+    page.wait_for_load_state("networkidle")  # type: ignore[attr-defined]
+    disc = page.locator("circle.disc").first  # type: ignore[attr-defined]
+    before = disc.bounding_box()
+    disc.hover()
+    page.wait_for_timeout(400)  # type: ignore[attr-defined]
+    after = disc.bounding_box()
+
+    def centre(box: dict) -> tuple[float, float]:
+        return (box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+
+    assert after["width"] > before["width"]
+    assert centre(after) == pytest.approx(centre(before), abs=0.5)
+    assert page.evaluate(  # type: ignore[attr-defined]
+        "getComputedStyle(document.querySelector('svg text.label')).stroke"
+    ) in ("none", "")
 
 
 def test_the_map_has_a_skip_link_to_a_plain_list_of_topics(

@@ -638,8 +638,10 @@ main:has(.board) { max-width: 1480px; }
 
 /* The panel the map opens beside itself rather than navigating away to. */
 .panel {
-  flex: 0 0 22rem;
-  max-width: 22rem;
+  /* `--panel-w` is the width the reader dragged it to (graph.html). */
+  flex: 0 0 var(--panel-w, 22rem);
+  max-width: var(--panel-w, 22rem);
+  min-width: 0;
   max-height: clamp(24rem, 64vh, 48rem);
   overflow: auto;
   /* Paths and identifiers have no spaces to break at; in a column this
@@ -667,10 +669,20 @@ main:has(.board) { max-width: 1480px; }
   padding-bottom: .35rem;
   border-bottom: 1px solid var(--rule);
 }
-.panel .said { color: var(--ink-soft); margin: .35rem 0 var(--s3); font-size: .875rem; }
+.panel-head h2 { flex: 1; min-width: 0; }
 .panel .shut { flex: none; padding: .25rem; color: var(--ink-faint); }
-.panel-facts { display: flex; flex-wrap: wrap; gap: var(--s2); margin: 0; }
-.panel-facts .chip { white-space: normal; overflow-wrap: anywhere; }
+/* Facts as plain text with their names beside them: nothing in this list is
+   a control, so nothing in it has a border. */
+.panel-facts {
+  display: flex; flex-wrap: wrap; gap: .2rem var(--s4);
+  margin: var(--s3) 0 0;
+  font-size: .8125rem;
+}
+.panel-facts > div { display: flex; gap: .4rem; align-items: baseline; min-width: 0; }
+.panel-facts > div.wide { flex-basis: 100%; }
+.panel-facts dt { flex: none; color: var(--ink-faint); font-size: .75rem; }
+.panel-facts dd { margin: 0; color: var(--ink-soft); min-width: 0; overflow-wrap: anywhere; }
+.panel-facts dd.needs { color: var(--warn); }
 .panel blockquote { font-size: .875rem; color: var(--ink); }
 .panel .hint { font-size: .78125rem; }
 .panel ul.parts { list-style: none; margin: 0; padding: 0; }
@@ -688,12 +700,9 @@ main:has(.board) { max-width: 1480px; }
 }
 /* The way out of the panel and on to the controls that CHANGE a topic. It
    sits above the brief rather than under the sections: a topic can hold
-   thirty of those, and an escape hatch below them is one nobody finds. */
-.panel-out {
-  display: flex; flex-wrap: wrap; gap: var(--s2); align-items: baseline;
-  margin: var(--s3) 0 0;
-}
-.panel-out .hint { flex: 1 1 8rem; }
+   thirty of those, and an escape hatch below them is one nobody finds. The
+   one action in the panel, so it is the one thing drawn as a button. */
+.panel-out { display: flex; width: 100%; margin: var(--s4) 0 0; }
 
 /* The narrow window has no room to put a panel beside a board, so it stacks
    them — the map first, because the panel is an answer about something on it. */
@@ -714,7 +723,6 @@ svg .link.propagation { stroke: var(--ink-faint); }
    three different relationships all look like "a line". */
 svg text.link-says {
   font: 600 10.5px var(--mono);
-  stroke-width: 3px;
   pointer-events: none;
 }
 svg text.link-says.pull { fill: var(--accent); }
@@ -735,6 +743,16 @@ svg circle.disc {
   fill: var(--tint);
   stroke: var(--surface);
   stroke-width: 2.5;
+  /* Hover grows the disc about its own centre. `fill-box` makes that centre
+     the circle's, not the canvas origin, so it swells in place instead of
+     sliding. Only the size eases: a stroke mid-fade is a focus ring that
+     is not yet the colour that parts it from the disc. */
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform .18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  svg circle.disc { transition: none; }
 }
 svg .b1 { --tint: #B4552D; }
 svg .b2 { --tint: #C87941; }
@@ -759,16 +777,13 @@ svg .b6 { --tint: #A96A4B; }
 /* Last, and at the same specificity as the branch rules, so it wins in every
    theme: a brief that needs rewriting outranks which subtree it is in. */
 svg .stale { --tint: var(--warn); }
-/* Stroking the label in the canvas colour BEFORE filling it knocks any line
-   out from behind the glyphs, so no label is ever read through a rule. */
+/* No halo behind the glyphs: a stroke in the canvas colour drew a pale
+   outline round every name on the board. The layout keeps connectors and
+   arcs off the words instead (`labels.py`, `_drawn`). */
 svg text {
   font: 600 11.5px var(--mono);
   fill: var(--ink);
   text-anchor: middle;
-  paint-order: stroke;
-  stroke: var(--surface);
-  stroke-width: 3px;
-  stroke-linejoin: round;
 }
 svg text.meta { font: 400 10.5px var(--mono); fill: var(--ink-faint); }
 /* The arcs a topic has that the map left undrawn, counted beside it. */
@@ -785,7 +800,7 @@ svg circle, svg path, svg rect, svg line {
    the selection never starts. */
 svg a { -webkit-user-drag: none; }
 svg a:hover text.label { fill: var(--accent); text-decoration: underline; }
-svg a:hover circle.disc { stroke: var(--accent); }
+svg a:hover circle.disc { stroke: var(--accent); transform: scale(1.12); }
 /* The topic the panel is showing, ringed so the answer on the right is tied
    to a place on the left. */
 svg .node.reading circle.disc { stroke: var(--accent); stroke-width: 3.5; }
@@ -836,6 +851,168 @@ a.toggle.proximity .swatch { border-top-style: dotted; }
 a.toggle.edge-on { border-color: currentColor; background: var(--sunken); color: var(--ink); }
 a.toggle.pull.edge-on, a.toggle.proximity.edge-on { color: var(--accent); }
 a.toggle.proximity.edge-on { color: var(--ok); }
+
+/* -------------------------------------------- map: views, list, panel width */
+/* The view switch: two links drawn as one control, the current one filled.
+   The same type and padding as `.btn.small`, so it is the height of the
+   buttons beside it. */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--rule-firm);
+  border-radius: var(--r2);
+  background: var(--surface);
+  overflow: hidden;
+}
+.seg a {
+  padding: .2rem .55rem;
+  font-size: .8125rem; font-weight: 560;
+  color: var(--ink-soft);
+}
+.seg a + a { border-left: 1px solid var(--rule-firm); }
+.seg a:hover { background: var(--sunken); color: var(--ink); text-decoration: none; }
+.seg a[aria-current] { background: var(--accent-wash); color: var(--accent); }
+.seg a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* A count, not a control: no border, no fill. */
+.afloat .said { font-size: .78125rem; color: var(--ink-faint); white-space: nowrap; }
+
+/* The list view: the same topics as rows, each indented under its parent,
+   with a guide line down from every open parent. It scrolls like a page, so
+   none of the board's grab-and-pan applies. Room at the top for the floating
+   controls, which would otherwise sit on the first rows. */
+.canvas.listing { cursor: auto; }
+main.bleed .canvas.listing {
+  /* Top, not centred: a list starts where it starts, and `align-content`
+     centres a block box too. */
+  display: block;
+  place-content: normal;
+  padding: 4.25rem var(--s4) var(--s6);
+}
+table.topics {
+  width: 100%;
+  max-width: 76rem;
+  margin: 0 auto;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: .8125rem;
+}
+table.topics thead th {
+  padding: .4rem .5rem;
+  text-align: left;
+  font: 600 .6875rem/1.4 var(--mono);
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--rule-firm);
+}
+table.topics th.col-holds { width: 7.5rem; text-align: right; }
+table.topics th.col-where { width: 16rem; }
+table.topics th.col-brief { width: 6rem; }
+table.topics tbody tr { border-bottom: 1px solid var(--rule); }
+table.topics tbody tr:hover { background: var(--sunken); }
+table.topics tbody th,
+table.topics tbody td {
+  padding: .3rem .5rem;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* One guide per ancestor, centred under that ancestor's chevron: the rows
+   read as a tree lying on its side, root at the left. */
+table.topics { --step: 1.25rem; }
+table.topics tbody th {
+  background-image: repeating-linear-gradient(
+    to right, var(--rule-firm) 0 1px, transparent 1px var(--step)
+  );
+  background-repeat: no-repeat;
+  background-position: 1.0625rem 0;
+  background-size: calc(var(--depth, 0) * var(--step)) 100%;
+}
+.topics .branch {
+  display: flex; align-items: center; gap: .3rem;
+  min-width: 0;
+  padding-left: calc(var(--depth, 0) * var(--step));
+}
+.topics .fold {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.125rem; height: 1.125rem;
+  border-radius: var(--r1);
+  color: var(--ink-faint);
+}
+.topics a.fold:hover { background: var(--rule); color: var(--accent); text-decoration: none; }
+.topics a.fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.topics .fold svg { transition: transform .15s ease-out; }
+.topics .fold.open svg { transform: rotate(90deg); }
+/* A leaf has nothing to open: a dot where the chevron would be. */
+.topics span.fold::before {
+  content: ""; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--rule-firm);
+}
+.topics a.name {
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
+  font: 560 .8125rem/1.6 var(--mono);
+  color: var(--ink);
+}
+.topics a.name:hover { color: var(--accent); }
+.topics td.col-holds { text-align: right; color: var(--ink-soft); }
+.topics td.col-where { font: .75rem/1.6 var(--mono); color: var(--ink-faint); }
+.topics td.col-brief .needs { color: var(--warn); }
+.topics td.col-brief .fine { color: var(--ink-faint); }
+/* The row the panel is showing, tied to it the way the ringed circle is. */
+.topics tr.reading { background: var(--accent-wash); }
+.topics tr.reading:hover { background: var(--accent-wash); }
+.topics tr.reading a.name { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .topics .fold svg { transition: none; }
+}
+/* A phone keeps the name and the count. Where goes, the count drops its
+   noun (still on the tooltip), and a topic needing a brief says so in its
+   own colour rather than in a column. */
+@media (max-width: 40rem) {
+  table.topics { --step: .875rem; }
+  table.topics .col-where, table.topics .col-brief { display: none; }
+  table.topics th.col-holds { width: 3rem; }
+  .topics td.col-holds .unit { display: none; }
+  .topics tr.stale a.name { color: var(--warn); }
+  main.bleed .canvas.listing { padding-inline: var(--s2); }
+}
+
+/* The panel's left edge, as a handle: a wide invisible hit area over a
+   hairline that lights up while it is held or focused. */
+.panel-grip {
+  flex: none;
+  position: relative;
+  width: 0;
+  align-self: stretch;
+  z-index: 7;
+}
+.panel-grip::before {
+  content: "";
+  position: absolute; top: 0; bottom: 0; left: -5px; width: 10px;
+  cursor: col-resize;
+}
+.panel-grip::after {
+  content: "";
+  position: absolute; top: 0; bottom: 0; left: -1px; width: 2px;
+  background: transparent;
+  transition: background .15s;
+}
+.panel-grip:hover::after,
+.panel-grip:focus-visible::after,
+body.resizing .panel-grip::after { background: var(--accent); }
+.panel-grip:focus-visible { outline: none; }
+.panel-grip[hidden], .board:not(.reading) .panel-grip { display: none; }
+body.resizing { cursor: col-resize; user-select: none; -webkit-user-select: none; }
+/* Out from under the panel by however wide it was dragged. */
+main.bleed:has(.board.reading) .afloat.tr,
+main.bleed:has(.board.reading) .afloat.br {
+  right: calc(var(--panel-w, 22rem) + var(--s3));
+}
+@media (max-width: 62rem) {
+  .panel-grip { display: none; }
+}
 
 /* ------------------------------------------------------------ topic page */
 blockquote {
