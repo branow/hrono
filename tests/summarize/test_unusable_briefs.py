@@ -12,11 +12,11 @@ from hrono import pins
 from hrono.auth.users import create_user
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import Database, open_database
+from hrono.health.triage import survey
 from hrono.jobs.ops import JobContext
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
 from hrono.server.app import create_app
-from hrono.server.triage import survey
 from hrono.summarize import briefs
 from hrono.summarize.brief import brief
 from hrono.tree.maintain import maintain

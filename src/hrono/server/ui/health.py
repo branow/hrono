@@ -11,13 +11,13 @@ from urllib.parse import quote, urlencode
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from hrono import edits
 from hrono.cluster.recipe import MIN_POINTS
-from hrono.embed.model import resolve_embedding_model
 from hrono.errors import AppError, DomainError
+from hrono.health import attention, report, triage
 from hrono.jobs.worker import enqueue
-from hrono.server import attention, triage
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -32,23 +32,25 @@ from hrono.server.ui import (
 
 @router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)
 def triage_page(tree: str, request: Request, user: Reader) -> Response:
-    """What is wrong with this tree, counted, and each kind listed."""
+    """What is wrong with this tree, counted, and each kind listed.
+
+    Read from the stored report (``health.report``): the checks run when the
+    tree changes and on Recheck, never on opening the page.
+    """
     with request.app.state.db.connect() as conn:
         trees = _trees(conn)
-        items = triage.survey(conn, tree)
-        model = _model(conn)
-        centres = attention.Centres(conn, tree, model)
-        parked_total, parked = attention.waiting(conn, tree, model, centres)
-        misfit_total, misfit = attention.misfits(conn, tree, model, centres)
-        context = {
-            "parked_total": parked_total,
-            "parked": parked,
-            "misfit_total": misfit_total,
-            "misfits": misfit,
-            "stale": attention.stale(conn, tree),
-            "held": attention.held(conn, tree),
-            "topics": attention.topics(conn, tree),
-        }
+        kept = report.load(conn, tree)
+    items = kept.items if kept is not None else ()
+    context = {
+        "checked_at": kept.checked_at if kept is not None else "",
+        "parked_total": kept.parked_total if kept is not None else 0,
+        "parked": kept.parked if kept is not None else (),
+        "misfit_total": kept.misfit_total if kept is not None else 0,
+        "misfits": kept.misfits if kept is not None else (),
+        "stale": kept.stale if kept is not None else (),
+        "held": kept.held if kept is not None else (),
+        "topics": kept.topics if kept is not None else (),
+    }
     return templates.TemplateResponse(
         request,
         "triage.html",
@@ -57,7 +59,7 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
             "trees": trees,
             "tree": tree,
             "items": items,
-            "clean": triage.clean(items),
+            "clean": kept is not None and triage.clean(items),
             "can_write": user.role == "admin",
             "shown": attention.SHOWN,
             "min_points": MIN_POINTS,
@@ -85,6 +87,7 @@ async def place_from_health(
         )
     except (AppError, DomainError) as exc:
         return _here(tree, error=str(exc))
+    await run_in_threadpool(report.refresh, request.app.state.db, tree)
     return _here(tree, done=f"section {section} filed in topic {target}")
 
 
@@ -141,16 +144,19 @@ async def release_from_health(
         )
     except AppError as exc:
         return _here(tree, error=str(exc))
+    await run_in_threadpool(report.refresh, request.app.state.db, tree)
     return _here(tree, done="handed back to automation")
+
+
+@router.post("/ui/trees/{tree}/triage/recheck")
+def recheck_from_health(tree: str, request: Request, user: Admin) -> Response:
+    """Work the report out again in the background."""
+    enqueue(request.app.state.db, "health", {}, tree=tree, started_by=user.name)
+    return _here(
+        tree, done="Rechecking. Refresh this page when the run finishes."
+    )
 
 
 def _here(tree: str, **outcome: str) -> Response:
     query = urlencode({"tree": tree, **{k: v for k, v in outcome.items() if v}})
     return RedirectResponse(f"/ui/trees/{tree}/triage?{query}", status_code=303)
-
-
-def _model(conn: object) -> str | None:
-    try:
-        return str(resolve_embedding_model(conn, {})["name"])  # type: ignore[arg-type]
-    except (AppError, DomainError):
-        return None

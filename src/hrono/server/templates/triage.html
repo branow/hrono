@@ -14,7 +14,11 @@
 {% block title %}hrono — {{ tree }} triage{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Needs attention<span class="tip" tabindex="0" role="note" data-tip="Five checks over this tree. A zero is reported too, so you can tell nothing-wrong from not-checked">?</span></h1>
+  <h1>Needs attention<span class="tip" tabindex="0" role="note" data-tip="Five checks over this tree, run at the end of every sync, maintain and settle. A zero is reported too, so you can tell nothing-wrong from not-checked">?</span></h1>
+  <div class="act-row">
+    <p class="hint">{% if checked_at %}Checked {{ checked_at }}{% else %}Not checked yet{% endif %}</p>
+    {% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn small" type="submit">Recheck</button></form>{% endif %}
+  </div>
 </div>
 
 {% if clean %}

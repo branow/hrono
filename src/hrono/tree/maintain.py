@@ -27,6 +27,7 @@ from collections.abc import Mapping
 from hrono.cluster.op import cluster
 from hrono.embed.model import resolve_embedding_model
 from hrono.embed.op import embed
+from hrono.health import report
 from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
@@ -151,6 +152,7 @@ def maintain(
             _stage(tree, "embed", {}), context, encoder_for=encoder_for
         ),
     )
+    run.run("health", lambda: report.refresh(context.database, tree))
     with context.database.connect() as conn:
         changed = changes.since(conn, tree, before)
     return run.outcome({"tree": changed})

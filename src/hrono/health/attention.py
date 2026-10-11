@@ -18,8 +18,8 @@ from hrono import naming, pins
 from hrono.cluster import incubator
 from hrono.cluster.blend import blend_weights, combined_vector, path_body
 from hrono.errors import AppError
+from hrono.health import triage
 from hrono.ingest.identity import content_hash as digest
-from hrono.server import triage
 from hrono.summarize import briefs
 
 SHOWN = 50

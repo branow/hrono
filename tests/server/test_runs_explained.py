@@ -167,6 +167,7 @@ def test_a_successful_maintain_reports_each_stage(repo: Path) -> None:
         "brief",
         "build-tree",
         "embed",
+        "health",
     ]
     assert all(s["seconds"] >= 0 for s in stages)
     assert stages[3]["result"]["condensed"] == 9

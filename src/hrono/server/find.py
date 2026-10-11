@@ -28,8 +28,8 @@ from markupsafe import Markup, escape
 
 from hrono import naming
 from hrono.cluster import incubator
+from hrono.health import triage
 from hrono.registry.collections import trees
-from hrono.server import triage
 from hrono.server import where as where_module
 
 # Enough candidate passages that a section-heavy word cannot crowd the briefs

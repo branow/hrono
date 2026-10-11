@@ -18,9 +18,10 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.cluster import incubator
+from hrono.health import report, triage
 from hrono.jobs import store as job_store
 from hrono.jobs.worker import enqueue
-from hrono.server import freshness, triage
+from hrono.server import freshness
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.jobs import clock, render_job
 from hrono.server.ui.setup import progress
@@ -48,7 +49,8 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
         trees = _trees(conn)
         chosen = tree if tree in trees else trees[0]
         topics, levels = _shape(conn, chosen)
-        attention = triage.survey(conn, chosen)
+        kept = report.load(conn, chosen)
+        attention = kept.items if kept is not None else ()
         shape = {
             "topics": topics,
             "levels": levels,
@@ -89,7 +91,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "spent": spent,
             "setup_started": started,
             "attention": [item for item in attention if item.count],
-            "clean": triage.clean(attention),
+            "clean": kept is not None and triage.clean(attention),
             "running": [run for run in runs if run["live"]],
             "last": next((run for run in runs if not run["live"]), None),
             "source_states": sources,
