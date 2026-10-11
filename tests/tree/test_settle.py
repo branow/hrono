@@ -37,6 +37,7 @@ from tests.cluster.invariant import (
     assert_pool_invariant,
 )
 from tests.context import job_context
+from tests.repo_template import memoized
 
 DIMS = 8
 TREE = "default"
@@ -71,6 +72,7 @@ def fake_build(vectors: object, *, init: object = None) -> ClusterResult:
     )
 
 
+@memoized
 def make_repo(path: Path) -> str:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)
