@@ -45,7 +45,9 @@ def first(order, hits_answer):
 
 
 def main(*qids: str) -> None:
-    questions = [q for q in json.load(open(ARCH)) if q["qid"] in (qids or QIDS)]
+    questions = [
+        q for q in json.loads(ARCH.read_text()) if q["qid"] in (qids or QIDS)
+    ]
     for label, (db, model_id) in DBS.items():
         r = Recall(str(db), model_id)
         ids, bodies, paths = _matrix(r)

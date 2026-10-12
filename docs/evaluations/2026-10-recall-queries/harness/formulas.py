@@ -95,7 +95,7 @@ class Formulas:
 def main(gate: str = "0.6") -> None:
     bar = float(gate)
     f = Formulas()
-    questions = [q for q in json.load(open(ARCH)) if q["qid"] in QIDS]
+    questions = [q for q in json.loads(ARCH.read_text()) if q["qid"] in QIDS]
     rankers = {"today": f.today, "cosine": f.cosine, "hybrid": f.hybrid}
     print("coverage of on-topic prompts (filtered of instruction sentences):")
     for q in questions:
