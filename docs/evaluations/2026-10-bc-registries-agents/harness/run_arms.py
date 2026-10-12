@@ -69,6 +69,8 @@ Answer from these alone; navigate the tree and run recall as much as you need.""
 # where the map is.
 PLUGIN = Path(__file__).resolve().parents[4] / "plugins" / "hrono"
 EXPORT_R2 = Path.home() / "hrono-eval" / "export-bcreg-v2-L3"
+# the v3 tree: contracts condense and brief prompts (2026-10-bc-registries-v2/)
+EXPORT_V3 = Path.home() / "hrono-eval" / "export-bcreg-v3-L3"
 HRONO_HOME_R2 = Path.home() / "hrono-eval" / "home-v2"
 
 SYSTEM_CODE_R2 = "The code is in {corpus}."
@@ -118,17 +120,22 @@ ROUND_2 = {
         )
         for run in "ab"
     },
+    **{
+        f"hrono-v3{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
 }
 
 
 def run_round_2(kind, arm, q):
     system, addition, cwd, plugin, turns = ROUND_2[arm]
+    export = EXPORT_V3 if "-v3" in arm else EXPORT_R2
     prompt = ARCH.format(question=q["question"])
     if cwd is not None:
         prompt = prompt.replace(
             "relative to the current directory", "as the map cites them"
         )
-    prompt += addition.format(export=EXPORT_R2)
+    prompt += addition.format(export=export)
     r = common.run_agent(
         prompt,
         model=MODEL,
@@ -136,8 +143,8 @@ def run_round_2(kind, arm, q):
         key=q["qid"],
         max_turns=turns,
         tools=["Read", "Grep", "Glob"],
-        system=system.format(corpus=common.CORPUS, export=EXPORT_R2),
-        add_dirs=[EXPORT_R2] if plugin and cwd is None else [],
+        system=system.format(corpus=common.CORPUS, export=export),
+        add_dirs=[export] if plugin and cwd is None else [],
         disallow_bash=cwd is not None,
         cwd=cwd,
         plugin_dir=PLUGIN if plugin else None,
