@@ -58,6 +58,7 @@ def render(
             notes.get(node_id),
             text,
             stems,
+            directory,
         )
     return files
 
@@ -74,12 +75,18 @@ def _node_markdown(
     note: str | None,
     brief: str,
     stems: Mapping[int, str],
+    directory: str,
 ) -> str:
     node = tree.nodes[node_id]
     parts = [brief.rstrip()]
     if node.children:
         called = names(conn, node.children)
         parts.append("## Children")
+        if directory:
+            # links are relative to this page, and agents read them as paths
+            # from the export's root: one line says where they are, instead
+            # of a full path on every entry of a wide page
+            parts.append(f"These are in the folder {directory}/.")
         parts.append(
             "\n".join(
                 _child_entry(conn, child, called[child], stems)
