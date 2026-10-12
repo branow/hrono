@@ -90,6 +90,13 @@ MAP_R3 = """
 Before reading code: open {export}/root.md, choose the areas that fit the question, read their brief.md and the leaf briefs beneath them. The map points you to the right files: open the source files the leaves list, verify there, and follow the flow into code the map does not cover. Passages attached as hrono recall show where to look first."""
 TURNS_R3 = 12
 
+# Hard questions (gen_hard.py): the map is searched like code, and both arms
+# get the turns a real task gets.
+MAP_H = """
+
+Before reading code, use the map of this codebase at {export}: grep it for the words and names that matter, the way you grep code, and read root.md and the briefs that fit. The map points you to the right files: open them, verify there, and follow the flow into code the map does not cover. Passages attached as hrono recall show where to look first."""
+TURNS_H = 30
+
 ROUND_2 = {
     # arm: (system, task addition, runs in, loads the plugin, max turns)
     "code-r2": (SYSTEM_CODE_R2, "", None, False, MAX_TURNS),
@@ -100,6 +107,14 @@ ROUND_2 = {
         for arm, addition, plugin in (
             ("code", "", False),
             ("hrono", MAP_R3, True),
+        )
+        for run in "ab"
+    },
+    **{
+        f"{arm}-h{run}": (SYSTEM_CODE_R2, addition, None, plugin, TURNS_H)
+        for arm, addition, plugin in (
+            ("code", "", False),
+            ("hrono", MAP_H, True),
         )
         for run in "ab"
     },
