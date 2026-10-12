@@ -82,6 +82,15 @@
   var connection = document.getElementById("connection");
   var model = document.getElementById("model");
   var log = document.getElementById("log");
+  // the conversation follows the answer as it grows, until the reader
+  // scrolls up to read something earlier
+  var follow = true;
+  log.addEventListener("scroll", function () {
+    follow = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+  });
+  new MutationObserver(function () {
+    if (follow) log.scrollTop = log.scrollHeight;
+  }).observe(log, { childList: true, subtree: true, characterData: true });
   var hello = document.getElementById("hello");
   var form = document.getElementById("ask");
   var box = document.getElementById("question");
@@ -156,7 +165,10 @@
     paneRecall.replaceChildren(head.cloneNode(true), turn.recallBox);
     panePath.replaceChildren(head, turn.pathBox);
     updateCounts();
-    mine.scrollIntoView({ behavior: "smooth", block: "start" });
+    follow = true;
+    log.scrollTop = log.scrollHeight;
+    // a narrow window scrolls the page, not the conversation
+    if (getComputedStyle(log).overflowY === "visible") mine.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function updateCounts() {
@@ -316,18 +328,24 @@
 {% endif %}
 
 <style>
-main:has(.chat-shell) { max-width: 1320px; }
-.chat-shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); gap: var(--s5); align-items: start; }
+/* the page is one window tall, as a chat app is: the conversation scrolls
+   inside its column and the composer stays at the bottom, so the window
+   itself never scrolls */
+body:has(.chat-shell) { display: flex; flex-direction: column; height: 100dvh; }
+body:has(.chat-shell) .subbar-in { max-width: 1320px; }
+main:has(.chat-shell) { max-width: 1320px; width: 100%; flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: var(--s3); }
+.chat-shell { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); gap: var(--s5); }
 .chat-shell.side-off { grid-template-columns: minmax(0, 1fr); }
 .chat-shell.side-off .side { display: none; }
+.chat-shell:not(.side-off) .chat { max-width: none; }
 
 /* the conversation: a column of messages and a composer that stays in reach */
-.chat { display: flex; flex-direction: column; min-width: 0; max-width: 52rem; width: 100%; margin-inline: auto;
-  min-height: calc(100vh - var(--topbar) - 9rem); }
+.chat { display: flex; flex-direction: column; min-width: 0; max-width: 52rem; width: 100%; margin-inline: auto; min-height: 0; }
 .chat-bar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; padding-bottom: var(--s3); border-bottom: 1px solid var(--rule); }
 .chat-bar .grow { flex: 1; }
 .chat-pick select { min-height: 2rem; font-size: .8125rem; padding-block: .2rem; }
-.chat-log { flex: 1; display: flex; flex-direction: column; gap: var(--s5); padding: var(--s5) 0 var(--s4); }
+.chat-log { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin;
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--s4), #000 calc(100% - var(--s4)), transparent); display: flex; flex-direction: column; gap: var(--s5); padding: var(--s5) 0 var(--s4); }
 .chat-hello { margin: auto 0; padding: var(--s7) var(--s4); text-align: center; }
 .chat-hello .title { font-size: 1.125rem; font-weight: 640; margin-bottom: var(--s2); }
 .chat-hello .hint { margin: 0 auto; max-width: 34rem; }
@@ -372,12 +390,7 @@ ol.work-steps li.note > :last-child { margin-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .status.thinking { animation: none; color: var(--ink-soft); background: none; } }
 
 /* the composer */
-/* the composer docks at the bottom of the window over a fade, so a long
-   answer scrolls away under it instead of showing through */
-.composer-dock {
-  position: sticky; bottom: 0; padding: var(--s4) 0 var(--s3);
-  background: linear-gradient(to bottom, transparent, var(--bg) 40%);
-}
+.composer-dock { padding: var(--s2) 0 0; }
 .composer {
   display: flex; align-items: flex-end; gap: var(--s2);
   padding: .5rem .5rem .5rem .9rem; background: var(--surface); border: 1px solid var(--rule-firm);
@@ -397,8 +410,7 @@ ol.work-steps li.note > :last-child { margin-bottom: 0; }
 
 /* the side panel: what recall attached, and the path the agent took */
 .side {
-  position: sticky; top: calc(var(--topbar) + var(--s3)); min-width: 0;
-  max-height: calc(100vh - var(--topbar) - var(--s5)); display: flex; flex-direction: column;
+  min-width: 0; min-height: 0; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r3);
 }
 .side-tabs { display: flex; border-bottom: 1px solid var(--rule); padding: 0 var(--s2); }
@@ -407,7 +419,7 @@ ol.work-steps li.note > :last-child { margin-bottom: 0; }
   font-weight: 560; color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .side-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
-.side-pane { overflow: auto; padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); min-height: 0; }
+.side-pane { flex: 1; overflow: auto; scrollbar-width: thin; padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); min-height: 0; }
 .side-pane[hidden] { display: none; }
 .side-empty { margin: var(--s4) 0; text-align: center; }
 .side-q { margin: 0 0 var(--s1); font-weight: 600; font-size: .875rem; overflow-wrap: anywhere; }
@@ -441,9 +453,14 @@ ol.path li.file .path-mark { color: var(--ink-faint); }
 .path-name.mono { font-size: .75rem; }
 .path-size { font-size: .6875rem; white-space: nowrap; }
 
+/* a narrow window has no room for two columns: the details go beneath the
+   conversation and the page scrolls as an ordinary page */
 @media (max-width: 960px) {
-  .chat-shell { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; max-height: none; }
+  body:has(.chat-shell) { height: auto; min-height: 100dvh; }
+  .chat-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(min(32rem, 70dvh), auto) auto; }
+  .chat-log { overflow: visible; mask-image: none; }
+  .composer-dock { position: sticky; bottom: 0; padding-bottom: var(--s2); background: var(--bg); }
+  .side-pane { flex: none; max-height: 70dvh; }
 }
 </style>
 {% endblock %}
