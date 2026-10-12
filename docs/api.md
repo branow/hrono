@@ -95,7 +95,7 @@ config. See [clustering.md](clustering.md) and
 |---|---|---|
 | `POST /trees/{name}/maintain` | writer | Cold build: the full pipeline to the root. Returns `{job_id}` |
 | `POST /trees/{name}/sync` | writer | Incremental update (`sync-tree`): ingest the diff, place, judge, re-brief, monitor, repair. Returns `{job_id}` |
-| `POST /trees/{name}/recall` | reader | `{question, limit=10}` → `{hits, message}` |
+| `POST /trees/{name}/recall` | reader | `{question, limit=10, pages=false}` → `{hits, message}`; `pages` gives one hit per leaf topic |
 | `GET /trees/{name}/export?levels=4` | reader | Rendered agent-facing tree as `{files: [{path, content}], shape}`. `levels` is the hop limit, at least 2 |
 | `GET /trees/{name}/export.zip?levels=4` | reader | The same export as a zip archive |
 | `GET /trees/{name}/pending` | reader | Incubator pool: sections in no topic yet |
@@ -197,7 +197,7 @@ hrono tree sync <tree>                         incremental update
 hrono tree export <tree> -o DIR [--levels 4]   write the rendered tree to DIR
 hrono tree pending <tree>
 
-hrono recall [TREE] "question" [--limit 10] [--json]
+hrono recall [TREE] "question" [--limit 10] [--pages] [--json]
 hrono jobs list [--op OP] [--status S] [--json] | get <id> | watch <id> | cancel <id>
 hrono usage [--by model] [--tree T] [--since YYYY-MM-DD]
 ```

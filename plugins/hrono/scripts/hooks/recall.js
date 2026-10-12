@@ -3,6 +3,9 @@
 // UserPromptSubmit: attach what the hrono tree knows about the prompt, so the
 // model starts with it instead of having to remember to look.
 
+const fs = require("node:fs");
+const path = require("node:path");
+
 const hook = require("../lib/hook");
 const hrono = require("../lib/hrono");
 const settings = require("../lib/settings");
@@ -24,20 +27,75 @@ function attachment(config, prompt) {
 }
 
 /**
+ * The hits as map pages to read, best first; a hit whose page is not in the
+ * export (none written yet) is attached as its passage instead.
  * @param {settings.Settings} config
  * @param {import("../lib/hrono").Hit[]} hits
  */
 function render(config, hits) {
   const head =
-    `hrono recall from tree "${config.tree}": the passages most likely to ` +
-    "answer this prompt, from its sources and from the map's briefs.";
+    `hrono recall from tree "${config.tree}": the map pages most likely to ` +
+    "cover this prompt, best first. Read them before the code: each says " +
+    "what its part does, its checks and failure handling, and which files hold it.";
+  const pages = pageIndex(config.folder);
   let text = head;
   for (const hit of hits) {
-    const block = `\n\n### ${title(hit)}\n\n${hit.body}`;
+    const page = hit.topic === undefined ? undefined : pages.get(hit.topic);
+    const block = page
+      ? `\n- ${page} : ${summary(page)}`
+      : `\n\n### ${title(hit)}\n\n${hit.body}`;
     if (text.length + block.length > config.longest) break;
     text += block;
   }
   return text === head ? null : text;
+}
+
+/**
+ * Each topic's page in the export, by topic id: a folder is named
+ * ``<slug>-<id>`` and holds the topic's brief.md.
+ * @param {string} folder
+ * @returns {Map<number, string>}
+ */
+function pageIndex(folder) {
+  /** @type {Map<number, string>} */
+  const pages = new Map();
+  /** @param {string} dir */
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const child = path.join(dir, entry.name);
+      const id = /-(\d+)$/.exec(entry.name);
+      const brief = path.join(child, "brief.md");
+      if (id && fs.existsSync(brief)) pages.set(Number(id[1]), brief);
+      walk(child);
+    }
+  };
+  walk(folder);
+  return pages;
+}
+
+/**
+ * A page's title and its first sentence.
+ * @param {string} page
+ */
+function summary(page) {
+  let text = "";
+  try {
+    text = fs.readFileSync(page, "utf8");
+  } catch {
+    return "";
+  }
+  const lines = text.split("\n").map((line) => line.trim());
+  const heading = (lines.find((line) => line.startsWith("# ")) ?? "").slice(2);
+  const first = lines.find((line) => line && !line.startsWith("#")) ?? "";
+  const sentence = (first.match(/^.*?[.!?](\s|$)/) ?? [first])[0].trim();
+  return heading ? `${heading}. ${sentence}` : sentence;
 }
 
 /**
