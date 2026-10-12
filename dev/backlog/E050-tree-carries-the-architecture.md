@@ -17,7 +17,7 @@ through the tree (findings E23–E29 in
 in the tree, but it is scattered, mixed with tests and boilerplate, and
 never put together into an explanation.
 
-The solution is not decided yet. The user will choose the approach. The
+The approach was chosen on 2026-10-12 from three pilots (see Log). The
 tickets state the problems and how to tell whether they are fixed.
 
 ## Tickets
@@ -72,13 +72,6 @@ Done when:
   and `pay-3`
 - [ ] no title or node URI is meta text or a licence header
 
-### 506 briefs do not copy credential-looking values (E29)
-Problem: a test-support brief carries an `.env`-style test password from
-the source. The export trips secret scanners.
-Done when:
-- [ ] condense and brief replace credential-looking values with a
-  placeholder, and a test proves it
-
 ## How to check
 - Trace by hand: `lear-filings-1` and `pay-3` from
   `docs/evaluations/2026-10-bc-registries-agents/data/arch.json`, plus 2–3
@@ -92,3 +85,17 @@ Done when:
 ## Log
 - 2026-10-11: created from the BC Registries agent A/B and two hand traces;
   solution left to the user.
+- 2026-10-12: dropped 506 (E29): the "secret" was a test fixture value that
+  the operator's canary hook flags; not a product problem.
+- 2026-10-12: approach chosen and built, from pilots on `bcreg`:
+  - clustering vector 0.6 x condensation embedding + 0.4 x leading folders
+    weighted 1/depth, granite embeddings
+    (`docs/evaluations/2026-10-cluster-formula/`), for 501 and 502;
+  - condense `purpose-decisions`, leaf brief `core-states`, upper brief
+    `area-flows` (`docs/evaluations/2026-10-condense-prompts/`,
+    `docs/evaluations/2026-10-brief-prompts/`), for 503 and 504;
+  - full rebuild started into `~/hrono-eval/db/hrono-v2.db` (server on port
+    8789, profile `v2`); the old tree stays as the baseline.
+  - Open: 505 untested; `update` places new sections before condensing
+    them, so incremental placement reads raw content until the next
+    rebuild; TAU (0.70) was set for the old vector space.
