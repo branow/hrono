@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+import zlib
 from collections.abc import AsyncIterator
 
 from starlette.concurrency import run_in_threadpool
@@ -50,7 +51,23 @@ def state_of(conn: sqlite3.Connection, job_id: str) -> dict[str, object] | None:
     }
     if rolled is not None:
         state["progress"] = {"done": rolled.done, "total": rolled.total}
+    state["mark"] = _mark(conn, job_id, row["result"])
     return state
+
+
+def _mark(conn: sqlite3.Connection, job_id: str, result: object) -> str:
+    """Moves whenever the run's page would read differently: a model call
+    recorded, a row of the tree changed, a stage started or ended. A page
+    that watches the stream refetches itself when it moves, so what a run
+    spent and changed shows as it happens, not when it ends."""
+    calls = conn.execute(
+        "SELECT COUNT(*) FROM llm_calls WHERE run_id = ?", (job_id,)
+    ).fetchone()[0]
+    changed = conn.execute(
+        "SELECT COALESCE(MAX(id), 0) FROM changes WHERE run = ?", (job_id,)
+    ).fetchone()[0]
+    said = zlib.crc32(str(result or "").encode())
+    return f"{calls}.{changed}.{said}"
 
 
 def is_terminal(state: dict[str, object]) -> bool:

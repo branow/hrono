@@ -17,9 +17,15 @@ says which section rather than "condense failed".
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+
+from hrono.jobs import store
+
+_logger = logging.getLogger(__name__)
 
 ITEM = "item: "
 
@@ -66,8 +72,13 @@ class Stages:
     single call that creates it.
     """
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.monotonic,
+        report: Callable[[dict[str, object]], None] | None = None,
+    ) -> None:
         self._clock = clock
+        self._report = report
         self._done: list[Done] = []
 
     def run[Made](
@@ -75,6 +86,7 @@ class Stages:
     ) -> Made:
         """Run one stage; record it, or raise ``StageFailed`` naming it."""
         started = self._clock()
+        self._tell({**self.outcome(), "current": {"op": op, "over": over}})
         try:
             made = call()
         except StageFailed:
@@ -85,7 +97,17 @@ class Stages:
             ) from exc
         result = made if isinstance(made, Mapping) else None
         self._done.append(Done(op, over, self._clock() - started, result))
+        self._tell(self.outcome())
         return made
+
+    def _tell(self, so_far: dict[str, object]) -> None:
+        """Pass the run so far to whoever watches it; never fail the run."""
+        if self._report is None:
+            return
+        try:
+            self._report(so_far)
+        except Exception:
+            _logger.exception("could not record a stage's progress")
 
     def outcome(
         self, extra: Mapping[str, object] | None = None
@@ -95,6 +117,19 @@ class Stages:
             **(dict(extra) if extra else {}),
             "stages": [done.view() for done in self._done],
         }
+
+
+def recorder(
+    database: object, job_id: str
+) -> Callable[[dict[str, object]], None]:
+    """A ``report`` that stores the run so far on its job row, so the run's
+    page shows each stage as it starts and ends rather than at the end."""
+
+    def report(so_far: dict[str, object]) -> None:
+        with database.write() as conn:  # type: ignore[attr-defined]
+            store.note_progress(conn, job_id, json.dumps(so_far))
+
+    return report
 
 
 def note_item(exc: BaseException, item: str) -> None:

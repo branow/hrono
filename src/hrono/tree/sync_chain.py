@@ -44,7 +44,7 @@ from hrono.cluster.repair import repair
 from hrono.health import report
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.jobs.stages import Stages
+from hrono.jobs.stages import Stages, recorder
 from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize.brief import brief
 from hrono.summarize.brief_upper import brief_upper
@@ -70,7 +70,7 @@ def sync(
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         before = changes.snapshot(conn, tree)
-    run = Stages()
+    run = Stages(report=recorder(context.database, job.id))
     ingested = run.run(
         "update",
         lambda: update(
