@@ -269,3 +269,42 @@ root lines that name parts rather than behaviour, briefs that drop
 identifiers, overrides and side effects, and recall that attaches tests and
 templates. And the agent uses the map badly: it skips it, reads only the
 root, or treats it as the answer instead of a pointer into the code.
+
+## Round 3: plain questions, two arms, each run twice
+
+The 10 analysed questions rewritten without the code's names, rubrics
+trimmed to what each asks (`../2026-10-bc-registries-agents/data/arch3.json`,
+22 of 85 facts dropped); code only against code + hrono (map + recall), a
+12-turn budget for both, the map instruction "the map points you to the
+right files: open them, verify, follow the flow past it", the export saying
+which folder an area's leaves are in (`9822283`). Fact coverage per run:
+
+| question | code a | code b | hrono a | hrono b | code | hrono | diff |
+|---|---|---|---|---|---|---|---|
+| lear-filings-1 | 0.70 | 0.80 | 0.80 | 0.80 | 0.75 | 0.80 | +0.05 |
+| lear-filings-2 | 0.75 | 0.83 | 0.83 | 0.75 | 0.79 | 0.79 | 0.00 |
+| auth-0 | 1.00 | 0.93 | 0.93 | 0.93 | 0.96 | 0.93 | -0.04 |
+| auth-4 | 0.75 | 0.88 | 0.88 | 0.75 | 0.81 | 0.81 | 0.00 |
+| pay-0 | 0.64 | 0.57 | 0.50 | 0.64 | 0.61 | 0.57 | -0.04 |
+| pay-3 | 0.80 | 0.70 | 0.80 | 0.70 | 0.75 | 0.75 | 0.00 |
+| pay-5 | 0.57 | 0.64 | 0.71 | 0.71 | 0.61 | 0.71 | +0.11 |
+| ui-0 | 0.86 | 0.79 | 0.71 | 0.71 | 0.82 | 0.71 | -0.11 |
+| ui-3 | 0.75 | 0.75 | 0.88 | 0.88 | 0.75 | 0.88 | +0.12 |
+| cross-0 | 0.71 | 0.79 | 0.71 | 0.00 | 0.75 | 0.36 | -0.39 |
+| mean | | | | | 0.76 | 0.73 | -0.03 |
+
+Turns 10.3 (code) and 11.2 (hrono); cost $2.78 and $3.21 for 20 runs each;
+2 contradicted facts each. hrono opened the map in 15 of 20 runs.
+
+- The one large difference is a harness artefact: on `cross-0` run b the
+  hrono agent spent 7 of its 12 turns reading the map (root, 3 areas, 3
+  leaves), ran out of turns while verifying in the code and returned no
+  answer. Scored at its run a, hrono's mean is 0.77 against 0.76.
+- Otherwise the arms are level: the per-question differences (−0.11 to
+  +0.12) are the size of the run-to-run spread inside one arm (up to 0.13).
+- Plain wording did not defeat grep: code alone still covers 0.76. Sonnet
+  finds the files from domain words ("filing", "invoice", "dashboard") as
+  well as from identifiers.
+
+On this benchmark, a Sonnet agent with the checkout gains nothing
+measurable from hrono, in facts or in turns.
