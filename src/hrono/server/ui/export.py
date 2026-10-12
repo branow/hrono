@@ -35,6 +35,7 @@ from hrono.export.saved import ROOT_PAGE
 from hrono.jobs.worker import enqueue
 from hrono.server import prose
 from hrono.server.ui import Reader, Writer, _fields, _trees, router, templates
+from hrono.server.ui.jobs import clock
 
 DEFAULT_LEVELS = 4
 OP = "export"
@@ -71,7 +72,7 @@ def export_page(
         pages = kept.pages()
         shown = page if page in pages else ROOT_PAGE
         context |= {
-            "built_at": kept.built_at,
+            "built_at": clock(kept.built_at),
             "shape": kept.shape,
             "budget": WIDTH,
             "files": kept.files,
@@ -111,9 +112,10 @@ async def start_export(tree: str, request: Request, user: Writer) -> Response:
         tree=tree,
         started_by=user.name,
     )
-    said = quote("Started the export. Refresh this page when it finishes.")
+    # the page itself follows the running export (``running``) and shows
+    # the result when it lands; there is nothing to say on top of that
     return RedirectResponse(
-        f"/ui/trees/{tree}/export?tree={tree}&done={said}", status_code=303
+        f"/ui/trees/{tree}/export?tree={tree}", status_code=303
     )
 
 
@@ -142,13 +144,14 @@ def _built(conn: sqlite3.Connection, tree: str) -> bool:
     return row is not None
 
 
-def _running(conn: sqlite3.Connection, tree: str) -> bool:
+def _running(conn: sqlite3.Connection, tree: str) -> str:
+    """The id of an export of ``tree`` waiting or working, or ""."""
     row = conn.execute(
-        "SELECT 1 FROM jobs WHERE tree = ? AND op = ? "
-        "AND status IN ('pending', 'running') LIMIT 1",
+        "SELECT id FROM jobs WHERE tree = ? AND op = ? "
+        "AND status IN ('pending', 'running') ORDER BY created_at DESC LIMIT 1",
         (tree, OP),
     ).fetchone()
-    return row is not None
+    return str(row["id"]) if row else ""
 
 
 TOKEN = "YOUR_TOKEN"

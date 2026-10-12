@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_parts.html" import start_sync with context %}
+{% from "_parts.html" import start_sync, follow with context %}
 {% block title %}hrono — {{ tree }} export{% endblock %}
 {% block main %}
 <div class="page-head">
@@ -29,24 +29,19 @@
   <div class="toolbar"><a class="btn primary" href="{{ download }}" download>Download .zip</a></div>
   {% endif %}
 
-  {% if running %}
-  <div class="callout">
-    <div class="body">
-      <div class="title">Exporting</div>
-      <p class="hint">The export is being built in the background. Refresh this page when it finishes; the <a href="/ui/jobs?tree={{ tree }}">Runs</a> page shows its progress.</p>
-    </div>
-  </div>
-  {% endif %}
+  {% if running %}{{ follow(running, "Exporting the tree") }}{% endif %}
 
   {% if not exported %}
+  {% if not running %}
   <div class="card">
     <div class="card-body stack" data-empty>
       <h2>Not exported yet</h2>
       <p class="hint">{% if can_write %}Press Export to write the tree as Markdown files.{% else %}A writer can export it from this page.{% endif %}</p>
     </div>
   </div>
+  {% endif %}
   {% else %}
-  <p class="hint">Exported {{ built_at }} at {{ levels }} hops. It does not change until the next export.</p>
+  <p class="hint">Exported {{ built_at }} at {{ levels }} hops<span class="tip" tabindex="0" role="note" data-tip="The export does not change until the next one">?</span></p>
 
   {% if flagged %}
   <div class="callout warn">
