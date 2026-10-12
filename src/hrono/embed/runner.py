@@ -44,12 +44,19 @@ def backend_installed() -> bool:
 def embed_texts(
     texts: list[str], batch_size: int, encode: Encoder
 ) -> list[list[float]]:
-    """Encode ``texts`` to vectors, halving the batch on an OOM failure."""
+    """Encode ``texts`` to vectors, halving the batch on an OOM failure.
+
+    Batches are cut from the texts sorted by length and the vectors returned
+    in the input order. A batch is padded to its longest text, so mixing a
+    long section into every batch made a bcreg embed four times slower.
+    """
+    order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+    by_length = [texts[i] for i in order]
     vectors: list[list[float]] = []
     index = 0
     size = max(1, batch_size)
-    while index < len(texts):
-        batch = texts[index : index + size]
+    while index < len(by_length):
+        batch = by_length[index : index + size]
         try:
             encoded = encode(batch)
         except Exception as exc:  # noqa: BLE001 - degrade on allocation failure
@@ -63,7 +70,10 @@ def embed_texts(
             continue
         vectors.extend([list(vector) for vector in encoded])
         index += len(batch)
-    return vectors
+    restored: list[list[float]] = [[] for _ in texts]
+    for position, vector in zip(order, vectors, strict=True):
+        restored[position] = vector
+    return restored
 
 
 def batch_size(params: dict[str, object]) -> int:

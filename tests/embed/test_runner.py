@@ -233,3 +233,17 @@ def test_a_failure_does_not_stop_the_retry() -> None:
         time.sleep(0.01)
     assert runner.ready_encoder_for("flaky", build=working) is not None
     assert "flaky" not in runner._FAILED  # and the memory is cleared
+
+
+def test_vectors_come_back_in_input_order_whatever_the_lengths() -> None:
+    texts = ["a much longer text here", "b", "ccc", "dd"]
+    seen: list[list[str]] = []
+
+    def encode(batch: list[str]) -> list[list[float]]:
+        seen.append(list(batch))
+        return [[float(len(t))] for t in batch]
+
+    vectors = embed_texts(texts, 2, encode)
+
+    assert vectors == [[23.0], [1.0], [3.0], [2.0]]
+    assert seen == [["b", "dd"], ["ccc", "a much longer text here"]]
