@@ -1738,6 +1738,10 @@ fieldset.fields + fieldset.fields { padding-top: var(--s3); border-top: 1px soli
 .fields .hint { font-size: .75rem; margin: 0; }
 .needed { color: var(--accent); margin-left: .15rem; }
 #steps .chip { font: 560 .8125rem/1.5 var(--sans); }
+.callout.live .live-line { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; width: 100%; }
+.callout.live .body { flex: 1; }
+.callout.live .live-line .title { font-weight: 600; }
+.callout.live .live-line a { margin-left: auto; }
 .check-state { display: flex; align-items: center; gap: var(--s3); min-height: 2.25rem; }
 .check-state form { margin: 0; }
 .checking { display: inline-flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--ink-soft); }
@@ -1917,13 +1921,49 @@ window.statusWord = (s) => (s === {{ partial_status|tojson }} ? 'running' : s);
   <div class="body"><p class="hint">{{ wrong }}</p></div>
 </div>
 {% endif %}
-{% if said %}
+{% if started %}
+{% from "_parts.html" import follow %}
+{{ follow(started, said or "Running") }}
+{% elif said %}
 <div class="callout ok mb-3" id="done" role="status">
-  <div class="body"><p class="hint">{{ said }}{% if started %} <a href="/ui/jobs/{{ started }}?tree={{ tree }}">Watch it run</a>{% endif %}</p></div>
+  <div class="body"><p class="hint">{{ said }}</p></div>
 </div>
 {% endif %}
 {% block main %}{% endblock %}</main>
 <div id="tipbox" role="tooltip" hidden></div>
+<script>
+/* Every job a page is waiting on ([data-follow]) is followed live: its
+   progress fills in, and when it ends the page reloads without the
+   started-notice, so what the job made is simply there. A failure stays on
+   the page with a link to why. */
+document.querySelectorAll("[data-follow]").forEach((box) => {
+  const job = box.dataset.follow;
+  const progress = box.querySelector(".live-progress");
+  const source = new EventSource("/jobs/" + job + "/events");
+  const settle = () => {
+    const url = new URL(location.href);
+    url.searchParams.delete("run");
+    url.searchParams.delete("done");
+    location.replace(url.toString());
+  };
+  source.addEventListener("state", (event) => {
+    const state = JSON.parse(event.data);
+    if (state.progress && state.progress.total) {
+      progress.textContent = state.progress.done + " of " + state.progress.total;
+    }
+    if (state.status === "succeeded") { source.close(); settle(); }
+    else if (state.status === "failed" || state.status === "canceled") {
+      source.close();
+      box.classList.add("bad");
+      box.querySelector(".spinner").remove();
+      box.querySelector(".title").textContent =
+        state.status === "failed" ? "It failed" : "It was stopped";
+      box.querySelector("a").textContent = "See why";
+    }
+  });
+  source.onerror = () => { source.close(); setTimeout(settle, 1500); };
+});
+</script>
 <script>
 /* A filter form marked data-live applies itself when a choice changes; its
    button stays for a browser running no script. */

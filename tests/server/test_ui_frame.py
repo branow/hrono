@@ -316,14 +316,14 @@ def test_starting_a_sync_comes_back_saying_what_it_started(
     sent = browser.client.post(f"/ui/trees/{TREE}/sync", follow_redirects=False)
     page = browser.get(sent.headers["location"])
 
-    assert 'id="done"' in page
     assert "Started a sync" in page
     run = sent.headers["location"].split("run=")[1]
-    # the banner's own link: the page under it may list the same run
-    banner = page[
-        page.index('id="done"') : page.index("</div>", page.index('id="done"'))
-    ]
-    assert f'href="/ui/jobs/{run}?tree={TREE}">Watch it run' in banner
+    # the page follows the run itself; nobody is asked to refresh it
+    banner = page[page.index(f'data-follow="{run}"') :]
+    banner = banner[: banner.index("</div>")]
+    assert "Started a sync" in banner
+    assert f'href="/ui/jobs/{run}"' in page
+    assert "efresh" not in banner
 
 
 def test_stopping_and_re_running_say_what_they_did(browser: Browser) -> None:

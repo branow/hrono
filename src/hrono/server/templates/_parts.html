@@ -97,3 +97,20 @@
   </fieldset>
   {% endfor %}
 {% endmacro %}
+
+
+{# A background job this page is waiting on: a live line while it runs, and
+   the page itself when it ends. The reader never refreshes anything. The
+   script that drives it is in base.html and serves every page. #}
+{% macro follow(job, label) -%}
+<div class="callout live mb-3" data-follow="{{ job }}" role="status">
+  <div class="body">
+    <div class="live-line">
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="title">{{ label }}</span>
+      <span class="live-progress faint num"></span>
+      <a class="small" href="/ui/jobs/{{ job }}">Details</a>
+    </div>
+  </div>
+</div>
+{%- endmacro %}
