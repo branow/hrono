@@ -1,14 +1,12 @@
-<svg width="{{ graph.width }}" height="{{ graph.height }}" role="img"
-     aria-label="the map, with the topics the agent opened lit">
-  {% for line in graph.edges %}
-  <path d="{{ line }}" class="edge"/>
-  {% endfor %}
+{# The path the agent walked, as an indented list: every topic it opened
+   is lit, the latest is marked, and the rest of each opened level is there
+   faintly for context. A circle map of hundreds of topics cannot fit in half
+   a screen; a list of the opened path always does. #}
+<ul class="demo-trail" aria-label="the topics the agent opened, in the tree">
   {% for node in graph.nodes %}
-  <g class="node b{{ node.branch }}{% if node.id in visited %} visited{% endif %}{% if node.id == current %} reading{% endif %}" data-node="{{ node.id }}" data-x="{{ node.x }}" data-y="{{ node.y }}">
-    <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
-    <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
-    <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
-    <title>{{ node.name }}, topic {{ node.id }}</title>
-  </g>
+  <li class="{% if node.id in visited %}visited{% endif %}{% if node.id == current %} reading{% endif %}" style="--depth: {{ node.depth }}" data-node="{{ node.id }}">
+    <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}" target="_blank" rel="noopener" title="{{ node.name }}{% if node.where %} — in {{ node.where }}{% endif %}">{{ node.name }}</a>
+    <span class="holds">{{ node.holds|counted(node.holds_what) }}</span>
+  </li>
   {% endfor %}
-</svg>
+</ul>

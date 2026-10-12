@@ -2,49 +2,47 @@
 {% block title %}hrono — {{ tree }} demo{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Demo<span class="tip" tabindex="0" role="note" data-tip="An agent answers from this tree while you watch: what recall attached, every page and file it opened, and its answer">?</span></h1>
-</div>
-
-<div class="callout" id="how">
-  <div class="body">
-    <div class="title">A demonstration, not the real setup</div>
-    <p class="hint">In real use the agent runs in your project. The plugin's hook attaches recall to each prompt, and the agent reads the exported map and the source files in your checkout with its own file tools, such as Read and Grep. Here the same steps run on the server, with two tools standing in for those, <code>open_topic</code> and <code>open_source</code>, so that each step can be shown.</p>
-  </div>
+  <h1>Demo<span class="tip" tabindex="0" role="note" data-tip="An agent answers from this tree while you watch: what recall attached, every page and file it opened, and its answer. In real use the agent runs in your project with its own file tools; here two stand-ins, open_topic and open_source, run on the server so each step can be shown">?</span></h1>
+  <p class="said">A demonstration, not the real setup: the agent's steps run here so each one can be shown.</p>
 </div>
 
 {% if not exported %}
-<div class="callout warn">
-  <div class="body">
+<section class="card">
+  <div class="card-body empty">
     <div class="title">Export this tree first</div>
-    <p class="hint">The agent reads the tree's export. <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export it</a>, then come back.</p>
+    <p class="hint">The agent reads the tree's export, the same files a real agent is handed.</p>
+    <div class="mt-3">{% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/export"><button class="btn primary" type="submit">Export now</button></form>{% else %}<a class="btn" href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export</a>{% endif %}</div>
   </div>
-</div>
+</section>
 {% elif not connections %}
-<div class="callout warn">
-  <div class="body">
-    <div class="title">No connection yet</div>
-    <p class="hint">The agent runs on a model you have set up. <a href="/ui/config?tree={{ tree }}&amp;section=connections">Add a connection</a> and a text model on it in Settings.</p>
+<section class="card">
+  <div class="card-body empty">
+    <div class="title">No model to run it on</div>
+    <p class="hint">The agent runs on a text model you have set up in Settings.</p>
+    <div class="mt-3"><a class="btn primary" href="/ui/config?tree={{ tree }}&amp;section=connections">Add a connection</a></div>
   </div>
-</div>
+</section>
 {% else %}
-<div class="row demo-pick">
-  <label>Connection
+<div class="demo-pick">
+  <label class="field"><span>Connection</span>
     <select id="connection">
       {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} · {{ c.provider }}{% endif %}</option>{% endfor %}
     </select>
   </label>
-  <label>Model
+  <label class="field"><span>Model</span>
     <select id="model"></select>
   </label>
   <span class="hint" id="no-model" hidden>No text model on this connection. <a href="/ui/config?tree={{ tree }}&amp;section=models">Add one in Settings</a>.</span>
-  <button class="btn quiet small" type="button" id="fresh">New conversation</button>
-  <span class="hint faint">Map exported {{ exported }}</span>
+  <button class="btn" type="button" id="fresh" hidden>New conversation</button>
 </div>
 
 <div class="demo">
   <section class="demo-talk" aria-label="conversation">
-    <ol class="steps" id="steps" aria-live="polite"></ol>
-    <p class="hint" id="empty">Ask something about this project. Each answer shows what recall attached, then every step the agent took.</p>
+    <ol class="demo-steps" id="demo-steps" aria-live="polite"></ol>
+    <div class="demo-empty" id="empty">
+      <div class="title">Ask about this project</div>
+      <p class="hint">You will see what recall attached, every topic and file the agent opened, then its answer.</p>
+    </div>
     <form id="ask" class="demo-ask">
       <label class="grow">
         <span class="visually-hidden">Question</span>
@@ -53,7 +51,10 @@
       <button class="btn primary" type="submit" {% if not can_write %}disabled title="Asking runs a model, so it needs the writer role"{% endif %}>Ask</button>
     </form>
   </section>
-  <div class="canvas demo-map" id="map" tabindex="0" role="region" aria-label="the map, lit where the agent went"></div>
+  <figure class="demo-side">
+    <div class="demo-map" id="map" tabindex="0" role="region" aria-label="the topics the agent opened"></div>
+    <figcaption class="faint small">Lit where the agent went · export of {{ exported }}</figcaption>
+  </figure>
 </div>
 
 <script type="application/json" id="models">{{ models|tojson }}</script>
@@ -64,7 +65,7 @@
   var models = JSON.parse(document.getElementById("models").textContent);
   var connection = document.getElementById("connection");
   var model = document.getElementById("model");
-  var steps = document.getElementById("steps");
+  var steps = document.getElementById("demo-steps");
   var empty = document.getElementById("empty");
   var form = document.getElementById("ask");
   var map = document.getElementById("map");
@@ -88,6 +89,7 @@
     visited = [];
     steps.replaceChildren();
     empty.hidden = false;
+    document.getElementById("fresh").hidden = true;
     drawMap();
   }
 
@@ -97,13 +99,9 @@
       .then(function (reply) { return reply.text(); })
       .then(function (html) {
         map.innerHTML = html;
-        var here = map.querySelector(".node.reading");
+        var here = map.querySelector("li.reading");
         if (here) {
-          map.scrollTo({
-            left: Number(here.dataset.x) - map.clientWidth / 2,
-            top: Number(here.dataset.y) - map.clientHeight / 2,
-            behavior: "smooth"
-          });
+          map.scrollTo({ top: here.offsetTop - map.clientHeight / 2, behavior: "smooth" });
         }
       });
   }
@@ -116,7 +114,7 @@
   }
 
   function folded(summary, body) {
-    var details = el("details");
+    var details = el("details", "reveal");
     details.append(el("summary", "", summary), el("pre", "mono passage", body));
     return details;
   }
@@ -125,17 +123,21 @@
   var shown = {
     asked: function (s) { return ["You", el("p", "demo-q", s.text)]; },
     recall: function (s) {
-      if (s.problem) return ["Hook", el("p", "hint", "Recall could not run: " + s.problem)];
-      if (!s.hits.length) return ["Hook", el("p", "hint", "Recall attached nothing: " + (s.refused || "no passage was confident enough") + ".")];
+      if (s.problem) {
+        var why = el("p", "hint", "Recall could not run, so the agent started with no passages attached.");
+        why.title = s.problem;
+        return ["Recall", why];
+      }
+      if (!s.hits.length) return ["Recall", el("p", "hint", "Recall attached nothing: " + (s.refused || "no passage was confident enough") + ".")];
       var list = el("ul", "demo-hits");
       s.hits.forEach(function (h) {
         var item = el("li", "mono small");
-        item.append(el("span", "chip", h.kind), " " + h.title + " ", el("span", "faint", "score " + h.score));
+        item.append(el("span", "faint", h.kind), " " + h.title + " ", el("span", "faint", h.score));
         list.append(item);
       });
       var box = el("div");
       box.append(el("p", "hint", "Recall attached " + s.hits.length + " passage" + (s.hits.length === 1 ? "" : "s") + " to the question:"), list);
-      return ["Hook", box];
+      return ["Recall", box];
     },
     prompt: function (s) {
       var box = el("div");
@@ -146,7 +148,7 @@
     tool: function (s) {
       var box = el("div");
       var head = el("p", "mono small");
-      head.append(el("span", "chip accent", s.tool), " " + s.label);
+      head.append(el("span", "demo-tool", s.tool), " " + s.label);
       box.append(head, folded("What it returned (" + s.size.toLocaleString() + " characters)", s.preview + (s.size > s.preview.length ? "\n…" : "")));
       if (s.node) { visited.push(s.node); drawMap(); }
       return ["Tool", box];
@@ -184,6 +186,7 @@
       if (started.problem) { add({ kind: "failed", message: started.problem }); running(false); return; }
       if (started.conversation !== talk) { visited = []; drawMap(); }
       talk = started.conversation;
+      document.getElementById("fresh").hidden = false;
       form.question.value = "";
       var source = new EventSource("/ui/trees/" + encodeURIComponent(tree) + "/demo/" + talk + "/steps?after=" + started.after);
       source.addEventListener("step", function (event) {
@@ -209,33 +212,66 @@
 
 <style>
 main:has(.demo) { max-width: 1480px; }
-.demo-pick { margin-block: var(--s4); gap: var(--s4); }
-.demo-pick label { display: flex; align-items: center; gap: var(--s2); }
-.demo-pick select { min-width: 12rem; }
+.demo-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); margin-bottom: var(--s4); }
+.demo-pick select { min-width: 13rem; }
+.demo-pick #fresh { margin-left: auto; }
+.demo-pick #no-model { align-self: center; }
 .demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
 .demo-talk { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
-.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2);
+ol.demo-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2);
   max-height: clamp(24rem, 64vh, 48rem); overflow: auto; }
-.demo-step { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--s3);
-  padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r2); }
+ol.demo-steps:empty { display: none; }
+.demo-empty { padding: var(--s6) var(--s4); text-align: center; border: 1px dashed var(--rule-firm); border-radius: var(--r3); }
+.demo-empty .title { font-weight: 620; margin-bottom: var(--s1); }
+.demo-empty .hint { margin: 0 auto; }
+.demo-step { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr); gap: var(--s3); align-items: baseline;
+  padding: var(--s3); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r2); }
 .demo-step p { margin: 0; }
-.demo-who { font: 600 .75rem var(--mono); color: var(--ink-faint); text-transform: uppercase; padding-top: .15rem; }
-.demo-step.asked { background: var(--sunken); }
-.demo-step.tool .demo-who, .demo-step.recall .demo-who { color: var(--accent); }
+.demo-who { font-size: .75rem; font-weight: 600; color: var(--ink-faint); }
+.demo-step.asked { background: var(--sunken); border-color: transparent; }
+.demo-step.asked .demo-q { font-weight: 560; }
 .demo-step.answer { border-color: var(--accent); }
+.demo-step.answer .demo-who { color: var(--accent); }
 .demo-step.failed { border-color: var(--danger); }
 .demo-failed { color: var(--danger); }
-.demo-step details summary { cursor: pointer; color: var(--ink-soft); font-size: .8125rem; }
-.demo-step pre.passage { max-height: 18rem; overflow: auto; margin-top: var(--s2); }
+.demo-tool { font: 600 .75rem var(--mono); color: var(--accent); }
+.demo-step details.reveal { border-top: 0; padding-top: 0; margin-top: var(--s1); }
+.demo-step details.reveal > summary { font-size: .8125rem; font-weight: 500; color: var(--ink-soft); }
+.demo-step pre.passage { max-height: 18rem; overflow: auto; margin-top: var(--s2); font-size: .75rem; }
+.demo-step .prose code { overflow-wrap: anywhere; }
+.demo-step .prose > :first-child { margin-top: 0; }
 .demo-hits { list-style: none; margin: var(--s1) 0 0; padding: 0; display: grid; gap: var(--s1); }
-.demo-ask { display: flex; gap: var(--s2); align-items: flex-end; }
-.demo-ask .grow { flex: 1; }
-.demo-ask textarea { width: 100%; resize: vertical; }
+.demo-ask { display: flex; gap: var(--s2); align-items: stretch; }
+.demo-ask .grow { flex: 1; display: flex; }
+.demo-ask textarea { width: 100%; resize: vertical; min-height: 2.75rem; }
+.demo-ask .btn { align-self: stretch; padding-inline: 1.1rem; }
 .demo-ask.busy button::after { content: "…"; }
-.demo-map { max-height: clamp(24rem, 72vh, 52rem); min-height: 24rem; cursor: auto; }
-.demo-map svg .node circle.disc { --tint: var(--rule-firm); }
-.demo-map svg .node.visited circle.disc { --tint: var(--accent); }
-.demo-map svg .node:not(.visited) text { fill: var(--ink-faint); }
-@media (max-width: 900px) { .demo { grid-template-columns: minmax(0, 1fr); } }
+.demo-side { margin: 0; display: flex; flex-direction: column; gap: var(--s2); min-width: 0;
+  position: sticky; top: calc(var(--topbar) + var(--s3)); }
+.demo-side figcaption { text-align: right; }
+.demo-map {
+  max-height: clamp(20rem, 70vh, 52rem); min-height: 20rem; overflow: auto; position: relative;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r3);
+  padding: var(--s2) var(--s3);
+}
+ul.demo-trail { list-style: none; margin: 0; padding: 0; --step: 1.1rem; }
+ul.demo-trail li {
+  display: flex; align-items: baseline; gap: .5rem; min-width: 0;
+  padding: .25rem .4rem .25rem calc(.4rem + var(--depth) * var(--step));
+  border-radius: var(--r1); font-size: .8125rem;
+  background-image: repeating-linear-gradient(to right, var(--rule) 0 1px, transparent 1px var(--step));
+  background-repeat: no-repeat; background-position: .9rem 0;
+  background-size: calc(var(--depth) * var(--step)) 100%;
+}
+ul.demo-trail a { color: var(--ink-faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.demo-trail .holds { flex: none; margin-left: auto; font-size: .75rem; color: var(--ink-faint); }
+ul.demo-trail li.visited a { color: var(--accent); font-weight: 600; }
+ul.demo-trail li.reading { background-color: var(--accent-wash); }
+ul.demo-trail a:hover { color: var(--accent); }
+@media (max-width: 900px) {
+  .demo { grid-template-columns: minmax(0, 1fr); }
+  .demo-side { position: static; }
+  .demo-pick #fresh { margin-left: 0; }
+}
 </style>
 {% endblock %}
