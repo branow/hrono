@@ -151,3 +151,31 @@ stated, 0.5 partly, 0 missing), blind to the arm.
 - Fix the tree-only system prompt.
 - Decide how the code-plus-tree agent should be told to use the tree, and
   whether to describe the brief layout.
+
+## Round 2: 5 questions, 2026-10-12
+
+Run after the fixes above: system prompt with only the code's path, the
+3-level export (`export-bcreg-v2-L3`), recall attached by hrono's Claude Code
+plugin (hooks, no recall command), recall at `c0f637d` (cosine plus word
+gate), instructions in the user prompt. Arms `code-r2`, `hrono-r2`,
+`tree-r2` in `../2026-10-bc-registries-agents/harness/run_arms.py`. Fact
+coverage, scored by Opus as in the first run; the first run's arms (`repo`,
+`hrono`, `tree`: old tree, old recall, repository descriptions in the system
+prompt) on the same questions for comparison.
+
+| arm | lear-filings-1 | pay-3 | auth-0 | ui-0 | cross-0 | mean | errors | turns | cost |
+|---|---|---|---|---|---|---|---|---|---|
+| code only, first run | 0.57 | 1.00 | 0.86 | 0.86 | 0.56 | 0.77 | 0 | 12 | $0.75 |
+| code + old tree | 0.50 | 0.67 | 1.00 | 0.57 | 0.50 | 0.65 | 1 | 8 | $0.64 |
+| old tree only | 0.36 | 0.58 | 0.50 | 0.50 | 0.44 | 0.48 | 2 | 7 | $0.67 |
+| code only, round 2 | 0.50 | 0.83 | 1.00 | 0.86 | 0.62 | 0.76 | 0 | 16 | $1.15 |
+| code + new tree | 0.64 | 0.75 | 0.86 | 0.86 | 0.62 | 0.75 | 0 | 12 | $0.94 |
+| new tree only | 0.64 | 0.58 | 0.71 | 0.57 | 0.62 | 0.63 | 1 | 10 | $0.84 |
+
+- The tree alone went from 0.48 to 0.63. On the two flow questions
+  (`lear-filings-1`, `cross-0`) it matches or beats the code.
+- Code plus tree went from 0.12 below code alone to level with it (0.75
+  against 0.76), in 12 turns instead of 16 and 18% cheaper.
+- Recall was attached to every run. The code-plus-tree agent opened the map
+  on 3 of 5 questions (none on `auth-0` and `pay-3`).
+- Five questions: a difference under about 0.1 is noise.
