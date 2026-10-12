@@ -196,7 +196,9 @@ def cached_encoder_for(
         return encoder
 
 
-MAX_TOKENS = 8192
+# Measured on bcreg (16 GB machine): at 8192 a batch of long sections took
+# the whole of memory and swapped the embed to a halt.
+MAX_TOKENS = 2048
 
 
 def _load(model_id: str, timeout: float) -> object:
