@@ -1,3 +1,4 @@
+# ruff: noqa: E501 - prompt texts are data
 """The condense prompts under test, as data.
 
 `today` is hrono's seeded default, imported so it cannot drift from what the
