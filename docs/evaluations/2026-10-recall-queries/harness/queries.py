@@ -187,7 +187,9 @@ class Recall:
 
 
 def main(db: str, *qids: str) -> None:
-    questions = [q for q in json.load(open(ARCH)) if q["qid"] in (qids or QIDS)]
+    questions = [
+        q for q in json.loads(ARCH.read_text()) if q["qid"] in (qids or QIDS)
+    ]
     recall = Recall(db)
     rows = []
     for name, split in STRATEGIES.items():
