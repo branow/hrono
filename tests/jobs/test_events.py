@@ -84,7 +84,7 @@ def test_a_finished_job_gets_its_state_and_a_closed_stream(
 
     states = harness.watch(parent)
 
-    assert states == [
+    assert [{k: v for k, v in s.items() if k != "mark"} for s in states] == [
         {
             "id": parent,
             "status": "succeeded",
@@ -191,3 +191,25 @@ def test_a_leaf_ends_on_its_own_status(harness: Harness) -> None:
     # no progress to wait on: its status is the whole story.
     assert events.is_terminal({"id": "x", "status": "succeeded"}) is True
     assert events.is_terminal({"id": "x", "status": "running"}) is False
+
+
+def test_the_mark_moves_when_a_run_spends_or_records_a_stage(
+    harness: Harness,
+) -> None:
+    # the run page refetches itself when the mark moves, so it must move on
+    # what the page shows, not only on status
+    parent = harness.fan_out()
+    before = events.state_of(harness.conn, parent)  # type: ignore[arg-type]
+    harness.conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO llm_calls (run_id, model, role, provider, duration_ms,"
+        " ok, created_at) VALUES (?, 'm', 'condense', 'p', 1, 1, 't')",
+        (parent,),
+    )
+    spent = events.state_of(harness.conn, parent)  # type: ignore[arg-type]
+    harness.conn.execute(  # type: ignore[attr-defined]
+        "UPDATE jobs SET result = '{\"stages\": []}' WHERE id = ?", (parent,)
+    )
+    staged = events.state_of(harness.conn, parent)  # type: ignore[arg-type]
+
+    assert before is not None and spent is not None and staged is not None
+    assert len({before["mark"], spent["mark"], staged["mark"]}) == 3

@@ -32,7 +32,7 @@ from hrono.ingest.split_op import split_source
 from hrono.ingest.sync import sync
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
-from hrono.jobs.stages import Stages
+from hrono.jobs.stages import Stages, recorder
 from hrono.registry.collections.trees import DEFAULT_TREE, ingest_sources
 from hrono.registry.completeness import BUILD_ROLES
 from hrono.summarize.brief import brief
@@ -86,7 +86,7 @@ def maintain(
         _require_models(conn)
         before = changes.snapshot(conn, tree)
 
-    run = Stages()
+    run = Stages(report=recorder(context.database, job.id))
     for name in sources:
         source_scope = {"type": "source", "name": name}
         run.run(

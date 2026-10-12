@@ -205,6 +205,19 @@ def set_status(
         )
 
 
+def note_progress(conn: sqlite3.Connection, job_id: str, result: str) -> None:
+    """Store what a running job has done so far, for the page that watches it.
+
+    Only over ``running``: the outcome a worker writes when the job ends is
+    the last word, and a late note must not replace it.
+    """
+    with tx(conn):
+        conn.execute(
+            "UPDATE jobs SET result = ? WHERE id = ? AND status = 'running'",
+            (result, job_id),
+        )
+
+
 def finalize_parent(conn: sqlite3.Connection, parent_id: str, now: str) -> None:
     """Write a fan-out parent's terminal status once its last child ends.
 

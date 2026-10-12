@@ -11,14 +11,14 @@
   <p class="run-meta">
     <span class="state bare status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span>
     <span>started {{ job.started }}</span>
-    <span class="num">{{ job.took }}</span>
+    <span class="num" {% if job.live %}data-since="{{ job.since }}"{% endif %}>{{ job.took }}</span>
     {% if job.scope.name %}<span>over {{ job.scope.name }}</span>{% endif %}
     {% if not job.spend and job.cost %}<span>{{ unrecorded(job.before_ledger, job.cost) }}</span>{% endif %}
     <span class="mono faint" title="{{ job.id }}">{{ job.short_id }}</span>
   </p>
 </div>
 
-<div class="run-layout" id="run" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
+<div class="run-layout" id="run" data-job="{{ job.id }}" data-mark="{{ job.mark }}" {% if job.live %}data-live="1"{% endif %}>
 <div class="topic-main stack">
 
   {% if job.live %}
@@ -26,7 +26,7 @@
     <div class="card-body">
       <div class="live-line">
         <span class="spinner" aria-hidden="true"></span>
-        <span class="title">Running</span>
+        <span class="title">Running{% if job.current %} <code>{{ job.current.op }}</code>{% if job.current.over %} <span class="mono faint">{{ job.current.over }}</span>{% endif %}{% endif %}</span>
         <span class="progress faint num">{% if job.progress %}{{ job.progress.done }} of {{ job.progress.total }} done{% endif %}</span>
         <span class="grow"></span>
         {% if can_write %}
@@ -117,10 +117,10 @@
     </div>
   </section>
 
-  {% if job.stages %}
+  {% if job.stages or job.current %}
   <section class="card" id="stages">
     {% set failed_here = job.failure and job.failure.stage %}
-    <div class="card-head"><h2>Stages <span class="faint num">{% if failed_here %}{{ job.stages|length }} of {{ job.stages|length + 1 }} done{% else %}{{ job.stages|length }}{% endif %}</span></h2></div>
+    <div class="card-head"><h2>Stages <span class="faint num">{% if failed_here %}{{ job.stages|length }} of {{ job.stages|length + 1 }} done{% elif job.current %}{{ job.stages|length }} done{% else %}{{ job.stages|length }}{% endif %}</span></h2></div>
     <div class="card-body">
       <ol class="stages">
         {% for stage in job.stages %}
@@ -130,6 +130,13 @@
           <span class="st-took num faint">{{ stage.took }}</span>
         </li>
         {% endfor %}
+        {% if job.current %}
+        <li>
+          <span class="st-op"><code>{{ job.current.op }}</code>{% if job.current.over %} <span class="mono faint">{{ job.current.over }}</span>{% endif %}</span>
+          <span class="st-did st-now"><span class="spinner" aria-hidden="true"></span>running</span>
+          <span class="st-took"></span>
+        </li>
+        {% endif %}
         {% if job.failure and job.failure.stage %}
         <li>
           <span class="st-op"><code>{{ job.failure.stage }}</code>{% if job.failure.item %} <span class="mono" title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</span>
@@ -148,7 +155,7 @@
       <h2>What it changed<span class="tip" tabindex="0" role="note" data-tip="Read from the change journal: every row this run wrote, kept with what it replaced. Reverting undoes exactly these">?</span></h2>
       {% if can_run and not changes.reverted and not changes.blocker %}
       <form method="post" action="/ui/jobs/{{ job.id }}/revert?tree={{ tree }}" class="inline">
-        <button class="btn small" type="submit" {% if changes.blocker %}disabled title="Cannot revert: {{ changes.blocker }}"{% endif %}>Revert</button>
+        <button class="btn small" type="submit">Revert</button>
       </form>
       {% endif %}
     </div>
@@ -159,19 +166,67 @@
       <dl class="totals">
         {% if changes.total %}<div><dt>Topics touched</dt><dd><span class="num">{{ changes.topics|length }}</span> <span class="faint of">of {{ changes.total }}</span></dd></div>{% endif %}
         {% for what in ("new", "rewritten", "regrouped", "retired") %}{% set n = changes.count(what) %}{% if n %}<div class="touched-{{ what }}"><dt>{{ what|capitalize }}</dt><dd class="num">{{ n }}</dd></div>{% endif %}{% endfor %}
-        {% if changes.files.added %}<div><dt>Sections added</dt><dd class="num">{{ changes.files.added }}</dd></div>{% endif %}
-        {% if changes.files.removed %}<div><dt>Sections removed</dt><dd class="num">{{ changes.files.removed }}</dd></div>{% endif %}
+        <div><dt>Files changed</dt><dd class="num">{{ changes.files|length }}</dd></div>
       </dl>
-      {% if touched %}
-      <ul class="touched" aria-label="the topics this run touched, in the tree">
-        {% for node in touched.nodes %}{% set what = changes.topics.get(node.id) %}
-        <li class="{{ 'touched-' ~ what if what else 'untouched' }}" style="--depth: {{ node.depth }}">
-          <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">{{ node.name }}</a>
-          {% if what %}<span class="what">{{ what }}</span>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
+
+      {% if changes.files %}
+      <div>
+        <h3 class="changed-h">Files</h3>
+        <ul class="changed-files">
+          {% for f in changes.files %}
+          <li id="{{ f.anchor }}">
+            <details>
+              <summary>
+                <span class="chip file-{{ f.status }}">{{ f.status }}</span>
+                <code>{{ f.path }}</code> <span class="faint small">{{ f.source }}</span>
+                <span class="num plus">+{{ f.plus }}</span> <span class="num minus">-{{ f.minus }}</span>
+              </summary>
+              <pre class="diff">{% for l in f.diff %}<span class="d-{{ {'+': 'add', '-': 'del', '@': 'gap'}.get(l.kind, 'ctx') }}">{{ l.kind if l.kind in '+-' else ' ' }} {{ l.text }}</span>{% endfor %}</pre>
+            </details>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
       {% endif %}
+
+      <details class="changed-tree"{% if changes.outline|length <= 40 %} open{% endif %}>
+        <summary><h3 class="changed-h">Topics</h3> <span class="hint">only the branches it touched; each topic opens to say why</span></summary>
+        <ul class="changed-outline">
+          {% for row in changes.outline %}{% set t = row.change %}
+          <li style="--depth: {{ row.depth }}" class="{{ 'is-' ~ t.what if t else 'is-same' }}">
+            {% if t %}
+            <details>
+              <summary>
+                <span class="name">{{ row.name }}</span>
+                <span class="chip what-{{ t.what }}">{{ t.what }}</span>
+                {% if row.unchanged %}<span class="faint small">+{{ row.unchanged }} unchanged</span>{% endif %}
+              </summary>
+              <div class="why">
+                <ul>
+                  {% for path in t.entered %}<li>Sections of <a href="#{{ changes.anchor(path) }}"><code>{{ path }}</code></a> {{ 'changed' if path in t.left else 'came in' }}</li>{% endfor %}
+                  {% for path in t.left if path not in t.entered %}<li>Sections of <a href="#{{ changes.anchor(path) }}"><code>{{ path }}</code></a> left</li>{% endfor %}
+                  {% if t.below %}<li>Topics beneath it changed: {% for b in t.below %}{{ changes.names.get(b, 'topic %d'|format(b)) }}{{ ', ' if not loop.last }}{% endfor %}</li>{% endif %}
+                  {% for said in t.decided %}<li>{{ said[:1]|upper }}{{ said[1:] }}</li>{% endfor %}
+                  {% if t.what == "new" %}<li>A new topic, made by this run</li>{% endif %}
+                  {% if t.what == "regrouped" and not t.entered and not t.left and not t.below %}<li>Its place in the tree changed; its brief was kept</li>{% endif %}
+                </ul>
+                {% if t.brief %}
+                <details class="brief-diff">
+                  <summary>Its brief, before and after</summary>
+                  <pre class="diff">{% for l in t.brief %}<span class="d-{{ {'+': 'add', '-': 'del', '@': 'gap'}.get(l.kind, 'ctx') }}">{{ l.kind if l.kind in '+-' else ' ' }} {{ l.text }}</span>{% endfor %}</pre>
+                </details>
+                {% elif t.what == "new" and t.after %}
+                <details class="brief-diff"><summary>Its brief</summary><div class="prose">{{ t.after|markdown|safe }}</div></details>
+                {% endif %}
+              </div>
+            </details>
+            {% else %}
+            <div class="same"><span class="name">{{ row.name }}</span>{% if row.unchanged %} <span class="faint small">+{{ row.unchanged }} unchanged</span>{% endif %}</div>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
       {% if can_run and changes.blocker and not job.live %}<p class="hint">Revert is not available: {{ changes.blocker }}.</p>{% endif %}
       {% endif %}
     </div>
@@ -180,12 +235,26 @@
   .totals .of { font-size: .875rem; font-weight: 500; }
   .totals .touched-new dd { color: var(--ok); }
   .totals .touched-rewritten dd, .totals .touched-regrouped dd { color: var(--accent); }
-  ul.touched { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 28rem; overflow: auto; }
-  ul.touched li { display: flex; gap: var(--s2); align-items: baseline; padding: .15rem .4rem; padding-left: calc(.4rem + var(--depth) * 1.1rem); border-radius: var(--r1); }
-  ul.touched li.untouched a { color: var(--ink-faint); }
-  ul.touched li[class^="touched-"] { background: var(--accent-wash); }
-  ul.touched li.touched-new { background: var(--ok-wash); }
-  ul.touched .what { font: 600 .6875rem var(--mono); color: var(--ink-soft); text-transform: uppercase; }
+  h3.changed-h { display: inline; font-size: .9375rem; margin: 0; }
+  .changed-files, .changed-outline { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; gap: 2px; }
+  .changed-files summary, .changed-outline summary, .changed-tree > summary { cursor: pointer; display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; padding: .2rem .35rem; border-radius: var(--r1); }
+  .changed-files summary:hover, .changed-outline summary:hover { background: var(--sunken); }
+  .changed-files .plus, pre.diff .d-add { color: var(--ok); }
+  .changed-files .minus, pre.diff .d-del { color: var(--danger); }
+  pre.diff { margin: var(--s1) 0 var(--s2); padding: var(--s2); background: var(--sunken); border-radius: var(--r2); max-height: 26rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; line-height: 1.45; }
+  pre.diff span { display: block; }
+  pre.diff .d-add { background: var(--ok-wash); }
+  pre.diff .d-del { background: var(--danger-wash); }
+  pre.diff .d-gap { color: var(--ink-faint); }
+  .changed-outline > li { padding-left: calc(var(--depth) * 1.25rem); border-left: 0; }
+  .changed-outline > li + li { border-top: 1px solid var(--rule); }
+  .changed-outline .same { padding: .2rem .35rem; color: var(--ink-faint); }
+  .changed-outline .name { font-weight: 540; }
+  .changed-outline .why { padding: 0 .35rem var(--s2) 1.25rem; }
+  .changed-outline .why ul { margin: 0 0 var(--s1); padding-left: 1rem; color: var(--ink-soft); font-size: .8125rem; }
+  .chip.what-new, .chip.file-added { background: var(--ok-wash); color: var(--ok); border-color: transparent; }
+  .chip.what-rewritten, .chip.what-regrouped, .chip.file-changed { background: var(--accent-wash); color: var(--accent); border-color: transparent; }
+  .chip.what-retired, .chip.file-removed { background: var(--danger-wash); color: var(--danger); border-color: transparent; }
   </style>
   {% endif %}
 
@@ -264,7 +333,7 @@
     </div>
   </section>
   {% endif %}
-  {% if job.raw %}
+  {% if job.raw and not job.live %}
   <details class="reveal" id="raw">
     <summary>Raw result<span class="tip" tabindex="0" role="note" data-tip="What the run returned, as stored. The sections above are read from it">?</span></summary>
     <pre class="preview">{{ job.raw|tojson(indent=2) }}</pre>
@@ -274,34 +343,70 @@
 </div>
 
 <script>
-// The same SSE stream the list uses, for one run: a progress bar that only
-// moves on reload is a progress bar nobody believes.
+// A run's page follows the run: the stream says when anything the page shows
+// has moved (a model call, a changed row, a stage begun or ended), and the
+// page fetches itself and swaps in the new parts. Nothing is reloaded.
 (function () {
-  var word = window.statusWord;
   var run = document.getElementById("run");
   if (!run || !run.dataset.live) return;
+  var meta = document.querySelector(".run-meta");
+  var last = "", first = true, busy = false, again = false;
+
+  // the time it has been going, counted here between fetches
+  var since = document.querySelector("[data-since]");
+  var began = since ? Date.parse(since.dataset.since) : NaN;
+  function took(s) {
+    if (s < 60) return s + "s";
+    if (s < 3600) return Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s";
+    return Math.floor(s / 3600) + "h " + String(Math.floor(s % 3600 / 60)).padStart(2, "0") + "m";
+  }
+  var ticker = isNaN(began) ? null : setInterval(function () {
+    var el = document.querySelector("[data-since]");
+    if (el) el.textContent = took(Math.max(0, Math.floor((Date.now() - began) / 1000)));
+  }, 1000);
+
+  function opened() {
+    return Array.prototype.map.call(run.querySelectorAll("details[open] > summary"), function (s) { return s.textContent.trim(); });
+  }
+  function refresh(done) {
+    if (busy) { again = true; return; }
+    busy = true;
+    fetch(location.href, { headers: { "accept": "text/html" }, cache: "no-store" })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+      .then(function (html) {
+        var page = new DOMParser().parseFromString(html, "text/html");
+        var fresh = page.getElementById("run"), freshMeta = page.querySelector(".run-meta");
+        if (!fresh) return;
+        var keep = opened(), scrolled = {};
+        run.querySelectorAll("[id]").forEach(function (el) { if (el.scrollTop) scrolled[el.id] = el.scrollTop; });
+        run.innerHTML = fresh.innerHTML;
+        run.dataset.mark = fresh.dataset.mark || "";
+        run.querySelectorAll("details > summary").forEach(function (s) {
+          if (keep.indexOf(s.textContent.trim()) >= 0) s.parentNode.open = true;
+        });
+        Object.keys(scrolled).forEach(function (id) { var el = document.getElementById(id); if (el) el.scrollTop = scrolled[id]; });
+        if (meta && freshMeta) meta.innerHTML = freshMeta.innerHTML;
+        if (!fresh.dataset.live && ticker) clearInterval(ticker);
+      })
+      .catch(function () {})
+      .then(function () {
+        busy = false;
+        if (again) { again = false; refresh(); }
+      });
+  }
+
   var source = new EventSource("/jobs/" + run.dataset.job + "/events");
   source.addEventListener("state", function (event) {
     var state = JSON.parse(event.data);
-    var badge = run.ownerDocument.querySelector(".status");
-    if (badge) { badge.textContent = word(state.status); badge.dataset.state = word(state.status); }
-    var said = run.querySelector(".progress");
-    if (said && state.progress) {
-      said.textContent = state.progress.done + " of " + state.progress.total + " done";
-    }
-    var bar = run.querySelector(".bar > span");
-    if (bar && state.progress && state.progress.total) {
-      bar.parentNode.hidden = false;
-      bar.style.width = (100 * state.progress.done / state.progress.total) + "%";
-    }
-    // a run that has finished has an outcome to show, and this page is built
-    // server-side: reload once rather than rebuild it here
-    if (state.status && ["succeeded", "failed", "canceled"].indexOf(state.status) >= 0) {
-      source.close();
-      window.location.reload();
-    }
+    var over = ["succeeded", "failed", "canceled"].indexOf(state.status) >= 0;
+    var mark = state.mark + "|" + state.status + "|" + JSON.stringify(state.progress || null);
+    if (over) source.close();
+    // the first word is the state this page was built from
+    if (first) { first = false; if (state.mark === run.dataset.mark && !over) { last = mark; return; } }
+    if (mark === last && !over) return;
+    last = mark;
+    refresh();
   });
-  source.onerror = function () { source.close(); };
 })();
 </script>
 <style>
@@ -319,6 +424,8 @@ ol.stages > li:last-child { border-bottom: 0; }
 ol.stages > li::before { content: counter(st); font: .75rem var(--mono); color: var(--ink-faint); text-align: right; min-width: 1.5ch; }
 .st-did { color: var(--ink-soft); min-width: 0; overflow-wrap: anywhere; }
 .st-took { text-align: right; white-space: nowrap; }
+.st-now { display: inline-flex; align-items: center; gap: .4rem; color: var(--accent); }
+.st-now .spinner { width: .8rem; height: .8rem; }
 .st-did.st-failed { color: var(--danger); font-weight: 600; }
 ul.didwhat.big { columns: 2 18rem; column-gap: var(--s6); display: block; }
 ul.didwhat.big > li { break-inside: avoid; margin-bottom: .3rem; }

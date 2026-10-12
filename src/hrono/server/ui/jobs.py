@@ -24,7 +24,7 @@ from hrono.jobs.ops import OPS
 from hrono.jobs.scope import SOURCE_SCOPED, fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import failures, graph, outcome
+from hrono.server import events, failures, outcome
 from hrono.server.changed import changed
 from hrono.server.ui import (
     Admin,
@@ -347,6 +347,13 @@ def one_run(
         job = render_job(conn, row, recorded_since(conn))
         job["scope"] = to_job(row).scope
         job["raw"] = to_job(row).result
+        # while it runs: the stage it is on, when it began (the page counts
+        # the time up itself) and the stream's mark this page was built at
+        job["current"] = (
+            (job["raw"] or {}).get("current") if job["live"] else None
+        )
+        job["since"] = str(row["created_at"])
+        job["mark"] = (events.state_of(conn, job_id) or {}).get("mark", "")
         job["spend_by_stage"] = [
             {"stage": group["key"], **describe(group)}  # type: ignore[dict-item]
             for group in for_job_by_role(conn, job_id)
@@ -355,15 +362,6 @@ def one_run(
         made = (
             changed(conn, job_id, own_tree)
             if row["parent_id"] is None
-            else None
-        )
-        touched = (
-            graph.build(
-                conn,
-                own_tree,
-                sorted(graph.opened_to(conn, own_tree, list(made.topics))),
-            )
-            if made and not made.reverted
             else None
         )
     return templates.TemplateResponse(
@@ -377,7 +375,6 @@ def one_run(
             "can_write": user.role in {"writer", "admin"},
             "can_run": user.role == "admin",
             "changes": made,
-            "touched": touched,
         },
     )
 
