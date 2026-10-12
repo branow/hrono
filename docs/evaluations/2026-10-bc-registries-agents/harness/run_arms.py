@@ -82,16 +82,32 @@ MAP_ONLY_R2 = """
 
 Answer from the map: open {export}/root.md, choose the areas that fit the question, read their brief.md and the leaf briefs beneath them. Passages attached as hrono recall show where to look first."""
 
+# Round 3: the questions in plain words (data/arch3.json, plain.py), a map
+# instruction that makes it a pointer into the code, the same turn budget for
+# both arms, and every arm run twice (suffix a, b).
+MAP_R3 = """
+
+Before reading code: open {export}/root.md, choose the areas that fit the question, read their brief.md and the leaf briefs beneath them. The map points you to the right files: open the source files the leaves list, verify there, and follow the flow into code the map does not cover. Passages attached as hrono recall show where to look first."""
+TURNS_R3 = 12
+
 ROUND_2 = {
-    # arm: (system, task addition, runs in, loads the plugin)
-    "code-r2": (SYSTEM_CODE_R2, "", None, False),
-    "hrono-r2": (SYSTEM_CODE_R2, MAP_R2, None, True),
-    "tree-r2": (SYSTEM_TREE_R2, MAP_ONLY_R2, EXPORT_R2, True),
+    # arm: (system, task addition, runs in, loads the plugin, max turns)
+    "code-r2": (SYSTEM_CODE_R2, "", None, False, MAX_TURNS),
+    "hrono-r2": (SYSTEM_CODE_R2, MAP_R2, None, True, MAX_TURNS),
+    "tree-r2": (SYSTEM_TREE_R2, MAP_ONLY_R2, EXPORT_R2, True, MAX_TURNS),
+    **{
+        f"{arm}-r3{run}": (SYSTEM_CODE_R2, addition, None, plugin, TURNS_R3)
+        for arm, addition, plugin in (
+            ("code", "", False),
+            ("hrono", MAP_R3, True),
+        )
+        for run in "ab"
+    },
 }
 
 
 def run_round_2(kind, arm, q):
-    system, addition, cwd, plugin = ROUND_2[arm]
+    system, addition, cwd, plugin, turns = ROUND_2[arm]
     prompt = ARCH.format(question=q["question"])
     if cwd is not None:
         prompt = prompt.replace(
@@ -103,7 +119,7 @@ def run_round_2(kind, arm, q):
         model=MODEL,
         role=f"{kind}:{arm}",
         key=q["qid"],
-        max_turns=MAX_TURNS,
+        max_turns=turns,
         tools=["Read", "Grep", "Glob"],
         system=system.format(corpus=common.CORPUS, export=EXPORT_R2),
         add_dirs=[EXPORT_R2] if plugin and cwd is None else [],
