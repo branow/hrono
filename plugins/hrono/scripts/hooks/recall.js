@@ -35,18 +35,26 @@ function attachment(config, prompt) {
 function render(config, hits) {
   const head =
     `hrono recall from tree "${config.tree}": the map pages most likely to ` +
-    "cover this prompt, best first. Read them before the code: each says " +
-    "what its part does, its checks and failure handling, and which files hold it.";
+    "cover this prompt, best first. Each says what its part does, its checks " +
+    "and failure handling, and which files hold it.";
   const pages = pageIndex(config.folder);
-  let text = head;
+  // the best pages whole while they fit, then the rest as one line each: a
+  // page only pointed at is rarely opened (2026-10-bc-registries-v2/)
+  let whole = head;
+  let pointers = "";
   for (const hit of hits) {
     const page = hit.topic === undefined ? undefined : pages.get(hit.topic);
-    const block = page
-      ? `\n- ${page} : ${summary(page)}`
-      : `\n\n### ${title(hit)}\n\n${hit.body}`;
-    if (text.length + block.length > config.longest) break;
-    text += block;
+    if (!page) {
+      const block = `\n\n### ${title(hit)}\n\n${hit.body}`;
+      if (whole.length + pointers.length + block.length <= config.longest) whole += block;
+      continue;
+    }
+    const full = `\n\n### ${page}\n\n${read(page)}`;
+    const line = `\n- ${page} : ${summary(page)}`;
+    if (!pointers && whole.length + full.length <= config.longest) whole += full;
+    else if (whole.length + pointers.length + line.length <= config.longest) pointers += line;
   }
+  const text = pointers ? `${whole}\n\nMore pages:${pointers}` : whole;
   return text === head ? null : text;
 }
 
@@ -80,18 +88,21 @@ function pageIndex(folder) {
   return pages;
 }
 
+/** @param {string} page */
+function read(page) {
+  try {
+    return fs.readFileSync(page, "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
 /**
  * A page's title and its first sentence.
  * @param {string} page
  */
 function summary(page) {
-  let text = "";
-  try {
-    text = fs.readFileSync(page, "utf8");
-  } catch {
-    return "";
-  }
-  const lines = text.split("\n").map((line) => line.trim());
+  const lines = read(page).split("\n").map((line) => line.trim());
   const heading = (lines.find((line) => line.startsWith("# ")) ?? "").slice(2);
   const first = lines.find((line) => line && !line.startsWith("#")) ?? "";
   const sentence = (first.match(/^.*?[.!?](\s|$)/) ?? [first])[0].trim();

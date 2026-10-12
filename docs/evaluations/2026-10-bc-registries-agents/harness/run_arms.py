@@ -130,6 +130,11 @@ ROUND_2 = {
         f"hrono-v3p{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
         for run in "ab"
     },
+    # the same, with the best pages attached whole (24,000 characters)
+    **{
+        f"hrono-v3f{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
 }
 
 

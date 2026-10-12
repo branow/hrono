@@ -104,8 +104,21 @@ test("a hit whose topic is in the export is attached as that map page", () => {
   w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.match(text, /the map pages most likely to cover this prompt/);
-  assert.ok(text.includes(`\n- ${page} : Sign-in. Checks a password.`));
+  assert.ok(text.includes(`### ${page}\n\n# Sign-in\n\nChecks a password. Then more.`));
   assert.doesNotMatch(text, /def login/);
+});
+
+test("pages past the budget are listed by title", () => {
+  const w = world([7, 8].map((topic) => ({ ...LOGIN, topic })));
+  const page = (id) => path.join(w.dir, "export", `part-${id}`, "brief.md");
+  for (const id of [7, 8]) {
+    fs.mkdirSync(path.dirname(page(id)), { recursive: true });
+    fs.writeFileSync(page(id), `# Part ${id}\n\nDoes ${id}. ${"x".repeat(300)}\n`);
+  }
+  w.configure({ tree: "demo", folder: path.join(w.dir, "export"), longest: 1000 });
+  const text = attached(w.run("recall.js", { prompt: ASK }));
+  assert.ok(text.includes(`### ${page(7)}`));
+  assert.ok(text.includes(`More pages:\n- ${page(8)} : Part 8. Does 8.`));
 });
 
 test("recall off, a short prompt or a slash command attach nothing", () => {
