@@ -141,6 +141,7 @@ Notes appear in the export, so the agent reading the tree sees them.
 | `GET /jobs/{id}/children` | reader | Child jobs |
 | `GET /jobs/{id}/events` | reader | Live progress (Server-Sent Events) |
 | `POST /jobs/{id}/cancel` | admin | Cooperative cancel, cascades to children |
+| `POST /jobs/{id}/revert` | admin | Undo every change the run made (newest run first, nothing running) |
 | `POST /jobs` | admin | `{op, scope, tree}`: enqueue any registered op. For debugging only |
 
 A job is `{id, parent_id, tree, op, scope, status, error, result, started_by,

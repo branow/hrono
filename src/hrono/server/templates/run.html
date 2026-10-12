@@ -142,6 +142,53 @@
   </section>
   {% endif %}
 
+  {% if changes %}
+  <section class="card" id="changed">
+    <div class="card-head">
+      <h2>What it changed<span class="tip" tabindex="0" role="note" data-tip="Read from the change journal: every row this run wrote, kept with what it replaced. Reverting undoes exactly these">?</span></h2>
+      {% if can_run and not changes.reverted %}
+      <form method="post" action="/ui/jobs/{{ job.id }}/revert?tree={{ tree }}" class="inline">
+        <button class="btn small" type="submit" {% if changes.blocker %}disabled title="Cannot revert: {{ changes.blocker }}"{% endif %}>Revert</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="card-body stack">
+      {% if changes.reverted %}
+      <p class="hint">Reverted {{ changes.reverted[:16]|replace("T", " ") }}. The tree is back as it was before this run; sync again to replay it.</p>
+      {% else %}
+      <p class="changed-head"><strong class="num">{{ changes.topics|length }}</strong> of <span class="num">{{ changes.total }}</span> topics touched</p>
+      <p class="row">
+        {% for what in ("new", "rewritten", "regrouped", "retired") %}{% set n = changes.count(what) %}{% if n %}<span class="chip touched-{{ what }}">{{ n }} {{ what }}</span>{% endif %}{% endfor %}
+        {% if changes.files.added %}<span class="chip">{{ changes.files.added|counted("sections") }} added</span>{% endif %}
+        {% if changes.files.removed %}<span class="chip">{{ changes.files.removed|counted("sections") }} removed</span>{% endif %}
+      </p>
+      {% if touched %}
+      <ul class="touched" aria-label="the topics this run touched, in the tree">
+        {% for node in touched.nodes %}{% set what = changes.topics.get(node.id) %}
+        <li class="{{ 'touched-' ~ what if what else 'untouched' }}" style="--depth: {{ node.depth }}">
+          <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">{{ node.name }}</a>
+          {% if what %}<span class="what">{{ what }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if can_run and changes.blocker %}<p class="hint">Cannot revert: {{ changes.blocker }}.</p>{% endif %}
+      {% endif %}
+    </div>
+  </section>
+  <style>
+  .changed-head { margin: 0; font-size: 1.05rem; }
+  ul.touched { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 28rem; overflow: auto; }
+  ul.touched li { display: flex; gap: var(--s2); align-items: baseline; padding: .15rem .4rem; padding-left: calc(.4rem + var(--depth) * 1.1rem); border-radius: var(--r1); }
+  ul.touched li.untouched a { color: var(--ink-faint); }
+  ul.touched li[class^="touched-"] { background: var(--accent-wash); }
+  ul.touched li.touched-new { background: var(--ok-wash); }
+  ul.touched .what { font: 600 .6875rem var(--mono); color: var(--ink-soft); text-transform: uppercase; }
+  .chip.touched-new { background: var(--ok-wash); color: var(--ok); border-color: transparent; }
+  .chip.touched-rewritten, .chip.touched-regrouped { background: var(--accent-wash); color: var(--accent); border-color: transparent; }
+  </style>
+  {% endif %}
+
   <section class="card">
     <div class="card-head"><h2>What it did</h2></div>
     <div class="card-body">

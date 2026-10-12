@@ -25,7 +25,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from hrono.crypto.cipher import Cipher
-from hrono.db import update_log
+from hrono.db import journal, update_log
 from hrono.db.database import Database
 from hrono.errors import AppError, BadRequest, Internal, as_app_error
 from hrono.jobs import store
@@ -272,12 +272,15 @@ class Worker(threading.Thread):
                 # safe to say back — and useless to hide behind "the job
                 # failed".
                 raise BadRequest(f"unknown op: {job.op}")
-            outcome = handler(
-                job,
-                JobContext(
-                    self._database, self._cipher, self._cache_root, job.id
-                ),
-            )
+            # every row the job writes is journaled under its run, so the
+            # run can be reverted as one (`db/journal.py`)
+            with journal.recording(self._run_of(job)):
+                outcome = handler(
+                    job,
+                    JobContext(
+                        self._database, self._cipher, self._cache_root, job.id
+                    ),
+                )
         except Exception as exc:  # noqa: BLE001 - a leaf failure is recorded
             # the record keeps the CODE; the driver's own wording lives here,
             # where an operator can read it and a client cannot.
@@ -288,6 +291,17 @@ class Worker(threading.Thread):
             self._finish(job, "succeeded", None, outcome)
         finally:
             self._held = None
+
+    def _run_of(self, job: Job) -> str:
+        """The run a job belongs to: the job at the top of its family."""
+        run = job.id
+        with self._database.connect() as conn:
+            parent = job.parent_id
+            while parent is not None:
+                run = parent
+                row = store.get(conn, parent)
+                parent = None if row is None else row["parent_id"]
+        return run
 
     def _finish(
         self,

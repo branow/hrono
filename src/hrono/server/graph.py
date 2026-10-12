@@ -665,3 +665,29 @@ def _fitted(text: str, budget: int) -> str:
     if len(text) <= budget:
         return text
     return text[: budget - 1].rstrip(" ,;:.") + "…"
+
+
+def opened_to(conn: sqlite3.Connection, tree: str, seen: list[int]) -> set[int]:
+    """``seen`` and every topic above them, the root at least: the ``opened``
+    a view needs so that each of them is drawn."""
+    parent = {
+        int(row["child"]): int(row["parent"])
+        for row in conn.execute(
+            "SELECT c.parent_id AS parent, c.child_id AS child "
+            "FROM node_children c JOIN nodes n ON n.id = c.parent_id "
+            "WHERE n.tree = ?",
+            (tree,),
+        ).fetchall()
+    }
+    root = conn.execute(
+        "SELECT id FROM nodes WHERE tree = ? ORDER BY level DESC, id LIMIT 1",
+        (tree,),
+    ).fetchone()
+    opened = {int(root["id"])} if root else set()
+    for node in seen:
+        while node not in opened:
+            opened.add(node)
+            if node not in parent:
+                break
+            node = parent[node]
+    return opened

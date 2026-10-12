@@ -122,7 +122,7 @@ def demo_map(
     """The map opened down to every topic visited, those topics lit."""
     seen = [int(part) for part in visited.split(",") if part.isdigit()]
     with request.app.state.db.connect() as conn:
-        opened = _opened(conn, tree, seen)
+        opened = graph.opened_to(conn, tree, seen)
         drawn = graph.build(conn, tree, sorted(opened))
     return templates.TemplateResponse(
         request,
@@ -212,31 +212,6 @@ def _choices(
                 }
             )
     return connections, models
-
-
-def _opened(conn: sqlite3.Connection, tree: str, seen: list[int]) -> set[int]:
-    """The visited topics and every topic above them; the root at least."""
-    parent = {
-        int(row["child"]): int(row["parent"])
-        for row in conn.execute(
-            "SELECT c.parent_id AS parent, c.child_id AS child "
-            "FROM node_children c JOIN nodes n ON n.id = c.parent_id "
-            "WHERE n.tree = ?",
-            (tree,),
-        ).fetchall()
-    }
-    root = conn.execute(
-        "SELECT id FROM nodes WHERE tree = ? ORDER BY level DESC, id LIMIT 1",
-        (tree,),
-    ).fetchone()
-    opened = {int(root["id"])} if root else set()
-    for node in seen:
-        while node not in opened:
-            opened.add(node)
-            if node not in parent:
-                break
-            node = parent[node]
-    return opened
 
 
 def _shown(step: Step) -> dict[str, object]:
