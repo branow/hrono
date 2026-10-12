@@ -1,12 +1,13 @@
-"""The recall engine: assemble the two legs + fusion into ranked hits.
+"""The recall engine: gate, rank, window, render.
 
-Embeds the question (content), runs the vector leg and keyword leg over the
-UNION of source and brief passages, fuses them, and renders up
-to ``limit`` hits — each the passage's one-line header (address + ``sp:``
-structure paths), full body, origin (summary for ``node`` passages, else
-source), and fused score. An empty union returns no hits and the frozen explore
-message. The whole recipe is internal — no constant surfaces. The query encoder
-is injected so the engine is testable offline; the endpoint builds the real one.
+A question the tree has no words for gets no hits and the explore message
+(``gate``). Otherwise the question is embedded, every source and brief
+passage in the tree is ranked by cosine against it (``similarity``), and the
+best ``limit`` are kept, one per document (``window``). Each hit renders as the
+passage's one-line header (address + ``sp:`` structure paths), full body,
+origin (summary for ``node`` passages, else source), and cosine. The query
+encoder is injected so the engine is testable offline; the endpoint builds
+the real one.
 """
 
 from __future__ import annotations
@@ -16,8 +17,9 @@ import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from hrono.recall import fusion, keyword_leg, vector_leg
+from hrono.recall import gate, similarity
 from hrono.recall.scope import passages_of
+from hrono.recall.window import CAP, EXPLORE_MESSAGE, window
 
 Encode = Callable[[list[str]], Sequence[Sequence[float]]]
 
@@ -48,58 +50,43 @@ def recall(
     model_name: str,
     encode: Encode,
     *,
-    limit: int = fusion.CAP,
+    limit: int = CAP,
     tree: str | None = None,
 ) -> Recall:
-    """Run the frozen recall recipe for ``question`` and return ranked hits.
+    """Recall ``question``: the passages most like it, one per document.
 
-    ``tree`` scopes the corpus to that tree's passages. Omitted, or a
-    tree that declares no sources, searches everything — which is what a
-    single-corpus database is, and why its scores are unchanged.
+    ``tree`` scopes the corpus to that tree's passages. Omitted, or a tree that
+    declares no sources, searches everything — which is what a single-corpus
+    database is.
     """
-    query_vec = list(encode([question])[0])
     allowed = None if tree is None else passages_of(conn, tree)
-    vector_z = vector_leg.scores(conn, query_vec, model_name, allowed)
-    keyword_z = keyword_leg.scores(conn, question, allowed)
-    vector_hits = vector_leg.qualify(vector_z, keyword_z)
-    keyword_hits = keyword_leg.search(conn, question, vector_z, allowed)
-
-    fused = fusion.fuse(
-        vector_hits,
-        keyword_hits,
-        _documents(conn, vector_hits, keyword_hits),
-    )
-    if not fused.ranked:
-        return Recall(hits=(), message=fused.message)
-
-    cap = min(limit, fusion.CAP)
+    if not gate.answers(conn, question, allowed):
+        return Recall(hits=(), message=EXPLORE_MESSAGE)
+    query_vec = list(encode([question])[0])
+    ranked = similarity.ranked(conn, query_vec, model_name, allowed)
+    kept = window(ranked, lambda ids: _documents(conn, ids), limit)
+    if not kept:
+        return Recall(hits=(), message=EXPLORE_MESSAGE)
     hits = tuple(
-        _render(conn, passage_id, score, tree)
-        for passage_id, score in fused.ranked[:cap]
+        _render(conn, passage_id, score, tree) for passage_id, score in kept
     )
     return Recall(hits=hits, message=None)
 
 
-def _documents(
-    conn: sqlite3.Connection,
-    vector_hits: Sequence[tuple[int, float]],
-    keyword_hits: Sequence[tuple[int, float]],
-) -> dict[int, str]:
-    """Map each candidate passage to the document it belongs to.
+def _documents(conn: sqlite3.Connection, ids: Sequence[int]) -> dict[int, str]:
+    """Map each passage to the document it belongs to: its URI.
 
-    A document is the passage's URI, which addresses the FILE and not the
-    slice of it — the unit a reader would call "the same place". hrono's URIs
-    carry no position: every passage of a file at one version shares
-    one, and where the passage sits inside it lives in ``ordinal`` and
-    ``sp_paths``. So the URI IS the document key, with nothing to strip.
+    hrono's URIs address the FILE (or the brief), not the slice of it: every
+    passage of a file at one version shares one, and where the passage sits
+    inside it lives in ``ordinal`` and ``sp_paths``. So the URI IS the document
+    key, with nothing to strip.
     """
-    ids = {pid for pid, _ in vector_hits} | {pid for pid, _ in keyword_hits}
     if not ids:
         return {}
-    marks = ",".join("?" * len(ids))
     rows = conn.execute(
-        f"SELECT id, uri FROM passages WHERE id IN ({marks})",  # noqa: S608
-        tuple(ids),
+        "SELECT id, uri FROM passages "
+        "WHERE id IN (SELECT value FROM json_each(?))",
+        (json.dumps(list(ids)),),
     ).fetchall()
     return {int(row["id"]): str(row["uri"]) for row in rows}
 

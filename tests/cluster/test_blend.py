@@ -6,12 +6,10 @@ from pathlib import Path
 import pytest
 
 from hrono.cluster.blend import (
-    ALPHA,
     FOLDER_DIMS,
     FOLDER_WEIGHT,
     TEXT_WEIGHT,
     clustering_vector,
-    combine,
     combined_vector,
     folder_vector,
     path_body,
@@ -34,38 +32,6 @@ def _dot(a: Sequence[float], b: Sequence[float]) -> float:
 def _unit(vec: Sequence[float]) -> list[float]:
     norm = math.sqrt(sum(x * x for x in vec))
     return [x / norm for x in vec]
-
-
-def test_blend_identity_holds_for_unit_vectors() -> None:
-    c1, c2 = _unit([1, 2, 3, 4]), _unit([4, 3, 2, 1])
-    p1, p2 = _unit([0, 1, 0, 1]), _unit([1, 0, 1, 0])
-    left = _dot(combine(c1, p1), combine(c2, p2))
-    right = (1 - ALPHA) * _dot(c1, c2) + ALPHA * _dot(p1, p2)
-    assert left == pytest.approx(right)
-
-
-def test_combined_has_double_the_dims_and_is_deterministic() -> None:
-    content = _unit([1, 1, 1, 1, 1])
-    path = _unit([1, 0, 0, 0, 0])
-    combined = combine(content, path)
-    assert len(combined) == 2 * len(content)
-    assert combined == combine(content, path)
-
-
-def test_non_unit_inputs_are_normalised_so_the_identity_holds() -> None:
-    c1, c2 = [2, 4, 6, 8], [8, 6, 4, 2]  # non-unit
-    p1, p2 = [0, 3, 0, 3], [3, 0, 3, 0]
-    left = _dot(combine(c1, p1), combine(c2, p2))
-    right = (1 - ALPHA) * _dot(_unit(c1), _unit(c2)) + ALPHA * _dot(
-        _unit(p1), _unit(p2)
-    )
-    assert left == pytest.approx(right)
-
-
-def test_zero_vector_does_not_divide_by_zero() -> None:
-    combined = combine([0.0, 0.0], [1.0, 0.0])
-    assert len(combined) == 4
-    assert combined[0] == 0.0 and combined[1] == 0.0
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
-"""Recall: rank stored passages for a query across two legs and fuse them.
+"""Recall: the passages of a tree most like a question.
 
-The keyword leg (this package's ``fts``) ranks passages by BM25 over an FTS5
-index of passage path + body; the vector leg ranks by the path-blended
-similarity passages are already embedded for. ``fusion`` combines
-the two by RRF and ``engine`` runs the whole recipe.
+``gate`` refuses a question the tree has no words for, ``similarity`` ranks
+source and brief passages by cosine, ``window`` keeps the best one per
+document, and ``engine`` runs the recipe. ``fts`` is the keyword index the gate
+reads.
 """

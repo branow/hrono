@@ -150,23 +150,27 @@ markdown, so they go through the same splitter into the same store under
 `source_type='node'` (`recall/brief_passages.py`): architectural questions
 surface briefs, detail questions surface sources.
 
-- **Vector leg** (`vector_leg.py`): each passage is scored both content-only
-  and path-blended, each z-scored against the query's own distribution
-  (median and MAD, so the matches do not raise their own bar), and keeps the
-  better. A passage qualifies at z ≥ 3.2 with keyword corroboration, or
-  z ≥ 4.5 without.
-- **Keyword leg** (`keyword_leg.py`): BM25 over FTS5 (path + body). A keyword
-  hit never qualifies alone (its background is stopword matches); it needs
-  z ≥ 6.0 and vector z ≥ 3.0. In practice it corroborates rather than
-  retrieves.
-- **Fusion** (`fusion.py`): weighted reciprocal rank fusion, 70/30
-  vector/keyword, k = 60, capped at 10 hits, with a diversity reserve so one
-  document fills at most 40% of the window while other qualified documents
-  wait. No gap cutoff: the z-floors alone decide.
+In one sentence: if at least 90% of the question's content words occur in the
+tree, return the 5 passages (up to 10) closest to it by cosine, one per file;
+otherwise send the agent to the map.
 
-Recall is strict on purpose, because injection costs tokens on every request.
+- **Gate** (`gate.py`): a question's content words are its tokens of three
+  letters or more that are not function words, matched by stem (less a plural
+  or tense ending, at most 5 letters). When fewer than 90% of them
+  occur in the tree's FTS index, the tree does not cover the question and
+  recall returns no hits. Vocabulary separates on- from off-topic questions;
+  similarity does not (every question has a nearest passage).
+- **Ranking** (`similarity.py`): plain cosine of the question's embedding
+  against each passage's content embedding, sources and briefs in one list.
+- **Window** (`window.py`): the best passages in order, the first of each
+  document (a file or a brief), up to the requested limit (cap 10). Never
+  padded.
+
 An empty result returns one line, *no confident matches - explore the map*:
-misses fail safe to exploring, never to silence.
+misses fail safe to exploring, never to silence. The recipe replaced a
+path-blended, z-scored one with fixed floors, which were calibrated on MiniLM
+and cut most answers once the tree was embedded with granite
+(`evaluations/2026-10-recall-queries/`).
 
 ## Explore: the export
 

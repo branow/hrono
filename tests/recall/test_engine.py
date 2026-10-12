@@ -1,37 +1,32 @@
-"""Calibration: a planted answer is recovered; a strict miss -> explore.
+"""The recall recipe end to end: gate, cosine order, one passage per document.
 
-Sizing matters: the vector leg z-scores over the query's own
-distribution, so max z ~ sqrt(N-1) — under ~13 passages the vector leg can never
-fire. The recovery corpus is >=14 passages so the vector path is exercised; a
-separate tiny corpus proves the fail-safe (neither leg reaches its floor ->
-explore, never a low-confidence hit).
+Vectors are planted, so a test says exactly which passage is closest to the
+question; the words of the question decide the gate.
 """
 
-import re
 from collections.abc import Iterator
 
 import pytest
 
-from hrono.cluster.blend import path_body, register_path_bodies
 from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
-from hrono.ingest.store import (
-    insert_passage,
-    insert_section,
-    upsert_content,
-)
+from hrono.ingest.store import insert_section, upsert_content
 from hrono.recall import fts
 from hrono.recall.engine import recall
+from hrono.recall.window import CAP, EXPLORE_MESSAGE
 
 MODEL = "emb"
 DIMS = 8
-PATH = "src/x.py"
 
 
-def unit(index: int) -> list[float]:
+def unit(
+    index: int, other: int | None = None, weight: float = 0.0
+) -> list[float]:
     vec = [0.0] * DIMS
     vec[index] = 1.0
+    if other is not None:
+        vec[other] = weight
     return vec
 
 
@@ -42,440 +37,181 @@ def const_encode(vec: list[float]):
     return encode
 
 
-def add_passage(conn: object, body: bytes, content_vec: list[float]) -> str:
+def add_passage(
+    conn: object,
+    body: bytes,
+    vec: list[float],
+    path: str = "src/x.py",
+    *,
+    source: str = "repo",
+    kind: str = "git",
+    ordinal: int = 0,
+) -> str:
+    """A passage the way split stores one: section, passage row, FTS row."""
     digest = content_hash(body)
     upsert_content(conn, digest, body)  # type: ignore[arg-type]
-    upsert_vector(conn, digest, MODEL, content_vec)  # type: ignore[arg-type]
+    upsert_vector(conn, digest, MODEL, vec)  # type: ignore[arg-type]
+    instance = "hrono" if kind == "node" else "ex/repo"
+    version = "sig" if kind == "node" else "v1"
     section_id = insert_section(
         conn,  # type: ignore[arg-type]
-        source="repo",
-        address=Address("git", "ex/repo", PATH, "v1"),
+        source=source,
+        address=Address(kind, instance, path, version),
         start=0,
         end=len(body),
         content_hash=digest,
-        ordinal=0,
+        ordinal=ordinal,
     )
-    uri = f"git://ex/repo/{PATH}@v1"
+    uri = f"{kind}://{instance}/{path}@{version}"
     conn.execute(  # type: ignore[attr-defined]
         "INSERT INTO passages(section_id, source, source_type, instance, path, "
         "version, uri, byte_start, byte_end, content_hash, sp_paths, ordinal, "
-        "created_at) VALUES (?, 'repo', 'git', 'ex/repo', ?, 'v1', ?, 0, ?, ?, "
-        "'[]', 0, 't')",
-        (section_id, PATH, uri, len(body), digest),
+        "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '[]', ?, 't')",
+        (
+            section_id,
+            source,
+            kind,
+            instance,
+            path,
+            version,
+            uri,
+            len(body),
+            digest,
+            ordinal,
+        ),
     )
-    fts.index_passage(  # production indexes every passage; so must a fixture
+    fts.index_passage(
         conn,  # type: ignore[arg-type]
         passage_id=int(
             conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]
         ),
-        source="repo",
-        path=PATH,
+        source=source,
+        path=path,
         body=body.decode(),
     )
     return uri
-
-
-def _plant_paths(conn: object) -> None:
-    register_path_bodies(conn, [PATH])
-    upsert_vector(conn, content_hash(path_body(PATH)), MODEL, unit(2))
-
-
-@pytest.fixture
-def big(tmp_path: object) -> Iterator[tuple[Database, str]]:
-    database = Database.at(tmp_path / "hrono.db")
-    with database.connect() as conn, conn:
-        _plant_paths(conn)
-        answer = add_passage(
-            conn, b"the authentication flow issues bearer tokens\n", unit(0)
-        )
-        for i in range(15):  # >= 14 others so the vector leg can qualify one
-            add_passage(conn, f"unrelated topic {i}\n".encode(), unit(1))
-    yield database, answer
-    database.close()
-
-
-def test_planted_answer_is_recovered_above_the_floors(
-    big: tuple[Database, str],
-) -> None:
-    database, answer = big
-    with database.connect() as conn:
-        # the question embeds to the answer's content vector (e0)
-        result = recall(conn, "authentication?", MODEL, const_encode(unit(0)))
-    assert result.message is None
-    assert result.hits
-    assert result.hits[0].uri == answer
-    assert result.hits[0].kind == "source"
-
-
-def test_a_no_answer_question_returns_the_explore_message(
-    big: tuple[Database, str],
-) -> None:
-    database, _ = big
-    with database.connect() as conn:
-        # the question embeds orthogonal to every passage (e3) -> no qualifier
-        result = recall(conn, "unrelated?", MODEL, const_encode(unit(3)))
-    assert result.hits == ()
-    assert result.message == "no confident matches - explore the map."
-
-
-def test_tiny_corpus_fails_safe_to_explore(tmp_path: object) -> None:
-    # under ~13 passages the vector leg cannot reach z>=3.5 and the keyword leg
-    # cannot reach z>=6.0, so even a matching question returns explore, never a
-    # low-confidence hit.
-    database = Database.at(tmp_path / "tiny.db")
-    with database.connect() as conn, conn:
-        _plant_paths(conn)
-        add_passage(conn, b"authentication tokens here\n", unit(0))
-        add_passage(conn, b"other one\n", unit(1))
-        add_passage(conn, b"other two\n", unit(1))
-    try:
-        with database.connect() as conn:
-            result = recall(
-                conn, "authentication?", MODEL, const_encode(unit(0))
-            )
-        assert result.hits == ()
-        assert result.message == "no confident matches - explore the map."
-    finally:
-        database.close()
-
-
-def _blend(content: list[float]) -> list[float]:
-    norm = sum(v * v for v in content) ** 0.5
-    return [v / norm for v in content]
-
-
-@pytest.fixture
-def rich(tmp_path: object) -> Iterator[Database]:
-    """A corpus that genuinely holds MANY answers, plus a varied noise body.
-
-    The shape a mean/sd estimator breaks: 12 real matches raise the mean AND
-    the standard deviation they are then measured against, so every one of
-    them scores under the floor. The noise scores vary slightly so the MAD is
-    not degenerate — a flat noise body is the case ``_spread`` falls back on.
-    """
-    database = Database.at(tmp_path / "rich.db")
-    with database.connect() as conn, conn:
-        _plant_paths(conn)
-        for i in range(12):  # strong matches, 0.80 .. 0.99 cosine
-            content = _blend(
-                [0.99 - i * 0.017, 0.14 + i * 0.05, 0.0] + [0.0] * (DIMS - 3)
-            )
-            add_passage(conn, f"the answer, phrasing {i}\n".encode(), content)
-        for i in range(30):  # noise, slightly varied so the MAD is non-zero
-            content = _blend([0.01 * i, 1.0, 0.0] + [0.0] * (DIMS - 3))
-            add_passage(conn, f"unrelated topic {i}\n".encode(), content)
-    yield database
-    database.close()
-
-
-def test_an_on_topic_question_fills_the_window(rich: Database) -> None:
-    # a corpus with many genuine matches must return a full window, not the
-    # 1-2 a mean/sd estimator leaves.
-    with rich.connect() as conn:
-        result = recall(conn, "the answer?", MODEL, const_encode(unit(0)))
-    assert result.message is None
-    assert len(result.hits) == 10  # the cap, not the floor, is what bounds it
-    assert all(hit.kind == "source" for hit in result.hits)
-
-
-def test_an_off_topic_question_still_explores(rich: Database) -> None:
-    # ... without letting the other half slip: the same corpus must still
-    # refuse a question it has no answer for.
-    with rich.connect() as conn:
-        result = recall(conn, "nothing like it?", MODEL, const_encode(unit(3)))
-    assert result.hits == ()
-    assert result.message == "no confident matches - explore the map."
-
-
-ABSENT = (
-    "how to train a labrador puppy",
-    "what is the capital of Peru",
-    "recipes for a chocolate cake",
-    "who won the 1998 world cup final",
-    "symptoms of vitamin D deficiency",
-    "best hiking trails in the Alps",
-    "how do I tune a violin",
-    "the plot of Anna Karenina",
-)
-PRESENT = "the bearer token authentication flow"
-
-# a toy embedding with the property real ones have: text that shares words is
-# near. Function words are IN the vocabulary on purpose — that is how an absent
-# question ends up near a passage it has nothing to do with, which is the leak
-# a robust (median/MAD) floor invites and this suite exists to catch.
-_VOCAB = (
-    "how",
-    "to",
-    "the",
-    "a",
-    "token",
-    "authentication",
-    "bearer",
-    "licence",
-)
-
-
-def bag_encode(texts: list[str]) -> list[list[float]]:
-    out = []
-    for text in texts:
-        terms = re.findall(r"[a-z0-9]+", text.lower())
-        vec = [float(terms.count(word)) for word in _VOCAB]
-        norm = sum(v * v for v in vec) ** 0.5
-        out.append([v / norm for v in vec] if norm else vec)
-    return out
-
-
-def _bag(text: str) -> list[float]:
-    return bag_encode([text])[0]
 
 
 @pytest.fixture
 def corpus(tmp_path: object) -> Iterator[Database]:
-    """One subject, a bulk of other material, and a few generic passages.
-
-    The generic ones share only FUNCTION words with an absent question, which
-    is exactly how "how to train a labrador puppy" reached chalk's
-    benchmark.js: the fixture has to be able to leak before the test can prove
-    it does not.
-    """
-    database = Database.at(tmp_path / "corpus.db")
+    database = Database.at(tmp_path / "hrono.db")
     with database.connect() as conn, conn:
-        _plant_paths(conn)
-        for i in range(3):
-            body = f"bearer token authentication {'bearer ' * (i % 3)}{i}\n"
-            add_passage(conn, body.encode(), _bag(body))
-        for i in range(36):
-            body = f"licence clause {i} licence licence licence\n"
-            add_passage(conn, body.encode(), _bag(body))
-        for i in range(3):
-            body = f"how to how to a the thing {i}\n"
-            add_passage(conn, body.encode(), _bag(body))
+        add_passage(
+            conn,
+            b"the authentication flow issues bearer tokens\n",
+            unit(0),
+            "src/auth.py",
+        )
+        add_passage(
+            conn,
+            b"bearer tokens are refreshed before they expire\n",
+            unit(0, 1, 0.5),
+            "src/refresh.py",
+        )
+        for i in range(6):
+            add_passage(
+                conn,
+                f"invoice ledger entry {i}\n".encode(),
+                unit(1),
+                f"src/ledger_{i}.py",
+            )
     yield database
     database.close()
 
 
-def test_every_absent_question_returns_the_explore_message(
+def ask(database: Database, question: str, vec: list[float], limit: int = CAP):
+    with database.connect() as conn:
+        return recall(conn, question, MODEL, const_encode(vec), limit=limit)
+
+
+def test_the_closest_passage_comes_first(corpus: Database) -> None:
+    result = ask(corpus, "How are bearer tokens issued?", unit(0))
+
+    assert result.message is None
+    assert [hit.path for hit in result.hits[:2]] == [
+        "src/auth.py",
+        "src/refresh.py",
+    ]
+    assert result.hits[0].score == pytest.approx(1.0)
+    assert result.hits[0].kind == "source"
+
+
+def test_a_question_the_tree_has_no_words_for_is_sent_to_the_map(
     corpus: Database,
 ) -> None:
-    # ONE leak anywhere fails: seven of eight measured absent questions held
-    # under the plain floor and the eighth did not, so a single probe proves
-    # nothing.
-    leaked = {}
-    for question in ABSENT:
-        with corpus.connect() as conn:
-            result = recall(conn, question, MODEL, bag_encode)
-        if result.hits:
-            leaked[question] = len(result.hits)
-    assert leaked == {}
+    # its vector is the answer's own: only the gate can stop it
+    result = ask(corpus, "What hydration suits a sourdough starter?", unit(0))
+
+    assert result.hits == ()
+    assert result.message == EXPLORE_MESSAGE
 
 
-def test_the_absent_questions_could_have_leaked(corpus: Database) -> None:
-    # the suite above is only worth having if the corpus can leak: without
-    # corroboration these questions DO clear the vector floor, on passages that
-    # share nothing with them but function words.
-    from hrono.recall import vector_leg
-
-    reachable = 0
-    for question in ABSENT:
-        with corpus.connect() as conn:
-            z = vector_leg.scores(conn, _bag(question), MODEL)
-        reachable += sum(
-            1 for score in z.values() if score >= vector_leg.Z_FLOOR
-        )
-    assert reachable > 0
-
-
-def test_a_present_question_still_returns_hits(corpus: Database) -> None:
-    # the counterweight, in the same suite ON PURPOSE: without it the cheapest
-    # way to pass the test above is to raise the floor until everything is cut,
-    # which restores the too-few-hits defect the robust floor exists to fix.
-    # Direction, not magnitude.
-    with corpus.connect() as conn:
-        result = recall(conn, PRESENT, MODEL, bag_encode)
-    assert result.message is None
-    assert result.hits
-
-
-def test_the_present_question_mean_sd_got_wrong_is_recovered(
-    rich: Database,
+def test_a_question_with_no_content_words_is_sent_to_the_map(
+    corpus: Database,
 ) -> None:
-    # the estimator's own regression: this shape returns ZERO candidates under
-    # mean/sd, so the suite fails if the median/MAD change is reverted.
-    with rich.connect() as conn:
-        result = recall(conn, "the answer?", MODEL, const_encode(unit(0)))
-    assert result.message is None
-    assert result.hits
+    assert ask(corpus, "How is it?", unit(0)).message == EXPLORE_MESSAGE
 
 
-def _add_at(conn: object, path: str, body: bytes, vec: list[float]) -> str:
-    """A passage stored the way production stores one; returns its URI.
-
-    It must not write `...@v1#chunk-<n>` by hand — a URI shape nothing in
-    hrono emits — or every passage looks like its own document and the
-    reserve this test is about is exercised against fabricated data.
-    Real passages of one file share one URI, which is what makes a document a
-    file at all.
-    """
-    digest = content_hash(body)
-    upsert_content(conn, digest, body)  # type: ignore[arg-type]
-    upsert_vector(conn, digest, MODEL, vec)  # type: ignore[arg-type]
-    address = Address("git", "ex/repo", path, "v1")
-    ordinal = int(
-        conn.execute(  # type: ignore[attr-defined]
-            "SELECT COUNT(*) FROM passages WHERE path = ?", (path,)
-        ).fetchone()[0]
-    )
-    section_id = insert_section(
-        conn,  # type: ignore[arg-type]
-        source="repo",
-        address=address,
-        start=0,
-        end=len(body),
-        content_hash=digest,
-        ordinal=ordinal,
-    )
-    passage_id = insert_passage(
-        conn,  # type: ignore[arg-type]
-        section_id=section_id,
-        source="repo",
-        address=address,
-        start=0,
-        end=len(body),
-        content_hash=digest,
-        sp_paths=(),
-        ordinal=ordinal,
-    )
-    fts.index_passage(
-        conn,  # type: ignore[arg-type]
-        passage_id=passage_id,
-        source="repo",
-        path=path,
-        body=body.decode(),
-    )
-    return address.uri
-
-
-def test_recall_lets_a_second_document_into_a_dominated_window(
-    tmp_path: object,
-) -> None:
-    # the per-document reserve end to end. The hog answers TWELVE times and
-    # scores higher every time; the quiet document answers once, slightly
-    # worse. In pure score order the window is ten hog hits and the quiet
-    # document never appears — so this test fails if the reserve is not wired
-    # in, and fails again if the document is taken to be the passage rather
-    # than the FILE (then every hit is its own document and nothing is ever
-    # held back).
+def test_a_small_tree_answers_without_a_floor(tmp_path: object) -> None:
     database = Database.at(tmp_path / "hrono.db")
     try:
         with database.connect() as conn, conn:
-            register_path_bodies(conn, ["src/hog.py", "docs/other.md"])
-            for path in ("src/hog.py", "docs/other.md"):
-                upsert_vector(
-                    conn, content_hash(path_body(path)), MODEL, unit(2)
-                )
-            for i in range(12):
-                _add_at(
+            answer = add_passage(conn, b"bearer tokens\n", unit(0))
+
+        result = ask(database, "bearer tokens?", unit(0))
+
+        assert [hit.uri for hit in result.hits] == [answer]
+    finally:
+        database.close()
+
+
+def test_one_file_gives_one_passage(tmp_path: object) -> None:
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        with database.connect() as conn, conn:
+            for i in range(3):  # three slices of one file, all closest
+                add_passage(
                     conn,
-                    "src/hog.py",
-                    f"bearer token flow {i}\n".encode(),
+                    f"bearer token rule {i}\n".encode(),
                     unit(0),
+                    ordinal=i,
                 )
-            weaker = [0.94, 0.0, 0.0, 0.34, 0.0, 0.0, 0.0, 0.0]
-            quiet = _add_at(
-                conn,
-                "docs/other.md",
-                b"bearer token flow, documented\n",
-                weaker,
+            add_passage(
+                conn, b"bearer token notes\n", unit(0, 1, 1.0), "doc.md"
             )
-            # noise sized from the estimator's own arithmetic: with n identical
-            # strong passages in a corpus of N the best reachable z is
-            # ~sqrt(N/n - 1), so thirteen strong hits need N > 146 to clear a
-            # floor of 3.2 at all. This test is about the window, not
-            # the floor.
-            for i in range(150):
-                _add_at(
-                    conn, "src/hog.py", f"unrelated {i}\n".encode(), unit(1)
-                )
 
-        with database.connect() as conn:
-            result = recall(conn, "bearer?", MODEL, const_encode(unit(0)))
+        result = ask(database, "bearer token rules?", unit(0))
 
-        documents = {hit.uri for hit in result.hits}
-        assert len(result.hits) == 10  # a full window, not a truncated one
-        assert quiet in documents  # the quiet document got in
-        assert len(documents) == 2
+        assert [hit.path for hit in result.hits] == ["src/x.py", "doc.md"]
     finally:
         database.close()
 
 
-def _add_brief(
-    conn: object, node_id: int, body: bytes, vec: list[float]
-) -> str:
-    """A `node://` brief passage, the way the brief op stores one."""
-    path = f"nodes/{node_id}/topic"
-    digest = content_hash(body)
-    upsert_content(conn, digest, body)  # type: ignore[arg-type]
-    upsert_vector(conn, digest, MODEL, vec)  # type: ignore[arg-type]
-    register_path_bodies(conn, [path])  # type: ignore[arg-type]
-    upsert_vector(  # type: ignore[arg-type]
-        conn, content_hash(path_body(path)), MODEL, unit(2)
-    )
-    section_id = insert_section(
-        conn,  # type: ignore[arg-type]
-        source=f"node-{node_id}",
-        address=Address("node", "hrono", path, "sig"),
-        start=0,
-        end=len(body),
-        content_hash=digest,
-        ordinal=0,
-    )
-    uri = f"node://hrono/{path}@sig"
-    conn.execute(  # type: ignore[attr-defined]
-        "INSERT INTO passages(section_id, source, source_type, instance, path, "
-        "version, uri, byte_start, byte_end, content_hash, sp_paths, ordinal, "
-        "created_at) VALUES (?, ?, 'node', 'hrono', ?, 'sig', ?, 0, ?, ?, "
-        "'[]', 0, 't')",
-        (section_id, f"node-{node_id}", path, uri, len(body), digest),
-    )
-    fts.index_passage(
-        conn,  # type: ignore[arg-type]
-        passage_id=int(
-            conn.execute("SELECT MAX(id) FROM passages").fetchone()[0]
-        ),
-        source=f"node-{node_id}",
-        path=path,
-        body=body.decode(),
-    )
-    return uri
+def test_the_window_is_never_padded(corpus: Database) -> None:
+    result = ask(corpus, "bearer tokens?", unit(0), limit=CAP)
+
+    assert len(result.hits) == 8  # every file once, nothing invented
 
 
-def test_a_summary_can_win_the_window(tmp_path: object) -> None:
-    # briefs are indexed so a CONCEPTUAL question can be answered by a
-    # summary. A measurement over 22 questions found a brief clearing the
-    # floor exactly once — which read as "the summary layer never
-    # competes" but was an artefact of the question set: all 22 were specific.
-    # Measured on the live corpus, an overview question puts a summary in the
-    # TOP slot ("give me an overview of the architecture" -> 5 hits, all
-    # summaries). Nothing about `source_type` disadvantages a brief; the score
-    # decides, and for an overview question the brief deserves to win.
-    database = Database.at(tmp_path / "hrono.db")
-    try:
-        with database.connect() as conn, conn:
-            _plant_paths(conn)
-            brief = _add_brief(
-                conn,
-                1,
-                b"an overview: this project signs and verifies tokens\n",
-                unit(0),
-            )
-            for i in range(15):
-                add_passage(conn, f"unrelated detail {i}\n".encode(), unit(1))
+def test_the_window_holds_at_most_the_limit(corpus: Database) -> None:
+    assert len(ask(corpus, "bearer tokens?", unit(0), limit=3).hits) == 3
+    assert len(ask(corpus, "bearer tokens?", unit(0), limit=50).hits) <= CAP
 
-        with database.connect() as conn:
-            result = recall(conn, "overview?", MODEL, const_encode(unit(0)))
 
-        assert result.hits
-        assert result.hits[0].kind == "summary"
-        assert result.hits[0].uri == brief
-    finally:
-        database.close()
+def test_a_brief_competes_with_the_sources(corpus: Database) -> None:
+    # an overview question is closest to a brief, and the brief wins: nothing
+    # about being a summary holds a passage back
+    with corpus.connect() as conn, conn:
+        brief = add_passage(
+            conn,
+            b"overview: authentication signs and verifies bearer tokens\n",
+            unit(3),
+            "nodes/1/auth",
+            source="node-1",
+            kind="node",
+        )
+
+    result = ask(corpus, "An overview of authentication?", unit(3))
+
+    assert result.hits[0].uri == brief
+    assert result.hits[0].kind == "summary"

@@ -351,7 +351,8 @@ def test_asking_again_after_an_edit_marks_new_and_dropped(
     moved = article_of(html, top.rpartition("@")[0])
     assert '<span class="chip accent">new</span>' in moved
     dropped = html[html.index('aria-label="dropped out"') :]
-    assert "f" in dropped and "score 0." in dropped
+    # the dropped passage keeps the score it had (a cosine, up to 1.0)
+    assert re.search(r"score [01]\.\d", dropped)
     assert (
         html.count('<span class="chip plain">same</span>')
         == len(api["hits"]) - 1

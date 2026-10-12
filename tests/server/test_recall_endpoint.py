@@ -154,14 +154,14 @@ def test_reader_can_recall_and_gets_ranked_hits(harness: Harness) -> None:
 def test_no_answer_returns_the_explore_message(
     harness: Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # re-point the query encoder at an orthogonal vector -> no confident hit
+    # a question in words the tree does not have, whatever its vector
     monkeypatch.setattr(
         "hrono.recall.ask._query_encode",
         lambda model_id: lambda texts: [unit(3) for _ in texts],
     )
     resp = harness.client.post(
         "/trees/default/recall",
-        json={"question": "unrelated?"},
+        json={"question": "sourdough hydration?"},
         headers=harness.auth("reader"),
     )
     assert resp.status_code == 200

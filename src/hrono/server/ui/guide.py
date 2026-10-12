@@ -31,7 +31,8 @@ from fastapi.responses import HTMLResponse, Response
 from hrono.cluster.placement import TAU
 from hrono.cluster.repair import MAX_CAP, MISFIT_THRESHOLD
 from hrono.export.collapse import WIDTH
-from hrono.recall.fusion import CAP, EXPLORE_MESSAGE, MAX_DOCUMENT_SHARE
+from hrono.recall.gate import COVERAGE
+from hrono.recall.window import CAP, EXPLORE_MESSAGE
 from hrono.registry import store
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.server.ui.export import DEFAULT_LEVELS
@@ -99,7 +100,7 @@ def guide_page(request: Request, user: Reader, tree: str = "") -> Response:
             },
             "recall": {
                 "cap": CAP,
-                "share": int(MAX_DOCUMENT_SHARE * 100),
+                "coverage": int(COVERAGE * 100),
                 "refusal": EXPLORE_MESSAGE,
             },
             "export": {"hops": DEFAULT_LEVELS, "width": WIDTH},

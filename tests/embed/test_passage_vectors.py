@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from hrono.cluster.blend import combine, path_blend_vector, path_body
+from hrono.cluster.blend import path_body
 from hrono.db.database import Database
 from hrono.embed.op import embed
 from hrono.embed.store import get_vector, vector_count
@@ -139,17 +139,6 @@ def test_every_passage_has_a_content_and_a_path_vector(db: Database) -> None:
             assert get_vector(conn, chash, "emb") is not None
             path_hash = content_hash(path_body(path))
             assert get_vector(conn, path_hash, "emb") is not None
-
-
-def test_passage_path_blend_vector_is_the_blend(db: Database) -> None:
-    with db.connect() as conn:
-        for chash, path in _passages(db):
-            content = get_vector(conn, chash, "emb")
-            path_vec = get_vector(conn, content_hash(path_body(path)), "emb")
-            combined = path_blend_vector(conn, chash, path, "emb")
-            assert combined is not None
-            assert len(combined) == 2 * DIMS
-            assert combined == combine(content, path_vec)  # path blend, a=0.5
 
 
 def test_re_embed_is_a_no_op(db: Database, tmp_path: Path) -> None:
