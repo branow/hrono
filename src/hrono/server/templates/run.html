@@ -8,13 +8,13 @@
   </div>
   <h1>{{ job.op }}</h1>
   <p class="said">{{ job.means }}</p>
-  <p class="where-note row mt-2">
-    <span class="state status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span>
-    <span class="chip">started {{ job.started }}</span>
-    <span class="chip">{{ job.took }}</span>
-    {% if job.scope.name %}<span class="chip">over {{ job.scope.name }}</span>{% endif %}
-    {% if not job.spend and job.cost %}{{ unrecorded(job.before_ledger, job.cost) }}{% endif %}
-    <span class="chip plain mono">{{ job.short_id }}</span>
+  <p class="run-meta">
+    <span class="state bare status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span>
+    <span>started {{ job.started }}</span>
+    <span class="num">{{ job.took }}</span>
+    {% if job.scope.name %}<span>over {{ job.scope.name }}</span>{% endif %}
+    {% if not job.spend and job.cost %}<span>{{ unrecorded(job.before_ledger, job.cost) }}</span>{% endif %}
+    <span class="mono faint" title="{{ job.id }}">{{ job.short_id }}</span>
   </p>
 </div>
 
@@ -22,18 +22,20 @@
 <div class="topic-main stack">
 
   {% if job.live %}
-  <section class="card">
-    <div class="card-head"><h2>Running now</h2></div>
+  <section class="card run-live" role="status">
     <div class="card-body">
-      <p class="progress-line">
-        <span class="progress">{% if job.progress %}{{ job.progress.done }} of {{ job.progress.total }} done{% else %}working{% endif %}</span>
-      </p>
-      <span class="bar wide"><span style="width:{% if job.progress and job.progress.total %}{{ (100 * job.progress.done / job.progress.total)|round|int }}{% else %}0{% endif %}%"></span></span>
-      {% if can_write %}
-      <form class="inline mt-3" method="post" action="/ui/jobs/{{ job.id }}/cancel?tree={{ tree }}">
-        <button class="btn small" type="submit">Stop this run</button>
-      </form>
-      {% endif %}
+      <div class="live-line">
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="title">Running</span>
+        <span class="progress faint num">{% if job.progress %}{{ job.progress.done }} of {{ job.progress.total }} done{% endif %}</span>
+        <span class="grow"></span>
+        {% if can_write %}
+        <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel?tree={{ tree }}">
+          <button class="btn small" type="submit">Stop</button>
+        </form>
+        {% endif %}
+      </div>
+      <span class="bar wide" {% if not (job.progress and job.progress.total) %}hidden{% endif %}><span style="width:{% if job.progress and job.progress.total %}{{ (100 * job.progress.done / job.progress.total)|round|int }}{% else %}0{% endif %}%"></span></span>
     </div>
   </section>
   {% endif %}
@@ -44,6 +46,12 @@
       <div class="title">Failed{% if job.failure.stage %} at {{ job.failure.stage }}{% endif %}{% if job.failure.item %}, on <span title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</div>
       <p>{{ job.failure.says }}</p>
       <p class="hint">{{ job.failure.next }}</p>
+      {% if job.retry and can_write %}
+      <form class="inline mt-2" method="post" action="/ui/jobs/{{ job.id }}/retry?tree={{ tree }}">
+        <button class="btn primary small" type="submit">Run it again</button>
+        <span class="tip" tabindex="0" role="note" data-tip="Same {{ job.op }}{% if job.scope.name %} over {{ job.scope.name }}{% endif %}. Sections already condensed and embedded are reused, so only what failed or was never reached costs anything">?</span>
+      </form>
+      {% endif %}
       <details class="reveal mt-2">
         <summary class="twisty">The error as reported</summary>
         <pre class="preview">{{ job.failure.code }}: {{ job.failure.raw }}</pre>
@@ -59,7 +67,7 @@
   </div>
   {% endif %}
 
-  {% if job.retry and can_write %}
+  {% if job.retry and can_write and not job.failure %}
   <section class="card" id="retry">
     <div class="card-body row">
       <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/retry?tree={{ tree }}">
@@ -75,7 +83,7 @@
     <div class="card-body">
       {% if job.spend %}
       <dl class="totals">
-        <div><dt>Cost</dt><dd>{{ money(job.spend) }}</dd></div>
+        <div><dt>Cost</dt><dd>{{ money(job.spend, true) }}</dd></div>
         <div><dt>Calls</dt><dd class="num">{{ "{:,}".format(job.spend.calls) }}</dd></div>
         <div><dt>Tokens in</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_in) }}">{{ job.spend.tokens_in|compact }}</dd></div>
         <div><dt>Tokens out</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_out) }}">{{ job.spend.tokens_out|compact }}</dd></div>
@@ -85,7 +93,7 @@
       {% if job.spend_by_stage|length > 1 %}
       <div class="table-wrap mt-3">
         <table class="usage">
-          <thead><tr><th>Stage</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th>Cost</th></tr></thead>
+          <thead><tr><th>Stage</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th class="count">Cost</th></tr></thead>
           <tbody>
             {% for row in job.spend_by_stage %}
             <tr data-stage="{{ row.stage }}">
@@ -94,7 +102,7 @@
               <td class="count" title="{{ '{:,}'.format(row.tokens_in) }}">{{ row.tokens_in|compact }}</td>
               <td class="count" title="{{ '{:,}'.format(row.tokens_out) }}">{{ row.tokens_out|compact }}</td>
               <td class="count">{{ row.time }}</td>
-              <td>{{ money(row, true) }}</td>
+              <td class="count">{{ money(row, true) }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -114,27 +122,19 @@
     {% set failed_here = job.failure and job.failure.stage %}
     <div class="card-head"><h2>Stages <span class="faint num">{% if failed_here %}{{ job.stages|length }} of {{ job.stages|length + 1 }} done{% else %}{{ job.stages|length }}{% endif %}</span></h2></div>
     <div class="card-body">
-      <ol class="timeline">
+      <ol class="stages">
         {% for stage in job.stages %}
         <li>
-          <div class="piece-head">
-            <code>{{ stage.op }}</code>
-            {% if stage.over %}<span class="chip plain over">{{ stage.over }}</span>{% endif %}
-            <span class="grow"></span>
-            <span class="state" data-state="succeeded">done</span>
-            <span class="num faint">{{ stage.took }}</span>
-          </div>
-          {% if stage.did %}<p class="hint">{{ stage.did|join(", ") }}</p>{% else %}<p class="hint faint">nothing to do</p>{% endif %}
+          <span class="st-op"><code>{{ stage.op }}</code>{% if stage.over %} <span class="mono faint">{{ stage.over }}</span>{% endif %}</span>
+          {% if stage.did %}<span class="st-did">{{ stage.did|join(", ") }}</span>{% else %}<span class="st-did faint">nothing to do</span>{% endif %}
+          <span class="st-took num faint">{{ stage.took }}</span>
         </li>
         {% endfor %}
         {% if job.failure and job.failure.stage %}
         <li>
-          <div class="piece-head">
-            <code>{{ job.failure.stage }}</code>
-            {% if job.failure.item %}<span class="chip plain over" title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}
-            <span class="grow"></span>
-            <span class="state" data-state="failed">failed</span>
-          </div>
+          <span class="st-op"><code>{{ job.failure.stage }}</code>{% if job.failure.item %} <span class="mono" title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</span>
+          <span class="st-did st-failed">failed</span>
+          <span class="st-took"></span>
         </li>
         {% endif %}
       </ol>
@@ -146,7 +146,7 @@
   <section class="card" id="changed">
     <div class="card-head">
       <h2>What it changed<span class="tip" tabindex="0" role="note" data-tip="Read from the change journal: every row this run wrote, kept with what it replaced. Reverting undoes exactly these">?</span></h2>
-      {% if can_run and not changes.reverted %}
+      {% if can_run and not changes.reverted and not changes.blocker %}
       <form method="post" action="/ui/jobs/{{ job.id }}/revert?tree={{ tree }}" class="inline">
         <button class="btn small" type="submit" {% if changes.blocker %}disabled title="Cannot revert: {{ changes.blocker }}"{% endif %}>Revert</button>
       </form>
@@ -156,12 +156,12 @@
       {% if changes.reverted %}
       <p class="hint">Reverted {{ changes.reverted[:16]|replace("T", " ") }}. The tree is back as it was before this run; sync again to replay it.</p>
       {% else %}
-      <p class="changed-head"><strong class="num">{{ changes.topics|length }}</strong> of <span class="num">{{ changes.total }}</span> topics touched</p>
-      <p class="row">
-        {% for what in ("new", "rewritten", "regrouped", "retired") %}{% set n = changes.count(what) %}{% if n %}<span class="chip touched-{{ what }}">{{ n }} {{ what }}</span>{% endif %}{% endfor %}
-        {% if changes.files.added %}<span class="chip">{{ changes.files.added|counted("sections") }} added</span>{% endif %}
-        {% if changes.files.removed %}<span class="chip">{{ changes.files.removed|counted("sections") }} removed</span>{% endif %}
-      </p>
+      <dl class="totals">
+        {% if changes.total %}<div><dt>Topics touched</dt><dd><span class="num">{{ changes.topics|length }}</span> <span class="faint of">of {{ changes.total }}</span></dd></div>{% endif %}
+        {% for what in ("new", "rewritten", "regrouped", "retired") %}{% set n = changes.count(what) %}{% if n %}<div class="touched-{{ what }}"><dt>{{ what|capitalize }}</dt><dd class="num">{{ n }}</dd></div>{% endif %}{% endfor %}
+        {% if changes.files.added %}<div><dt>Sections added</dt><dd class="num">{{ changes.files.added }}</dd></div>{% endif %}
+        {% if changes.files.removed %}<div><dt>Sections removed</dt><dd class="num">{{ changes.files.removed }}</dd></div>{% endif %}
+      </dl>
       {% if touched %}
       <ul class="touched" aria-label="the topics this run touched, in the tree">
         {% for node in touched.nodes %}{% set what = changes.topics.get(node.id) %}
@@ -172,39 +172,38 @@
         {% endfor %}
       </ul>
       {% endif %}
-      {% if can_run and changes.blocker %}<p class="hint">Cannot revert: {{ changes.blocker }}.</p>{% endif %}
+      {% if can_run and changes.blocker and not job.live %}<p class="hint">Revert is not available: {{ changes.blocker }}.</p>{% endif %}
       {% endif %}
     </div>
   </section>
   <style>
-  .changed-head { margin: 0; font-size: 1.05rem; }
+  .totals .of { font-size: .875rem; font-weight: 500; }
+  .totals .touched-new dd { color: var(--ok); }
+  .totals .touched-rewritten dd, .totals .touched-regrouped dd { color: var(--accent); }
   ul.touched { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 28rem; overflow: auto; }
   ul.touched li { display: flex; gap: var(--s2); align-items: baseline; padding: .15rem .4rem; padding-left: calc(.4rem + var(--depth) * 1.1rem); border-radius: var(--r1); }
   ul.touched li.untouched a { color: var(--ink-faint); }
   ul.touched li[class^="touched-"] { background: var(--accent-wash); }
   ul.touched li.touched-new { background: var(--ok-wash); }
   ul.touched .what { font: 600 .6875rem var(--mono); color: var(--ink-soft); text-transform: uppercase; }
-  .chip.touched-new { background: var(--ok-wash); color: var(--ok); border-color: transparent; }
-  .chip.touched-rewritten, .chip.touched-regrouped { background: var(--accent-wash); color: var(--accent); border-color: transparent; }
   </style>
   {% endif %}
 
+  {% set nothing_yet = not (job.outcome.did or job.outcome.found) %}
+  {% if not (nothing_yet and job.live) %}
   <section class="card">
-    <div class="card-head"><h2>What it did</h2></div>
+    <div class="card-head"><h2>What it did</h2>{% if job.outcome.did or job.outcome.found %}<a class="small" href="/ui/trees/{{ tree }}/activity?tree={{ tree }}">Changes</a>{% endif %}</div>
     <div class="card-body">
       {% if job.outcome.did or job.outcome.found %}
       <ul class="didwhat big">
         {% for line in job.outcome.did %}<li>{{ line }}</li>{% endfor %}
         {% for line in job.outcome.found %}<li class="measured">{{ line }}</li>{% endfor %}
       </ul>
-      <p class="mt-2"><a href="/ui/trees/{{ tree }}/activity?tree={{ tree }}">What changed, decision by decision, in the activity log</a></p>
-      {% elif job.live %}
-      <p class="hint">Still going. What it did appears here as it finishes.</p>
       {% elif job.status in ("failed", "canceled") %}
       <div class="empty">
         <div class="title">It stopped before it finished</div>
         {% if job.stages %}<p class="hint mt-2">What finished first is in the stages above. Anything after them was not done.</p>{% endif %}
-        <div class="mt-3">{% if job.retry and can_write %}<a class="btn primary" href="#retry">Run it again</a>{% else %}<a class="btn" href="/ui/jobs?tree={{ tree }}">All runs</a>{% endif %}</div>
+        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">All runs</a></div>
       </div>
       {% elif job.outcome.quiet %}
       <div class="empty">
@@ -217,6 +216,8 @@
       {% endif %}
     </div>
   </section>
+
+  {% endif %}
 
   {% for todo in job.outcome.next %}
   <div class="callout warn">
@@ -290,6 +291,7 @@
     }
     var bar = run.querySelector(".bar > span");
     if (bar && state.progress && state.progress.total) {
+      bar.parentNode.hidden = false;
       bar.style.width = (100 * state.progress.done / state.progress.total) + "%";
     }
     // a run that has finished has an outcome to show, and this page is built
@@ -302,4 +304,30 @@
   source.onerror = function () { source.close(); };
 })();
 </script>
+<style>
+.run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem var(--s4); margin: var(--s2) 0 0; color: var(--ink-soft); font-size: .8125rem; }
+.state.bare { background: none; padding: 0; }
+.run-live .live-line { display: flex; align-items: center; gap: var(--s2); min-height: 2rem; }
+.run-live .title { font-weight: 600; }
+.run-live .grow { flex: 1; }
+.run-live .bar { margin-top: var(--s3); }
+.run-live .bar[hidden] { display: none; }
+.callout form.inline { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s3); }
+ol.stages { margin: 0; padding: 0; list-style: none; counter-reset: st; display: grid; grid-template-columns: auto minmax(10rem, auto) minmax(0, 1fr) auto; font-size: .8125rem; }
+ol.stages > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; gap: var(--s4); align-items: baseline; padding: .45rem 0; border-bottom: 1px solid var(--rule); counter-increment: st; }
+ol.stages > li:last-child { border-bottom: 0; }
+ol.stages > li::before { content: counter(st); font: .75rem var(--mono); color: var(--ink-faint); text-align: right; min-width: 1.5ch; }
+.st-did { color: var(--ink-soft); min-width: 0; overflow-wrap: anywhere; }
+.st-took { text-align: right; white-space: nowrap; }
+.st-did.st-failed { color: var(--danger); font-weight: 600; }
+ul.didwhat.big { columns: 2 18rem; column-gap: var(--s6); display: block; }
+ul.didwhat.big > li { break-inside: avoid; margin-bottom: .3rem; }
+@media (max-width: 640px) {
+  ol.stages { grid-template-columns: auto minmax(0, 1fr) auto; }
+  ol.stages > li { gap: .15rem var(--s3); }
+  .st-op { grid-column: 2; }
+  .st-took { grid-column: 3; grid-row: 1; }
+  .st-did { grid-column: 2 / -1; }
+}
+</style>
 {% endblock %}

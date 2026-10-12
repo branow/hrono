@@ -162,7 +162,7 @@ def test_metered_spend_and_a_subscription_estimate_are_never_added(
     page = panel.get(f"/ui/jobs/{run}?tree=default")
 
     assert 'data-spend="metered">$2.00' in page
-    assert "about $2.00 estimate, not billed" in page
+    assert '~$2.00 <span class="faint est">est.</span>' in page
     assert "$4.00" not in page
 
 
