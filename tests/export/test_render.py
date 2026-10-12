@@ -798,3 +798,29 @@ def test_an_index_page_at_full_width_stays_within_one_section(
     root = files[_page(ids["root"])]
     assert root.count("](") >= middles
     assert len(root.encode()) <= section_budget(Path("index.md"))
+
+
+def test_an_index_page_below_the_root_says_where_its_children_are(
+    tmp_path: object,
+) -> None:
+    # agents read a child's link as a path from the export's root; the page
+    # names its own folder once so they can build the real one
+    database, ids = _grove(
+        tmp_path,
+        [[["a/x.py"]], [["b/y.py"]]],
+        {
+            "root": "# Root\n\nAll.",
+            "m0": "# Mid A\n\nAlpha things.",
+            "m1": "# Mid B\n\nBeta things.",
+            "l0.0": "# Leaf A\n\nLeaf alpha.",
+            "l1.0": "# Leaf B\n\nLeaf beta.",
+        },
+        apex=True,
+    )
+    try:
+        files = _files(database, hops=4)
+    finally:
+        database.close()
+    page = files[_page(ids["root"])]
+    assert f"These are in the folder root-{ids['root']}/." in page
+    assert "These are in the folder" not in files["root.md"]
