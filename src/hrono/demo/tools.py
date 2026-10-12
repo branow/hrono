@@ -85,12 +85,20 @@ class Library:
         """Run ``tool``; the model gets the text, the page gets a step."""
         with self._database.connect() as conn:
             opened = self._open(conn, tool, args)
+            level = (
+                None
+                if opened.node is None
+                else conn.execute(
+                    "SELECT level FROM nodes WHERE id = ?", (opened.node,)
+                ).fetchone()
+            )
         self._steps.add(
             "tool",
             tool=tool,
             args=args,
             label=opened.label,
             node=opened.node,
+            level=None if level is None else int(level["level"]),
             size=len(opened.text),
             preview=opened.text[:PREVIEW],
         )

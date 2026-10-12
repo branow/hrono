@@ -154,6 +154,9 @@ def _recall(
                 "kind": "brief" if hit.kind == "summary" else "source",
                 "score": round(hit.score, 3),
                 "topic": hit.topic,
+                "path": hit.path,
+                "source": hit.source,
+                "body": hit.body,
             }
             for hit in found.hits
         ],

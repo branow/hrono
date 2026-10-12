@@ -23,38 +23,54 @@
   </div>
 </section>
 {% else %}
-<div class="demo-pick">
-  <label class="field"><span>Connection</span>
-    <select id="connection">
-      {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} ({{ c.provider }}){% endif %}</option>{% endfor %}
-    </select>
-  </label>
-  <label class="field"><span>Model</span>
-    <select id="model"></select>
-  </label>
-  <span class="hint" id="no-model" hidden>No text model on this connection. <a href="/ui/config?tree={{ tree }}&amp;section=models">Add one in Settings</a>.</span>
-  <button class="btn" type="button" id="fresh" hidden>New conversation</button>
-</div>
-
-<div class="demo">
-  <section class="demo-talk" aria-label="conversation">
-    <ol class="demo-steps" id="demo-steps" aria-live="polite"></ol>
-    <div class="demo-empty" id="empty">
-      <div class="title">Ask about this project</div>
-      <p class="hint">You will see what recall attached, every topic and file the agent opened, then its answer.</p>
-    </div>
-    <form id="ask" class="demo-ask">
-      <label class="grow">
-        <span class="visually-hidden">Question</span>
-        <textarea name="question" rows="2" placeholder="How does sign-in work?" required {% if not can_write %}disabled{% endif %}></textarea>
+<div class="chat-shell" id="shell">
+  <section class="chat" aria-label="conversation">
+    <div class="chat-bar">
+      <label class="chat-pick"><span class="visually-hidden">Connection</span>
+        <select id="connection" aria-label="connection">
+          {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} ({{ c.provider }}){% endif %}</option>{% endfor %}
+        </select>
       </label>
-      <button class="btn primary" type="submit" {% if not can_write %}disabled title="Asking runs a model, so it needs the writer role"{% endif %}>Ask</button>
+      <label class="chat-pick"><span class="visually-hidden">Model</span>
+        <select id="model" aria-label="model"></select>
+      </label>
+      <span class="hint" id="no-model" hidden>No text model on this connection. <a href="/ui/config?tree={{ tree }}&amp;section=models">Add one</a>.</span>
+      <span class="grow"></span>
+      <button class="btn small quiet" type="button" id="fresh" hidden>New chat</button>
+      <button class="btn small" type="button" id="toggle-side" aria-controls="side" aria-expanded="true">Hide details</button>
+    </div>
+
+    <div class="chat-log" id="log" aria-live="polite">
+      <div class="chat-hello" id="hello">
+        <div class="title">Ask about this project</div>
+        <p class="hint">The agent reads this tree's export to answer. What recall attached and every topic and file it opened appear beside the chat.</p>
+      </div>
+    </div>
+
+    <div class="composer-dock">
+    <form id="ask" class="composer">
+      <label class="visually-hidden" for="question">Question</label>
+      <textarea id="question" name="question" rows="1" placeholder="Ask a question about this project" required {% if not can_write %}disabled{% endif %}></textarea>
+      <button class="send" type="submit" aria-label="Send" {% if not can_write %}disabled title="Asking runs a model, so it needs the writer role"{% endif %}>
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </form>
+    </div>
   </section>
-  <figure class="demo-side">
-    <div class="demo-map" id="map" tabindex="0" role="region" aria-label="the topics the agent opened"></div>
-    <figcaption class="faint small">Lit where the agent went, from the export of {{ exported }}</figcaption>
-  </figure>
+
+  <aside class="side" id="side" aria-label="what the agent used">
+    <div class="side-tabs" role="tablist">
+      <button type="button" role="tab" id="tab-recall" aria-selected="true" aria-controls="pane-recall">Recall <span class="num faint" id="count-recall"></span></button>
+      <button type="button" role="tab" id="tab-path" aria-selected="false" aria-controls="pane-path">Path <span class="num faint" id="count-path"></span></button>
+    </div>
+    <div class="side-pane" role="tabpanel" id="pane-recall" aria-labelledby="tab-recall">
+      <p class="hint side-empty">What recall attached to the question appears here.</p>
+    </div>
+    <div class="side-pane" role="tabpanel" id="pane-path" aria-labelledby="tab-path" hidden>
+      <p class="hint side-empty">Every topic and file the agent opens appears here, in order.</p>
+    </div>
+    <p class="side-note faint small">From the export of {{ exported }}</p>
+  </aside>
 </div>
 
 <script type="application/json" id="models">{{ models|tojson }}</script>
@@ -65,13 +81,26 @@
   var models = JSON.parse(document.getElementById("models").textContent);
   var connection = document.getElementById("connection");
   var model = document.getElementById("model");
-  var steps = document.getElementById("demo-steps");
-  var empty = document.getElementById("empty");
+  var log = document.getElementById("log");
+  var hello = document.getElementById("hello");
   var form = document.getElementById("ask");
-  var map = document.getElementById("map");
+  var box = document.getElementById("question");
+  var shell = document.getElementById("shell");
+  var paneRecall = document.getElementById("pane-recall");
+  var panePath = document.getElementById("pane-path");
   var talk = "";
-  var visited = [];
+  var turn = null;  // the question being answered: its message parts and side content
 
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function topicUrl(id) { return "/ui/trees/" + encodeURIComponent(tree) + "/nodes/" + id + "?tree=" + encodeURIComponent(tree); }
+
+  /* ---- the model picker ---- */
   function pickModels() {
     var mine = models.filter(function (m) { return m.connection === connection.value; });
     model.replaceChildren.apply(model, mine.map(function (m) {
@@ -84,194 +113,337 @@
     document.getElementById("no-model").hidden = mine.length > 0;
   }
 
-  function fresh() {
-    talk = "";
-    visited = [];
-    steps.replaceChildren();
-    empty.hidden = false;
-    document.getElementById("fresh").hidden = true;
-    drawMap();
+  /* ---- the side panel: shown or hidden, remembered ---- */
+  var toggle = document.getElementById("toggle-side");
+  function showSide(on) {
+    shell.classList.toggle("side-off", !on);
+    toggle.textContent = on ? "Hide details" : "Show details";
+    toggle.setAttribute("aria-expanded", String(on));
+    try { localStorage.setItem("hrono-demo-side", on ? "1" : "0"); } catch (e) {}
+  }
+  toggle.addEventListener("click", function () { showSide(shell.classList.contains("side-off")); });
+  try { if (localStorage.getItem("hrono-demo-side") === "0") showSide(false); } catch (e) {}
+
+  var tabs = { recall: document.getElementById("tab-recall"), path: document.getElementById("tab-path") };
+  function openTab(name) {
+    Object.keys(tabs).forEach(function (key) {
+      tabs[key].setAttribute("aria-selected", String(key === name));
+      document.getElementById("pane-" + key).hidden = key !== name;
+    });
+  }
+  tabs.recall.addEventListener("click", function () { openTab("recall"); });
+  tabs.path.addEventListener("click", function () { openTab("path"); });
+
+  /* ---- one question and its answer ---- */
+  function startTurn(question) {
+    hello.hidden = true;
+    var mine = el("div", "msg user");
+    mine.append(el("div", "bubble", question));
+    var theirs = el("div", "msg agent");
+    var work = el("details", "work");
+    var summary = el("summary");
+    var status = el("span", "status thinking", "Thinking");
+    summary.append(status);
+    var steps = el("ol", "work-steps");
+    work.append(summary, steps);
+    var answer = el("div", "answer prose");
+    theirs.append(work, answer);
+    log.append(mine, theirs);
+    turn = { status: status, steps: steps, answer: answer, work: work, theirs: theirs,
+             hits: 0, topics: 0, files: 0, recallBox: el("div", "side-turn"), pathBox: el("ol", "path") };
+    // the side panel shows the question being answered
+    var head = el("p", "side-q", question);
+    paneRecall.replaceChildren(head.cloneNode(true), turn.recallBox);
+    panePath.replaceChildren(head, turn.pathBox);
+    updateCounts();
+    mine.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function drawMap() {
-    var url = "/ui/trees/" + encodeURIComponent(tree) + "/demo/map?visited=" + visited.join(",");
-    return fetch(url, { credentials: "same-origin" })
-      .then(function (reply) { return reply.text(); })
-      .then(function (html) {
-        map.innerHTML = html;
-        var here = map.querySelector("li.reading");
-        if (here) {
-          map.scrollTo({ top: here.offsetTop - map.clientHeight / 2, behavior: "smooth" });
-        }
-      });
+  function updateCounts() {
+    document.getElementById("count-recall").textContent = turn && turn.hits ? turn.hits : "";
+    document.getElementById("count-path").textContent = turn && (turn.topics + turn.files) ? turn.topics + turn.files : "";
   }
 
-  function el(tag, cls, text) {
-    var node = document.createElement(tag);
-    if (cls) node.className = cls;
-    if (text !== undefined) node.textContent = text;
-    return node;
+  function doing(text) { turn.status.textContent = text; }
+
+  function workLine(text, cls) {
+    var item = el("li", cls || "", text);
+    turn.steps.append(item);
+    return item;
   }
 
-  function folded(summary, body) {
-    var details = el("details", "reveal");
-    details.append(el("summary", "", summary), el("pre", "mono passage", body));
-    return details;
+  function settle(failed) {
+    var parts = [];
+    if (turn.hits) parts.push("recalled " + plural(turn.hits, "passage", "passages"));
+    if (turn.topics) parts.push("opened " + plural(turn.topics, "topic", "topics"));
+    if (turn.files) parts.push("read " + plural(turn.files, "file", "files"));
+    var said = parts.length ? parts.join(", ") : "answered from what it already had";
+    turn.status.className = "status";
+    turn.status.textContent = failed ? "Stopped" : said.charAt(0).toUpperCase() + said.slice(1);
   }
 
-  // One renderer per kind of step: who did it, and what it says.
   var shown = {
-    asked: function (s) { return ["You", el("p", "demo-q", s.text)]; },
+    asked: function (s) { startTurn(s.text); },
     recall: function (s) {
       if (s.problem) {
+        workLine("Recall could not run, so nothing was attached", "faint");
         var why = el("p", "hint", "Recall could not run, so the agent started with no passages attached.");
         why.title = s.problem;
-        return ["Recall", why];
+        turn.recallBox.append(why);
+        return;
       }
-      if (!s.hits.length) return ["Recall", el("p", "hint", "Recall attached nothing: " + (s.refused || "no passage was confident enough") + ".")];
-      var list = el("ul", "demo-hits");
+      if (!s.hits.length) {
+        workLine("Recall attached nothing", "faint");
+        turn.recallBox.append(el("p", "hint", "Recall attached nothing: " + (s.refused || "no passage was confident enough") + "."));
+        return;
+      }
+      turn.hits = s.hits.length;
+      workLine("Recall attached " + plural(s.hits.length, "passage", "passages"));
       s.hits.forEach(function (h) {
-        var item = el("li", "mono small");
-        item.append(el("span", "faint", h.kind), " " + h.title + " ", el("span", "faint", h.score));
-        list.append(item);
+        var card = el("details", "hit");
+        var sum = el("summary");
+        var top = el("span", "hit-top");
+        top.append(el("span", "hit-kind", h.kind === "brief" ? "Topic brief" : "Source"), el("span", "hit-score num", h.score.toFixed(2)));
+        sum.append(top, el("span", "hit-title", h.title));
+        // a source's title is already its path; say only where it came from
+        var where = h.path && h.title.indexOf(h.path) === -1 ? h.path : "";
+        if (h.source || where) sum.append(el("span", "hit-path mono", [h.source, where].filter(Boolean).join(": ")));
+        card.append(sum, el("pre", "hit-body", h.body || ""));
+        if (h.topic) {
+          var link = el("a", "small", "Open its topic");
+          link.href = topicUrl(h.topic); link.target = "_blank"; link.rel = "noopener";
+          card.append(link);
+        }
+        turn.recallBox.append(card);
       });
-      var box = el("div");
-      box.append(el("p", "hint", "Recall attached " + s.hits.length + " passage" + (s.hits.length === 1 ? "" : "s") + " to the question:"), list);
-      return ["Recall", box];
+      updateCounts();
+      doing("Reading the map");
     },
     prompt: function (s) {
-      var box = el("div");
-      box.append(folded("The prompt the model received", s.text), folded("Its instructions", s.system));
-      return ["Prompt", box];
+      var card = el("details", "hit prompt");
+      var sum = el("summary");
+      sum.append(el("span", "hit-title", "What the model received"));
+      card.append(sum, el("pre", "hit-body", "Instructions\n\n" + s.system + "\n\nPrompt\n\n" + s.text));
+      turn.recallBox.append(card);
     },
-    say: function (s) { var p = el("div", "prose"); p.innerHTML = s.html; return ["Agent", p]; },
+    say: function (s) {
+      var note = el("li", "note prose");
+      note.innerHTML = s.html;
+      turn.steps.append(note);
+    },
     tool: function (s) {
-      var box = el("div");
-      var head = el("p", "mono small");
-      head.append(el("span", "demo-tool", s.tool), " " + s.label);
-      box.append(head, folded("What it returned (" + s.size.toLocaleString() + " characters)", s.preview + (s.size > s.preview.length ? "\n…" : "")));
-      if (s.node) { visited.push(s.node); drawMap(); }
-      return ["Tool", box];
+      var isTopic = s.tool === "open_topic";
+      if (isTopic) turn.topics += 1; else turn.files += 1;
+      doing((isTopic ? "Opening " : "Reading ") + s.label);
+      workLine((isTopic ? "Opened " : "Read ") + s.label, "act");
+      var item = el("li", isTopic ? "topic" : "file");
+      var mark = el("span", "path-mark", isTopic ? (s.level === null || s.level === undefined ? "" : "L" + s.level) : "file");
+      var name;
+      if (isTopic && s.node) {
+        name = el("a", "path-name", s.label);
+        name.href = topicUrl(s.node); name.target = "_blank"; name.rel = "noopener";
+      } else {
+        name = el("span", "path-name mono", s.label);
+      }
+      var size = el("span", "path-size faint num", s.size.toLocaleString() + " chars");
+      item.append(mark, name, size);
+      turn.pathBox.append(item);
+      updateCounts();
     },
-    answer: function (s) { var p = el("div", "prose demo-answer"); p.innerHTML = s.html; return ["Answer", p]; },
-    done: function () { return null; },
-    failed: function (s) { return ["Error", el("p", "demo-failed", s.message)]; }
+    answer: function (s) {
+      turn.answer.innerHTML = s.html;
+      settle(false);
+    },
+    done: function () {},
+    failed: function (s) {
+      if (!turn) startTurn("");
+      turn.answer.replaceChildren(el("p", "chat-failed", s.message));
+      settle(true);
+    }
   };
 
-  function add(step) {
-    var made = shown[step.kind] ? shown[step.kind](step) : null;
-    if (!made) return;
-    var item = el("li", "demo-step " + step.kind);
-    item.append(el("span", "demo-who", made[0]), made[1]);
-    steps.append(item);
-    item.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }
-
   function running(on) {
-    form.querySelector("button").disabled = on;
-    form.querySelector("textarea").disabled = on;
+    box.disabled = on;
+    form.querySelector(".send").disabled = on;
     form.classList.toggle("busy", on);
   }
 
+  function grow() { box.style.height = "auto"; box.style.height = Math.min(box.scrollHeight, 200) + "px"; }
+  box.addEventListener("input", grow);
+  box.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+  });
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
-    var question = form.question.value.trim();
+    var question = box.value.trim();
     if (!question || model.disabled) return;
     var body = new URLSearchParams({ question: question, model: model.value, conversation: talk });
     running(true);
-    empty.hidden = true;
-    fetch("/ui/trees/" + encodeURIComponent(tree) + "/demo/ask", {
-      method: "POST", credentials: "same-origin", body: body
-    }).then(function (reply) { return reply.json(); }).then(function (started) {
-      if (started.problem) { add({ kind: "failed", message: started.problem }); running(false); return; }
-      if (started.conversation !== talk) { visited = []; drawMap(); }
-      talk = started.conversation;
-      document.getElementById("fresh").hidden = false;
-      form.question.value = "";
-      var source = new EventSource("/ui/trees/" + encodeURIComponent(tree) + "/demo/" + talk + "/steps?after=" + started.after);
-      source.addEventListener("step", function (event) {
-        var step = JSON.parse(event.data);
-        add(step);
-        if (step.kind === "done" || step.kind === "failed") { source.close(); running(false); form.question.focus(); }
-      });
-      source.onerror = function () { source.close(); running(false); };
-    }).catch(function () { add({ kind: "failed", message: "The server could not be reached." }); running(false); });
+    fetch("/ui/trees/" + encodeURIComponent(tree) + "/demo/ask", { method: "POST", credentials: "same-origin", body: body })
+      .then(function (reply) { return reply.json(); })
+      .then(function (started) {
+        if (started.problem) { shown.failed({ message: started.problem }); running(false); return; }
+        talk = started.conversation;
+        document.getElementById("fresh").hidden = false;
+        box.value = ""; grow();
+        var source = new EventSource("/ui/trees/" + encodeURIComponent(tree) + "/demo/" + talk + "/steps?after=" + started.after);
+        source.addEventListener("step", function (event) {
+          var step = JSON.parse(event.data);
+          if (shown[step.kind]) shown[step.kind](step);
+          if (step.kind === "done" || step.kind === "failed") { source.close(); running(false); box.focus(); }
+        });
+        source.onerror = function () { source.close(); running(false); };
+      })
+      .catch(function () { shown.failed({ message: "The server could not be reached." }); running(false); });
   });
 
-  form.question.addEventListener("keydown", function (event) {
-    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
-  });
+  function fresh() {
+    talk = ""; turn = null;
+    log.replaceChildren(hello); hello.hidden = false;
+    paneRecall.replaceChildren(el("p", "hint side-empty", "What recall attached to the question appears here."));
+    panePath.replaceChildren(el("p", "hint side-empty", "Every topic and file the agent opens appears here, in order."));
+    document.getElementById("fresh").hidden = true;
+    document.getElementById("count-recall").textContent = "";
+    document.getElementById("count-path").textContent = "";
+  }
   connection.addEventListener("change", function () { pickModels(); fresh(); });
   model.addEventListener("change", fresh);
   document.getElementById("fresh").addEventListener("click", fresh);
   pickModels();
-  drawMap();
 })();
 </script>
 {% endif %}
 
 <style>
-main:has(.demo) { max-width: 1480px; }
-.demo-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); margin-bottom: var(--s4); }
-.demo-pick select { min-width: 13rem; }
-.demo-pick #fresh { margin-left: auto; }
-.demo-pick #no-model { align-self: center; }
-.demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
-.demo-talk { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
-ol.demo-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2);
-  max-height: clamp(24rem, 64vh, 48rem); overflow: auto; }
-ol.demo-steps:empty { display: none; }
-.demo-empty { padding: var(--s6) var(--s4); text-align: center; border: 1px dashed var(--rule-firm); border-radius: var(--r3); }
-.demo-empty .title { font-weight: 620; margin-bottom: var(--s1); }
-.demo-empty .hint { margin: 0 auto; }
-.demo-step { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr); gap: var(--s3); align-items: baseline;
-  padding: var(--s3); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r2); }
-.demo-step p { margin: 0; }
-.demo-who { font-size: .75rem; font-weight: 600; color: var(--ink-faint); }
-.demo-step.asked { background: var(--sunken); border-color: transparent; }
-.demo-step.asked .demo-q { font-weight: 560; }
-.demo-step.answer { border-color: var(--accent); }
-.demo-step.answer .demo-who { color: var(--accent); }
-.demo-step.failed { border-color: var(--danger); }
-.demo-failed { color: var(--danger); }
-.demo-tool { font: 600 .75rem var(--mono); color: var(--accent); }
-.demo-step details.reveal { border-top: 0; padding-top: 0; margin-top: var(--s1); }
-.demo-step details.reveal > summary { font-size: .8125rem; font-weight: 500; color: var(--ink-soft); }
-.demo-step pre.passage { max-height: 18rem; overflow: auto; margin-top: var(--s2); font-size: .75rem; }
-.demo-step .prose code { overflow-wrap: anywhere; }
-.demo-step .prose > :first-child { margin-top: 0; }
-.demo-hits { list-style: none; margin: var(--s1) 0 0; padding: 0; display: grid; gap: var(--s1); }
-.demo-ask { display: flex; gap: var(--s2); align-items: stretch; }
-.demo-ask .grow { flex: 1; display: flex; }
-.demo-ask textarea { width: 100%; resize: vertical; min-height: 2.75rem; }
-.demo-ask .btn { align-self: stretch; padding-inline: 1.1rem; }
-.demo-ask.busy button::after { content: "…"; }
-.demo-side { margin: 0; display: flex; flex-direction: column; gap: var(--s2); min-width: 0;
-  position: sticky; top: calc(var(--topbar) + var(--s3)); }
-.demo-side figcaption { text-align: right; }
-.demo-map {
-  max-height: clamp(20rem, 70vh, 52rem); min-height: 20rem; overflow: auto; position: relative;
+main:has(.chat-shell) { max-width: 1320px; }
+.chat-shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); gap: var(--s5); align-items: start; }
+.chat-shell.side-off { grid-template-columns: minmax(0, 1fr); }
+.chat-shell.side-off .side { display: none; }
+
+/* the conversation: a column of messages and a composer that stays in reach */
+.chat { display: flex; flex-direction: column; min-width: 0; max-width: 52rem; width: 100%; margin-inline: auto;
+  min-height: calc(100vh - var(--topbar) - 9rem); }
+.chat-bar { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; padding-bottom: var(--s3); border-bottom: 1px solid var(--rule); }
+.chat-bar .grow { flex: 1; }
+.chat-pick select { min-height: 2rem; font-size: .8125rem; padding-block: .2rem; }
+.chat-log { flex: 1; display: flex; flex-direction: column; gap: var(--s5); padding: var(--s5) 0 var(--s4); }
+.chat-hello { margin: auto 0; padding: var(--s7) var(--s4); text-align: center; }
+.chat-hello .title { font-size: 1.125rem; font-weight: 640; margin-bottom: var(--s2); }
+.chat-hello .hint { margin: 0 auto; max-width: 34rem; }
+
+.msg { display: flex; flex-direction: column; min-width: 0; }
+.msg.user { align-items: flex-end; }
+.msg.user .bubble {
+  max-width: min(80%, 38rem); padding: .65rem .95rem; border-radius: 1.1rem 1.1rem .3rem 1.1rem;
+  background: var(--sunken); color: var(--ink); font-size: .9375rem; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.msg.agent { gap: var(--s2); }
+.answer { font-size: .9375rem; line-height: 1.65; overflow-wrap: anywhere; min-width: 0; }
+.answer:empty { display: none; }
+.answer code { overflow-wrap: anywhere; }
+.answer pre { max-width: 100%; overflow-x: auto; white-space: pre-wrap; }
+.chat-failed { color: var(--danger); margin: 0; }
+
+/* the agent's work: one quiet line that can be opened */
+details.work { font-size: .8125rem; color: var(--ink-soft); }
+details.work > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .45rem; }
+details.work > summary::-webkit-details-marker { display: none; }
+details.work > summary::before {
+  content: ""; width: .4rem; height: .4rem; border-right: 1.5px solid var(--ink-faint); border-bottom: 1.5px solid var(--ink-faint);
+  transform: rotate(-45deg); transition: transform .15s ease-out;
+}
+details.work[open] > summary::before { transform: rotate(45deg); }
+ol.work-steps { list-style: none; margin: var(--s2) 0 0; padding: 0 0 0 var(--s3); border-left: 2px solid var(--rule); display: grid; gap: .35rem; }
+ol.work-steps li { overflow-wrap: anywhere; }
+ol.work-steps li.note { color: var(--ink); }
+ol.work-steps li.note > :first-child { margin-top: 0; }
+ol.work-steps li.note > :last-child { margin-bottom: 0; }
+
+/* thinking: a light sweeping across the words, as a chat does */
+.status.thinking {
+  background: linear-gradient(90deg, var(--ink-faint) 0%, var(--ink-faint) 40%, var(--ink) 50%, var(--ink-faint) 60%, var(--ink-faint) 100%);
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sweep 1.8s linear infinite; font-weight: 560;
+}
+.status.thinking::after { content: "…"; }
+@keyframes sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .status.thinking { animation: none; color: var(--ink-soft); background: none; } }
+
+/* the composer */
+/* the composer docks at the bottom of the window over a fade, so a long
+   answer scrolls away under it instead of showing through */
+.composer-dock {
+  position: sticky; bottom: 0; padding: var(--s4) 0 var(--s3);
+  background: linear-gradient(to bottom, transparent, var(--bg) 40%);
+}
+.composer {
+  display: flex; align-items: flex-end; gap: var(--s2);
+  padding: .5rem .5rem .5rem .9rem; background: var(--surface); border: 1px solid var(--rule-firm);
+  border-radius: 1.25rem; box-shadow: 0 6px 24px #16212b14;
+}
+.composer:focus-within { border-color: var(--accent); }
+.composer textarea {
+  flex: 1; border: 0; background: none; resize: none; outline: none; padding: .45rem 0; min-height: 0;
+  font-size: .9375rem; line-height: 1.5; max-height: 200px;
+}
+.composer .send {
+  flex: none; width: 2.25rem; height: 2.25rem; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--accent); color: var(--accent-ink);
+}
+.composer .send:disabled { opacity: .45; cursor: default; }
+.composer.busy .send { opacity: .45; }
+
+/* the side panel: what recall attached, and the path the agent took */
+.side {
+  position: sticky; top: calc(var(--topbar) + var(--s3)); min-width: 0;
+  max-height: calc(100vh - var(--topbar) - var(--s5)); display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r3);
-  padding: var(--s2) var(--s3);
 }
-ul.demo-trail { list-style: none; margin: 0; padding: 0; --step: 1.1rem; }
-ul.demo-trail li {
-  display: flex; align-items: baseline; gap: .5rem; min-width: 0;
-  padding: .25rem .4rem .25rem calc(.4rem + var(--depth) * var(--step));
-  border-radius: var(--r1); font-size: .8125rem;
-  background-image: repeating-linear-gradient(to right, var(--rule) 0 1px, transparent 1px var(--step));
-  background-repeat: no-repeat; background-position: .9rem 0;
-  background-size: calc(var(--depth) * var(--step)) 100%;
+.side-tabs { display: flex; border-bottom: 1px solid var(--rule); padding: 0 var(--s2); }
+.side-tabs button {
+  flex: 1; border: 0; background: none; cursor: pointer; padding: .7rem .5rem .6rem; font: inherit; font-size: .875rem;
+  font-weight: 560; color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
-ul.demo-trail a { color: var(--ink-faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-ul.demo-trail .holds { flex: none; margin-left: auto; font-size: .75rem; color: var(--ink-faint); }
-ul.demo-trail li.visited a { color: var(--accent); font-weight: 600; }
-ul.demo-trail li.reading { background-color: var(--accent-wash); }
-ul.demo-trail a:hover { color: var(--accent); }
-@media (max-width: 900px) {
-  .demo { grid-template-columns: minmax(0, 1fr); }
-  .demo-side { position: static; }
-  .demo-pick #fresh { margin-left: 0; }
+.side-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.side-pane { overflow: auto; padding: var(--s3); display: flex; flex-direction: column; gap: var(--s2); min-height: 0; }
+.side-pane[hidden] { display: none; }
+.side-empty { margin: var(--s4) 0; text-align: center; }
+.side-q { margin: 0 0 var(--s1); font-weight: 600; font-size: .875rem; overflow-wrap: anywhere; }
+.side-turn { display: flex; flex-direction: column; gap: var(--s2); }
+.side-note { margin: 0; padding: var(--s2) var(--s3); border-top: 1px solid var(--rule); text-align: right; }
+
+details.hit { border: 1px solid var(--rule); border-radius: var(--r2); padding: .55rem .7rem; min-width: 0; }
+details.hit > summary { list-style: none; cursor: pointer; display: grid; gap: .15rem; min-width: 0; }
+details.hit > summary::-webkit-details-marker { display: none; }
+details.hit[open] { background: var(--bg); }
+.hit-top { display: flex; justify-content: space-between; gap: var(--s2); font-size: .75rem; color: var(--ink-faint); }
+.hit-kind { font-weight: 600; color: var(--accent); }
+.hit-title { font-size: .8125rem; font-weight: 560; overflow-wrap: anywhere; }
+.hit-path { font-size: .75rem; color: var(--ink-faint); overflow-wrap: anywhere; }
+pre.hit-body {
+  margin: var(--s2) 0 0; max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: .75rem/1.55 var(--mono); color: var(--ink-soft);
+}
+details.hit > a { display: inline-block; margin-top: var(--s2); }
+details.prompt .hit-title { color: var(--ink-soft); }
+
+ol.path { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; counter-reset: step; }
+ol.path li {
+  display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto; gap: var(--s2); align-items: baseline;
+  padding: .4rem .5rem; border-radius: var(--r1); font-size: .8125rem;
+}
+ol.path li:nth-child(odd) { background: var(--bg); }
+.path-mark { font: 600 .6875rem var(--mono); color: var(--accent); text-align: center; }
+ol.path li.file .path-mark { color: var(--ink-faint); }
+.path-name { overflow-wrap: anywhere; min-width: 0; }
+.path-name.mono { font-size: .75rem; }
+.path-size { font-size: .6875rem; white-space: nowrap; }
+
+@media (max-width: 960px) {
+  .chat-shell { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; max-height: none; }
 }
 </style>
 {% endblock %}
