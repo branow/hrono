@@ -359,3 +359,52 @@ Read case by case, with every missed fact looked up in the map:
 The tree, as briefs of what each cluster of code does, cannot answer
 the questions where agents make mistakes: those turn on absences,
 conditions and links between services, and the brief recipe drops all three.
+
+## The v3 tree: contracts prompts, then recall as map pages
+
+The tree rebuilt with the `contracts` condense prompt and the
+`core-contracts` brief (entry checks with their conditions, outbound calls,
+commit points, failure handling, absences), exported at 3 levels. The same
+five hard questions, re-verified keys, every arm twice (mean coverage of
+ten answers; errors summed):
+
+| arm | recall | coverage | errors |
+|---|---|---|---|
+| code only | none | 0.48 | 14 |
+| v2 tree | passages, whole prompt | 0.51 | 13 |
+| v3 tree | passages, whole prompt | 0.54 | 9 |
+| v3 tree | 10 map pages listed | 0.53 | 13 |
+| v3 tree | best 3-4 pages attached whole, the rest listed | 0.51 | 11 |
+
+Every hrono arm is ahead of code alone, and none by more than the gap
+between two runs of the same arm (0.48 and 0.59 for the v3 tree).
+
+Read case by case (one analyst per question, every missed fact looked up in
+the v3 map):
+
+- **The map now holds most missed facts.** Of the facts no run got, most are
+  stated on a v3 leaf page: the authorization gate before an edit, the
+  future-effective job selecting PAID or APPROVED filings, the PDFs each
+  email attaches, the filer committing before its side effects, the duplicate
+  guard that only checks COMPLETED. Still missing: the 600 s product cache
+  keyed on a client header, which filing types leave out the waive flag or
+  carry future-effective fees, and that one service's enum copies lack a
+  status.
+- **Recall injected noise.** The hook embedded the whole prompt (question,
+  answer format, how to use the map), and every v3 run got licence headers
+  and tests. Fixed (`ff04bbc`): each sentence is embedded alone, and recall
+  can return one hit per leaf page; the right pages then come first
+  (`2026-10-recall-queries/harness/prompts.py`: 12 of 50 listed pages cover
+  a cited file, against 1.4 by chance; 0 of 25 passages did before).
+- **Listed pages are not read.** Agents opened 0-2 of the 10 pages recall
+  listed, then grepped the code.
+- **Attached pages are read, but rarely carry the answer.** With the best
+  pages attached whole, both runs of the fee-waiver question used the
+  refusal on the attached payment page (fact 6, 1.0 twice). On the failure
+  question, the attached page stating the duplicate guard went unused.
+  Agents treat the map as a list of places to start and take their answer
+  from the code.
+- **Agents still miss facts across services.** The facts all runs miss are
+  facts about how two services connect (who produces what a listener
+  consumes, which job repairs what another leaves stuck). A page states
+  them, but no single page says the two belong together.
