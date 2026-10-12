@@ -18,7 +18,7 @@ import pytest
 from hrono.cluster.blend import (
     ALPHA,
     combine,
-    combined_vector,
+    path_blend_vector,
     path_body,
     register_path_bodies,
     unit,
@@ -52,7 +52,9 @@ def _reference(
     ).fetchall():
         if scope is not None and int(row["id"]) not in scope:
             continue
-        passage = combined_vector(conn, row["content_hash"], row["path"], MODEL)  # type: ignore[arg-type]
+        passage = path_blend_vector(
+            conn, row["content_hash"], row["path"], MODEL
+        )  # type: ignore[arg-type]
         body = get_vector(conn, row["content_hash"], MODEL)  # type: ignore[arg-type]
         if passage is None or body is None:
             continue

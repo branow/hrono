@@ -16,11 +16,12 @@ All baked in code, not config.
 
 | Name | Value | Where | Why |
 |---|---|---|---|
-| `ALPHA` | 0.5 | `cluster/blend.py` | Section vector = `[√(1−α)·content ; √α·path]`, so a dot product is the blended similarity. Briefs have no path and cluster on content only. |
+| `TEXT_WEIGHT`, `FOLDER_WEIGHT` | 0.6, 0.4 | `cluster/blend.py` | Section vector = `[√0.6·text ; √0.4·folders]`, so a dot product is `0.6·text_sim + 0.4·folder_sim`. Text is the embedding of the section's condensation (its raw content until condensed). Folders: every leading prefix of `source/folders/file`, the one at depth d weighing 1/d, hashed into `FOLDER_DIMS` (2048); two paths score the weight of their shared prefixes over the geometric mean of their totals. Chosen in `evaluations/2026-10-cluster-formula/`. Briefs have no path and cluster on content only. |
+| `ALPHA` | 0.5 | `cluster/blend.py` | Recall's blend of content with the embedded path string, `[√(1−α)·content ; √α·path]`. Not used for clustering. |
 | Recipe ladder | ≥ 27 points: UMAP 25 dims, 15 neighbours, `min_cluster_size` 5. ≥ 12 points: 10 dims, 10 neighbours, `min_cluster_size` 3. | `cluster/recipe.py` | One pipeline at every level, scaled to the point count. UMAP's spectral init needs N ≥ dims + 2 (UMAP-25 fails at 26 points). Below 12 points a level cannot be reduced and is one topic. |
 | UMAP | cosine, seed 42, warm `init` from stored coords | `cluster/build.py` | Build and settle only; never during an update. |
 | HDBSCAN | `leaf`, euclidean | `cluster/build.py` | Leaf selection gives the many small topics a summarization tree wants. |
-| `TAU` | 0.70 | `cluster/placement.py` | Similarity a section needs to join an existing topic. |
+| `TAU` | 0.70 | `cluster/placement.py` | Similarity a section needs to join an existing topic. Set for the old content-and-path-string space; to recalibrate on the new clustering vector. |
 | `MAX_CAP` | 30 members | `cluster/repair.py` | The edge of one faithful brief (~500 tokens × 30 ≈ 15k input tokens). It sits above the organic leaf sizes (5–28, median ~10), so it only catches pathological growth. |
 | `MISFIT_THRESHOLD` | 0.25 | `cluster/repair.py` | Per-topic misfit share that triggers a migrate. |
 | `SAMPLE_SIZE` | 32 topics | `cluster/monitor.py` | Bounded re-check per batch beyond the dirty topics. |

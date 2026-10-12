@@ -162,6 +162,7 @@ def test_a_successful_maintain_reports_each_stage(repo: Path) -> None:
         "split",
         "embed",
         "condense",
+        "embed-condensations",
         "cluster",
         "restore-pins",
         "brief",
@@ -348,6 +349,7 @@ def test_a_failed_maintain_names_the_stage_and_keeps_what_finished(
         "split",
         "embed",
         "condense",
+        "embed-condensations",
     ]
 
 

@@ -16,14 +16,12 @@ import numpy as np
 
 from hrono import naming, pins
 from hrono.cluster import incubator
-from hrono.cluster.blend import blend_weights, combined_vector, path_body
+from hrono.cluster.blend import combined_vector
 from hrono.errors import AppError
 from hrono.health import triage
-from hrono.ingest.identity import content_hash as digest
 from hrono.summarize import briefs
 
 SHOWN = 50
-_WEIGHTS = blend_weights()
 
 
 @dataclass(frozen=True)
@@ -221,6 +219,7 @@ def release(
 def _centroids(
     conn: sqlite3.Connection, tree: str, model: str | None
 ) -> tuple[list[int], np.ndarray]:
+    """Each leaf's mean clustering vector, unit length: what placement uses."""
     if model is None:
         return [], np.zeros((0, 0))
     members = conn.execute(
@@ -230,47 +229,21 @@ def _centroids(
         "WHERE n.tree = ? AND n.level = 0 ORDER BY m.node_id",
         (tree,),
     ).fetchall()
-    path_hash = {row["path"]: digest(path_body(row["path"])) for row in members}
-    vectors = _vectors(
-        conn, model, {row["h"] for row in members} | set(path_hash.values())
-    )
-    kept = [
-        row
-        for row in members
-        if row["h"] in vectors and path_hash[row["path"]] in vectors
-    ]
+    kept, rows = [], []
+    for row in members:
+        vector = combined_vector(conn, row["h"], row["path"], model)
+        if vector is not None:
+            kept.append(int(row["node"]))
+            rows.append(vector)
     if not kept:
         return [], np.zeros((0, 0))
-    content = _unit_rows(np.vstack([vectors[row["h"]] for row in kept]))
-    place = _unit_rows(
-        np.vstack([vectors[path_hash[row["path"]]] for row in kept])
-    )
-    combined = np.hstack((content * _WEIGHTS[0], place * _WEIGHTS[1]))
+    combined = np.asarray(rows, dtype=np.float64)
     # rows arrive grouped by topic (ORDER BY node_id): sum each run of them
-    owner = np.array([int(row["node"]) for row in kept])
-    ids, starts, sizes = np.unique(owner, return_index=True, return_counts=True)
+    ids, starts, sizes = np.unique(
+        np.array(kept), return_index=True, return_counts=True
+    )
     means = np.add.reduceat(combined, starts, axis=0) / sizes[:, None]
     return [int(node) for node in ids], _unit_rows(means)
-
-
-def _vectors(
-    conn: sqlite3.Connection, model: str, hashes: set[str]
-) -> dict[str, np.ndarray]:
-    """Every stored vector of ``model`` among ``hashes``, in one read."""
-    found: dict[str, np.ndarray] = {}
-    wanted = sorted(hashes)
-    for start in range(0, len(wanted), 900):
-        chunk = wanted[start : start + 900]
-        marks = ",".join("?" * len(chunk))
-        for row in conn.execute(
-            "SELECT content_hash, vector FROM embeddings "  # noqa: S608
-            f"WHERE model_name = ? AND content_hash IN ({marks})",
-            (model, *chunk),
-        ):
-            found[row["content_hash"]] = np.frombuffer(
-                row["vector"], dtype=np.float32
-            ).astype(np.float64)
-    return found
 
 
 def _unit_rows(matrix: np.ndarray) -> np.ndarray:

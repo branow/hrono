@@ -110,10 +110,13 @@ A recalled passage's header is its address followed by its `sp:` paths.
 
 **Embedding** (`src/hrono/embed/`) runs in-process with
 sentence-transformers. Vectors are keyed `(content hash, model)`, so re-runs
-embed only new bytes and a model change re-embeds automatically. A section's
-clustering vector blends what it says with where it lives:
-`[√(1−α)·content ; √α·path]`, α = 0.5 (`cluster/blend.py`), so a dot product
-is `(1−α)·content_sim + α·path_sim`.
+embed only new bytes and a model change re-embeds automatically. The default model is
+`ibm-granite/granite-embedding-97m-multilingual-r2` (384 dims, reads up to 8k
+tokens). A section's clustering vector blends what it is for with where it
+lives: `[√0.6·text ; √0.4·folders]` (`cluster/blend.py`), where text is the
+embedding of its condensation and folders weigh its leading path prefixes by
+1/depth, so a dot product is `0.6·text_sim + 0.4·folder_sim`. Recall blends
+content with the embedded path string instead (α = 0.5).
 
 **Clustering** (`src/hrono/cluster/`): UMAP → HDBSCAN (leaf) → attach every
 noise section to its nearest core member, so every section is in exactly one

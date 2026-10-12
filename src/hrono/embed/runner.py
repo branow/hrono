@@ -196,6 +196,9 @@ def cached_encoder_for(
         return encoder
 
 
+MAX_TOKENS = 8192
+
+
 def _load(model_id: str, timeout: float) -> object:
     try:
         from sentence_transformers import SentenceTransformer
@@ -206,7 +209,13 @@ def _load(model_id: str, timeout: float) -> object:
 
     def load() -> None:
         try:
-            box["model"] = SentenceTransformer(model_id)
+            model = SentenceTransformer(model_id)
+            # long-context models read up to 32k tokens; past MAX_TOKENS a
+            # batch can exhaust memory for text no section needs whole
+            limit = getattr(model, "max_seq_length", None)
+            if limit is None or limit > MAX_TOKENS:
+                model.max_seq_length = MAX_TOKENS
+            box["model"] = model
         except Exception as exc:  # noqa: BLE001 - surfaced below as EmbedError
             box["error"] = exc
 

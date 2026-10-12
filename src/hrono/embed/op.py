@@ -81,7 +81,8 @@ def _allowed(conn: object, tree: str) -> frozenset[str] | None:
     - the PATH strings of all of the above, which the blend embeds as
       content keyed by the hash of the path's bytes — computable only here,
       so they are hashed in Python over the distinct paths;
-    - each brief's whole text, which ``cluster_briefs`` registers as one body.
+    - each brief's whole text, which ``cluster_briefs`` registers as one body;
+    - the condensations of its sections, which clustering reads them by.
     """
     scope = sources_of(conn, tree)  # type: ignore[arg-type]
     if scope is None:
@@ -103,6 +104,13 @@ def _allowed(conn: object, tree: str) -> frozenset[str] | None:
         "SELECT b.text AS text FROM briefs b "
         "JOIN nodes n ON n.id = b.node_id WHERE n.tree = ?",
         (tree,),
+    ).fetchall():
+        hashes.add(content_hash(str(row["text"]).encode("utf-8")))
+    for row in conn.execute(  # type: ignore[attr-defined]
+        "SELECT DISTINCT d.text AS text FROM condensations d "
+        "JOIN sections s ON s.content_hash = d.content_hash "
+        "WHERE s.source IN (SELECT value FROM json_each(?))",
+        (named,),
     ).fetchall():
         hashes.add(content_hash(str(row["text"]).encode("utf-8")))
     hashes.update(content_hash(path_body(path)) for path in paths)

@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 EMBEDDING_NAME = "embedder"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "ibm-granite/granite-embedding-97m-multilingual-r2"
 
 # role -> which of the two tiers answers it
 ROLES: dict[str, str] = {
