@@ -63,71 +63,101 @@ def _validate(config: dict[str, object], context: ValidationContext) -> None:
         )
 
 
-# The defaults are the prompts the research settled on
-# (docs/summarization.md; docs/research/prototype/): the condense prompt of
-# tree-level1.ipynb, the adaptive-gotchas brief of summarize_experiments.py,
-# the round-7 upper prompt of summarize-level2-experiments.ipynb and the
-# relevance judge of update-threshold.ipynb. Each op appends its content at
-# the placeholder.
+# The defaults are the prompts the 2026-10 experiments on the bcreg corpus
+# settled on: condense `purpose-decisions`
+# (docs/evaluations/2026-10-condense-prompts/), the leaf brief `core-states`
+# and the upper brief `area-flows` (docs/evaluations/2026-10-brief-prompts/),
+# each scored against the verified facts of the agents evaluation. The judge
+# is the relevance judge of update-threshold.ipynb. Each op appends its
+# content at the placeholder.
+
 _CONDENSE = """\
-Condense this content chunk to its essential information. Let the length \
-follow the density of the content: boilerplate, generated, or repetitive \
-content collapses to one short line saying so; dense logic keeps whatever it \
-needs to stay faithful. Copy concrete identifiers, names, values, and \
-constraints VERBATIM from the content - never infer or add ones that are not \
-literally there. If the content holds anything non-obvious a newcomer could \
-be hurt by (behavior differing from what names suggest, silent no-ops, \
-partial or non-transactional operations, asymmetries, workarounds, fragile \
-special cases), add a line starting with 'GOTCHA:' for each - only if \
-literally present. Output only the condensed content.
+Condense this content chunk. Start with one sentence saying what it is for, \
+in the terms of the system it belongs to: the job it does (for example \
+"Applies a confirmed payment to its business filing"), not how it is built. \
+If it is a test, fixture, configuration, build file, migration or \
+documentation, say so in that first sentence and name what it serves.
+
+Then give what a reader needs to find and change its behaviour: what comes \
+in, what goes out and in what shape, the steps of its main flow, and every \
+decision it makes - the condition, the outcome, and the function, constant, \
+list or field that holds it. Name identifiers together with what they do, \
+never as bare lists. Mechanism (frameworks, queues, retries, wiring) comes \
+after the purpose. Boilerplate (licence headers, imports, logging and server \
+setup, plain configuration) collapses to one short line, or to nothing. Aim \
+for 60 to 120 words; a chunk with many decisions may use up to 250. Copy \
+names and values VERBATIM from the content - never infer or add ones that \
+are not literally there. If the code itself shows something a newcomer could \
+be hurt by (an exception swallowed, a partial or non-transactional update, a \
+hard-coded special case, behaviour differing from what a name says), add a \
+line starting with 'GOTCHA:' for each. Never guess about spelling, naming or \
+intent. Output only the condensed content.
 
 {content}"""
 
 _BRIEF = """\
-Summarize the following group of related content chunks. The summary is a \
-node in a knowledge tree: a reader (human or AI agent) uses it to understand \
-what this group is and contains, without opening the chunks.
+Below are notes on the sources of one part of a larger system, each under \
+its source's name. Write what a reader (human or AI agent) must know about \
+this part to understand its role in the system and to find where to change \
+it. The notes stay available below this description, so leave detail to \
+them: keep what is fundamental, drop what is obvious or minor.
 
-Guidelines:
-- Start by stating what this group is as a whole and what \
-domain/technology/format it belongs to, if any is apparent.
-- Look at the content and identify the natural groupings or patterns actually \
-present in it - whatever they are. Organize the summary by them, one section \
-per grouping. Choose the structure that fits THIS content; do not force one.
-- Describe each part with the concrete names and terms that appear in it.
-- If many chunks are near-identical or repetitive, describe the pattern once \
-and note the variation, instead of describing each.
-- End with a "Caution" section listing anything non-obvious a newcomer could \
-be hurt by: behavior differing from what names suggest, silent no-ops, partial \
-or non-transactional operations, asymmetries, workarounds, fragile special \
-cases. Omit the section entirely if there is nothing to warn about.
-- Mention only what is actually present in the content - do not invent \
-anything.
+Keep, in this order:
+1. One or two sentences: what this part does and what it hands work to or \
+takes work from.
+2. Its contract with the rest of the system: what reaches it and from where, \
+what it sends or writes and to where, with the shape of messages or records \
+that cross the boundary.
+3. The decisions that shape its behaviour, one line each: the condition, the \
+outcome, and the function, constant or list that holds it. Include every \
+step that moves a record from one state to another (created, submitted, \
+paid, reviewed, resubmitted, completed, deleted - whatever this part has) \
+and every check that refuses a caller (authorization, validation, locks), \
+naming the function that does it.
+4. Hazards that lose, duplicate or corrupt work, or fail silently - at most \
+three.
+5. The two to four sources to open first, and what each holds.
 
-Output only the summary in markdown, nothing else.
+Leave out: startup and wiring, configuration keys and defaults, lists of \
+fields or enum values, health checks, version helpers, logging, test \
+plumbing, and any hazard about style, naming or types. Name a test only when \
+it pins down a behaviour from point 3. If the notes cover unrelated things, \
+say so and give each its own short description.
+
+Write compactly: one line per decision, no padding. Aim for 250 to 500 \
+words; a part with several distinct jobs may use up to 800. Write about the \
+part itself. Never describe the text you were given: no "this group", "this \
+set", "these chunks", "the summaries", "condensed" or "the files above". Say \
+what things do, never only that they exist: a name without what it does is \
+noise. Licences, server and logging setup, environment defaults and \
+packaging get one line at most, and only if they matter to a reader. Mention \
+only what is actually present - do not invent anything.
+
+Output only the description in markdown, nothing else.
 
 {content}"""
 
 _BRIEF_UPPER = """\
-Each text below is the summary of one group of related content. Together the \
-groups form one larger area. Write the summary of that whole area - one level \
-of abstraction higher than the texts.
+Below are descriptions of the parts of one area of a larger system, each \
+under its title. Write what a reader (human or AI agent) must know about the \
+whole area: what it does, and how work moves through its parts.
 
-These are content requirements only - they say what the summary must convey, \
-and they must not be recognizable in its form:
-- what the area is as a whole;
-- what only becomes visible when the groups are seen together: shared \
-conventions, recurring patterns, emergent rules, invariants, cross-cutting \
-decisions - never restating what a single text already says;
-- the components someone would search for first, by name;
-- hazards from the texts' caution notes, where they matter for the whole area.
+Open with one or two sentences: what this area does and what it hands work \
+to or takes work from outside it. Then the end-to-end flows of the area - \
+the things a user or another system asks of it - each as numbered steps from \
+what starts it to what it ends with, naming at each step the part and the \
+function that does it and the state the record moves to. Then one line per \
+part not already named in a flow, saying its job. End with at most three \
+hazards that come from how the parts interact.
 
-The form is completely free: use whatever markdown serves this particular \
-content best - headings, lists, tables, prose, or any mix. If you use \
-headings, name them after the content's own concepts, never after the \
-requirements above. Be substantially shorter than any of the texts; the \
-length must not grow with the number of input texts. Never invent or \
-generalize names. Output only the summary in markdown.
+Aim for 300 to 600 words, however many parts there are. Leave out what one \
+part's description already says in detail - a reader opens that part for it \
+- and setup, configuration, field lists and style hazards. Name a part by \
+its title so a reader can open it. Mention only what the descriptions say - \
+do not invent anything. Write about the part itself. Never describe the text \
+you were given: no "this group", "this set", "these chunks", "the \
+summaries", "condensed" or "the files above". Output only the description in \
+markdown, nothing else.
 
 {content}"""
 
