@@ -1,0 +1,8 @@
+- sbc-auth/auth-api/src/auth_api/: extensions/__init__.py, schemas/__init__.py, schemas/account_payment_settings.py, schemas/activity_log.py and 33 more
+- sbc-auth/auth-api/: logging.conf, src/auth_api/exceptions/__init__.py, src/auth_api/exceptions/errors.py, src/auth_api/models/org.py and 11 more
+- sbc-auth/auth-api/: manage.py, src/auth_api/auth.py, src/auth_api/config.py, src/auth_api/resources/__init__.py and 38 more
+- sbc-auth/auth-api/: src/auth_api/schemas/schemas/account_response.json, src/auth_api/schemas/schemas/affidavit.json, src/auth_api/schemas/schemas/affidavit_response.json, src/auth_api/schemas/schemas/affiliation.json and 43 more
+- sbc-auth/auth-api/: flags.json, src/auth_api/schemas/schemas/anonymous_user.json, src/auth_api/schemas/schemas/api_key.json, src/auth_api/schemas/schemas/bconline_response.json and 5 more
+- sbc-auth/auth-api/: src/auth_api/models/__init__.py, src/auth_api/models/account_login_options.py, src/auth_api/models/activity_log.py, src/auth_api/models/affidavit.py and 23 more
+- sbc-auth/auth-api/: src/auth_api/models/affidavit_status.py, src/auth_api/models/affiliation_invitation_type.py, src/auth_api/models/business_size_code.py, src/auth_api/models/business_type_code.py and 16 more
+- sbc-auth/auth-api/: docs/dotenv_template, src/auth_api/config.py, src/auth_api/services/__init__.py, src/auth_api/services/affidavit.py and 18 more

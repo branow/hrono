@@ -1,0 +1,9 @@
+- lear/legal-api/: src/legal_api/reports/__init__.py, src/legal_api/reports/business_document.py, src/legal_api/reports/registrar_meta.py, src/legal_api/reports/report.py and 4 more
+- lear/legal-api/src/legal_api/: decorators.py, resources/v1/namerequest.py, resources/v1/nr_type_map.py, services/authz.py and 5 more
+- lear/legal-api/src/legal_api/: models/colin_update.py, resources/v1/business/business_filings.py, services/authz.py, services/filings/validations/admin_freeze.py and 31 more
+- lear/: legal-api/src/legal_api/core/__init__.py, legal-api/src/legal_api/core/constants.py, legal-api/src/legal_api/core/filing.py, legal-api/src/legal_api/core/meta/__init__.py and 16 more
+- lear/legal-api/src/legal_api/services/: business/__init__.py, business/validations/__init__.py, comments/__init__.py, comments/validations/__init__.py and 8 more
+- lear/legal-api/: src/legal_api/core/business.py, src/legal_api/core/filing_helper.py, src/legal_api/core/utils.py, src/legal_api/exceptions/error_messages/codes.py and 50 more
+- lear/legal-api/: scripts/manual_db_scripts/2022_jan_31_add_ar_filing_year_to_meta_data.sql, src/legal_api/core/filing.py, src/legal_api/core/meta/filing.py, src/legal_api/models/filing.py and 9 more
+- lear/legal-api/src/legal_api/: resources/__init__.py, resources/constants.py, resources/endpoints.py, resources/v1/__init__.py and 13 more
+- lear/legal-api/src/legal_api/: __init__.py, config.py, resources/v1/business/business_address.py, resources/v1/business/business_aliases.py and 22 more

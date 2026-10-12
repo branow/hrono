@@ -1,0 +1,16 @@
+- lear/queue_services/entity-emailer/src/entity_emailer/: email_processors/__init__.py, email_processors/affiliation_notification.py, email_processors/agm_extension_notification.py, email_processors/agm_location_change_notification.py and 21 more
+- lear/queue_services/entity-emailer/src/entity_emailer/email_templates/: DIS-PAID.html, INVOL-DIS-STAGE-1.html, RES-COMPLETED.jinja2, RES-PAID.jinja2 and 7 more
+- lear/queue_services/entity-emailer/src/entity_emailer/email_templates/: NR-BEFORE-EXPIRY-COLIN.html, NR-BEFORE-EXPIRY-MODERNIZED.html, NR-BEFORE-EXPIRY-SO.html, NR-BEFORE-EXPIRY.html and 5 more
+- lear/queue_services/entity-emailer/src/entity_emailer/email_templates/: AGM-EXT-COMPLETED.html, AGM-LOCCHG-COMPLETED.html, AMALGA-COMPLETED.html, AMALGA-PAID.html and 48 more
+- lear/queue_services/entity-digital-credentials/: README.md, src/entity_digital_credentials/__init__.py, src/entity_digital_credentials/digital_credentials_processors/__init__.py, src/entity_digital_credentials/digital_credentials_processors/admin_revoke.py and 13 more
+- lear/queue_services/: common/tests/unit/test_messages.py, entity-digital-credentials/tests/unit/__init__.py, entity-emailer/src/entity_emailer/message_tracker/tracker.py, entity-emailer/tests/integration/test_publish_event.py and 23 more
+- lear/queue_services/: common/tests/unit/__init__.py, entity-filer/flags.json, entity-filer/src/entity_filer/filing_processors/filing_components/aliases.py, entity-filer/src/entity_filer/filing_processors/filing_components/shares.py and 45 more
+- lear/queue_services/entity-bn/tests/: __init__.py, unit/__init__.py, unit/bn_processors/test_admin.py, unit/bn_processors/test_change_of_registration.py and 3 more
+- lear/queue_services/entity-bn/src/entity_bn/: __init__.py, bn_processors/__init__.py, bn_processors/admin.py, bn_processors/change_of_registration.py and 7 more
+- lear/queue_services/: common/README.md, common/src/entity_queue_common/__init__.py, common/src/entity_queue_common/service_utils/exceptions.py, common/tests/integration/__init__.py and 10 more
+- /: business-filings-ui/LICENSE, lear/LICENSE, lear/colin-api/LICENSE, lear/data-reset-tool/LICENSE and 13 more
+- lear/queue_services/: common/LICENSE, entity-bn/LICENSE, entity-bn/src/entity_bn/exceptions.py, entity-digital-credentials/LICENSE and 5 more
+- lear/queue_services/entity-filer/src/entity_filer/: __init__.py, filing_processors/__init__.py, filing_processors/admin_freeze.py, filing_processors/agm_extension.py and 24 more
+- lear/queue_services/entity-filer/src/entity_filer/: worker.py
+- lear/queue_services/entity-emailer/: migrations/versions/786dac4b44ef_.py, src/entity_emailer/message_tracker/tracker.py, tracker/models/__init__.py, tracker/models/message_processing.py and 2 more
+- lear/queue_services/business-pay/: LICENSE, src/business_pay/__init__.py, src/business_pay/config.py, src/business_pay/database/__init__.py and 18 more
