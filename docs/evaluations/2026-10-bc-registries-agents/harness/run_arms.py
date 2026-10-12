@@ -15,8 +15,10 @@ runs/<set>-<arm>.jsonl and a rerun skips what is done.
 """
 
 import json
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import common
 
@@ -60,11 +62,67 @@ You do NOT have the source code. You have only hrono's knowledge base of it, in 
 Answer from these alone; navigate the tree and run recall as much as you need."""
 
 
+# Round 2 (E050 rebuild, docs/evaluations/2026-10-bc-registries-v2/): the
+# system prompt says only where the code is; the map is the 3-level export of
+# the rebuilt tree; recall is not a command the agent runs but hrono's Claude
+# Code plugin, whose hooks attach recalled passages to the question and say
+# where the map is.
+PLUGIN = Path(__file__).resolve().parents[4] / "plugins" / "hrono"
+EXPORT_R2 = Path.home() / "hrono-eval" / "export-bcreg-v2-L3"
+HRONO_HOME_R2 = Path.home() / "hrono-eval" / "home-v2"
+
+SYSTEM_CODE_R2 = "The code is in {corpus}."
+SYSTEM_TREE_R2 = "The code is not available. A map of it is in {export}."
+
+MAP_R2 = """
+
+Before reading code: open {export}/root.md, choose the areas that fit the question, read their brief.md and the leaf briefs beneath them, then open the source files the leaves list. Passages attached as hrono recall show where to look first."""
+
+MAP_ONLY_R2 = """
+
+Answer from the map: open {export}/root.md, choose the areas that fit the question, read their brief.md and the leaf briefs beneath them. Passages attached as hrono recall show where to look first."""
+
+ROUND_2 = {
+    # arm: (system, task addition, runs in, loads the plugin)
+    "code-r2": (SYSTEM_CODE_R2, "", None, False),
+    "hrono-r2": (SYSTEM_CODE_R2, MAP_R2, None, True),
+    "tree-r2": (SYSTEM_TREE_R2, MAP_ONLY_R2, EXPORT_R2, True),
+}
+
+
+def run_round_2(kind, arm, q):
+    system, addition, cwd, plugin = ROUND_2[arm]
+    prompt = ARCH.format(question=q["question"])
+    if cwd is not None:
+        prompt = prompt.replace(
+            "relative to the current directory", "as the map cites them"
+        )
+    prompt += addition.format(export=EXPORT_R2)
+    r = common.run_agent(
+        prompt,
+        model=MODEL,
+        role=f"{kind}:{arm}",
+        key=q["qid"],
+        max_turns=MAX_TURNS,
+        tools=["Read", "Grep", "Glob"],
+        system=system.format(corpus=common.CORPUS, export=EXPORT_R2),
+        add_dirs=[EXPORT_R2] if plugin and cwd is None else [],
+        disallow_bash=cwd is not None,
+        cwd=cwd,
+        plugin_dir=PLUGIN if plugin else None,
+        env={"HRONO_HOME": str(HRONO_HOME_R2)},
+        safe_mode=False,
+    )
+    return {"qid": q["qid"], "set": kind, "arm": arm, **r}
+
+
 def items(kind):
     return json.load(open(common.DATA / f"{kind}.json"))
 
 
 def run_one(kind, arm, q):
+    if arm in ROUND_2:
+        return run_round_2(kind, arm, q)
     prompt = (
         LOCATE.format(task=q["task"])
         if kind == "locate"
@@ -74,20 +132,28 @@ def run_one(kind, arm, q):
     # agent normally has it; the hrono arm adds only the recall command.
     tools, add = ["Read", "Grep", "Glob"], []
     cwd = None
-    if arm == "tree":
+    # `<arm>-v2` is the same arm over the rebuilt tree (E050)
+    base, _, version = arm.partition("-")
+    export, h = (
+        (common.EXPORT_V2, common.H_V2)
+        if version == "v2"
+        else (common.EXPORT, common.H)
+    )
+    arm_kind = base if version == "v2" else arm
+    if arm_kind == "tree":
         # Diagnostic: the knowledge base alone, no checkout. Measures what
         # the tree itself knows, not how an agent combines it with grep.
         prompt = prompt.replace(
             "relative to the current directory",
             "as the knowledge base cites them",
         )
-        prompt += TREE_ONLY.format(export=common.EXPORT, h=common.H)
-        tools.append(f"Bash({common.H} recall:*)")
-        cwd = common.EXPORT
-    if arm == "hrono":
-        prompt += HRONO.format(export=common.EXPORT, h=common.H)
-        tools.append(f"Bash({common.H} recall:*)")
-        add = [common.EXPORT]
+        prompt += TREE_ONLY.format(export=export, h=h)
+        tools.append(f"Bash({h} recall:*)")
+        cwd = export
+    if arm_kind == "hrono":
+        prompt += HRONO.format(export=export, h=h)
+        tools.append(f"Bash({h} recall:*)")
+        add = [export]
     r = common.run_agent(
         prompt,
         model=MODEL,
@@ -110,7 +176,12 @@ def main(kind, arms):
         done = set()
         if out.exists():
             done = {json.loads(l)["qid"] for l in out.open()}
-        todo = [q for q in qs if q["qid"] not in done]
+        wanted = set(filter(None, os.environ.get("QIDS", "").split(",")))
+        todo = [
+            q
+            for q in qs
+            if q["qid"] not in done and (not wanted or q["qid"] in wanted)
+        ]
 
         def go(q):
             row = run_one(kind, arm, q)

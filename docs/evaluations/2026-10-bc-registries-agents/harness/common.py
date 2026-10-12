@@ -24,6 +24,9 @@ CACHE = ROOT / "cache" / "llm"
 WORKDIR = ROOT / "cache" / "cli-work"
 EXPORT = Path.home() / "hrono-eval" / "export-bcreg"
 H = str(Path.home() / "hrono-eval" / "bin" / "h")
+# The rebuilt tree (E050): its own export and its own server profile.
+EXPORT_V2 = Path.home() / "hrono-eval" / "export-bcreg-v2"
+H_V2 = str(Path.home() / "hrono-eval" / "bin" / "h2")
 TREE = "bcreg"
 REPOS = ["lear", "sbc-auth", "sbc-pay", "business-filings-ui"]
 
@@ -149,8 +152,25 @@ def run_agent(
     disallow_bash=True,
     timeout=3600,
     cwd=None,
+    plugin_dir=None,
+    env=None,
+    safe_mode=True,
 ):
-    """One headless Claude Code agent run in the corpus, logged with its tool calls."""
+    """One headless Claude Code agent run in the corpus, logged with its tool calls.
+
+    ``safe_mode`` runs with no customization at all. Safe mode also turns
+    plugins off, so the round-2 arms, which load hrono's Claude Code plugin
+    (its hooks attach recall and the map's location), run without it and are
+    isolated with ``--setting-sources project``: the operator's own settings,
+    plugins and hooks stay out. Every arm of a round uses the same isolation,
+    and the hook events are recorded.
+    """
+    if safe_mode:
+        isolation = ["--safe-mode"]
+    else:
+        isolation = ["--setting-sources", "project", "--include-hook-events"]
+        if plugin_dir:
+            isolation += ["--plugin-dir", str(plugin_dir)]
     argv = [
         "claude",
         "-p",
@@ -158,7 +178,7 @@ def run_agent(
         model,
         "--max-turns",
         str(max_turns),
-        "--safe-mode",
+        *isolation,
         "--output-format",
         "stream-json",
         "--verbose",
@@ -183,6 +203,7 @@ def run_agent(
                 text=True,
                 cwd=cwd or CORPUS,
                 timeout=timeout,
+                env={**os.environ, **(env or {})},
             )
             out = proc.stdout
         except subprocess.TimeoutExpired as e:
@@ -192,7 +213,7 @@ def run_agent(
                 else (e.stdout or "")
             )
         wall = time.time() - t0
-        payload, calls = {}, []
+        payload, calls, hooks = {}, [], []
         for line in out.splitlines():
             try:
                 ev = json.loads(line)
@@ -200,13 +221,17 @@ def run_agent(
                 continue
             if ev.get("type") == "result":
                 payload = ev
+            elif ev.get("type") == "system" and "hook" in str(
+                ev.get("subtype")
+            ):
+                hooks.append(json.dumps(ev)[:20000])
             elif ev.get("type") == "assistant":
                 for part in ev.get("message", {}).get("content", []):
                     if part.get("type") == "tool_use":
                         calls.append(
                             {
                                 "tool": part.get("name"),
-                                "input": json.dumps(part.get("input"))[:400],
+                                "input": json.dumps(part.get("input"))[:1000],
                             }
                         )
         busy = str(payload.get("api_error_status")) in {
@@ -247,4 +272,9 @@ def run_agent(
     }
     with _LOCK, open(RUNS / "calls.jsonl", "a") as f:
         f.write(json.dumps(rec) + "\n")
-    return {"answer": payload.get("result") or "", "tools": calls, "usage": rec}
+    return {
+        "answer": payload.get("result") or "",
+        "tools": calls,
+        "hooks": hooks,
+        "usage": rec,
+    }
