@@ -215,3 +215,77 @@ def test_a_brief_competes_with_the_sources(corpus: Database) -> None:
 
     assert result.hits[0].uri == brief
     assert result.hits[0].kind == "summary"
+
+
+def _leaf(conn: object, section_paths: list[str], level: int = 0) -> int:
+    """A topic at ``level`` holding the sections at ``section_paths``."""
+    conn.execute(  # type: ignore[attr-defined]
+        "INSERT INTO nodes(tree, level, label, created_at) "
+        "VALUES ('default', ?, 0, 't')",
+        (level,),
+    )
+    node = int(conn.execute("SELECT MAX(id) FROM nodes").fetchone()[0])  # type: ignore[attr-defined]
+    for path in section_paths:
+        conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO node_members(node_id, section_id, attached, "
+            "created_at) SELECT ?, s.id, 1, 't' FROM sections s "
+            "JOIN passages p ON p.section_id = s.id WHERE p.path = ?",
+            (node, path),
+        )
+    return node
+
+
+def test_pages_give_one_hit_per_leaf_and_skip_tests(tmp_path: object) -> None:
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        with database.connect() as conn, conn:
+            add_passage(conn, b"bearer token tests\n", unit(0), "tests/a.py")
+            add_passage(conn, b"bearer token issue\n", unit(0, 1, 0.1), "a.py")
+            add_passage(conn, b"bearer token keep\n", unit(0, 1, 0.2), "b.py")
+            add_passage(conn, b"bearer token other\n", unit(0, 1, 0.3), "c.py")
+            auth = _leaf(conn, ["tests/a.py", "a.py", "b.py"])
+            other = _leaf(conn, ["c.py"])
+
+        with database.connect() as conn:
+            result = recall(
+                conn, "bearer tokens?", MODEL, const_encode(unit(0)), pages=True
+            )
+
+        assert [(hit.topic, hit.path) for hit in result.hits] == [
+            (auth, "a.py"),
+            (other, "c.py"),
+        ]
+    finally:
+        database.close()
+
+
+def test_a_passage_scores_its_best_sentence(tmp_path: object) -> None:
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        with database.connect() as conn, conn:
+            add_passage(
+                conn, b"how bearer tokens are issued\n", unit(0), "auth.py"
+            )
+            add_passage(
+                conn,
+                b"reply in at most four hundred words\n",
+                unit(1),
+                "fmt.py",
+            )
+        vectors = {
+            "How are bearer tokens issued?": unit(0, 2, 0.1),
+            "Reply in at most four hundred words.": unit(1),
+        }
+
+        def encode(texts: list[str]) -> list[list[float]]:
+            return [vectors[text] for text in texts]
+
+        with database.connect() as conn:
+            result = recall(conn, " ".join(vectors), MODEL, encode, limit=2)
+
+        # both sentences find their passage at full strength; a single
+        # vector for the whole prompt would have found neither
+        assert {hit.path for hit in result.hits} == {"auth.py", "fmt.py"}
+        assert all(hit.score > 0.99 for hit in result.hits)
+    finally:
+        database.close()

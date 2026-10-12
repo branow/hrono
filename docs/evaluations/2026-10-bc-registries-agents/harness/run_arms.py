@@ -124,6 +124,12 @@ ROUND_2 = {
         f"hrono-v3{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
         for run in "ab"
     },
+    # the same, with recall attaching map pages (one per leaf topic, each
+    # sentence of the prompt embedded alone) instead of passages
+    **{
+        f"hrono-v3p{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
 }
 
 

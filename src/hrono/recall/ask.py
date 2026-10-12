@@ -16,7 +16,12 @@ from hrono.recall import engine
 
 
 def ask(
-    database: Database, tree: str, question: str, limit: int
+    database: Database,
+    tree: str,
+    question: str,
+    limit: int,
+    *,
+    pages: bool = False,
 ) -> engine.Recall:
     """Recall for ``question`` in ``tree``; Unavailable while the model loads.
 
@@ -28,7 +33,13 @@ def ask(
     encode = _query_encode(str(model["model"]))
     with database.connect() as conn:
         return engine.recall(
-            conn, question, str(model["name"]), encode, limit=limit, tree=tree
+            conn,
+            question,
+            str(model["name"]),
+            encode,
+            limit=limit,
+            tree=tree,
+            pages=pages,
         )
 
 

@@ -160,11 +160,17 @@ otherwise send the agent to the map.
   occur in the tree's FTS index, the tree does not cover the question and
   recall returns no hits. Vocabulary separates on- from off-topic questions;
   similarity does not (every question has a nearest passage).
-- **Ranking** (`similarity.py`): plain cosine of the question's embedding
-  against each passage's content embedding, sources and briefs in one list.
+- **Ranking** (`similarity.py`): plain cosine against each passage's content
+  embedding, sources and briefs in one list. A question of several sentences
+  is embedded a sentence at a time (`query.py`) and a passage scores its best
+  sentence: one embedding of a long prompt averages its parts, and the
+  framing around a question pulled it to licence headers and tests.
 - **Window** (`window.py`): the best passages in order, the first of each
   document (a file or a brief), up to the requested limit (cap 10). Never
-  padded.
+  padded. With `pages`, the first of each leaf topic instead, skipping tests
+  and upper briefs: the map pages to read first. A question spanning several
+  services needs more facts than five passages hold, and the leaf briefs
+  state them (`evaluations/2026-10-bc-registries-v2/`).
 
 An empty result returns one line, *no confident matches - explore the map*:
 misses fail safe to exploring, never to silence. The recipe replaced a

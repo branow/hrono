@@ -13,11 +13,12 @@ the real one.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from hrono.recall import gate, similarity
+from hrono.recall import gate, query, similarity
 from hrono.recall.scope import passages_of
 from hrono.recall.window import CAP, EXPLORE_MESSAGE, window
 
@@ -52,19 +53,27 @@ def recall(
     *,
     limit: int = CAP,
     tree: str | None = None,
+    pages: bool = False,
 ) -> Recall:
     """Recall ``question``: the passages most like it, one per document.
 
     ``tree`` scopes the corpus to that tree's passages. Omitted, or a tree that
     declares no sources, searches everything — which is what a single-corpus
     database is.
+
+    ``pages`` keeps one passage per leaf topic instead: the map pages to read
+    first, each with the passage that put it there. A question spanning
+    several services needs more facts than five passages hold, and the leaf
+    briefs state them; a passage that is a test, or an upper brief, points
+    at no page.
     """
     allowed = None if tree is None else passages_of(conn, tree)
     if not gate.answers(conn, question, allowed):
         return Recall(hits=(), message=EXPLORE_MESSAGE)
-    query_vec = list(encode([question])[0])
-    ranked = similarity.ranked(conn, query_vec, model_name, allowed)
-    kept = window(ranked, lambda ids: _documents(conn, ids), limit)
+    query_vecs = [list(vector) for vector in encode(query.sentences(question))]
+    ranked = similarity.ranked(conn, query_vecs, model_name, allowed)
+    keys = _pages if pages else _documents
+    kept = window(ranked, lambda ids: keys(conn, ids, tree), limit)
     if not kept:
         return Recall(hits=(), message=EXPLORE_MESSAGE)
     hits = tuple(
@@ -73,7 +82,9 @@ def recall(
     return Recall(hits=hits, message=None)
 
 
-def _documents(conn: sqlite3.Connection, ids: Sequence[int]) -> dict[int, str]:
+def _documents(
+    conn: sqlite3.Connection, ids: Sequence[int], tree: str | None = None
+) -> dict[int, str | None]:
     """Map each passage to the document it belongs to: its URI.
 
     hrono's URIs address the FILE (or the brief), not the slice of it: every
@@ -89,6 +100,45 @@ def _documents(conn: sqlite3.Connection, ids: Sequence[int]) -> dict[int, str]:
         (json.dumps(list(ids)),),
     ).fetchall()
     return {int(row["id"]): str(row["uri"]) for row in rows}
+
+
+_TEST = re.compile(
+    r"(^|/)(tests?|__tests__)/|(^|/)test_[^/]*$|_test\.\w+$|\.(spec|test)\.\w+$"
+)
+
+
+def _pages(
+    conn: sqlite3.Connection, ids: Sequence[int], tree: str | None
+) -> dict[int, str | None]:
+    """Map each passage to the leaf topic it sits on, or None.
+
+    A source passage sits on the leaf holding its section; a leaf brief's
+    passage on that leaf. A test, an upper brief, and a section no leaf
+    holds have no page.
+    """
+    if not ids:
+        return {}
+    rows = conn.execute(
+        "SELECT p.id, p.source_type, p.source, p.path, "
+        "(SELECT MIN(m.node_id) FROM node_members m "
+        " JOIN nodes n ON n.id = m.node_id WHERE m.section_id = p.section_id "
+        " AND n.level = 0 AND (? IS NULL OR n.tree = ?)) AS leaf "
+        "FROM passages p WHERE p.id IN (SELECT value FROM json_each(?))",
+        (tree, tree, json.dumps(list(ids))),
+    ).fetchall()
+    out: dict[int, str | None] = {}
+    for row in rows:
+        if row["source_type"] == "node":
+            node = int(str(row["source"]).removeprefix("node-"))
+            level = conn.execute(
+                "SELECT level FROM nodes WHERE id = ?", (node,)
+            ).fetchone()
+            leaf = node if level is not None and level["level"] == 0 else None
+        else:
+            path = str(row["path"] or "")
+            leaf = None if _TEST.search(path) else row["leaf"]
+        out[int(row["id"])] = None if leaf is None else f"topic:{leaf}"
+    return out
 
 
 def _render(

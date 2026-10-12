@@ -1,5 +1,11 @@
 """Recall's ranking: plain cosine of the question against every passage.
 
+A question of several sentences is embedded sentence by sentence and each
+passage takes its best one (``query.sentences``): one embedding of a long
+prompt is the average of its parts, and the framing around a question (the
+answer format, how to use the map) pulls it to licence headers and tests
+(docs/evaluations/2026-10-recall-queries/: prompts.py).
+
 Source passages and brief passages are ranked in one list by the cosine of
 the question's embedding against the passage content's. Nothing else: the
 earlier recipe blended in the embedded path string and kept only passages
@@ -23,22 +29,25 @@ import numpy
 
 def ranked(
     conn: sqlite3.Connection,
-    query_vec: Sequence[float],
+    query_vec: Sequence[float] | Sequence[Sequence[float]],
     model_name: str,
     scope: frozenset[int] | None = None,
 ) -> tuple[tuple[int, float], ...]:
     """Every embedded passage in ``scope`` with its cosine, best first.
 
-    Ties break by passage id, so the order is deterministic.
+    ``query_vec`` is one vector, or one per sentence of the question; a
+    passage then scores its best sentence. Ties break by passage id, so the
+    order is deterministic.
     """
     ids, bodies = _stack(conn, model_name, scope)
     if not ids:
         return ()
-    query = numpy.asarray(query_vec, dtype=numpy.float64)
-    norm = float(numpy.linalg.norm(query))
-    if norm == 0.0:
+    queries = numpy.atleast_2d(numpy.asarray(query_vec, dtype=numpy.float64))
+    norms = numpy.linalg.norm(queries, axis=1)
+    queries = queries[norms > 0.0] / norms[norms > 0.0, None]
+    if len(queries) == 0:
         return ()
-    cosine = bodies @ (query / norm)
+    cosine = (bodies @ queries.T).max(axis=1)
     order = sorted(range(len(ids)), key=lambda i: (-cosine[i], ids[i]))
     return tuple((ids[i], float(cosine[i])) for i in order)
 

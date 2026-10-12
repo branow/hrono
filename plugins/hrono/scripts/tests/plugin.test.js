@@ -85,7 +85,7 @@ test("a project with no tree set gets no hrono at all", () => {
   assert.deepEqual(w.calls(), []);
 });
 
-test("a prompt gets its recalled passages, named by file and topic", () => {
+test("a prompt with no export gets its recalled passages, named by file and topic", () => {
   const w = world();
   w.configure({ tree: "demo" });
   const text = attached(w.run("recall.js", { prompt: ASK }));
@@ -93,7 +93,19 @@ test("a prompt gets its recalled passages, named by file and topic", () => {
   assert.match(text, /### src\/auth\.py \(repo\)\n\ndef login\(\): \.\.\./);
   assert.match(text, /### brief of topic 7\n\nAuth handles sign-in\./);
   assert.doesNotMatch(text, /git:\/\//);
-  assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--limit", "5"]);
+  assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--pages", "--limit", "5"]);
+});
+
+test("a hit whose topic is in the export is attached as that map page", () => {
+  const w = world([{ ...LOGIN, topic: 7 }]);
+  const page = path.join(w.dir, "export", "auth-area-3", "sign-in-7", "brief.md");
+  fs.mkdirSync(path.dirname(page), { recursive: true });
+  fs.writeFileSync(page, "# Sign-in\n\nChecks a password. Then more.\n");
+  w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
+  const text = attached(w.run("recall.js", { prompt: ASK }));
+  assert.match(text, /the map pages most likely to cover this prompt/);
+  assert.ok(text.includes(`\n- ${page} : Sign-in. Checks a password.`));
+  assert.doesNotMatch(text, /def login/);
 });
 
 test("recall off, a short prompt or a slash command attach nothing", () => {
