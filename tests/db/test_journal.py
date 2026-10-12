@@ -176,5 +176,5 @@ def test_the_run_page_shows_what_changed_and_reverts_it(
         after = client.get("/ui/jobs/run-1?tree=default").text
 
     assert "What it changed" in page
-    assert "topics touched" in page and ">Revert</button>" in page
-    assert "Reverted " in after and "topics touched" not in after
+    assert "Topics touched" in page and ">Revert</button>" in page
+    assert "Reverted " in after and "Topics touched" not in after

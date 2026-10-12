@@ -15,16 +15,16 @@
    and the two are never added. ``short`` marks it "est." for a table row,
    whose page already says it in full above. #}
 {% macro money(s, short=false) -%}
-{%- if s.billed %}<span class="chip num" data-spend="metered">{{ s.paid }}{% if s.paid == "unknown" and s.unpriced %} <span class="faint">no price for {{ s.unpriced|join(", ") }}</span>{% endif %}</span>{% endif -%}
-{%- if s.subscription and short %} <span class="chip plain num" data-spend="estimate" title="An estimate, not billed: a subscription charged nothing per call. This is what the same tokens would cost at the API's prices.">{{ "~" ~ s.estimate if s.estimate != "unknown" else "unknown" }} est.</span>
-{%- elif s.subscription %} <span class="chip plain num" data-spend="estimate" title="Billed through a subscription, so nothing was charged per call. This is what the same tokens would cost at the API's prices.">{{ "about " ~ s.estimate if s.estimate != "unknown" else "unknown" }} estimate, not billed</span>{% endif -%}
-{%- if not s.billed and not s.subscription %}<span class="chip plain" data-spend="none">no charge</span>{% endif -%}
+{%- if s.billed %}<span class="num" data-spend="metered">{{ s.paid }}{% if s.paid == "unknown" and s.unpriced %} <span class="faint">no price for {{ s.unpriced|join(", ") }}</span>{% endif %}</span>{% endif -%}
+{%- if s.subscription and short %} <span class="num" data-spend="estimate" title="An estimate, not billed: a subscription charged nothing per call. This is what the same tokens would cost at the API's prices.">{{ "~" ~ s.estimate if s.estimate != "unknown" else "unknown" }} <span class="faint est">est.</span></span>
+{%- elif s.subscription %} <span class="num" data-spend="estimate" title="Billed through a subscription, so nothing was charged per call. This is what the same tokens would cost at the API's prices.">{{ "~" ~ s.estimate if s.estimate != "unknown" else "unknown" }} <span class="faint est">est.</span></span>{% endif -%}
+{%- if not s.billed and not s.subscription %}<span class="faint" data-spend="none">no charge</span>{% endif -%}
 {%- endmacro %}
 
 {# A run with no ledger rows is one of two things the page must not blur: a run
    made before spend was recorded (unknown) and a run that called no model. #}
 {% macro unrecorded(before, cost=None) -%}
-{%- if cost %}<span class="chip plain num" data-spend="tokens-only">{{ "{:,}".format(cost.input) }} in, {{ "{:,}".format(cost.output) }} out</span> <span class="faint" data-spend="unknown">cost not recorded</span>
+{%- if cost %}<span class="num" data-spend="tokens-only">{{ "{:,}".format(cost.input) }} in, {{ "{:,}".format(cost.output) }} out</span> <span class="faint" data-spend="unknown">cost not recorded</span>
 {%- elif before %}<span class="faint" data-spend="unknown">not recorded: this ran before spend was kept</span>{% else %}<span class="faint" data-spend="none">no model calls</span>{% endif -%}
 {%- endmacro %}
 
