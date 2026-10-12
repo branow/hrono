@@ -42,12 +42,14 @@
     ]
    },
    {
-    "fact": "When the waive flag is set, the fee schedule sets the filing fee, priority fee, future-effective fee and service fee all to zero. So a non-staff user who adds the flag to a filing header sent directly to the legal API gets a $0 invoice, even though the fee quote for the same filing would show the full amount.",
+    "fact": "When the waive flag is set, the fee schedule zeroes the filing, priority, future-effective and service fees and records the original fixed amount as the waived amount; creating the invoice's line item then refuses a non-staff caller with FEE_OVERRIDE_NOT_ALLOWED. So a non-staff user who adds the flag to a filing sent to the legal API is refused at invoice creation (only a variable-fee filing, whose waived amount stays 0, slips through), while the fee quote shows the full amount.",
     "files": [
-     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
      "sbc-pay/pay-api/src/pay_api/resources/v1/fee.py",
-     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
-    ]
+     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py"
+    ],
+    "fixed_by_hand": "fee_schedule.py fee_amount setter sets _waived_fee_amount; payment_line_item.py:300-304 raises FEE_OVERRIDE_NOT_ALLOWED for non-staff"
    },
    {
     "fact": "The v2 legal API marks a fee line as future-effective only for incorporation, amalgamation, continuation-in, alteration and voluntary dissolution (v1 does this only for incorporation and voluntary dissolution). The quote endpoint passes the futureEffective query flag for any filing type, and FeeSchedule adds the surcharge whenever the fee schedule has a future_effective_fee configured and filing fees apply to the account. So quotes and invoices can disagree on future-effective surcharges.",
@@ -89,6 +91,100 @@
    {
     "verdict": "partly",
     "fix": "The v2 legal API marks a fee line as future-effective only for incorporation, amalgamation, continuation-in, alteration and voluntary dissolution (v1 does this only for incorporation and voluntary dissolution). The quote endpoint passes the futureEffective query flag for any filing type, and FeeSchedule adds the surcharge whenever the fee schedule has a future_effective_fee configured and filing fees apply to the account. So quotes and invoices can disagree on future-effective surcharges."
+   }
+  ],
+  "facts_before": [
+   {
+    "fact": "In the filings UI, most filing screens (for example AnnualReport and StandaloneOfficeAddressFiling) put the waive flag in the filing header only when the staff payment dialog's 'No Fee' option is chosen. That dialog is shown only to users with the staff role. ContinuationOut.vue always sets header.waiveFees = true without checking the role at that point, but the screen itself is staff-only: its created() hook throws 'This is a Staff only Filing.' for non-staff users.",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+     "business-filings-ui/src/views/ContinuationOut.vue",
+     "business-filings-ui/src/mixins/filing-mixin.ts"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Both legal API versions copy the header's waive flag into the fee lines sent to the payment service, without checking the submitter's role. It is not copied into every line: court order, registrar's notation and registrar's order lines (and in v2 also put back on and admin freeze) get no waiveFees, and in v1 the incorporation application line gets no waiveFees either. Only the routing slip, BCOL and DAT account details are restricted to staff or system tokens.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The legal API creates the invoice by posting to the payment service with the end user's own bearer token. The payment service therefore sees the customer, not a privileged service account.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "The payment service's fee-quote endpoint does enforce the rule: it ignores the waive query parameter unless the caller has the staff role.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/fee.py"
+    ]
+   },
+   {
+    "fact": "The payment service's invoice-creation endpoint only checks the request schema and that the caller has the make-payment permission on the business. Its fee calculation passes each line's waive flag straight to the fee schedule with no staff check. The filing-type schema only says 'Only for staff users' in a title string and does not enforce it.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+     "sbc-pay/pay-api/src/pay_api/schemas/schemas/filing_type.json"
+    ]
+   },
+   {
+    "fact": "When the waive flag is set, the fee schedule sets the filing fee, priority fee, future-effective fee and service fee all to zero. So a non-staff user who adds the flag to a filing header sent directly to the legal API gets a $0 invoice, even though the fee quote for the same filing would show the full amount.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+     "sbc-pay/pay-api/src/pay_api/resources/v1/fee.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ]
+   },
+   {
+    "fact": "The v2 legal API marks a fee line as future-effective only for incorporation, amalgamation, continuation-in, alteration and voluntary dissolution (v1 does this only for incorporation and voluntary dissolution). The quote endpoint passes the futureEffective query flag for any filing type, and FeeSchedule adds the surcharge whenever the fee schedule has a future_effective_fee configured and filing fees apply to the account. So quotes and invoices can disagree on future-effective surcharges.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "sbc-pay/pay-api/src/pay_api/resources/v1/fee.py",
+     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+    ],
+    "fixed": true
+   }
+  ],
+  "reverdicts": [
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "AnnualReport.vue:1058-1059 (StandaloneOfficeAddressFiling.vue:713 likewise) sets waiveFees only in case StaffPaymentOptions.NO_FEE; the staff payment dialog only opens when isRoleStaff (AnnualReport.vue:939, StandaloneOfficeAddressFiling.vue:604). ContinuationOut.vue:737 sets waiveFees=true unconditionally, but created() throws 'This is a Staff only Filing.' for non-staff (ContinuationOut.vue:433-435). AmalgamationOut.vue follows the same pattern (497, 807)."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "v2 get_filing_types (business_filings.py:675-764) copies the header waiveFees with no role check, and the courtOrder/registrarsNotation/registrarsOrder/putBackOn/adminFreeze branch (719-724) leaves it out. v1 (business_filings.py:665-670 and 697-701) leaves it off those three types and off incorporationApplication. The staff/system check (v2 834-854, v1 772-792) only controls the routingSlip, bcolAccountNumber and datNumber fields in accountInfo. No other waiveFees check exists in legal-api/src."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "v2 create_invoice:856-862 (and v1 794-800) take token = user_jwt.get_token_auth_header() and post to PAYMENT_SVC_URL with only the Authorization: Bearer <token> and Content-Type headers."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "fee.py:43-45 sets waive_fees=False and reads the waiveFees query arg only if _jwt.validate_roles([Role.STAFF.value])."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "invoice.py:52-68 does requires_auth, a payment_request schema check, then check_auth(contains_role=MAKE_PAYMENT). payment_service._calculate_fees:308 passes waive_fees=filing_type_info.get('waiveFees') with no staff check. In filing_type.json, 'Only for staff users' appears only in a title string."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "fee_schedule.py:319-323 zeroes fee_amount, priority_fee, future_effective_fee and service_fees when waive_fees is set; gst and pst always return 0 (212-219), so the invoice total is $0. The quote endpoint drops waiveFees for non-staff (fee.py:44-45). The legal API forwards the header flag without checking the role."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "The v2 futureEffective lines are at business_filings.py:696 and 752-755; v1 only at 647 and 697-700. fee.py:40 reads futureEffective for any filing type. fee_schedule.py:316-317 adds the surcharge if is_future_effective, future_effective_fee is configured and apply_filing_fees is true. Caveat: whether quotes and invoices actually disagree depends on what the UI sends to the quote endpoint, which these files don't show."
    }
   ]
  },
@@ -195,12 +291,217 @@
     "verdict": "correct",
     "fix": ""
    }
+  ],
+  "facts_before": [
+   {
+    "fact": "In legal-api, the filing read endpoints (the ledger list and a single filing by id, including the temp-registration variant) only require a valid JWT and never call authorized(). get_single_filing also returns the filing PDF when the Accept header is application/pdf, and it returns the raw stored JSON for filings that are not completed, approved, paid or pending, which includes drafts.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/core/filing.py"
+    ]
+   },
+   {
+    "fact": "By contrast, the filing documents endpoint (which also serves PDFs and receipts) and the business documents, addresses, directors, parties, share classes, resolutions and furnishing-documents endpoints all require authorized(identifier, jwt, ['view']). So the same PDF is protected on one route and unprotected on another.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_documents.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_address.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_directors.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_parties.py"
+    ]
+   },
+   {
+    "fact": "The view check on the business profile endpoint is commented out (a workaround for business-search users, #22143). Any authenticated caller gets the business JSON, including its warnings and allowable actions. From the most recent filing, the response only includes the submitter (redacted for staff/system submitters when the caller is not staff) and its date as lastModified, not the filing itself.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Where authorized(['view']) is enforced, it is skipped for the staff/system/colin roles, the account_identity (IDIM) role, or an active CA_SEARCH product subscription. That subscription is looked up by calling auth-api orgs/{Account-Id}/products using the client-supplied Account-Id header.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ]
+   },
+   {
+    "fact": "legal-api never checks that the Account-Id header belongs to the user. On a cache miss, auth-api's org products endpoint stops a spoofed header: ProductService.get_all_product_subscription runs check_auth for membership in that org (client roles or staff) before listing subscriptions. However, legal-api caches get_account_products for 600s keyed only by the Account-Id header (make_cache_key=get_account_id, not the token). So after a real member of the org has triggered a lookup, a spoofer sending the same header gets the cached product list without auth-api being called.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org_products.py",
+     "sbc-auth/auth-api/src/auth_api/services/products.py",
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The only caller-dependent filtering on the filing read path is submitter redaction: Filing.redacted / redact_submitter hides staff or system submitters from non-staff JWTs. Affiliation is never consulted.",
+    "files": [
+     "lear/legal-api/src/legal_api/core/filing.py",
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ]
+   },
+   {
+    "fact": "business-filings-ui is where the affiliation gate for the filing history lives. It calls auth-api entities/{id}/authorizations, shows an auth error and stops loading if no roles come back, and only then fetches businesses/{id}/filings. A direct API caller skips this gate entirely.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/auth-services.ts",
+     "business-filings-ui/src/services/legal-services.ts"
+    ]
+   },
+   {
+    "fact": "In pay-api, reading an invoice by id (Invoice.find_by_id \u2192 _check_for_auth \u2192 check_auth(dao.business_identifier)) uses the caller's Account-Id first when one is present. It then only verifies the caller's role in that account and never compares it with the invoice's own payment account. The list-by-business endpoint is restricted to the system role.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/services/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/services/auth.py",
+     "sbc-pay/pay-api/src/pay_api/utils/user_context.py"
+    ]
+   }
+  ],
+  "reverdicts": [
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "business_filings.py:92-102: get_filings only has @jwt.requires_auth and never calls authorized(). get_single_filing returns get_pdf(rv.storage) for an application/pdf Accept header and returns rv.json, which core/filing.py:197-204 builds from the raw stored JSON for any status other than COMPLETED/APPROVED/PAID/PENDING. ?original=true also returns the raw JSON for any status. The ledger list only includes COMPLETED/PAID filings."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "authorized(identifier, jwt, ['view']) is called in business_filings/business_documents.py:50, business_documents.py:39, business_address.py:43, business_directors.py:40, business_parties.py:40, business_share_classes.py:40, business_resolutions.py:39 and furnishing_documents.py:39. The filings route calls the same get_pdf with no such check."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "business.py:55-59 has the authorized() check commented out (#22143). Lines 69-81 add the warnings and allowable_actions, and only the submitter and header date from get_most_recent_filing_json (redact_submitter applies). With ?slim=true the response skips the warnings and allowable actions."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "authz.py:102-110 returns True for the staff/system/colin roles, and for a view-only action when the caller has ACCOUNT_IDENTITY or has_product('CA_SEARCH'). get_account_products (897-904) calls orgs/{Account-Id header}/products. The affiliation lookup at 112-121 only runs for basic/public_user roles."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "authz.py:892-897 uses @cache.cached(timeout=600, make_cache_key=get_account_id, cache_none=True), keyed only on the Account-Id header. auth-api products.py:338-339 runs check_auth(one_of_roles=(*CLIENT_AUTH_ROLES, STAFF), org_id), and authorization.py:248 checks membership by the user's sub. cache_none=True also means a failed lookup is cached under the same key."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "core/filing.py:179-186 and 344-354 redact only staff/system submitters for non-staff callers. ledger (390-394) and get_most_recent_filing_json do the same. DocumentMetaService has no caller checks, and nothing on this path looks at affiliation."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "App.vue:426-434 calls fetchAuthorizations (entities/{id}/authorizations). storeAuthorizations (565-571) throws when there are no roles, the error dialog opens and the method returns. Only after that does fetchBusinessData call loadFilings, which uses legal-services.ts:47-48 businesses/{id}/filings."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "invoice.py:501-503 calls check_auth(dao.business_identifier). auth.py:36 sets account_id = user.account_id (token claim, then g, then the Account-Id header, per user_context.py:151-156). It then calls orgs/{account_id}/authorizations and checks only one_of_roles, never the invoice's payment_account. resources/v1/invoice.py:37 restricts GET /invoices to the SYSTEM role."
+   }
   ]
  },
  {
   "kind": "impact",
   "question": "We want a second kind of new-business filing, besides continuations in from another jurisdiction, to be held for staff examination after the customer pays instead of going straight to processing. Where is that hold decided today? What else across the backend, notifications, scheduled jobs and the business dashboard has to change so the filing doesn't skip review, get stuck, or vanish from the customer's view?",
   "facts": [
+   {
+    "fact": "The hold is decided in only one place: the GCP payment listener (business-pay), which hard-codes staff_review_required = ['continuationIn']. For those filings it creates a Review in AWAITING_REVIEW, sets the filing to AWAITING_REVIEW and does not publish to the filer. The older NATS payment worker (entity-pay) has no review branch at all and publishes every paid, non-future-dated filing straight to the filer, so any traffic that still goes through it skips review.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+    ]
+   },
+   {
+    "fact": "Both the payment listener and legal-api's resubmission path fill in the review record from continuation-specific fields: nameRequest.nrNumber, foreignJurisdiction.identifier, and the party with the 'Completing Party' role. business-pay also keeps its own copies of the filing-status and review-status enums, separate from legal-api's, and its filing-status copy already lacks WITHDRAWN.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/database/filings.py",
+     "lear/queue_services/business-pay/src/business_pay/database/review.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "In legal-api, the filing status listener leaves AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED and APPROVED-without-transaction alone. Only set_review_decision may move a filing to CHANGE_REQUESTED, APPROVED or REJECTED. When the customer saves a CHANGE_REQUESTED filing again, it is resubmitted to AWAITING_REVIEW. Authorization lets a filing be edited only while it is DRAFT or CHANGE_REQUESTED.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ]
+   },
+   {
+    "fact": "After payment, the staff admin review endpoint is the only thing that sends a reviewed filing to processing. It publishes an email with option set to the new filing status, and publishes to the filer only if the approved filing's effective date has arrived. Future-dated approved filings are released later by the future-effective job, which reads legal-api's internal list of filings in PAID or APPROVED status.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py"
+    ]
+   },
+   {
+    "fact": "Emails are routed per filing type in the emailer worker. The continuation-in processor uses CONT-IN-{status} templates and has subjects for APPROVED, REJECTED, CHANGE_REQUESTED, RESUBMITTED, PAID and COMPLETED. It attaches PDFs only for PAID (filing PDF and receipt), RESUBMITTED (filing PDF) and COMPLETED (certificate and NoA). APPROVED, REJECTED and CHANGE_REQUESTED get no PDFs. The per-status message-id type list is in message_tracker/tracker.py, not in the worker. business-pay always sends option 'PAID'. The admin review endpoint sends the new filing status as the option. legal-api's resubmit path publishes no 'RESUBMITTED' email.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/continuation_in_notification.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+     "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "In the core filing document list, the legal-filing PDF is shown for PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED and REJECTED, except for the types in no_legal_filings_in_paid_status: registration, consentContinuationOut, continuationOut, agmExtension, agmLocationChange, plus SP/GP dissolution. So if registration became the reviewed type, it would show no filing PDF while under review unless that list changes. The receipt endpoint (business_documents.py:105-113) also accepts these review statuses. A single-filing GET adds latestReviewComment only for CHANGE_REQUESTED, APPROVED and REJECTED.",
+    "files": [
+     "lear/legal-api/src/legal_api/core/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_documents.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Only the Pending-list getter (isBootstrapPending \u2192 isContinuationInPending, AWAITING_REVIEW) is continuation-in only. The To Do and History getters also cover amalgamation, incorporation application and registration, but only the continuation-in getters include the review statuses: To Do has CHANGE_REQUESTED, DRAFT and PENDING; History has APPROVED, COMPLETED, PAID and REJECTED. TodoList's post-payment polling treats PAID, COMPLETED or AWAITING_REVIEW as processed. A second reviewed type would still appear in its usual lists for DRAFT, PENDING, PAID and COMPLETED, but would be missing while it is AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED unless its getters are extended.",
+    "files": [
+     "business-filings-ui/src/stores/rootStore.ts",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/enums/filingStatus.ts",
+     "business-filings-ui/src/services/enum-utilities.ts"
+    ],
+    "fixed": true
+   }
+  ],
+  "qid": "hard-impact-1",
+  "area": "hard-impact",
+  "verdicts": [
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "Emails are routed per filing type in the emailer worker. The continuation-in processor uses CONT-IN-{status} templates and has subjects for APPROVED, REJECTED, CHANGE_REQUESTED, RESUBMITTED, PAID and COMPLETED. It attaches PDFs only for PAID (filing PDF and receipt), RESUBMITTED (filing PDF) and COMPLETED (certificate and NoA). APPROVED, REJECTED and CHANGE_REQUESTED get no PDFs. The per-status message-id type list is in message_tracker/tracker.py, not in the worker. business-pay always sends option 'PAID'. The admin review endpoint sends the new filing status as the option. legal-api's resubmit path publishes no 'RESUBMITTED' email."
+   },
+   {
+    "verdict": "correct",
+    "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "Only the Pending-list getter (isBootstrapPending \u2192 isContinuationInPending, AWAITING_REVIEW) is continuation-in only. The To Do and History getters also cover amalgamation, incorporation application and registration, but only the continuation-in getters include the review statuses: To Do has CHANGE_REQUESTED, DRAFT and PENDING; History has APPROVED, COMPLETED, PAID and REJECTED. TodoList's post-payment polling treats PAID, COMPLETED or AWAITING_REVIEW as processed. A second reviewed type would still appear in its usual lists for DRAFT, PENDING, PAID and COMPLETED, but would be missing while it is AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED unless its getters are extended."
+   }
+  ],
+  "facts_before": [
    {
     "fact": "The hold is decided in only one place: the GCP payment listener (business-pay), which hard-codes staff_review_required = ['continuationIn']. For those filings it creates a Review in AWAITING_REVIEW, sets the filing to AWAITING_REVIEW and does not publish to the filer. The older NATS payment worker (entity-pay) has no review branch at all and publishes every paid, non-future-dated filing straight to the filer, so any traffic that still goes through it skips review.",
     "files": [
@@ -265,8 +566,108 @@
     "fixed": true
    }
   ],
-  "qid": "hard-impact-1",
-  "area": "hard-impact",
+  "reverdicts": [
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "pay_filer.py:152-186 hard-codes ['continuationIn'], then create_staff_review creates a Review in AWAITING_REVIEW, sets the filing to AWAITING_REVIEW and skips publish_to_filer. entity-pay worker.py:114-140 sends a PAID email and publishes any filing that is not future-dated, with no review check. No other lear code creates a Review or sets the initial AWAITING_REVIEW."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "pay_filer.py:172-180 and business_filings.py:966-998 both read nameRequest.nrNumber, foreignJurisdiction.identifier and the 'Completing Party' role. business_pay/database/filings.py:55-71 and review.py:24-31 are separate copies of the enums, and the filing-status copy has no WITHDRAWN, which legal-api models/filing.py:53 has."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "models/filing.py:1182-1186 is the listener guard. set_review_decision (1117-1130) is the only code that sets CHANGE_REQUESTED, APPROVED or REJECTED. business_filings.py:156-158 calls resubmit_filing_for_review, which leads to resubmit_filing_to_awaiting_review (1132-1141). authz.py:490 allows edits only in DRAFT or CHANGE_REQUESTED."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "admin/reviews.py:160-171 publishes an email with option=filing.status, and publishes to the filer only when the filing is APPROVED and its effective_date <= now. get_future_effective_filing_ids (models/filing.py:1029-1035) returns PAID or APPROVED filings whose effective_date <= now; it is served at internal_services.py:30 and read by file_future_effective.py:101."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "worker.py:215 sends continuationIn to its own processor. continuation_in_notification.py:173 uses the CONT-IN-{status} template. Subjects are at 211-218 and PDFs at 54-138 (PAID: filing PDF and receipt; RESUBMITTED: filing PDF; COMPLETED: certificate and NoA). tracker.py:108-114 builds the per-status message id. business-pay services/__init__.py:53 always sends 'PAID'. The resubmit path publishes no email."
+   },
+   {
+    "verdict": "partly",
+    "fix": "In the core filing document list, the legal-filing PDF is shown for PAID, AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED and REJECTED, except for the types in no_legal_filings_in_paid_status: registration, consentContinuationOut, continuationOut, agmExtension, agmLocationChange, plus SP/GP dissolution. So if registration became the reviewed type, it would show no filing PDF while under review unless that list changes. The receipt endpoint (business_documents.py:105-113) also accepts these review statuses. A single-filing GET adds latestReviewComment only for CHANGE_REQUESTED, APPROVED and REJECTED.",
+    "why": "core/filing.py:519-539 has the exclusion list. business_filings.py:293-297 adds the review comment."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "rootStore.ts:232-235: isBootstrapPending checks only isContinuationInPending. Only the continuation-in To Do getter (145-154) and History getter (165-175) include the review statuses; the amalgamation, incorporation application and registration getters only have DRAFT/PENDING and COMPLETED/PAID (123-219). TodoList.vue:952-957 treats PAID, COMPLETED or AWAITING_REVIEW as processed."
+   }
+  ]
+ },
+ {
+  "kind": "failure",
+  "question": "After a customer pays a filing fee, the 'payment completed' notification has to reach the registry so the filing is applied and confirmation emails go out. If that notification is never published, is delivered twice, or processing dies partway through, what state does the filing and the business end up in, which payment methods have an automatic retry, and what (if anything) repairs it later?",
+  "facts": [
+   {
+    "fact": "For credit card/PayBC payments, if the payment event fails to publish, PaymentTransaction.publish_status marks the transaction EVENT_FAILED. The stale-payment job then finds it (find_stale_records excludes only COMPLETED/CANCELLED/FAILED and is limited to the CC and DIRECT_PAY methods), and update_transaction republishes the event for each invoice when the payment is already COMPLETED.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+     "sbc-pay/pay-api/src/pay_api/models/payment_transaction.py",
+     "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py"
+    ]
+   },
+   {
+    "fact": "For BCOL drawdown, internal, PAD, EFT and EJV, the event is sent by BasePaymentSystemService._release_payment from complete_post_invoice. For PAD, EFT and EJV this happens when the invoice is created, not when the money is collected. Online banking only uses _release_payment when a credit is applied (apply_credit). A normal online-banking payment is released by pay-queue's payment_reconciliations._publish_payment_event. In every one of these paths a failed publish is only logged and sent to Sentry with capture_message. No failure status is saved, so no job retries it.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/online_banking_service.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The GCP business-pay consumer first saves payment_completion_date, the status PAID and the payment status. It then publishes to the filer and the emailer inside suppress(Exception), so a failed publish is silently lost. Any later duplicate payment event is dropped because payment_completion_date is already set. For continuationIn it creates a staff Review and sets AWAITING_REVIEW instead of sending the filing to the filer.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/services/__init__.py"
+    ]
+   },
+   {
+    "fact": "The legacy NATS entity-pay consumer treats a message as a duplicate only if the filing is already COMPLETED. A second delivery for a filing that is PAID but not yet applied therefore resets payment_completion_date, sends the PAID email again and publishes to the filer again. It also has no staff-review branch, so it would send a continuationIn straight to the filer.",
+    "files": [
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/common/src/entity_queue_common/messages.py"
+    ]
+   },
+   {
+    "fact": "The emailer tracker builds '<type>_<option>_<filingId>' only for certain filing types: incorporationApplication, annualReport, changeOfDirectors, changeOfAddress, alteration, dissolution, registration, changeOfRegistration, restoration, specialResolution, correction, amalgamationApplication and continuationIn. It skips any id already seen whose status is not FAILED. It also stops retrying a FAILED id once message_seen_count exceeds MSG_RETRY_NUM. For any other filing type message_id is None, and is_processable_message returns False, so that message is not processed at all.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "The only automatic repair for a paid filing that never reached the filer is indirect. The legal-api before_update listener derives the PAID status from payment_completion_date. The scheduled future-effective-filings job asks legal-api's internal endpoint for every PAID or APPROVED filing whose effective_date is now or earlier, and puts each one back on the filer subject, so it also re-drives lost non-future-effective filings.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py"
+    ]
+   },
+   {
+    "fact": "The filer skips filings already COMPLETED and commits transaction_id (status COMPLETED) before the side effects run. update_affiliation catches every error and only reports it to Sentry (business_profile.py:142). The completed email, publish_event and the GCP event each have their own try/except, so a failure in one does not stop the others. An uncaught exception in consume_nr, update_business_profile, update_entity or publish_mras_email skips the steps after it. The generic handler absorbs that exception and the message is removed from the queue. Replaying is a no-op, and the future-effective job only selects PAID/APPROVED filings, so nothing repairs the missing affiliation, profile, email or event.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ],
+    "fixed": true
+   }
+  ],
+  "qid": "hard-failure-1",
+  "area": "hard-failure",
   "verdicts": [
    {
     "verdict": "correct",
@@ -285,23 +686,19 @@
     "fix": ""
    },
    {
-    "verdict": "partly",
-    "fix": "Emails are routed per filing type in the emailer worker. The continuation-in processor uses CONT-IN-{status} templates and has subjects for APPROVED, REJECTED, CHANGE_REQUESTED, RESUBMITTED, PAID and COMPLETED. It attaches PDFs only for PAID (filing PDF and receipt), RESUBMITTED (filing PDF) and COMPLETED (certificate and NoA). APPROVED, REJECTED and CHANGE_REQUESTED get no PDFs. The per-status message-id type list is in message_tracker/tracker.py, not in the worker. business-pay always sends option 'PAID'. The admin review endpoint sends the new filing status as the option. legal-api's resubmit path publishes no 'RESUBMITTED' email."
+    "verdict": "correct",
+    "fix": ""
    },
    {
     "verdict": "correct",
     "fix": ""
    },
    {
-    "verdict": "partly",
-    "fix": "Only the Pending-list getter (isBootstrapPending \u2192 isContinuationInPending, AWAITING_REVIEW) is continuation-in only. The To Do and History getters also cover amalgamation, incorporation application and registration, but only the continuation-in getters include the review statuses: To Do has CHANGE_REQUESTED, DRAFT and PENDING; History has APPROVED, COMPLETED, PAID and REJECTED. TodoList's post-payment polling treats PAID, COMPLETED or AWAITING_REVIEW as processed. A second reviewed type would still appear in its usual lists for DRAFT, PENDING, PAID and COMPLETED, but would be missing while it is AWAITING_REVIEW, CHANGE_REQUESTED, APPROVED or REJECTED unless its getters are extended."
+    "verdict": "correct",
+    "fix": ""
    }
-  ]
- },
- {
-  "kind": "failure",
-  "question": "After a customer pays a filing fee, the 'payment completed' notification has to reach the registry so the filing is applied and confirmation emails go out. If that notification is never published, is delivered twice, or processing dies partway through, what state does the filing and the business end up in, which payment methods have an automatic retry, and what (if anything) repairs it later?",
-  "facts": [
+  ],
+  "facts_before": [
    {
     "fact": "For credit card/PayBC payments, if the payment event fails to publish, PaymentTransaction.publish_status marks the transaction EVENT_FAILED. The stale-payment job then finds it (find_stale_records excludes only COMPLETED/CANCELLED/FAILED and is limited to the CC and DIRECT_PAY methods), and update_transaction republishes the event for each invoice when the payment is already COMPLETED.",
     "files": [
@@ -357,8 +754,124 @@
     ]
    }
   ],
-  "qid": "hard-failure-1",
-  "area": "hard-failure",
+  "reverdicts": [
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "publish_status sets EVENT_FAILED in its except block (payment_transaction.py:516-521). find_stale_records leaves out only COMPLETED/CANCELLED/FAILED and is limited to CC/DIRECT_PAY (models/payment_transaction.py:143-149). The 30-minute stale job calls update_transaction, which republishes for each invoice when the payment is COMPLETED and the transaction is EVENT_FAILED (payment_transaction.py:366-377)."
+   },
+   {
+    "verdict": "partly",
+    "fix": "For BCOL drawdown, internal, PAD, EFT and EJV, the event is sent by BasePaymentSystemService._release_payment from complete_post_invoice. For PAD, EFT and EJV this happens when the invoice is created, not when the money is collected. Online banking only uses _release_payment when a credit is applied (apply_credit). A normal online-banking payment is released by pay-queue's payment_reconciliations._publish_payment_event. In every one of these paths a failed publish is only logged and sent to Sentry with capture_message. No failure status is saved, so no job retries it.",
+    "why": "The except block in base_payment_system.py:174-177 has no status write, and pay-queue payment_reconciliations.py:657-674 does the same. find_stale_records only covers CC/DIRECT_PAY."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "pay_filer.py:139-150 drops the event if payment_completion_date is set, otherwise saves payment_completion_date, COMPLETED and PAID. continuationIn goes to create_staff_review, which sets AWAITING_REVIEW. publish_to_filer and publish_to_emailer run inside suppress(Exception). Filer publishing only happens when effective_date <= payment_completion_date."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "entity-pay worker.py:99 returns early only when the status is COMPLETED, and returns on TRANSACTION_FAILED. Otherwise lines 114-133 reset payment_completion_date, send the PAID email, and publish to the filer when the filing is not future-effective. There is no staff-review branch."
+   },
+   {
+    "verdict": "partly",
+    "fix": "The emailer tracker builds '<type>_<option>_<filingId>' only for certain filing types: incorporationApplication, annualReport, changeOfDirectors, changeOfAddress, alteration, dissolution, registration, changeOfRegistration, restoration, specialResolution, correction, amalgamationApplication and continuationIn. It skips any id already seen whose status is not FAILED. It also stops retrying a FAILED id once message_seen_count exceeds MSG_RETRY_NUM. For any other filing type message_id is None, and is_processable_message returns False, so that message is not processed at all.",
+    "why": "tracker.py:108-131 and 145-171, plus FILING_TYPE_CONVERTER in filing_notification.py:38-44."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "The before_update listener sets PAID from payment_completion_date (filing.py:1198). get_future_effective_filing_ids returns PAID or APPROVED filings with effective_date <= now, with no other filter (filing.py:1029-1035). The job republishes each id to the filer subject (file_future_effective.py:125-129)."
+   },
+   {
+    "verdict": "partly",
+    "fix": "The filer skips filings already COMPLETED and commits transaction_id (status COMPLETED) before the side effects run. update_affiliation catches every error and only reports it to Sentry (business_profile.py:142). The completed email, publish_event and the GCP event each have their own try/except, so a failure in one does not stop the others. An uncaught exception in consume_nr, update_business_profile, update_entity or publish_mras_email skips the steps after it. The generic handler absorbs that exception and the message is removed from the queue. Replaying is a no-op, and the future-effective job only selects PAID/APPROVED filings, so nothing repairs the missing affiliation, profile, email or event.",
+    "why": "entity-filer worker.py:218 skips COMPLETED filings, 337-348 commits before the side effects, 397-428 wraps each publish in its own try, and 446-449 is the generic handler."
+   }
+  ]
+ },
+ {
+  "kind": "legacy",
+  "question": "We still have two payment-completion listeners in the business registry: the older one on the streaming bus and the newer push-subscription one. Before we change how a paid filing moves on to being filed, which one actually gets the pay system's 'payment completed' events today? Where do the two disagree on duplicate payments, failed or cancelled payments, unknown product types and filings that need staff review? And what would go wrong if someone fixed a bug in only the old one, or brought the old one back as a fallback?",
+  "facts": [
+   {
+    "fact": "The pay API publishes payment-completed and payment-failed events only as GCP Pub/Sub CloudEvents. The topic comes from the invoice's corp type: NRO goes to NAMEX_PAY_TOPIC, the BUSINESS and BUSINESS_SEARCH products go to BUSINESS_PAY_TOPIC, and STRR goes to STRR_PAY_TOPIC, which defaults to BUSINESS_PAY_TOPIC. Nothing in the pay API publishes these events to NATS, which is the only transport the old entity-pay listener subscribes to.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py",
+     "sbc-pay/pay-api/src/pay_api/config.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+    ]
+   },
+   {
+    "fact": "The message shapes don't match. The pay API puts a flat camelized payment token (built from invoice id, status, filing id and corp type) straight into the CloudEvent data. The old entity-pay worker only processes JSON that has a top-level 'paymentToken' wrapper whose corpTypeCode exists in lear's CorpType table, so it would silently skip every event the pay API currently sends. The new business-pay worker reads ce.data with type 'bc.registry.payment' and converts the keys to snake_case.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/common/src/entity_queue_common/messages.py"
+    ]
+   },
+   {
+    "fact": "The staff-review gate exists only in the new listener. business-pay marks the filing PAID, then for continuationIn creates a Review row with AWAITING_REVIEW, sets the filing to AWAITING_REVIEW, and does not publish to the filer. entity-pay has no review logic: it just sets the payment completion date and publishes non-future-effective filings straight to the filer.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py"
+    ]
+   },
+   {
+    "fact": "Nothing downstream re-checks review status, so putting the old path back would let unreviewed continuation-in filings through. The entity-filer only skips filings that are already COMPLETED. legal-api's before-insert/update listener sets a filing to PAID when it has a payment completion date and no transaction_id, but it skips filings already in AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED, or APPROVED without a transaction. In the old path a PENDING continuation-in filing never reaches AWAITING_REVIEW, so it becomes PAID. The future-effective-filings job asks legal-api for every PAID or APPROVED filing whose effective date has passed and pushes it onto the NATS filer subject.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/legal-api/src/legal_api/models/filing.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "business-pay uses its own cut-down Filing model on the same filings table and sets status PAID and payment_status_code itself, because legal-api's before-insert/update status listener doesn't run there. A change to status rules in legal_api/models/filing.py won't apply to the live payment path unless it is also copied into business-pay.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/database/filings.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ]
+   },
+   {
+    "fact": "Retry, duplicate and failure handling differ. business-pay drops any non-COMPLETED token, including the pay API's 'TRANSACTION_FAILED', and hard-codes skips for MHR and BTR. It treats a set payment completion date as a duplicate. When no filing is found it returns 404, so Pub/Sub redelivers, unless the corp type is BC with no filing identifier. That means product events routed to the business topic with no lear filing (for example STRR on the default topic) are redelivered over and over. entity-pay instead polls 5 times, treats only a COMPLETED filing as a duplicate, and swallows not-found errors.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py",
+     "sbc-pay/pay-api/src/pay_api/config.py"
+    ]
+   },
+   {
+    "fact": "business-pay calls verify_gcp_jwt and returns 403 unless the bearer token passes id_token.verify_oauth2_token for SUB_AUDIENCE with email_verified true and email == SUB_SERVICE_ACCOUNT. The check runs after the empty-body check, so a request with no body gets 200 without authentication. entity-pay does no authentication on its NATS subject.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/services/gcp_auth.py",
+     "lear/queue_services/business-pay/src/business_pay/config.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/entity-pay/src/entity_pay/config.py"
+    ],
+    "fixed": true
+   },
+   {
+    "fact": "Even the new listener still sends work on through NATS/STAN. It publishes {'filing': {'id'}} to the filer subject and an email with option 'PAID' to the emailer subject through its own QueueService, inside suppress(Exception). It sends to the filer only when effective_date is on or before payment_completion_date, so a missing effective date or a publish failure is swallowed after the filing is already marked PAID. The staff review endpoint publishes approvals to the same NATS filer subject.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/queue_services/business-pay/src/business_pay/services/queue.py",
+     "lear/queue_services/business-pay/src/business_pay/services/__init__.py",
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+    ]
+   }
+  ],
+  "qid": "hard-legacy-0",
+  "area": "hard-legacy",
   "verdicts": [
    {
     "verdict": "correct",
@@ -371,6 +884,10 @@
    {
     "verdict": "correct",
     "fix": ""
+   },
+   {
+    "verdict": "partly",
+    "fix": "Nothing downstream re-checks review status, so putting the old path back would let unreviewed continuation-in filings through. The entity-filer only skips filings that are already COMPLETED. legal-api's before-insert/update listener sets a filing to PAID when it has a payment completion date and no transaction_id, but it skips filings already in AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED, or APPROVED without a transaction. In the old path a PENDING continuation-in filing never reaches AWAITING_REVIEW, so it becomes PAID. The future-effective-filings job asks legal-api for every PAID or APPROVED filing whose effective date has passed and pushes it onto the NATS filer subject."
    },
    {
     "verdict": "correct",
@@ -388,12 +905,8 @@
     "verdict": "correct",
     "fix": ""
    }
-  ]
- },
- {
-  "kind": "legacy",
-  "question": "We still have two payment-completion listeners in the business registry: the older one on the streaming bus and the newer push-subscription one. Before we change how a paid filing moves on to being filed, which one actually gets the pay system's 'payment completed' events today? Where do the two disagree on duplicate payments, failed or cancelled payments, unknown product types and filings that need staff review? And what would go wrong if someone fixed a bug in only the old one, or brought the old one back as a fallback?",
-  "facts": [
+  ],
+  "facts_before": [
    {
     "fact": "The pay API publishes payment-completed and payment-failed events only as GCP Pub/Sub CloudEvents. The topic comes from the invoice's corp type: NRO goes to NAMEX_PAY_TOPIC, the BUSINESS and BUSINESS_SEARCH products go to BUSINESS_PAY_TOPIC, and STRR goes to STRR_PAY_TOPIC, which defaults to BUSINESS_PAY_TOPIC. Nothing in the pay API publishes these events to NATS, which is the only transport the old entity-pay listener subscribes to.",
     "files": [
@@ -467,40 +980,46 @@
     ]
    }
   ],
-  "qid": "hard-legacy-0",
-  "area": "hard-legacy",
-  "verdicts": [
+  "reverdicts": [
    {
     "verdict": "correct",
-    "fix": ""
+    "fix": "",
+    "why": "payment_transaction.publish_status and base_payment_system._release_payment only call gcp_queue_publisher.publish_to_queue (a SimpleCloudEvent to Pub/Sub). The topic comes from util.get_topic_for_corp_type (NRO\u2192NAMEX, BUSINESS/BUSINESS_SEARCH\u2192BUSINESS, STRR\u2192STRR_PAY_TOPIC, which defaults to BUSINESS_PAY_TOPIC), and the pay API has no NATS publish. entity-pay subscribes only to NATS SUBSCRIPTION_OPTIONS 'entity.filings'."
    },
    {
     "verdict": "correct",
-    "fix": ""
+    "fix": "",
+    "why": "create_event_payload = humps.camelize(asdict(PaymentToken(invoice.id, status_code, invoice.filing_id, corp_type))). entity-pay is_processable_message needs msg['paymentToken'].corpTypeCode to be in CorpType, otherwise it only logs a debug skip. business-pay get_payment_token checks ce.type=='bc.registry.payment' and runs dict_keys_to_snake_case(ce.data)."
    },
    {
     "verdict": "correct",
-    "fix": ""
+    "fix": "",
+    "why": "pay_filer.worker sets PAID, and for staff_review_required=['continuationIn'] create_staff_review saves a Review with AWAITING_REVIEW, sets the filing to AWAITING_REVIEW and skips publish_to_filer. entity-pay process_payment has no review branch: it sets payment_completion_date and calls publish_filing when effective_date is missing or <= now."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "entity-filer process_filing only returns early for COMPLETED and never checks AWAITING_REVIEW/APPROVED. receive_before_change returns early for AWAITING_REVIEW/CHANGE_REQUESTED/REJECTED or APPROVED without transaction_id, and otherwise sets PAID when payment_completion_date is set. get_future_effective_filing_ids selects PAID/APPROVED filings with effective_date<=now, and file_future_effective publishes them to NATS_FILER_SUBJECT. Also, entity-pay itself publishes non-future-effective continuationIn filings straight to the filer."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "business_pay/database/filings.py is a minimal Filing on __tablename__='filings' with include_properties. pay_filer sets status=PAID and payment_status_code='COMPLETED' itself. business-pay never imports legal_api, so the listens_for listener in legal_api/models/filing.py never runs there."
+   },
+   {
+    "verdict": "correct",
+    "fix": "",
+    "why": "pay_filer returns 200 when status_code != 'COMPLETED' and skips MHR/BTR. It treats payment_completion_date as a duplicate. With no filing it returns 404, unless filing_identifier is None and corp_type is BC. entity-pay retries the lookup 5 times with sleep(0.2), skips only COMPLETED filings as duplicates, and cb_subscription_handler catches FilingException without re-raising."
    },
    {
     "verdict": "partly",
-    "fix": "Nothing downstream re-checks review status, so putting the old path back would let unreviewed continuation-in filings through. The entity-filer only skips filings that are already COMPLETED. legal-api's before-insert/update listener sets a filing to PAID when it has a payment completion date and no transaction_id, but it skips filings already in AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED, or APPROVED without a transaction. In the old path a PENDING continuation-in filing never reaches AWAITING_REVIEW, so it becomes PAID. The future-effective-filings job asks legal-api for every PAID or APPROVED filing whose effective date has passed and pushes it onto the NATS filer subject."
+    "fix": "business-pay calls verify_gcp_jwt and returns 403 unless the bearer token passes id_token.verify_oauth2_token for SUB_AUDIENCE with email_verified true and email == SUB_SERVICE_ACCOUNT. The check runs after the empty-body check, so a request with no body gets 200 without authentication. entity-pay does no authentication on its NATS subject.",
+    "why": "pay_filer.worker returns {} 200 when request.data is empty, before it calls verify_gcp_jwt. gcp_auth.verify_gcp_jwt holds the audience and email checks. entity_pay/config.py has only NATS subject settings."
    },
    {
     "verdict": "correct",
-    "fix": ""
-   },
-   {
-    "verdict": "correct",
-    "fix": ""
-   },
-   {
-    "verdict": "correct",
-    "fix": ""
-   },
-   {
-    "verdict": "correct",
-    "fix": ""
+    "fix": "",
+    "why": "business_pay QueueService.publish_json publishes over a STAN client. publish_to_filer sends {'filing':{'id'}} only when effective_date <= payment_completion_date, inside suppress(Exception), so a None effective_date raises a TypeError that is swallowed. create_email_msg uses option 'PAID' and is also published inside suppress(Exception). Both run after filing.save() has marked the filing PAID. reviews.py publishes {'filing':{'id'}} to NATS_FILER_SUBJECT for APPROVED filings whose effective date has passed."
    }
   ]
  }
