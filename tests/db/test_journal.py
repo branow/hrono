@@ -1,5 +1,6 @@
 """A run is journaled as it writes, and reverting it restores it exactly."""
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -172,9 +173,13 @@ def test_the_run_page_shows_what_changed_and_reverts_it(
         client.post("/ui/login", data={"token": admin})
 
         page = client.get("/ui/jobs/run-1?tree=default").text
+        Path(os.environ.get("RUN_PAGE", os.devnull)).write_text(page)
         client.post("/ui/jobs/run-1/revert?tree=default")
         after = client.get("/ui/jobs/run-1?tree=default").text
 
     assert "What it changed" in page
     assert "Topics touched" in page and ">Revert</button>" in page
+    assert 'id="file-f0-txt"' in page  # the edited file, with its diff
+    assert "completely rewritten now" in page
+    assert "Sections of" in page  # a topic says which files came in
     assert "Reverted " in after and "Topics touched" not in after
