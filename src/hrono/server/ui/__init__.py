@@ -219,61 +219,142 @@ def switch(here: str, tree: str, to: str) -> str:
     return f"{rebased}?tree={to}"
 
 
-# One row per page a person can navigate to: its key, its label, where it
-# lives, and the paths that are "inside" it. A run's page belongs to Runs, a
-# topic's page to no tab at all, so it gets a transient one of its own rather
-# than lighting up Map for a page that is not the map. Data, so the nav and the
-# current-page mark cannot disagree about which pages exist.
-TABS: tuple[tuple[str, str, str, str], ...] = (
-    ("home", "Home", "/ui", r"/ui"),
-    ("map", "Map", "/ui/trees/{tree}/graph", r"/ui/trees/[^/]+/graph"),
+# The menu: seven sections, each owning the pages inside it. A section with
+# more than one page shows them as sub-tabs under the bar, so a page is never
+# more than two clicks away and the bar never grows a tab per page. Data, so
+# the bar, the sub-tabs and the current-page mark cannot disagree.
+# (key, label, href, inside, admin only)
+Page = tuple[str, str, str, str, bool]
+SECTIONS: tuple[tuple[str, str, tuple[Page, ...]], ...] = (
+    ("home", "Home", (("home", "Overview", "/ui", r"/ui", False),)),
     (
-        "find",
-        "Find",
-        "/ui/trees/{tree}/find",
-        r"/ui/trees/[^/]+/(find|outline|files)",
+        "map",
+        "Map",
+        (
+            (
+                "map",
+                "Map",
+                "/ui/trees/{tree}/graph",
+                r"/ui/trees/[^/]+/graph",
+                False,
+            ),
+            (
+                "search",
+                "Search",
+                "/ui/trees/{tree}/find",
+                r"/ui/trees/[^/]+/(find|files)",
+                False,
+            ),
+            (
+                "outline",
+                "Outline",
+                "/ui/trees/{tree}/outline",
+                r"/ui/trees/[^/]+/outline",
+                False,
+            ),
+        ),
     ),
-    ("ask", "Ask", "/ui/trees/{tree}/ask", r"/ui/trees/[^/]+/ask"),
-    ("demo", "Demo", "/ui/trees/{tree}/demo", r"/ui/trees/[^/]+/demo"),
+    (
+        "ask",
+        "Ask",
+        (
+            (
+                "ask",
+                "Recall",
+                "/ui/trees/{tree}/ask",
+                r"/ui/trees/[^/]+/ask",
+                False,
+            ),
+            (
+                "demo",
+                "Agent demo",
+                "/ui/trees/{tree}/demo",
+                r"/ui/trees/[^/]+/demo",
+                False,
+            ),
+        ),
+    ),
     (
         "runs",
         "Runs",
-        "/ui/jobs",
-        r"/ui/jobs(/.*)?|/ui/trees/[^/]+/activity",
+        (
+            ("runs", "Runs", "/ui/jobs", r"/ui/jobs(/.*)?", False),
+            (
+                "changes",
+                "Changes",
+                "/ui/trees/{tree}/activity",
+                r"/ui/trees/[^/]+/activity",
+                False,
+            ),
+            ("usage", "Usage", "/ui/usage", r"/ui/usage", False),
+        ),
     ),
     (
         "health",
         "Health",
-        "/ui/trees/{tree}/triage",
-        r"/ui/trees/[^/]+/triage",
+        (
+            (
+                "health",
+                "Health",
+                "/ui/trees/{tree}/triage",
+                r"/ui/trees/[^/]+/triage",
+                False,
+            ),
+        ),
     ),
-    ("export", "Export", "/ui/trees/{tree}/export", r"/ui/trees/[^/]+/export"),
-    ("usage", "Usage", "/ui/usage", r"/ui/usage"),
-    ("settings", "Settings", "/ui/config", r"/ui/(config(/.*)?|setup)"),
-    ("guide", "Guide", "/ui/guide", r"/ui/guide"),
+    (
+        "export",
+        "Export",
+        (
+            (
+                "export",
+                "Export",
+                "/ui/trees/{tree}/export",
+                r"/ui/trees/[^/]+/export",
+                False,
+            ),
+        ),
+    ),
+    (
+        "settings",
+        "Settings",
+        (
+            (
+                "settings",
+                "Settings",
+                "/ui/config",
+                r"/ui/(config(/.*)?|setup)",
+                False,
+            ),
+            ("access", "Access", "/ui/access", r"/ui/access(/.*)?", True),
+        ),
+    ),
 )
 TOPIC_PAGE = r"/ui/trees/[^/]+/nodes/\d+"
 
 
-# Drawn for an admin only, from the same rule that refuses everyone else the
-# page, and placed before the Guide.
-ACCESS_TAB = ("access", "Access", "/ui/access", r"/ui/access(/.*)?")
+def _visible(pages: tuple[Page, ...], role: str) -> list[Page]:
+    return [page for page in pages if not page[4] or allows(role, "admin")]
+
+
+def _link(href: str, tree: str) -> str:
+    return f"{href.format(tree=tree)}?tree={tree}"
 
 
 def tabs(here: str, tree: str, role: str = "reader") -> list[dict[str, object]]:
-    """The navigation: every tab, the current one marked, and a topic's own."""
+    """The bar: a tab per section, its first page the target, the current
+    section marked; a topic's page gets a transient tab of its own."""
     path = here.rstrip("/") or "/ui"
-    shown = list(TABS)
-    if allows(role, "admin"):
-        shown.insert(-1, ACCESS_TAB)
-    rows = [
-        {
-            "label": label,
-            "href": f"{href.format(tree=tree)}?tree={tree}",
-            "current": re.fullmatch(inside, path) is not None,
-        }
-        for _, label, href, inside in shown
-    ]
+    rows = []
+    for _, label, pages in SECTIONS:
+        shown = _visible(pages, role)
+        rows.append(
+            {
+                "label": label,
+                "href": _link(shown[0][2], tree),
+                "current": any(re.fullmatch(page[3], path) for page in shown),
+            }
+        )
     if re.fullmatch(TOPIC_PAGE, path):
         rows.insert(
             2,
@@ -282,11 +363,31 @@ def tabs(here: str, tree: str, role: str = "reader") -> list[dict[str, object]]:
     return rows
 
 
+def subtabs(
+    here: str, tree: str, role: str = "reader"
+) -> list[dict[str, object]]:
+    """The pages of the current section, when it has more than one."""
+    path = here.rstrip("/") or "/ui"
+    for _, _, pages in SECTIONS:
+        shown = _visible(pages, role)
+        if len(shown) > 1 and any(re.fullmatch(p[3], path) for p in shown):
+            return [
+                {
+                    "label": label,
+                    "href": _link(href, tree),
+                    "current": re.fullmatch(inside, path) is not None,
+                }
+                for _, label, href, inside, _ in shown
+            ]
+    return []
+
+
 # The tree switcher rewrites the current path per tree, which is routing, not
 # markup — so it is a function the template calls rather than a chain of Jinja
 # string operations.
 templates.env.globals["switch"] = switch
 templates.env.globals["tabs"] = tabs
+templates.env.globals["subtabs"] = subtabs
 # Read from the request in the template rather than threaded through a dozen
 # route context dicts: the theme is chrome, and every page has the same answer.
 templates.env.globals["chosen_theme"] = chosen_theme

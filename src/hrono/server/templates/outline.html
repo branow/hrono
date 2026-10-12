@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from "_find.html" import nav %}
 {% block title %}hrono — {{ tree }} outline{% endblock %}
 {% macro branch(row, depth) %}
 <li>
@@ -24,7 +23,6 @@
 <div class="page-head">
   <h1>Outline<span class="tip" tabindex="0" role="note" data-tip="The same topics as the map, as a list. Open a row to see what is under it; click a name to open the topic">?</span></h1>
 </div>
-{{ nav(tree, page) }}
 
 {% if not rows %}
 <div class="empty">
