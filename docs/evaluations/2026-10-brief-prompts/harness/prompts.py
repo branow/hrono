@@ -1,3 +1,4 @@
+# ruff: noqa: E501 - prompt texts are data
 """The leaf brief prompts under test, as data.
 
 `today` is hrono's seeded default. The others describe the leaf as one part
