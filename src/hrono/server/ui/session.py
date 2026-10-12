@@ -96,3 +96,25 @@ async def set_theme(request: Request) -> Response:
     else:
         answer.delete_cookie(THEME_COOKIE)
     return answer
+
+
+# The mark the page head carries as a data URI, for whatever asks for the
+# conventional path: a browser on a response with no head, such as a 404.
+FAVICON = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
+    "<path d='M8 5v2.4M8 7.6L4.2 10M8 7.6l3.8 2.4' stroke='#B4552D' "
+    "stroke-width='1.1' fill='none'/>"
+    "<circle cx='8' cy='3' r='2.2' fill='#B4552D'/>"
+    "<circle cx='3.6' cy='12' r='2.2' fill='#B4552D' opacity='.65'/>"
+    "<circle cx='12.4' cy='12' r='2.2' fill='#B4552D' opacity='.65'/>"
+    "</svg>"
+)
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    return Response(
+        FAVICON,
+        media_type="image/svg+xml",
+        headers={"cache-control": "max-age=86400"},
+    )

@@ -119,7 +119,7 @@
         <li>
           <a href="/ui/trees/{{ tree }}/nodes/{{ child.id }}?tree={{ tree }}" title="{{ child.title }}">
             <span class="who-holds">{{ topic_name(child) }}</span>
-            <span class="kid-meta num nowrap">{{ child.holds|counted(child.holds_what) }} · #{{ child.id }}</span>
+            <span class="kid-meta num nowrap">{{ child.holds|counted(child.holds_what) }}<span class="gap">#{{ child.id }}</span></span>
           </a>
         </li>
         {% endfor %}
@@ -143,7 +143,7 @@
       {% endif %}
       <div id="section-list">
       {% if node.members.q %}
-      <p class="filter-count faint small" role="status">{{ node.members.matched }} of {{ node.members.total }} · <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">Clear</a></p>
+      <p class="filter-count faint small" role="status">{{ node.members.matched }} of {{ node.members.total }} <a class="gap" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">Clear</a></p>
       {% endif %}
       {% if not node.members.total %}
       <div class="empty">

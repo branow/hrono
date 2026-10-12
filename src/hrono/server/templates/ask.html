@@ -20,8 +20,7 @@
   <nav class="crumbs" aria-label="asked before">
     <span>Asked before<span class="tip" tabindex="0" role="note" data-tip="Kept in this browser only, for a day. Ask one again to see what changed since">?</span>:</span>
     {% for text, link in asked %}
-    {% if not loop.first %}<span class="sep">·</span>{% endif %}
-    <a href="{{ link }}">{{ text }}</a>
+    <a href="{{ link }}">{{ text }}</a>{% if not loop.last %},{% endif %}
     {% endfor %}
   </nav>
   {% endif %}

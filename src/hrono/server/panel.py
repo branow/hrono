@@ -145,7 +145,7 @@ def _detail(row: sqlite3.Row, place: str) -> str:
     """What a child holds, and where — the line under its name."""
     held = int(row["members"]) or int(row["kids"])
     counted = f"{held} {'sections' if int(row['members']) else 'topics'}"
-    return f"{counted} · in {place}" if place else counted
+    return f"{counted}, in {place}" if place else counted
 
 
 def _relative(path: str, stem: str) -> str:

@@ -119,7 +119,7 @@
   {% if asked is not none %}
   <section class="card" id="asked">
     <div class="card-head"><h2>Agent questions<span class="tip" tabindex="0" role="note" data-tip="Every recall an agent makes through the API, over the last {{ window }} days. Asking on the Ask page is not counted">?</span></h2>
-      {% if asked.calls %}<span class="small faint">{{ asked.calls }} call{{ "" if asked.calls == 1 else "s" }} in the last {{ window }} days · {{ asked.unsure_share }}% not confident</span>{% endif %}
+      {% if asked.calls %}<span class="small faint">{{ asked.calls }} call{{ "" if asked.calls == 1 else "s" }} in the last {{ window }} days, {{ asked.unsure_share }}% not confident</span>{% endif %}
     </div>
     <div class="card-body stack">
       {% if not asked.calls %}

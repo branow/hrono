@@ -144,7 +144,7 @@
       <span class="fold" aria-hidden="true"></span>
       {% endif %}
       <a class="name" href="{{ node.read }}" title="{{ node.name }}"{% if node.focused %} aria-current="true"{% endif %}>{{ node.name }}</a>
-      <span class="meta" title="{{ holds }}{% if node.where %} · {{ node.where }}{% endif %}"><span class="num">{{ holds }}</span>{% if node.where %}<span class="where"> · <span class="mono">{{ node.where }}</span></span>{% endif %}</span>
+      <span class="meta" title="{{ holds }}{% if node.where %}, in {{ node.where }}{% endif %}"><span class="num">{{ holds }}</span>{% if node.where %}<span class="where mono">{{ node.where }}</span>{% endif %}</span>
       </span>
     </th>
     <td class="col-brief">{% if node.stale %}<span class="needs" title="Missing or out of date: recall cannot answer from this topic">needs a brief</span>{% endif %}</td>
