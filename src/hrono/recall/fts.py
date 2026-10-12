@@ -4,8 +4,8 @@
 every re-split, so the index never drifts from the passage store and a removed
 passage leaves no orphan row. ``search`` runs an FTS5 MATCH and returns each
 hit's passage id with its BM25 score (FTS5's bm25 is negative — MORE negative =
-better — so results come back best-first). The leg query + z-floor is
-``keyword_leg``.
+better — so results come back best-first). Recall's ``gate`` reads it to tell
+whether a question's words occur in a tree.
 """
 
 from __future__ import annotations

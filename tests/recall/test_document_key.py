@@ -64,7 +64,7 @@ def test_passages_of_one_file_share_a_document(db: Database) -> None:
         other = _passage(conn, "src/y.py", b"a different file\n", 0)
 
     with db.connect() as conn:
-        keys = _documents(conn, [(first, 1.0), (second, 0.9)], [(other, 0.5)])
+        keys = _documents(conn, [first, second, other])
 
     assert keys[first] == keys[second]  # the file, not the slice
     assert keys[other] != keys[first]
@@ -82,6 +82,6 @@ def test_the_key_is_the_stored_uri_untouched(db: Database) -> None:
         stored = conn.execute(
             "SELECT uri FROM passages WHERE id = ?", (passage,)
         ).fetchone()["uri"]
-        keys = _documents(conn, [(passage, 1.0)], [])
+        keys = _documents(conn, [passage])
 
     assert keys[passage] == stored

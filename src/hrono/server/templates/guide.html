@@ -155,8 +155,8 @@
 <section class="doc-part" id="what-recall-does">
   <h2>What recall does</h2>
   <div>
-    <p class="hint">Recall answers a question with the passages that answer it, and says where each came from. It embeds the question, scores every passage in the tree against it, and keeps only the passages that stand well clear of the rest for that question. Up to {{ recall.cap }} come back, and no one document takes more than {{ recall.share }}% of them while another document still has a passage that qualified.</p>
-    <p class="hint">When nothing stands clear it says <em>{{ recall.refusal }}</em> and hands over to the map, because a plausible passage that does not answer the question is worse for an agent than none. That is the design working, not a fault. Recall never calls a language model, so it costs nothing per question.</p>
+    <p class="hint">Recall answers a question with the passages most like it, and says where each came from. It embeds the question, ranks every passage and brief in the tree by how close it is, and returns up to {{ recall.cap }} of the closest, one per file.</p>
+    <p class="hint">It first checks that the tree has the words for the question: when fewer than {{ recall.coverage }}% of the question's words occur anywhere in the tree, it says <em>{{ recall.refusal }}</em> and hands over to the map, because the closest passage to a question the tree does not cover answers nothing. That is the design working, not a fault. Recall never calls a language model, so it costs nothing per question.</p>
   </div>
 </section>
 

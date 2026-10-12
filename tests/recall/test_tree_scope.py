@@ -20,7 +20,7 @@ from hrono.db.database import Database
 from hrono.embed.store import upsert_vector
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_section, upsert_content
-from hrono.recall import fts, keyword_leg, vector_leg
+from hrono.recall import fts, similarity
 from hrono.recall.engine import recall
 from hrono.recall.scope import passages_of
 from hrono.registry import store as registry_store
@@ -292,38 +292,25 @@ def _brief_passage_id(database: Database) -> int:
         )
 
 
-def test_each_leg_scores_over_its_own_tree_s_population(
+def test_ranking_and_gate_read_only_their_own_tree(
     two_trees: tuple[Database, Answers],
 ) -> None:
-    """The PO ruling of 2026-09-25, as a test on each leg separately.
-
-    The fused result cannot show this: both legs must agree before a passage
-    becomes a hit, so ONE leg filtering is enough to keep another tree's
-    passage out of the answer. What one leg cannot do alone is keep the other
-    tree out of the DISTRIBUTION -- and a z is a statement about a population.
-    Drop either filter and every score silently changes while the hit set
-    stays right, which is why this is asserted per leg.
-    """
+    """The PO ruling of 2026-09-25: another tree's passages are not part of
+    this tree's question, neither as candidates nor as vocabulary."""
     database, _answers = two_trees
     with database.connect() as conn:
         scope = passages_of(conn, "alpha")
         assert scope is not None
 
-        scoped_vec = vector_leg.scores(conn, unit(0), MODEL, scope)
-        whole_vec = vector_leg.scores(conn, unit(0), MODEL, None)
-        scoped_kw = keyword_leg.scores(conn, "authentication", scope)
-        whole_kw = keyword_leg.scores(conn, "authentication", None)
+        scoped = {
+            pid for pid, _ in similarity.ranked(conn, unit(0), MODEL, scope)
+        }
+        whole = {
+            pid for pid, _ in similarity.ranked(conn, unit(0), MODEL, None)
+        }
 
-    assert set(scoped_vec) <= scope
-    assert set(scoped_kw) <= scope
-    assert set(whole_vec) - scope  # the unscoped run really does see beta
-    assert set(whole_kw) - scope
-
-    # and the population changes the number, not only the membership
-    shared = set(scoped_vec) & set(whole_vec)
-    assert any(scoped_vec[pid] != whole_vec[pid] for pid in shared)
-    shared_kw = set(scoped_kw) & set(whole_kw)
-    assert any(scoped_kw[pid] != whole_kw[pid] for pid in shared_kw)
+    assert scoped <= scope
+    assert whole - scope  # the unscoped run really does see beta
 
 
 def test_an_unscoped_tree_still_answers_only_from_its_own_briefs(

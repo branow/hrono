@@ -27,9 +27,10 @@ vectors with sqrt(1/d) per prefix. Those vectors are hashed (signed feature
 hashing) into a fixed width, so nothing is stored and a new path needs no
 vocabulary.
 
-Recall and the health page's path view still blend the content with the
-EMBEDDED path string (``ALPHA``, ``path_body``): that is a retrieval signal,
-not the clustering one.
+File path strings are still registered as content bodies and embedded
+(``path_body``, ``register_path_bodies``), for the recall recipe that blended
+them in. Nothing reads those vectors since recall moved to plain cosine
+(docs/evaluations/2026-10-recall-queries/); removing them is open work.
 """
 
 from __future__ import annotations
@@ -44,55 +45,9 @@ from hrono.embed.store import get_vector
 from hrono.ingest.identity import content_hash
 from hrono.ingest.store import upsert_content
 
-ALPHA = 0.5  # recall's content/path-string blend
-
 TEXT_WEIGHT = 0.6
 FOLDER_WEIGHT = 0.4
 FOLDER_DIMS = 2048
-
-
-def combine(
-    content_vec: Sequence[float],
-    path_vec: Sequence[float],
-    alpha: float = ALPHA,
-) -> tuple[float, ...]:
-    """Blend a content and path vector into one path-aware clustering vector."""
-    content_unit = unit(content_vec)
-    path_unit = unit(path_vec)
-    content_weight, path_weight = blend_weights(alpha)
-    return tuple(
-        [content_weight * value for value in content_unit]
-        + [path_weight * value for value in path_unit]
-    )
-
-
-def blend_weights(alpha: float = ALPHA) -> tuple[float, float]:
-    """The (content, path) weights `combine` applies. ONE definition.
-
-    Recall scores thousands of passages per query and does it in numpy;
-    it needs these two numbers rather than the concatenated vector, and it must
-    not re-derive them — `combine` above is what a passage's stored clustering
-    vector means, and two places computing `sqrt(1 - alpha)` is two places to
-    disagree about what alpha is.
-    """
-    return math.sqrt(1 - alpha), math.sqrt(alpha)
-
-
-def similarity_weights(alpha: float = ALPHA) -> tuple[float, float]:
-    """The weights a DOT PRODUCT of two combined vectors applies per view.
-
-    `combine` scales each half by `sqrt(w)`, and both sides of the dot product
-    carry that scaling, so each view arrives weighted by w — the SQUARE of the
-    vector weight. Recall needs this form because it scores the two views
-    separately instead of dotting one 768-wide vector.
-
-    It cannot be checked against the baked ALPHA of 0.5: the two weights are
-    equal there, and a z-score is invariant under scaling all scores alike, so
-    squaring or not squaring gives identical rankings. The exponent only shows
-    itself at an asymmetric alpha, which is where it is tested.
-    """
-    content_weight, path_weight = blend_weights(alpha)
-    return content_weight**2, path_weight**2
 
 
 def path_body(path: str) -> bytes:
@@ -107,21 +62,6 @@ def register_path_bodies(
     for path in set(paths):
         body = path_body(path)
         upsert_content(conn, content_hash(body), body)
-
-
-def path_blend_vector(
-    conn: sqlite3.Connection,
-    content_digest: str,
-    path: str,
-    model_name: str,
-) -> tuple[float, ...] | None:
-    """The content blended with the embedded path string (``ALPHA``): what
-    recall's vector leg scores a passage by. None if a component is missing."""
-    content = get_vector(conn, content_digest, model_name)
-    path_component = get_vector(conn, content_hash(path_body(path)), model_name)
-    if content is None or path_component is None:
-        return None
-    return combine(content, path_component)
 
 
 def combined_vector(
