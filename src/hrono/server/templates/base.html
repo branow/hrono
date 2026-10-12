@@ -993,6 +993,7 @@ table.topics tbody th {
   font-size: .78125rem; color: var(--ink-faint);
 }
 .topics .meta .mono { font-size: .75rem; }
+.topics .meta .where { margin-left: .75rem; }
 .topics td.col-brief .needs { font-size: .78125rem; font-weight: 560; color: var(--warn); }
 /* The row the panel is showing, tied to it the way the ringed circle is. */
 .topics tr.reading { background: var(--accent-wash); }
@@ -1203,7 +1204,9 @@ details.hashes { margin-top: var(--s3); }
   margin-top: var(--s2);
   font-size: .8125rem; color: var(--ink-faint);
 }
-.topic-meta > span + span::before { content: "\00b7"; margin-right: .5rem; color: var(--rule-firm); }
+/* pieces of a quiet meta line are spaced apart, never joined by a dot */
+.topic-meta { column-gap: 1rem; }
+.gap { margin-left: .75rem; }
 .topic-meta .held-note { color: var(--accent); cursor: help; }
 ul.kids .kid-meta { font-size: .75rem; color: var(--ink-faint); }
 .warn-text { color: var(--warn); }
@@ -1221,7 +1224,7 @@ ul.members summary .fit.warn-text { color: var(--warn); }
    thing to read, then the file and the move tucked behind their own
    disclosures. */
 .section-meta { display: flex; flex-wrap: wrap; gap: 0 .5rem; align-items: baseline; }
-.section-meta > * + *::before { content: "\00b7"; margin-right: .5rem; color: var(--rule-firm); }
+.section-meta { column-gap: 1rem; }
 .section-meta a { display: inline-flex; align-items: center; gap: .25rem; }
 .section-part h3.part-title { font-size: .8125rem; display: inline-flex; align-items: center; }
 .section-part > .part-title + .hint { margin-top: var(--s1); }
@@ -1274,7 +1277,7 @@ ul.members summary .fit.warn-text { color: var(--warn); }
    the change, what it takes, and the button that does it. Reshaping comes
    last and its buttons say so in red text, not in an alarm box. */
 .manage-link { font-size: .8125rem; }
-.topic-meta > .manage-link::before { content: "\00b7"; margin-right: .5rem; color: var(--rule-firm); }
+
 .manage { display: flex; flex-direction: column; }
 .mrow {
   display: grid; grid-template-columns: 7rem minmax(0, 1fr) auto; gap: var(--s2) var(--s4);

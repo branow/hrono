@@ -26,7 +26,7 @@
 <div class="demo-pick">
   <label class="field"><span>Connection</span>
     <select id="connection">
-      {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} · {{ c.provider }}{% endif %}</option>{% endfor %}
+      {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} ({{ c.provider }}){% endif %}</option>{% endfor %}
     </select>
   </label>
   <label class="field"><span>Model</span>
@@ -53,7 +53,7 @@
   </section>
   <figure class="demo-side">
     <div class="demo-map" id="map" tabindex="0" role="region" aria-label="the topics the agent opened"></div>
-    <figcaption class="faint small">Lit where the agent went · export of {{ exported }}</figcaption>
+    <figcaption class="faint small">Lit where the agent went, from the export of {{ exported }}</figcaption>
   </figure>
 </div>
 
@@ -77,7 +77,7 @@
     model.replaceChildren.apply(model, mine.map(function (m) {
       var option = document.createElement("option");
       option.value = m.name;
-      option.textContent = m.name + (m.model && m.model !== m.name ? " · " + m.model : "");
+      option.textContent = m.name + (m.model && m.model !== m.name ? " (" + m.model + ")" : "");
       return option;
     }));
     model.disabled = mine.length === 0;

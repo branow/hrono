@@ -216,7 +216,7 @@ def test_the_page_says_it_is_a_demonstration_and_asks_for_an_export(
 
     assert "A demonstration, not the real setup" in before
     assert "Export this tree first" in before
-    assert 'id="connection"' in after and "claude · claude-code" in after
+    assert 'id="connection"' in after and "claude (claude-code)" in after
     assert '"connection": "claude"' in after
 
 

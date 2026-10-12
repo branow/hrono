@@ -17,7 +17,7 @@
 {% endmacro %}
 {% macro line(row) %}
 <a class="ol-name" href="/ui/trees/{{ tree }}/nodes/{{ row.id }}?tree={{ tree }}" title="{{ row.name }}">{{ row.name }}</a>
-<span class="ol-meta" title="{{ row.sections }} section{{ '' if row.sections == 1 else 's' }} beneath this topic">{{ row.holds }} {{ row.holds_what if row.holds != 1 else row.holds_what[:-1] }}{% if row.where %} · <span class="mono">{{ row.where }}</span>{% endif %}</span>
+<span class="ol-meta" title="{{ row.sections }} section{{ '' if row.sections == 1 else 's' }} beneath this topic">{{ row.holds }} {{ row.holds_what if row.holds != 1 else row.holds_what[:-1] }}{% if row.where %}<span class="mono gap">{{ row.where }}</span>{% endif %}</span>
 {% if not row.healthy %}<span class="ol-warn" title="No usable brief, or a stale one: recall cannot answer from this topic">needs a brief</span>{% endif %}
 {% endmacro %}
 {% block main %}
