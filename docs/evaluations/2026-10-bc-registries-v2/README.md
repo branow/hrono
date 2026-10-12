@@ -179,3 +179,39 @@ prompt) on the same questions for comparison.
 - Recall was attached to every run. The code-plus-tree agent opened the map
   on 3 of 5 questions (none on `auth-0` and `pay-3`).
 - Five questions: a difference under about 0.1 is noise.
+
+## Why round 2 shows no clear gain: the 15 runs read one by one
+
+Each question's runs were traced step by step, and every fact an arm missed
+was looked up in the map and the code.
+
+| question | code alone | what happened |
+|---|---|---|
+| `auth-0` invite flow | 1.00 | One well-named file (`invitation.py`); grep "invit" finds it. Code+map never opened the map, 5 turns instead of 21. The map holds the missed facts in front-end and helper leaves under other areas. |
+| `pay-3` account lock | 0.83 | The question's words are the identifiers (`freeze`, `has_nsf_invoices`); three greps find every file. Code+map never opened the map; recall pulled it to Vue briefs. |
+| `ui-0` dashboard load | 0.86 | Six obvious files from `main.ts`. The map saved 7 turns, added no facts; tree-only stopped after one leaf. |
+| `lear-filings-1` payment to filer | 0.50 | Map arms +0.14 from one leaf (the legacy entity-pay worker grep never found). 5 turns lost to wrong leaf paths. The status listener and change-of-address rule are in legal-api leaves whose summaries do not mention them. |
+| `cross-0` annual report | 0.62 | All arms 0.62. Missed facts are fine details; the pay leaf states some weakly and reports one rule as a "silent bug" (it saw a truncated chunk). |
+
+Causes, across the five:
+
+1. **The sample was easy.** Three of the five are answered at 0.83 to 1.00 by
+   code alone, so nothing can be added. In the first run only 4 of the 36
+   questions scored 0.85 or more with code alone; this sample drew 3 of
+   them. The ten hardest for code alone (0.29 to 0.64) are where a map can
+   show.
+2. **The code+map agent skips the map.** It did not open it on `auth-0` and
+   `pay-3`, though told to: grep is faster when the question names the
+   code. An instruction is not enough.
+3. **Navigation loses the agent.** Leaf pages sit under area folders but
+   agents assumed flat paths (5 turns lost); area summaries are generic
+   ("models and small helpers") and do not name the behaviour inside; one
+   app or service is split across areas with no link (business-filings-ui
+   in two areas, auth front and back end, pay-queue in two).
+4. **Briefs drop what these questions turn on**: side effects and callers
+   (who calls `ensure_no_payment_blockers`, the `NSF_LOCK_ACCOUNT` publish),
+   route strings, enum and topic names, the branch that keeps a state; one
+   misplaced detail (`fetchData` in "the dashboard component", it is
+   `App.vue`) and one invented bug from a truncated chunk.
+5. **Recall attaches noise for flow questions**: test files, notebooks and
+   unrelated UI; it never surfaced the key leaves.
