@@ -219,7 +219,7 @@ details.reveal .hint { margin-top: var(--s2); }
 .topbar {
   display: flex;
   align-items: center;
-  gap: var(--s4);
+  gap: var(--s3);
   flex-wrap: wrap;
   padding: var(--s2) var(--s5);
   background: var(--surface);
@@ -285,9 +285,15 @@ details.reveal .hint { margin-top: var(--s2); }
 .treepick .menu a[aria-selected="true"] { color: var(--accent); font-weight: 640; }
 .treepick .menu .tick { width: .75rem; flex: none; }
 
-.tabs { display: flex; gap: var(--s1); flex-wrap: wrap; margin-left: auto; }
+/* One row of tabs, never a ragged wrap: when the header cannot hold them
+   beside the rest, they take a row of their own under it. */
+.tabs { display: flex; flex-wrap: nowrap; margin-left: auto; }
+@media (max-width: 1279px) {
+  .topbar .tabs { order: 9; flex: 1 0 100%; margin-left: 0; overflow-x: auto; }
+  .topbar .finder { margin-left: auto; }
+}
 .tab {
-  padding: .4rem .55rem .35rem;
+  padding: .4rem .45rem .35rem;
   color: var(--ink-soft);
   font-weight: 520;
   white-space: nowrap;
@@ -300,7 +306,7 @@ details.reveal .hint { margin-top: var(--s2); }
   border-bottom-color: var(--accent);
 }
 
-.finder input { width: 9rem; padding: .3rem .55rem; font-size: .8125rem; }
+.finder input { width: 8rem; padding: .3rem .55rem; font-size: .8125rem; }
 .finder input:focus { width: 13rem; }
 mark { background: var(--accent-wash); color: inherit; border-radius: 2px; padding: 0 .1em; }
 ul.outline { list-style: none; margin: 0; padding: 0; }
