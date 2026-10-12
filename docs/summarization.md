@@ -10,25 +10,34 @@ How hrono writes briefs and decides when a change climbs the tree. Code:
 Two layers, gotcha-aware, content-addressed.
 
 1. **Condense, per section** (`summarize/condense.py`, cheap model). Each
-   section is reduced to its essential information. Length follows content
-   density: boilerplate collapses to a line, dense logic keeps what it needs.
-   Identifiers and values are copied verbatim, never inferred, and `GOTCHA:`
-   lines flag anything non-obvious that could hurt a newcomer. Results are
-   cached by content hash, so an unchanged section is never condensed twice
-   and a topic rebuild costs one brief call. Up to 8 sections share one call
-   (`summarize/packed.py`), because a `claude-code` call carries a large fixed
-   overhead; a section whose packed result is missing is retried alone.
+   section opens with one sentence on what it is for, in the system's own
+   terms (or that it is a test, config, migration or document, and what it
+   serves). Then what comes in and goes out, the main flow, and every
+   decision with the function, constant, list or field that holds it.
+   Mechanism comes after purpose; boilerplate collapses to a line. 60 to 120
+   words, up to 250 for dense logic. Identifiers and values are copied
+   verbatim, and `GOTCHA:` lines flag only what the code shows (a swallowed
+   exception, a partial update), never a guess. Results are cached by
+   content hash, so an unchanged section is never condensed twice. Up to 8
+   sections share one call (`summarize/packed.py`), because a `claude-code`
+   call carries a large fixed overhead; a section whose packed result is
+   missing is retried alone.
 2. **Brief, per leaf topic** (`summarize/brief.py`, stronger model). Over the
-   condensations: say what the group is, find the groupings actually present
-   (never impose a structure; it must work for code, config, translations and
-   prose alike), name concrete things, compress near-identical sections into
-   pattern plus variations, and end with a **Caution** section that aggregates
-   the gotchas (omitted when there is nothing to warn about).
-3. **Brief, per upper topic** (`summarize/brief_upper.py`, stronger model). A
-   pure-abstraction prompt over the child briefs, with no condense stage. The
-   model is never told it is in a tree (no node, child or subtree vocabulary)
-   and must synthesize across the children: the rules and conventions that only
-   exist when they are seen together.
+   condensations, what a reader needs to understand the part's role and find
+   where to change it, in order: what it does and whom it hands work to; its
+   contract (what comes in and goes out, with the message or record shapes);
+   its decisions one line each with where they live, including every state
+   change and every check that refuses a caller; at most three hazards that
+   lose or corrupt work; two to four sources to open first. Setup,
+   configuration, field lists, health checks and test plumbing are left to
+   the condensations below. 250 to 500 words, up to 800 for several jobs.
+   It writes about the part, never about its input ("this group").
+3. **Brief, per upper topic** (`summarize/brief_upper.py`, stronger model).
+   Over the child briefs, with no condense stage: what the area does, then
+   its end-to-end flows as numbered steps naming the part, the function and
+   the state at each step, one line per part not in a flow, and at most
+   three hazards from how the parts interact. 300 to 600 words however many
+   children there are. The model is never told it is in a tree.
 
 **References are mechanical.** Member lists and links are rendered by code
 from topic metadata, never written by the LLM: no tokens, no hallucinated
@@ -74,10 +83,19 @@ templates, a tight group of DTOs, a low-coherence grab-bag). Prototype code:
   made the model invent a value ("512 chars") that the brief then repeated;
   removing the cap removed that class of fabrication.
 
+The 2026-10 prompts replace the adaptive ones after measurement on a large
+unknown corpus (`evaluations/2026-10-condense-prompts/`,
+`evaluations/2026-10-brief-prompts/`): scored against the verified facts of
+an agent evaluation, the adaptive brief was a file catalog, opened by
+describing its input in 71% of leaves, and its upper briefs ran longer than
+their children. The leaf prompt keeps more of the facts in two thirds of the
+words; the upper prompt keeps about 1.6 times as many at the same length.
+
 ## Rejected (do not retry blindly)
 
-- Size budgets in prompts: ignored (~2× overruns), and size matters little as
-  long as a brief is smaller than its input.
+- Hard size budgets in prompts: ignored (~2× overruns). A range with an
+  escape for dense content ("aim for 60 to 120 words; dense logic may use
+  up to 250") holds roughly, and a tight one costs facts.
 - Hard token caps on condensation: they starve dense sections and cause
   fabrication.
 - LLM-written reference lists.
