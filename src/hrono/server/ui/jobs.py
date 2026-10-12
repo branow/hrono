@@ -14,6 +14,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
+from hrono.db import journal
 from hrono.errors import Forbidden, NotFound
 from hrono.jobs import store as job_store
 from hrono.jobs.aggregate import PARTIAL, rollup, total_spend
@@ -23,7 +24,8 @@ from hrono.jobs.ops import OPS
 from hrono.jobs.scope import SOURCE_SCOPED, fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import failures, outcome
+from hrono.server import failures, graph, outcome
+from hrono.server.changed import changed
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -349,6 +351,21 @@ def one_run(
             {"stage": group["key"], **describe(group)}  # type: ignore[dict-item]
             for group in for_job_by_role(conn, job_id)
         ]
+        own_tree = str(row["tree"] or "default")
+        made = (
+            changed(conn, job_id, own_tree)
+            if row["parent_id"] is None
+            else None
+        )
+        touched = (
+            graph.build(
+                conn,
+                own_tree,
+                sorted(graph.opened_to(conn, own_tree, list(made.topics))),
+            )
+            if made and not made.reverted
+            else None
+        )
     return templates.TemplateResponse(
         request,
         "run.html",
@@ -359,8 +376,32 @@ def one_run(
             "job": job,
             "can_write": user.role in {"writer", "admin"},
             "can_run": user.role == "admin",
+            "changes": made,
+            "touched": touched,
         },
     )
+
+
+@router.post("/ui/jobs/{job_id}/revert")
+async def revert_from_the_page(
+    job_id: str, request: Request, user: Admin, tree: str = ""
+) -> Response:
+    """Undo the run's changes, then show the run again, now reverted."""
+
+    def work() -> str:
+        with request.app.state.db.write() as conn:
+            if job_store.get(conn, job_id) is None:
+                raise NotFound(f"job not found: {job_id}")
+            why = journal.blocker(conn, job_id)
+            if why is not None:
+                return f"Cannot revert this run: {why}."
+            undone = journal.revert(conn, job_id, user.name)
+        return f"Reverted: {undone} changes undone. Sync again to replay it."
+
+    said = await run_in_threadpool(work)
+    key = "error" if said.startswith("Cannot") else "done"
+    query = urlencode({"tree": tree or "default", key: said})
+    return RedirectResponse(f"/ui/jobs/{job_id}?{query}", status_code=303)
 
 
 @router.post("/ui/jobs/run")

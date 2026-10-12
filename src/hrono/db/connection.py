@@ -7,11 +7,16 @@ from pathlib import Path
 
 import sqlite_vec
 
+from hrono.db import journal
+
 _PRAGMAS = (
     "PRAGMA journal_mode=WAL",
     "PRAGMA foreign_keys=ON",
     "PRAGMA busy_timeout=5000",
     "PRAGMA synchronous=NORMAL",
+    # an INSERT OR REPLACE deletes the row it replaces, and only with this on
+    # does that delete fire a trigger, so the change journal keeps the old row
+    "PRAGMA recursive_triggers=ON",
 )
 
 
@@ -35,6 +40,7 @@ def connect(path: Path, *, extensions: bool = True) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    journal.register(conn)
     for pragma in _PRAGMAS:
         conn.execute(pragma)
     if extensions:

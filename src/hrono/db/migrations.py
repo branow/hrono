@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from hrono.db import journal
 from hrono.db.backfill import STEPS
 
 _FILENAME = re.compile(r"^(\d+)_([a-z0-9_]+)\.sql$")
@@ -128,8 +129,15 @@ def packaged() -> tuple[Migration, ...]:
 
 
 def migrate(conn: sqlite3.Connection) -> tuple[int, ...]:
-    """Apply every pending packaged migration to ``conn``."""
-    return Migrator(packaged()).apply(conn)
+    """Apply every pending packaged migration to ``conn``.
+
+    Then the change journal's triggers are made again from the schema the
+    migrations left, so a table or column a migration added is journaled.
+    """
+    applied = Migrator(packaged()).apply(conn)
+    with conn:
+        journal.install(conn)
+    return applied
 
 
 def _now() -> str:

@@ -130,6 +130,13 @@ Runs shows every job live: status, progress, sub-steps and spend, split by
 stage. A failed run says what stopped it and what to do next, and can be
 retried with one click.
 
+A run that changed the tree says what it changed: how many of the tree's
+topics it touched, which ones (new, rewritten, regrouped or retired, lit in
+the tree), and the sections added and removed. An admin can revert it, which
+puts the tree back exactly as it was before the run; syncing again replays
+the same change, so a sync can be shown as often as needed. Only the newest
+run that changed anything can be reverted, and only while nothing runs.
+
 Usage, open to every role, adds spend up by day, model, run and person. For a
 writer or admin it also shows the questions agents asked through recall: the
 last 10,000 per tree are kept, with a count per day over the last 30 days, the

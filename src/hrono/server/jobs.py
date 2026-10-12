@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from hrono.auth.users import User
+from hrono.db import journal
 from hrono.errors import BadRequest, NotFound
 from hrono.jobs import store
 from hrono.jobs.aggregate import Rollup, rollup, total_spend
@@ -190,6 +191,21 @@ def cancel_job(job_id: str, request: Request, _: Admin) -> dict[str, object]:
         "running": outcome.running,
         "finished": outcome.finished,
     }
+
+
+@router.post("/jobs/{job_id}/revert")
+def revert_job(job_id: str, request: Request, user: Admin) -> dict[str, object]:
+    """Undo every change this run made to its tree (``db/journal.py``).
+
+    Admin, like cancel. Only the newest run that changed anything can be
+    reverted, and only while nothing runs; anything else is a 409 that says
+    which run to revert first.
+    """
+    with request.app.state.db.write() as conn:
+        if store.get(conn, job_id) is None:
+            raise NotFound(f"job not found: {job_id}")
+        undone = journal.revert(conn, job_id, user.name)
+    return {"job_id": job_id, "undone": undone}
 
 
 @router.get("/jobs/{job_id}/children")

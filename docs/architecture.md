@@ -218,6 +218,14 @@ Updates never re-run the build pipeline. Full rules:
 - **`settle`** (`tree/settle.py`) is a warm full rebuild that applies only the
   membership diff. `sync-tree` reports when one is due; it runs only when an
   operator enqueues it (`POST /jobs` with `op: settle`).
+- **The change journal** (`db/journal.py`) records every row a run inserts,
+  updates or deletes in the tables that make up a tree, with the row as it
+  was before, through triggers generated from the schema on every open. It is
+  the run's history, what the run page shows it touched, and the way back:
+  reverting a run (`POST /jobs/{id}/revert`) applies its entries in reverse.
+  Run records, usage, users, configuration and the content-addressed caches
+  are not journaled, so a revert keeps what was spent and syncing again
+  reuses what was computed.
 
 Invariants:
 
