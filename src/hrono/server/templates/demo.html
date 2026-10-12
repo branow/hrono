@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}hrono — {{ tree }} demo{% endblock %}
+{% block main %}
+<div class="page-head">
+  <h1>Demo<span class="tip" tabindex="0" role="note" data-tip="An agent answers from this tree while you watch: what recall attached, every page and file it opened, and its answer">?</span></h1>
+</div>
+
+<div class="callout" id="how">
+  <div class="body">
+    <div class="title">A demonstration, not the real setup</div>
+    <p class="hint">In real use the agent runs in your project. The plugin's hook attaches recall to each prompt, and the agent reads the exported map and the source files in your checkout with its own file tools, such as Read and Grep. Here the same steps run on the server, with two tools standing in for those, <code>open_topic</code> and <code>open_source</code>, so that each step can be shown.</p>
+  </div>
+</div>
+
+{% if not exported %}
+<div class="callout warn">
+  <div class="body">
+    <div class="title">Export this tree first</div>
+    <p class="hint">The agent reads the tree's export. <a href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export it</a>, then come back.</p>
+  </div>
+</div>
+{% elif not connections %}
+<div class="callout warn">
+  <div class="body">
+    <div class="title">No connection yet</div>
+    <p class="hint">The agent runs on a model you have set up. <a href="/ui/config?tree={{ tree }}&amp;section=connections">Add a connection</a> and a text model on it in Settings.</p>
+  </div>
+</div>
+{% else %}
+<div class="row demo-pick">
+  <label>Connection
+    <select id="connection">
+      {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} · {{ c.provider }}{% endif %}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Model
+    <select id="model"></select>
+  </label>
+  <span class="hint" id="no-model" hidden>No text model on this connection. <a href="/ui/config?tree={{ tree }}&amp;section=models">Add one in Settings</a>.</span>
+  <button class="btn quiet small" type="button" id="fresh">New conversation</button>
+  <span class="hint faint">Map exported {{ exported }}</span>
+</div>
+
+<div class="demo">
+  <section class="demo-talk" aria-label="conversation">
+    <ol class="steps" id="steps" aria-live="polite"></ol>
+    <p class="hint" id="empty">Ask something about this project. Each answer shows what recall attached, then every step the agent took.</p>
+    <form id="ask" class="demo-ask">
+      <label class="grow">
+        <span class="visually-hidden">Question</span>
+        <textarea name="question" rows="2" placeholder="How does sign-in work?" required {% if not can_write %}disabled{% endif %}></textarea>
+      </label>
+      <button class="btn primary" type="submit" {% if not can_write %}disabled title="Asking runs a model, so it needs the writer role"{% endif %}>Ask</button>
+    </form>
+  </section>
+  <div class="canvas demo-map" id="map" tabindex="0" role="region" aria-label="the map, lit where the agent went"></div>
+</div>
+
+<script type="application/json" id="models">{{ models|tojson }}</script>
+<script>
+(function () {
+  "use strict";
+  var tree = {{ tree|tojson }};
+  var models = JSON.parse(document.getElementById("models").textContent);
+  var connection = document.getElementById("connection");
+  var model = document.getElementById("model");
+  var steps = document.getElementById("steps");
+  var empty = document.getElementById("empty");
+  var form = document.getElementById("ask");
+  var map = document.getElementById("map");
+  var talk = "";
+  var visited = [];
+
+  function pickModels() {
+    var mine = models.filter(function (m) { return m.connection === connection.value; });
+    model.replaceChildren.apply(model, mine.map(function (m) {
+      var option = document.createElement("option");
+      option.value = m.name;
+      option.textContent = m.name + (m.model && m.model !== m.name ? " · " + m.model : "");
+      return option;
+    }));
+    model.disabled = mine.length === 0;
+    document.getElementById("no-model").hidden = mine.length > 0;
+  }
+
+  function fresh() {
+    talk = "";
+    visited = [];
+    steps.replaceChildren();
+    empty.hidden = false;
+    drawMap();
+  }
+
+  function drawMap() {
+    var url = "/ui/trees/" + encodeURIComponent(tree) + "/demo/map?visited=" + visited.join(",");
+    return fetch(url, { credentials: "same-origin" })
+      .then(function (reply) { return reply.text(); })
+      .then(function (html) {
+        map.innerHTML = html;
+        var here = map.querySelector(".node.reading");
+        if (here) {
+          map.scrollTo({
+            left: Number(here.dataset.x) - map.clientWidth / 2,
+            top: Number(here.dataset.y) - map.clientHeight / 2,
+            behavior: "smooth"
+          });
+        }
+      });
+  }
+
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function folded(summary, body) {
+    var details = el("details");
+    details.append(el("summary", "", summary), el("pre", "mono passage", body));
+    return details;
+  }
+
+  // One renderer per kind of step: who did it, and what it says.
+  var shown = {
+    asked: function (s) { return ["You", el("p", "demo-q", s.text)]; },
+    recall: function (s) {
+      if (s.problem) return ["Hook", el("p", "hint", "Recall could not run: " + s.problem)];
+      if (!s.hits.length) return ["Hook", el("p", "hint", "Recall attached nothing: " + (s.refused || "no passage was confident enough") + ".")];
+      var list = el("ul", "demo-hits");
+      s.hits.forEach(function (h) {
+        var item = el("li", "mono small");
+        item.append(el("span", "chip", h.kind), " " + h.title + " ", el("span", "faint", "score " + h.score));
+        list.append(item);
+      });
+      var box = el("div");
+      box.append(el("p", "hint", "Recall attached " + s.hits.length + " passage" + (s.hits.length === 1 ? "" : "s") + " to the question:"), list);
+      return ["Hook", box];
+    },
+    prompt: function (s) {
+      var box = el("div");
+      box.append(folded("The prompt the model received", s.text), folded("Its instructions", s.system));
+      return ["Prompt", box];
+    },
+    say: function (s) { var p = el("div", "prose"); p.innerHTML = s.html; return ["Agent", p]; },
+    tool: function (s) {
+      var box = el("div");
+      var head = el("p", "mono small");
+      head.append(el("span", "chip accent", s.tool), " " + s.label);
+      box.append(head, folded("What it returned (" + s.size.toLocaleString() + " characters)", s.preview + (s.size > s.preview.length ? "\n…" : "")));
+      if (s.node) { visited.push(s.node); drawMap(); }
+      return ["Tool", box];
+    },
+    answer: function (s) { var p = el("div", "prose demo-answer"); p.innerHTML = s.html; return ["Answer", p]; },
+    done: function () { return null; },
+    failed: function (s) { return ["Error", el("p", "demo-failed", s.message)]; }
+  };
+
+  function add(step) {
+    var made = shown[step.kind] ? shown[step.kind](step) : null;
+    if (!made) return;
+    var item = el("li", "demo-step " + step.kind);
+    item.append(el("span", "demo-who", made[0]), made[1]);
+    steps.append(item);
+    item.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function running(on) {
+    form.querySelector("button").disabled = on;
+    form.querySelector("textarea").disabled = on;
+    form.classList.toggle("busy", on);
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var question = form.question.value.trim();
+    if (!question || model.disabled) return;
+    var body = new URLSearchParams({ question: question, model: model.value, conversation: talk });
+    running(true);
+    empty.hidden = true;
+    fetch("/ui/trees/" + encodeURIComponent(tree) + "/demo/ask", {
+      method: "POST", credentials: "same-origin", body: body
+    }).then(function (reply) { return reply.json(); }).then(function (started) {
+      if (started.problem) { add({ kind: "failed", message: started.problem }); running(false); return; }
+      if (started.conversation !== talk) { visited = []; drawMap(); }
+      talk = started.conversation;
+      form.question.value = "";
+      var source = new EventSource("/ui/trees/" + encodeURIComponent(tree) + "/demo/" + talk + "/steps?after=" + started.after);
+      source.addEventListener("step", function (event) {
+        var step = JSON.parse(event.data);
+        add(step);
+        if (step.kind === "done" || step.kind === "failed") { source.close(); running(false); form.question.focus(); }
+      });
+      source.onerror = function () { source.close(); running(false); };
+    }).catch(function () { add({ kind: "failed", message: "The server could not be reached." }); running(false); });
+  });
+
+  form.question.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); }
+  });
+  connection.addEventListener("change", function () { pickModels(); fresh(); });
+  model.addEventListener("change", fresh);
+  document.getElementById("fresh").addEventListener("click", fresh);
+  pickModels();
+  drawMap();
+})();
+</script>
+{% endif %}
+
+<style>
+main:has(.demo) { max-width: 1480px; }
+.demo-pick { margin-block: var(--s4); gap: var(--s4); }
+.demo-pick label { display: flex; align-items: center; gap: var(--s2); }
+.demo-pick select { min-width: 12rem; }
+.demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s4); align-items: start; }
+.demo-talk { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2);
+  max-height: clamp(24rem, 64vh, 48rem); overflow: auto; }
+.demo-step { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: var(--s3);
+  padding: var(--s2) var(--s3); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r2); }
+.demo-step p { margin: 0; }
+.demo-who { font: 600 .75rem var(--mono); color: var(--ink-faint); text-transform: uppercase; padding-top: .15rem; }
+.demo-step.asked { background: var(--sunken); }
+.demo-step.tool .demo-who, .demo-step.recall .demo-who { color: var(--accent); }
+.demo-step.answer { border-color: var(--accent); }
+.demo-step.failed { border-color: var(--danger); }
+.demo-failed { color: var(--danger); }
+.demo-step details summary { cursor: pointer; color: var(--ink-soft); font-size: .8125rem; }
+.demo-step pre.passage { max-height: 18rem; overflow: auto; margin-top: var(--s2); }
+.demo-hits { list-style: none; margin: var(--s1) 0 0; padding: 0; display: grid; gap: var(--s1); }
+.demo-ask { display: flex; gap: var(--s2); align-items: flex-end; }
+.demo-ask .grow { flex: 1; }
+.demo-ask textarea { width: 100%; resize: vertical; }
+.demo-ask.busy button::after { content: "…"; }
+.demo-map { max-height: clamp(24rem, 72vh, 52rem); min-height: 24rem; cursor: auto; }
+.demo-map svg .node circle.disc { --tint: var(--rule-firm); }
+.demo-map svg .node.visited circle.disc { --tint: var(--accent); }
+.demo-map svg .node:not(.visited) text { fill: var(--ink-faint); }
+@media (max-width: 900px) { .demo { grid-template-columns: minmax(0, 1fr); } }
+</style>
+{% endblock %}

@@ -1,0 +1,14 @@
+<svg width="{{ graph.width }}" height="{{ graph.height }}" role="img"
+     aria-label="the map, with the topics the agent opened lit">
+  {% for line in graph.edges %}
+  <path d="{{ line }}" class="edge"/>
+  {% endfor %}
+  {% for node in graph.nodes %}
+  <g class="node b{{ node.branch }}{% if node.id in visited %} visited{% endif %}{% if node.id == current %} reading{% endif %}" data-node="{{ node.id }}" data-x="{{ node.x }}" data-y="{{ node.y }}">
+    <circle class="disc" cx="{{ node.x }}" cy="{{ node.y }}" r="{{ node.radius }}"/>
+    <text class="label" x="{{ node.x }}" y="{{ node.y + node.radius + 15 }}">{{ node.label }}</text>
+    <text class="meta" x="{{ node.x }}" y="{{ node.y + node.radius + 29 }}">{{ node.place }}</text>
+    <title>{{ node.name }}, topic {{ node.id }}</title>
+  </g>
+  {% endfor %}
+</svg>

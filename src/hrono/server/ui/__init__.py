@@ -234,6 +234,7 @@ TABS: tuple[tuple[str, str, str, str], ...] = (
         r"/ui/trees/[^/]+/(find|outline|files)",
     ),
     ("ask", "Ask", "/ui/trees/{tree}/ask", r"/ui/trees/[^/]+/ask"),
+    ("demo", "Demo", "/ui/trees/{tree}/demo", r"/ui/trees/[^/]+/demo"),
     (
         "runs",
         "Runs",
@@ -319,6 +320,7 @@ def _shape(conn: object, tree: str) -> tuple[int, int]:
 from hrono.server.ui import (  # noqa: E402, F401
     access,
     ask,
+    demo,
     export,
     find,
     guide,

@@ -27,6 +27,7 @@ ROUTES = (
     "/ui/trees/default/graph",
     "/ui/trees/default/graph?view=list",
     "/ui/trees/default/ask",
+    "/ui/trees/default/demo",
     "/ui/trees/default/activity",
     "/ui/jobs",
     "/ui/jobs/done-1",
