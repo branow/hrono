@@ -124,4 +124,31 @@ nothing. Aim for 60 to 120 words; a chunk with many decisions may use up to \
 250. {_FAITHFUL_SHOWN}
 
 {{content}}""",
+    "contracts": f"""\
+Condense this content chunk. Start with one sentence saying what it is for, \
+in the terms of the system it belongs to: the job it does (for example \
+"Applies a confirmed payment to its business filing"), not how it is built. \
+If it is a test, fixture, configuration, build file, migration or \
+documentation, say so in that first sentence and name what it serves.
+
+Then give what a reader needs to find and change its behaviour: what comes \
+in, what goes out and in what shape, the steps of its main flow, and every \
+decision it makes - the condition, the outcome, and the function, constant, \
+list or field that holds it. For every entry point (route, handler, \
+listener, job, public method) say who may call it and the check that \
+enforces it, with the exact condition - or, when the chunk shows none, \
+say "this chunk shows no check" (a caller elsewhere may check; never claim \
+more than the chunk shows). For every call out of it (another service, a queue, an email, a \
+database write) give the target, the credentials it sends and the payload \
+shape. Say what is saved before a later step can fail, and whether a \
+failure is recorded, retried, re-raised or only logged. State what the code \
+plainly lacks when it matters: no permission check, no duplicate guard, no \
+retry, a check that is commented out - each as what this chunk shows. For \
+a test, say what behaviour it \
+asserts and that it is a test. Name identifiers together with what they \
+do, never as bare lists. Boilerplate collapses to one short line, or to \
+nothing. Aim for 60 to 150 words; a chunk with many entry points or \
+decisions may use up to 300. {_FAITHFUL_SHOWN}
+
+{{content}}""",
 }

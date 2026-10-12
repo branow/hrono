@@ -261,3 +261,35 @@ caller or changer gets; skip naming, style, dead code and defaults. \
 # misses the cache. Measures how much one prompt's briefs vary run to run.
 BRIEF["core#2"] = BRIEF["core"] + "\n"
 BRIEF["core-states#2"] = BRIEF["core-states"] + "\n"
+
+
+# Hard questions turn on absences, exact conditions and boundaries
+# (docs/evaluations/2026-10-bc-registries-v2/): core-states plus a part that
+# keeps them, and a rule that test notes only confirm.
+BRIEF["core-contracts"] = (
+    BRIEF["core-states"]
+    .replace(
+        """4. Hazards that lose, duplicate or corrupt work, or fail silently - at most \
+three.""",
+        """4. Its boundaries, one line each: for each entry point, the check that \
+guards it and its exact condition, or that the notes show none; for each call \
+out of it (another service, a queue, an email), the target, the credentials \
+it sends and the payload shape; what is committed before a step that can \
+fail, and whether a failure is recorded, retried or only logged. Keep the \
+absences the notes report - a missing check, a missing duplicate guard, a \
+branch one implementation has and another lacks - but never turn one note's \
+silence into a claim.
+5. Hazards that lose, duplicate or corrupt work, or fail silently - at most \
+three.""",
+    )
+    .replace(
+        "5. The two to four sources to open first",
+        "6. The two to four sources to open first",
+    )
+    .replace(
+        "Aim for 250 to 500 words; a part with several distinct jobs may use up to 800.",
+        "A note on a test describes what is expected, not what the code does: use \
+it only to confirm what source notes say. Aim for 300 to 600 words; a part \
+with several distinct jobs may use up to 900.",
+    )
+)
