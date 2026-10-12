@@ -215,3 +215,57 @@ Causes, across the five:
    `App.vue`) and one invented bug from a truncated chunk.
 5. **Recall attaches noise for flow questions**: test files, notebooks and
    unrelated UI; it never surfaced the key leaves.
+
+## Round 2b: the five hardest questions for code alone
+
+The five questions code alone scored lowest on in the first run, same arms.
+
+| arm | lear-filings-2 | pay-0 | auth-4 | pay-5 | ui-3 | mean | turns |
+|---|---|---|---|---|---|---|---|
+| code only, first run | 0.29 | 0.36 | 0.50 | 0.50 | 0.50 | 0.43 | 11 |
+| code + old tree | 0.57 | 0.29 | 0.58 | 0.57 | 0.83 | 0.57 | 8 |
+| old tree only | 0.21 | 0.29 | 0.58 | 0.43 | 0.58 | 0.42 | 5 |
+| code only, round 2 | 0.64 | 0.50 | 0.50 | 0.64 | 0.83 | 0.62 | 12 |
+| code + new tree | 0.64 | 0.50 | 0.58 | 0.57 | 0.75 | 0.61 | 10 |
+| new tree only | 0.43 | 0.50 | 0.50 | 0.64 | 0.67 | 0.55 | 7 |
+
+Read run by run:
+
+- **They were not hard.** Four of the five first-run scores were noise: the
+  same code-only setup gained 0.14 to 0.35 on a rerun by opening one more
+  file. Grep finds every one of them (`tempRegNumber`, `get_owner_count`,
+  `deletion_locked` are distinctive).
+- **The rubric caps every arm.** Facts reward what the question does not
+  ask: pay-api fee internals for an end-to-end question (`pay-0`, every arm
+  0.50), side effects of a guard (`auth-4`, every arm 0 on two facts), the
+  readers of a status (`lear-filings-2`, every arm 0). A hedge ("approved or
+  created") earns full credit; a wrong claim every arm shares is not
+  penalised.
+- **The map's effect is speed, which the score does not count**: code+map
+  matched code alone in 6 turns instead of 15 (`lear-filings-2`) and 12
+  instead of 24 (`pay-0`).
+- **How the map arms went wrong**: read only `root.md` and went back to grep
+  (`lear-filings-2`); lost turns to leaf paths without their area folder
+  (`pay-5`); answered from briefs without opening the code and stated a
+  wrong status (`pay-5`); stopped where the map's coverage ended (`pay-0`).
+- **What the map lacks here**: per-subclass overrides and literal statuses
+  (`get_default_invoice_status`, APPROVED against CREATED), fee logic
+  (`fee_schedule.py` appears only in a test brief), side effects of one
+  method of a pair, client-to-endpoint mappings (`leaveOrg` → DELETE); the
+  facts that are present sit in leaves behind area lines that do not name
+  them, in a repository split across two areas, or only in test briefs.
+
+## What the ten cases say
+
+The benchmark, as it stands, cannot show the map's value: its questions are
+answered by grep, one run per question moves a score by up to 0.35, and its
+facts reward details the questions do not ask for. Where the map helps (the
+legacy entity-pay worker, the partner-disbursement exclusion, half the
+turns) it is either one fact or not scored.
+
+The map itself has fixable faults, found again and again: leaf links an
+agent mis-resolves, one service split over areas with no link, area and
+root lines that name parts rather than behaviour, briefs that drop
+identifiers, overrides and side effects, and recall that attaches tests and
+templates. And the agent uses the map badly: it skips it, reads only the
+root, or treats it as the answer instead of a pointer into the code.
