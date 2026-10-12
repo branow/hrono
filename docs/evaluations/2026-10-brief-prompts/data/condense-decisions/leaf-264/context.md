@@ -1,0 +1,20 @@
+- /: lear/data-reset-tool/src/data_reset_tool/blueprints/__init__.py, sbc-pay/jobs/payment-jobs/tasks/routing_slip_task.py, sbc-pay/jobs/payment-jobs/tasks/statement_due_task.py, sbc-pay/jobs/payment-jobs/tasks/statement_task.py and 15 more
+- sbc-pay/pay-api/: src/pay_api/resources/__init__.py, src/pay_api/resources/endpoints.py, src/pay_api/resources/ops.py, src/pay_api/resources/v1/__init__.py and 9 more
+- sbc-pay/pay-api/src/pay_api/: __init__.py, config.py, resources/v1/account.py, resources/v1/account_statements.py and 18 more
+- sbc-pay/pay-queue/tests/integration/: __init__.py, factory.py, test_cgi_reconciliations.py, test_eft_reconciliation.py and 2 more
+- sbc-pay/pay-queue/src/pay_queue/: external/readme.txt, services/__init__.py, services/cgi_reconciliations.py, services/eft/eft_reconciliation.py and 4 more
+- sbc-pay/pay-api/src/pay_api/: exceptions/__init__.py, schemas/schemas/account_fees.json, schemas/schemas/account_info.json, schemas/schemas/business_info.json and 31 more
+- sbc-pay/pay-api/src/pay_api/: schemas/schemas/account_fee.json, schemas/schemas/account_info.json, schemas/schemas/bank_accounts.json, schemas/schemas/distribution_code.json and 12 more
+- sbc-pay/pay-queue/: flags.json, src/pay_queue/enums.py, src/pay_queue/services/eft/__init__.py, src/pay_queue/services/eft/eft_base.py and 6 more
+- sbc-pay/pay-queue/tests/: integration/test_eft_reconciliation.py, unit/test_data/tdi17_sample.txt, unit/test_eft_file_parser.py, utilities/factory_utils.py
+- sbc-pay/pay-api/src/pay_api/: models/__init__.py, models/audit.py, models/base_model.py, models/base_schema.py and 27 more
+- sbc-pay/pay-api/src/pay_api/: models/account_fee.py, models/cfs_account.py, models/comment.py, models/credit.py and 29 more
+- sbc-pay/pay-api/: scripts/verify_license_headers.sh, src/pay_api/factory/__init__.py, tests/__init__.py, tests/unit/__init__.py and 12 more
+- sbc-pay/: CONTRIBUTING.md, LICENSE, bcol-api/LICENSE, bcol-api/scripts/verify_license_headers.sh and 28 more
+- sbc-pay/pay-api/src/pay_api/: models/payment.py, models/routing_slip.py, schemas/__init__.py, services/__init__.py and 19 more
+- sbc-pay/: BCOL_NOTES.md, pay-api/flags.json, pay-api/src/pay_api/config.py, pay-api/src/pay_api/dtos/eft_shortname.py and 24 more
+- sbc-pay/pay-api/tests/: conftest.py, docker/nginx.conf, unit/api/fas/test_refund.py, unit/api/fas/test_routing_slip.py and 21 more
+- sbc-pay/pay-api/tests/: conftest.py, unit/api/test_code.py, unit/conf/test_version.py, unit/models/test_comment.py and 18 more
+- sbc-pay/pay-api/tests/unit/: api/test_cors_preflight.py, api/test_eft_payment_actions.py, api/test_eft_short_names.py, api/test_refund.py and 9 more
+- sbc-pay/pay-api/tests/unit/: api/test_eft_short_name_history.py, api/test_non_sufficient_funds.py, api/test_partial_refund.py, api/test_transaction.py and 17 more
+- sbc-pay/pay-api/tests/: unit/api/test_eft_short_name_history.py, unit/api/test_eft_short_names.py, unit/api/test_statement_settings.py, unit/models/test_eft_short_names_historical.py and 7 more
