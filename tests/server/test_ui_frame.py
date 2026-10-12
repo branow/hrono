@@ -6,6 +6,7 @@ cookie, on a database the production writers filled where one is needed.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from html.parser import HTMLParser
 from pathlib import Path
@@ -19,23 +20,11 @@ from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
 from hrono.jobs import store as job_store
 from hrono.server.app import create_app
-from hrono.server.ui import tabs
+from hrono.server.ui import subtabs, tabs
 
 KEY = Fernet.generate_key()
 TREE = "default"
-LABELS = [
-    "Home",
-    "Map",
-    "Find",
-    "Ask",
-    "Demo",
-    "Runs",
-    "Health",
-    "Export",
-    "Usage",
-    "Settings",
-    "Guide",
-]
+LABELS = ["Home", "Map", "Ask", "Runs", "Health", "Export", "Settings"]
 
 
 class Browser:
@@ -135,35 +124,61 @@ def test_the_navigation_is_the_agreed_set_of_pages_that_exist(
 
     labels = [name for name, _ in _read(browser.get("/ui")).tabs]
 
-    assert labels == [*LABELS[:-1], "Access", "Guide"]
+    assert labels == LABELS
+
+
+def _subtabs(page: str) -> list[str]:
+    strip = re.search(r'<nav class="subbar".*?</nav>', page, re.S)
+    return re.findall(r">([^<]+)</a>", strip.group(0)) if strip else []
 
 
 @pytest.mark.parametrize("role", ["reader", "writer"])
-def test_only_an_admin_is_offered_the_access_tab(
+def test_only_an_admin_is_offered_the_access_page(
     browser: Browser, role: str
 ) -> None:
     browser.sign_in(role)
 
-    labels = [name for name, _ in _read(browser.get("/ui")).tabs]
+    page = browser.get("/ui/config")
 
-    assert labels == LABELS
+    assert [name for name, _ in _read(page).tabs] == LABELS
+    assert _subtabs(page) == []  # Settings alone has no strip of pages
+
+
+def test_a_section_with_several_pages_shows_them_under_the_bar(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+
+    assert _subtabs(browser.get(f"/ui/trees/{TREE}/find")) == [
+        "Map",
+        "Search",
+        "Outline",
+    ]
+    assert _subtabs(browser.get(f"/ui/trees/{TREE}/ask")) == [
+        "Recall",
+        "Agent demo",
+    ]
+    assert _subtabs(browser.get("/ui/usage")) == ["Runs", "Changes", "Usage"]
+    assert _subtabs(browser.get("/ui/config")) == ["Settings", "Access"]
+    assert _subtabs(browser.get(f"/ui/trees/{TREE}/export")) == []
+    assert 'href="/ui/guide?tree=' in browser.get("/ui")  # the ? beside you
 
 
 TABS = (
     ("/ui", "Home"),
     (f"/ui/trees/{TREE}/graph", "Map"),
-    (f"/ui/trees/{TREE}/find", "Find"),
-    (f"/ui/trees/{TREE}/outline", "Find"),
+    (f"/ui/trees/{TREE}/find", "Map"),
+    (f"/ui/trees/{TREE}/outline", "Map"),
     (f"/ui/trees/{TREE}/ask", "Ask"),
-    (f"/ui/trees/{TREE}/demo", "Demo"),
+    (f"/ui/trees/{TREE}/demo", "Ask"),
     ("/ui/jobs", "Runs"),
     ("/ui/jobs/finished", "Runs"),
     (f"/ui/trees/{TREE}/activity", "Runs"),
     (f"/ui/trees/{TREE}/triage", "Health"),
     (f"/ui/trees/{TREE}/export", "Export"),
+    ("/ui/usage", "Runs"),
     ("/ui/config", "Settings"),
-    ("/ui/access", "Access"),
-    ("/ui/guide", "Guide"),
+    ("/ui/access", "Settings"),
 )
 
 
@@ -217,7 +232,9 @@ def test_the_tab_row_names_its_current_page_by_path_alone() -> None:
 def test_the_access_tab_is_marked_on_the_pages_its_posts_draw() -> None:
     for path in ("/ui/access", "/ui/access/create", "/ui/access/rotate-key"):
         shown = tabs(path, TREE, "admin")
-        assert [t["label"] for t in shown if t["current"]] == ["Access"]
+        assert [t["label"] for t in shown if t["current"]] == ["Settings"]
+        pages = subtabs(path, TREE, "admin")
+        assert [t["label"] for t in pages if t["current"]] == ["Access"]
 
 
 EMPTY_PAGES = (

@@ -1,6 +1,0 @@
-{% macro nav(tree, page) -%}
-<nav class="subnav" aria-label="find">
-  <a href="/ui/trees/{{ tree }}/find?tree={{ tree }}"{% if page == "search" %} aria-current="page"{% endif %}>Search</a>
-  <a href="/ui/trees/{{ tree }}/outline?tree={{ tree }}"{% if page == "outline" %} aria-current="page"{% endif %}>Outline</a>
-</nav>
-{%- endmacro %}

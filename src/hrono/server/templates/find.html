@@ -1,11 +1,9 @@
 {% extends "base.html" %}
-{% from "_find.html" import nav %}
 {% block title %}hrono — {{ tree }} search{% endblock %}
 {% block main %}
 <div class="page-head">
   <h1>Search<span class="tip" tabindex="0" role="note" data-tip="Words in topic names, briefs, file paths and file text. Narrow to Files and type a path to see where a file was filed. To ask a question in your own words, use Ask">?</span></h1>
 </div>
-{{ nav(tree, page) }}
 <div class="stack">
   <form class="searchbar" id="find" method="get" action="/ui/trees/{{ tree }}/find" role="search">
     <input type="hidden" name="tree" value="{{ tree }}">

@@ -288,7 +288,7 @@ details.reveal .hint { margin-top: var(--s2); }
 /* One row of tabs, never a ragged wrap: when the header cannot hold them
    beside the rest, they take a row of their own under it. */
 .tabs { display: flex; flex-wrap: nowrap; margin-left: auto; }
-@media (max-width: 1279px) {
+@media (max-width: 1079px) {
   .topbar .tabs { order: 9; flex: 1 0 100%; margin-left: 0; overflow-x: auto; }
   .topbar .finder { margin-left: auto; }
 }
@@ -1697,6 +1697,18 @@ dl.terms dd { margin: 0; color: var(--ink-soft); font-size: .875rem; line-height
 .subnav a[aria-current="page"] { color: var(--ink); font-weight: 640; border-bottom-color: var(--accent); }
 .subnav .count { color: var(--ink-faint); font: 500 .75rem/1 var(--mono); margin-left: .2rem; }
 .crumb { margin: 0 0 .1rem; font-size: .8125rem; }
+/* The pages of the current section, one slim strip under the bar. */
+.subbar { background: var(--surface); border-bottom: 1px solid var(--rule); }
+.subbar-in { display: flex; gap: var(--s1); max-width: 1180px; margin: 0 auto; padding: 0 var(--s5); overflow-x: auto; }
+body:has(main.bleed) .subbar-in { max-width: none; }
+.subbar a {
+  padding: .45rem .7rem .4rem; font-size: .875rem; font-weight: 540; color: var(--ink-soft);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.subbar a:hover { color: var(--ink); text-decoration: none; }
+.subbar a[aria-current="page"] { color: var(--ink); font-weight: 620; border-bottom-color: var(--accent); }
+.who .helper { padding-inline: .4rem; }
+.who .helper[aria-current="page"] { color: var(--accent); }
 .card-head .hint { margin: .2rem 0 0; }
 
 .env { margin-top: var(--s5); }
@@ -1889,6 +1901,9 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
   <div class="who">
     <span class="name">{{ user.name }}</span>
     <span class="chip" title="{{ user.role }} — what this account may do">{{ user.role }}</span>
+    <a class="btn small quiet helper" href="/ui/guide?tree={{ tree }}" aria-label="Guide: how hrono works" data-tip="Guide: how hrono works"{% if here.startswith("/ui/guide") %} aria-current="page"{% endif %}>
+      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".85" fill="currentColor"/></svg>
+    </a>
     <form class="inline" method="post" action="/ui/theme">
       <input type="hidden" name="theme" value="{{ next_theme(theme) }}">
       <input type="hidden" name="back" value="{{ request.url.path }}?tree={{ tree }}">
@@ -1909,6 +1924,14 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     </form>
   </div>
 </header>
+{% set subs = subtabs(here, tree, user.role) %}
+{% if subs %}
+<nav class="subbar" aria-label="pages in this section">
+  <div class="subbar-in">
+    {% for item in subs %}<a href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
+  </div>
+</nav>
+{% endif %}
 {% endblock %}
 <main id="content" tabindex="-1"{% if full_bleed %} class="bleed"{% endif %}>
 <script>

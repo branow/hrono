@@ -209,9 +209,11 @@ def test_the_search_box_is_on_every_page_and_the_tab_is_marked(
     for route in ("find", "outline"):
         html = page(panel, route)
         assert 'role="search"' in html.split("<main")[0]
+        # Search and Outline live in the Map section, under its bar
         assert re.search(
-            r'class="tab" href="[^"]*/find[^"]*" aria-current', html
+            r'class="tab" href="[^"]*/graph[^"]*" aria-current', html
         )
+        assert re.search(r'href="[^"]*/(find|outline)[^"]*" aria-current', html)
     node = topic_of(panel, "f1.txt")
     for url in (
         "/ui",

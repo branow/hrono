@@ -14,6 +14,22 @@ The dashboard is server-rendered Jinja with no build step and no JavaScript to
 vendor. The map, runs, health checks, activity log and config tables are plain
 HTML, and every view is a URL you can paste to someone else.
 
+## The menu
+
+The bar has seven sections: Home, Map, Ask, Runs, Health, Export and Settings.
+A section with more than one page shows them in a strip under the bar:
+
+| Section | Pages |
+|---|---|
+| Map | Map, Search, Outline |
+| Ask | Recall, Agent demo |
+| Runs | Runs, Changes, Usage |
+| Settings | Settings, Access (admin only) |
+
+The Guide is the `?` beside your name. The sections and their pages are one
+table in `server/ui/__init__.py` (`SECTIONS`), which draws the bar, the strip
+and the current-page mark.
+
 ## Keyboard access
 
 Everything is reachable from the keyboard. The first Tab stops on a "Skip to
