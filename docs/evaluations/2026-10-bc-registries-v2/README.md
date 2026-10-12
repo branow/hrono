@@ -308,3 +308,54 @@ Turns 10.3 (code) and 11.2 (hrono); cost $2.78 and $3.21 for 20 runs each;
 
 On this benchmark, a Sonnet agent with the checkout gains nothing
 measurable from hrono, in facts or in turns.
+
+## Hard questions: what an engineer gets wrong
+
+`../2026-10-bc-registries-agents/harness/gen_hard.py`: one Opus agent per
+theme (inconsistency, authorization, impact, failure, legacy) wrote two
+questions whose answer depends on code the question's words do not lead to;
+an Opus verifier checked every fact; a code-only run calibrated them and the
+five it did worst on were kept (`data/hard5.json`). Both arms 30 turns, run
+twice; the hrono arm is told to grep the map like code.
+
+| question | code a | code b | hrono a | hrono b |
+|---|---|---|---|---|
+| staff-only fee waiver: where enforced | 0.29 | 0.64 | 0.71 | 0.21 |
+| can an unaffiliated user read a business's filings | 0.50 | 0.62 | 0.62 | 0.50 |
+| a second filing type held for staff review | 0.50 | 0.57 | 0.50 | 0.57 |
+| a payment-completed message that fails or repeats | 0.29 | 0.50 | 0.43 | 0.43 |
+| the old and new payment listeners | 0.44 | 0.50 | 0.56 | 0.50 |
+| mean | 0.49 | | 0.50 | |
+
+Contradicted facts 13 (code) and 10 (hrono); turns 13.8 and 15.7. The
+questions are hard (both arms miss half the facts), and the arms are level.
+Calibration flattered the code arm's difficulty: its second run scored
+higher on every question.
+
+Read case by case, with every missed fact looked up in the map:
+
+- **The agents barely read it.** In 6 of 10 hrono runs one grep, then code;
+  on two questions no brief was opened. A grep for the question's words
+  ("waive", "affiliat") reaches the code directly; the map does not use the
+  words a hard question turns on ("missing check", "open route").
+- **The hard part is not in the map.** It holds what each part does and
+  where a rule lives. It does not hold what a hard question asks: a check
+  that is missing or commented out, the condition a guard compares, what a
+  security lookup is cached by, whose token goes on an outbound call, what
+  is committed before a failure point, whether a failed publish is
+  recorded or only logged, which worker has no review branch, two copies of
+  an enum that drifted, and who produces what a listener consumes. Read
+  perfectly, the map would have added about one fact on two questions and
+  nothing on the authorization one.
+- **Some briefs mislead.** A test-suite brief says an endpoint returns
+  filings whose effective date is in the future; the code does the
+  opposite. "Business GET checks view permission" is false; "`check_auth()`
+  verifies account access" reads as a guarantee it is not. A brief that
+  omits a guard led an agent to claim there is none.
+- **One answer key is wrong**: the fee-waiver question's fact 6 (a non-staff
+  caller does get a refusal, `PaymentLineItem.create`), so some
+  "contradictions" there were correct answers.
+
+The tree, as briefs of what each cluster of code does, cannot answer
+the questions where agents make mistakes: those turn on absences,
+conditions and links between services, and the brief recipe drops all three.
