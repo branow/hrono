@@ -129,6 +129,7 @@ def demo_map(
         "_demo_map.html",
         {
             "graph": drawn,
+            "tree": tree,
             "visited": set(seen),
             "current": seen[-1] if seen else None,
         },
