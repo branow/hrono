@@ -85,6 +85,20 @@ each with a compact snapshot of what it returned. Ask one again after a fix and
 every passage is marked new, changed, moved from a rank, or the same, and the
 ones that dropped out are listed.
 
+## Demo
+
+Demo shows an agent answering from the tree, step by step, as the plugin
+would run it in a real session: the recall the hook attached, the prompt the
+model received, every map page and source file it opened, lit on the map
+beside it, and its answer. Follow-up questions continue the conversation.
+
+It runs on a text model already set up in Settings, picked by its connection
+(claude-code, anthropic, openai or openai-compatible), and reads the tree's
+kept export, so the tree must be exported first. Asking needs the writer role,
+and each call is recorded in Usage. The agent's two tools, `open_topic` and
+`open_source`, stand in for the file tools a real agent uses on the export
+folder and its own checkout; the page says so.
+
 ## Health
 
 Health lists each problem with its fix beside it. An admin can place a waiting

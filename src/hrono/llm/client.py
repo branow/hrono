@@ -118,21 +118,27 @@ class AnthropicClient:
         return _read(response)
 
     def _credential(self, model: dict[str, object]) -> tuple[str, str | None]:
-        name = model.get("connection")
-        if name is None:
-            raise LLMError("text model requires a connection")
-        with self._database.connect() as conn:
-            row = store.get(conn, "connections", str(name))
-        if row is None:
-            raise LLMError(f"unknown connection: {name}")
-        connection: dict[str, object] = json.loads(row["config"])
-        auth = connection.get("auth")
-        key_id = row["key_id"]
-        if not (isinstance(auth, dict) and auth.get("key") and key_id):
-            raise LLMError("connection has no api key")
-        key = self._cipher.decrypt(key_id, str(auth["key"]))
-        endpoint = connection.get("endpoint")
-        return key, str(endpoint).rstrip("/") if endpoint else None
+        return credential(self._database, self._cipher, model.get("connection"))
+
+
+def credential(
+    database: Database, cipher: Cipher, name: object
+) -> tuple[str, str | None]:
+    """The (api key, endpoint) an anthropic connection resolves to."""
+    if name is None:
+        raise LLMError("text model requires a connection")
+    with database.connect() as conn:
+        row = store.get(conn, "connections", str(name))
+    if row is None:
+        raise LLMError(f"unknown connection: {name}")
+    connection: dict[str, object] = json.loads(row["config"])
+    auth = connection.get("auth")
+    key_id = row["key_id"]
+    if not (isinstance(auth, dict) and auth.get("key") and key_id):
+        raise LLMError("connection has no api key")
+    key = cipher.decrypt(key_id, str(auth["key"]))
+    endpoint = connection.get("endpoint")
+    return key, str(endpoint).rstrip("/") if endpoint else None
 
 
 def _max_tokens(model: dict[str, object]) -> int:

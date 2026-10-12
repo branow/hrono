@@ -56,7 +56,7 @@ class OpenAIClient:
     ) -> None:
         self._database = database
         self._cipher = cipher
-        self._send = send if send is not None else _post
+        self._send = send if send is not None else post_json
         self._timeout = timeout
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
@@ -69,7 +69,7 @@ class OpenAIClient:
         messages.append({"role": "user", "content": request.content})
         payload = self._send(  # type: ignore[operator]
             api_root(base) + "/chat/completions",
-            _headers(key),
+            auth_headers(key),
             {
                 "model": str(request.model["model"]),
                 "messages": messages,
@@ -93,14 +93,14 @@ def embeddings(
 
     ``usage.prompt_tokens`` of each response goes to ``tally`` for the ledger.
     """
-    poster = send if send is not None else _post
+    poster = send if send is not None else post_json
     key, base = credential(database, cipher, model.get("connection"))
     name = str(model["model"])
 
     def encode(texts: list[str]) -> Sequence[Sequence[float]]:
         payload = poster(  # type: ignore[operator]
             api_root(base) + "/embeddings",
-            _headers(key),
+            auth_headers(key),
             {"model": name, "input": texts},
             timeout,
         )
@@ -140,7 +140,7 @@ def credential(
     return cipher.decrypt(int(key_id), str(auth["key"])), base
 
 
-def _post(
+def post_json(
     url: str, headers: dict[str, str], body: dict[str, object], timeout: float
 ) -> dict[str, object]:
     """One POST; any transport or status failure becomes one ``LLMError``."""
@@ -227,7 +227,7 @@ def _prompt_tokens(payload: dict[str, object]) -> int | None:
     return tokens if isinstance(tokens, int) else None
 
 
-def _headers(key: str | None) -> dict[str, str]:
+def auth_headers(key: str | None) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
