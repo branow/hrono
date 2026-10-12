@@ -7,8 +7,13 @@ import pytest
 
 from hrono.cluster.blend import (
     ALPHA,
+    FOLDER_DIMS,
+    FOLDER_WEIGHT,
+    TEXT_WEIGHT,
+    clustering_vector,
     combine,
     combined_vector,
+    folder_vector,
     path_body,
     register_path_bodies,
 )
@@ -141,7 +146,7 @@ def test_combined_vector_blends_stored_components(db: Database) -> None:
     with db.connect() as conn:
         combined = combined_vector(conn, content_hash(body), path, "emb")
     assert combined is not None
-    assert len(combined) == 8
+    assert len(combined) == 4 + FOLDER_DIMS  # text ++ hashed folders
 
 
 def test_combined_vector_is_none_when_a_component_is_missing(
@@ -154,3 +159,71 @@ def test_combined_vector_is_none_when_a_component_is_missing(
     # nothing embedded yet -> content vector missing
     with db.connect() as conn:
         assert combined_vector(conn, content_hash(body), "p.py", "emb") is None
+
+
+def test_clustering_weighs_text_and_folders_by_the_baked_weights() -> None:
+    t1, t2 = _unit([1, 2, 3, 4]), _unit([4, 3, 2, 1])
+    f1 = folder_vector("lear", "queue_services/entity-pay/worker.py")
+    f2 = folder_vector("lear", "queue_services/entity-filer/worker.py")
+    left = _dot(clustering_vector(t1, f1), clustering_vector(t2, f2))
+    right = TEXT_WEIGHT * _dot(t1, t2) + FOLDER_WEIGHT * _dot(f1, f2)
+    assert left == pytest.approx(right)
+
+
+def test_shared_leading_folders_weigh_by_one_over_their_depth() -> None:
+    # depths 1-4 shared of 5 and 5: sum 1/d over shared over the total
+    a = folder_vector("lear", "queue_services/entity-pay/src/worker.py")
+    b = folder_vector("lear", "queue_services/entity-pay/src/config.py")
+    shared = 1 + 1 / 2 + 1 / 3 + 1 / 4
+    total = shared + 1 / 5
+    assert _dot(a, b) == pytest.approx(shared / total, abs=0.02)
+
+
+def test_the_source_is_the_heaviest_folder() -> None:
+    here = folder_vector("lear", "legal-api/models/filing.py")
+    same_repo = folder_vector("lear", "colin-api/models/filing.py")
+    other_repo = folder_vector("sbc-pay", "legal-api/models/filing.py")
+    assert _dot(here, same_repo) > 0.3
+    assert abs(_dot(here, other_repo)) < 0.05  # every prefix differs
+
+
+def test_a_condensed_section_is_read_by_its_condensation(
+    db: Database,
+) -> None:
+    body = b"# MIT licence\nimport os\ndef pay(): ...\n"
+    condensed = "Applies a confirmed payment to its filing."
+    with db.connect() as conn, conn:
+        istore.upsert_content(conn, content_hash(body), body)
+        _register_model(conn)
+        registry_store.insert(
+            conn,
+            "models",
+            "condense",
+            json.dumps(
+                {
+                    "name": "condense",
+                    "kind": "text",
+                    "model": "m",
+                    "role": "condense",
+                }
+            ),
+            None,
+            "t",
+        )
+        conn.execute(
+            "INSERT INTO condensations(content_hash, model_name, text, "
+            "input_tokens, output_tokens, created_at) "
+            "VALUES (?, 'condense', ?, 1, 1, 'now')",
+            (content_hash(body), condensed),
+        )
+        istore.upsert_content(
+            conn, content_hash(condensed.encode()), condensed.encode()
+        )
+    embed(_job(), JobContext(db), encoder_for=_fake_encoder(4))
+    with db.connect() as conn:
+        combined = combined_vector(conn, content_hash(body), "pay.py", "emb")
+        text = vstore.get_vector(conn, content_hash(condensed.encode()), "emb")
+    assert combined is not None and text is not None
+    assert combined[:4] == pytest.approx(
+        [math.sqrt(TEXT_WEIGHT) * x for x in _unit(text)]
+    )

@@ -1,7 +1,7 @@
 """The ``maintain`` op: run the whole pipeline in order over a tree.
 
 One easy-button that drives the existing ops in dependency order — sync
--> split -> embed -> condense -> cluster -> brief
+-> split -> embed -> condense -> embed the condensations -> cluster -> brief
  -> recurse-to-root — so a fresh tree builds all the way to a
 single root. Stages run sequentially on the current jobs framework (no DAG
 scheduler): the maintain job runs each op in turn, and a stage that raises fails
@@ -112,6 +112,14 @@ def maintain(
     run.run(
         "condense",
         lambda: condense(_stage(tree, "condense", {}), context, client=client),
+    )
+    # clustering reads a section by its condensation's vector, so the
+    # condensations just written are embedded before it runs
+    run.run(
+        "embed-condensations",
+        lambda: embed(
+            _stage(tree, "embed", {}), context, encoder_for=encoder_for
+        ),
     )
     run.run(
         "cluster",

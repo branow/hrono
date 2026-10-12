@@ -346,7 +346,11 @@ def _park_unembedded(db: Database, count: int) -> None:
                 ordinal=0,
             )
             park(conn, TREE, section_id, batch=1)
-            condensations.upsert(conn, digest, "sonnet", "a plain gist.", 1, 1)
+            # clustering reads a section by its condensation, so each one
+            # carries the marker the planted encoder places by
+            condensations.upsert(
+                conn, digest, "sonnet", f"late arrival {i} gist.", 1, 1
+            )
 
 
 def test_settle_drains_chunks_its_own_embed_pass_made_placeable(

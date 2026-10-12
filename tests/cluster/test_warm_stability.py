@@ -162,7 +162,9 @@ def test_a_warm_rebuild_keeps_unchanged_sections_in_their_topic(
 
     with database.write() as conn:
         new_ids = [
-            add_planted_section(conn, "repo-b", i, vector)
+            # same repository: a section of another one has no folder in
+            # common with these topics and is rightly parked, not placed
+            add_planted_section(conn, "repo-a", PLANTED + i, vector)
             for i, vector in enumerate(added)
         ]
     _place(database, new_ids)

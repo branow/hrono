@@ -3,7 +3,7 @@ from collections.abc import Iterator
 import pytest
 
 from hrono.cluster import store
-from hrono.cluster.blend import path_body, register_path_bodies
+from hrono.cluster.blend import FOLDER_DIMS, path_body, register_path_bodies
 from hrono.db.database import Database
 from hrono.embed import store as vstore
 from hrono.ingest import store as istore
@@ -51,17 +51,17 @@ def test_combined_vectors_returned_for_fully_embedded_sections(
     assert len(pairs) == 1
     returned_id, combined = pairs[0]
     assert returned_id == section_id
-    assert len(combined) == 8  # 2x model dims (content ++ path)
+    assert len(combined) == 4 + FOLDER_DIMS  # text ++ hashed folders
 
 
-def test_sections_missing_a_component_are_skipped(db: Database) -> None:
+def test_sections_with_no_text_vector_are_skipped(db: Database) -> None:
     body = b"x = 1\n"
     path = "src/x.py"
     with db.connect() as conn, conn:
         _add_section(conn, path, body, 0)
         register_path_bodies(conn, [path])
-        # content embedded, path NOT embedded -> no combined vector
-        _embed(conn, content_hash(body), [1.0, 0.0, 0.0, 0.0])
+        # the path is embedded, the content is not -> no clustering vector
+        _embed(conn, content_hash(path_body(path)), [1.0, 0.0, 0.0, 0.0])
     with db.connect() as conn:
         assert store.section_combined_vectors(conn, MODEL) == ()
 

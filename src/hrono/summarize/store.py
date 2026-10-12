@@ -20,6 +20,8 @@ import sqlite3
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
+from hrono.ingest.identity import content_hash as digest
+from hrono.ingest.store import upsert_content
 from hrono.summarize.resolve import model_fingerprint, template_hash
 from hrono.summarize.shape import talks_back
 
@@ -222,12 +224,18 @@ def upsert(
     input_tokens: int,
     output_tokens: int,
 ) -> None:
-    """Store one condensation; a repeat (hash, model) key is a no-op."""
+    """Store one condensation; a repeat (hash, model) key is a no-op.
+
+    Its text is also stored as a content body, so the embed op vectorises it
+    once: clustering reads a section by its condensation's vector.
+    """
     conn.execute(
         "INSERT OR IGNORE INTO condensations(content_hash, model_name, text, "
         "input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (content_hash, model_name, text, input_tokens, output_tokens, _now()),
     )
+    body = text.encode("utf-8")
+    upsert_content(conn, digest(body), body)
 
 
 def get(

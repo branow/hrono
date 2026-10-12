@@ -348,7 +348,9 @@ def test_an_all_noise_build_says_it_collected(tmp_path: object) -> None:
     # and the run must say so, or a large corpus folded into one topic reads
     # exactly like one that clustered.
     database = Database.at(tmp_path / "noise.db")
-    bodies = structureless(30)
+    # seed 1: no core either side of the float32 store (seed 0 has one once
+    # its vectors are rounded, a UMAP knife edge)
+    bodies = structureless(30, seed=1)
     paths = structureless(30, seed=3)
     try:
         with database.connect() as conn, conn:
@@ -364,7 +366,9 @@ def test_an_all_noise_build_says_it_collected(tmp_path: object) -> None:
                     vstore.upsert_vector(
                         conn, content_hash(text), MODEL, point.tolist()
                     )
-                add_embedded_section(conn, path, body, i)
+                # one source each: no folder in common, so the folder view
+                # adds no structure to the structureless text
+                add_embedded_section(conn, path, body, i, source=f"r{i}")
             combined = cstore.section_combined_vectors(conn, MODEL)
         # the real clusterer finds no core in what the op will read
         assert set(core_labels([v for _, v in combined])) == {-1}

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from hrono.cluster import placement
 from hrono.cluster.build import ClusterResult
 from hrono.cluster.incubator import pending
 from hrono.cluster.recipe import MIN_POINTS
@@ -372,12 +373,16 @@ def test_update_drains_a_full_pool_in_the_same_run(
 def test_update_parks_only_the_twin_that_fits_nowhere(
     built: tuple[Database, Path],
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # duplicate content, different paths: one content hash but two sections,
-    # and the ALPHA-0.5 path blend gives them different combined vectors, so
-    # g9.txt clears TAU while alien/g9.txt parks. The pool is keyed by SECTION
-    # precisely so it can hold one without claiming the other is homeless, and
-    # the run's home pass forces only the parked twin.
+    # and the folder view gives them different clustering vectors: g9.txt
+    # sits with the root files (0.908), alien/g9.txt one folder away (0.881).
+    # Identical text in one repository clears the real TAU either way, so the
+    # bar is set between the two. The pool is keyed by SECTION precisely so
+    # it can hold one without claiming the other is homeless, and the run's
+    # home pass forces only the parked twin.
+    monkeypatch.setattr(placement, "TAU", 0.895)
     db, origin = built
     add_twins(origin, "g9.txt")
     update(
