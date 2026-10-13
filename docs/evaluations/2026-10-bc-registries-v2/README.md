@@ -430,3 +430,37 @@ about 10% more.
 Every arm scores near 0.5, and most facts get half credit in every run: the
 answers name the right components and miss the exact condition or the
 second service. The set measures that last step, which neither arm takes.
+
+## Recall over the inline limit; Opus, Sonnet and Haiku
+
+Claude Code shows a hook's added context inline only up to 10,000
+characters (tested: 9,900 inline, 10,100 not). Above it the agent gets a file
+path and a 2 KB preview. The v3f arm attached about 23 KB, so its agents saw
+the head of one page unless they opened the file: Sonnet did in 1 of 15
+runs, Opus in 4 of 5. The plugin now caps recall at 10,000 (`f55482d`); the
+`v3c` arm is v3f under that cap. The five original hard questions, one run
+each (`<arm>@<model>+<turns>` in `run_arms.py`):
+
+| agent | arm | coverage | errors | turns | cost |
+|---|---|---|---|---|---|
+| Opus | code only | 0.67 | 4 | 17.8 | $2.53 |
+| Opus | hrono, 23 KB recall in a file | 0.58 | 4 | 14.8 | $2.18 |
+| Opus | hrono, capped recall | 0.54 | 4 | 16.2 | $2.27 |
+| Sonnet | code only | 0.51 | 3 | 12.6 | $1.11 |
+| Sonnet | hrono, capped recall | 0.47 | 6 | 12.4 | $1.16 |
+| Haiku, 30 turns | code only | 0.04 (4 unanswered) | 1 | 30.6 | $1.09 |
+| Haiku, 30 turns | hrono, 23 KB recall | 0.17 (2 unanswered) | 5 | 25.6 | $0.98 |
+| Haiku, 100 turns | code only | 0.25 | 11 | 42.8 | $1.58 |
+| Haiku, 100 turns | hrono, capped recall | 0.27 | 6 | 25.4 | $0.92 |
+
+- **The map helps the weak agent work, not answer.** Haiku with the map
+  needs 40% fewer turns, costs 42% less and makes half the errors, for the
+  same coverage.
+- **The map costs the strong agent coverage.** Opus loses 0.09-0.13 with it.
+  Case (authorization-1, fact 7): code-only Opus read pay-api's `check_auth`
+  and found it checks the caller's own account, never the invoice's. With
+  the map, Opus wrote "the payment service invoice reads do check
+  affiliation": the pay-api page says "`Invoice.find_by_id` runs
+  `check_auth`", and the agent took the named check for a guarantee and did
+  not read it. Hard questions turn on exactly such checks, so a page that
+  names a check without its condition steers the agent away from the flaw.
