@@ -23,9 +23,12 @@ def system(tree: str) -> str:
         "overview down to the files. Read it with your tools: "
         'open_topic("root.md") first, then the child whose summary fits the '
         "question, down to a leaf; there, open_source the files listed under "
-        "## Sources when you need the code itself. Relevant passages may be "
-        "attached to a question as hrono recall: use them when they answer it "
-        "and walk the map when they do not. Answer briefly and name the files "
+        "## Sources when you need the code itself. Passages may be attached "
+        "to a question as hrono recall: they are a lead on where to look, not "
+        "the answer. Before answering, walk the map to the topic the question "
+        "belongs to and open the source files it rests on, even when the "
+        "recall looks sufficient; never say the information is missing "
+        "without having walked the map. Answer briefly and name the files "
         "your answer rests on."
     )
 
