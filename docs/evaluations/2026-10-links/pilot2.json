@@ -1,0 +1,669 @@
+[
+ {
+  "id": 37132,
+  "source": "lear",
+  "path": "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "structured": {
+   "condensed": "Determines fee codes and attributes for a business filing based on filing type, legal entity type, and flags. Extracts priority, fee waiver, and filing name from the input JSON; retrieves legal type from the name request (for new business filings) or business record. Branches on filing type: correction filings append the correction code; voluntary dissolution appends dissolution code plus special resolution and affidavit codes for cooperatives, and checks futureEffective; administrative dissolution appends hardcoded 'NOFEE'; courtOrder, registrarsNotation, registrarsOrder, putBackOn, and adminFreeze each append their single code. All other filings iterate through filing keys, optionally applying a subtype lookup, and for changeOfDirectors, determine if free based on whether all director actions are only nameChanged or addressChanged, selecting the free or standard code accordingly; suppress priority flag for changeOfDirectors and changeOfAddress except when parent filing is not annualReport; append futureEffective for incorporation, amalgamation, continuationIn, and alteration. Returns list of filing type objects with filingTypeCode, priority, waiveFees, and optionally futureEffective or filingDescription. GOTCHA: no checks validate that filing_json contains expected keys before access, risking KeyError; no validation that returned filing_type_code exists or is non-null before appending.",
+   "references": [
+    {
+     "target": "Business.legal_type",
+     "direction": "depends",
+     "what": "Reads legal entity type from business record for non-new-business filings."
+    },
+    {
+     "target": "Business.LegalTypes.COOP.value",
+     "direction": "depends",
+     "what": "Constant checked to conditionally append special resolution and affidavit codes for cooperative voluntary dissolutions."
+    },
+    {
+     "target": "Filing.FILINGS",
+     "direction": "depends",
+     "what": "Lookup table with nested structure keyed by filing type, dissolution type, subtype, and legal type to retrieve fee codes."
+    },
+    {
+     "target": "Filing.get_filings_sub_type()",
+     "direction": "sends",
+     "what": "Called with filing key and JSON to retrieve optional subtype for code lookup."
+    },
+    {
+     "target": "ListFilingResource.is_future_effective_filing()",
+     "direction": "sends",
+     "what": "Called with filing JSON to determine futureEffective flag for dissolution, incorporation, amalgamation, continuationIn, and alteration filings."
+    }
+   ]
+  },
+  "cost": 0.009446,
+  "seconds": 8.146,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 6056,
+    "outputTokens": 678,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.009446,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 42294,
+  "source": "sbc-pay",
+  "path": "pay-api/src/pay_api/resources/v1/invoice.py",
+  "structured": {
+   "condensed": "Flask HTTP resource for payment request and invoice endpoints: GET, POST, DELETE, PATCH and PDF report generation.\n\nEntry points: GET /payment-requests (requires Role.SYSTEM) queries InvoiceService.find_invoices(businessIdentifier query param); POST /payment-requests (requires auth) validates request against 'payment_request' schema, checks auth with check_auth(businessIdentifier, corpType from request, contains_role=MAKE_PAYMENT), then calls PaymentService.create_invoice(request_json, authorization); GET /payment-requests/{invoice_id} (requires auth) calls InvoiceService.find_by_id(invoice_id).asdict(include_dynamic_fields=True); DELETE /payment-requests/{invoice_id} (requires auth) calls PaymentService.accept_delete(invoice_id) and returns 202 Accepted; PATCH /payment-requests/{invoice_id} (requires auth) validates request against 'payment_info' schema, reads applyCredit query param ('false' default), calls PaymentService.update_invoice(invoice_id, request_json, is_apply_credit); POST /payment-requests/{invoice_id}/reports (requires auth) calls InvoiceService.create_invoice_pdf(invoice_id), returns PDF with Content-Disposition attachment header.\n\nValidation errors (format or schema) return Error.INVALID_REQUEST with serialized errors. BusinessException and ServiceUnavailableException caught and returned via exception.response(). All endpoints decorated with @cross_origin. GET /payment-requests logs <get_invoices and >get_invoices; others log entry/exit with context. POST /payment-requests logs full request_json. PATCH logs invoice_id and request_json. DELETE logs <delete_invoice and >delete_invoice. All return jsonify(response) and status code.\n\nGOTCHA: GET /payment-requests checks Role.SYSTEM but POST, GET/{id}, DELETE, PATCH all use requires_auth with no role check\u2014permission enforcement relies on check_auth for POST only; other endpoints show no check.",
+   "references": [
+    {
+     "target": "InvoiceService.find_invoices",
+     "direction": "sends",
+     "what": "businessIdentifier query parameter; returns invoice records."
+    },
+    {
+     "target": "schema_utils.validate",
+     "direction": "sends",
+     "what": "Request JSON and schema name ('payment_request' or 'payment_info'); returns validity boolean and error list."
+    },
+    {
+     "target": "check_auth",
+     "direction": "sends",
+     "what": "businessIdentifier, corpType from request, and contains_role=MAKE_PAYMENT constant; returns authorization object."
+    },
+    {
+     "target": "PaymentService.create_invoice",
+     "direction": "sends",
+     "what": "Request JSON and authorization object; returns created invoice response."
+    },
+    {
+     "target": "InvoiceService.find_by_id",
+     "direction": "sends",
+     "what": "invoice_id integer; returns invoice with dynamic fields as dictionary."
+    },
+    {
+     "target": "PaymentService.accept_delete",
+     "direction": "sends",
+     "what": "invoice_id integer; soft deletes the invoice."
+    },
+    {
+     "target": "PaymentService.update_invoice",
+     "direction": "sends",
+     "what": "invoice_id, request JSON, is_apply_credit boolean; returns updated invoice response."
+    },
+    {
+     "target": "InvoiceService.create_invoice_pdf",
+     "direction": "sends",
+     "what": "invoice_id integer; returns PDF bytes and file name for attachment."
+    },
+    {
+     "target": "Error.INVALID_REQUEST",
+     "direction": "depends",
+     "what": "Error constant used to format validation error responses."
+    },
+    {
+     "target": "MAKE_PAYMENT",
+     "direction": "depends",
+     "what": "Constant specifying required role for invoice creation authorization check."
+    }
+   ]
+  },
+  "cost": 0.011908,
+  "seconds": 10.957,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 6708,
+    "outputTokens": 1040,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.011908,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 42292,
+  "source": "sbc-pay",
+  "path": "pay-api/src/pay_api/resources/v1/fee.py",
+  "structured": {
+   "condensed": "Flask REST endpoint that calculates filing fees for a business entity based on corporate and filing type. Entry point: GET /{corp_type}/{filing_type_code} callable only by roles VIEWER, EDITOR, or STAFF (checked via @_jwt.has_one_of_roles). Accepts query parameters: date (defaults to now in DT_SHORT_FORMAT), priority (boolean, default False), futureEffective (boolean, default False), jurisdiction (default DEFAULT_JURISDICTION), quantity (integer, default 1), and waiveFees (boolean, default False, only accessible when caller has STAFF role, checked via _jwt.validate_roles). Calls FeeSchedule.find_by_corp_type_and_filing_type with all parameters including waive_fees flag; returns fee dict via .asdict() as JSON with HTTP 200 on success. On BusinessException, returns exception.response(). GOTCHA: waive_fees only restricted to STAFF in request parsing, but no re-check at FeeSchedule service boundary; permission could be bypassed if FeeSchedule is called elsewhere without the same guard.",
+   "references": [
+    {
+     "target": "FeeSchedule.find_by_corp_type_and_filing_type",
+     "direction": "sends",
+     "what": "Called with corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, quantity; returns fee record."
+    },
+    {
+     "target": "Role.VIEWER, Role.EDITOR, Role.STAFF",
+     "direction": "depends",
+     "what": "Enum values checked to enforce access control on GET endpoint; only these roles permitted."
+    },
+    {
+     "target": "BusinessException",
+     "direction": "receives",
+     "what": "Caught from FeeSchedule call; .response() method invoked to return error to client."
+    }
+   ]
+  },
+  "cost": 0.007461000000000001,
+  "seconds": 6.168,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 4836,
+    "outputTokens": 525,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.007461000000000001,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 34577,
+  "source": "business-filings-ui",
+  "path": "src/mixins/filing-mixin.ts",
+  "structured": {
+   "condensed": "Mixin providing utilities for filing operations: adds/removes filing codes and flags, searches for codes, and builds filing bodies for corrections, dissolutions, and restorations.\n\n**In:** Action (add/remove), filing code (FilingCodes enum, optional), priority flag (boolean, optional), waive fees flag (boolean, optional). Main flow: updateFilingData filters out existing code if specified, re-adds it conditionally with flags, or applies flag changes to all codes; hasFilingCode searches filingData array for matching filingTypeCode; buildCorrectionFiling, buildDissolutionFiling, buildRestorationFiling format filing bodies from store getters (getCurrentDate, getIdentifier, entityName, getLegalType, getFoundingDate, getBusinessAddress, getRegisteredOfficeAddress, getStartDate). **Out:** setFilingData action updates root store; builder methods return CorrectionFilingIF, DissolutionFilingIF, RestorationFilingIF objects. **Decisions:** updateFilingData branches on filingCode presence (code-specific vs. all-codes operation); buildDissolutionFiling switches on getLegalType (SOLE_PROP or PARTNERSHIP use getBusinessAddress || null for custodialOffice, others use getRegisteredOfficeAddress); buildRestorationFiling always uses FilingSubTypes.DISSOLUTION_VOLUNTARY. Entry points (updateFilingData, hasFilingCode, build* methods) are public and mixed into components; this chunk shows no authorization check. GOTCHA: buildDissolutionFiling reads getBusinessAddress into custodialOffice but only for SOLE_PROP and PARTNERSHIP\u2014comment says \"FUTURE: apply type dynamically when we have dissolution variations\" suggesting incomplete enum coverage.",
+   "references": [
+    {
+     "target": "useRootStore",
+     "direction": "depends",
+     "what": "Provides getters for getCurrentDate, filingData, getBusinessAddress, getRegisteredOfficeAddress and action setFilingData; updateFilingData calls setFilingData(myFilingData) to persist filing code and flag changes."
+    },
+    {
+     "target": "useBusinessStore",
+     "direction": "depends",
+     "what": "Provides getters for entityName, getFoundingDate, getIdentifier, getLegalType, getStartDate used to populate filing body objects."
+    },
+    {
+     "target": "DateMixin",
+     "direction": "depends",
+     "what": "Parent class providing dateToYyyyMmDd and dateToApi date conversion methods called by correction and dissolution builders."
+    }
+   ]
+  },
+  "cost": 0.012328,
+  "seconds": 11.097,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 6988,
+    "outputTokens": 1068,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.012328,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 34650,
+  "source": "business-filings-ui",
+  "path": "src/views/AnnualReport.vue",
+  "structured": {
+   "condensed": "Initializes an annual report filing form for a business entity and manages changes to it; a Vue component lifecycle method that handles the assembly of the form with original data and handles subsequent user modifications.\n\nEntry point: `mounted()` \u2014 entry point on component initialization with no check shown; validates required tombstone data (getIdentifier, ARFilingYear, filingId) and entity-specific dates (arMinDate/arMaxDate for coops, nextARDate for base companies), redirecting to dashboard if missing. If filingId > 0, calls `fetchDraftFiling()` to resume a draft; otherwise fetches original office addresses and directors. Sets up change handlers for office addresses, directors (paid and free change codes), and AGM date validity; for base companies, immediately adds ANNUAL_REPORT_BC filing code using existing Priority and Waive Fees flags.\n\n`fetchDraftFiling()` \u2014 called on resume; fetches filing via LegalServices at path `businesses/{getIdentifier}/filings/{filingId}`, verifies header (type ANNUAL_REPORT, status DRAFT), business identifier and legal name match, then restores certifiedBy, staff payment data (routes: FAS/BCOL/NO_FEE/NONE), AGM date, AGM extension flag, and optional change-of-directors and change-of-address sections; throws errors for missing or mismatched data; logs errors and shows resumeErrorDialog on failure with no retry.\n\nEvent handlers (`officeModifiedEventHandler`, `directorsPaidChange`, `directorsFreeChange`, `onAgmDateChange`, `onAgmExtensionChange`, `onNoAgmChange`, `onAgmDateValidChange`) \u2014 called by child components; update filing data (add or remove filing codes ADDRESS_CHANGE_OT, DIRECTOR_CHANGE_OT, FREE_DIRECTOR_CHANGE_OT, ANNUAL_REPORT_OT) and set haveChanges flag once dataLoaded is true.\n\n`onClickSave()` \u2014 called when user clicks Save; prevents double-save via busySaving flag, calls `saveFiling(true)`, catches errors and assigns SaveErrorReasons.SAVE.\n\nGOTCHA: No checks shown on mounted() entry point. Change-of-directors and change-of-address restoration from draft throws errors only if present but structurally invalid; if absent, silently leaves existing data intact.",
+   "references": [
+    {
+     "target": "LegalServices.fetchFiling()",
+     "direction": "sends",
+     "what": "Fetches draft filing at path `businesses/{getIdentifier}/filings/{filingId}` with no credentials shown; expects response containing header, business, annualReport objects, and optional changeOfDirectors and changeOfAddress; no retry on failure."
+    },
+    {
+     "target": "this.$refs.officeAddressesComponent.getOrigAddresses()",
+     "direction": "sends",
+     "what": "Called with asOfDate and isEmptyAddresses boolean; fetches original office addresses and updates working data; called when dataLoaded is true."
+    },
+    {
+     "target": "this.$refs.directorsComponent.getOrigDirectors()",
+     "direction": "sends",
+     "what": "Called with asOfDate and isEmpty boolean; fetches original directors and updates working data; called when dataLoaded is true."
+    },
+    {
+     "target": "updateFilingData()",
+     "direction": "sends",
+     "what": "Updates filing data by adding or removing filing codes (ANNUAL_REPORT_BC, ADDRESS_CHANGE_OT, DIRECTOR_CHANGE_OT, FREE_DIRECTOR_CHANGE_OT, ANNUAL_REPORT_OT) with Priority and Waive Fees flags derived from staffPaymentData."
+    },
+    {
+     "target": "saveFiling()",
+     "direction": "sends",
+     "what": "Called with boolean true argument; saves draft filing; catches error and extracts filing from error.response.data.filing on failure; no retry."
+    },
+    {
+     "target": "goToDashboard()",
+     "direction": "sends",
+     "what": "Called with boolean true; redirects to dashboard when required tombstone or entity-specific data is missing."
+    }
+   ]
+  },
+  "cost": 0.021797999999999998,
+  "seconds": 16.671,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 4452,
+    "outputTokens": 1618,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 4628,
+    "webSearchRequests": 0,
+    "costUSD": 0.021797999999999998,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 38766,
+  "source": "lear",
+  "path": "queue_services/entity-filer/src/entity_filer/worker.py",
+  "structured": {
+   "condensed": "This module contains the worker that processes business filing messages from NATS Streaming; the entry point is cb_subscription_handler (not shown in this chunk).\n\n**Inputs:** Filing message from NATS queue containing filing_json with filing type keys.\n\n**Outputs:** Publishing to NATS (async publish_event) and GCP Queue (publish_gcp_queue_event), and optional email to MRAS via publish_email_message.\n\n**get_filing_types** extracts keys from legal_filings['filing'] where Filing.FILINGS holds a value; returns list of filing type strings.\n\n**publish_event (async):** Publishes a CloudEvent to qsm.service on subject from ENTITY_EVENT_PUBLISH_OPTIONS['subject']. Payload includes specversion '1.x-wip', type 'bc.registry.business.{filing_type}', source (LEGAL_API_URL/business/{identifier}/filing/{id}), filing header with filingId and effectiveDate, business identifier, and legalFilings list. Adds tempidentifier if filing.temp_reg exists. This chunk shows no check who may call it. On any exception: captured to Sentry with filing.id, logged at error level, exception swallowed (not re-raised).\n\n**publish_gcp_queue_event:** Publishes a SimpleCloudEvent to gcp_queue on subject from BUSINESS_EVENTS_TOPIC, with identical data structure and source as NATS version. On any exception: captured to Sentry with filing.id, logged at error level, exception swallowed.\n\n**publish_mras_email (async):** If filing.filing_type is AMALGAMATIONAPPLICATION, CONTINUATIONIN, or INCORPORATIONAPPLICATION, publishes email message via publish_email_message to qsm on EMAIL_PUBLISH_OPTIONS['subject'] with subject 'mras'. On exception: captured to Sentry with filing.id and error, exception swallowed.\n\nGOTCHA: All exceptions in publish_event, publish_gcp_queue_event, and publish_mras_email are caught and only logged/captured to Sentry; failures do not fail the filing or retry. GOTCHA: publish_mras_email only checks three specific filing types; other filing types silently skip email publication with no guard or log.",
+   "references": [
+    {
+     "target": "NATS Streaming",
+     "direction": "receives",
+     "what": "Filing message from queue; cb_subscription_handler entry point processes messages one at a time per NATS Streaming constraint."
+    },
+    {
+     "target": "ENTITY_EVENT_PUBLISH_OPTIONS['subject'] (NATS)",
+     "direction": "sends",
+     "what": "CloudEvent with type bc.registry.business.{filing_type}, payload containing filing header (filingId, effectiveDate), business identifier, and legalFilings list; no credential shown."
+    },
+    {
+     "target": "BUSINESS_EVENTS_TOPIC (GCP Queue)",
+     "direction": "sends",
+     "what": "SimpleCloudEvent with identical data structure to NATS version (filing header, business identifier, legalFilings); no credential shown."
+    },
+    {
+     "target": "EMAIL_PUBLISH_OPTIONS['subject'] (NATS emailer)",
+     "direction": "sends",
+     "what": "Email message for MRAS topic only when filing type is AMALGAMATIONAPPLICATION, CONTINUATIONIN, or INCORPORATIONAPPLICATION; sent via publish_email_message with subject 'mras'."
+    },
+    {
+     "target": "legal_api.models.Filing",
+     "direction": "depends",
+     "what": "Accesses filing.filing_type, filing.filing_json, filing.effective_date, filing.id, filing.temp_reg."
+    },
+    {
+     "target": "legal_api.models.Business",
+     "direction": "depends",
+     "what": "Accesses business.identifier."
+    },
+    {
+     "target": "entity_queue_common.messages.publish_email_message",
+     "direction": "depends",
+     "what": "External function called with qsm, subject, filing object, and 'mras' topic string."
+    },
+    {
+     "target": "Sentry",
+     "direction": "sends",
+     "what": "Captures error messages on exception in publish_event, publish_gcp_queue_event, publish_mras_email; level 'error'."
+    },
+    {
+     "target": "Filing.FILINGS",
+     "direction": "depends",
+     "what": "Dictionary used to validate filing type keys in get_filing_types."
+    },
+    {
+     "target": "LEGAL_API_URL (config)",
+     "direction": "depends",
+     "what": "Base URL for building source field in event payload."
+    }
+   ]
+  },
+  "cost": 0.013458,
+  "seconds": 13.312,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 7278,
+    "outputTokens": 1236,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.013458,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 42541,
+  "source": "sbc-pay",
+  "path": "pay-api/tests/unit/api/test_fee.py",
+  "structured": {
+   "condensed": "This is a test fixture and test case for account fee settings retrieval and modification via API endpoints.\n\n**Test flow:** Creates an account with SYSTEM role, sets account fees with MANAGE_ACCOUNTS role specifying service fee code TRF02 (1.0) and `applyFilingFees: False`, retrieves fees via GET `/api/v1/fees/BEN/BCANN` with EDITOR role and Account-Id header, asserts response code 200, validates against 'fees' schema, and checks `filingFees == 0` and `serviceFees == 1.0`. Then updates fees via PUT `/api/v1/accounts/{account_id}/fees/BUSINESS` with MANAGE_ACCOUNTS role to `applyFilingFees: True` and service fee code TRF01 (1.5), retrieves fees again, and asserts `filingFees > 0` and `serviceFees == 1.5`.\n\n**Factories:** `factory_filing_type_model` creates and saves FilingType with code and description ('TEST' default); `factory_fee_model` creates and saves FeeCode with code and Decimal amount; `factory_corp_type_model` creates and saves CorpType with code and description; `factory_fee_schedule_model` creates and saves FeeSchedule linking filing_type, corp_type, and fee_code with optional service_fee_code and date range (fee_end_date defaults None).\n\n**Entry points:** Test called by test runner; factories callable by other tests. Test shows no permission checks beyond role inclusion in JWT claims.\n\nGOTCHA: Test asserts response code and schema validation but does not verify the account creation or fee POST requests succeeded before proceeding.",
+   "references": [
+    {
+     "target": "POST /api/v1/accounts",
+     "direction": "sends",
+     "what": "Creates account with payload from get_gov_account_payload(), authorized by JWT with Role.SYSTEM claim, returns accountId in response."
+    },
+    {
+     "target": "POST /api/v1/accounts/{account_id}/fees",
+     "direction": "sends",
+     "what": "Sets account fees with payload containing accountFees array with applyFilingFees, serviceFeeCode, and product, authorized by JWT with Role.MANAGE_ACCOUNTS claim."
+    },
+    {
+     "target": "GET /api/v1/fees/BEN/BCANN",
+     "direction": "sends",
+     "what": "Retrieves fees for filing type BEN and corp type BCANN with Account-Id header, authorized by JWT with Role.EDITOR claim, returns filingFees and serviceFees."
+    },
+    {
+     "target": "PUT /api/v1/accounts/{account_id}/fees/BUSINESS",
+     "direction": "sends",
+     "what": "Updates account fees with payload containing applyFilingFees, serviceFeeCode, and product, authorized by JWT with Role.MANAGE_ACCOUNTS claim."
+    },
+    {
+     "target": "schema_utils.validate",
+     "direction": "depends",
+     "what": "Validates response JSON against 'fees' schema, returns tuple with boolean result."
+    },
+    {
+     "target": "FilingType model",
+     "direction": "depends",
+     "what": "Database model for filing types with code and description fields; factory saves instances."
+    },
+    {
+     "target": "FeeCode model",
+     "direction": "depends",
+     "what": "Database model for fee codes with code and Decimal amount; factory saves instances."
+    },
+    {
+     "target": "CorpType model",
+     "direction": "depends",
+     "what": "Database model for corporation types with code and description; factory saves instances."
+    },
+    {
+     "target": "FeeSchedule model",
+     "direction": "depends",
+     "what": "Database model linking filing_type_code, corp_type_code, fee_code, date range, and optional service_fee_code; factory saves instances."
+    }
+   ]
+  },
+  "cost": 0.012988000000000001,
+  "seconds": 13.034,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 5818,
+    "outputTokens": 1434,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.012988000000000001,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 41715,
+  "source": "sbc-pay",
+  "path": "docs/docs/architecture/FAS_Intgeration.md",
+  "structured": {
+   "condensed": "Documentation of FAS-to-CFS API integration points for payment processing. When a routing slip is created, FAS calls CFS endpoints `/parties`, `/accs`, `/sites`, and `/rcpts` to set up a customer entity, account named BCR, a site (with hard-coded values due to no address provided), and a receipt numbered from the routing slip. On invoice creation, FAS calls `/invs` to create an invoice against the site, then `/rcpts/apply` to apply the receipt. On full invoice cancellation, FAS calls `/rcpts/unapply` then `/invs/adjs` to zero the invoice. On partial cancellation, FAS unapplies, adjusts to partial amount, then reapplies. For refund approval, FAS calls `/rcpts/adjs` with an activity_name to move funds to refund revenue. For write-offs under $10, FAS calls `/rcpts/adjs` with activity_name to move to write-off revenue. When a cheque bounces, FAS calls `/rcpts/reverse` to unapply all invoices, then `/invs` to create an NSF fee invoice. When linking routing slips, FAS reverses the child receipt and creates a new receipt on the parent. GOTCHA: endpoints `/rcpts/adjs` and `/rcpts/reverse` are marked with question marks indicating uncertainty. GOTCHA: site creation uses hard-coded values due to missing address data. No permission checks, credentials, payload shapes, error handling, or retry logic documented.",
+   "references": [
+    {
+     "target": "CFS_API /parties",
+     "direction": "sends",
+     "what": "Creates customer entity; this chunk shows no credential mechanism or payload shape details."
+    },
+    {
+     "target": "CFS_API /accs",
+     "direction": "sends",
+     "what": "Creates account with hard-coded name BCR; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /sites",
+     "direction": "sends",
+     "what": "Creates site with hard-coded values because no address is provided; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /rcpts",
+     "direction": "sends",
+     "what": "Creates receipt numbered from routing slip; called on creation, reversal, and linking; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /invs",
+     "direction": "sends",
+     "what": "Creates invoice against a site; called on transaction creation and for NSF fees; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /rcpts/apply",
+     "direction": "sends",
+     "what": "Applies a receipt to an invoice; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /rcpts/unapply",
+     "direction": "sends",
+     "what": "Unapplies a receipt from an invoice; called on full and partial cancellation; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /invs/adjs",
+     "direction": "sends",
+     "what": "Adjusts invoice to zero (full cancellation) or partial amount (partial cancellation); no check or credential shown."
+    },
+    {
+     "target": "CFS_API /rcpts/adjs",
+     "direction": "sends",
+     "what": "Adjusts receipt with activity_name to move funds to refund or write-off revenue account; endpoint marked uncertain; no check or credential shown."
+    },
+    {
+     "target": "CFS_API /rcpts/reverse",
+     "direction": "sends",
+     "what": "Reverses receipt and unapplies all invoices; called on cheque bounce and routing slip linking; endpoint marked uncertain; no check or credential shown."
+    }
+   ]
+  },
+  "cost": 0.012530999999999999,
+  "seconds": 12.71,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 5606,
+    "outputTokens": 1385,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.012530999999999999,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 40533,
+  "source": "sbc-auth",
+  "path": "docs/build-deploy.md",
+  "structured": {
+   "condensed": "Documentation on deploying authentication API and web UI components to OpenShift, including database setup, build configuration, and pipeline creation.\n\n**Setup and Configuration:**\nObjects use labels (app, app-group, template) for selection; commands query or delete by label. Secrets and configmaps must not be embedded in templates; they are created separately with literal values (username, password) via `oc create secret` and applied with `--dry-run -o json | oc apply -f -`. Existing secrets are extended via `jq` merge.\n\n**API Deployment Flow:**\nLogin to OpenShift, switch to dev namespace (1rdehl-dev), deploy PostgreSQL from `postgresql-deploy.json` with TAG_NAME=dev, then manually create a tester superuser role in the postgres pod. Process `auth-api-pre-deploy.json` to create configmap and secrets (requires manual value replacement after). Process `auth-api-deploy.json` with NAME=auth-api, TAG_NAME=dev, REPLICAS=1, and JAEGER_COLLECTOR=--collector.host-port=jaeger-collector.d7eovc-dev.svc:14267 to create DeployConfig, Service, and Route.\n\n**API Build Flow:**\nSwitch to tools namespace (1rdehl-tools). Process `auth-api-build.json` with NAME=auth-api, GIT_REPO_URL=https://github.com/bcgov/sbc-auth.git, GIT_REF=development. Process `auth-api-pipeline.json` with those parameters plus TAG_NAME=dev, WEBHOOK=github-auth-api-dev, and JENKINS_FILE=./jenkins/dev.groovy.\n\n**Web Deployment Flow:**\nIn dev namespace, process `auth-web-pre-deploy.json` with NAME=auth-web, TAG_NAME=dev (manual secret replacement). Process `auth-web-deploy.json` with NAME=auth-web, NAME_RUNTIME=auth-web-runtime, TAG_NAME=dev, REPLICAS=1.\n\n**Web Build Flow:**\nIn tools namespace, process `auth-web-build.json` with NAME=auth-web, GIT_REPO_URL=https://github.com/bcgov/sbc-auth.git, GIT_REF=development. Run `oc new-build --name auth-web-runtime --binary --strategy docker`, then process `auth-web-runtime-build.json` with NAME=auth-web-runtime. Process `auth-web-pipeline.json` with NAME=auth-web, TAG_NAME=dev, GIT_REPO_URL, GIT_REF=development, WEBHOOK=github-auth-web-dev, JENKINS_FILE=./jenkins/dev.groovy.\n\nNo entry points, permission checks, or outbound calls shown. GOTCHA: Secret values must be manually replaced after template processing; no automation documented. GOTCHA: PostgreSQL tester user created via manual psql terminal; not automated.",
+   "references": [
+    {
+     "target": "OpenShift cluster",
+     "direction": "sends",
+     "what": "Login credentials via `oc login`, namespace selection (1rdehl-dev, 1rdehl-tools), and template processing commands with parameters."
+    },
+    {
+     "target": "PostgreSQL database (postgresql-deploy.json)",
+     "direction": "depends",
+     "what": "Deployed to dev namespace with TAG_NAME=dev; requires manual superuser role creation for tester."
+    },
+    {
+     "target": "auth-api-pre-deploy.json template",
+     "direction": "depends",
+     "what": "Creates configmap and secrets with NAME=auth-api, TAG_NAME=dev; values manually replaced post-processing."
+    },
+    {
+     "target": "auth-api-deploy.json template",
+     "direction": "depends",
+     "what": "Deploys API with NAME=auth-api, TAG_NAME=dev, REPLICAS=1, JAEGER_COLLECTOR=--collector.host-port=jaeger-collector.d7eovc-dev.svc:14267."
+    },
+    {
+     "target": "auth-api-build.json template",
+     "direction": "depends",
+     "what": "Creates build config with NAME=auth-api, GIT_REPO_URL=https://github.com/bcgov/sbc-auth.git, GIT_REF=development."
+    },
+    {
+     "target": "auth-api-pipeline.json template",
+     "direction": "depends",
+     "what": "Configures pipeline with TAG_NAME=dev, WEBHOOK=github-auth-api-dev, JENKINS_FILE=./jenkins/dev.groovy."
+    },
+    {
+     "target": "auth-web-pre-deploy.json template",
+     "direction": "depends",
+     "what": "Creates configmap and secrets with NAME=auth-web, TAG_NAME=dev; values manually replaced post-processing."
+    },
+    {
+     "target": "auth-web-deploy.json template",
+     "direction": "depends",
+     "what": "Deploys web UI with NAME=auth-web, NAME_RUNTIME=auth-web-runtime, TAG_NAME=dev, REPLICAS=1."
+    },
+    {
+     "target": "auth-web-build.json template",
+     "direction": "depends",
+     "what": "Creates build config with NAME=auth-web, GIT_REPO_URL=https://github.com/bcgov/sbc-auth.git, GIT_REF=development."
+    },
+    {
+     "target": "auth-web-runtime-build.json template",
+     "direction": "depends",
+     "what": "Creates runtime build with NAME=auth-web-runtime using binary Docker strategy."
+    },
+    {
+     "target": "auth-web-pipeline.json template",
+     "direction": "depends",
+     "what": "Configures pipeline with TAG_NAME=dev, WEBHOOK=github-auth-web-dev, JENKINS_FILE=./jenkins/dev.groovy."
+    },
+    {
+     "target": "GitHub repository",
+     "direction": "receives",
+     "what": "Webhook triggers (github-auth-api-dev, github-auth-web-dev) from commit to GIT_REF=development on https://github.com/bcgov/sbc-auth.git."
+    },
+    {
+     "target": "LEAR Documentation",
+     "direction": "depends",
+     "what": "This document will migrate to LEAR Documentation (https://bcgov.github.io/lear/)."
+    }
+   ]
+  },
+  "cost": 0.018437,
+  "seconds": 19.532,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 6642,
+    "outputTokens": 2359,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.018437,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 36051,
+  "source": "lear",
+  "path": "devops/openshift/templates/github-actions-cicd-rbac.yaml",
+  "structured": {
+   "condensed": "OpenShift configuration template that establishes RBAC rules for GitHub CI/CD credentials management. \n\nDefines a Role with verbs (get, list, create, delete, patch, update) on configmaps and secrets across all apiGroups; (get, list, patch, update, watch) on deploymentconfigs and deploymentconfigs/scale in empty and apps.openshift.io apiGroups; (get, list, watch) on deploymentconfigs/log and deploymentconfigs/status. Creates a RoleBinding that binds this Role to a ServiceAccount named ${NAME} in namespace ${NAMESPACE_TOOLS}, granting the account permissions to manage credentials and deployment configurations in ${NAMESPACE}.\n\nTakes three parameters: NAMESPACE (required, defaults to cc892f-dev) where roles are stored; NAMESPACE_TOOLS (required, defaults to d893f6-tools) where credential components live; NAME (required, defaults to github-cicd) used for all components. No entry points or runtime decisions; purely declarative configuration.",
+   "references": []
+  },
+  "cost": 0.005912000000000001,
+  "seconds": 3.891,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 4332,
+    "outputTokens": 316,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 0,
+    "webSearchRequests": 0,
+    "costUSD": 0.005912000000000001,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ },
+ {
+  "id": 37133,
+  "source": "lear",
+  "path": "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "structured": {
+   "condensed": "Creates an invoice for a business filing submission by calling the payment service and saves the payment token to the filing. Entry point: static method called by others; this chunk shows no check. Input: Business and Filing objects, filing types list, JWT manager, optional payment account ID. Output: tuple of payment token ID (or None), error dict (or None), and HTTP status code. Flow: determines office type and mailing address based on filing type (new business, conversion, or other), extracts or derives corporate type and business name, builds payload with business info, filing info, details, and optional folio number; if user has staff or system role, adds account info from routing slip/BCOL/DAT numbers to payload; posts payload to payment service with bearer token auth (20 second timeout); on success saves payment token, status code, and account to filing and returns isPaymentActionRequired flag; on BAD_REQUEST saves error type to payment_status_code and returns error details; other failures return generic error. Save point: filing persisted after payment service succeeds or on BAD_REQUEST error. GOTCHA: connection errors only logged, not retried or re-raised. GOTCHA: no duplicate guard on invoice creation. GOTCHA: special_role saved to filing but never validated to match caller's actual permissions.\n\nSet_effective_date helper: sets futureEffectiveDate to tomorrow 00:01 for changeOfAddress filings on non-COOP businesses, saves to filing.\n\nIs_future_effective_filing helper: returns True if filing's effectiveDate is after current UTC time.\n\nDelete_from_minio helper: removes uploaded files (rules, memorandum, affidavit, court order, continuation-in documents) from Minio by fileKey depending on filing type.\n\nDetails_for_invoice helper: returns list with business identifier label (\"Registration Number\" or \"Incorporation Number\") and value for invoicing, empty if identifier is absent or starts with 'T'.",
+   "references": [
+    {
+     "target": "PAYMENT_SVC_URL",
+     "direction": "sends",
+     "what": "POST request with Bearer token (from JWT header), JSON payload containing businessInfo (identifier, corpType, name, mailing address), filingInfo (ID, types, folio number), and details; on staff/system roles adds accountInfo with routingSlip, bcolAccountNumber, datNumber. Returns status, id, statusCode, isPaymentActionRequired, type, detail fields."
+    },
+    {
+     "target": "MinioService.delete_file",
+     "direction": "sends",
+     "what": "Deletes file object by key (rulesFileKey, memorandumFileKey, affidavitFileKey, fileKey, authorizationFiles) for incorporation applications, alterations, dissolutions, court orders, and continuation-in filings."
+    },
+    {
+     "target": "ListFilingResource.details_for_invoice",
+     "direction": "depends",
+     "what": "Called to retrieve invoice detail lines for given business identifier and corporation type."
+    }
+   ]
+  },
+  "cost": 0.016622,
+  "seconds": 10.678,
+  "usage": {
+   "claude-haiku-4-5-20251001": {
+    "inputTokens": 4135,
+    "outputTokens": 773,
+    "cacheReadInputTokens": 0,
+    "cacheCreationInputTokens": 4311,
+    "webSearchRequests": 0,
+    "costUSD": 0.016622,
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "thinkingTokens": 0,
+    "canonicalModel": "claude-haiku-4-5",
+    "provider": "firstParty",
+    "costBasis": "list"
+   }
+  }
+ }
+]
