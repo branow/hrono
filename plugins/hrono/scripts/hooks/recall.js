@@ -10,6 +10,13 @@ const hook = require("../lib/hook");
 const hrono = require("../lib/hrono");
 const settings = require("../lib/settings");
 
+// Claude Code shows a hook's added context inline only up to 10,000
+// characters; past that it saves the text to a file and shows a 2 KB preview,
+// which agents rarely open (measured: 1 of 15 runs). So no setting can
+// attach more than this.
+const INLINE = 10000;
+const MORE = "\n\nMore pages:";
+
 /**
  * The recalled passages for ``prompt`` as one block of text, or null when
  * there is nothing to attach.
@@ -38,6 +45,7 @@ function render(config, hits) {
     "cover this prompt, best first. Each says what its part does, its checks " +
     "and failure handling, and which files hold it.";
   const pages = pageIndex(config.folder);
+  const longest = Math.min(config.longest, INLINE);
   // the best pages whole while they fit, then the rest as one line each: a
   // page only pointed at is rarely opened (2026-10-bc-registries-v2/)
   let whole = head;
@@ -46,15 +54,16 @@ function render(config, hits) {
     const page = hit.topic === undefined ? undefined : pages.get(hit.topic);
     if (!page) {
       const block = `\n\n### ${title(hit)}\n\n${hit.body}`;
-      if (whole.length + pointers.length + block.length <= config.longest) whole += block;
+      if (whole.length + pointers.length + block.length <= longest) whole += block;
       continue;
     }
     const full = `\n\n### ${page}\n\n${read(page)}`;
     const line = `\n- ${page} : ${summary(page)}`;
-    if (!pointers && whole.length + full.length <= config.longest) whole += full;
-    else if (whole.length + pointers.length + line.length <= config.longest) pointers += line;
+    if (!pointers && whole.length + full.length <= longest) whole += full;
+    else if (whole.length + MORE.length + pointers.length + line.length <= longest)
+      pointers += line;
   }
-  const text = pointers ? `${whole}\n\nMore pages:${pointers}` : whole;
+  const text = pointers ? `${whole}${MORE}${pointers}` : whole;
   return text === head ? null : text;
 }
 
