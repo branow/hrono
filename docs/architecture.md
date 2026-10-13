@@ -37,7 +37,8 @@ one server and one knowledge base. See [api.md](api.md).
   User tokens are stored as hashes (`src/hrono/auth/`). Roles: reader, writer,
   admin.
 - **LLM providers** (`src/hrono/llm/`): `anthropic`, `openai` and compatible,
-  and `claude-code` (the `claude` CLI, billed to a Claude subscription). Each
+  and `claude-code` (the `claude` CLI driven through the Claude Agent SDK,
+  billed to a Claude subscription; the `claude-code` extra). Each
   role (`condense`, `brief`, `brief-upper`, `judge`) resolves to one model;
   first-run defaults are in `src/hrono/onboarding/defaults.py` (cheap model
   for condense and judge, stronger for briefs). Every call is a row in the

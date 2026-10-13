@@ -62,6 +62,9 @@ cluster = [
     "umap-learn>=0.5.6,<0.6",
     "hdbscan>=0.8.38,<0.9",
 ]
+# The `claude-code` provider, through the Claude Agent SDK. Opt-in: the SDK
+# wheel carries its own copy of the claude CLI, about 240 MB.
+claude-code = ["claude-agent-sdk>=0.2.165,<0.3"]
 
 [project.urls]
 Homepage = "https://github.com/branow/hrono"
@@ -83,6 +86,8 @@ dev = [
     "hdbscan>=0.8.38,<0.9",
     "numpy>=1.26,<3",
     "pytest-xdist>=3.8.0",
+    # The claude-code provider's tests drive the real SDK against a stub CLI.
+    "claude-agent-sdk>=0.2.165,<0.3",
     "playwright==1.56.0",
 ]
 

@@ -66,8 +66,9 @@ must be clean before the work is done.
   **tree-sitter** + **tree-sitter-language-pack**, **umap-learn** +
   **hdbscan**.
 - LLM providers: `anthropic` (the **anthropic** SDK), `openai` and
-  `openai-compatible` (over httpx), and `claude-code` (the **claude** CLI,
-  billed to a Claude subscription).
+  `openai-compatible` (over httpx), and `claude-code` (the **claude** CLI
+  through **claude-agent-sdk**, extra `claude-code`, billed to a Claude
+  subscription).
 - Dashboard: server-rendered Jinja at `/ui`, no frontend build.
 - Tests: **pytest** (+ xdist, Playwright for layout). Lint and format:
   **ruff**, line length 80.

@@ -1,23 +1,34 @@
-"""The ``claude-code`` completion provider: the CLI, headless.
+"""The ``claude-code`` completion provider: Claude Code, through its SDK.
 
-A second ``Completion`` beside the anthropic SDK client, driving the Claude Code
-CLI in print mode. It needs no API key and bills through the operator's existing
-subscription, which makes it the wanted default for local and development use.
+A second ``Completion`` beside the anthropic SDK client, driving Claude Code
+through the Claude Agent SDK (``claude-agent-sdk``, the ``claude-code`` extra).
+It needs no API key and bills through the operator's existing subscription,
+which makes it the wanted default for local and development use. Each call is
+one ``query()``: the SDK starts the ``claude`` binary, hands it the content as
+the one user message, and yields typed messages, the last of which is the
+``ResultMessage`` read here. The worker is synchronous, so each call runs its
+own event loop.
 
-    claude -p --model <m> --max-turns 3 --allowed-tools "" --safe-mode
-      --system-prompt <s> --output-format json   < content on stdin
+The binary is the INSTALLED ``claude`` when there is one, and the SDK's bundled
+copy only when there is not: measured, the bundled CLI resolved ``haiku`` to a
+different model than the installed one did, and a tree must be summarized by
+the model its operator chose and sees in their own CLI.
 
-**Know what it costs before choosing it.** The per-call overhead is fixed and
-large: even with the system prompt replaced and every customization off, a
-trivial call reported ``cache_creation_input_tokens: 18871`` and
-``total_cost_usd: 0.038``. At one call per section a 92-section corpus spends
-roughly $3.50 on overhead alone, before any real content. Latency is 4-30 s per
-call (measured: 4.2 s trivial, 8-24 s for real condensations, 32 s for an 18 KB
-judge prompt). A measured full ``condense`` over 421 sections took about 70
-minutes and about $16 this way. For bulk work — a first build over a large
-corpus — the ``anthropic`` provider is cheaper and faster; this one is for
+**Know what it costs before choosing it.** Every call starts a CLI process,
+so latency has a floor of a few seconds (measured through the SDK: 2.7 s for a
+trivial call, 4-30 s for real condensations and judge prompts with the earlier
+``claude -p`` driver). The token overhead depends on what the call carries.
+With ``claude -p --allowed-tools ""`` the tool DEFINITIONS still went out, and
+a trivial call reported ``cache_creation_input_tokens: 18871`` and
+``total_cost_usd: 0.038``; a full ``condense`` over 421 sections took about 70
+minutes and about $16 that way. Through the SDK with ``tools=[]`` no tool is
+defined, and the same kind of trivial call measured 455 to 1367 input tokens,
+no cache write and $0.0005 to $0.0015. For bulk work — a first build over a
+large corpus — the ``anthropic`` provider is still faster; this one is for
 convenience, not throughput, and the ``connections`` collection says so where a
-user picks between them.
+user picks between them. Thinking is off for every call: measured, 1k-7k
+thinking tokens per condensation dominated both the cost and the latency of a
+task that has nothing to reason about.
 
 **This CLI is somebody's configured agent, and a summarizer is not.** Left to
 its defaults it arrives carrying the operator's CLAUDE.md files, their skills,
@@ -28,29 +39,39 @@ isn't one. Measured on a real node: two of three calls came back as a question
 to the caller, and the one that answered wrote in the operator's chat voice.
 So every call is isolated on two axes — ``--safe-mode`` drops every
 customization (CLAUDE.md, skills, plugins, hooks, MCP, commands, output style)
-while leaving auth, model and tools alone, and ``--system-prompt`` replaces the
+while leaving auth, model and tools alone, and the system prompt replaces the
 agent identity itself, with `SYSTEM` standing in when a caller passes none.
-Three of three then came back as briefs. (``--exclude-dynamic-system-prompt-
-sections`` is gone with it: the CLI ignores that flag whenever a system prompt
-is given.)
+Three of three then came back as briefs. The SDK's ``setting_sources=[]`` is
+passed as well. Measured, it alone also kept a project CLAUDE.md out, but it is
+documented only as which settings FILES load, and the MCP servers of
+``~/.claude.json`` are not in one; ``--safe-mode`` is the flag that promises
+every customization is off, so it stays.
 
 Two further failure modes are worth knowing. The CLI reads the PROJECT MEMORY
 of its working directory, so it must run from a directory hrono owns
 (``paths.cli_workdir``) — ``--safe-mode`` covers this too, and the empty
-directory stays as the second lock on it. And it can exit non-zero with an
-empty stderr, so the error carries stdout too, and success is read from the
-JSON payload (``is_error``, ``subtype``, ``api_error_status``) rather than from
-the exit code alone.
+directory stays as the second lock on it. And it can exit non-zero with
+nothing useful but its stderr, so stderr is collected and carried by the error,
+and success is read from the result (``is_error``, ``subtype``,
+``api_error_status``) rather than from the exit code alone.
+
+A caller may ask for structured output by passing a JSON schema on the
+request. The CLI then validates its answer against it and the parsed object
+comes back as ``CompletionResult.structured``. A schema asked for and no
+object returned is an ``LLMError``, not a retry: the CLI already retries a
+reply that fails the schema within the call's turns.
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
 import math
-import subprocess
+import shutil
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from hrono.llm.client import (
     CompletionRequest,
@@ -93,28 +114,42 @@ SYSTEM = (
     "Follow the instruction and reply with the finished text and nothing "
     "else — no preamble, no commentary, and never a question back."
 )
+STDERR_KEPT = 20  # lines of the CLI's stderr an error carries
 
-Runner = Callable[[list[str], str, Path, float], tuple[int, str, str]]
+Query = Callable[..., AsyncIterator[Any]]
 
 
 class _Busy(LLMError):
     """The upstream was rate limited or overloaded; worth asking again."""
 
 
+@dataclass
+class _Stderr:
+    """The tail of what the CLI wrote to stderr during one call."""
+
+    lines: list[str] = field(default_factory=list)
+
+    def __call__(self, line: str) -> None:
+        self.lines = [*self.lines[-(STDERR_KEPT - 1) :], line]
+
+    def tail(self) -> str:
+        return " | ".join(self.lines)[-300:]
+
+
 class ClaudeCodeClient:
-    """A ``Completion`` over the Claude Code CLI in headless print mode."""
+    """A ``Completion`` over Claude Code, driven by the Claude Agent SDK."""
 
     def __init__(
         self,
         workdir: Path,
         *,
-        run: Runner | None = None,
+        query: Query | None = None,
         timeout: float = TIMEOUT,
         pause: Callable[[float], None] = time.sleep,
         wanted: Callable[[], bool] = lambda: True,
     ) -> None:
         self._workdir = workdir
-        self._run = run if run is not None else _subprocess
+        self._query = query
         self._timeout = timeout
         self._pause = pause
         self._wanted = wanted
@@ -130,53 +165,108 @@ class ClaudeCodeClient:
         other failure is raised at once.
         """
         self._workdir.mkdir(parents=True, exist_ok=True)
-        argv = _argv(request)
         for wait in (*WAITS, None):
             try:
-                return _read(*self._call(argv, request.content))
+                return _read(self._call(request), request.schema)
             except _Busy as busy:
                 if wait is None or not self._wanted():
                     raise LLMError(str(busy)) from busy
                 self._pause(wait)
         raise AssertionError  # unreachable: the last pass returns or raises
 
-    def _call(self, argv: list[str], content: str) -> tuple[int, str, str]:
+    def _call(self, request: CompletionRequest) -> dict[str, Any]:
+        sdk = _sdk()
+        stderr = _Stderr()
+        query = self._query if self._query is not None else sdk.query
+        options = _options(request, self._workdir, stderr)
         try:
-            return self._run(argv, content, self._workdir, self._timeout)
-        except subprocess.TimeoutExpired as exc:
+            return asyncio.run(
+                _result(query, request.content, options, self._timeout)
+            )
+        except TimeoutError as exc:
             raise LLMError("claude-code call timed out") from exc
-        except OSError as exc:
+        except sdk.CLINotFoundError as exc:
             raise LLMError("claude-code CLI could not be run") from exc
+        except sdk.ClaudeSDKError as exc:
+            raise LLMError(
+                f"claude-code failed: {_first_line(exc)} stderr={stderr.tail()}"
+            ) from exc
 
 
-def _argv(request: CompletionRequest) -> list[str]:
-    return [
-        "claude",
-        "-p",
-        "--model",
-        str(request.model["model"]),
-        "--max-turns",
-        str(MAX_TURNS),
-        "--allowed-tools",
-        "",
+def _options(request: CompletionRequest, workdir: Path, stderr: _Stderr) -> Any:
+    sdk = _sdk()
+    return sdk.ClaudeAgentOptions(
+        model=str(request.model["model"]),
+        system_prompt=request.system or SYSTEM,
+        tools=[],  # no tool use
+        max_turns=MAX_TURNS,
         # the operator's CLAUDE.md, skills, hooks, plugins, MCP servers and
-        # output style are not part of this call
-        "--safe-mode",
-        "--system-prompt",
-        request.system or SYSTEM,
-        "--output-format",
-        "json",
-    ]
+        # output style are not part of this call; the module docstring says
+        # why both switches are passed
+        setting_sources=[],
+        extra_args={"safe-mode": None},
+        thinking={"type": "disabled"},
+        cwd=str(workdir),
+        cli_path=shutil.which("claude"),
+        stderr=stderr,
+        output_format=(
+            {"type": "json_schema", "schema": request.schema}
+            if request.schema is not None
+            else None
+        ),
+    )
 
 
-def _read(code: int, out: str, err: str) -> CompletionResult:
-    """Turn one CLI invocation into a result, or one ``LLMError``.
+async def _result(
+    query: Query, content: str, options: Any, timeout: float
+) -> dict[str, Any]:
+    """The call's final result, as the CLI's own ``result`` payload.
 
-    The exit code is not trusted on its own — a wrong working directory has
-    produced exit 1 with an empty stderr — so the payload decides, and the
-    message always carries stdout as well as stderr.
+    A failed run yields its result and then exits non-zero, which the SDK
+    raises as a ``ResultError`` carrying that same payload; either way the
+    payload decides, not the exit code, so one reader serves success and
+    failure alike.
     """
-    payload = _payload(code, out, err)
+    import anyio
+
+    sdk = _sdk()
+    found: dict[str, Any] | None = None
+    try:
+        # an anyio deadline, not asyncio's: the SDK shields its cleanup from
+        # anyio cancellation only, and a cancelled call must not orphan its CLI
+        with anyio.fail_after(timeout):
+            async for message in query(prompt=content, options=options):
+                if isinstance(message, sdk.ResultMessage):
+                    found = _payload(message)
+    except sdk.ClaudeSDKError as exc:
+        # the CLI's exit after a result it already reported adds nothing
+        if found is not None:
+            return found
+        if isinstance(exc, sdk.ResultError):
+            return dict(exc.data)
+        raise
+    if found is None:
+        raise LLMError("claude-code returned no result")
+    return found
+
+
+def _payload(message: Any) -> dict[str, Any]:
+    return {
+        "subtype": message.subtype,
+        "is_error": message.is_error,
+        "result": message.result,
+        "errors": message.errors,
+        "api_error_status": message.api_error_status,
+        "usage": message.usage,
+        "modelUsage": message.model_usage,
+        "structured_output": message.structured_output,
+    }
+
+
+def _read(
+    payload: dict[str, Any], schema: dict[str, object] | None = None
+) -> CompletionResult:
+    """Turn one call's result payload into a result, or one ``LLMError``."""
     if str(payload.get("api_error_status")) in BUSY:
         raise _Busy(f"claude-code refused the call: {_detail(payload)}")
     if payload.get("subtype") == "error_max_turns":
@@ -185,6 +275,9 @@ def _read(code: int, out: str, err: str) -> CompletionResult:
         raise LLMError(f"claude-code refused the call: {_detail(payload)}")
     if payload.get("api_error_status"):
         raise LLMError(f"claude-code upstream error: {_detail(payload)}")
+    structured = payload.get("structured_output")
+    if schema is not None and not isinstance(structured, dict):
+        raise LLMError("claude-code returned no structured output")
     text = payload.get("result")
     if not isinstance(text, str):
         raise LLMError("claude-code returned no result text")
@@ -199,6 +292,7 @@ def _read(code: int, out: str, err: str) -> CompletionResult:
             cache_creation=_count(counts.get("cache_creation_input_tokens")),
             model=_upstream(payload.get("modelUsage")),
         ),
+        structured if schema is not None else None,
     )
 
 
@@ -226,40 +320,30 @@ def _upstream(models: object) -> str | None:
     )
 
 
-def _payload(code: int, out: str, err: str) -> dict[str, object]:
+def _detail(payload: dict[str, Any]) -> str:
+    said = [
+        str(payload[key])
+        for key in ("api_error_status", "subtype", "errors", "result")
+        if payload.get(key)
+    ]
+    return " ".join(said)[:300] if said else "no detail in the payload"
+
+
+def _first_line(exc: Exception) -> str:
+    return str(exc).strip().splitlines()[0][:300] if str(exc).strip() else ""
+
+
+def _sdk() -> Any:
+    """The Claude Agent SDK, or one ``LLMError`` naming the extra to install.
+
+    Imported here rather than at the top so the server, and every op that
+    never calls this provider, starts without it.
+    """
     try:
-        parsed = json.loads(out)
-    except ValueError:
+        import claude_agent_sdk
+    except ImportError as exc:
         raise LLMError(
-            f"claude-code exited {code}: {_tail(err, out)}"
-        ) from None
-    if not isinstance(parsed, dict):
-        raise LLMError(f"claude-code exited {code}: {_tail(err, out)}")
-    return parsed
-
-
-def _detail(payload: dict[str, object]) -> str:
-    for key in ("api_error_status", "subtype", "result"):
-        value = payload.get(key)
-        if value:
-            return str(value)[:200]
-    return "no detail in the payload"
-
-
-def _tail(err: str, out: str) -> str:
-    return f"stderr={err.strip()[:300]} stdout={out.strip()[:300]}"
-
-
-def _subprocess(
-    argv: list[str], content: str, workdir: Path, timeout: float
-) -> tuple[int, str, str]:
-    done = subprocess.run(  # noqa: S603 - argv is built here, never user text
-        argv,
-        input=content,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=str(workdir),
-        check=False,
-    )
-    return done.returncode, done.stdout, done.stderr
+            "the claude-code provider needs the claude-agent-sdk package: "
+            "install hrono with the claude-code extra"
+        ) from exc
+    return claude_agent_sdk

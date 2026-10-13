@@ -14,12 +14,12 @@ You need Python 3.13+, [uv](https://docs.astral.sh/uv/) and `git`.
 ```sh
 git clone https://github.com/<you>/hrono.git
 cd hrono
-uv sync --extra embed --extra cluster
+uv sync --extra embed --extra cluster --extra claude-code
 uv run playwright install chromium
 ```
 
-`uv sync` installs the `dev` group, which carries the test tools and the
-clustering backend the tests exercise. The `embed` extra is needed to run a
+`uv sync` installs the `dev` group, which carries the test tools, the
+clustering backend and the Claude Agent SDK the tests exercise. The `embed` extra is needed to run a
 real build locally; the suite itself runs without it. Playwright's Chromium
 drives the layout tests; without it they skip locally and fail in CI.
 

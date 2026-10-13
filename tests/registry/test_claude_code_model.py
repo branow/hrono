@@ -1,14 +1,13 @@
 """A text model on a `claude-code` connection validates through the CLI.
 
-Driven through the endpoint with a real subprocess: a stand-in `claude` on PATH
-is the only fake, so the dispatch, the working directory and the error path run
-as production runs them. The README's first-run path depends on this.
+Driven through the endpoint with the real Agent SDK and a real subprocess: a
+stand-in `claude` on PATH is the only fake, so the dispatch, the working
+directory and the error path run as production runs them. The README's
+first-run path depends on this.
 """
 
 import inspect
-import json
 import sqlite3
-import stat
 import time
 from collections.abc import Iterator
 from contextlib import closing
@@ -26,6 +25,7 @@ from hrono.registry.commands import WRITE_TIMEOUT
 from hrono.registry.descriptor import ValidationContext, ValidationFailed
 from hrono.registry.validation.model_validation import validate_model
 from hrono.server.app import create_app
+from tests.claude_stub import calls, result, stub_claude
 
 KEY = Fernet.generate_key()
 CONNECTION = {
@@ -39,16 +39,7 @@ TEXT = {
     "connection": "cli",
     "model": "haiku",
 }
-OK = json.dumps({"subtype": "success", "is_error": False, "result": "hi"})
-
-
-def fake_claude(directory: Path, script: str) -> None:
-    """A `claude` that answers `--version` and otherwise runs ``script``."""
-    binary = directory / "claude"
-    binary.write_text(
-        '#!/bin/sh\n[ "$1" = "--version" ] && echo 2.1 && exit 0\n' + script
-    )
-    binary.chmod(binary.stat().st_mode | stat.S_IEXEC)
+OK = result("hi")
 
 
 @pytest.fixture
@@ -67,7 +58,7 @@ def served(
     app = create_app(db_path=db_path, master_key=KEY)
     headers = {"Authorization": f"Bearer {token}"}
     with TestClient(app) as client:
-        fake_claude(bin_dir, "exit 0\n")
+        stub_claude(bin_dir, answer=OK)
         assert (
             client.post("/connections", json=CONNECTION, headers=headers)
         ).status_code == 201
@@ -76,10 +67,7 @@ def served(
 
 def test_a_text_model_registers_through_the_cli(served, tmp_path: Path) -> None:
     client, headers, bin_dir = served
-    fake_claude(
-        bin_dir,
-        f"cat >/dev/null\necho '{OK}'\n",
-    )
+    stub_claude(bin_dir, answer=OK)
 
     response = client.post("/models", json=TEXT, headers=headers)
 
@@ -93,26 +81,20 @@ def test_the_probe_runs_from_the_directory_hrono_owns(
     served, tmp_path: Path
 ) -> None:
     client, headers, bin_dir = served
-    seen = tmp_path / "cwd"
-    fake_claude(
-        bin_dir,
-        f"pwd > {seen}\ncat >/dev/null\necho '{OK}'\n",
-    )
+    stub_claude(bin_dir, answer=OK)
 
     client.post("/models", json=TEXT, headers=headers)
 
+    [call] = calls(bin_dir)
     assert (
-        Path(seen.read_text().strip()).resolve()
+        Path(str(call["cwd"])).resolve()
         == cli_workdir(tmp_path / "data" / "hrono.db").resolve()
     )
 
 
 def test_a_broken_cli_is_an_actionable_bad_request(served) -> None:
     client, headers, bin_dir = served
-    fake_claude(
-        bin_dir,
-        "echo 'not logged in' >&2\nexit 1\n",
-    )
+    stub_claude(bin_dir, exit=1, stderr="not logged in\n")
 
     response = client.post("/models", json=TEXT, headers=headers)
 
@@ -124,26 +106,19 @@ def test_a_broken_cli_is_an_actionable_bad_request(served) -> None:
 
 def test_an_empty_answer_is_rejected(served) -> None:
     client, headers, bin_dir = served
-    empty = json.dumps({"subtype": "success", "is_error": False, "result": ""})
-    fake_claude(
-        bin_dir,
-        f"cat >/dev/null\necho '{empty}'\n",
-    )
+    stub_claude(bin_dir, answer=result(""))
 
     assert client.post("/models", json=TEXT, headers=headers).status_code == 400
 
 
 def test_the_registered_model_reaches_the_cli(served, tmp_path: Path) -> None:
     client, headers, bin_dir = served
-    argv = tmp_path / "argv"
-    fake_claude(
-        bin_dir,
-        f"echo \"$@\" > {argv}\ncat >/dev/null\necho '{OK}'\n",
-    )
+    stub_claude(bin_dir, answer=OK)
 
     client.post("/models", json=TEXT, headers=headers)
 
-    assert "--model haiku" in argv.read_text()
+    [call] = calls(bin_dir)
+    assert "--model haiku" in " ".join(call["argv"])  # type: ignore[arg-type]
 
 
 def test_a_hung_cli_ends_in_a_bad_request(served) -> None:
@@ -154,16 +129,21 @@ def test_a_hung_cli_ends_in_a_bad_request(served) -> None:
         cipher=state.cipher,
         cache_root=state.cache_root,
     )
-    fake_claude(bin_dir, "sleep 5\n")
+    stub_claude(bin_dir, answer=OK, sleep=60)
 
     started = time.monotonic()
     with pytest.raises(ValidationFailed, match="timed out"):
         validate_model(dict(TEXT), context, cli_timeout=0.5)
 
-    assert time.monotonic() - started < 4
+    assert time.monotonic() - started < 0.5 + SHUTDOWN_GRACE + 3
+
+
+# The SDK gives a CLI it is done with 5 s to exit on its own before it
+# terminates it, so a timed-out call returns that much after its deadline.
+SHUTDOWN_GRACE = 5.0
 
 
 def test_validate_models_own_default_ends_before_the_client_waits() -> None:
     default = inspect.signature(validate_model).parameters["cli_timeout"]
 
-    assert default.default < WRITE_TIMEOUT
+    assert default.default + SHUTDOWN_GRACE < WRITE_TIMEOUT

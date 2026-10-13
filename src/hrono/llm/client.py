@@ -64,17 +64,27 @@ class Usage:
 
 @dataclass(frozen=True)
 class CompletionRequest:
-    """A resolved text-model config plus the system prompt and user content."""
+    """A resolved text-model config plus the system prompt and user content.
+
+    ``schema`` is a JSON schema the answer must satisfy. Only the
+    ``claude-code`` provider honours it today; the others accept it and
+    answer in plain text, so a caller that sets it reads ``structured`` and
+    must cope with None.
+    """
 
     model: dict[str, object]
     system: str
     content: str
+    schema: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
 class CompletionResult:
+    """The answer's text, its usage, and the object a ``schema`` asked for."""
+
     text: str
     usage: Usage
+    structured: dict[str, object] | None = None
 
 
 class Completion(Protocol):
@@ -87,7 +97,11 @@ Invoke = Callable[..., object]
 
 
 class AnthropicClient:
-    """A ``Completion`` over the anthropic SDK, credential fed by cipher."""
+    """A ``Completion`` over the anthropic SDK, credential fed by cipher.
+
+    A request's ``schema`` is ignored for now: the answer comes back as text
+    and ``structured`` stays None.
+    """
 
     def __init__(
         self,

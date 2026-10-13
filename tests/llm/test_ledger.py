@@ -319,7 +319,7 @@ def test_claude_code_reports_its_cache_and_upstream_model() -> None:
         },
     }
 
-    usage = claude_code._read(0, json.dumps(payload), "").usage  # noqa: SLF001
+    usage = claude_code._read(payload).usage  # noqa: SLF001
 
     assert usage == Usage(2, 5371, 300, 14563, "claude-sonnet-4-5")
 
