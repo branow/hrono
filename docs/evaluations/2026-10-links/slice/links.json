@@ -1,0 +1,3642 @@
+[
+ {
+  "from": 638,
+  "to": 57,
+  "score": 3.28,
+  "section": 34577,
+  "path": "business-filings-ui/src/mixins/filing-mixin.ts",
+  "target": "useRootStore",
+  "direction": "depends",
+  "what": "Pinia store providing filingData array, getBusinessAddress, getCurrentDate, getRegisteredOfficeAddress; receives setFilingData action to update filingData."
+ },
+ {
+  "from": 638,
+  "to": 57,
+  "score": 1.71,
+  "section": 34577,
+  "path": "business-filings-ui/src/mixins/filing-mixin.ts",
+  "target": "useBusinessStore",
+  "direction": "depends",
+  "what": "Pinia store providing entityName, getFoundingDate, getIdentifier, getLegalType, getStartDate getters."
+ },
+ {
+  "from": 534,
+  "to": 683,
+  "score": 0.31,
+  "section": 34649,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "useBusinessStore",
+  "direction": "depends",
+  "what": "Injects isEntityCoop getter to determine which button layout to render."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 2.0,
+  "section": 34649,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "isPageValid computed property",
+  "direction": "depends",
+  "what": "Read by File and Pay button disabled condition; depends on agmDateValid, addressesFormValid, directorFormValid, certifyFormValid, and directorEditInProgress from external components."
+ },
+ {
+  "from": 534,
+  "to": 556,
+  "score": 1.32,
+  "section": 34650,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "LegalServices.fetchFiling()",
+  "direction": "sends",
+  "what": "Fetches draft filing by URL `businesses/{identifier}/filings/{filingId}` with no explicit credentials shown; response must contain header (name, certifiedBy, routingSlipNumber, bcolAccountNumber, datNumber, folioNumber, waiveFees, priority, status), business (identifier, legalName), annualReport (annualGeneralMeetingDate, didNotHoldAgm, agmExtension), and optional changeOfDirectors (directors array) and changeOfAddress (offices.registeredOffice, offices.recordsOffice)."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 2.0,
+  "section": 34650,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "child component OfficeAddress (this.$refs.officeAddressesComponent)",
+  "direction": "sends",
+  "what": "Calls getOrigAddresses(asOfDate, isEmptyAddresses) to fetch original office addresses and populate or update working data; child emits 'modified' event that triggers officeModifiedEventHandler()."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 4.5,
+  "section": 34650,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "child component Directors (this.$refs.directorsComponent)",
+  "direction": "sends",
+  "what": "Calls getOrigDirectors(asOfDate, isEmpty) to fetch original directors and populate or update working data; child emits events that trigger directorsPaidChange() and directorsFreeChange()."
+ },
+ {
+  "from": 534,
+  "to": 840,
+  "score": 0.25,
+  "section": 34650,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "this.$root custom event 'fetch-error-event'",
+  "direction": "receives",
+  "what": "Listened to during component lifecycle; removed in beforeDestroy()."
+ },
+ {
+  "from": 534,
+  "to": 617,
+  "score": 0.33,
+  "section": 34650,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "saveFiling(true)",
+  "direction": "sends",
+  "what": "Saves draft filing; response payload structure not shown in this chunk, but errors return filing object at response.data.filing."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.03,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "LegalServices.hasPendingTasks(identifier)",
+  "direction": "sends",
+  "what": "Identifier for business entity; returns boolean indicating pending draft filings exist; called only for new filings (filingId===0); error caught and stored in saveErrors without retry."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 0.53,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "LegalServices.createFiling(identifier, filing, isDraft)",
+  "direction": "sends",
+  "what": "Business identifier, filing object with header/business/document sections, isDraft boolean; returns filing with assigned filingId; errors caught and stored in saveErrors/saveWarnings."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 0.53,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "LegalServices.updateFiling(identifier, filing, filingId, isDraft)",
+  "direction": "sends",
+  "what": "Business identifier, filing object, existing filingId, isDraft boolean; updates draft or final filing; errors caught and stored in saveErrors/saveWarnings."
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 1.0,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "paymentErrorDialog",
+  "direction": "receives",
+  "what": "Displayed when API returns 402 PAYMENT_REQUIRED; caller must handle dismissal and retry via onClickFilePay(fromStaffPayment=true)."
+ },
+ {
+  "from": 534,
+  "to": 520,
+  "score": 0.33,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "saveErrorReason",
+  "direction": "receives",
+  "what": "Set to SaveErrorReasons.SAVE_RESUME or .FILE_PAY on non-402 errors; dialogs read and must clear before finish can complete."
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 1.0,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "staffPaymentDialog",
+  "direction": "sends",
+  "what": "Displayed to staff users on File Pay click; dialog retries onClickFilePay(fromStaffPayment=true)."
+ },
+ {
+  "from": 534,
+  "to": 683,
+  "score": 1.35,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "navigate(payUrl)",
+  "direction": "sends",
+  "what": "External payment URL constructed from paymentToken and returnUrl (filingId parameter); no error handling assumed."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.03,
+  "section": 34651,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "navigateToBusinessDashboard(identifier, filingId?)",
+  "direction": "sends",
+  "what": "Routes user to dashboard; filingId parameter optional."
+ },
+ {
+  "from": 534,
+  "to": 683,
+  "score": 1.0,
+  "section": 34652,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "this.$refs.confirm",
+  "direction": "sends",
+  "what": "Confirmation dialog open request with title, message, and button options (yes returns promise resolve, cancel returns promise reject)"
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 1.0,
+  "section": 34652,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "this.$refs.officeAddressesComponent.getOrigAddresses",
+  "direction": "sends",
+  "what": "Request to fetch original office addresses for given asOfDate with refresh flag"
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 1.0,
+  "section": 34652,
+  "path": "business-filings-ui/src/views/AnnualReport.vue",
+  "target": "this.$refs.directorsComponent.getOrigDirectors",
+  "direction": "sends",
+  "what": "Request to fetch original directors for given asOfDate with refresh flag"
+ },
+ {
+  "from": 534,
+  "to": 57,
+  "score": 1.0,
+  "section": 34662,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "LegalServices.fetchFiling()",
+  "direction": "sends",
+  "what": "GET request to `businesses/{identifier}/filings/{filingId}` to retrieve draft filing; expects filing object with header, business, continuationOut properties and FilingStatus.DRAFT status."
+ },
+ {
+  "from": 534,
+  "to": 639,
+  "score": 0.29,
+  "section": 34662,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "saveFiling()",
+  "direction": "sends",
+  "what": "Saves complete filing; origin and payload shape unclear from this chunk (likely from FilingMixin); error response may include filing object in data.filing."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.3,
+  "section": 34662,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "navigateToBusinessDashboard()",
+  "direction": "sends",
+  "what": "Navigates away if filingId is NaN; uses getIdentifier from mixin."
+ },
+ {
+  "from": 534,
+  "to": 57,
+  "score": 2.21,
+  "section": 34662,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "useBusinessStore, useConfigurationStore, useRootStore",
+  "direction": "depends",
+  "what": "Pinia stores providing getLegalName, getPayApiUrl, getAuthWebUrl, getBusinessEmail, isRoleStaff, getIdentifier via Getter decorators."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 1.08,
+  "section": 34662,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "SBC common components",
+  "direction": "depends",
+  "what": "Imports BusinessNameForeign, Certify, EffectiveDate, ForeignJurisdiction, CourtOrderPoa, DocumentDelivery, SbcFeeSummary for rendering and validation."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.03,
+  "section": 34663,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "LegalServices.hasPendingTasks",
+  "direction": "sends",
+  "what": "Checks if pending tasks exist for identifier; throws to set saveErrors if it fails; used only for new filings (filingId === 0)."
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 1.03,
+  "section": 34663,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "LegalServices.updateFiling",
+  "direction": "sends",
+  "what": "Updates existing filing (filingId > 0) with assembled filing object and isDraft flag; returns updated filing or throws with errors/warnings in response.data."
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 1.36,
+  "section": 34663,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "LegalServices.createFiling",
+  "direction": "sends",
+  "what": "Creates new filing (filingId === 0) with assembled filing object and isDraft flag; returns new filing with filingId or throws with errors/warnings in response.data."
+ },
+ {
+  "from": 534,
+  "to": 683,
+  "score": 0.86,
+  "section": 34663,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "payment URL (this.getAuthWebUrl + 'makepayment/' + paymentToken + '/' + returnUrl)",
+  "direction": "sends",
+  "what": "Navigates browser to payment flow when isPaymentActionRequired is true and filingId > 0; paymentToken and filingId from response; no credential shown."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.03,
+  "section": 34663,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "navigateToBusinessDashboard",
+  "direction": "sends",
+  "what": "Routes user to dashboard with identifier and optional filingId; called after successful save/resume/file-pay or when exiting without saving."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 1.0,
+  "section": 34663,
+  "path": "business-filings-ui/src/views/ContinuationOut.vue",
+  "target": "this.$refs.confirm.open / this.$refs.certifyRef / this.$refs.certifyTextfieldRef",
+  "direction": "depends",
+  "what": "Child component refs for unsaved-changes confirmation dialog and certify form validation error display."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 1.1,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "OfficeAddresses component",
+  "direction": "sends",
+  "what": "updatedAddresses object with registeredOffice and recordsOffice properties; receives modified event and valid boolean for form validation state"
+ },
+ {
+  "from": 534,
+  "to": 696,
+  "score": 0.56,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "Certify component",
+  "direction": "sends",
+  "what": "isCertified boolean and certifiedBy string (authorized person's name); receives displayName() and certifyText() values; sends valid boolean for form validation state"
+ },
+ {
+  "from": 534,
+  "to": 639,
+  "score": 1.0,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "SbcFeeSummary component",
+  "direction": "sends",
+  "what": "filingData object and payURL; receives total-fee event"
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 1.12,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "SaveErrorDialog",
+  "direction": "sends",
+  "what": "saveErrorReason (nullable), filingName 'Address Change', saveErrors and saveWarnings arrays, busySaving boolean; receives exit, retry, and okay events"
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 2.12,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "PaymentErrorDialog",
+  "direction": "sends",
+  "what": "paymentErrorDialog boolean, filingName 'Address Change', saveErrors and saveWarnings arrays; receives exit event"
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 2.0,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "StaffPaymentDialog",
+  "direction": "sends",
+  "what": "staffPaymentData object, filingPaying boolean; receives submit event calling onClickFilePay(true)"
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 2.0,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "FetchErrorDialog, ResumeErrorDialog",
+  "direction": "sends",
+  "what": "dialog state booleans; receive exit event calling goToDashboard(true)"
+ },
+ {
+  "from": 534,
+  "to": 57,
+  "score": 2.02,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "useBusinessStore, useConfigurationStore, useRootStore",
+  "direction": "depends",
+  "what": "getLegalName, isEntityCoop, isBaseCompany, getPayApiUrl, isRoleStaff, getAuthWebUrl via @Getter decorators"
+ },
+ {
+  "from": 534,
+  "to": 696,
+  "score": 0.33,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "goToDashboard()",
+  "direction": "sends",
+  "what": "navigation function called on Cancel or error dialog exit; takes optional boolean parameter"
+ },
+ {
+  "from": 534,
+  "to": 696,
+  "score": 0.33,
+  "section": 34672,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "navigate utility",
+  "direction": "depends",
+  "what": "imported for navigation; called by goToDashboard"
+ },
+ {
+  "from": 534,
+  "to": 645,
+  "score": 0.66,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "LegalServices.fetchFiling()",
+  "direction": "sends",
+  "what": "GET/PUT to `businesses/{identifier}/filings/{filingId}` with filing data; receives filing object with header (certifiedBy, routingSlipNumber, bcolAccountNumber, datNumber, folioNumber, waiveFees, priority, name, filingId), business (identifier, legalName), changeOfAddress (offices.registeredOffice, offices.recordsOffice). Credential not shown."
+ },
+ {
+  "from": 534,
+  "to": 599,
+  "score": 2.0,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "OfficeAddresses child component",
+  "direction": "receives",
+  "what": "`getOrigAddresses(coaDate, isEmptyAddresses)` method called to fetch original office addresses; fires 'modified' event that triggers `officeModifiedEventHandler()`."
+ },
+ {
+  "from": 534,
+  "to": 521,
+  "score": 1.0,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "fetch-error-event",
+  "direction": "receives",
+  "what": "Custom Vue event listened on `this.$root`; sets `fetchErrorDialog = true`."
+ },
+ {
+  "from": 534,
+  "to": 696,
+  "score": 0.33,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "goToDashboard()",
+  "direction": "sends",
+  "what": "Internal navigation method called with boolean flag; no details shown."
+ },
+ {
+  "from": 534,
+  "to": 617,
+  "score": 0.33,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "saveFiling()",
+  "direction": "sends",
+  "what": "Internal method called with boolean draft flag; returns filing object or throws error with `response.data.filing` on 402 Payment Required or other errors. Details not shown."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.51,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "updateFilingData()",
+  "direction": "sends",
+  "what": "Internal method called with action ('add'|'remove'), feeCode (FilingCodes), isPriority (boolean), waiveFees (boolean)."
+ },
+ {
+  "from": 534,
+  "to": 840,
+  "score": 0.25,
+  "section": 34673,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "window.onbeforeunload",
+  "direction": "sends",
+  "what": "Browser event handler set to prompt 'You have unsaved changes. Are you sure you want to leave?' if `haveChanges` is true; cleared on `beforeDestroy()`."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.0,
+  "section": 34674,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "LegalServices.hasPendingTasks()",
+  "direction": "sends",
+  "what": "Checks if pending tasks exist for identifier; throws on error."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 0.53,
+  "section": 34674,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "LegalServices.updateFiling()",
+  "direction": "sends",
+  "what": "Updates existing filing with identifier, filing object, filingId, and isDraft flag; returns result or throws with response.data.errors/warnings."
+ },
+ {
+  "from": 534,
+  "to": 696,
+  "score": 0.5,
+  "section": 34674,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "LegalServices.createFiling()",
+  "direction": "sends",
+  "what": "Creates new filing with identifier, filing object, and isDraft flag; returns result or throws with response.data.errors/warnings."
+ },
+ {
+  "from": 534,
+  "to": 638,
+  "score": 1.03,
+  "section": 34674,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "navigateToBusinessDashboard()",
+  "direction": "sends",
+  "what": "Routes to dashboard; called with identifier only or with identifier and filingId parameter."
+ },
+ {
+  "from": 534,
+  "to": 683,
+  "score": 0.94,
+  "section": 34674,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "Payment URL at getAuthWebUrl + 'makepayment/'",
+  "direction": "sends",
+  "what": "Navigates to external payment endpoint with paymentToken and encoded returnUrl containing baseUrl and filingId."
+ },
+ {
+  "from": 534,
+  "to": 683,
+  "score": 2.0,
+  "section": 34674,
+  "path": "business-filings-ui/src/views/StandaloneOfficeAddressFiling.vue",
+  "target": "Confirmation dialog via $refs.confirm",
+  "direction": "sends",
+  "what": "Opens dialog titled 'Unsaved Changes' with yes/cancel options; resolves on yes, rejects on cancel."
+ },
+ {
+  "from": 523,
+  "to": 775,
+  "score": 1.0,
+  "section": 36465,
+  "path": "lear/jobs/future-effective-filings/file_future_effective.py",
+  "target": "NATS_SERVERS",
+  "direction": "depends",
+  "what": "NATS cluster connection via ServiceWorker using servers list from config"
+ },
+ {
+  "from": 744,
+  "to": 597,
+  "score": 1.06,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "rsbc_schemas.validate(json_data, 'filing')",
+  "direction": "depends",
+  "what": "JSON schema validation service called when payment token exists and not in change-requested status; returns tuple (valid: bool, err: error details) and raises BusinessException on invalid schema"
+ },
+ {
+  "from": 744,
+  "to": 577,
+  "score": 0.3,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "build_schema_error_response(err)",
+  "direction": "depends",
+  "what": "Transforms validation error object into formatted response sent in BusinessException"
+ },
+ {
+  "from": 744,
+  "to": 577,
+  "score": 0.39,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "db.ForeignKey('transaction.id')",
+  "direction": "depends",
+  "what": "Filing references transaction record via transaction_id"
+ },
+ {
+  "from": 744,
+  "to": 577,
+  "score": 0.43,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "db.ForeignKey('businesses.id')",
+  "direction": "depends",
+  "what": "Filing references business record via business_id"
+ },
+ {
+  "from": 744,
+  "to": 743,
+  "score": 0.54,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "db.ForeignKey('users.id')",
+  "direction": "depends",
+  "what": "Filing references user record (submitter) via submitter_id"
+ },
+ {
+  "from": 744,
+  "to": 743,
+  "score": 0.58,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "db.ForeignKey('registration_bootstrap.identifier')",
+  "direction": "depends",
+  "what": "Filing may reference bootstrap registration via temp_reg identifier"
+ },
+ {
+  "from": 744,
+  "to": 743,
+  "score": 1.46,
+  "section": 37031,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "db.relationship to ColinEventId, Comment, Document, PartyRole, Review",
+  "direction": "depends",
+  "what": "Filing has one-to-many relationships with these entities; all lazy-loaded except colin_event_ids which is select-lazy"
+ },
+ {
+  "from": 744,
+  "to": 577,
+  "score": 1.0,
+  "section": 37032,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "ColinEventId.get_by_filing_id",
+  "direction": "sends",
+  "what": "Queries colin event ids for this filing by filing id."
+ },
+ {
+  "from": 744,
+  "to": 645,
+  "score": 0.4,
+  "section": 37032,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "BusinessException",
+  "direction": "sends",
+  "what": "Raised by _raise_default_lock_exception with error message and HTTPStatus.FORBIDDEN status code."
+ },
+ {
+  "from": 744,
+  "to": 577,
+  "score": 0.56,
+  "section": 37033,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "Filing model (self)",
+  "direction": "depends",
+  "what": "ORM model with fields _filing_type, _filing_sub_type, _status, business_id, effective_date, filing_date, id, locked, _payment_token, _filing_json; statuses are Filing.Status.DRAFT, COMPLETED, PAID, APPROVED, CHANGE_REQUESTED, REJECTED, AWAITING_REVIEW enums."
+ },
+ {
+  "from": 744,
+  "to": 577,
+  "score": 0.55,
+  "section": 37033,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "Business model",
+  "direction": "depends",
+  "what": "Joined in get_completed_filings_for_colin; filtered by legal_type against excluded values SOLE_PROP and PARTNERSHIP."
+ },
+ {
+  "from": 744,
+  "to": 645,
+  "score": 0.4,
+  "section": 37033,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "BusinessException",
+  "direction": "sends",
+  "what": "Raised with error message and HTTPStatus.FORBIDDEN when delete attempted on locked filing, or invalid status set, or resubmit attempted from wrong status."
+ },
+ {
+  "from": 744,
+  "to": 644,
+  "score": 1.07,
+  "section": 37033,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "datetime.now(timezone.utc)",
+  "direction": "depends",
+  "what": "Current UTC time used to compare and set effective_date in set_review_decision()."
+ },
+ {
+  "from": 744,
+  "to": 568,
+  "score": 0.31,
+  "section": 37033,
+  "path": "lear/legal-api/src/legal_api/models/filing.py",
+  "target": "db.session.add(self)",
+  "direction": "sends",
+  "what": "Stages Filing object for insert; committed immediately in save() or deferred in save_to_session()."
+ },
+ {
+  "from": 645,
+  "to": 604,
+  "score": 1.0,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Business.get_filing_by_id(identifier, filing_id)",
+  "direction": "depends",
+  "what": "Retrieves filing for non-T-prefixed business; used by DELETE."
+ },
+ {
+  "from": 645,
+  "to": 556,
+  "score": 1.37,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "DocumentMetaService().get_documents(filing_json)",
+  "direction": "depends",
+  "what": "Enriches filing JSON with document metadata; called during GET and PUT when original_filing=false."
+ },
+ {
+  "from": 645,
+  "to": 857,
+  "score": 0.37,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "{PAYMENT_SVC_URL}/{paymentToken}",
+  "direction": "sends",
+  "what": "GET request with Authorization Bearer {jwt_token} and Content-Type application/json to fetch isPaymentActionRequired and paymentMethod for PENDING filings; failure logged not retried."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.14,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "legal_api.reports.get_pdf(storage, report_type)",
+  "direction": "sends",
+  "what": "Retrieves PDF report for filing; called when Accept MIME type is application/pdf."
+ },
+ {
+  "from": 645,
+  "to": 743,
+  "score": 1.0,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "User.get_or_create_user_by_jwt(g.jwt_oidc_token_info)",
+  "direction": "depends",
+  "what": "Creates or retrieves user from JWT token; used in PUT to associate filing with user."
+ },
+ {
+  "from": 645,
+  "to": 71,
+  "score": 1.0,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "RegistrationBootstrap.find_by_identifier(identifier)",
+  "direction": "depends",
+  "what": "Looks up temporary registration bootstrap; used in PUT and DELETE for T-prefixed identifiers."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.0,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "ListFilingResource._delete_from_minio(filing)",
+  "direction": "sends",
+  "what": "Deletes filing documents from Minio storage; called during DELETE."
+ },
+ {
+  "from": 645,
+  "to": 644,
+  "score": 0.5,
+  "section": 37088,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "validate(business, json_input)",
+  "direction": "depends",
+  "what": "Validates filing JSON against business state; returns error object with msg and code or none."
+ },
+ {
+  "from": 645,
+  "to": 744,
+  "score": 0.33,
+  "section": 37089,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "PAYMENT_SVC_URL",
+  "direction": "sends",
+  "what": "DELETE request to {PAYMENT_SVC_URL}/{filing.payment_token} with Authorization Bearer token header to cancel payment; expects OK or ACCEPTED response"
+ },
+ {
+  "from": 645,
+  "to": 597,
+  "score": 0.54,
+  "section": 37089,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "MinioService.delete_file",
+  "direction": "sends",
+  "what": "Deletes object storage keys: rulesFileKey, memorandumFileKey, affidavitFileKey, or fileKey extracted from filing JSON depending on filing type"
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.9,
+  "section": 37089,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Database (Filing, Business)",
+  "direction": "depends",
+  "what": "Queries filing by identifier and filing_id; for temp registrations queries by temp_reg field; otherwise via Business.get_filing_by_id; reads filing.filing_json, filing.filing_type, filing.payment_token, filing.status; writes filing.reset_filing_to_draft()"
+ },
+ {
+  "from": 645,
+  "to": 597,
+  "score": 0.49,
+  "section": 37089,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "namex.query_nr_number",
+  "direction": "sends",
+  "what": "Queries name request expiration by nrNumber from filing JSON; called when filing_type is incorporationApplication or registration with nameRequest.nrNumber and effectiveDate present"
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 0.32,
+  "section": 37089,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "authorized",
+  "direction": "depends",
+  "what": "External authorization check returning boolean; called with identifier, jwt, and action=['edit']; also checks is_allowed with business state, filing_type, legal_type, filing_sub_type"
+ },
+ {
+  "from": 645,
+  "to": 71,
+  "score": 1.0,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "RegistrationBootstrap.find_by_identifier",
+  "direction": "depends",
+  "what": "Queries bootstrap registration by identifier; returns bootstrap object or None."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 0.47,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Filing model",
+  "direction": "depends",
+  "what": "Persisted in database via filing.save(); queried by filing_id, business_id, status, and temp_reg; stores json, dates, submitter_id, colin_event_ids, transaction_id, status."
+ },
+ {
+  "from": 645,
+  "to": 704,
+  "score": 0.38,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "ColinEventId model",
+  "direction": "depends",
+  "what": "Appended to filing.colin_event_ids collection; stores colin_event_id value."
+ },
+ {
+  "from": 645,
+  "to": 556,
+  "score": 0.5,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "queue.publish_json",
+  "direction": "sends",
+  "what": "Receives payload {'filing': {'id': filing.id}}; no credential or authentication shown."
+ },
+ {
+  "from": 645,
+  "to": 597,
+  "score": 1.0,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "rsbc_schemas.validate",
+  "direction": "depends",
+  "what": "Validates request JSON against 'filing' schema; returns (valid bool, error details)."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 0.25,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "User model",
+  "direction": "depends",
+  "what": "User.id extracted from passed user object and stored in filing.submitter_id."
+ },
+ {
+  "from": 645,
+  "to": 89,
+  "score": 0.55,
+  "section": 37090,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "filing.set_processed",
+  "direction": "depends",
+  "what": "Sets filing status; called with business.legal_type parameter."
+ },
+ {
+  "from": 645,
+  "to": 556,
+  "score": 0.52,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Filing.FILINGS",
+  "direction": "depends",
+  "what": "Constant dict mapping filing type names and legal types to fee codes and configuration; accessed by keys 'correction', 'dissolution', 'specialResolution', 'affidavit', 'courtOrder', 'registrarsNotation', 'registrarsOrder', and filing sub-types like 'changeOfDirectors', 'changeOfAddress', 'incorporationApplication'."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.21,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "ListFilingResource._is_future_effective_filing",
+  "direction": "depends",
+  "what": "Static method called with filing_json; returns boolean for futureEffective flag in dissolution and incorporationApplication."
+ },
+ {
+  "from": 645,
+  "to": 743,
+  "score": 0.37,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Address.create_address",
+  "direction": "depends",
+  "what": "Static method called with mailing address dict from filing.json; creates Address object with city, postal_code, region, street, country fields."
+ },
+ {
+  "from": 645,
+  "to": 833,
+  "score": 1.28,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "PAYMENT_SVC_URL",
+  "direction": "sends",
+  "what": "External payment service endpoint: receives POST with businessInfo (identifier, corpType, legal_name, city, postalCode, province, addressLine1, country), filingInfo (filingTypes list, optional folioNumber), optional accountInfo (routingSlip, bcolAccountNumber, datNumber); requires Authorization bearer token header; returns JSON with id, statusCode, isPaymentActionRequired fields on success, or type and detail on BAD_REQUEST."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.0,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "user_jwt.get_token_auth_header",
+  "direction": "depends",
+  "what": "Method called to extract bearer token for Authorization header in payment service request."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.59,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "user_jwt.validate_roles",
+  "direction": "depends",
+  "what": "Method called with [STAFF_ROLE] and [SYSTEM_ROLE] to determine if user is staff or system caller; sets submitter_roles accordingly."
+ },
+ {
+  "from": 645,
+  "to": 604,
+  "score": 0.59,
+  "section": 37091,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "filing.save",
+  "direction": "sends",
+  "what": "Database persist called after setting payment_token, payment_status_code, payment_account, submitter_roles fields on success; called again on BAD_REQUEST after setting payment_status_code to error type."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.0,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Filing.get_completed_filings_for_colin()",
+  "direction": "depends",
+  "what": "Returns dict with 'filings' key containing Filing objects ready for Colin sync; called when no status filter provided."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 2.2,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "ColinEventId.get_by_filing_id(corrected_filing_id)",
+  "direction": "depends",
+  "what": "Retrieves ColinEventId records linked to a filing; used to populate correctedFilingColinId in correction filings."
+ },
+ {
+  "from": 645,
+  "to": 577,
+  "score": 1.5,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "ColinEventId.get_by_colin_id(colin_id)",
+  "direction": "depends",
+  "what": "Retrieves single ColinEventId object by colin_id; returns None if not found."
+ },
+ {
+  "from": 645,
+  "to": 744,
+  "score": 0.67,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Filing.colin_event_ids",
+  "direction": "sends",
+  "what": "Appends new ColinEventId objects to this relationship on the Filing model during PATCH."
+ },
+ {
+  "from": 645,
+  "to": 743,
+  "score": 0.62,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "Filing.save()",
+  "direction": "depends",
+  "what": "Persists Filing and its appended colin_event_ids to database; called once per colin_id in PATCH loop."
+ },
+ {
+  "from": 645,
+  "to": 576,
+  "score": 0.82,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "colin_last_update",
+  "direction": "sends",
+  "what": "Database table storing last_update timestamp and last_event_id; read via raw SQL select, written via raw SQL insert with unparameterized colin_id value."
+ },
+ {
+  "from": 645,
+  "to": 556,
+  "score": 0.64,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "jwt.validate_roles([COLIN_SVC_ROLE])",
+  "direction": "depends",
+  "what": "Returns boolean indicating whether request bearer has COLIN_SVC_ROLE; both PATCH and POST require this role."
+ },
+ {
+  "from": 645,
+  "to": 556,
+  "score": 0.5,
+  "section": 37093,
+  "path": "lear/legal-api/src/legal_api/resources/v1/business/business_filings.py",
+  "target": "COLIN_SVC_ROLE",
+  "direction": "depends",
+  "what": "Constant string naming the role required to modify filings and colin_last_update table."
+ },
+ {
+  "from": 644,
+  "to": 743,
+  "score": 3.36,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "Review model / Review.ReviewFilter",
+  "direction": "depends",
+  "what": "Constructs filter object with start_date, end_date, start_effective_date, end_effective_date, nr_number, identifier, completing_party, status list, submitted_sort_by, submitted_sort_order, page, limit."
+ },
+ {
+  "from": 644,
+  "to": 743,
+  "score": 1.5,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "Review.get_paginated_reviews",
+  "direction": "depends",
+  "what": "Accepts ReviewFilter and mapped column name; returns dict with 'reviews' list and pagination metadata."
+ },
+ {
+  "from": 644,
+  "to": 743,
+  "score": 1.0,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "User.get_or_create_user_by_jwt",
+  "direction": "depends",
+  "what": "Extracts user from JWT token in g.jwt_oidc_token_info; creates or retrieves User object."
+ },
+ {
+  "from": 644,
+  "to": 743,
+  "score": 0.7,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "ReviewResult model",
+  "direction": "depends",
+  "what": "Creates ReviewResult with reviewer_id, status, comments fields; appended to review.review_results."
+ },
+ {
+  "from": 644,
+  "to": 556,
+  "score": 1.03,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "queue.publish_json / NATS_EMAILER_SUBJECT",
+  "direction": "sends",
+  "what": "Publishes {email: {filingId, type, option}} to emailer topic; always sent when review is saved."
+ },
+ {
+  "from": 644,
+  "to": 556,
+  "score": 1.12,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "queue.publish_json / NATS_FILER_SUBJECT",
+  "direction": "sends",
+  "what": "Publishes {filing: {id}} to filer topic only if filing.status is APPROVED and filing.effective_date is in past or present."
+ },
+ {
+  "from": 644,
+  "to": 577,
+  "score": 0.4,
+  "section": 37113,
+  "path": "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py",
+  "target": "jwt.has_one_of_roles decorator",
+  "direction": "depends",
+  "what": "Enforces that caller has UserRoles.staff; rejects non-staff with 403."
+ },
+ {
+  "from": 577,
+  "to": 644,
+  "score": 0.5,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ListFilingResource.check_authorization(identifier, json_input, business, filing_id)",
+  "direction": "sends",
+  "what": "Validates caller authorization for filing; returns response and code."
+ },
+ {
+  "from": 577,
+  "to": 743,
+  "score": 1.0,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "validate(business_validate, json_input, payment_account_id)",
+  "direction": "sends",
+  "what": "Validates filing data against business rules; called when not draft and not historical COLIN and not before epoch; returns error or none."
+ },
+ {
+  "from": 577,
+  "to": 743,
+  "score": 1.0,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "User.get_or_create_user_by_jwt(g.jwt_oidc_token_info)",
+  "direction": "depends",
+  "what": "Retrieves or creates user from JWT token claims."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.0,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ListFilingResource.check_and_update_nr(filing)",
+  "direction": "sends",
+  "what": "Updates name request status from filing."
+ },
+ {
+  "from": 577,
+  "to": 604,
+  "score": 1.0,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Business.get_filing_by_id(identifier, filing_id)",
+  "direction": "depends",
+  "what": "Retrieves filing by business identifier and filing_id."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.0,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ListFilingResource.delete_from_minio(filing)",
+  "direction": "sends",
+  "what": "Removes filing documents from Minio object storage."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 0.25,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "filing.delete()",
+  "direction": "sends",
+  "what": "Removes filing record from database; may raise BusinessException."
+ },
+ {
+  "from": 577,
+  "to": 71,
+  "score": 1.0,
+  "section": 37127,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "RegistrationBootstrap.find_by_identifier(identifier)",
+  "direction": "depends",
+  "what": "Retrieves temporary registration bootstrap record."
+ },
+ {
+  "from": 577,
+  "to": 744,
+  "score": 0.33,
+  "section": 37128,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "PAYMENT_SVC_URL",
+  "direction": "sends",
+  "what": "DELETE request with Authorization Bearer token to {PAYMENT_SVC_URL}/{filing.payment_token}; expects 200 or 202 response to proceed with reset."
+ },
+ {
+  "from": 577,
+  "to": 556,
+  "score": 0.48,
+  "section": 37128,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "jwt",
+  "direction": "depends",
+  "what": "Requires JWT token via jwt.requires_auth decorator; calls jwt.get_token_auth_header() to extract token for Authorization header."
+ },
+ {
+  "from": 577,
+  "to": 604,
+  "score": 1.0,
+  "section": 37128,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Business.get_filing_by_id()",
+  "direction": "depends",
+  "what": "Retrieves filing by business identifier and filing_id when identifier does not start with 'T'."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.07,
+  "section": 37128,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing table",
+  "direction": "depends",
+  "what": "Queries Filing by temp_reg when identifier starts with 'T', or fetched via Business; calls filing.reset_filing_to_draft() to update status."
+ },
+ {
+  "from": 577,
+  "to": 556,
+  "score": 0.5,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "PAYMENT_SVC_URL",
+  "direction": "sends",
+  "what": "HTTP GET request with Bearer token (from jwt.get_token_auth_header()) to retrieve payment status by paymentToken; expects JSON response with isPaymentActionRequired (bool) and paymentMethod (string)."
+ },
+ {
+  "from": 577,
+  "to": 556,
+  "score": 1.33,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "DocumentMetaService().get_documents()",
+  "direction": "depends",
+  "what": "External function to retrieve document metadata from filing JSON; injects into filing['filing']['documents']."
+ },
+ {
+  "from": 577,
+  "to": 706,
+  "score": 0.5,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ReviewResult.get_last_review_result()",
+  "direction": "depends",
+  "what": "Queries review result for filing ID; if found, injects comments into filing['filing']['header']['latestReviewComment']."
+ },
+ {
+  "from": 577,
+  "to": 707,
+  "score": 0.33,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "namex.query_nr_number()",
+  "direction": "depends",
+  "what": "Queries name request service by NR number; returns response object with JSON data."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.0,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "namex.is_date_past_expiration()",
+  "direction": "depends",
+  "what": "Checks if effective_date is past NR expiration in response JSON."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.0,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ListFilingResource.process_colin_filing()",
+  "direction": "depends",
+  "what": "Processes filing sourced from COLIN; returns (error_dict, HTTPStatus) tuple."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.08,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ListFilingResource.create_invoice()",
+  "direction": "depends",
+  "what": "Creates invoice for filing; accepts business, filing, filing_types, jwt, payment_account_id; returns (message_dict, HTTPStatus) tuple."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 0.32,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "is_allowed()",
+  "direction": "depends",
+  "what": "Checks if filing type/subtype is allowed for business state and legal_type; parameters: business, state, filing_type, legal_type, jwt, filing_sub_type, filing_id."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.24,
+  "section": 37130,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing model",
+  "direction": "depends",
+  "what": "Accesses Filing.Status enum (PENDING, DRAFT, CHANGE_REQUESTED, APPROVED, REJECTED, COMPLETED, PAID), Filing.Source enum (COLIN), Filing.get_filings_sub_type(); reads/writes filing_type, status, source, filing_json."
+ },
+ {
+  "from": 577,
+  "to": 71,
+  "score": 1.0,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "RegistrationBootstrap.find_by_identifier()",
+  "direction": "depends",
+  "what": "Queries store for bootstrap registration by identifier; returns None if not found."
+ },
+ {
+  "from": 577,
+  "to": 744,
+  "score": 1.04,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "db.session.query()",
+  "direction": "depends",
+  "what": "Direct database query to retrieve Filing by temp_reg/id or by Business.id/Filing.id/business_identifier."
+ },
+ {
+  "from": 577,
+  "to": 556,
+  "score": 0.25,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing.get_filings_by_status()",
+  "direction": "depends",
+  "what": "Queries store for filings by business_id and status list; used to find EPOCH filings."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 0.57,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing model",
+  "direction": "depends",
+  "what": "Reads and writes filing_json, filing_date, effective_date, transaction_id, source, submitter_id, colin_event_ids, temp_reg; calls set_processed() and save()."
+ },
+ {
+  "from": 577,
+  "to": 556,
+  "score": 0.5,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "queue.publish_json()",
+  "direction": "sends",
+  "what": "Publishes JSON payload {'filing': {'id': filing.id}} when filing is not before epoch."
+ },
+ {
+  "from": 577,
+  "to": 597,
+  "score": 1.0,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "rsbc_schemas.validate()",
+  "direction": "depends",
+  "what": "External schema validator; receives JSON and schema name 'filing', returns (valid bool, errors)."
+ },
+ {
+  "from": 577,
+  "to": 704,
+  "score": 0.38,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ColinEventId model",
+  "direction": "depends",
+  "what": "Creates and appends ColinEventId objects with colin_event_id attribute to filing.colin_event_ids."
+ },
+ {
+  "from": 577,
+  "to": 744,
+  "score": 0.33,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing.Status.EPOCH",
+  "direction": "depends",
+  "what": "Enum constant for epoch filing status."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.25,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing.Source.LEAR / Filing.Source.COLIN",
+  "direction": "depends",
+  "what": "Enum constants for filing source; LEAR is default, COLIN triggers special handling."
+ },
+ {
+  "from": 577,
+  "to": 625,
+  "score": 0.25,
+  "section": 37131,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "BOB_DATE constant",
+  "direction": "depends",
+  "what": "Constant threshold date; filings before this with COLIN source are marked historical."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 1.04,
+  "section": 37132,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ListFilingResource.is_future_effective_filing()",
+  "direction": "sends",
+  "what": "Called with filing_json to determine if filing has future effective date; no credentials or checks shown."
+ },
+ {
+  "from": 577,
+  "to": 824,
+  "score": 0.82,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "PAYMENT_SVC_URL",
+  "direction": "sends",
+  "what": "HTTP POST with Bearer token from user JWT, payload with businessInfo, filingInfo, and optional accountInfo (routing slip, BCOL account number, DAT number); expects response JSON with id, statusCode, isPaymentActionRequired, or on error type and detail."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 2.07,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Filing model",
+  "direction": "depends",
+  "what": "Reads and writes filing.filing_type, filing.filing_json, filing.id, filing.payment_token, filing.payment_status_code, filing.payment_account, filing.submitter_roles, filing.effective_date; calls filing.save()."
+ },
+ {
+  "from": 577,
+  "to": 720,
+  "score": 0.41,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Business model",
+  "direction": "depends",
+  "what": "Reads business.identifier, business.legal_name, business.legal_type, business.mailing_address, business.LegalTypes enum; writes business.legal_name."
+ },
+ {
+  "from": 577,
+  "to": 743,
+  "score": 0.33,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Address.create_address",
+  "direction": "depends",
+  "what": "Called to create Address objects from filing JSON mailing address data."
+ },
+ {
+  "from": 577,
+  "to": 597,
+  "score": 0.54,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "MinioService.delete_file",
+  "direction": "sends",
+  "what": "Called with file key string to delete files (rulesFileKey, memorandumFileKey, affidavitFileKey, or fileKey) from object storage."
+ },
+ {
+  "from": 577,
+  "to": 743,
+  "score": 0.25,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "LegislationDatetime.as_utc_timezone",
+  "direction": "depends",
+  "what": "Called to convert effective date to UTC timezone for filing JSON."
+ },
+ {
+  "from": 577,
+  "to": 645,
+  "score": 0.42,
+  "section": 37133,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "JwtManager.validate_roles",
+  "direction": "depends",
+  "what": "Called with role constant (STAFF_ROLE, SYSTEM_ROLE) to check if user has special roles."
+ },
+ {
+  "from": 577,
+  "to": 644,
+  "score": 1.0,
+  "section": 37134,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "Review",
+  "direction": "depends",
+  "what": "Filing review record retrieved by filing.id and saved after updates; status set to ReviewStatus.RESUBMITTED"
+ },
+ {
+  "from": 577,
+  "to": 743,
+  "score": 0.33,
+  "section": 37134,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ReviewResult",
+  "direction": "depends",
+  "what": "Last review result for filing.id retrieved and its submission_date updated, then appended to review.review_results"
+ },
+ {
+  "from": 577,
+  "to": 644,
+  "score": 1.1,
+  "section": 37134,
+  "path": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "target": "ReviewStatus.RESUBMITTED",
+  "direction": "depends",
+  "what": "Enum constant assigned to review.status"
+ },
+ {
+  "from": 577,
+  "to": 743,
+  "score": 1.0,
+  "section": 37145,
+  "path": "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+  "target": "User.get_or_create_user_by_jwt()",
+  "direction": "depends",
+  "what": "Retrieves or creates user from JWT token info in g.jwt_oidc_token_info."
+ },
+ {
+  "from": 577,
+  "to": 579,
+  "score": 1.7,
+  "section": 37145,
+  "path": "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+  "target": "publish_event()",
+  "direction": "sends",
+  "what": "Publishes event to NATS topic specified by config key; sends oldBn and newBn in payload for bc.registry.bnmove, empty payload for bc.registry.business.bn."
+ },
+ {
+  "from": 577,
+  "to": 720,
+  "score": 0.39,
+  "section": 37145,
+  "path": "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+  "target": "business.save()",
+  "direction": "sends",
+  "what": "Persists business tax_id update to database."
+ },
+ {
+  "from": 694,
+  "to": 732,
+  "score": 0.25,
+  "section": 38307,
+  "path": "lear/queue_services/business-pay/src/business_pay/config.py",
+  "target": "NATS_SERVERS",
+  "direction": "depends",
+  "what": "Environment variable with comma-separated NATS server URLs; split and passed to NATS_CONNECTION_OPTIONS and SUBSCRIPTION_OPTIONS."
+ },
+ {
+  "from": 694,
+  "to": 557,
+  "score": 0.25,
+  "section": 38307,
+  "path": "lear/queue_services/business-pay/src/business_pay/config.py",
+  "target": "NATS_FILER_SUBJECT",
+  "direction": "depends",
+  "what": "Environment variable for NATS subject published to by filer (defaults to 'entity.filing.filer')."
+ },
+ {
+  "from": 694,
+  "to": 670,
+  "score": 0.33,
+  "section": 38307,
+  "path": "lear/queue_services/business-pay/src/business_pay/config.py",
+  "target": "AUDIENCE, PUBLISHER_AUDIENCE, SUB_AUDIENCE, SUB_SERVICE_ACCOUNT",
+  "direction": "depends",
+  "what": "Environment variables for Google Pub/Sub authentication and authorization."
+ },
+ {
+  "from": 694,
+  "to": 797,
+  "score": 1.0,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "Filing.get_filing_by_payment_token",
+  "direction": "depends",
+  "what": "Database query for filing matching payment token id; returns Filing or None"
+ },
+ {
+  "from": 694,
+  "to": 604,
+  "score": 0.45,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "Filing.save",
+  "direction": "sends",
+  "what": "Persists filing object with payment_completion_date, payment_status_code, status fields updated to database"
+ },
+ {
+  "from": 694,
+  "to": 644,
+  "score": 0.69,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "Review.save",
+  "direction": "sends",
+  "what": "Persists review object with filing_id, nr_number, identifier, status, completing_party, submission_date, creation_date to database"
+ },
+ {
+  "from": 694,
+  "to": 797,
+  "score": 0.83,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "FILER_PUBLISH_OPTIONS/subject",
+  "direction": "sends",
+  "what": "Queue topic from config; receives create_filing_msg(filing.id) payload via queue.publish_json()"
+ },
+ {
+  "from": 694,
+  "to": 775,
+  "score": 1.04,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "EMAIL_PUBLISH_OPTIONS/subject",
+  "direction": "sends",
+  "what": "Queue topic from config; receives create_email_msg(filing.id, filing.filing_type) payload via queue.publish_json()"
+ },
+ {
+  "from": 694,
+  "to": 797,
+  "score": 0.5,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "create_filing_msg",
+  "direction": "depends",
+  "what": "Transforms filing.id into queue message payload for filer service"
+ },
+ {
+  "from": 694,
+  "to": 775,
+  "score": 1.04,
+  "section": 38314,
+  "path": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+  "target": "create_email_msg",
+  "direction": "depends",
+  "what": "Transforms filing.id and filing.filing_type into queue message payload for emailer service"
+ },
+ {
+  "from": 694,
+  "to": 552,
+  "score": 0.5,
+  "section": 38316,
+  "path": "lear/queue_services/business-pay/src/business_pay/services/gcp_auth.py",
+  "target": "google.oauth2.id_token.verify_oauth2_token()",
+  "direction": "sends",
+  "what": "Sends the extracted JWT token, a requests.Request transport object, and the audience string from SUB_AUDIENCE config; receives verified claim dict or raises exception."
+ },
+ {
+  "from": 694,
+  "to": 556,
+  "score": 1.03,
+  "section": 38317,
+  "path": "lear/queue_services/business-pay/src/business_pay/services/queue.py",
+  "target": "NATS_CONNECT_TIMEOUT",
+  "direction": "depends",
+  "what": "Flask app.config key read during init_app; defaults to DEFAULT_CONNECT_TIMEOUT if not set."
+ },
+ {
+  "from": 775,
+  "to": 744,
+  "score": 0.5,
+  "section": 38349,
+  "path": "lear/queue_services/common/src/entity_queue_common/messages.py",
+  "target": "legal_api.models.Filing",
+  "direction": "depends",
+  "what": "Filing model with `id` and `filing_type` fields accessed in `publish_email_message`."
+ },
+ {
+  "from": 775,
+  "to": 797,
+  "score": 0.5,
+  "section": 38349,
+  "path": "lear/queue_services/common/src/entity_queue_common/messages.py",
+  "target": "entity_queue_common.service.QueueServiceManager",
+  "direction": "depends",
+  "what": "Queue service manager dependency injected into `publish_email_message` to publish to NATS."
+ },
+ {
+  "from": 775,
+  "to": 797,
+  "score": 0.75,
+  "section": 38349,
+  "path": "lear/queue_services/common/src/entity_queue_common/messages.py",
+  "target": "emailer subject (NATS topic)",
+  "direction": "sends",
+  "what": "Email payload published by `publish_email_message` via `qsm.service.publish(subject, payload)` with no credential check shown."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 1.07,
+  "section": 38638,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "MessageProcessingService.find_message_by_message_id",
+  "direction": "depends",
+  "what": "Queries existing message record by message_id only; called for non-cloud-event format."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 3.86,
+  "section": 38638,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "MessageProcessingService.create_message",
+  "direction": "sends",
+  "what": "Creates new MessageProcessing record with message_id, source, identifier, message_type, status, message_json, last_error, seen_count; no credentials shown."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 0.64,
+  "section": 38638,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "involuntary_dissolution_stage_1_notification.PROCESSABLE_FURNISHING_NAMES",
+  "direction": "depends",
+  "what": "List used to filter bc.registry.dissolution messages by furnishingName field."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 1.0,
+  "section": 38638,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "MessageProcessing.Status",
+  "direction": "depends",
+  "what": "Enum providing PROCESSING, COMPLETED, FAILED status values."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 2.0,
+  "section": 38638,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "MSG_RETRY_NUM",
+  "direction": "depends",
+  "what": "Config value limiting message reprocessing; message rejected if seen_count exceeds this threshold."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 1.0,
+  "section": 38638,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "current_app.config",
+  "direction": "depends",
+  "what": "Flask config accessed for MSG_RETRY_NUM value."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 1.17,
+  "section": 38639,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "MessageProcessingService.update_message_status",
+  "direction": "sends",
+  "what": "Sends a MessageProcessing record with a status constant (PROCESSING, FAILED, or COMPLETE), optional error_details string, and a notify boolean flag; receives the updated record or error."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 1.17,
+  "section": 38639,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "MessageProcessingService.update_message_last_error",
+  "direction": "sends",
+  "what": "Sends a MessageProcessing record with an error_details string and notify boolean set to False; receives the updated record or error."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 1.67,
+  "section": 38639,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/message_tracker/tracker.py",
+  "target": "create_message",
+  "direction": "sends",
+  "what": "Sends message_context_properties dict, message string, a MessageProcessing.Status constant, and error_details (or None); receives a new message object."
+ },
+ {
+  "from": 579,
+  "to": 568,
+  "score": 0.5,
+  "section": 38642,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "ENTITY_EVENT_PUBLISH_OPTIONS['subject']",
+  "direction": "sends",
+  "what": "Email payload as JSON via QueueServiceManager.publish()."
+ },
+ {
+  "from": 579,
+  "to": 529,
+  "score": 0.3,
+  "section": 38642,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "legal_api.services.flags (Flags)",
+  "direction": "depends",
+  "what": "Feature flags initialized if LD_SDK_KEY config present; queried by email processors."
+ },
+ {
+  "from": 579,
+  "to": 706,
+  "score": 1.25,
+  "section": 38642,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "email_processors (17 processor modules)",
+  "direction": "depends",
+  "what": "Imported handlers for specific filing types (e.g., affiliation_notification, ar_reminder_notification); route on message type."
+ },
+ {
+  "from": 579,
+  "to": 775,
+  "score": 0.66,
+  "section": 38642,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "entity_queue_common.service (QueueServiceManager)",
+  "direction": "depends",
+  "what": "Manages NATS connection and publish; initialized via qsm.service."
+ },
+ {
+  "from": 579,
+  "to": 775,
+  "score": 1.0,
+  "section": 38643,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "send_email",
+  "direction": "sends",
+  "what": "Called with constructed email object and bearer token; sends email to recipients; raises `EmailException` on failure which is caught and re-raised for requeue."
+ },
+ {
+  "from": 579,
+  "to": 707,
+  "score": 5.17,
+  "section": 38643,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "nr_notification.process, name_request.process, affiliation_notification.process, bn_notification.process_bn_move, involuntary_dissolution_stage_1_notification.process, involuntary_dissolution_stage_1_notification.post_process, bn_notification.process, mras_notification.process, ar_reminder_notification.process, agm_location_change_notification.process, agm_extension_notification.process, dissolution_notification.process, registration_notification.process, restoration_notification.process, change_of_registration_notification.process, correction_notification.process, consent_continuation_out_notification.process, continuation_out_notification.process, special_resolution_notification.process, amalgamation_notification.process, continuation_in_notification.process, filing_notification.process",
+  "direction": "depends",
+  "what": "Notification processors construct email objects from `email_msg` and token; `involuntary_dissolution_stage_1_notification.post_process` updates furnishing status as `PROCESSED` or `FAILED` after send attempt."
+ },
+ {
+  "from": 579,
+  "to": 707,
+  "score": 1.0,
+  "section": 38643,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "flags.is_on",
+  "direction": "depends",
+  "what": "Checked for flag `'disable-specific-service-provider'` to conditionally pass flag state to `ar_reminder_notification.process`."
+ },
+ {
+  "from": 579,
+  "to": 529,
+  "score": 0.33,
+  "section": 38643,
+  "path": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "target": "Furnishing.FurnishingStatus",
+  "direction": "depends",
+  "what": "Enum providing `PROCESSED` and `FAILED` status values for post-processing dissolution furnishings after email send."
+ },
+ {
+  "from": 607,
+  "to": 71,
+  "score": 0.34,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "ACCOUNT_SVC_ENTITY_URL",
+  "direction": "sends",
+  "what": "HTTP POST/PUT to account service endpoint for creating or updating business contacts, with JSON payload containing email, phone, phoneExtension; requires bearer token from AccountService.get_bearer_token()"
+ },
+ {
+  "from": 607,
+  "to": 768,
+  "score": 1.03,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "AccountService.create_affiliation()",
+  "direction": "sends",
+  "what": "Creates affiliation between bootstrap account and business; sent bootstrap account, business identifier, legal name, legal type code, passcode, and details dict with bootstrapIdentifier, identifier, nrNumber; expects HTTPStatus.OK or HTTPStatus.CREATED response"
+ },
+ {
+  "from": 607,
+  "to": 556,
+  "score": 0.66,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "AccountService.delete_affiliation()",
+  "direction": "sends",
+  "what": "Removes affiliation when create_affiliation fails; sent bootstrap account and business identifier; expects HTTPStatus.OK response"
+ },
+ {
+  "from": 607,
+  "to": 71,
+  "score": 1.32,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "AccountService.update_entity()",
+  "direction": "sends",
+  "what": "Updates entity in auth service with business identifier, legal name, legal type code, and optional state; called twice in update_affiliation (on bootstrap) and once in update_entity (on business)"
+ },
+ {
+  "from": 607,
+  "to": 71,
+  "score": 1.17,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "RegistrationBootstrap.find_by_identifier()",
+  "direction": "depends",
+  "what": "Database lookup of bootstrap record by filing.temp_reg identifier"
+ },
+ {
+  "from": 607,
+  "to": 71,
+  "score": 1.0,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "business_info.get_firm_affiliation_passcode()",
+  "direction": "depends",
+  "what": "Retrieves passcode for firm affiliation by business ID when filing type is registration"
+ },
+ {
+  "from": 607,
+  "to": 71,
+  "score": 1.0,
+  "section": 38746,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+  "target": "sentry_sdk.capture_message()",
+  "direction": "sends",
+  "what": "Logs errors to Sentry at error level when business profile update, business profile not found, affiliation creation, or affiliation management fails"
+ },
+ {
+  "from": 606,
+  "to": 568,
+  "score": 0.5,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "ENTITY_EVENT_PUBLISH_OPTIONS['subject']",
+  "direction": "sends",
+  "what": "Filing event message with CloudEvent spec containing filing ID, effective date, business identifier, legal filings list, and optional temp registration."
+ },
+ {
+  "from": 606,
+  "to": 731,
+  "score": 1.0,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "BUSINESS_EVENTS_TOPIC",
+  "direction": "sends",
+  "what": "Filing event message in SimpleCloudEvent envelope with filing header, business identifier, legal filings list, and optional temp registration."
+ },
+ {
+  "from": 606,
+  "to": 797,
+  "score": 0.7,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "EMAIL_PUBLISH_OPTIONS['subject']",
+  "direction": "sends",
+  "what": "Email message via publish_email_message() for MRAS filing types (AMALGAMATIONAPPLICATION, CONTINUATIONIN, INCORPORATIONAPPLICATION); no credential check shown."
+ },
+ {
+  "from": 606,
+  "to": 89,
+  "score": 0.33,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "legal_api.models.Business",
+  "direction": "depends",
+  "what": "Business entity with identifier field; read-only access."
+ },
+ {
+  "from": 606,
+  "to": 744,
+  "score": 0.61,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "legal_api.models.Filing",
+  "direction": "depends",
+  "what": "Filing entity with filing_type, filing_json, effective_date, temp_reg, and id fields; read-only access."
+ },
+ {
+  "from": 606,
+  "to": 604,
+  "score": 1.14,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "legal_api.core.Filing (FilingCore)",
+  "direction": "depends",
+  "what": "Enum FilingTypes.AMALGAMATIONAPPLICATION, CONTINUATIONIN, INCORPORATIONAPPLICATION used for conditional email publishing."
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.25,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "QueueServiceManager",
+  "direction": "depends",
+  "what": "Service manager with publish() method for NATS queue; instantiated globally as qsm."
+ },
+ {
+  "from": 606,
+  "to": 775,
+  "score": 0.72,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "entity_queue_common.service_utils",
+  "direction": "depends",
+  "what": "Provides FilingException, QueueException, logger; no calls shown in this chunk."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 1.0,
+  "section": 38766,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "sentry_sdk.capture_message",
+  "direction": "sends",
+  "what": "Error messages on publication failures with level='error'."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 0.76,
+  "section": 38770,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "FilingCore",
+  "direction": "depends",
+  "what": "Database record fetched by id; chunk checks status field against Filing.Status.COMPLETED and filing_type field against FilingCore.FilingTypes.CORRECTION"
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.6,
+  "section": 38770,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "filing_core_submission.storage",
+  "direction": "depends",
+  "what": "Extracts the storage attribute to get filing_submission object containing business_id and id fields"
+ },
+ {
+  "from": 606,
+  "to": 694,
+  "score": 0.33,
+  "section": 38770,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "logger.warning",
+  "direction": "sends",
+  "what": "Logs reprocessing attempt with business.id, filing.id, and filing_msg; no error raised on COMPLETED status"
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.48,
+  "section": 38770,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "QueueException",
+  "direction": "sends",
+  "what": "Raised when FilingCore.find_by_id returns no record"
+ },
+ {
+  "from": 606,
+  "to": 89,
+  "score": 0.53,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "versioning_manager.unit_of_work",
+  "direction": "depends",
+  "what": "Creates a transactional unit of work wrapping db.session."
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.42,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "Business.find_by_internal_id",
+  "direction": "depends",
+  "what": "Retrieves business by internal id from filing_submission.business_id."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 0.5,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "FilingMeta",
+  "direction": "depends",
+  "what": "Data class holding application_date, legal_filings list, and optional correction dict."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 0.43,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "alteration.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_submission, filing, filing_meta, is_correction."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 1.12,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "annual_report.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing, filing_meta, enable-involuntary-dissolution flag."
+ },
+ {
+  "from": 606,
+  "to": 607,
+  "score": 0.32,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "change_of_directors.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing (augmented with colinIds from filing_submission), filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 0.39,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "dissolution.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing, filing_submission, filing_meta, enable-involuntary-dissolution flag."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 2.23,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "incorporation_filing.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_core_submission.json, filing_submission, filing_meta; returns updated business, filing_submission, filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 1.56,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "registration.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_core_submission.json, filing_submission, filing_meta; returns updated business, filing_submission, filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 1.73,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "conversion.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_core_submission.json, filing_submission, filing_meta; returns updated business, filing_submission."
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.56,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "correction.process",
+  "direction": "sends",
+  "what": "Processor called with filing_submission, filing, filing_meta, business; returns updated filing_submission."
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.56,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "change_of_registration.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_submission, filing, filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 720,
+  "score": 0.56,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "put_back_on.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing, filing_submission, filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 607,
+  "score": 1.23,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "amalgamation_application.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_core_submission.json, filing_submission, filing_meta; returns updated business, filing_submission, filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 71,
+  "score": 1.23,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "continuation_in.process",
+  "direction": "sends",
+  "what": "Processor called with business, filing_core_submission.json, filing_submission, filing_meta; returns updated business, filing_submission, filing_meta."
+ },
+ {
+  "from": 606,
+  "to": 607,
+  "score": 1.0,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "business_profile.update_affiliation",
+  "direction": "sends",
+  "what": "Called for new business from incorporation, registration, amalgamation, continuation-in (not conversion)."
+ },
+ {
+  "from": 606,
+  "to": 627,
+  "score": 0.5,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "business_profile.update_business_profile",
+  "direction": "sends",
+  "what": "Called for new business or after specific filing types (alteration, change of registration, change of name, correction, restoration)."
+ },
+ {
+  "from": 606,
+  "to": 607,
+  "score": 1.0,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "name_request.consume_nr",
+  "direction": "sends",
+  "what": "Marks name request as consumed for new business or specific filing types (alteration, change of registration, change of name, correction, restoration); passes flags parameter."
+ },
+ {
+  "from": 606,
+  "to": 797,
+  "score": 1.43,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "publish_email_message",
+  "direction": "sends",
+  "what": "Async call to publish email via qsm with subject from APP_CONFIG.EMAIL_PUBLISH_OPTIONS['subject'], filing_submission, and filing_submission.status; exceptions caught and logged to Sentry, not re-raised."
+ },
+ {
+  "from": 606,
+  "to": 556,
+  "score": 0.31,
+  "section": 38772,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "publish_event",
+  "direction": "sends",
+  "what": "Async call to publish event with business and filing_submission; exceptions caught and logged to Sentry, not re-raised."
+ },
+ {
+  "from": 606,
+  "to": 627,
+  "score": 0.33,
+  "section": 38774,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "process_filing",
+  "direction": "sends",
+  "what": "Invoked with parsed filing_msg dictionary and FLASK_APP instance to process the filing."
+ },
+ {
+  "from": 606,
+  "to": 797,
+  "score": 0.46,
+  "section": 38774,
+  "path": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "target": "Sentry (capture_message)",
+  "direction": "sends",
+  "what": "Error-level capture of queue error messages as JSON string of filing_msg when QueueException or unhandled Exception occurs."
+ },
+ {
+  "from": 796,
+  "to": 523,
+  "score": 0.28,
+  "section": 38874,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/config.py",
+  "target": "NATS subject 'entity.filings'",
+  "direction": "depends",
+  "what": "NATS topic name for filing subscription, configurable via NATS_SUBJECT env var"
+ },
+ {
+  "from": 797,
+  "to": 694,
+  "score": 1.0,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "QueueServiceManager.service.publish",
+  "direction": "sends",
+  "what": "Publishes filing message to NATS subject from APP_CONFIG.FILER_PUBLISH_OPTIONS['subject']."
+ },
+ {
+  "from": 797,
+  "to": 720,
+  "score": 0.33,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "APP_CONFIG.EMAIL_PUBLISH_OPTIONS['subject']",
+  "direction": "sends",
+  "what": "NATS queue topic for email messages; publishing subject is configured here."
+ },
+ {
+  "from": 797,
+  "to": 694,
+  "score": 1.0,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "APP_CONFIG.FILER_PUBLISH_OPTIONS['subject']",
+  "direction": "sends",
+  "what": "NATS queue topic for filing messages; publishing subject is configured here."
+ },
+ {
+  "from": 797,
+  "to": 744,
+  "score": 1.2,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "legal_api.models.Filing",
+  "direction": "depends",
+  "what": "get_filing_by_payment_token() looks up filing by payment ID; model defines Status enum and payment_completion_date, effective_date fields."
+ },
+ {
+  "from": 797,
+  "to": 89,
+  "score": 1.0,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "legal_api.db",
+  "direction": "sends",
+  "what": "Flask-SQLAlchemy session; commit() saves filing.payment_completion_date update; no transaction rollback on subsequent failures."
+ },
+ {
+  "from": 797,
+  "to": 71,
+  "score": 1.14,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "sentry_sdk.capture_message",
+  "direction": "sends",
+  "what": "Sends error and warning messages to Sentry for human review; called on payment reprocessing, email/filing publication failures, unknown statusCode, and FilingException."
+ },
+ {
+  "from": 797,
+  "to": 579,
+  "score": 0.3,
+  "section": 38877,
+  "path": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "target": "NATS Streaming queue",
+  "direction": "receives",
+  "what": "Receives payment token messages via cb_subscription_handler callback; callback processes one message synchronously; message is consumed if no OperationalError is raised."
+ },
+ {
+  "from": 635,
+  "to": 834,
+  "score": 1.5,
+  "section": 41855,
+  "path": "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py",
+  "target": "PaymentModel, PaymentTransactionModel (join query)",
+  "direction": "depends",
+  "what": "Database query joining Payment and PaymentTransaction for records with PaymentStatus.CREATED and Error.SERVICE_UNAVAILABLE.name reason code."
+ },
+ {
+  "from": 635,
+  "to": 620,
+  "score": 1.25,
+  "section": 41855,
+  "path": "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py",
+  "target": "TransactionService.update_transaction",
+  "direction": "sends",
+  "what": "Updates a transaction by ID with pay_response_url=None; raises BusinessException if error occurs."
+ },
+ {
+  "from": 635,
+  "to": 833,
+  "score": 1.05,
+  "section": 41855,
+  "path": "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py",
+  "target": "PaymentService.delete_invoice",
+  "direction": "sends",
+  "what": "Deletes an invoice by ID; raises BusinessException on error."
+ },
+ {
+  "from": 635,
+  "to": 833,
+  "score": 1.25,
+  "section": 41855,
+  "path": "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py",
+  "target": "DirectPayService.query_order_status",
+  "direction": "sends",
+  "what": "Queries external PAYBC system with an invoice and InvoiceReferenceStatus.ACTIVE.value; returns object with paymentstatus field; raises HTTPError on failure."
+ },
+ {
+  "from": 619,
+  "to": 833,
+  "score": 0.41,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "CFS_BASE_URL",
+  "direction": "depends",
+  "what": "Base URL for CFS API calls; credentials CFS_CLIENT_ID and CFS_CLIENT_SECRET also configured"
+ },
+ {
+  "from": 619,
+  "to": 833,
+  "score": 0.96,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "PAYBC_DIRECT_PAY_BASE_URL",
+  "direction": "depends",
+  "what": "Base URL for PayBC Direct Pay API; credentials PAYBC_DIRECT_PAY_CLIENT_ID and PAYBC_DIRECT_PAY_CLIENT_SECRET also configured"
+ },
+ {
+  "from": 619,
+  "to": 512,
+  "score": 0.3,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "ACCOUNT_MAILER_TOPIC",
+  "direction": "sends",
+  "what": "Google Pub/Sub topic for account mailer messages; authenticated via GCP_AUTH_KEY if set"
+ },
+ {
+  "from": 619,
+  "to": 663,
+  "score": 0.34,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "AUTH_EVENT_TOPIC",
+  "direction": "sends",
+  "what": "Google Pub/Sub topic for auth events; authenticated via GCP_AUTH_KEY if set"
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 0.7,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "BUSINESS_PAY_TOPIC",
+  "direction": "sends",
+  "what": "Google Pub/Sub topic for business payments; authenticated via GCP_AUTH_KEY if set"
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 0.7,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "NAMEX_PAY_TOPIC",
+  "direction": "sends",
+  "what": "Google Pub/Sub topic for name exchange payments; authenticated via GCP_AUTH_KEY if set"
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 0.7,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "STRR_PAY_TOPIC",
+  "direction": "sends",
+  "what": "Google Pub/Sub topic for STRR payments (defaults to BUSINESS_PAY_TOPIC); authenticated via GCP_AUTH_KEY if set"
+ },
+ {
+  "from": 619,
+  "to": 709,
+  "score": 0.4,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "AUTH_API_ENDPOINT",
+  "direction": "depends",
+  "what": "Auth service endpoint constructed from AUTH_API_URL and AUTH_API_VERSION env vars"
+ },
+ {
+  "from": 619,
+  "to": 574,
+  "score": 0.53,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "BCOL_API_ENDPOINT",
+  "direction": "depends",
+  "what": "BCOL service endpoint constructed from BCOL_API_URL and BCOL_API_VERSION env vars"
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 1.33,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "REPORT_API_BASE_URL",
+  "direction": "depends",
+  "what": "Report service endpoint constructed from REPORT_API_URL and REPORT_API_VERSION env vars"
+ },
+ {
+  "from": 619,
+  "to": 709,
+  "score": 0.49,
+  "section": 42200,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "NOTIFY_API_ENDPOINT",
+  "direction": "depends",
+  "what": "Notification service endpoint constructed from NOTIFY_API_URL and NOTIFY_API_VERSION env vars"
+ },
+ {
+  "from": 619,
+  "to": 691,
+  "score": 0.33,
+  "section": 42201,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "DATABASE_TEST_USERNAME, DATABASE_TEST_PASSWORD, DATABASE_TEST_NAME, DATABASE_TEST_HOST, DATABASE_TEST_PORT, DATABASE_TEST_URL",
+  "direction": "depends",
+  "what": "Environment variables providing PostgreSQL test database connection details; defaults used if absent (postgres/postgres@localhost:5432/paytestdb)."
+ },
+ {
+  "from": 619,
+  "to": 511,
+  "score": 1.41,
+  "section": 42201,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "JWT_OIDC_TEST_AUDIENCE, JWT_OIDC_TEST_CLIENT_SECRET, JWT_OIDC_TEST_ISSUER, JWT_OIDC_WELL_KNOWN_CONFIG, JWT_OIDC_TEST_ALGORITHMS, JWT_OIDC_TEST_JWKS_URI",
+  "direction": "depends",
+  "what": "Environment variables providing JWT/OIDC test configuration (audience, issuer, algorithms, JWKS URI); no defaults except JWKS_URI (default None)."
+ },
+ {
+  "from": 619,
+  "to": 710,
+  "score": 0.33,
+  "section": 42201,
+  "path": "sbc-pay/pay-api/src/pay_api/config.py",
+  "target": "USE_TEST_KEYCLOAK_DOCKER, USE_DOCKER_MOCK",
+  "direction": "depends",
+  "what": "Environment variables read but not used in visible logic (default None)."
+ },
+ {
+  "from": 728,
+  "to": 635,
+  "score": 1.1,
+  "section": 42260,
+  "path": "sbc-pay/pay-api/src/pay_api/models/payment_transaction.py",
+  "target": "payments table",
+  "direction": "depends",
+  "what": "Reads payment_id foreign key and payment_method_code; joined in find_stale_records and invoice-related queries"
+ },
+ {
+  "from": 728,
+  "to": 729,
+  "score": 0.33,
+  "section": 42260,
+  "path": "sbc-pay/pay-api/src/pay_api/models/payment_transaction.py",
+  "target": "transaction_status_codes table",
+  "direction": "depends",
+  "what": "status_code must exist as foreign key; values: CREATED, COMPLETED, CANCELLED, FAILED"
+ },
+ {
+  "from": 728,
+  "to": 664,
+  "score": 0.38,
+  "section": 42260,
+  "path": "sbc-pay/pay-api/src/pay_api/models/payment_transaction.py",
+  "target": "InvoiceReference model",
+  "direction": "depends",
+  "what": "Joined via invoice_number; filters on status_code=ACTIVE in active transaction queries"
+ },
+ {
+  "from": 728,
+  "to": 619,
+  "score": 0.33,
+  "section": 42260,
+  "path": "sbc-pay/pay-api/src/pay_api/models/payment_transaction.py",
+  "target": "TransactionStatus enum",
+  "direction": "depends",
+  "what": "Provides status values: CREATED, COMPLETED, CANCELLED, FAILED"
+ },
+ {
+  "from": 728,
+  "to": 635,
+  "score": 1.08,
+  "section": 42260,
+  "path": "sbc-pay/pay-api/src/pay_api/models/payment_transaction.py",
+  "target": "PaymentMethod enum",
+  "direction": "depends",
+  "what": "Provides payment method values: CC, DIRECT_PAY for filtering in find_stale_records"
+ },
+ {
+  "from": 620,
+  "to": 834,
+  "score": 2.61,
+  "section": 42292,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/fee.py",
+  "target": "FeeSchedule.find_by_corp_type_and_filing_type",
+  "direction": "depends",
+  "what": "Service method called with corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, and quantity; returns dict-like object with asdict() method."
+ },
+ {
+  "from": 620,
+  "to": 833,
+  "score": 1.05,
+  "section": 42292,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/fee.py",
+  "target": "pay_api.utils.auth.jwt.has_one_of_roles",
+  "direction": "depends",
+  "what": "Decorator enforcing caller has at least one of Role.VIEWER, Role.EDITOR, or Role.STAFF."
+ },
+ {
+  "from": 620,
+  "to": 833,
+  "score": 1.06,
+  "section": 42294,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+  "target": "PaymentService.create_invoice",
+  "direction": "sends",
+  "what": "request_json dict and authorization object; creates invoice and returns response"
+ },
+ {
+  "from": 620,
+  "to": 833,
+  "score": 2.1,
+  "section": 42294,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+  "target": "PaymentService.update_invoice",
+  "direction": "sends",
+  "what": "invoice_id, request_json dict, is_apply_credit boolean; updates payment method and optionally applies credit"
+ },
+ {
+  "from": 620,
+  "to": 833,
+  "score": 0.7,
+  "section": 42294,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+  "target": "check_auth",
+  "direction": "sends",
+  "what": "business_identifier, corp_type_code strings and contains_role constant MAKE_PAYMENT; validates user authorization"
+ },
+ {
+  "from": 620,
+  "to": 505,
+  "score": 0.62,
+  "section": 42294,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+  "target": "schema_utils.validate",
+  "direction": "sends",
+  "what": "request_json and schema name ('payment_request' or 'payment_info'); validates input format"
+ },
+ {
+  "from": 620,
+  "to": 505,
+  "score": 0.56,
+  "section": 42294,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+  "target": "BusinessException, ServiceUnavailableException",
+  "direction": "receives",
+  "what": "caught from service calls and returned as exception.response()"
+ },
+ {
+  "from": 620,
+  "to": 577,
+  "score": 0.64,
+  "section": 42294,
+  "path": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+  "target": "_jwt.requires_roles, _jwt.requires_auth",
+  "direction": "depends",
+  "what": "JWT decorators enforce role and auth checks before route handler executes"
+ },
+ {
+  "from": 834,
+  "to": 770,
+  "score": 2.22,
+  "section": 42361,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "CfsAccount, Credit, Invoice, InvoiceReference, PaymentAccount, PaymentLineItem, PaymentTransaction, Receipt, RefundPartialLine",
+  "direction": "depends",
+  "what": "ORM models imported from pay_api.models; used by subclasses to represent business entities in the payment workflow."
+ },
+ {
+  "from": 834,
+  "to": 770,
+  "score": 0.79,
+  "section": 42361,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "CFSService, Invoice, InvoiceReference, Payment, PaymentAccount, PaymentLineItem, Receipt",
+  "direction": "depends",
+  "what": "Service classes imported from pay_api.services; used by subclasses to orchestrate payment processing logic."
+ },
+ {
+  "from": 834,
+  "to": 663,
+  "score": 0.29,
+  "section": 42361,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "gcp_queue_publisher",
+  "direction": "depends",
+  "what": "GCP Pub/Sub client imported from pay_api.services; used by subclasses to publish payment events to message queues."
+ },
+ {
+  "from": 834,
+  "to": 71,
+  "score": 1.0,
+  "section": 42361,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "sentry_sdk.capture_message",
+  "direction": "depends",
+  "what": "Sentry error tracking integration; used by subclasses to report payment processing errors and anomalies."
+ },
+ {
+  "from": 834,
+  "to": 635,
+  "score": 1.48,
+  "section": 42361,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "QueueMessageTypes, CorpType, InvoiceReferenceStatus, InvoiceStatus, PaymentMethod, PaymentStatus, QueueSources, TransactionStatus",
+  "direction": "depends",
+  "what": "Enums imported from pay_api.utils.enums and sbc_common_components.utils.enums; used by subclasses to define payment states and message routing."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.49,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "gcp_queue_publisher.publish_to_queue",
+  "direction": "sends",
+  "what": "Publishes QueueMessage containing source (PAY_API), message_type (PAYMENT), payload, topic, and corp_type to GCP queue; no credential shown in this chunk."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.33,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "get_topic_for_corp_type",
+  "direction": "depends",
+  "what": "Resolves the GCP topic name for a given corp type code."
+ },
+ {
+  "from": 833,
+  "to": 573,
+  "score": 0.5,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "CFSService.create_cms",
+  "direction": "sends",
+  "what": "Creates a credit memo in the external CFS payment system given line items and CFS account; returns response with credit_memo_number."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.5,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "CfsAccountModel.find_effective_or_latest_by_payment_method",
+  "direction": "depends",
+  "what": "Retrieves the effective or most recent CFS account record for a payment account and payment method."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.33,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "InvoiceReferenceModel.find_by_invoice_id_and_status",
+  "direction": "depends",
+  "what": "Queries for an active invoice reference by invoice ID and status."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.5,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "CreditModel",
+  "direction": "sends",
+  "what": "Creates and flushes a new credit record with CFS identifier, credit memo flag, amount, and account ID to the database."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.33,
+  "section": 42363,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "PaymentAccountModel.find_by_id",
+  "direction": "depends",
+  "what": "Retrieves a payment account record by ID."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 1.0,
+  "section": 42364,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "ReceiptModel.find_by_invoice_id_and_receipt_number",
+  "direction": "depends",
+  "what": "Retrieves receipt by invoice ID; called without null/existence check."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.33,
+  "section": 42364,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "InvoiceReferenceModel.find_by_invoice_id_and_status",
+  "direction": "depends",
+  "what": "Retrieves invoice reference with status COMPLETED; called without null/existence check."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.33,
+  "section": 42364,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "PaymentAccountModel.find_by_id",
+  "direction": "depends",
+  "what": "Retrieves payment account by ID when payment method is drawdown; called without null/existence check."
+ },
+ {
+  "from": 833,
+  "to": 649,
+  "score": 2.14,
+  "section": 42364,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "gcp_queue_publisher.publish_to_queue",
+  "direction": "sends",
+  "what": "Publishes refund message to GCP queue with payload containing identifier, orderNumber, transactionDateTime, transactionAmount, transactionId, refundDate, filingDescription, and optionally bcolAccount and bcolUser; uses credentials and topic from ACCOUNT_MAILER_TOPIC config."
+ },
+ {
+  "from": 833,
+  "to": 620,
+  "score": 0.33,
+  "section": 42364,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "Payment.create",
+  "direction": "sends",
+  "what": "Creates payment record with completed status, payment method code, payment system code, invoice number, total amount, and payment account ID."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.0,
+  "section": 42365,
+  "path": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "target": "InvoiceReference.create",
+  "direction": "sends",
+  "what": "Creates mock invoice reference when sandbox is detected, with formatted ID and reference strings."
+ },
+ {
+  "from": 833,
+  "to": 636,
+  "score": 3.06,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "BCOL_API_ENDPOINT + 'payments'",
+  "direction": "sends",
+  "what": "POST with bearer token (user.bearer_token); payload contains userId, invoiceNumber, folioNumber, amount, rate, remarks, feeCode, forceUseDebitAccount, serviceFees, and conditionally accountNumber, formNumber, redundantFlag, rateType."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.13,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "PaymentAccount",
+  "direction": "depends",
+  "what": "Input supplies bcol_user_id, auth_account_id; service checks payment blockers via ensure_no_payment_blockers."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 0.79,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "PaymentLineItem",
+  "direction": "depends",
+  "what": "Input list of items; service sums line.total and joins filing_type_code values."
+ },
+ {
+  "from": 833,
+  "to": 729,
+  "score": 0.98,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "CorpType",
+  "direction": "depends",
+  "what": "find_by_code looks up entity to fetch bcol_staff_fee_code, bcol_code_full_service_fee, bcol_code_partial_service_fee, bcol_code_no_service_fee."
+ },
+ {
+  "from": 833,
+  "to": 619,
+  "score": 0.81,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "UserContext",
+  "direction": "depends",
+  "what": "Passed in kwargs; chunk calls user.is_staff(), user.is_system(), user.first_name, user.user_name_with_no_idp, user.bearer_token."
+ },
+ {
+  "from": 833,
+  "to": 824,
+  "score": 0.5,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "InvoiceReference",
+  "direction": "sends",
+  "what": "Created and returned with invoice ID and BCOL response fields (key, sequenceNo)."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.34,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "PaymentModel",
+  "direction": "sends",
+  "what": "In process_cfs_refund, finds payment for invoice.id and updates payment_status_code to REFUNDED, then flush."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.0,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "_publish_refund_to_mailer",
+  "direction": "sends",
+  "what": "Called in process_cfs_refund with invoice."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.5,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "_release_payment",
+  "direction": "sends",
+  "what": "Called in complete_post_invoice with invoice; chunk shows no further detail."
+ },
+ {
+  "from": 833,
+  "to": 619,
+  "score": 1.0,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "get_bcol_error",
+  "direction": "depends",
+  "what": "Maps BCOL error type (int) to Error enum value."
+ },
+ {
+  "from": 833,
+  "to": 619,
+  "score": 0.33,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "BCOL_USERNAME_FOR_SERVICE_ACCOUNT_PAYMENTS",
+  "direction": "depends",
+  "what": "Config key used as userId fallback for non-staff service account payments."
+ },
+ {
+  "from": 833,
+  "to": 619,
+  "score": 0.42,
+  "section": 42366,
+  "path": "sbc-pay/pay-api/src/pay_api/services/bcol_service.py",
+  "target": "generate_transaction_number",
+  "direction": "depends",
+  "what": "Called with invoice.id to produce invoice_number."
+ },
+ {
+  "from": 834,
+  "to": 635,
+  "score": 1.36,
+  "section": 42411,
+  "path": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+  "target": "FeeScheduleModel",
+  "direction": "depends",
+  "what": "DAO queried via find_by_filing_type_and_corp_type(corp_type, filing_type_code, valid_date) returning fee_schedule_id, filing_type_code, corp_type_code, fee_code, fee_start_date, fee_end_date, fee.amount, filing_type.description, service_fee_code, variable, priority_fee.amount, future_effective_fee.amount; saved via save()."
+ },
+ {
+  "from": 834,
+  "to": 833,
+  "score": 2.14,
+  "section": 42411,
+  "path": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+  "target": "AccountFeeModel",
+  "direction": "depends",
+  "what": "DAO queried via find_by_auth_account_id_and_corp_type(user.account_id, corp_type) returning apply_filing_fees boolean flag; used to waive filing and priority/future_effective fees."
+ },
+ {
+  "from": 834,
+  "to": 620,
+  "score": 1.03,
+  "section": 42411,
+  "path": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+  "target": "current_app.logger",
+  "direction": "sends",
+  "what": "Debug log calls with filing type, corp type, and valid date at entry/exit of find_by_corp_type_and_filing_type."
+ },
+ {
+  "from": 834,
+  "to": 635,
+  "score": 0.61,
+  "section": 42411,
+  "path": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+  "target": "BusinessException(Error.INVALID_CORP_OR_FILING_TYPE)",
+  "direction": "sends",
+  "what": "Raised when corp_type and filing_type_code both falsy or FeeScheduleModel.find_by_filing_type_and_corp_type returns None."
+ },
+ {
+  "from": 834,
+  "to": 768,
+  "score": 0.5,
+  "section": 42412,
+  "path": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+  "target": "UserContext",
+  "direction": "depends",
+  "what": "User context object from @user_context decorator; methods is_staff(), is_system() and roles property determine fee calculation eligibility."
+ },
+ {
+  "from": 833,
+  "to": 768,
+  "score": 1.2,
+  "section": 42416,
+  "path": "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+  "target": "GCP PubSub Queue",
+  "direction": "sends",
+  "what": "SimpleCloudEvent serialized via GcpQueue.to_queue_message with id, source (prefixed sbc-pay-), timestamp, type, and data fields; includes ordering_key and corp_type attributes if provided."
+ },
+ {
+  "from": 833,
+  "to": 697,
+  "score": 1.15,
+  "section": 42416,
+  "path": "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+  "target": "queue.publish",
+  "direction": "sends",
+  "what": "Called with topic name, serialized message, and optional ordering_key and corp_type parameters to publish to GCP Pub/Sub."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.14,
+  "section": 42426,
+  "path": "sbc-pay/pay-api/src/pay_api/services/online_banking_service.py",
+  "target": "ensure_no_payment_blockers",
+  "direction": "sends",
+  "what": "Called on payment_account during create_invoice with no exception handling shown."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.0,
+  "section": 42426,
+  "path": "sbc-pay/pay-api/src/pay_api/services/online_banking_service.py",
+  "target": "_release_payment",
+  "direction": "sends",
+  "what": "Called on invoice during apply_credit; inherited from parent CFSService."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 0.64,
+  "section": 42426,
+  "path": "sbc-pay/pay-api/src/pay_api/services/online_banking_service.py",
+  "target": "reverse_invoice",
+  "direction": "sends",
+  "what": "Called with inv_number during cancel_invoice; inherited from parent CFSService."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.5,
+  "section": 42426,
+  "path": "sbc-pay/pay-api/src/pay_api/services/online_banking_service.py",
+  "target": "_refund_and_create_credit_memo",
+  "direction": "sends",
+  "what": "Called on invoice during process_cfs_refund; inherited from parent PaymentSystemService."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.64,
+  "section": 42427,
+  "path": "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+  "target": "CFSService.update_bank_details",
+  "direction": "sends",
+  "what": "Bank details update with name, party_number, account_number, site_number, payment_info (bankInstitutionNumber, bankTransitNumber, bankAccountNumber); receives payment_instrument_number."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 2.5,
+  "section": 42427,
+  "path": "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+  "target": "PaymentSystemService",
+  "direction": "depends",
+  "what": "Base class providing ensure_no_payment_blockers and _release_payment and _refund_and_create_credit_memo methods."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.44,
+  "section": 42427,
+  "path": "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+  "target": "InvoiceReference",
+  "direction": "depends",
+  "what": "Return type for create_invoice; service does not construct it."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.72,
+  "section": 42441,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+  "target": "DistributionCodeModel.find_by_active_for_fee_schedule",
+  "direction": "sends",
+  "what": "Queries for active distribution code by fee_schedule_id when line item total or service_fees exceed zero; receives distribution_code_id."
+ },
+ {
+  "from": 833,
+  "to": 728,
+  "score": 1.5,
+  "section": 42441,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+  "target": "PaymentLineItemModel (DAO)",
+  "direction": "depends",
+  "what": "Persists all PaymentLineItem fields via flush() to database; wraps id, invoice_id, filing_fees, fee_schedule_id, priority_fees, future_effective_fees, description, gst, pst, total, quantity, line_item_status_code, waived_fees, waived_by, fee_distribution_id, service_fees."
+ },
+ {
+  "from": 833,
+  "to": 728,
+  "score": 0.63,
+  "section": 42441,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+  "target": "Role.STAFF",
+  "direction": "depends",
+  "what": "Authorization check: only users with STAFF role may set waived_fees and waived_by; non-staff raises BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED)."
+ },
+ {
+  "from": 833,
+  "to": 621,
+  "score": 0.72,
+  "section": 42441,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+  "target": "UserContext (user_context decorator)",
+  "direction": "receives",
+  "what": "Injected into create() via @user_context decorator; provides user.has_role() and user.user_name for staff validation and audit trail."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.64,
+  "section": 42441,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+  "target": "LineItemStatus.ACTIVE",
+  "direction": "depends",
+  "what": "Enum value set as line_item_status_code when creating new line items."
+ },
+ {
+  "from": 833,
+  "to": 834,
+  "score": 1.0,
+  "section": 42441,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+  "target": "Error.FEE_OVERRIDE_NOT_ALLOWED",
+  "direction": "sends",
+  "what": "Exception message raised when non-staff user attempts to set waived_fee_amount."
+ },
+ {
+  "from": 833,
+  "to": 768,
+  "score": 0.25,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PaymentAccount.create(dict)",
+  "direction": "sends",
+  "what": "Creates payment account in database with accountId and paymentInfo.methodOfPayment."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.53,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "_get_payment_method(payment_request, payment_account)",
+  "direction": "depends",
+  "what": "Extracts or derives payment method from request or account; defined elsewhere."
+ },
+ {
+  "from": 833,
+  "to": 768,
+  "score": 0.5,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "_get_default_payment()",
+  "direction": "depends",
+  "what": "Returns default payment method; defined elsewhere."
+ },
+ {
+  "from": 833,
+  "to": 824,
+  "score": 0.33,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "_calculate_fees(corp_type, filing_info)",
+  "direction": "depends",
+  "what": "Calculates fee list by corp_type and filing details; defined elsewhere."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.03,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PaymentSystemFactory.create(payment_method, corp_type, fees, account_info, payment_account)",
+  "direction": "depends",
+  "what": "Factory returns PaymentSystemService instance for given payment method and corp type; defined elsewhere."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.06,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PaymentSystemFactory.create_from_payment_method(payment_method_code)",
+  "direction": "depends",
+  "what": "Factory returns PaymentSystemService for payment method code; used in update_invoice."
+ },
+ {
+  "from": 833,
+  "to": 728,
+  "score": 0.56,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "Invoice (database model)",
+  "direction": "sends",
+  "what": "Creates Invoice record, flushes to db with payment_account_id, cfs_account_id, invoice_status_code, service_fees, total, paid, refund, routing_slip, filing_id, dat_number, folio_number, business_identifier, payment_method_code, corp_type_code, details; commits after pay_service.create_invoice; rolled back on exception."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.0,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "Invoice.find_by_id(id, skip_auth_check)",
+  "direction": "depends",
+  "what": "Queries database for invoice by id; skip_auth_check=True in create path, False in update path."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.0,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PaymentAccount.find_by_id(id)",
+  "direction": "depends",
+  "what": "Queries database for payment account by id; used in update_invoice for credit application."
+ },
+ {
+  "from": 833,
+  "to": 834,
+  "score": 0.5,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "pay_service.get_default_invoice_status()",
+  "direction": "depends",
+  "what": "PaymentSystemService method returns default invoice status code."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 1.0,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "pay_service.get_payment_method_code()",
+  "direction": "depends",
+  "what": "PaymentSystemService method returns payment method code for invoice."
+ },
+ {
+  "from": 833,
+  "to": 620,
+  "score": 0.42,
+  "section": 42444,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "Error.INVALID_REQUEST",
+  "direction": "depends",
+  "what": "Error constant raised when update_invoice validation fails."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.04,
+  "section": 42445,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PayBC",
+  "direction": "depends",
+  "what": "Transaction status updates fetched via _update_active_transactions"
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.56,
+  "section": 42445,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PaymentSystemFactory.create_from_payment_method",
+  "direction": "depends",
+  "what": "Creates payment service implementation based on invoice payment_method_code to call cancel_invoice"
+ },
+ {
+  "from": 833,
+  "to": 834,
+  "score": 2.44,
+  "section": 42446,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "FeeSchedule.find_by_corp_type_and_filing_type",
+  "direction": "depends",
+  "what": "Database query returning fee schedule by corp_type, filing_type_code, date, jurisdiction, is_priority, is_future_effective, waive_fees, and quantity; no credentials shown."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.06,
+  "section": 42446,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "BusinessException",
+  "direction": "sends",
+  "what": "Exception raised with Error.COMPLETED_PAYMENT when invoice or payment status prevents deletion."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.05,
+  "section": 42446,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "Error.COMPLETED_PAYMENT",
+  "direction": "depends",
+  "what": "Error constant used when raising BusinessException for completed or deleted payments and invoices."
+ },
+ {
+  "from": 833,
+  "to": 768,
+  "score": 0.25,
+  "section": 42446,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "target": "PaymentMethod.DIRECT_PAY",
+  "direction": "depends",
+  "what": "Enum value returned as default payment method."
+ },
+ {
+  "from": 834,
+  "to": 833,
+  "score": 0.55,
+  "section": 42447,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "pay_api.services.gcp_queue_publisher",
+  "direction": "sends",
+  "what": "Publishes QueueMessage with PaymentToken and QueueMessageTypes to process payment events"
+ },
+ {
+  "from": 834,
+  "to": 71,
+  "score": 1.0,
+  "section": 42447,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "sentry_sdk.capture_message",
+  "direction": "sends",
+  "what": "Error tracking via Sentry"
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.04,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "Invoice.find_by_id",
+  "direction": "depends",
+  "what": "Called with invoice_id int and skip_auth_check=True parameter; no credential sent; returns invoice or null."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 0.7,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "Payment.create",
+  "direction": "depends",
+  "what": "Called with payment_method, payment_system, payment_status, invoice_number, invoice_amount, payment_account_id to create new payment record if none exists for invoice."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.0,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentSystemFactory.create_from_payment_method",
+  "direction": "depends",
+  "what": "Called with payment_method code string to instantiate PaymentSystemService; used to get payment method code, system code, and default status."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.06,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentTransaction._build_pay_system_url_for_invoice",
+  "direction": "depends",
+  "what": "Static method called with invoice, pay_system_service, transaction.id, and payReturnUrl from request_json to construct payment system URL for invoice transactions."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.06,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentTransaction._build_pay_system_url_for_payment",
+  "direction": "depends",
+  "what": "Static method called with payment, pay_system_service, transaction.id, and payReturnUrl from request_json to construct payment system URL for payment transactions."
+ },
+ {
+  "from": 833,
+  "to": 519,
+  "score": 0.3,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentTransaction._validate_redirect_url_and_throw_error",
+  "direction": "depends",
+  "what": "Static method called with payment_method and clientSystemUrl to validate return URL; raises BusinessException(Error.INVALID_REDIRECT_URI) if invalid for CC or DIRECT_PAY methods."
+ },
+ {
+  "from": 833,
+  "to": 728,
+  "score": 0.5,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentTransactionSchema",
+  "direction": "depends",
+  "what": "Used in asdict() to serialize DAO to dictionary via dump() method."
+ },
+ {
+  "from": 833,
+  "to": 834,
+  "score": 1.0,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentTransactionModel",
+  "direction": "depends",
+  "what": "DAO class instantiated and held in __dao property; delegates save() and flush() operations to it; synced bidirectionally with service properties."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.06,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "BusinessException with Error.COMPLETED_PAYMENT",
+  "direction": "sends",
+  "what": "Raised in _create_transaction when payment status is COMPLETED or DELETED."
+ },
+ {
+  "from": 833,
+  "to": 519,
+  "score": 0.3,
+  "section": 42449,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "BusinessException with Error.INVALID_REDIRECT_URI",
+  "direction": "sends",
+  "what": "Raised by _validate_redirect_url_and_throw_error when clientSystemUrl invalid for CC or DIRECT_PAY payment methods."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.05,
+  "section": 42450,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentAccount.find_by_id",
+  "direction": "depends",
+  "what": "Retrieves payment account record by payment_account_id."
+ },
+ {
+  "from": 833,
+  "to": 770,
+  "score": 1.0,
+  "section": 42450,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentSystemFactory.create_from_payment_method",
+  "direction": "depends",
+  "what": "Instantiates PaymentSystemService based on payment method code; no credential shown."
+ },
+ {
+  "from": 833,
+  "to": 620,
+  "score": 0.68,
+  "section": 42450,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "PaymentSystemService.get_receipt",
+  "direction": "sends",
+  "what": "Calls payment system service with payment_account, pay_response_url, and invoice_reference; expects receipt_details tuple or raises ServiceUnavailableException."
+ },
+ {
+  "from": 833,
+  "to": 728,
+  "score": 1.1,
+  "section": 42451,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "Receipt.find_by_invoice_id_and_receipt_number",
+  "direction": "depends",
+  "what": "Database query by invoice_id and receipt_number; returns Receipt record or empty result."
+ },
+ {
+  "from": 833,
+  "to": 635,
+  "score": 1.0,
+  "section": 42451,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "receipt.flush()",
+  "direction": "depends",
+  "what": "Persists Receipt record to database."
+ },
+ {
+  "from": 833,
+  "to": 697,
+  "score": 0.52,
+  "section": 42451,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "gcp_queue_publisher.publish_to_queue",
+  "direction": "sends",
+  "what": "Publishes QueueMessage with payment status to Google Cloud Pub/Sub queue; message includes source, type, invoice/status payload, topic for corp_type, and corp_type code."
+ },
+ {
+  "from": 833,
+  "to": 664,
+  "score": 0.33,
+  "section": 42451,
+  "path": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "target": "get_topic_for_corp_type",
+  "direction": "depends",
+  "what": "Resolves message topic based on invoice.corp_type_code."
+ },
+ {
+  "from": 619,
+  "to": 833,
+  "score": 1.5,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "CodeService.find_code_value_by_type_and_code",
+  "direction": "sends",
+  "what": "Code.CORP_TYPE.value and corp_type; returns dict with 'product' key."
+ },
+ {
+  "from": 619,
+  "to": 709,
+  "score": 0.75,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "VALID_REDIRECT_URLS",
+  "direction": "depends",
+  "what": "Config list of URL prefixes (ending with '*') or exact URLs to validate against; bypassed if DISABLE_VALID_REDIRECT_URLS is set."
+ },
+ {
+  "from": 619,
+  "to": 709,
+  "score": 0.5,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "DISABLE_VALID_REDIRECT_URLS",
+  "direction": "depends",
+  "what": "Config boolean that wholly disables redirect URL validation."
+ },
+ {
+  "from": 619,
+  "to": 709,
+  "score": 0.5,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "CFS_INVOICE_PREFIX",
+  "direction": "depends",
+  "what": "Config prefix for generated transaction numbers."
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 1.0,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "CFS_RECEIPT_PREFIX",
+  "direction": "depends",
+  "what": "Config prefix for generated receipt numbers."
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 1.0,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "OUTSTANDING_TRANSACTION_DAYS",
+  "direction": "depends",
+  "what": "Config integer count of business days to rewind for outstanding PAD transaction start date."
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 0.5,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "NAMEX_PAY_TOPIC",
+  "direction": "depends",
+  "what": "Config queue topic name for corp type NRO."
+ },
+ {
+  "from": 619,
+  "to": 670,
+  "score": 0.5,
+  "section": 42481,
+  "path": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "target": "BUSINESS_PAY_TOPIC",
+  "direction": "depends",
+  "what": "Config queue topic name for product BUSINESS or BUSINESS_SEARCH."
+ }
+]

@@ -67,3 +67,37 @@ for all 11 (round 1: $0.64), 4-20 s a call. Matches in `links2.txt`.
   filer's event subject lands on the entity emailer, its consumer.
   `updateFilingData` and `PaymentService.create_invoice` land on their
   definitions. `LegalServices.fetchFiling` does not reach the legal API.
+
+## Stage 3: a slice condensed with links, its briefs rebuilt
+
+`harness/slice.py`, outputs in `slice/`. Every section of a file cited by
+three hard questions (fee waiver, payment notification, two payment
+listeners): 100 sections, 21 leaf pages. Condensed with references (Haiku
+4.5, SDK, thinking off, $1.22, 97 of 100 schema-valid), 364 links by rare
+names (a page that refers to the same target is a co-caller and is skipped;
+mostly-test pages are not link ends), then the 21 leaf briefs rebuilt with the
+v3 `brief` prompt, a CONNECTIONS block and a 7th point asking for them
+(Sonnet, thinking off, $1.79). A Sonnet judge says, per fact (22), whether
+the pages holding its files state it:
+
+| pages | yes | partial | no | score |
+|---|---|---|---|---|
+| v3 briefs | 1 | 21 | 0 | 0.52 |
+| briefs with connections | 2 | 19 | 1 | 0.52 |
+| v3 condensations of the fact's own files (ceiling) | 1 | 21 | 0 | 0.52 |
+
+- **The connections are written.** The legal API page now says "Pay
+  service: the caller's Bearer token is forwarded"; the payment listeners'
+  pages name each other's subjects.
+- **Nothing moves, not even the ceiling.** Even the notes of the exact cited
+  files score "partial" on 21 of 22 facts. What is missing is never a piece:
+  each fact is a conclusion drawn across pieces ("so the payment service sees
+  the customer", "a second delivery of a PAID-but-unapplied filing resets the
+  completion date and resends the email") or an exact list ("which filing
+  types get no waiveFees"). The pieces are on the pages; the conclusions are
+  in no single source, so no summary of a source states them.
+- **Details the notes keep, the briefs drop.** Both condensations of
+  `get_filing_types` say the header's waiveFees is copied into each fee line;
+  no brief keeps it (300-900 words over 30-50 sections).
+- **This judge cannot steer the work.** A fact-level yes/partial/no saturates
+  at "partial" for every arm, ceiling included.
