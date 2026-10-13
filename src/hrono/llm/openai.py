@@ -44,7 +44,11 @@ _DEFAULT_MAX_TOKENS = 4096
 
 
 class OpenAIClient:
-    """A ``Completion`` over the openai chat-completions REST shape."""
+    """A ``Completion`` over the openai chat-completions REST shape.
+
+    A request's ``schema`` is ignored for now: the answer comes back as text
+    and ``structured`` stays None.
+    """
 
     def __init__(
         self,

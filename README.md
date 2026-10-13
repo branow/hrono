@@ -75,20 +75,23 @@ starts, and nothing it encrypted opens.
 ## Install
 
 hrono is not yet published to PyPI; install it from source. You need Python
-3.13+, [uv](https://docs.astral.sh/uv/) and `git`. The `claude` CLI, installed
-and signed in, is needed only for the `claude-code` provider.
+3.13+, [uv](https://docs.astral.sh/uv/) and `git`. The `claude-code` provider
+also needs the `claude-code` extra (the Claude Agent SDK) and the `claude` CLI,
+installed and signed in.
 
 ```sh
 git clone https://github.com/branow/hrono.git
 cd hrono
-uv sync --extra embed --extra cluster
+uv sync --extra embed --extra cluster --extra claude-code
 source .venv/bin/activate        # or prefix each command with `uv run`
 ```
 
-The two extras are heavyweight (torch, umap-learn, hdbscan; several GB
-together) and opt-in. Without `embed` the embed stage fails with "in-process
-embedding backend is not installed"; without `cluster` the build stops at
-clustering with the matching message.
+The extras are heavyweight (torch, umap-learn, hdbscan; several GB together,
+and the Agent SDK carries its own copy of the CLI) and opt-in. Without `embed`
+the embed stage fails with "in-process embedding backend is not installed";
+without `cluster` the build stops at clustering with the matching message;
+without `claude-code` a call on a `claude-code` connection fails naming the
+extra to install.
 
 The first build downloads the embedding model weights from Hugging Face, so it
 needs network access. Clustering needs at least 12 sections; a toy source of
@@ -201,9 +204,11 @@ build costs. Supported providers: `claude-code`, `anthropic`, `openai` and
 
 - `claude-code` needs no API key and bills through your Claude subscription.
   Use it to try hrono and for incremental syncs, where a few changed sections
-  cost a few calls. Each call carries a fixed overhead (about 19k cached input
-  tokens and 4 to 30 s), so a first build over a large corpus is slow: the
-  condense pass over 421 sections took about 70 minutes.
+  cost a few calls. hrono drives Claude Code through the Claude Agent SDK
+  with tools, thinking and your own customizations off. Each call starts a CLI
+  process and takes seconds (4 to 30 s measured), so a first build over a
+  large corpus is slow: the condense pass over 421 sections took about 70
+  minutes.
 - `anthropic` bills per token to an API key and pays for the content rather
   than the harness. Use it for a first full build over a large corpus:
 
