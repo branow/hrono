@@ -59,7 +59,10 @@ def earlier(theme):
     if not BATCH or not path.exists():
         return ""
     asked = [q["question"] for q in json.loads(path.read_text())["questions"]]
-    return "\n\nThese are already in the benchmark; write about different flows and code:\n" + "\n".join(f"- {q}" for q in asked)
+    return (
+        "\n\nThese are already in the benchmark; write about different flows and code:\n"
+        + "\n".join(f"- {q}" for q in asked)
+    )
 
 
 def gen(theme):
