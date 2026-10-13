@@ -177,7 +177,7 @@ def run_links() -> None:
         for n, t in conn.execute("SELECT node_id, text FROM briefs")
     }
     page = []
-    for pid, path, kind, source, sid, _ in rows:
+    for _pid, path, kind, source, sid, _ in rows:
         if kind == "node":
             node = int(source.removeprefix("node-"))
             page.append(node if level.get(node) == 0 else None)
