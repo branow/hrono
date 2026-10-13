@@ -464,3 +464,33 @@ each (`<arm>@<model>+<turns>` in `run_arms.py`):
   `check_auth`", and the agent took the named check for a guarantee and did
   not read it. Hard questions turn on exactly such checks, so a page that
   names a check without its condition steers the agent away from the flaw.
+
+## Rewritten briefs on a slice of the map
+
+The 21 leaf pages behind three hard questions (`2026-10-links/` slice)
+rewritten: the slice's sections condensed with references, linked by rare
+names, and briefed with a CONNECTIONS block plus a rule that every check
+comes with what it compares, or "(condition not in the notes)", and that a
+check's name never stands for a guarantee (`slice.py brief2`, $1.84). The
+export copied to `export-bcreg-v3x-L3` with those 21 pages swapped in; arm
+`hrono-v3x` is v3c (capped recall) over it. Four questions (the slice's three
+and authorization-1, whose pay-api page was rewritten), one run each, plus a
+second code-only Opus run for the spread:
+
+| agent | arm | coverage | errors | turns | cost |
+|---|---|---|---|---|---|
+| Opus | code only, run a / b | 0.68 / 0.63 | 3 / 2 | 18.5 / 16.8 | $2.05 / $1.66 |
+| Opus | hrono, v3 pages | 0.54 | 4 | 15.5 | $1.68 |
+| Opus | hrono, rewritten pages | 0.60 | 7 | 11.2 | $1.45 |
+| Sonnet | code only, run a / b | 0.52 / 0.46 | 3 / 5 | 13.2 / 15.2 | $0.87 / $0.71 |
+| Sonnet | hrono, v3 pages | 0.46 | 5 | 11.0 | $0.90 |
+| Sonnet | hrono, rewritten pages | 0.57 | 5 | 10.5 | $0.74 |
+
+- The rewritten pages lift both agents (Opus +0.06, Sonnet +0.11 over the
+  v3 pages), with fewer turns. Sonnet with them is above both of its
+  code-only runs; Opus is still under its own.
+- The invoice case is still lost: the pay-api page now says `check_auth`
+  asks auth-api for the caller's role in `orgs/{account}`, but not that the
+  account is never compared with the invoice's, and Opus again wrote that
+  invoices check affiliation. One run each: the spread between two code-only
+  runs is 0.05 for Opus, 0.06 for Sonnet.

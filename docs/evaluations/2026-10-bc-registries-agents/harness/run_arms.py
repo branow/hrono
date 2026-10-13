@@ -72,6 +72,10 @@ EXPORT_R2 = Path.home() / "hrono-eval" / "export-bcreg-v2-L3"
 # the v3 tree: contracts condense and brief prompts (2026-10-bc-registries-v2/)
 EXPORT_V3 = Path.home() / "hrono-eval" / "export-bcreg-v3-L3"
 HRONO_HOME_R2 = Path.home() / "hrono-eval" / "home-v2"
+# the v3 export with 21 leaf briefs rewritten (2026-10-links/ slice): each
+# check with its condition, and the page's connections to other pages
+EXPORT_V3X = Path.home() / "hrono-eval" / "export-bcreg-v3x-L3"
+HRONO_HOME_V3X = Path.home() / "hrono-eval" / "home-v2x"
 
 SYSTEM_CODE_R2 = "The code is in {corpus}."
 SYSTEM_TREE_R2 = "The code is not available. A map of it is in {export}."
@@ -135,6 +139,11 @@ ROUND_2 = {
         f"hrono-v3f{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
         for run in "ab"
     },
+    # capped recall over the export with the slice's rewritten briefs
+    **{
+        f"hrono-v3x{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
     # the same once more, after the plugin caps recall at Claude Code's
     # 10,000-character inline limit: above it the v3f runs got a file path
     # and a 2 KB preview, and opened the file in 1 of 15 runs
@@ -154,6 +163,9 @@ def run_round_2(kind, arm, q):
     system, addition, cwd, plugin, turns = ROUND_2[arm]
     turns = int(most) if most else turns
     export = EXPORT_V3 if "-v3" in arm else EXPORT_R2
+    home = HRONO_HOME_R2
+    if "-v3x" in arm:
+        export, home = EXPORT_V3X, HRONO_HOME_V3X
     prompt = ARCH.format(question=q["question"])
     if cwd is not None:
         prompt = prompt.replace(
@@ -172,7 +184,7 @@ def run_round_2(kind, arm, q):
         disallow_bash=cwd is not None,
         cwd=cwd,
         plugin_dir=PLUGIN if plugin else None,
-        env={"HRONO_HOME": str(HRONO_HOME_R2)},
+        env={"HRONO_HOME": str(home)},
         safe_mode=False,
     )
     return {"qid": q["qid"], "set": kind, "arm": name, **r}
