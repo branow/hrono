@@ -1,0 +1,425 @@
+[
+ {
+  "id": 37132,
+  "source": "lear",
+  "path": "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "structured": {
+   "condensed": "Determines which filing type fee codes apply to a given business filing based on filing type, legal entity type, and specific conditions like priority status and fee waivers.\n\nReads filing type and flags (priority, waiveFees) from `filing_json['filing']['header']`, and legal type either from the filing's nameRequest (for new business types) or from the `business` object. Routes through conditional branches:\n- If filing contains 'correction': appends correction code for the legal type\n- If filing is 'dissolution' with dissolutionType 'voluntary': appends dissolution code; adds specialResolution and affidavit codes if legal type is COOP value; includes `futureEffective` flag from `ListFilingResource.is_future_effective_filing(filing_json)`\n- If dissolutionType is 'administrative': appends code 'NOFEE'\n- If filing type in ['courtOrder', 'registrarsNotation', 'registrarsOrder', 'putBackOn', 'adminFreeze']: appends court/registrar code with filingDescription\n- Otherwise: iterates filing keys, looks up codes via `Filing.get_filings_sub_type(k, filing_json)`, with special handling for 'changeOfDirectors' (marked free if all directors have only 'nameChanged' or 'addressChanged' actions; priority set to False if parent is 'annualReport', else priority_flag)\n\nEach appended object contains filingTypeCode, priority, waiveFees; some branches also include futureEffective or filingDescription. Returns list. This chunk shows no permission check. Entry point: static method callable by any caller.\n\nGOTCHA: No validation of filing_json structure before nested key access; hard-coded 'NOFEE' for administrative dissolution; free_changes list hard-coded to ['nameChanged', 'addressChanged']; pylint disable comment indicates method violates branch complexity guidelines.",
+   "references": [
+    {
+     "target": "Filing.FILINGS",
+     "relation": "Chunk reads nested dicts keyed by filing type and legal type to look up filingTypeCode values."
+    },
+    {
+     "target": "Filing.get_filings_sub_type(k, filing_json)",
+     "relation": "Chunk calls to retrieve filing sub-type for code lookup."
+    },
+    {
+     "target": "ListFilingResource.is_future_effective_filing(filing_json)",
+     "relation": "Chunk calls to determine futureEffective flag for incorporation, amalgamation, continuation, alteration, and voluntary dissolution filings."
+    },
+    {
+     "target": "business.legal_type",
+     "relation": "Chunk reads to fall back to business legal type when not provided in filing."
+    },
+    {
+     "target": "Business.LegalTypes.COOP.value",
+     "relation": "Chunk checks for COOP type to add specialResolution and affidavit codes in voluntary dissolution."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Determines which filing type fee codes apply to a given business filing based on filing type, legal entity type, and specific conditions like priority status and fee waivers.\\n\\nReads filing type and flags (priority, waiveFees) from `filing_json['filing']['header']`, and legal type either from the filing's nameRequest (for new business types) or from the `business` object. Routes through conditional branches:\\n- If filing contains 'correction': appends correction code for the legal type\\n- If filing is 'dissolution' with dissolutionType 'voluntary': appends dissolution code; adds specialResolution and affidavit codes if legal type is COOP value; includes `futureEffective` flag from `ListFilingResource.is_future_effective_filing(filing_json)`\\n- If dissolutionType is 'administrative': appends code 'NOFEE'\\n- If filing type in ['courtOrder', 'registrarsNotation', 'registrarsOrder', 'putBackOn', 'adminFreeze']: appends court/registrar code with filingDescription\\n- Otherwise: iterates filing keys, looks up codes via `Filing.get_filings_sub_type(k, filing_json)`, with special handling for 'changeOfDirectors' (marked free if all directors have only 'nameChanged' or 'addressChanged' actions; priority set to False if parent is 'annualReport', else priority_flag)\\n\\nEach appended object contains filingTypeCode, priority, waiveFees; some branches also include futureEffective or filingDescription. Returns list. This chunk shows no permission check. Entry point: static method callable by any caller.\\n\\nGOTCHA: No validation of filing_json structure before nested key access; hard-coded 'NOFEE' for administrative dissolution; free_changes list hard-coded to ['nameChanged', 'addressChanged']; pylint disable comment indicates method violates branch complexity guidelines.\",\"references\":[{\"target\":\"Filing.FILINGS\",\"relation\":\"Chunk reads nested dicts keyed by filing type and legal type to look up filingTypeCode values.\"},{\"target\":\"Filing.get_filings_sub_type(k, filing_json)\",\"relation\":\"Chunk calls to retrieve filing sub-type for code lookup.\"},{\"target\":\"ListFilingResource.is_future_effective_filing(filing_json)\",\"relation\":\"Chunk calls to determine futureEffective flag for incorporation, amalgamation, continuation, alteration, and voluntary dissolution filings.\"},{\"target\":\"business.legal_type\",\"relation\":\"Chunk reads to fall back to business legal type when not provided in filing.\"},{\"target\":\"Business.LegalTypes.COOP.value\",\"relation\":\"Chunk checks for COOP type to add specialResolution and affidavit codes in voluntary dissolution.\"}]}",
+  "subtype": "success",
+  "cost": 0.0525629
+ },
+ {
+  "id": 42294,
+  "source": "sbc-pay",
+  "path": "pay-api/src/pay_api/resources/v1/invoice.py",
+  "structured": {
+   "condensed": "Flask blueprint for payment request/invoice CRUD: creates, retrieves, updates (soft delete), and generates PDF reports on invoices.\n\nInputs: GET query `businessIdentifier` (optional); POST/PATCH JSON validated against `payment_request`, `payment_info` schemas; PATCH query `applyCredit` (default 'false'). Outputs: JSON invoice records or PDF attachment.\n\nGET `''` requires SYSTEM role; POST `''` requires auth plus `check_auth(business_identifier, corp_type_code, MAKE_PAYMENT)` (this chunk shows no further check details); GET/DELETE/PATCH `/<id>` and POST `/<id>/reports` require auth only. Schema validation failures return `Error.INVALID_REQUEST`; other failures caught and converted to exception responses. No retry logic.\n\nOutgoing: `PaymentService.create_invoice()`, `.update_invoice(invoice_id, request_json, is_apply_credit)`, `.accept_delete(invoice_id)` (soft); `InvoiceService.find_invoices(business_identifier)`, `.find_by_id(invoice_id)`, `.create_invoice_pdf(invoice_id)`.\n\nGOTCHA: PATCH and POST `/<id>/reports` docstrings both incorrectly state \"Update the payment method for an online banking\".",
+   "references": [
+    {
+     "target": "PaymentService",
+     "relation": "Receives request JSON and authorization to create invoice; invoice ID, payment info JSON, and is_apply_credit flag to update; invoice ID to soft-delete; returns response data."
+    },
+    {
+     "target": "InvoiceService",
+     "relation": "Receives optional businessIdentifier filter to query all invoices, invoice ID to fetch one or generate PDF report; returns invoice records or PDF binary."
+    },
+    {
+     "target": "check_auth",
+     "relation": "Called with business_identifier, corp_type_code, and MAKE_PAYMENT role requirement; returns authorization result gating POST `''` creation."
+    },
+    {
+     "target": "_jwt.requires_auth",
+     "relation": "Decorator enforcing JWT authentication on GET/DELETE/PATCH `/<id>` and POST `/<id>/reports`."
+    },
+    {
+     "target": "_jwt.requires_roles",
+     "relation": "Decorator enforcing SYSTEM role on GET `''`."
+    },
+    {
+     "target": "schema_utils.validate",
+     "relation": "Validates POST/PATCH request JSON against named schemas; returns validity and error list."
+    },
+    {
+     "target": "error_to_response",
+     "relation": "Receives schema errors; returns HTTP error response."
+    },
+    {
+     "target": "Error.INVALID_REQUEST",
+     "relation": "Constant; error code for schema validation failures."
+    },
+    {
+     "target": "MAKE_PAYMENT",
+     "relation": "Constant; authorization scope required for POST `''`."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Flask blueprint for payment request/invoice CRUD: creates, retrieves, updates (soft delete), and generates PDF reports on invoices.\\n\\nInputs: GET query `businessIdentifier` (optional); POST/PATCH JSON validated against `payment_request`, `payment_info` schemas; PATCH query `applyCredit` (default 'false'). Outputs: JSON invoice records or PDF attachment.\\n\\nGET `''` requires SYSTEM role; POST `''` requires auth plus `check_auth(business_identifier, corp_type_code, MAKE_PAYMENT)` (this chunk shows no further check details); GET/DELETE/PATCH `/<id>` and POST `/<id>/reports` require auth only. Schema validation failures return `Error.INVALID_REQUEST`; other failures caught and converted to exception responses. No retry logic.\\n\\nOutgoing: `PaymentService.create_invoice()`, `.update_invoice(invoice_id, request_json, is_apply_credit)`, `.accept_delete(invoice_id)` (soft); `InvoiceService.find_invoices(business_identifier)`, `.find_by_id(invoice_id)`, `.create_invoice_pdf(invoice_id)`.\\n\\nGOTCHA: PATCH and POST `/<id>/reports` docstrings both incorrectly state \\\"Update the payment method for an online banking\\\".\",\"references\":[{\"target\":\"PaymentService\",\"relation\":\"Receives request JSON and authorization to create invoice; invoice ID, payment info JSON, and is_apply_credit flag to update; invoice ID to soft-delete; returns response data.\"},{\"target\":\"InvoiceService\",\"relation\":\"Receives optional businessIdentifier filter to query all invoices, invoice ID to fetch one or generate PDF report; returns invoice records or PDF binary.\"},{\"target\":\"check_auth\",\"relation\":\"Called with business_identifier, corp_type_code, and MAKE_PAYMENT role requirement; returns authorization result gating POST `''` creation.\"},{\"target\":\"_jwt.requires_auth\",\"relation\":\"Decorator enforcing JWT authentication on GET/DELETE/PATCH `/<id>` and POST `/<id>/reports`.\"},{\"target\":\"_jwt.requires_roles\",\"relation\":\"Decorator enforcing SYSTEM role on GET `''`.\"},{\"target\":\"schema_utils.validate\",\"relation\":\"Validates POST/PATCH request JSON against named schemas; returns validity and error list.\"},{\"target\":\"error_to_response\",\"relation\":\"Receives schema errors; returns HTTP error response.\"},{\"target\":\"Error.INVALID_REQUEST\",\"relation\":\"Constant; error code for schema validation failures.\"},{\"target\":\"MAKE_PAYMENT\",\"relation\":\"Constant; authorization scope required for POST `''`.\"}]}",
+  "subtype": "success",
+  "cost": 0.08178550000000001
+ },
+ {
+  "id": 42292,
+  "source": "sbc-pay",
+  "path": "pay-api/src/pay_api/resources/v1/fee.py",
+  "structured": {
+   "condensed": "GET endpoint that calculates fees for a filing based on corporation type and filing type code.\n\n**Caller:** Requires one of VIEWER, EDITOR, or STAFF roles (enforced by `@_jwt.has_one_of_roles` decorator; this chunk shows the decorated condition but not the check implementation).\n\n**Inputs:** URL path `corp_type` and `filing_type_code`; query parameters `date` (ISO short format, defaults to current UTC), `priority` (bool, defaults `False`), `futureEffective` (bool, defaults `False`), `jurisdiction` (defaults `DEFAULT_JURISDICTION`), `quantity` (int, defaults `1`), and `waiveFees` (bool, defaults `False`, only if JWT validates STAFF role).\n\n**Main flow:** Extracts and parses parameters; calls `FeeSchedule.find_by_corp_type_and_filing_type()` with corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, quantity; converts result to dict.\n\n**Output:** JSON response containing fee data (via `.asdict()`) with HTTP 200 OK.\n\n**Error handling:** Catches `BusinessException` and returns its response; no retry or re-raise.\n\nGOTCHA: `waive_fees` is read from query string only when `_jwt.validate_roles([Role.STAFF.value])` returns true; for non-STAFF roles it stays `False` regardless of query parameter.",
+   "references": [
+    {
+     "target": "FeeSchedule.find_by_corp_type_and_filing_type()",
+     "relation": "Hands off fee calculation parameters (corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, quantity) and receives FeeSchedule result to serialize."
+    },
+    {
+     "target": "Role (enum)",
+     "relation": "Uses VIEWER, EDITOR, STAFF values for role-based access control and conditional waive_fees parameter parsing."
+    },
+    {
+     "target": "BusinessException",
+     "relation": "Catches exceptions from FeeSchedule and returns its .response()."
+    },
+    {
+     "target": "_jwt decorator @has_one_of_roles",
+     "relation": "Enforces authorization check on request."
+    },
+    {
+     "target": "_jwt.validate_roles()",
+     "relation": "Checks if current user holds STAFF role to conditionally enable waiveFees parameter."
+    },
+    {
+     "target": "DEFAULT_JURISDICTION, DT_SHORT_FORMAT constants",
+     "relation": "Provide defaults for query parameters."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"GET endpoint that calculates fees for a filing based on corporation type and filing type code.\\n\\n**Caller:** Requires one of VIEWER, EDITOR, or STAFF roles (enforced by `@_jwt.has_one_of_roles` decorator; this chunk shows the decorated condition but not the check implementation).\\n\\n**Inputs:** URL path `corp_type` and `filing_type_code`; query parameters `date` (ISO short format, defaults to current UTC), `priority` (bool, defaults `False`), `futureEffective` (bool, defaults `False`), `jurisdiction` (defaults `DEFAULT_JURISDICTION`), `quantity` (int, defaults `1`), and `waiveFees` (bool, defaults `False`, only if JWT validates STAFF role).\\n\\n**Main flow:** Extracts and parses parameters; calls `FeeSchedule.find_by_corp_type_and_filing_type()` with corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, quantity; converts result to dict.\\n\\n**Output:** JSON response containing fee data (via `.asdict()`) with HTTP 200 OK.\\n\\n**Error handling:** Catches `BusinessException` and returns its response; no retry or re-raise.\\n\\nGOTCHA: `waive_fees` is read from query string only when `_jwt.validate_roles([Role.STAFF.value])` returns true; for non-STAFF roles it stays `False` regardless of query parameter.\",\"references\":[{\"target\":\"FeeSchedule.find_by_corp_type_and_filing_type()\",\"relation\":\"Hands off fee calculation parameters (corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, quantity) and receives FeeSchedule result to serialize.\"},{\"target\":\"Role (enum)\",\"relation\":\"Uses VIEWER, EDITOR, STAFF values for role-based access control and conditional waive_fees parameter parsing.\"},{\"target\":\"BusinessException\",\"relation\":\"Catches exceptions from FeeSchedule and returns its .response().\"},{\"target\":\"_jwt decorator @has_one_of_roles\",\"relation\":\"Enforces authorization check on request.\"},{\"target\":\"_jwt.validate_roles()\",\"relation\":\"Checks if current user holds STAFF role to conditionally enable waiveFees parameter.\"},{\"target\":\"DEFAULT_JURISDICTION, DT_SHORT_FORMAT constants\",\"relation\":\"Provide defaults for query parameters.\"}]}",
+  "subtype": "success",
+  "cost": 0.051046900000000006
+ },
+ {
+  "id": 34577,
+  "source": "business-filings-ui",
+  "path": "src/mixins/filing-mixin.ts",
+  "structured": {
+   "condensed": "Mixin providing filing data management and filing document builders for a corporate filing application.\n\nReads entity data (identifier, legal name, type, dates, addresses) and filing state from Pinia store getters. Outputs modified filing data via `setFilingData` action or constructed filing objects (CorrectionFilingIF, DissolutionFilingIF, RestorationFilingIF).\n\n`updateFilingData()` adds or removes filing codes with optional priority and waiveFees flags: if filingCode provided, removes existing instance then re-adds with new flags if action='add'; if no filingCode, modifies flags on all existing codes. `hasFilingCode()` searches filingData array for code presence. Builder methods construct typed filing objects: `buildCorrectionFiling()` uses correctedFiling.submittedDate and correctionType; `buildDissolutionFiling()` uses entity type to select custodial office address (getBusinessAddress for SOLE_PROP and PARTNERSHIP, else getRegisteredOfficeAddress); `buildRestorationFiling()` takes restorationType parameter.\n\nDecisions: updateFilingData action (add vs. remove), flag application scope (single code vs. all codes); buildDissolutionFiling entity type check.\n\nNo authorization checks shown; all public methods callable by any component.\n\nGOTCHA: updateFilingData unconditionally removes existing code before re-adding\u2014may lose intermediate state. Calling with action='remove' and no filingCode sets specified flags to false on all codes, not removal. buildDissolutionFiling hardcodes dissolutionType to DISSOLUTION_VOLUNTARY (comment: \"FUTURE: apply type dynamically\"). entityName may be undefined per buildCorrectionFiling comment.",
+   "references": [
+    {
+     "target": "useRootStore",
+     "relation": "Chunk reads filingData, getBusinessAddress, getCurrentDate, getRegisteredOfficeAddress getters and invokes setFilingData action; receives and sends back modified filing state."
+    },
+    {
+     "target": "useBusinessStore",
+     "relation": "Chunk reads entityName, getFoundingDate, getIdentifier, getLegalType, getStartDate getters."
+    },
+    {
+     "target": "DateMixin",
+     "relation": "Chunk extends parent class to inherit dateToYyyyMmDd() and dateToApi() date conversion methods."
+    },
+    {
+     "target": "CorpTypeCd",
+     "relation": "Chunk matches against SOLE_PROP and PARTNERSHIP values to condition custodialOffice selection in dissolution."
+    },
+    {
+     "target": "FilingCodes, FilingTypes, FilingSubTypes, CorrectionTypes",
+     "relation": "Chunk uses enum constants to construct and identify filing objects."
+    },
+    {
+     "target": "CorrectionFilingIF, DissolutionFilingIF, RestorationFilingIF, FilingDataIF, OfficeAddressIF",
+     "relation": "Chunk uses as types for filing objects and store state."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Mixin providing filing data management and filing document builders for a corporate filing application.\\n\\nReads entity data (identifier, legal name, type, dates, addresses) and filing state from Pinia store getters. Outputs modified filing data via `setFilingData` action or constructed filing objects (CorrectionFilingIF, DissolutionFilingIF, RestorationFilingIF).\\n\\n`updateFilingData()` adds or removes filing codes with optional priority and waiveFees flags: if filingCode provided, removes existing instance then re-adds with new flags if action='add'; if no filingCode, modifies flags on all existing codes. `hasFilingCode()` searches filingData array for code presence. Builder methods construct typed filing objects: `buildCorrectionFiling()` uses correctedFiling.submittedDate and correctionType; `buildDissolutionFiling()` uses entity type to select custodial office address (getBusinessAddress for SOLE_PROP and PARTNERSHIP, else getRegisteredOfficeAddress); `buildRestorationFiling()` takes restorationType parameter.\\n\\nDecisions: updateFilingData action (add vs. remove), flag application scope (single code vs. all codes); buildDissolutionFiling entity type check.\\n\\nNo authorization checks shown; all public methods callable by any component.\\n\\nGOTCHA: updateFilingData unconditionally removes existing code before re-adding\u2014may lose intermediate state. Calling with action='remove' and no filingCode sets specified flags to false on all codes, not removal. buildDissolutionFiling hardcodes dissolutionType to DISSOLUTION_VOLUNTARY (comment: \\\"FUTURE: apply type dynamically\\\"). entityName may be undefined per buildCorrectionFiling comment.\",\"references\":[{\"target\":\"useRootStore\",\"relation\":\"Chunk reads filingData, getBusinessAddress, getCurrentDate, getRegisteredOfficeAddress getters and invokes setFilingData action; receives and sends back modified filing state.\"},{\"target\":\"useBusinessStore\",\"relation\":\"Chunk reads entityName, getFoundingDate, getIdentifier, getLegalType, getStartDate getters.\"},{\"target\":\"DateMixin\",\"relation\":\"Chunk extends parent class to inherit dateToYyyyMmDd() and dateToApi() date conversion methods.\"},{\"target\":\"CorpTypeCd\",\"relation\":\"Chunk matches against SOLE_PROP and PARTNERSHIP values to condition custodialOffice selection in dissolution.\"},{\"target\":\"FilingCodes, FilingTypes, FilingSubTypes, CorrectionTypes\",\"relation\":\"Chunk uses enum constants to construct and identify filing objects.\"},{\"target\":\"CorrectionFilingIF, DissolutionFilingIF, RestorationFilingIF, FilingDataIF, OfficeAddressIF\",\"relation\":\"Chunk uses as types for filing objects and store state.\"}]}",
+  "subtype": "success",
+  "cost": 0.05623399999999999
+ },
+ {
+  "id": 34650,
+  "source": "business-filings-ui",
+  "path": "src/views/AnnualReport.vue",
+  "structured": {
+   "condensed": "Vue component that manages Annual Report filings\u2014loads and resumes drafts, populates form data, tracks changes, and enables saving.\n\nOn mount, validates identifier, ARFilingYear, filingId; cooperatives need arMinDate/arMaxDate; base companies need nextARDate. Invalid data redirects to dashboard. For filingId > 0, calls LegalServices.fetchFiling(businesses/{id}/filings/{filingId}), validates filing type=ANNUAL_REPORT, status=DRAFT, identifiers match. Restores: certifiedBy; staffPaymentData (FAS/BCOL/NO_FEE/NONE with account details and isPriority flag); agmDate, noAgm flag (cooperatives); agmExtension flag; optional changeOfDirectors array and changeOfAddress (registeredOffice required; recordsOffice for base companies). For filingId=0, prepares new. Both fetch originals via child component methods getOrigAddresses(asOfDate, isEmpty) and getOrigDirectors(asOfDate, isEmpty) unless Vitest running. Adds ANNUAL_REPORT_BC code immediately for base companies; ANNUAL_REPORT_OT for cooperatives when AGM valid.\n\nEvent handlers (office/directors modified, agm changes) set haveChanges and call updateFilingData('add'|'remove', code, isPriority, waiveFees) only after dataLoaded=true. onClickSave() prevents double-save with busySaving flag, calls saveFiling(true), catches errors (SaveErrorReasons.SAVE); no retry shown. fetchDraftFiling() errors logged to console only, resumeErrorDialog set. Entry points: Vue lifecycle hooks and event handlers; this chunk shows no permission checks.\n\nGOTCHA: haveChanges recorded only after dataLoaded=true.\nGOTCHA: changeOfDirectors/changeOfAddress silently skipped if missing.\nGOTCHA: fetchDraftFiling() errors not retried or re-raised.",
+   "references": [
+    {
+     "target": "LegalServices.fetchFiling(url)",
+     "relation": "External service call with URL businesses/{identifier}/filings/{filingId}; returns filing object with header, business, annualReport sections, and optional changeOfDirectors and changeOfAddress objects containing account and address data."
+    },
+    {
+     "target": "this.$refs.officeAddressesComponent.getOrigAddresses(asOfDate, isEmpty)",
+     "relation": "Child component method that populates original office addresses; receives asOfDate string and isEmpty boolean flag."
+    },
+    {
+     "target": "this.$refs.directorsComponent.getOrigDirectors(asOfDate, isEmpty)",
+     "relation": "Child component method that populates original directors; receives asOfDate string and isEmpty boolean flag."
+    },
+    {
+     "target": "this.updateFilingData(action, filingCode, isPriority, waiveFees)",
+     "relation": "Updates filing codes list with 'add' or 'remove' action, FilingCode constant, and payment flags; called when office, directors, or AGM changes occur."
+    },
+    {
+     "target": "this.goToDashboard(boolean)",
+     "relation": "Navigation method called when required tombstone data is invalid."
+    },
+    {
+     "target": "this.saveFiling(boolean)",
+     "relation": "Initiates filing save operation; called from onClickSave() and returns promise with filing object or null on error."
+    },
+    {
+     "target": "this.$root.$off('fetch-error-event')",
+     "relation": "Event listener removed during component destruction cleanup."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Vue component that manages Annual Report filings\u2014loads and resumes drafts, populates form data, tracks changes, and enables saving.\\n\\nOn mount, validates identifier, ARFilingYear, filingId; cooperatives need arMinDate/arMaxDate; base companies need nextARDate. Invalid data redirects to dashboard. For filingId > 0, calls LegalServices.fetchFiling(businesses/{id}/filings/{filingId}), validates filing type=ANNUAL_REPORT, status=DRAFT, identifiers match. Restores: certifiedBy; staffPaymentData (FAS/BCOL/NO_FEE/NONE with account details and isPriority flag); agmDate, noAgm flag (cooperatives); agmExtension flag; optional changeOfDirectors array and changeOfAddress (registeredOffice required; recordsOffice for base companies). For filingId=0, prepares new. Both fetch originals via child component methods getOrigAddresses(asOfDate, isEmpty) and getOrigDirectors(asOfDate, isEmpty) unless Vitest running. Adds ANNUAL_REPORT_BC code immediately for base companies; ANNUAL_REPORT_OT for cooperatives when AGM valid.\\n\\nEvent handlers (office/directors modified, agm changes) set haveChanges and call updateFilingData('add'|'remove', code, isPriority, waiveFees) only after dataLoaded=true. onClickSave() prevents double-save with busySaving flag, calls saveFiling(true), catches errors (SaveErrorReasons.SAVE); no retry shown. fetchDraftFiling() errors logged to console only, resumeErrorDialog set. Entry points: Vue lifecycle hooks and event handlers; this chunk shows no permission checks.\\n\\nGOTCHA: haveChanges recorded only after dataLoaded=true.\\nGOTCHA: changeOfDirectors/changeOfAddress silently skipped if missing.\\nGOTCHA: fetchDraftFiling() errors not retried or re-raised.\",\"references\":[{\"target\":\"LegalServices.fetchFiling(url)\",\"relation\":\"External service call with URL businesses/{identifier}/filings/{filingId}; returns filing object with header, business, annualReport sections, and optional changeOfDirectors and changeOfAddress objects containing account and address data.\"},{\"target\":\"this.$refs.officeAddressesComponent.getOrigAddresses(asOfDate, isEmpty)\",\"relation\":\"Child component method that populates original office addresses; receives asOfDate string and isEmpty boolean flag.\"},{\"target\":\"this.$refs.directorsComponent.getOrigDirectors(asOfDate, isEmpty)\",\"relation\":\"Child component method that populates original directors; receives asOfDate string and isEmpty boolean flag.\"},{\"target\":\"this.updateFilingData(action, filingCode, isPriority, waiveFees)\",\"relation\":\"Updates filing codes list with 'add' or 'remove' action, FilingCode constant, and payment flags; called when office, directors, or AGM changes occur.\"},{\"target\":\"this.goToDashboard(boolean)\",\"relation\":\"Navigation method called when required tombstone data is invalid.\"},{\"target\":\"this.saveFiling(boolean)\",\"relation\":\"Initiates filing save operation; called from onClickSave() and returns promise with filing object or null on error.\"},{\"target\":\"this.$root.$off('fetch-error-event')\",\"relation\":\"Event listener removed during component destruction cleanup.\"}]}",
+  "subtype": "success",
+  "cost": 0.09145210000000001
+ },
+ {
+  "id": 38766,
+  "source": "lear",
+  "path": "queue_services/entity-filer/src/entity_filer/worker.py",
+  "structured": {
+   "condensed": "Publishes filing-completion events to downstream systems (NATS messaging, GCP Queue, email service).\n\n**Entry points** (this chunk shows no permission checks):\n- `get_filing_types(legal_filings: dict)` \u2014 iterates legal_filings['filing'].keys(), returns list of keys where Filing.FILINGS.get(k) is truthy\n- `async publish_event(business: Business, filing: Filing)` \u2014 publishes CloudEvent to NATS subject (APP_CONFIG.ENTITY_EVENT_PUBLISH_OPTIONS['subject']) with type 'bc.registry.business.{filing.filing_type}', source (LEGAL_API_URL/business/{identifier}/filing/{id}), data containing filingId, effectiveDate, identifier, legalFilings; adds tempidentifier to payload if filing.temp_reg exists\n- `publish_gcp_queue_event(business: Business, filing: Filing)` \u2014 publishes SimpleCloudEvent to GCP topic (APP_CONFIG.BUSINESS_EVENTS_TOPIC) with matching data; adds tempidentifier if filing.temp_reg exists\n- `async publish_mras_email(filing: Filing)` \u2014 if filing.filing_type in [FilingCore.FilingTypes.AMALGAMATIONAPPLICATION, FilingCore.FilingTypes.CONTINUATIONIN, FilingCore.FilingTypes.INCORPORATIONAPPLICATION], calls publish_email_message(qsm, APP_CONFIG.EMAIL_PUBLISH_OPTIONS['subject'], filing, 'mras')\n\n**Failure handling:** All publish functions catch broad `Exception`, log via logger.error(exc_info=True) and capture_message() to Sentry, but do not re-raise\u2014filings continue processing despite publication failures.\n\n**GOTCHA:** Broad exception handlers silently swallow failures from caller perspective. MRAS email limited to exactly 3 hardcoded filing types.",
+   "references": [
+    {
+     "target": "qsm.service.publish()",
+     "relation": "This chunk publishes CloudEvent payloads to NATS subject"
+    },
+    {
+     "target": "gcp_queue.publish()",
+     "relation": "This chunk publishes SimpleCloudEvent to GCP Cloud Pub/Sub topic"
+    },
+    {
+     "target": "publish_email_message()",
+     "relation": "This chunk calls this to publish email notifications when filing_type matches specific constants"
+    },
+    {
+     "target": "capture_message()",
+     "relation": "This chunk sends exception messages to Sentry error tracking"
+    },
+    {
+     "target": "logger.error()",
+     "relation": "This chunk sends exception details with stack traces to application logging"
+    },
+    {
+     "target": "Filing.FILINGS",
+     "relation": "This chunk reads this dictionary to validate filing type keys"
+    },
+    {
+     "target": "FilingCore.FilingTypes",
+     "relation": "This chunk reads these constants to match against filing.filing_type for MRAS email filtering"
+    },
+    {
+     "target": "Business, Filing models",
+     "relation": "This chunk reads properties from instances: business.identifier, filing.id, filing.filing_type, filing.effective_date, filing.temp_reg, filing.filing_json"
+    },
+    {
+     "target": "APP_CONFIG",
+     "relation": "This chunk reads configuration values: ENTITY_EVENT_PUBLISH_OPTIONS['subject'], BUSINESS_EVENTS_TOPIC, EMAIL_PUBLISH_OPTIONS['subject'], LEGAL_API_URL"
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Publishes filing-completion events to downstream systems (NATS messaging, GCP Queue, email service).\\n\\n**Entry points** (this chunk shows no permission checks):\\n- `get_filing_types(legal_filings: dict)` \u2014 iterates legal_filings['filing'].keys(), returns list of keys where Filing.FILINGS.get(k) is truthy\\n- `async publish_event(business: Business, filing: Filing)` \u2014 publishes CloudEvent to NATS subject (APP_CONFIG.ENTITY_EVENT_PUBLISH_OPTIONS['subject']) with type 'bc.registry.business.{filing.filing_type}', source (LEGAL_API_URL/business/{identifier}/filing/{id}), data containing filingId, effectiveDate, identifier, legalFilings; adds tempidentifier to payload if filing.temp_reg exists\\n- `publish_gcp_queue_event(business: Business, filing: Filing)` \u2014 publishes SimpleCloudEvent to GCP topic (APP_CONFIG.BUSINESS_EVENTS_TOPIC) with matching data; adds tempidentifier if filing.temp_reg exists\\n- `async publish_mras_email(filing: Filing)` \u2014 if filing.filing_type in [FilingCore.FilingTypes.AMALGAMATIONAPPLICATION, FilingCore.FilingTypes.CONTINUATIONIN, FilingCore.FilingTypes.INCORPORATIONAPPLICATION], calls publish_email_message(qsm, APP_CONFIG.EMAIL_PUBLISH_OPTIONS['subject'], filing, 'mras')\\n\\n**Failure handling:** All publish functions catch broad `Exception`, log via logger.error(exc_info=True) and capture_message() to Sentry, but do not re-raise\u2014filings continue processing despite publication failures.\\n\\n**GOTCHA:** Broad exception handlers silently swallow failures from caller perspective. MRAS email limited to exactly 3 hardcoded filing types.\",\"references\":[{\"target\":\"qsm.service.publish()\",\"relation\":\"This chunk publishes CloudEvent payloads to NATS subject\"},{\"target\":\"gcp_queue.publish()\",\"relation\":\"This chunk publishes SimpleCloudEvent to GCP Cloud Pub/Sub topic\"},{\"target\":\"publish_email_message()\",\"relation\":\"This chunk calls this to publish email notifications when filing_type matches specific constants\"},{\"target\":\"capture_message()\",\"relation\":\"This chunk sends exception messages to Sentry error tracking\"},{\"target\":\"logger.error()\",\"relation\":\"This chunk sends exception details with stack traces to application logging\"},{\"target\":\"Filing.FILINGS\",\"relation\":\"This chunk reads this dictionary to validate filing type keys\"},{\"target\":\"FilingCore.FilingTypes\",\"relation\":\"This chunk reads these constants to match against filing.filing_type for MRAS email filtering\"},{\"target\":\"Business, Filing models\",\"relation\":\"This chunk reads properties from instances: business.identifier, filing.id, filing.filing_type, filing.effective_date, filing.temp_reg, filing.filing_json\"},{\"target\":\"APP_CONFIG\",\"relation\":\"This chunk reads configuration values: ENTITY_EVENT_PUBLISH_OPTIONS['subject'], BUSINESS_EVENTS_TOPIC, EMAIL_PUBLISH_OPTIONS['subject'], LEGAL_API_URL\"}]}",
+  "subtype": "success",
+  "cost": 0.0896115
+ },
+ {
+  "id": 42541,
+  "source": "sbc-pay",
+  "path": "pay-api/tests/unit/api/test_fee.py",
+  "structured": {
+   "condensed": "Test and fixtures for fee configuration where account settings control whether filing fees and service fees are applied.\n\nThe test creates a gov account (POST /api/v1/accounts, SYSTEM role token required, responds with accountId), posts fee settings with serviceFeeCode='TRF02' (1.0) and applyFilingFees=False (POST /api/v1/accounts/{accountId}/fees, MANAGE_ACCOUNTS role token required, body: {accountFees: [{applyFilingFees, serviceFeeCode, product}]}), retrieves fees (GET /api/v1/fees/BEN/BCANN, EDITOR role token + Account-Id header required, responds {filingFees, serviceFees}), asserts filingFees=0 and serviceFees=1.0. Updates settings to serviceFeeCode='TRF01' (1.5) and applyFilingFees=True (PUT /api/v1/accounts/{accountId}/fees/BUSINESS, MANAGE_ACCOUNTS role), retrieves fees again (EDITOR role), asserts filingFees>0 and serviceFees=1.5. All responses validated against 'fees' schema.\n\nFactories create and persist test models: factory_filing_type_model creates FilingType(code, description='TEST').save(); factory_fee_model creates FeeCode(code, amount as Decimal).save(); factory_corp_type_model creates CorpType(code, description).save(); factory_fee_schedule_model creates FeeSchedule(filing_type_code, corp_type_code, fee_code, fee_start_date defaults to today UTC, optional fee_end_date, optional service_fee_code).save().\n\nGOTCHA: filingFees assertion uses > 0 without checking exact value.\nGOTCHA: .save() calls show no error handling.",
+   "references": [
+    {
+     "target": "client.post, client.get, client.put",
+     "relation": "Test makes HTTP requests to endpoints: POST /api/v1/accounts (account creation), POST /api/v1/accounts/{accountId}/fees (fee creation), GET /api/v1/fees/BEN/BCANN (fee retrieval), PUT /api/v1/accounts/{accountId}/fees/BUSINESS (fee update); each request includes JWT Bearer token with role-based authorization."
+    },
+    {
+     "target": "jwt.create_jwt",
+     "relation": "Test calls to generate JWT tokens with claims for specified role."
+    },
+    {
+     "target": "get_claims",
+     "relation": "Test calls to build JWT claims object with role parameter."
+    },
+    {
+     "target": "Role",
+     "relation": "Test references enum values SYSTEM, MANAGE_ACCOUNTS, EDITOR for role-based authorization in token generation."
+    },
+    {
+     "target": "schema_utils.validate",
+     "relation": "Test calls to validate response JSON against the 'fees' schema."
+    },
+    {
+     "target": "get_gov_account_payload",
+     "relation": "Test calls to obtain request body for account creation endpoint."
+    },
+    {
+     "target": "FilingType, FeeCode, CorpType, FeeSchedule",
+     "relation": "Factories instantiate these models and call .save() to persist to database for test data setup."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Test and fixtures for fee configuration where account settings control whether filing fees and service fees are applied.\\n\\nThe test creates a gov account (POST /api/v1/accounts, SYSTEM role token required, responds with accountId), posts fee settings with serviceFeeCode='TRF02' (1.0) and applyFilingFees=False (POST /api/v1/accounts/{accountId}/fees, MANAGE_ACCOUNTS role token required, body: {accountFees: [{applyFilingFees, serviceFeeCode, product}]}), retrieves fees (GET /api/v1/fees/BEN/BCANN, EDITOR role token + Account-Id header required, responds {filingFees, serviceFees}), asserts filingFees=0 and serviceFees=1.0. Updates settings to serviceFeeCode='TRF01' (1.5) and applyFilingFees=True (PUT /api/v1/accounts/{accountId}/fees/BUSINESS, MANAGE_ACCOUNTS role), retrieves fees again (EDITOR role), asserts filingFees>0 and serviceFees=1.5. All responses validated against 'fees' schema.\\n\\nFactories create and persist test models: factory_filing_type_model creates FilingType(code, description='TEST').save(); factory_fee_model creates FeeCode(code, amount as Decimal).save(); factory_corp_type_model creates CorpType(code, description).save(); factory_fee_schedule_model creates FeeSchedule(filing_type_code, corp_type_code, fee_code, fee_start_date defaults to today UTC, optional fee_end_date, optional service_fee_code).save().\\n\\nGOTCHA: filingFees assertion uses > 0 without checking exact value.\\nGOTCHA: .save() calls show no error handling.\",\"references\":[{\"target\":\"client.post, client.get, client.put\",\"relation\":\"Test makes HTTP requests to endpoints: POST /api/v1/accounts (account creation), POST /api/v1/accounts/{accountId}/fees (fee creation), GET /api/v1/fees/BEN/BCANN (fee retrieval), PUT /api/v1/accounts/{accountId}/fees/BUSINESS (fee update); each request includes JWT Bearer token with role-based authorization.\"},{\"target\":\"jwt.create_jwt\",\"relation\":\"Test calls to generate JWT tokens with claims for specified role.\"},{\"target\":\"get_claims\",\"relation\":\"Test calls to build JWT claims object with role parameter.\"},{\"target\":\"Role\",\"relation\":\"Test references enum values SYSTEM, MANAGE_ACCOUNTS, EDITOR for role-based authorization in token generation.\"},{\"target\":\"schema_utils.validate\",\"relation\":\"Test calls to validate response JSON against the 'fees' schema.\"},{\"target\":\"get_gov_account_payload\",\"relation\":\"Test calls to obtain request body for account creation endpoint.\"},{\"target\":\"FilingType, FeeCode, CorpType, FeeSchedule\",\"relation\":\"Factories instantiate these models and call .save() to persist to database for test data setup.\"}]}",
+  "subtype": "success",
+  "cost": 0.0515405
+ },
+ {
+  "id": 41715,
+  "source": "sbc-pay",
+  "path": "docs/docs/architecture/FAS_Intgeration.md",
+  "structured": {
+   "condensed": "This is a specification document defining CFS API endpoints that Pay_API should call during payment routing slip lifecycle events, though implementation details remain uncertain.\n\n**Events and endpoint sequences:**\nRouting slip creation \u2192 /parties, /accs, /sites, /rcpts (create party, account, site, receipt). Invoice creation \u2192 /invs, /rcpts/apply. Invoice cancellation (full) \u2192 /rcpts/unapply, /invs/adjs (zero). Partial cancellation \u2192 /rcpts/unapply, /invs/adjs (partial), /rcpts/apply. Refund approved \u2192 /rcpts/adjs (zero, activity_name to refund revenue). Write-off <$10 \u2192 /rcpts/adjs (zero, activity_name to write-off revenue). Cheque bounced (NSF) \u2192 /rcpts/reverse, /invs (NSF fee). RS linked \u2192 /rcpts/reverse (child), /rcpts (parent).\n\n**Unresolved questions in specification:**\nCustomer name format for /parties (entity number vs. unique number); account creation (should \"BCR\" name be used); site creation (hard-coded values acceptable without address); endpoint correctness for /rcpts/reverse in NSF and link scenarios (marked with \"?\" in source).\n\nGOTCHA: Specification contains multiple open questions about implementation, indicating these integration points are not yet finalized or confirmed.",
+   "references": [
+    {
+     "target": "CFS_API",
+     "relation": "Pay_API sends requests to create and manipulate financial records (parties, accounts, sites, receipts, invoices) in response to payment events."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"This is a specification document defining CFS API endpoints that Pay_API should call during payment routing slip lifecycle events, though implementation details remain uncertain.\\n\\n**Events and endpoint sequences:**\\nRouting slip creation \u2192 /parties, /accs, /sites, /rcpts (create party, account, site, receipt). Invoice creation \u2192 /invs, /rcpts/apply. Invoice cancellation (full) \u2192 /rcpts/unapply, /invs/adjs (zero). Partial cancellation \u2192 /rcpts/unapply, /invs/adjs (partial), /rcpts/apply. Refund approved \u2192 /rcpts/adjs (zero, activity_name to refund revenue). Write-off <$10 \u2192 /rcpts/adjs (zero, activity_name to write-off revenue). Cheque bounced (NSF) \u2192 /rcpts/reverse, /invs (NSF fee). RS linked \u2192 /rcpts/reverse (child), /rcpts (parent).\\n\\n**Unresolved questions in specification:**\\nCustomer name format for /parties (entity number vs. unique number); account creation (should \\\"BCR\\\" name be used); site creation (hard-coded values acceptable without address); endpoint correctness for /rcpts/reverse in NSF and link scenarios (marked with \\\"?\\\" in source).\\n\\nGOTCHA: Specification contains multiple open questions about implementation, indicating these integration points are not yet finalized or confirmed.\",\"references\":[{\"target\":\"CFS_API\",\"relation\":\"Pay_API sends requests to create and manipulate financial records (parties, accounts, sites, receipts, invoices) in response to payment events.\"}]}",
+  "subtype": "success",
+  "cost": 0.0435479
+ },
+ {
+  "id": 40533,
+  "source": "sbc-auth",
+  "path": "docs/build-deploy.md",
+  "structured": {
+   "condensed": "Documentation guide for deploying and building sbc-auth API and Web/UI components to OpenShift namespaces (dev, tools).\n\nOperator authenticates via `oc login`, switches namespace context with `oc project` (dev for deployments, tools for builds), then processes templates with `oc process` using component-specific JSON templates and parameters (NAME, TAG_NAME, REPLICAS, GIT_REF, JENKINS_FILE), applying results with `oc apply`. For API: deploys postgresql database, creates ConfigMap and Secrets via auth-api-pre-deploy.json, creates DeploymentConfig/Service/Route via auth-api-deploy.json, builds via auth-api-build.json, creates pipeline via auth-api-pipeline.json. For Web/UI: creates ConfigMap/Secrets via auth-web-pre-deploy.json, creates DeploymentConfig/Service/Route via auth-web-deploy.json, builds Web via auth-web-build.json and runtime via auth-web-runtime-build.json, creates pipeline via auth-web-pipeline.json. Operator manually updates Secret values in Web Console after creation. Pipeline parameter WEBHOOK routes to GitHub (bcgov/sbc-auth.git); JAEGER_COLLECTOR routes to jaeger-collector service; JENKINS_FILE references ./jenkins/dev.groovy. No entry-point checks shown. Objects queried and deleted by label (app=auth-api, app-group=sbc-auth, template=auth-api-deploy).\n\nGOTCHA: Guide warns \"Don't put the real secret inside the template file\" but shows no enforcement\u2014secrets require manual Web Console replacement. GOTCHA: PVC deletion marked \"(Danger!!)\" when deleting by label but no guard prevents accidental deletion. GOTCHA: Guide states it will move to LEAR Documentation but is currently here.",
+   "references": [
+    {
+     "target": "OpenShift CLI (oc)",
+     "relation": "Commands authenticate to OpenShift, switch namespaces, process templates into manifests, apply manifests to create/update resources, and query/delete resources by label."
+    },
+    {
+     "target": "GitHub (https://github.com/bcgov/sbc-auth.git)",
+     "relation": "GIT_REPO_URL and GIT_REF parameters specify the repository and branch that build configs clone and build from."
+    },
+    {
+     "target": "Jenkins (./jenkins/dev.groovy)",
+     "relation": "JENKINS_FILE parameter specifies the Groovy pipeline definition that the pipeline template executes."
+    },
+    {
+     "target": "Jaeger (jaeger-collector service)",
+     "relation": "JAEGER_COLLECTOR parameter routes API deployment to the collector endpoint at jaeger-collector.d7eovc-dev.svc:14267."
+    },
+    {
+     "target": "PostgreSQL",
+     "relation": "Database component deployed as auth-db via postgresql-deploy.json template; test user created manually in pod terminal."
+    },
+    {
+     "target": "OpenShift templates (postgresql-deploy.json, auth-api-pre-deploy.json, auth-api-deploy.json, auth-api-build.json, auth-api-pipeline.json, auth-web-pre-deploy.json, auth-web-deploy.json, auth-web-build.json, auth-web-runtime-build.json, auth-web-pipeline.json)",
+     "relation": "Each template is processed with `oc process` and parameters to generate Kubernetes manifests applied to create deployments, builds, and pipelines."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Documentation guide for deploying and building sbc-auth API and Web/UI components to OpenShift namespaces (dev, tools).\\n\\nOperator authenticates via `oc login`, switches namespace context with `oc project` (dev for deployments, tools for builds), then processes templates with `oc process` using component-specific JSON templates and parameters (NAME, TAG_NAME, REPLICAS, GIT_REF, JENKINS_FILE), applying results with `oc apply`. For API: deploys postgresql database, creates ConfigMap and Secrets via auth-api-pre-deploy.json, creates DeploymentConfig/Service/Route via auth-api-deploy.json, builds via auth-api-build.json, creates pipeline via auth-api-pipeline.json. For Web/UI: creates ConfigMap/Secrets via auth-web-pre-deploy.json, creates DeploymentConfig/Service/Route via auth-web-deploy.json, builds Web via auth-web-build.json and runtime via auth-web-runtime-build.json, creates pipeline via auth-web-pipeline.json. Operator manually updates Secret values in Web Console after creation. Pipeline parameter WEBHOOK routes to GitHub (bcgov/sbc-auth.git); JAEGER_COLLECTOR routes to jaeger-collector service; JENKINS_FILE references ./jenkins/dev.groovy. No entry-point checks shown. Objects queried and deleted by label (app=auth-api, app-group=sbc-auth, template=auth-api-deploy).\\n\\nGOTCHA: Guide warns \\\"Don't put the real secret inside the template file\\\" but shows no enforcement\u2014secrets require manual Web Console replacement. GOTCHA: PVC deletion marked \\\"(Danger!!)\\\" when deleting by label but no guard prevents accidental deletion. GOTCHA: Guide states it will move to LEAR Documentation but is currently here.\",\"references\":[{\"target\":\"OpenShift CLI (oc)\",\"relation\":\"Commands authenticate to OpenShift, switch namespaces, process templates into manifests, apply manifests to create/update resources, and query/delete resources by label.\"},{\"target\":\"GitHub (https://github.com/bcgov/sbc-auth.git)\",\"relation\":\"GIT_REPO_URL and GIT_REF parameters specify the repository and branch that build configs clone and build from.\"},{\"target\":\"Jenkins (./jenkins/dev.groovy)\",\"relation\":\"JENKINS_FILE parameter specifies the Groovy pipeline definition that the pipeline template executes.\"},{\"target\":\"Jaeger (jaeger-collector service)\",\"relation\":\"JAEGER_COLLECTOR parameter routes API deployment to the collector endpoint at jaeger-collector.d7eovc-dev.svc:14267.\"},{\"target\":\"PostgreSQL\",\"relation\":\"Database component deployed as auth-db via postgresql-deploy.json template; test user created manually in pod terminal.\"},{\"target\":\"OpenShift templates (postgresql-deploy.json, auth-api-pre-deploy.json, auth-api-deploy.json, auth-api-build.json, auth-api-pipeline.json, auth-web-pre-deploy.json, auth-web-deploy.json, auth-web-build.json, auth-web-runtime-build.json, auth-web-pipeline.json)\",\"relation\":\"Each template is processed with `oc process` and parameters to generate Kubernetes manifests applied to create deployments, builds, and pipelines.\"}]}",
+  "subtype": "success",
+  "cost": 0.0308527
+ },
+ {
+  "id": 36051,
+  "source": "lear",
+  "path": "devops/openshift/templates/github-actions-cicd-rbac.yaml",
+  "structured": {
+   "condensed": "OpenShift Template configuration that provisions a Kubernetes Role and RoleBinding to grant a GitHub CI/CD service account permissions for managing deployments and credentials.\n\nParameters: NAMESPACE (role storage, default cc892f-dev), NAMESPACE_TOOLS (credentials storage, default d893f6-tools), NAME (component name, default github-cicd).\n\nObjects created: A Role granting API permissions, and a RoleBinding binding that role to a ServiceAccount.\n\nMain flow: The Role grants permissions to get, list, create, delete, patch, update configmaps and secrets; get, list, patch, update, watch deploymentconfigs and deploymentconfigs/scale; get, list, watch deploymentconfigs/log and deploymentconfigs/status. The RoleBinding binds this Role to ServiceAccount ${NAME} in namespace ${NAMESPACE_TOOLS}.\n\nEntry points: This chunk shows no entry points\u2014it is declarative configuration applied via `kubectl apply` or `oc apply`.\n\nDecisions: None.\n\nCalls out: None; Kubernetes API processes the objects when applied.\n\nPermission checks: This chunk shows no checks.\n\nGOTCHA: Neither the Role nor the RoleBinding declares an explicit namespace in metadata; they inherit from the applied context. However, the RoleBinding's roleRef specifies namespace ${NAMESPACE}, which may not match the objects' actual namespace if applied elsewhere, causing the binding to fail.",
+   "references": [
+    {
+     "target": "ServiceAccount ${NAME} in namespace ${NAMESPACE_TOOLS}",
+     "relation": "The RoleBinding makes this account subject to the Role, granting permissions to create, read, modify, and delete configmaps and secrets, and to read and update deploymentconfigs."
+    },
+    {
+     "target": "configmaps, secrets",
+     "relation": "The Role permits the account to get, list, create, delete, patch, and update these resources."
+    },
+    {
+     "target": "deploymentconfigs, deploymentconfigs/scale, deploymentconfigs/log, deploymentconfigs/status",
+     "relation": "The Role permits the account to get, list, patch, update, and watch these resources (read-only for logs and status)."
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"OpenShift Template configuration that provisions a Kubernetes Role and RoleBinding to grant a GitHub CI/CD service account permissions for managing deployments and credentials.\\n\\nParameters: NAMESPACE (role storage, default cc892f-dev), NAMESPACE_TOOLS (credentials storage, default d893f6-tools), NAME (component name, default github-cicd).\\n\\nObjects created: A Role granting API permissions, and a RoleBinding binding that role to a ServiceAccount.\\n\\nMain flow: The Role grants permissions to get, list, create, delete, patch, update configmaps and secrets; get, list, patch, update, watch deploymentconfigs and deploymentconfigs/scale; get, list, watch deploymentconfigs/log and deploymentconfigs/status. The RoleBinding binds this Role to ServiceAccount ${NAME} in namespace ${NAMESPACE_TOOLS}.\\n\\nEntry points: This chunk shows no entry points\u2014it is declarative configuration applied via `kubectl apply` or `oc apply`.\\n\\nDecisions: None.\\n\\nCalls out: None; Kubernetes API processes the objects when applied.\\n\\nPermission checks: This chunk shows no checks.\\n\\nGOTCHA: Neither the Role nor the RoleBinding declares an explicit namespace in metadata; they inherit from the applied context. However, the RoleBinding's roleRef specifies namespace ${NAMESPACE}, which may not match the objects' actual namespace if applied elsewhere, causing the binding to fail.\",\"references\":[{\"target\":\"ServiceAccount ${NAME} in namespace ${NAMESPACE_TOOLS}\",\"relation\":\"The RoleBinding makes this account subject to the Role, granting permissions to create, read, modify, and delete configmaps and secrets, and to read and update deploymentconfigs.\"},{\"target\":\"configmaps, secrets\",\"relation\":\"The Role permits the account to get, list, create, delete, patch, and update these resources.\"},{\"target\":\"deploymentconfigs, deploymentconfigs/scale, deploymentconfigs/log, deploymentconfigs/status\",\"relation\":\"The Role permits the account to get, list, patch, update, and watch these resources (read-only for logs and status).\"}]}",
+  "subtype": "success",
+  "cost": 0.0524112
+ },
+ {
+  "id": 37133,
+  "source": "lear",
+  "path": "legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "structured": {
+   "condensed": "Creates an invoice for a filing by calling the payment service with business and filing details, handling the response, and storing the payment token and status. Four additional static methods set effective dates for filings, detect future-effective filings, delete associated files from Minio object storage, and format invoice details.\n\n**create_invoice entry points**: Four static method; no permission check shown. Receives Business, Filing, filing_types list, JwtManager user_jwt, and optional payment_account_id. Returns tuple of (dict with payment response or error message, HTTPStatus code).\n\n**Main flow**: Extracts mailing address and corp type from filing JSON based on filing type (new business, conversion, or other). Extracts legal name or falls back to business identifier. Builds payload with businessInfo (identifier, type, name, contact from address), filingInfo (id, types, optional folio number), and invoice details. Checks user roles: if staff or system, optionally adds account info (routingSlip, bcolAccountNumber, datNumber) from filing header. POSTs payload to PAYMENT_SVC_URL with JWT bearer token and 20-second timeout. On success (200/201): saves payment id, status code, account id, and submitter role to filing, calls filing.save(), returns payment action flag. On 400: saves error type to filing, calls filing.save(), returns error type and detail message. On any other status: returns generic error message. Connection or timeout errors are logged but not re-raised\u2014returns generic message.\n\n**set_effective_date**: For changeOfAddress filings on non-COOP businesses, sets effective date to tomorrow at 1 minute after midnight in UTC, updates filing JSON, calls filing.save().\n\n**is_future_effective_filing**: Returns true if filing's effective date (parsed from ISO format in JSON) is after current UTC time.\n\n**delete_from_minio**: Deletes files from Minio by filing type: incorporationApplication or alteration (rulesFileKey, memorandumFileKey), dissolution (affidavitFileKey), courtOrder (fileKey), continuationIn (affidavitFileKey and authorization files array).\n\n**details_for_invoice**: Returns list with one dict (label and registration or incorporation number) if business_identifier is non-null and does not start with 'T', else empty list.\n\nGOTCHA: create_invoice logs connection failures but returns generic error message instead of re-raising; caller cannot distinguish connection failure from payment service errors. GOTCHA: set_effective_date directly assigns to filing._filing_json (protected member). GOTCHA: delete_from_minio shows no error handling for MinioService.delete_file calls.",
+   "references": [
+    {
+     "target": "PAYMENT_SVC_URL (current_app.config)",
+     "relation": "POST destination for invoice creation; receives JWT bearer token and JSON payload with business and filing info; returns id, statusCode, isPaymentActionRequired, or type and detail on error"
+    },
+    {
+     "target": "requests.post",
+     "relation": "HTTP client making POST to payment service with 20-second timeout"
+    },
+    {
+     "target": "MinioService.delete_file",
+     "relation": "Deletes file by key; called for rulesFileKey, memorandumFileKey, affidavitFileKey, fileKey from filing JSON"
+    },
+    {
+     "target": "Filing (model)",
+     "relation": "Source of filing type, JSON, payment_token, payment_status_code, payment_account, submitter_roles, effective_date; receives save() calls"
+    },
+    {
+     "target": "Business (model)",
+     "relation": "Source of identifier, legal_name, legal_type, mailing_address"
+    },
+    {
+     "target": "LegislationDatetime",
+     "relation": "Utility for tomorrow_one_minute_after_midnight() and as_utc_timezone()"
+    },
+    {
+     "target": "Address.create_address",
+     "relation": "Constructs address from JSON"
+    },
+    {
+     "target": "ListFilingResource.details_for_invoice",
+     "relation": "Returns invoice detail line items"
+    },
+    {
+     "target": "HTTPStatus (constants)",
+     "relation": "Status codes for responses (OK, CREATED, BAD_REQUEST, PAYMENT_REQUIRED)"
+    },
+    {
+     "target": "UserRoles (constants)",
+     "relation": "Enum for staff, system roles"
+    },
+    {
+     "target": "user_jwt (JwtManager)",
+     "relation": "Provides validate_roles() check and get_token_auth_header() for authorization"
+    }
+   ]
+  },
+  "result": "{\"condensed\":\"Creates an invoice for a filing by calling the payment service with business and filing details, handling the response, and storing the payment token and status. Four additional static methods set effective dates for filings, detect future-effective filings, delete associated files from Minio object storage, and format invoice details.\\n\\n**create_invoice entry points**: Four static method; no permission check shown. Receives Business, Filing, filing_types list, JwtManager user_jwt, and optional payment_account_id. Returns tuple of (dict with payment response or error message, HTTPStatus code).\\n\\n**Main flow**: Extracts mailing address and corp type from filing JSON based on filing type (new business, conversion, or other). Extracts legal name or falls back to business identifier. Builds payload with businessInfo (identifier, type, name, contact from address), filingInfo (id, types, optional folio number), and invoice details. Checks user roles: if staff or system, optionally adds account info (routingSlip, bcolAccountNumber, datNumber) from filing header. POSTs payload to PAYMENT_SVC_URL with JWT bearer token and 20-second timeout. On success (200/201): saves payment id, status code, account id, and submitter role to filing, calls filing.save(), returns payment action flag. On 400: saves error type to filing, calls filing.save(), returns error type and detail message. On any other status: returns generic error message. Connection or timeout errors are logged but not re-raised\u2014returns generic message.\\n\\n**set_effective_date**: For changeOfAddress filings on non-COOP businesses, sets effective date to tomorrow at 1 minute after midnight in UTC, updates filing JSON, calls filing.save().\\n\\n**is_future_effective_filing**: Returns true if filing's effective date (parsed from ISO format in JSON) is after current UTC time.\\n\\n**delete_from_minio**: Deletes files from Minio by filing type: incorporationApplication or alteration (rulesFileKey, memorandumFileKey), dissolution (affidavitFileKey), courtOrder (fileKey), continuationIn (affidavitFileKey and authorization files array).\\n\\n**details_for_invoice**: Returns list with one dict (label and registration or incorporation number) if business_identifier is non-null and does not start with 'T', else empty list.\\n\\nGOTCHA: create_invoice logs connection failures but returns generic error message instead of re-raising; caller cannot distinguish connection failure from payment service errors. GOTCHA: set_effective_date directly assigns to filing._filing_json (protected member). GOTCHA: delete_from_minio shows no error handling for MinioService.delete_file calls.\",\"references\":[{\"target\":\"PAYMENT_SVC_URL (current_app.config)\",\"relation\":\"POST destination for invoice creation; receives JWT bearer token and JSON payload with business and filing info; returns id, statusCode, isPaymentActionRequired, or type and detail on error\"},{\"target\":\"requests.post\",\"relation\":\"HTTP client making POST to payment service with 20-second timeout\"},{\"target\":\"MinioService.delete_file\",\"relation\":\"Deletes file by key; called for rulesFileKey, memorandumFileKey, affidavitFileKey, fileKey from filing JSON\"},{\"target\":\"Filing (model)\",\"relation\":\"Source of filing type, JSON, payment_token, payment_status_code, payment_account, submitter_roles, effective_date; receives save() calls\"},{\"target\":\"Business (model)\",\"relation\":\"Source of identifier, legal_name, legal_type, mailing_address\"},{\"target\":\"LegislationDatetime\",\"relation\":\"Utility for tomorrow_one_minute_after_midnight() and as_utc_timezone()\"},{\"target\":\"Address.create_address\",\"relation\":\"Constructs address from JSON\"},{\"target\":\"ListFilingResource.details_for_invoice\",\"relation\":\"Returns invoice detail line items\"},{\"target\":\"HTTPStatus (constants)\",\"relation\":\"Status codes for responses (OK, CREATED, BAD_REQUEST, PAYMENT_REQUIRED)\"},{\"target\":\"UserRoles (constants)\",\"relation\":\"Enum for staff, system roles\"},{\"target\":\"user_jwt (JwtManager)\",\"relation\":\"Provides validate_roles() check and get_token_auth_header() for authorization\"}]}",
+  "subtype": "success",
+  "cost": 0.0347769
+ }
+]
