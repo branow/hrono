@@ -408,3 +408,25 @@ the v3 map):
   facts about how two services connect (who produces what a listener
   consumes, which job repairs what another leaves stuck). A page states
   them, but no single page says the two belong together.
+
+## Fifteen hard questions: no difference
+
+The five hard questions, the five unused ones from the same batch, and five
+new ones (one per theme, `BATCH=b N=1 gen_hard.py`), every fact re-verified
+(`reverify.py hard15`; none dropped, 17 corrected). Code only against full
+hrono (v3 tree, sentence recall, best pages attached whole), each twice:
+
+| arm | coverage | errors | cost |
+|---|---|---|---|
+| code only (a, b) | 0.527, 0.534 | 21, 16 | $3.41, $3.15 |
+| hrono (a, b) | 0.516, 0.518 | 25, 17 | $3.76, $3.38 |
+
+Paired per question (mean of two runs): hrono - code = -0.013, 95%
+bootstrap CI [-0.058, 0.029]; hrono ahead on 6 questions, behind on 7.
+The five-question lead was noise. On these questions a strong agent with
+30 turns and grep gets as much as it does with the map, and the map costs
+about 10% more.
+
+Every arm scores near 0.5, and most facts get half credit in every run: the
+answers name the right components and miss the exact condition or the
+second service. The set measures that last step, which neither arm takes.
