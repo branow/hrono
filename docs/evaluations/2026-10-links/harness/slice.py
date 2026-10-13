@@ -199,6 +199,23 @@ CONNECT = (
 )
 
 
+# A page that names a check without what it compares reads as a guarantee:
+# Opus with the map wrote "invoice reads do check affiliation" because a page
+# said "`Invoice.find_by_id` runs `check_auth`", and did not open the check
+# that compares the caller's own account, never the invoice's.
+CHECKS = (
+    "\n\nEvery check you mention (authorization, validation, a lock, a "
+    "duplicate guard, a status test) comes with what it compares and against "
+    'what, exactly as the notes give it - for example "`check_auth` asks the '
+    "auth service for the caller's role in the caller's own account; it does "
+    "not compare that account with the invoice's\". When the notes only name "
+    'a check, write "`check_auth` (condition not in the notes)". Never let '
+    "a check's name stand for a guarantee: do not write that something is "
+    "enforced, protected or safe unless the notes show the condition that "
+    "makes it so."
+)
+
+
 def slice_leaves(conn) -> list[int]:
     leaf = leaves_of(conn)
     return sorted({leaf[s] for s in slice_sections(conn) if s in leaf})
@@ -245,7 +262,7 @@ async def _sonnet(prompt: str) -> dict:
     return {"text": result.result, "cost": result.total_cost_usd}
 
 
-def brief() -> None:
+def brief(variant: str = "") -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "src"))
     from hrono.summarize.briefs import labeled
 
@@ -256,10 +273,17 @@ def brief() -> None:
         ).fetchone()[0]
     )["template"]
     template = template.replace("\n\nLeave out:", CONNECT + "\n\nLeave out:", 1)
+    if variant:
+        template = template.replace(
+            "\n\nOutput only the description",
+            CHECKS + "\n\nOutput only the description",
+            1,
+        )
+        assert CHECKS in template
     new = json.loads((DIR / "condensed.json").read_text())
     links = json.loads((DIR / "links.json").read_text())
     title = titles(conn)
-    out_path = DIR / "briefs.json"
+    out_path = DIR / f"briefs{variant}.json"
     out = json.loads(out_path.read_text()) if out_path.exists() else {}
 
     def one(node: int) -> tuple[str, dict]:
@@ -459,6 +483,7 @@ if __name__ == "__main__":
         "condense": condense,
         "link": link,
         "brief": brief,
+        "brief2": lambda: brief("2"),
         "judge": judge,
         "notes": judge_notes,
     }[sys.argv[1]]()
