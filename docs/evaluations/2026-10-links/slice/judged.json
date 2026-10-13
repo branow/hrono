@@ -1,0 +1,354 @@
+[
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says staff-only views throw in created() if !isRoleStaff, and that staff payment adds waiveFees for NO_FEE. It also says the staff dialog opens when isRoleStaff. It never says the waive flag goes in the header only when 'No Fee' is chosen in the dialog, and it doesn't say ContinuationOut sets header.waiveFees = true unconditionally. It also doesn't give the exact 'This is a Staff only Filing.' message, and it lists ContinuationOut as one of the dialog views.",
+  "cost": 0.031256
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says staffPaymentData.option (including NO_FEE) selects the header payment fields and that the dialog opens only for isRoleStaff. It also says ContinuationOut is staff-only and its created() throws for non-staff. It never says the waive flag goes in the header only when 'No Fee' is chosen, and it never says ContinuationOut always sets header.waiveFees = true. It doesn't give the 'This is a Staff only Filing.' message. It lists StandaloneOfficeAddressFiling and AnnualReport only as staff-detour users.",
+  "cost": 0.034429
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map never says the header's waive flag is copied into the fee lines as waiveFees without a role check. It also omits which filing types (court order, registrar's notation/order, put back on, admin freeze, v1 incorporation application) get no waiveFees. It only says that accountInfo (routingSlip, bcolAccountNumber, datNumber) goes to staff/system callers, which covers the last claim.",
+  "cost": 0.029565
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "arm": "links",
+  "verdict": "no",
+  "missing": "The map never says the header's waive flag is copied into the fee lines, that this happens without a role check, or which filing types get no waiveFees. It only says accountInfo (routing slip, BCOL, DAT) goes to staff or system callers, and that the legal-api does not verify scope.",
+  "cost": 0.036279
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says the invoice is created by a POST to PAYMENT_SVC_URL and that payment calls send a Bearer JWT. It never says the JWT is the end user's own token, and it never says the payment service sees the customer rather than a privileged service account.",
+  "cost": 0.018105999999999997
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says the caller's Bearer JWT is sent on Pay calls, including the invoice POST, and that the caller's token is forwarded. It never says the payment service therefore sees the customer rather than a privileged service account. It also says staff or system callers get accountInfo, which suggests the token can belong to a staff or system caller, not always an end user.",
+  "cost": 0.020449000000000002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says only that `fee.py` honours `waiveFees` for staff only; it doesn't name the fee-quote endpoint, doesn't say the parameter is ignored for non-staff callers, and doesn't mention a `waive` query parameter or a staff-role check.",
+  "cost": 0.031865
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says `fee.py` honours `waiveFees` only for STAFF (via `validate_roles`), but it doesn't say the fee-quote endpoint ignores the parameter for non-staff callers. It also doesn't name the parameter `waive` or the endpoint as a fee quote.",
+  "cost": 0.031129000000000004
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says invoice POST needs MAKE_PAYMENT and that schemas guard no entry point, and that `filing_type.waiveFees` is commented \"staff only\" but not enforced. But it says `fee.py` honours waiveFees for staff only, and `PaymentLineItem.create` requires STAFF for waived fees (FEE_OVERRIDE_NOT_ALLOWED), which contradicts \"no staff check\". It never says the fee calculation passes the waive flag straight through, and it doesn't say the title string reads \"Only for staff users\".",
+  "cost": 0.06637699999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map covers the schema-only waiveFees note and the MAKE_PAYMENT check_auth on POST /payment-requests, but it never says that invoice creation's fee calculation passes each line's waive flag straight to the fee schedule with no staff check. It only notes staff checks elsewhere (PaymentLineItem.create and fee.py).",
+  "cost": 0.0534834
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map states that waive_fees sets every fee to 0, that the fee amount setter records the original total as the waived amount unless the fee is variable, and that PaymentLineItem.create refuses a non-staff waived fee with FEE_OVERRIDE_NOT_ALLOWED. It never ties these together into the end-to-end result: a non-staff user adding the flag via the legal API is refused at invoice creation, and the fee quote shows the full amount (fee.py only says waiveFees is honoured for staff). It also doesn't say the variable-fee case slips through, and it doesn't list which fees are zeroed.",
+  "cost": 0.0525174
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says waived fees need STAFF (FEE_OVERRIDE_NOT_ALLOWED in PaymentLineItem.create), that fee.py honours waiveFees only for STAFF, and that the fee_amount setter zeroes variable fees as waived. It never says the waive flag zeroes the filing, priority, future-effective and service fees, or that the original fixed amount is recorded as the waived amount. It does not say that a non-staff legal-api filing with the flag is refused at invoice creation. It does not say that a variable-fee filing slips through because its waived amount stays 0. It does not say that the fee quote shows the full amount for non-staff.",
+  "cost": 0.0563174
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says pay-api FeeSchedule adds the future-effective fee only when is_future_effective is set and apply_filing_fees is true. It never says which v1 or v2 legal-api filing types get the future-effective flag, and it never says the quote endpoint passes futureEffective for any filing type. It also doesn't mention that FeeSchedule needs a configured future_effective_fee, or that quotes and invoices can disagree.",
+  "cost": 0.0386624
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says FeeSchedule applies a future-effective flag conditionally, but it doesn't name the v2 filing types (incorporation, amalgamation, continuation-in, alteration, voluntary dissolution) or the v1 difference. It also doesn't say the quote endpoint passes futureEffective for any filing type, or that quotes and invoices can disagree on the surcharge.",
+  "cost": 0.0394654
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "arm": "v3",
+  "verdict": "yes",
+  "missing": "Almost nothing is missing. The map never says the republish happens once per invoice, and it only loosely links the stale-payment job to update_transaction.",
+  "cost": 0.0571154
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says publish_status sets EVENT_FAILED on a publish failure, and that find_stale_records picks non-terminal CC/DIRECT_PAY rows. It never says the exclusion list is exactly COMPLETED/CANCELLED/FAILED, so EVENT_FAILED rows being picked up is only implied. It also never says update_transaction republishes the event for each invoice when the payment is already COMPLETED. It only describes the normal completion flow, and the stale job calling update_transaction with pay_response_url=None.",
+  "cost": 0.06238540000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says only that `_release_payment` skips CSO, RPT, PPR and VS and swallows publish errors, and that queue publish failures are logged only. It doesn't say which payment methods call it from `complete_post_invoice` (BCOL drawdown, internal, PAD, EFT, EJV), that PAD, EFT and EJV release at invoice creation rather than on collection, that online banking uses it only for `apply_credit`, or that normal online banking goes through pay-queue's `payment_reconciliations._publish_payment_event`. It also doesn't mention Sentry `capture_message`. It adds that `publish_status` sets EVENT_FAILED, which seems to conflict with the fact's \"no failure status is saved, so no job retries it\".",
+  "cost": 0.0312144
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says queue publish failures are logged and sent to Sentry and never retried, and that update_transaction publishes unless PAD or EFT. It does not say that BasePaymentSystemService._release_payment sends the event from complete_post_invoice for BCOL, internal, PAD, EFT and EJV. It also omits that PAD, EFT and EJV publish at invoice creation rather than collection, that online banking uses _release_payment only for apply_credit, and that normal online-banking payments are published by pay-queue's payment_reconciliations._publish_payment_event. The map also says publish_status sets the transaction to EVENT_FAILED on a publish failure, which contradicts the fact's \"no failure status is saved\".",
+  "cost": 0.0334124
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map covers nearly every claim. It says the save commits before publishing, the publishes sit inside suppress(Exception) so failures are lost, the duplicate guard blocks redelivery, and continuationIn creates a staff Review rather than publishing to the filer. It never says the continuationIn path sets the AWAITING_REVIEW status. It also says the emailer message is published after the Review is created, which fits the fact.",
+  "cost": 0.013510399999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "arm": "links",
+  "verdict": "yes",
+  "missing": "Nothing material is missing. The map covers the save-before-publish order, the suppress(Exception) publish failures, the duplicate guard on payment_completion_date, and the continuationIn branch that creates a staff Review and sets AWAITING_REVIEW instead of publishing to the filer.",
+  "cost": 0.0159094
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says only COMPLETED filings are treated as duplicates and that there is no other duplicate guard. It never mentions a PAID-but-not-applied filing, so it doesn't say that a second delivery resets payment_completion_date, resends the PAID email and republishes to the filer. It also doesn't say there is no staff-review branch or that continuationIn would go straight to the filer.",
+  "cost": 0.0200944
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says the only duplicate guard is the COMPLETED-status check, but it never says a PAID-but-not-applied filing is redelivered and has payment_completion_date reset, the PAID email resent and the filer message republished. It also never mentions a missing staff-review branch or continuationIn being sent straight to the filer.",
+  "cost": 0.0239964
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map never states the '<type>_<option>_<filingId>' message_id format, never says message_id is built only for the listed filing types (changeOfDirectors, changeOfAddress, alteration are absent from its legacy type list), and never says message_id is None for other types. It does cover the dedupe and retry rules: records whose status isn't FAILED are skipped, and message_seen_count > MSG_RETRY_NUM stops retries.",
+  "cost": 0.015113400000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map never lists the specific filing types (incorporationApplication, annualReport, etc.) or the '<type>_<option>_<filingId>' id format, and it doesn't say message_id is None for other types. It does cover skipping seen non-FAILED ids, the MSG_RETRY_NUM retry limit, and skipping messages with no message_id.",
+  "cost": 0.0202402
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map states that the job pulls PAID/APPROVED filings with effective_date <= now from legal-api's internal endpoint and publishes each id to the filer subject, and that the before_update listener derives PAID from payment_completion_date. It never says this is the only automatic repair for a paid filing that never reached the filer. It also never says the job re-drives lost non-future-effective filings.",
+  "cost": 0.0374672
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says the job calls /internal/filings/future_effective and publishes each returned filing ID to the filer queue, and that the model's before_update listener sets PAID from payment_completion_date. It never says the endpoint returns PAID or APPROVED filings with effective_date now or earlier, and it doesn't say this re-drives lost non-future-effective filings or that it is the only automatic repair for a paid filing that never reached the filer.",
+  "cost": 0.0374374
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map covers the COMPLETED guard, swallowed publish and business_profile failures, the catch-all that drops the message, multiple commits, and the future-effective job selecting PAID/APPROVED. It does not say that transaction_id (status COMPLETED) is committed before the side effects, that an uncaught exception in consume_nr, update_business_profile, update_entity or publish_mras_email skips the later steps, or that replay is a no-op and so nothing repairs the missing affiliation, profile, email or event. It also does not tie update_affiliation's error capture to business_profile.py:142.",
+  "cost": 0.0385254
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map covers: COMPLETED filings are skipped, update_affiliation swallows all errors to Sentry, publish failures are caught separately, and the generic handler drops the message. It does not say that transaction_id/COMPLETED is committed before the side effects run. It does not say that an uncaught exception in consume_nr, update_business_profile, update_entity or publish_mras_email skips the later steps. It does not say that the future-effective job selects only PAID/APPROVED filings, or that nothing repairs the missing affiliation, profile, email or event. The business_profile.py:142 line reference and the per-step try/except structure for the completed email, publish_event and GCP event are also not stated.",
+  "cost": 0.0427092
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map states the topic routing (NRO, BUSINESS/BUSINESS_SEARCH, STRR) and that pay-api publishes payment status to GCP PubSub CloudEvents. It never says STRR_PAY_TOPIC defaults to BUSINESS_PAY_TOPIC, and it does not say that pay-api never publishes these events to NATS or that this is the only transport the entity-pay listener uses. It does describe entity-pay as a NATS/STAN worker. It also calls the routing \"by input (product)\" rather than by the invoice's corp type, and says \"only\" nowhere for the GCP transport.",
+  "cost": 0.0574154
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map gives the topic routing (NRO\u2192NAMEX, BUSINESS/BUSINESS_SEARCH\u2192BUSINESS, STRR\u2192STRR_PAY_TOPIC) and the GCP Pub/Sub CloudEvent publishing, and it says entity-pay consumes from NATS. It doesn't say that STRR_PAY_TOPIC defaults to BUSINESS_PAY_TOPIC. It doesn't say that pay-api publishes these events only over Pub/Sub and never to NATS. It also doesn't link the NATS-only entity-pay listener to the missing NATS publishing. Corp type is mapped via the product, which the page doesn't tie to the invoice.",
+  "cost": 0.0690442
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map never says the pay API puts the camelized token flat into the CloudEvent data, or that it is built from invoice id, status, filing id and corp type. It also never states the cross-service mismatch, i.e. that the old entity-pay worker would skip every event the pay API sends. It does show that entity-pay needs a top-level 'paymentToken' wrapper with a corpTypeCode found in CorpType, that business-pay reads ce.data with type 'bc.registry.payment', and that it converts keys to snake_case. The pay-api page only says payloads are \"PaymentToken camelized\".",
+  "cost": 0.0518864
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says pay-api publishes a camelized payload {id, statusCode, filingId, corpTypeCode}, and that entity-pay requires a top-level 'paymentToken' wrapper with a corpTypeCode in a fixed set. It does not say the data is flat and unwrapped in the CloudEvent. It does not say entity-pay would skip every current pay-api event. It lists the allowed corp types as {BEN, CP, SP, GP, BC, ULC, CC}, not as lear's CorpType table. It does not say business-pay reads ce.data with type 'bc.registry.payment' or converts keys to snake_case. It only says business-pay takes a cloud event with a payment token.",
+  "cost": 0.0598754
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map never says the review gate exists only in business-pay, and it doesn't say that the filing's status is set to AWAITING_REVIEW or that the Review row has that status. It also doesn't say outright that continuationIn filings are not published to the filer. The entity-pay page does say it has no review logic and publishes to the filer when the effective date has arrived, but it doesn't say that it sets only the payment completion date.",
+  "cost": 0.0200644
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "arm": "links",
+  "verdict": "yes",
+  "missing": "Nothing material. The map never says outright that entity-pay has no review logic, or that continuationIn skips the filer publish. Both follow from the decision lists, which show only business-pay with review creation and \"any other type\" publishing to the filer.",
+  "cost": 0.0250394
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map states the individual pieces: entity-filer skips only COMPLETED filings, the listener's skip rules and PAID derivation, the future-effective query for PAID or APPROVED filings, and the job's NATS publish. It does not say that an old-path PENDING continuation-in filing never reaches AWAITING_REVIEW and becomes PAID, or that restoring the old path would let unreviewed continuation-in filings through. The listener skip list is also slightly off: APPROVED is skipped only without a transaction_id, and a PENDING filing with only a payment_token would not become PAID. It also doesn't say the filing JSON is sent to the filer by the job via legal-api's list call, and the map does not mention the claim \"nothing downstream re-checks review status\".",
+  "cost": 0.0458094
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map covers the entity-filer COMPLETED skip and the listener's skip of AWAITING_REVIEW/CHANGE_REQUESTED/REJECTED/APPROVED without a transaction_id. It also says a payment_completion_date gives PAID and that the future-effective job publishes filings from the legal API. It does not say the listener requires no transaction_id for PAID. It does not say the future-effective endpoint returns PAID or APPROVED filings whose effective date has passed. It never mentions an \"old path\" where a PENDING continuation-in filing skips AWAITING_REVIEW and becomes PAID. It also never concludes that restoring that path would let unreviewed continuation-in filings through because nothing downstream re-checks review status.",
+  "cost": 0.048710399999999994
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map says business-pay sets status PAID and payment_status_code itself and has its own Filing model in database/filings.py on the shared filings table. It never says the model is cut-down, that legal-api's before-insert/update status listener doesn't run there, or that status-rule changes in legal_api/models/filing.py must be copied into business-pay to reach the live payment path.",
+  "cost": 0.024504400000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map says business-pay writes Filing fields (payment_status_code \"COMPLETED\", status PAID) and uses the shared table. It never says business-pay has its own cut-down Filing model, that legal-api's before-insert/update status listener doesn't run there, or that changes to status rules in legal_api/models/filing.py must be copied into business-pay.",
+  "cost": 0.0255564
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map covers most of the fact: the MHR/BTR skips, the duplicate guard on payment_completion_date, the 404 on filing not found, the BC-with-no-identifier exception, and entity-pay's 5 retries, COMPLETED-only duplicate check and swallowed errors. It does not say that business-pay drops any non-COMPLETED token such as TRANSACTION_FAILED. It does not say that entity-pay swallows not-found errors specifically, though it says FilingException is absorbed. It does not state the conclusion that STRR or other product events routed to the business topic with no lear filing are redelivered endlessly. It also does not link pay-api's topic routing to that outcome, because the routing page says nothing about STRR on the default topic.",
+  "cost": 0.041587400000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map never says business-pay drops any non-COMPLETED token, including TRANSACTION_FAILED. It also omits the product-event consequence: STRR or other events on the business topic with no lear filing get a 404 and are redelivered endlessly. It does cover the MHR/BTR skips, the duplicate guard, the 404 with the BC/null exception, entity-pay's 5 retries, and its COMPLETED-only duplicate check. entity-pay's TRANSACTION_FAILED handling is covered, but \"swallows not-found errors\" is not stated. The map says a not-found filing raises, and other exceptions are absorbed.",
+  "cost": 0.04680240000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map covers business-pay's JWT check (audience, email_verified, email match, 403) and its empty-request 200. It never says the empty-body check runs before authentication, so an unauthenticated empty request gets 200. For entity-pay it only says no entry-point authorization appears in the files, and it does not state that the NATS subject is unauthenticated.",
+  "cost": 0.020548399999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map states the JWT check (403, verify_oauth2_token, SUB_AUDIENCE, email_verified, email == SUB_SERVICE_ACCOUNT) and says entity-pay's notes show no checks. It does not say the JWT check runs after the empty-body check, so an empty-body request gets 200 without authentication. It only lists empty messages as 200 drops and says POST / is guarded only by verify_gcp_jwt. It also doesn't state that entity-pay's NATS subject has no authentication, only that none is visible in the notes.",
+  "cost": 0.0221254
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "arm": "v3",
+  "verdict": "partial",
+  "missing": "The map never says the listener has its own QueueService, and it doesn't say that a missing effective_date is swallowed. It also doesn't tie the staff review endpoint's approvals to the same NATS filer subject as part of that listener comparison. The pay-service page does cover the filer and emailer payloads, the effective_date <= payment_completion_date condition, suppress(Exception), and PAID being committed before publish. The legal-api page does cover the review filer publish.",
+  "cost": 0.0234564
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "arm": "links",
+  "verdict": "partial",
+  "missing": "The map covers almost all of the fact. Two details are missing or only loosely stated. The word \"new\" for the listener is not used. The pay_filer map says the service publishes through `queue.publish_json` in services/queue.py, but it does not say this is the service's own QueueService.",
+  "cost": 0.0264614
+ }
+]
