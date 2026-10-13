@@ -22,6 +22,7 @@ const path = require("node:path");
  * @property {number} levels     hops from root.md to a leaf in the export
  * @property {number} shortest   prompts shorter than this get no recall
  * @property {number} longest    the most recalled text attached to a prompt
+ *                               (at most 10,000: Claude Code's inline limit)
  * @property {string} bin        the hrono command
  */
 
@@ -31,7 +32,7 @@ const DEFAULTS = Object.freeze({
   limit: 5,
   levels: 4,
   shortest: 20,
-  longest: 12000,
+  longest: 10000,
   bin: "hrono",
 });
 

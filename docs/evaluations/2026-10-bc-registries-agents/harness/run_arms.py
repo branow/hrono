@@ -135,11 +135,24 @@ ROUND_2 = {
         f"hrono-v3f{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
         for run in "ab"
     },
+    # the same once more, after the plugin caps recall at Claude Code's
+    # 10,000-character inline limit: above it the v3f runs got a file path
+    # and a 2 KB preview, and opened the file in 1 of 15 runs
+    **{
+        f"hrono-v3c{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
 }
 
 
 def run_round_2(kind, arm, q):
+    # `<arm>@<model>` is the same arm with another agent model, and
+    # `<arm>@<model>+<n>` also lets it take up to n turns
+    name = arm
+    arm, _, model = arm.partition("@")
+    model, _, most = model.partition("+")
     system, addition, cwd, plugin, turns = ROUND_2[arm]
+    turns = int(most) if most else turns
     export = EXPORT_V3 if "-v3" in arm else EXPORT_R2
     prompt = ARCH.format(question=q["question"])
     if cwd is not None:
@@ -149,8 +162,8 @@ def run_round_2(kind, arm, q):
     prompt += addition.format(export=export)
     r = common.run_agent(
         prompt,
-        model=MODEL,
-        role=f"{kind}:{arm}",
+        model=model or MODEL,
+        role=f"{kind}:{name}",
         key=q["qid"],
         max_turns=turns,
         tools=["Read", "Grep", "Glob"],
@@ -162,7 +175,7 @@ def run_round_2(kind, arm, q):
         env={"HRONO_HOME": str(HRONO_HOME_R2)},
         safe_mode=False,
     )
-    return {"qid": q["qid"], "set": kind, "arm": arm, **r}
+    return {"qid": q["qid"], "set": kind, "arm": name, **r}
 
 
 def items(kind):
@@ -170,7 +183,7 @@ def items(kind):
 
 
 def run_one(kind, arm, q):
-    if arm in ROUND_2:
+    if arm.partition("@")[0] in ROUND_2:
         return run_round_2(kind, arm, q)
     prompt = (
         LOCATE.format(task=q["task"])

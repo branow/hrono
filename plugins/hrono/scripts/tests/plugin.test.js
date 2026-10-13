@@ -153,6 +153,16 @@ test("the attachment stops before the size limit", () => {
   assert.doesNotMatch(text, /### f4\.py/);
 });
 
+test("no setting attaches more than Claude Code shows inline", () => {
+  const body = "x".repeat(3000);
+  const w = world([1, 2, 3, 4, 5, 6].map((n) => ({ kind: "source", path: `f${n}.py`, body })));
+  w.configure({ tree: "demo", longest: 24000 });
+  const text = attached(w.run("recall.js", { prompt: ASK }));
+  assert.ok(text.length <= 10000);
+  assert.match(text, /### f3\.py/);
+  assert.doesNotMatch(text, /### f4\.py/);
+});
+
 test("a setting of the wrong kind keeps its default", () => {
   const w = world();
   w.configure({ tree: "demo", limit: "lots", recall: "yes" });
