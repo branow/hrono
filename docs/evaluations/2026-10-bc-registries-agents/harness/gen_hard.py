@@ -11,12 +11,16 @@ hrono) and writes questions whose answer needs that wider context. They are
 then verified (verify.py) and calibrated: a code-only agent answers each
 once, and the ones it does worst on are kept.
 
-Writes data/gen-hard-<theme>.json.
+Writes data/gen-hard-<theme>.json. With BATCH set (e.g. BATCH=b), a further
+batch: N questions per theme (default 2), told not to repeat the earlier
+ones, written to data/gen-hard-<batch>-<theme>.json with qids
+hard-<theme>-<batch><i>.
 
-Usage: python3 gen_hard.py [THEME ...]
+Usage: [BATCH=b N=1] python3 gen_hard.py [THEME ...]
 """
 
 import json
+import os
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -45,12 +49,25 @@ Rules:
 Reply with only a JSON array: [{{"kind": "{kind}", "question": "...", "facts": [{{"fact": "...", "files": ["..."]}}]}}]"""
 
 
+BATCH = os.environ.get("BATCH", "")
+N = int(os.environ.get("N", "2"))
+
+
+def earlier(theme):
+    """The questions already written on ``theme``, for a further batch."""
+    path = common.DATA / f"gen-hard-{theme}.json"
+    if not BATCH or not path.exists():
+        return ""
+    asked = [q["question"] for q in json.loads(path.read_text())["questions"]]
+    return "\n\nThese are already in the benchmark; write about different flows and code:\n" + "\n".join(f"- {q}" for q in asked)
+
+
 def gen(theme):
     r = common.run_agent(
-        PROMPT.format(theme=THEMES[theme], n=2, kind=theme),
+        PROMPT.format(theme=THEMES[theme], n=N, kind=theme) + earlier(theme),
         model="opus",
         role="gen-hard",
-        key=theme,
+        key=f"{BATCH}{theme}",
         max_turns=120,
         tools=["Read", "Grep", "Glob"],
         timeout=5400,
@@ -58,9 +75,10 @@ def gen(theme):
     m = re.search(r"\[.*\]", r["answer"], re.S)
     qs = json.loads(m.group(0)) if m else []
     for i, q in enumerate(qs):
-        q["qid"] = f"hard-{theme}-{i}"
+        q["qid"] = f"hard-{theme}-{BATCH}{i}"
         q["area"] = f"hard-{theme}"
-    (common.DATA / f"gen-hard-{theme}.json").write_text(
+    name = f"hard-{BATCH}-{theme}" if BATCH else f"hard-{theme}"
+    (common.DATA / f"gen-{name}.json").write_text(
         json.dumps({"questions": qs, "raw": r}, indent=1)
     )
     print(theme, len(qs), r["usage"]["cost_usd"], flush=True)

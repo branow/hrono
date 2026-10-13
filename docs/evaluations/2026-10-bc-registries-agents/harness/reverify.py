@@ -8,6 +8,8 @@ the code that would contradict it, and either keeps it, corrects it, or
 drops it. Rewrites data/<set>.json in place, keeping the old facts as
 `facts_before`.
 
+A question already re-verified is kept as it is.
+
 Usage: python3 reverify.py SET
 """
 
@@ -31,6 +33,8 @@ Reply with only JSON: [{{"verdict": "correct|partly|wrong", "fix": "<corrected f
 
 
 def check(q):
+    if "reverdicts" in q:  # already re-verified
+        return q
     facts = "\n".join(
         f"{i + 1}. {f['fact']} (files: {', '.join(f['files'])})"
         for i, f in enumerate(q["facts"])
