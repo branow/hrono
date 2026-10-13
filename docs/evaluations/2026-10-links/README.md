@@ -21,3 +21,25 @@ test, two docs, an OpenShift template. Cost $0.64.
   the legal API's own page first, pay-api third; `Role` -> auth-web
   helpers). It works when the name is distinctive (`updateFilingData` ->
   the filing mixin page, 0.98).
+
+## The claude CLI against the Agent SDK
+
+`harness/bench_sdk.py`, Haiku 4.5 pinned, the same three prompts per arm,
+sequential (`bench.json`):
+
+| arm | seconds | output tokens | cost | schema met |
+|---|---|---|---|---|
+| CLI, hrono's flags | 33 / 59 / 30 | 3.1k / 6.5k / 3.1k | $0.025 / 0.047 / 0.024 | 2 of 3 |
+| CLI, `--tools ""` | 391 / 95 / 113 | 11k / 10k / 13k | $0.057 / 0.054 / 0.066 | 3 of 3 |
+| Agent SDK, `tools=[]` | 118 / 38 / 60 | 13k / 4k / 6k | $0.073 / 0.024 / 0.034 | 3 of 3 |
+
+- The Agent SDK runs the same CLI: it spawns a `claude` binary it bundles.
+  Unpinned, that bundled CLI resolved "haiku" to Haiku 5.5, not 4.5.
+- The CLI's fixed overhead is about 33k tokens of tool definitions, read from
+  cache ($0.003 at Haiku prices). Removing tools removes it, but it is not
+  where the time or money goes.
+- Output dominates, and most of it is thinking: 0.9k-6.6k thinking tokens
+  for one section, varying run to run. That variance, not CLI against SDK,
+  sets the time and the cost.
+- `--json-schema` checks the answer after it is written and asks again on a
+  miss; at `--max-turns 3` one CLI call ended without the structured output.
