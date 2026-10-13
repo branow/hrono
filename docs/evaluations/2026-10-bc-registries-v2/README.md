@@ -431,6 +431,23 @@ Every arm scores near 0.5, and most facts get half credit in every run: the
 answers name the right components and miss the exact condition or the
 second service. The set measures that last step, which neither arm takes.
 
+## Agents read too little, not too much
+
+The hope was that the map keeps a big question's context small and focused.
+The fifteen-question Sonnet runs show the opposite failure:
+
+| arm | turns | tool calls | map pages opened | cited files touched | coverage |
+|---|---|---|---|---|---|
+| code only (a / b) | 15.5 / 16.5 | 14.5 / 15.5 | 0 | 52% / 54% | 0.53 |
+| hrono (a / b) | 17.6 / 14.9 | 16.6 / 13.9 | 1.6 / 1.9 | 52% / 49% | 0.52 |
+
+Agents stop after about 15 turns, having touched half the files the answer
+cites (the second service, the twin listener, the repair job). Coverage
+rises with context read (r = +0.16) and with cited files touched (+0.30),
+so clutter is not the problem; stopping early is. The map did not change
+which files they reached. (These hrono runs were also hit by the inline
+limit below, so their recall was mostly unseen.)
+
 ## Recall over the inline limit; Opus, Sonnet and Haiku
 
 Claude Code shows a hook's added context inline only up to 10,000
@@ -494,3 +511,30 @@ second code-only Opus run for the spread:
   account is never compared with the invoice's, and Opus again wrote that
   invoices check affiliation. One run each: the spread between two code-only
   runs is 0.05 for Opus, 0.06 for Sonnet.
+
+## Where this stands (2026-10-13)
+
+- **Invalidated:** every "full hrono" result before `f55482d` attached more
+  than Claude Code shows inline, so the fifteen-question tie measured almost
+  no recall. Only the `v3c` and `v3x` arms are clean.
+- **What helps:** briefs that state each check's condition (or say it is not
+  in the notes) and the page's connections. On a 21-page slice they lift
+  Sonnet above code alone and Opus to just under it, in fewer turns.
+- **What hurts:** a page that names a check without its condition. Strong
+  agents take it as a guarantee and skip the code that holds the flaw.
+- **Still lost:** conclusions across pieces (the invoice account never
+  compared); no single source states them, so no summary does.
+
+Next, in order:
+1. Second runs of `hrono-v3xa` for Opus and Sonnet (`hrono-v3xb@opus`,
+   `hrono-v3xb@sonnet`, QIDS = the four), about $2.20, to confirm the lift.
+2. Read the seven errors of `hrono-v3xa@opus` case by case (free).
+3. If it holds, move it into hrono: references in the condense output
+   (schema via the SDK provider, `229dc19`), the rare-name linking step, the
+   CHECKS rule and a connections block in the brief prompt; rebuild the v3
+   tree and rerun the fifteen questions with `v3c`-style capped recall.
+
+Workspace: tree `~/hrono-eval/db/hrono-v3.db` served on port 8789
+(`bin/h2`); exports `export-bcreg-v3-L3` (v3) and `export-bcreg-v3x-L3` (21
+pages rewritten), plugin homes `home-v2` and `home-v2x`; runs in
+`~/hrono-deep/runs` as `hard15-<arm>@<model>+<turns>.jsonl`.
