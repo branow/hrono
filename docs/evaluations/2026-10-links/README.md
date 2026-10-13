@@ -43,3 +43,27 @@ sequential (`bench.json`):
   sets the time and the cost.
 - `--json-schema` checks the answer after it is written and asks again on a
   miss; at `--max-turns 3` one CLI call ended without the structured output.
+
+## Round 2: references across the edge, matched by name
+
+`harness/links2.py`, the same 11 sections, Agent SDK, thinking off: $0.14
+for all 11 (round 1: $0.64), 4-20 s a call. Matches in `links2.txt`.
+
+- **The request now says what not to list** (own functions, libraries,
+  types, enums, models, constants, logging) and asks for the most specific
+  name the content gives, a direction, and what passes with its conditions.
+  Docs and listeners now give real edges: the entity filer's NATS subject and
+  GCP topic with their payloads, the FAS doc's ten CFS endpoints, the legal
+  API's POST to `PAYMENT_SVC_URL` with "Bearer token from the JWT header;
+  staff or system roles add routingSlip, bcolAccountNumber, datNumber". The
+  RBAC template rightly gives none. Code chunks still list calls into their
+  own repository (`PaymentService.create_invoice`), which are links too.
+- **Matching by names, rare ones weighted up.** Every identifier-like name in
+  the target and the payload (snake_case, camelCase, dotted, paths; plain
+  words left out) is looked up in the full-text index; each votes
+  1/(pages holding it) for those pages. The legal API's payment call lands on
+  the pay-api schema and service pages (2nd and 3rd; 1st is a legal-API
+  sibling page), because the payload's field names live on both sides. The
+  filer's event subject lands on the entity emailer, its consumer.
+  `updateFilingData` and `PaymentService.create_invoice` land on their
+  definitions. `LegalServices.fetchFiling` does not reach the legal API.

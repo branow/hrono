@@ -1,0 +1,166 @@
+
+## lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py (own page 577: legal-api v2 business resources, documents, internal services and Minio wrapper)
+- [depends] Business.legal_type -- Reads legal entity type from business record for non-new-business filings.
+    -> by name `Business.legal_type`: 707 entity-emailer email processors; 645 legal-api REST resources (v1 and v2); 71 Custom filer (data-tool/flows/custom_filer)
+- [depends] Business.LegalTypes.COOP.value -- Constant checked to conditionally append special resolution and affidavit codes for cooperative voluntary dissolutions.
+    -> by name `Business.LegalTypes.COOP.value`: 706 Entity-emailer email processors; 707 entity-emailer email processors; 645 legal-api REST resources (v1 and v2)
+- [depends] Filing.FILINGS -- Lookup table with nested structure keyed by filing type, dissolution type, subtype, and legal type to retrieve fee codes.
+    -> by name `Filing.FILINGS`: 641 Business filings API test suite (legal-api `tests/unit/; 707 entity-emailer email processors; 645 legal-api REST resources (v1 and v2)
+- [sends] Filing.get_filings_sub_type() -- Called with filing key and JSON to retrieve optional subtype for code lookup.
+    -> by name `Filing.get_filings_sub_type`: 645 legal-api REST resources (v1 and v2)
+- [sends] ListFilingResource.is_future_effective_filing() -- Called with filing JSON to determine futureEffective flag for dissolution, incorporation, amalgamation, continuationIn, and alteration filings.
+    -> by name `ListFilingResource.is_future_effective_filing, futureEffective, continuationIn`: 645 legal-api REST resources (v1 and v2); 540 Type definitions for the business-filing UI (`src/inter; 833 pay-api service layer: payment orchestration and paymen
+
+## sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py (own page 620: pay-api REST resource layer (`pay_api/resources`))
+- [sends] InvoiceService.find_invoices -- businessIdentifier query parameter; returns invoice records.
+    -> by meaning: 833 pay-api service layer: payment orchestration and paymen; 728 Data model layer of pay-api (`pay_api/models`); 635 payment-jobs: scheduled back-office jobs for the paymen
+- [sends] schema_utils.validate -- Request JSON and schema name ('payment_request' or 'payment_info'); returns validity boolean and error list.
+    -> by name `schema_utils.validate, payment_request, payment_info`: 636 bcol-api: BCOL payment/profile gateway; 505 auth-api HTTP resource layer (`auth_api/resources`); 799 auth-api unit API tests (`auth-api/tests/unit/api/`)
+- [sends] check_auth -- businessIdentifier, corpType from request, and contains_role=MAKE_PAYMENT constant; returns authorization object.
+    -> by name `contains_role, MAKE_PAYMENT, check_auth, corpType`: 833 pay-api service layer: payment orchestration and paymen; 561 pay-api unit tests: services, utils and shared fixtures; 556 legal-api service layer (legal_api/services, decorators
+- [sends] PaymentService.create_invoice -- Request JSON and authorization object; returns created invoice response.
+    -> by name `PaymentService.create_invoice`: 833 pay-api service layer: payment orchestration and paymen; 561 pay-api unit tests: services, utils and shared fixtures
+- [sends] InvoiceService.find_by_id -- invoice_id integer; returns invoice with dynamic fields as dictionary.
+    -> by name `invoice_id`: 833 pay-api service layer: payment orchestration and paymen; 770 EFT short names and credits (pay-api); 518 Payment database schema documentation
+- [sends] PaymentService.accept_delete -- invoice_id integer; soft deletes the invoice.
+    -> by name `invoice_id`: 833 pay-api service layer: payment orchestration and paymen; 770 EFT short names and credits (pay-api); 518 Payment database schema documentation
+- [sends] PaymentService.update_invoice -- invoice_id, request JSON, is_apply_credit boolean; returns updated invoice response.
+    -> by name `PaymentService.update_invoice, is_apply_credit, invoice_id`: 833 pay-api service layer: payment orchestration and paymen; 770 EFT short names and credits (pay-api); 518 Payment database schema documentation
+- [sends] InvoiceService.create_invoice_pdf -- invoice_id integer; returns PDF bytes and file name for attachment.
+    -> by name `invoice_id`: 833 pay-api service layer: payment orchestration and paymen; 770 EFT short names and credits (pay-api); 518 Payment database schema documentation
+- [depends] Error.INVALID_REQUEST -- Error constant used to format validation error responses.
+    -> by name `Error.INVALID_REQUEST`: 833 pay-api service layer: payment orchestration and paymen; 770 EFT short names and credits (pay-api); 636 bcol-api: BCOL payment/profile gateway
+- [depends] MAKE_PAYMENT -- Constant specifying required role for invoice creation authorization check.
+    -> by name `MAKE_PAYMENT`: 802 BC Registries Auth API contract (OpenAPI); 580 Payment and statement UI components (auth-web); 612 auth-web/src/util — shared frontend helpers
+
+## sbc-pay/pay-api/src/pay_api/resources/v1/fee.py (own page 620: pay-api REST resource layer (`pay_api/resources`))
+- [sends] FeeSchedule.find_by_corp_type_and_filing_type -- Called with corp_type, filing_type_code, valid_date, jurisdiction, is_priority, is_future_effective, waive_fees, quantity; returns fee record.
+    -> by name `FeeSchedule.find_by_corp_type_and_filing_type, is_future_effective, filing_type_code, is_priority`: 833 pay-api service layer: payment orchestration and paymen; 834 pay-api service layer (`pay_api/services`); 577 legal-api v2 business resources, documents, internal se
+- [depends] Role.VIEWER, Role.EDITOR, Role.STAFF -- Enum values checked to enforce access control on GET endpoint; only these roles permitted.
+    -> by name `Role.VIEWER, Role.EDITOR, Role.STAFF`: 511 auth-api: app core and shared utilities; 833 pay-api service layer: payment orchestration and paymen; 584 pay-api test suite: scaffolding, fixtures and factories
+- [receives] BusinessException -- Caught from FeeSchedule call; .response() method invoked to return error to client.
+    -> by name `BusinessException, FeeSchedule`: 770 EFT short names and credits (pay-api); 833 pay-api service layer: payment orchestration and paymen; 834 pay-api service layer (`pay_api/services`)
+
+## business-filings-ui/src/mixins/filing-mixin.ts (own page 638: Shared client-side support layer (mixins, services, utils))
+- [depends] useRootStore -- Provides getters for getCurrentDate, filingData, getBusinessAddress, getRegisteredOfficeAddress and action setFilingData; updateFilingData calls setFilingData(myFilingData) to persist filing code and flag changes.
+    -> by name `getRegisteredOfficeAddress, getBusinessAddress, updateFilingData, getCurrentDate`: 57 State stores (`src/stores`); 534 Business filing UI (BC Registries): filing views, entit; 683 Dashboard UI components (address lists, party lists, to
+- [depends] useBusinessStore -- Provides getters for entityName, getFoundingDate, getIdentifier, getLegalType, getStartDate used to populate filing body objects.
+    -> by name `useBusinessStore, getFoundingDate, getIdentifier, getStartDate`: 57 State stores (`src/stores`); 639 Business filing dashboard frontend (Vue app shell); 521 Dialogs and entity header (`src/components/dialogs/`, `
+- [depends] DateMixin -- Parent class providing dateToYyyyMmDd and dateToApi date conversion methods called by correction and dissolution builders.
+    -> by name `dateToYyyyMmDd, DateMixin, dateToApi`: 534 Business filing UI (BC Registries): filing views, entit; 599 Shared Vue UI components for business filings (common/,; 598 AGM extension, AGM location and AGM date UI components
+
+## business-filings-ui/src/views/AnnualReport.vue (own page 534: Business filing UI (BC Registries): filing views, entity header/menu, shared styling)
+- [sends] LegalServices.fetchFiling() -- Fetches draft filing at path `businesses/{getIdentifier}/filings/{filingId}` with no credentials shown; expects response containing header, business, annualReport objects, and optional changeOfDirectors and changeOfAddress; no retry on failure.
+    -> by name `LegalServices.fetchFiling, changeOfDirectors, changeOfAddress, getIdentifier`: 683 Dashboard UI components (address lists, party lists, to; 57 State stores (`src/stores`); 516 Test suite and fixtures for filing UI (consent continua
+- [sends] this.$refs.officeAddressesComponent.getOrigAddresses() -- Called with asOfDate and isEmptyAddresses boolean; fetches original office addresses and updates working data; called when dataLoaded is true.
+    -> by name `dataLoaded, asOfDate`: 639 Business filing dashboard frontend (Vue app shell); 599 Shared Vue UI components for business filings (common/,
+- [sends] this.$refs.directorsComponent.getOrigDirectors() -- Called with asOfDate and isEmpty boolean; fetches original directors and updates working data; called when dataLoaded is true.
+    -> by name `dataLoaded, asOfDate, isEmpty`: 599 Shared Vue UI components for business filings (common/,; 639 Business filing dashboard frontend (Vue app shell); 683 Dashboard UI components (address lists, party lists, to
+- [sends] updateFilingData() -- Updates filing data by adding or removing filing codes (ANNUAL_REPORT_BC, ADDRESS_CHANGE_OT, DIRECTOR_CHANGE_OT, FREE_DIRECTOR_CHANGE_OT, ANNUAL_REPORT_OT) with Priority and Waive Fees flags derived from staffPaymentData.
+    -> by name `DIRECTOR_CHANGE_OT, ADDRESS_CHANGE_OT, ANNUAL_REPORT_BC, updateFilingData`: 36 Business-type configuration resources (`src/resources/`; 638 Shared client-side support layer (mixins, services, uti; 601 StandaloneDirectorsFiling – unit test suite (`tests/uni
+- [sends] saveFiling() -- Called with boolean true argument; saves draft filing; catches error and extracts filing from error.response.data.filing on failure; no retry.
+    -> by meaning: 521 Dialogs and entity header (`src/components/dialogs/`, `; 604 legal-api core domain package; 549 Involuntary-dissolutions job, plus an unrelated Pinia t
+- [sends] goToDashboard() -- Called with boolean true; redirects to dashboard when required tombstone or entity-specific data is missing.
+    -> by name `goToDashboard`: 696 Manage-business UI (auth-web: `components/auth/manage-b; 792 auth-web `src/views/auth/` — page views for sign-in, in; 612 auth-web/src/util — shared frontend helpers
+
+## lear/queue_services/entity-filer/src/entity_filer/worker.py (own page 606: entity-filer (queue worker))
+- [receives] NATS Streaming -- Filing message from queue; cb_subscription_handler entry point processes messages one at a time per NATS Streaming constraint.
+    -> by name `cb_subscription_handler`: 579 entity-emailer queue service; 71 Custom filer (data-tool/flows/custom_filer); 648 entity-emailer test suite (queue_services/entity-emaile
+- [sends] ENTITY_EVENT_PUBLISH_OPTIONS['subject'] (NATS) -- CloudEvent with type bc.registry.business.{filing_type}, payload containing filing header (filingId, effectiveDate), business identifier, and legalFilings list; no credential shown.
+    -> by name `ENTITY_EVENT_PUBLISH_OPTIONS, bc.registry.business, legalFilings, CloudEvent`: 679 entity-filer tests; 648 entity-emailer test suite (queue_services/entity-emaile; 568 entity-emailer (queue_services/entity-emailer)
+- [sends] BUSINESS_EVENTS_TOPIC (GCP Queue) -- SimpleCloudEvent with identical data structure to NATS version (filing header, business identifier, legalFilings); no credential shown.
+    -> by name `BUSINESS_EVENTS_TOPIC, SimpleCloudEvent, legalFilings`: 731 GitHub Actions CI/CD workflows for the bcgov/lear monor; 512 auth-queue; 768 auth-api service layer
+- [sends] EMAIL_PUBLISH_OPTIONS['subject'] (NATS emailer) -- Email message for MRAS topic only when filing type is AMALGAMATIONAPPLICATION, CONTINUATIONIN, or INCORPORATIONAPPLICATION; sent via publish_email_message with subject 'mras'.
+    -> by name `publish_email_message, EMAIL_PUBLISH_OPTIONS`: 797 entity-pay queue service; 679 entity-filer tests; 678 Entity-filer filing processor unit tests
+- [depends] legal_api.models.Filing -- Accesses filing.filing_type, filing.filing_json, filing.effective_date, filing.id, filing.temp_reg.
+    -> by name `legal_api.models.Filing, filing.effective_date, filing.filing_json, filing.filing_type`: 744 Role; 89 Business-ops notebooks and Sentry notes (support toolin; 577 legal-api v2 business resources, documents, internal se
+- [depends] legal_api.models.Business -- Accesses business.identifier.
+    -> by name `legal_api.models.Business`: 673 Unit tests for the legal-api models (`legal-api/tests/u; 743 legal-api SQLAlchemy models (`legal_api/models/`); 199 Furnishings Job: unit tests
+- [depends] entity_queue_common.messages.publish_email_message -- External function called with qsm, subject, filing object, and 'mras' topic string.
+    -> by meaning: 775 entity_queue_common: shared NATS/STAN plumbing for queu; 694 business-pay queue service; 664 pay-queue services: payment reconciliation, CGI/EJV fee
+- [sends] Sentry -- Captures error messages on exception in publish_event, publish_gcp_queue_event, publish_mras_email; level 'error'.
+    -> by name `publish_event`: 768 auth-api service layer; 577 legal-api v2 business resources, documents, internal se; 579 entity-emailer queue service
+- [depends] Filing.FILINGS -- Dictionary used to validate filing type keys in get_filing_types.
+    -> by name `get_filing_types, Filing.FILINGS`: 577 legal-api v2 business resources, documents, internal se; 641 Business filings API test suite (legal-api `tests/unit/; 545 Business filings API tests (v1 `/businesses/{identifier
+- [depends] LEGAL_API_URL (config) -- Base URL for building source field in event payload.
+    -> by name `LEGAL_API_URL`: 768 auth-api service layer; 576 Filing sync jobs (update-colin-filings, update-legal-fi; 706 Entity-emailer email processors
+
+## sbc-pay/pay-api/tests/unit/api/test_fee.py (own page 633: pay-api unit tests: HTTP API and utils)
+- [sends] POST /api/v1/accounts -- Creates account with payload from get_gov_account_payload(), authorized by JWT with Role.SYSTEM claim, returns accountId in response.
+    -> by name `api/v1/accounts, Role.SYSTEM`: 632 EFT short names, refunds and statement summary: API and; 824 API contract docs and fee-schedule query (BC Registries; 825 API contracts and integration docs (BC Registries Pay s
+- [sends] POST /api/v1/accounts/{account_id}/fees -- Sets account fees with payload containing accountFees array with applyFilingFees, serviceFeeCode, and product, authorized by JWT with Role.MANAGE_ACCOUNTS claim.
+    -> by name `Role.MANAGE_ACCOUNTS, applyFilingFees, api/v1/accounts, serviceFeeCode`: 620 pay-api REST resource layer (`pay_api/resources`); 833 pay-api service layer: payment orchestration and paymen; 519 JSON Schema layer of pay-api (`pay_api/schemas`)
+- [sends] GET /api/v1/fees/BEN/BCANN -- Retrieves fees for filing type BEN and corp type BCANN with Account-Id header, authorized by JWT with Role.EDITOR claim, returns filingFees and serviceFees.
+    -> by name `serviceFees, Role.EDITOR, filingFees`: 833 pay-api service layer: payment orchestration and paymen; 550 Payment and transaction views (auth-web/src/views); 519 JSON Schema layer of pay-api (`pay_api/schemas`)
+- [sends] PUT /api/v1/accounts/{account_id}/fees/BUSINESS -- Updates account fees with payload containing applyFilingFees, serviceFeeCode, and product, authorized by JWT with Role.MANAGE_ACCOUNTS claim.
+    -> by name `Role.MANAGE_ACCOUNTS, applyFilingFees, api/v1/accounts, serviceFeeCode`: 620 pay-api REST resource layer (`pay_api/resources`); 824 API contract docs and fee-schedule query (BC Registries; 522 email-reminder job
+- [depends] schema_utils.validate -- Validates response JSON against 'fees' schema, returns tuple with boolean result.
+    -> by name `schema_utils.validate`: 636 bcol-api: BCOL payment/profile gateway; 505 auth-api HTTP resource layer (`auth_api/resources`); 620 pay-api REST resource layer (`pay_api/resources`)
+- [depends] FilingType model -- Database model for filing types with code and description fields; factory saves instances.
+    -> by name `FilingType`: 640 Filing documents and ledger endpoint tests (legal-api v; 516 Test suite and fixtures for filing UI (consent continua; 517 colin-api test suite (unit tests and fixtures)
+- [depends] FeeCode model -- Database model for fee codes with code and Decimal amount; factory saves instances.
+    -> by name `FeeCode`: 833 pay-api service layer: payment orchestration and paymen; 834 pay-api service layer (`pay_api/services`); 84 bcol-api test suite
+- [depends] CorpType model -- Database model for corporation types with code and description; factory saves instances.
+    -> by name `CorpType`: 768 auth-api service layer; 512 auth-queue; 770 EFT short names and credits (pay-api)
+- [depends] FeeSchedule model -- Database model linking filing_type_code, corp_type_code, fee_code, date range, and optional service_fee_code; factory saves instances.
+    -> by name `filing_type_code, service_fee_code, FeeSchedule, fee_code`: 833 pay-api service layer: payment orchestration and paymen; 834 pay-api service layer (`pay_api/services`); 728 Data model layer of pay-api (`pay_api/models`)
+
+## sbc-pay/docs/docs/architecture/FAS_Intgeration.md (own page 825: API contracts and integration docs (BC Registries Pay system))
+- [sends] CFS_API /parties -- Creates customer entity; this chunk shows no credential mechanism or payload shape details.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+- [sends] CFS_API /accs -- Creates account with hard-coded name BCR; no check or credential shown.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+- [sends] CFS_API /sites -- Creates site with hard-coded values because no address is provided; no check or credential shown.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+- [sends] CFS_API /rcpts -- Creates receipt numbered from routing slip; called on creation, reversal, and linking; no check or credential shown.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+- [sends] CFS_API /invs -- Creates invoice against a site; called on transaction creation and for NSF fees; no check or credential shown.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+- [sends] CFS_API /rcpts/apply -- Applies a receipt to an invoice; no check or credential shown.
+    -> by name `rcpts/apply, CFS_API`: 807 PayBC mock API documentation (OpenAPI specs); 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili
+- [sends] CFS_API /rcpts/unapply -- Unapplies a receipt from an invoice; called on full and partial cancellation; no check or credential shown.
+    -> by name `rcpts/unapply, CFS_API`: 807 PayBC mock API documentation (OpenAPI specs); 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili
+- [sends] CFS_API /invs/adjs -- Adjusts invoice to zero (full cancellation) or partial amount (partial cancellation); no check or credential shown.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+- [sends] CFS_API /rcpts/adjs -- Adjusts receipt with activity_name to move funds to refund or write-off revenue account; endpoint marked uncertain; no check or credential shown.
+    -> by name `activity_name, CFS_API`: 619 pay-api core package (app factory, config, shared utili; 768 auth-api service layer; 833 pay-api service layer: payment orchestration and paymen
+- [sends] CFS_API /rcpts/reverse -- Reverses receipt and unapplies all invoices; called on cheque bounce and routing slip linking; endpoint marked uncertain; no check or credential shown.
+    -> by name `CFS_API`: 664 pay-queue services: payment reconciliation, CGI/EJV fee; 619 pay-api core package (app factory, config, shared utili; 709 payment-jobs: deployment shell and utilities
+
+## sbc-auth/docs/build-deploy.md (own page 594: Part overview)
+- [sends] OpenShift cluster -- Login credentials via `oc login`, namespace selection (1rdehl-dev, 1rdehl-tools), and template processing commands with parameters.
+    -> by meaning: 755 CI/CD workflows for the bcgov/lear report jobs; 756 CI/CD workflows (`.github/workflows`) for the bcgov/lea; 731 GitHub Actions CI/CD workflows for the bcgov/lear monor
+- [depends] PostgreSQL database (postgresql-deploy.json) -- Deployed to dev namespace with TAG_NAME=dev; requires manual superuser role creation for tester.
+    -> by name `postgresql-deploy.json`: 83 pay-db
+- [depends] auth-api-pre-deploy.json template -- Creates configmap and secrets with NAME=auth-api, TAG_NAME=dev; values manually replaced post-processing.
+    -> by meaning: 115 auth-api OpenShift templates; 489 legal-api OpenShift deployment (devops/openshift); 528 Role
+- [depends] auth-api-deploy.json template -- Deploys API with NAME=auth-api, TAG_NAME=dev, REPLICAS=1, JAEGER_COLLECTOR=--collector.host-port=jaeger-collector.d7eovc-dev.svc:14267.
+    -> by name `collector.host-port, JAEGER_COLLECTOR`: 45 bcol-api OpenShift templates
+- [depends] auth-api-build.json template -- Creates build config with NAME=auth-api, GIT_REPO_URL=https://github.com/bcgov/sbc-auth.git, GIT_REF=development.
+    -> by name `github.com/bcgov/sbc-auth.git, GIT_REPO_URL, GIT_REF`: 115 auth-api OpenShift templates; 18 Jobs: GCP DB data masking and weekly auth stats noteboo; 531 account-mailer queue service
+- [depends] auth-api-pipeline.json template -- Configures pipeline with TAG_NAME=dev, WEBHOOK=github-auth-api-dev, JENKINS_FILE=./jenkins/dev.groovy.
+    -> by meaning: 476 DevOps: Jenkins CI/CD on OpenShift; 658 CI/CD and release configuration (GitHub Actions, bcgov/; 583 auth-api: build, packaging and runtime scaffolding
+- [depends] auth-web-pre-deploy.json template -- Creates configmap and secrets with NAME=auth-web, TAG_NAME=dev; values manually replaced post-processing.
+    -> by meaning: 489 legal-api OpenShift deployment (devops/openshift); 528 Role; 115 auth-api OpenShift templates
+- [depends] auth-web-deploy.json template -- Deploys web UI with NAME=auth-web, NAME_RUNTIME=auth-web-runtime, TAG_NAME=dev, REPLICAS=1.
+    -> by meaning: 528 Role; 526 auth-web: build, packaging and hosting configuration; 658 CI/CD and release configuration (GitHub Actions, bcgov/
+- [depends] auth-web-build.json template -- Creates build config with NAME=auth-web, GIT_REPO_URL=https://github.com/bcgov/sbc-auth.git, GIT_REF=development.
+    -> by name `github.com/bcgov/sbc-auth.git, GIT_REPO_URL, GIT_REF`: 115 auth-api OpenShift templates; 18 Jobs: GCP DB data masking and weekly auth stats noteboo; 531 account-mailer queue service
+- [depends] auth-web-runtime-build.json template -- Creates runtime build with NAME=auth-web-runtime using binary Docker strategy.
+    -> by meaning: 476 DevOps: Jenkins CI/CD on OpenShift; 115 auth-api OpenShift templates; 526 auth-web: build, packaging and hosting configuration
+- [depends] auth-web-pipeline.json template -- Configures pipeline with TAG_NAME=dev, WEBHOOK=github-auth-web-dev, JENKINS_FILE=./jenkins/dev.groovy.
+    -> by meaning: 476 DevOps: Jenkins CI/CD on OpenShift; 528 Role; 489 legal-api OpenShift deployment (devops/openshift)
+- [receives] GitHub repository -- Webhook triggers (github-auth-api-dev, github-auth-web-dev) from commit to GIT_REF=development on https://github.com/bcgov/sbc-auth.git.
+    -> by name `github.com/bcgov/sbc-auth.git, GIT_REF`: 115 auth-api OpenShift templates; 18 Jobs: GCP DB data masking and weekly auth stats noteboo; 531 account-mailer queue service
+- [depends] LEAR Documentation -- This document will migrate to LEAR Documentation (https://bcgov.github.io/lear/).
+    -> by meaning: 557 legal-api: packaging, deployment and local-dev scaffold; 568 entity-emailer (queue_services/entity-emailer); 754 pay-api/migrations
+
+## lear/devops/openshift/templates/github-actions-cicd-rbac.yaml (own page 174: OpenShift RBAC templates for CI/CD (`devops/openshift/templates/`))
+
+## lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py (own page 577: legal-api v2 business resources, documents, internal services and Minio wrapper)
+- [sends] PAYMENT_SVC_URL -- POST request with Bearer token (from JWT header), JSON payload containing businessInfo (identifier, corpType, name, mailing address), filingInfo (ID, types, folio number), and details; on staff/system roles adds accountInfo with routingSlip, bcolAccountNumber, datNumber. Returns status, id, statusCode, isPaymentActionRequired, type, detail fields.
+    -> by name `isPaymentActionRequired, bcolAccountNumber, PAYMENT_SVC_URL, staff/system`: 645 legal-api REST resources (v1 and v2); 519 JSON Schema layer of pay-api (`pay_api/schemas`); 833 pay-api service layer: payment orchestration and paymen
+- [sends] MinioService.delete_file -- Deletes file object by key (rulesFileKey, memorandumFileKey, affidavitFileKey, fileKey, authorizationFiles) for incorporation applications, alterations, dissolutions, court orders, and continuation-in filings.
+    -> by name `MinioService.delete_file, authorizationFiles, memorandumFileKey, affidavitFileKey`: 645 legal-api REST resources (v1 and v2); 604 legal-api core domain package; 607 Entity-filer filing processors
+- [depends] ListFilingResource.details_for_invoice -- Called to retrieve invoice detail lines for given business identifier and corporation type.
+    -> by meaning: 728 Data model layer of pay-api (`pay_api/models`); 833 pay-api service layer: payment orchestration and paymen; 688 PayBC API mock reference (OpenAPI spec)
