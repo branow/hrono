@@ -80,6 +80,9 @@ HRONO_HOME_V3X = Path.home() / "hrono-eval" / "home-v2x"
 # slice leaf briefs written with linked condensations, their 6 upper briefs
 # rebuilt with the links, and each leaf's condensations.md
 EXPORT_V3Y = Path.home() / "hrono-eval" / "export-bcreg-v3y-L3"
+# v3y with the 21 leaf briefs written by a prompt that keeps the
+# condensations' detail, no word target, and no condensations.md
+EXPORT_V3Z = Path.home() / "hrono-eval" / "export-bcreg-v3z-L3"
 
 SYSTEM_CODE_R2 = "The code is in {corpus}."
 SYSTEM_TREE_R2 = "The code is not available. A map of it is in {export}."
@@ -153,6 +156,10 @@ ROUND_2 = {
         f"hrono-v3y{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
         for run in "ab"
     },
+    **{
+        f"hrono-v3z{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
     # the same once more, after the plugin caps recall at Claude Code's
     # 10,000-character inline limit: above it the v3f runs got a file path
     # and a 2 KB preview, and opened the file in 1 of 15 runs
@@ -177,6 +184,8 @@ def run_round_2(kind, arm, q):
         export, home = EXPORT_V3X, HRONO_HOME_V3X
     if "-v3y" in arm:
         export, home = EXPORT_V3Y, HRONO_HOME_V3X
+    if "-v3z" in arm:
+        export, home = EXPORT_V3Z, HRONO_HOME_V3X
     prompt = ARCH.format(question=q["question"])
     if cwd is not None:
         prompt = prompt.replace(

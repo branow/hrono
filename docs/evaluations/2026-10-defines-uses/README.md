@@ -269,3 +269,35 @@ reused from the earlier evaluation, not rerun.
   Every run read briefs: 9 to 23 `brief.md` references per run.
 - **The richer content did not reach the agents.** It sits one link below a
   brief, and agents stop at the brief, then go to the code.
+
+## Round 4 (2026-10-14): wide leaf briefs
+
+The seeded brief prompt (`src/hrono/registry/collections/prompts.py`, from
+`bd95540`) says "the notes stay available below this description, so leave
+detail to them". It also drops lists and enum values and aims for 300-600
+words. Nothing below a brief reaches an agent, so that detail is lost.
+
+`harness/wide.py` writes the 21 leaf briefs with a prompt that keeps every
+decision, list, condition, error path and call out of the condensations,
+with no word target. Input: the ledger condensations plus the linked
+condensations of other topics. The briefs average 2,406 words, up to 4,524
+(about 700 before); $5.01. The export `export-bcreg-v3z-L3` is v3y with
+these leaf briefs and no `condensations.md`; arm `hrono-v3z`, Sonnet, the
+four questions, two runs.
+
+| arm | run a | run b | mean | errors a / b |
+|---|---|---|---|---|
+| code only (earlier runs) | 0.52 | 0.46 | 0.49 | 3 / 5 |
+| code + sub-tree, B briefs (v3y) | 0.50 | 0.55 | 0.53 | 5 / 4 |
+| code + sub-tree, wide briefs (v3z) | 0.48 | 0.46 | 0.47 | 6 / 6 |
+
+**The wide briefs were barely read.** Counted from the tool calls:
+- 4 reads of rebuilt leaf briefs over 8 runs, and only on two questions
+  (`hard-failure-1`: 635, 797, 833; `hard-authorization-1`: 577).
+- Agents grep the export with `files_with_matches`, which shows file names,
+  not text, and then read code.
+- Recall attaches briefs from the v3 tree on the server, so it showed the
+  old briefs, not these.
+
+So this run does not test whether richer briefs help; they did not reach
+the agents.
