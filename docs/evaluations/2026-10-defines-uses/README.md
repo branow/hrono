@@ -243,3 +243,29 @@ Paired, claim by claim:
 Cost so far: round 1 $29, round 2 about $49 (ledger condense $6.08 counting
 the cited-section pilot, BL $3.68, per-claim judge $35.51 plus a $1.84
 pilot, raw ceiling $2.06).
+
+## Round 3 (2026-10-14): agents on the rebuilt sub-tree
+
+The export `export-bcreg-v3y-L3` (`harness/export_v3y.py`) is the v3 export
+with one sub-tree rebuilt:
+- the 21 slice leaf topics carry the B briefs;
+- their 6 upper topics carry the rebuilt upper briefs (arm C);
+- each of the 21 leaf topics has `condensations.md`, the ledger condensation
+  of each of its sections, linked from its brief.
+
+Arm `hrono-v3y` in `../2026-10-bc-registries-agents/harness/run_arms.py`:
+the same setup as `hrono-v3x` (capped recall over the v3 tree), over this
+export. Sonnet, the four questions, two runs, $1.72. The code-only runs are
+reused from the earlier evaluation, not rerun.
+
+| arm | run a | run b | mean | errors a / b |
+|---|---|---|---|---|
+| code only (earlier runs) | 0.52 | 0.46 | 0.49 | 3 / 5 |
+| code + rebuilt sub-tree | 0.50 | 0.55 | 0.53 | 5 / 4 |
+
+- **No measurable gain.** +0.04 is inside the 0.06 spread between two
+  code-only runs.
+- **The condensations were never opened.** No run opened `condensations.md`.
+  Every run read briefs: 9 to 23 `brief.md` references per run.
+- **The richer content did not reach the agents.** It sits one link below a
+  brief, and agents stop at the brief, then go to the code.
