@@ -1,0 +1,5 @@
+judge2-main.json 540 errors 41 cost 24.71
+A-v3 {'connection': '9/38', 'local': '47/97'}
+B {'connection': '14/38', 'local': '47/97'}
+notes-ledger {'connection': '12/38', 'local': '58/97'}
+notes-v3 {'connection': '11/38', 'local': '54/97'}

@@ -1,0 +1,218 @@
+[
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.104051
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.045999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.102306
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.045953999999999995
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `filing_type` in `['courtOrder', 'registrarsNotation', 'registrarsOrder', 'putBackOn', 'adminFreeze']` -> look up code in `Filing.FILINGS[filing_type]['code']`, append with `filingTypeCode`, `filingDescription`.",
+  "stated": true,
+  "cost": 0.106319
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.047262000000000005
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `filing_type` in `['courtOrder', 'registrarsNotation', 'registrarsOrder', 'putBackOn', 'adminFreeze']` -> look up code in `Filing.FILINGS[filing_type]['code']`, append with `filingTypeCode`, `filingDescription`.",
+  "stated": true,
+  "cost": 0.105645
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.045982999999999996
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "RULE: if k == 'incorporationApplication' -> do not include 'priority' or 'waiveFees' fields, in `_get_filing_types`.",
+  "stated": true,
+  "cost": 0.1008202
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.045238200000000006
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10340519999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0460382
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `kwargs.get('waive_fees')` -> sets `fee_amount`, `priority_fee`, `future_effective_fee`, and `service_fees` all to 0, in `find_by_corp_type_and_filing_type`.",
+  "stated": true,
+  "cost": 0.0736342
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0822852
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "stated": false,
+  "quote": "",
+  "cost": 0.0753912
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "**Waiver:** `waive_fees` sets every fee to 0. ... **Fee amount setter:** if the amount is 0 and the fee is not variable, `waived_fee_amount` takes the original total.",
+  "stated": true,
+  "cost": 0.0862272
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "if `fee.waived_fee_amount > 0` and `user.has_role(Role.STAFF.value)` is true \u2192 sets `p.waived_by = user.user_name`; if waived amount > 0 and user does NOT have STAFF role \u2192 raises `BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED)` in `create`.",
+  "stated": true,
+  "cost": 0.07404519999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "`PaymentLineItem.create`: a waived fee needs the STAFF role (FEE_OVERRIDE_NOT_ALLOWED).",
+  "stated": true,
+  "cost": 0.0818762
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07537920000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0824902
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07466719999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0819282
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "if `_jwt.validate_roles([Role.STAFF.value])` is true \u2192 `waive_fees` set from `waiveFees` query param; otherwise `waive_fees = False`",
+  "stated": true,
+  "cost": 0.07521420000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "`fee.py` calculates fees. `waiveFees` is honoured for staff only.",
+  "stated": true,
+  "cost": 0.0821452
+ }
+]

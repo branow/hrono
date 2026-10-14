@@ -153,3 +153,38 @@ uv run --with claude-agent-sdk python exp.py judge r1   # and r2
 uv run --with claude-agent-sdk python notes_v3.py r1    # and r2
 uv run python exp.py report
 ```
+
+## Round 2 (2026-10-14): the batched judge undercounts
+
+- The judge above checks all of a fact's claims in one call, and it answers
+  "no" with an empty quote on claims the notes state word for word (for
+  example `if waive_fees -> sets fee_amount, priority_fee,
+  future_effective_fee and service_fees all to 0`). Every number in the
+  table above is an undercount.
+- `harness/judge2.py`: one claim per call, thinking on, the quote asked for
+  before the verdict. One run, 540 calls, $24.71. 41 calls errored and count
+  as "no".
+
+  | arm | connection (38) | local (97) |
+  |---|---|---|
+  | A-v3 (today's pages) | 9 | 47 |
+  | B (pages with linked notes) | 14 | 47 |
+  | notes-v3 (stored notes of the cited files) | 11 | 54 |
+  | notes-ledger (`harness/ledger.py`, verbatim lists, rules, error handling, no word target) | 12 | 58 |
+  | raw source (batched judge, so a lower bound) | 20 | 76 |
+
+- Linked notes lift connection claims, now by 5 of 38 (+13 points), and
+  local claims stay level. The ledger prompt adds 4 local claims over the
+  stored notes. Pages still state fewer local claims than their notes (47
+  against 54-58).
+- `data/` was scrubbed of credential-like strings copied from the repos'
+  config (connection strings, `.env` values). The ledger prompt now writes
+  `<secret>` instead.
+
+Left to do:
+1. Rerun the 41 errored calls.
+2. Finish the ledger condensation of all 574 slice sections
+   (`ledger.py condense-all`).
+3. Build B on the ledger notes, with the brief call marking each linked
+   source as used or not relevant.
+4. Judge it with `judge2.py`.

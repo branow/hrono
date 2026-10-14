@@ -39300,7 +39300,7 @@
  {
   "section": 41978,
   "own": 670,
-  "name": "postgresql+pg8000://postgres:admin@localhost:54333/postgres",
+  "name": "postgresql+pg8000://<redacted>@localhost:54333/postgres",
   "direction": "reads",
   "what": "Test PostgreSQL database connection; credentials are postgres:admin."
  },

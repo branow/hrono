@@ -1,0 +1,4821 @@
+[
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0359312
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "switch on `this.staffPaymentData.option` sets header fields: if `StaffPaymentOptions.FAS` -> sets `routingSlipNumber`, `priority`; if `StaffPaymentOptions.BCOL` -> sets `bcolAccountNumber`, `datNumber`, `folioNumber`, `priority`; if `StaffPaymentOptions.NO_FEE` -> sets `waiveFees = true`",
+  "stated": true,
+  "cost": 0.1219982
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "Staff payment adds `routingSlipNumber` (FAS), `bcolAccountNumber`/`datNumber`/`folioNumber` (BCOL) or `waiveFees` (NO_FEE) to the header.",
+  "stated": true,
+  "cost": 0.0380642
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.043825199999999995
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0384362
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `this.isRoleStaff && !fromStaffPayment` in `onClickFilePay()` -> sets `staffPaymentDialog = true` and returns early.",
+  "stated": true,
+  "cost": 0.12118319999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "Staff detour: `onClickFilePay` opens the Staff Payment dialog when `isRoleStaff && !fromStaffPayment`.",
+  "stated": false,
+  "cost": 0.0375542
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "B",
+  "quote": "`onClickFilePay` opens the Staff Payment dialog first when `isRoleStaff && !fromStaffPayment`.",
+  "stated": true,
+  "cost": 0.0446802
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "builds filing with header.name=FilingTypes.CONTINUATION_OUT/header.waiveFees=true/business",
+  "stated": true,
+  "cost": 0.039081199999999996
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1178432
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.037139200000000004
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0449952
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "Entry point: created() enforces staff-only access (checks isRoleStaff, throws 'This is a Staff only Filing.' if not staff).",
+  "stated": true,
+  "cost": 0.036236199999999996
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.11876319999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "Staff-only views (`AmalgamationOut.created`, `ContinuationOut.created`) throw if `!isRoleStaff`.",
+  "stated": false,
+  "cost": 0.037639200000000005
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "B",
+  "quote": "`AmalgamationOut` and `ContinuationOut` `created()` throw if `!isRoleStaff`.",
+  "stated": false,
+  "cost": 0.0428452
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "Entry point: created() enforces staff-only access (checks isRoleStaff, throws 'This is a Staff only Filing.' if not staff).",
+  "stated": true,
+  "cost": 0.0384452
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1199172
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "Staff-only views (`AmalgamationOut.created`, `ContinuationOut.created`) throw if `!isRoleStaff`.",
+  "stated": false,
+  "cost": 0.0397532
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "B",
+  "quote": "`AmalgamationOut` and `ContinuationOut` `created()` throw if `!isRoleStaff`.",
+  "stated": true,
+  "cost": 0.0450442
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.040324200000000004
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10188420000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0440572
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.050737199999999996
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0380492
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1017942
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0440222
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0516222
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "Elif courtOrder/registrarsNotation/registrarsOrder, append code and filingDescription.",
+  "stated": true,
+  "cost": 0.0415122
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "if `filing_type` in `['courtOrder', 'registrarsNotation', 'registrarsOrder', 'putBackOn', 'adminFreeze']` -> look up code in `Filing.FILINGS[filing_type]['code']`, append with `filingTypeCode`, `filingDescription`.",
+  "stated": true,
+  "cost": 0.1067422
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.044040199999999995
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0507302
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0402982
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "if `filing_type` in `['courtOrder', 'registrarsNotation', 'registrarsOrder', 'putBackOn', 'adminFreeze']` -> look up code in `Filing.FILINGS[filing_type]['code']`, append with `filingTypeCode`, `filingDescription`.",
+  "stated": true,
+  "cost": 0.1049832
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.044021199999999996
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0507062
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.040108200000000004
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "RULE: if k == 'incorporationApplication' -> do not include 'priority' or 'waiveFees' fields, in `_get_filing_types`.",
+  "stated": true,
+  "cost": 0.10085319999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0440112
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0506862
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "If user has STAFF_ROLE or SYSTEM_ROLE, adds accountInfo with optional routingSlip, bcolAccountNumber, datNumber from filing header.",
+  "stated": false,
+  "cost": 0.0406182
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1025832
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0440712
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.052426200000000006
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "Posts to payment_svc_url with bearer token, timeout 20.0s; returns {'isPaymentActionRequired': bool}, HTTP 201 on success",
+  "stated": true,
+  "cost": 0.0237452
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "Creates an invoice for a filing submission by calling the payment service",
+  "stated": true,
+  "cost": 0.055770200000000006
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "New filings are saved, then an invoice is created with a POST to `PAYMENT_SVC_URL`.",
+  "stated": true,
+  "cost": 0.025050199999999998
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "B",
+  "quote": "`create_invoice` POSTs `{business info, filing info, invoice details}` to `PAYMENT_SVC_URL` with the caller's Bearer token (20s timeout).",
+  "stated": true,
+  "cost": 0.0301682
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.026272200000000002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "posts to `payment_svc_url` (from `current_app.config.get('PAYMENT_SVC_URL')`) with Authorization header `'Bearer ' + token` (from `user_jwt.get_token_auth_header()`)",
+  "stated": true,
+  "cost": 0.0563322
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "Payment calls send a Bearer JWT.",
+  "stated": false,
+  "cost": 0.025667199999999998
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "B",
+  "quote": "`create_invoice` POSTs `{business info, filing info, invoice details}` to `PAYMENT_SVC_URL` with the caller's Bearer token (20s timeout).",
+  "stated": true,
+  "cost": 0.0321302
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0246502
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.057060200000000005
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0247052
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "B",
+  "quote": "payment, cancel and receipt calls pass the caller's JWT as Bearer.",
+  "stated": true,
+  "cost": 0.0326832
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "waiveFees (boolean, staff-only, default False)",
+  "stated": true,
+  "cost": 0.0084582
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "if `_jwt.validate_roles([Role.STAFF.value])` is true \u2192 `waive_fees` set from `waiveFees` query param; otherwise `waive_fees = False`",
+  "stated": true,
+  "cost": 0.0074892
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "`fee.py` calculates fees. `waiveFees` is honoured for staff only.",
+  "stated": true,
+  "cost": 0.0279122
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "B",
+  "quote": "`fee.py`: `waiveFees` is honoured only for STAFF callers and silently ignored otherwise.",
+  "stated": true,
+  "cost": 0.0298662
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "POST '' (create): requires auth via @_jwt.requires_auth; validates request JSON against 'payment_request' schema",
+  "stated": true,
+  "cost": 0.018483199999999998
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: POST /payment-requests validates request against 'payment_request' schema -> returns Error.INVALID_REQUEST if invalid",
+  "stated": true,
+  "cost": 0.0332302
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "A client POSTs a payment request to `pay_api/resources` (`v1/invoice.py`, `v1/payment.py`). It is checked against `JSON Schema layer of pay-api` (`validate()`) and its JWT role.",
+  "stated": true,
+  "cost": 0.0718362
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "B",
+  "quote": "A client POSTs a payment request to `pay_api/resources` (`v1/invoice.py`, `v1/payment.py`). It is checked against `JSON Schema layer of pay-api` (`validate()`) and its JWT role.",
+  "stated": true,
+  "cost": 0.08084419999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "POST '' (create): requires auth via @_jwt.requires_auth; validates request JSON against 'payment_request' schema; checks auth via check_auth(business_identifier, corp_type_code, contains_role=MAKE_PAYMENT)",
+  "stated": true,
+  "cost": 0.0189122
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "ENTRY: POST /payment-requests \u2014 requires auth; checks authorization via check_auth(business_identifier, corp_type_code, contains_role=MAKE_PAYMENT)",
+  "stated": true,
+  "cost": 0.0320292
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "`invoice.py` POST needs `MAKE_PAYMENT`, then calls `PaymentService.create_invoice`.",
+  "stated": true,
+  "cost": 0.0701152
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "B",
+  "quote": "`invoice.py`: GET `/payment-requests` needs SYSTEM; POST uses `check_auth` (MAKE_PAYMENT) on business_identifier and corp_type_code.",
+  "stated": true,
+  "cost": 0.08075819999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "calls FeeSchedule.find_by_corp_type_and_filing_type with corp_type, filingTypeCode, valid_date, is_priority, is_future_effective, waive_fees, quantity",
+  "stated": false,
+  "cost": 0.018799200000000002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0314812
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "PaymentLineItem.create: a waived fee needs the STAFF role (FEE_OVERRIDE_NOT_ALLOWED).",
+  "stated": false,
+  "cost": 0.0720122
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0813702
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "waiveFees (boolean, default false, title \"Override fees to zero. Only for staff users.\")",
+  "stated": true,
+  "cost": 0.0200982
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "waiveFees (boolean, default false, title states \"Only for staff users\"); ABSENT: no permission check that enforces staff-only access to waiveFees; no schema validation that waiveFees is actually restricted to staff in this document alone",
+  "stated": true,
+  "cost": 0.0321602
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "`filing_type.waiveFees` is commented \"staff only\", but the schema does not enforce that.",
+  "stated": false,
+  "cost": 0.0710612
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "B",
+  "quote": "`filing_type.waiveFees` is documented as staff-only, but the schema has no role constraint (and its `$id` points at `futureEffective`).",
+  "stated": false,
+  "cost": 0.0805542
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "waiveFees (boolean, default false, title \"Override fees to zero. Only for staff users.\")",
+  "stated": false,
+  "cost": 0.0183952
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "ABSENT: no permission check that enforces staff-only access to waiveFees; no schema validation that waiveFees is actually restricted to staff in this document alone",
+  "stated": true,
+  "cost": 0.031902200000000006
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "`filing_type.waiveFees` is commented \"staff only\", but the schema does not enforce that.",
+  "stated": true,
+  "cost": 0.06998320000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "B",
+  "quote": "`filing_type.waiveFees` is documented as staff-only, but the schema has no role constraint (and its `$id` points at `futureEffective`).",
+  "stated": true,
+  "cost": 0.08054620000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "Sets all fees to 0 if waive_fees true.",
+  "stated": true,
+  "cost": 0.0336682
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `kwargs.get('waive_fees')` -> sets `fee_amount`, `priority_fee`, `future_effective_fee`, and `service_fees` all to 0, in `find_by_corp_type_and_filing_type`.",
+  "stated": true,
+  "cost": 0.07367220000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "**Waiver:** `waive_fees` sets every fee to 0.",
+  "stated": false,
+  "cost": 0.0804832
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "B",
+  "quote": "priority and future-effective fees are added only when requested and apply_filing_fees is true; `waive_fees` zeros all fees.",
+  "stated": true,
+  "cost": 0.0968922
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "Sets all fees to 0 if waive_fees true. | fee_amount setter: if amount==0 and not variable, sets waived_fee_amount to original total.",
+  "stated": true,
+  "cost": 0.0353502
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "if `kwargs.get('waive_fees')` -> sets `fee_amount`, `priority_fee`, `future_effective_fee`, and `service_fees` all to 0, in `find_by_corp_type_and_filing_type`.",
+  "stated": false,
+  "cost": 0.0736242
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0825652
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0972792
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "checks user.has_role(Role.STAFF.value) before allowing waived_fee_amount > 0, raises BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED) otherwise.",
+  "stated": false,
+  "cost": 0.036679199999999995
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "if `fee.waived_fee_amount > 0` and `user.has_role(Role.STAFF.value)` is true \u2192 sets `p.waived_by = user.user_name`; if waived amount > 0 and user does NOT have STAFF role \u2192 raises `BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED)` in `create`.",
+  "stated": false,
+  "cost": 0.0741032
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "`PaymentLineItem.create`: a waived fee needs the STAFF role (FEE_OVERRIDE_NOT_ALLOWED).",
+  "stated": true,
+  "cost": 0.0807792
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "B",
+  "quote": "**`PaymentLineItem.create`:** only `Role.STAFF` may waive fees, otherwise `FEE_OVERRIDE_NOT_ALLOWED`.",
+  "stated": false,
+  "cost": 0.0952982
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0322232
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0779222
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0826582
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0977172
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0343112
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "if `fee.waived_fee_amount > 0` and `user.has_role(Role.STAFF.value)` is true \u2192 sets `p.waived_by = user.user_name`; if waived amount > 0 and user does NOT have STAFF role \u2192 raises `BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED)` in `create`.",
+  "stated": true,
+  "cost": 0.0791102
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08201119999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0967852
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0350532
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "if `_jwt.validate_roles([Role.STAFF.value])` is true \u2192 `waive_fees` set from `waiveFees` query param; otherwise `waive_fees = False`",
+  "stated": true,
+  "cost": 0.0755672
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "`fee.py` calculates fees. `waiveFees` is honoured for staff only.",
+  "stated": true,
+  "cost": 0.0826882
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "B",
+  "quote": "`fee.py`: `waiveFees` is honoured only for STAFF callers and silently ignored otherwise.",
+  "stated": true,
+  "cost": 0.09689719999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0305552
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "`futureEffective` (if dissolution voluntary or incorporation/amalgamation/continuation/alteration)",
+  "stated": true,
+  "cost": 0.0712702
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0670562
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0739072
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.030480200000000002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `k` in `['incorporationApplication', 'amalgamationApplication', 'continuationIn', 'alteration']` -> append with `futureEffective`.",
+  "stated": false,
+  "cost": 0.07009019999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0670012
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0738472
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "GET /<corp_type>/<filing_type_code> requires one of Role.VIEWER/EDITOR/STAFF via @_jwt.has_one_of_roles check. Query params: date (defaults to now in DT_SHORT_FORMAT), priority (boolean, default False), futureEffective (boolean, default False)",
+  "stated": true,
+  "cost": 0.0332852
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "CALLS OUT: `FeeSchedule.find_by_corp_type_and_filing_type()` with payload `corp_type`, `filing_type_code`, `valid_date` (defaults to `datetime.now(tz=timezone.utc).strftime(DT_SHORT_FORMAT)` if not provided), `jurisdiction` (defaults to `DEFAULT_JURISDICTION`), `is_priority` (bool from `priority` param, defaults `False`), `is_future_effective` (bool from `futureEffective` param, defaults `False`)",
+  "stated": true,
+  "cost": 0.07402020000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0669512
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0737922
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "Conditionally applies priority_fee if is_priority and apply_filing_fees, future_effective_fee if is_future_effective and apply_filing_fees.",
+  "stated": false,
+  "cost": 0.032295199999999996
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0711302
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06878619999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0755172
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.030437199999999998
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0694872
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0669432
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07380919999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "On exception: logs error and warning, sets transaction_dao.status_code=TransactionStatus.EVENT_FAILED.value.",
+  "stated": true,
+  "cost": 0.024196199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "in `publish_status`, broad except catches all exceptions from `gcp_queue_publisher.publish_to_queue()`: logs error and warning, sets `transaction_dao.status_code = TransactionStatus.EVENT_FAILED.value`",
+  "stated": true,
+  "cost": 0.0425722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "Queue publish failures are logged only, and `publish_status` sets EVENT_FAILED.",
+  "stated": true,
+  "cost": 0.0745932
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "B",
+  "quote": "Queue publish failures are logged only, except `PaymentTransaction.publish_status` also sets EVENT_FAILED.",
+  "stated": true,
+  "cost": 0.0843172
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "find_stale_records (batch job) finds incomplete transactions (status not in [COMPLETED, CANCELLED, FAILED]) untouched past days/hours/minutes threshold, payment_method_code in [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]",
+  "stated": true,
+  "cost": 0.0220122
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "`find_stale_records` -> filters where status_code NOT IN [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value, TransactionStatus.FAILED.value]",
+  "stated": true,
+  "cost": 0.04079819999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "the batch-job query for transactions not COMPLETED/CANCELLED/FAILED, past a threshold, with method CC or DIRECT_PAY",
+  "stated": true,
+  "cost": 0.0763342
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "B",
+  "quote": "`PaymentTransaction.find_stale_records`: not COMPLETED/CANCELLED/FAILED, older than the cutoff, CC or DIRECT_PAY only.",
+  "stated": true,
+  "cost": 0.08650820000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "find_stale_records (batch job) finds incomplete transactions (status not in [COMPLETED, CANCELLED, FAILED]) untouched past days/hours/minutes threshold, payment_method_code in [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]",
+  "stated": true,
+  "cost": 0.0220022
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "`find_stale_records` -> filters where status_code NOT IN [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value, TransactionStatus.FAILED.value] AND transaction_start_time < (now - timedelta) AND payment_method_code IN [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]",
+  "stated": true,
+  "cost": 0.03964820000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "`PaymentTransaction.find_stale_records`: the batch-job query for transactions not COMPLETED/CANCELLED/FAILED, past a threshold, with method CC or DIRECT_PAY.",
+  "stated": true,
+  "cost": 0.07491919999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "B",
+  "quote": "`PaymentTransaction.find_stale_records`: not COMPLETED/CANCELLED/FAILED, older than the cutoff, CC or DIRECT_PAY only.",
+  "stated": true,
+  "cost": 0.0844432
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0226562
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "`find_stale_records` -> filters where status_code NOT IN [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value, TransactionStatus.FAILED.value]",
+  "stated": true,
+  "cost": 0.044117199999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0761682
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0858272
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "if payment status already COMPLETED, handles stale payment\u2014if transaction status EVENT_FAILED, marks COMPLETED and publishes to queue via PaymentTransaction.publish_status(), else raises BusinessException(Error.COMPLETED_PAYMENT)",
+  "stated": false,
+  "cost": 0.0236402
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "if `payment.payment_status_code == PaymentStatus.COMPLETED.value` \u2192 check if `transaction_dao.status_code == TransactionStatus.EVENT_FAILED.value` \u2192 set to `COMPLETED` and publish, else raise `BusinessException(Error.COMPLETED_PAYMENT)` in `update_transaction`.",
+  "stated": false,
+  "cost": 0.0394812
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0756622
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "B",
+  "quote": "Raises COMPLETED_PAYMENT if the payment is COMPLETED, unless the transaction is EVENT_FAILED, in which case it republishes.",
+  "stated": false,
+  "cost": 0.08578619999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "if transaction status EVENT_FAILED, marks COMPLETED and publishes to queue via PaymentTransaction.publish_status(), else raises BusinessException(Error.COMPLETED_PAYMENT)",
+  "stated": true,
+  "cost": 0.03711199999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "if `payment.payment_status_code == PaymentStatus.COMPLETED.value` \u2192 check if `transaction_dao.status_code == TransactionStatus.EVENT_FAILED.value` \u2192 set to `COMPLETED` and publish, else raise `BusinessException(Error.COMPLETED_PAYMENT)` in `update_transaction`.",
+  "stated": true,
+  "cost": 0.0436282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0756642
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "B",
+  "quote": "Raises COMPLETED_PAYMENT if the payment is COMPLETED, unless the transaction is EVENT_FAILED, in which case it republishes.",
+  "stated": false,
+  "cost": 0.0867982
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.020112199999999997
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0432732
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.051225200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.056577199999999994
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "complete_post_invoice() calls _release_payment().",
+  "stated": true,
+  "cost": 0.019050199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "ORDER: in `complete_post_invoice`, call `complete_payment(invoice, invoice_reference)`, then call `_release_payment(invoice)`.",
+  "stated": true,
+  "cost": 0.0421362
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.04876319999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.056410199999999994
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0189592
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.041710199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0488722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0564842
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0189462
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "ENTRY: `apply_credit(invoice)` - no check in this chunk; calls `_release_payment(invoice=invoice)`.",
+  "stated": true,
+  "cost": 0.0444572
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0488042
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0564412
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0189642
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0416702
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0488472
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0565142
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "catches Exception logging to current_app.logger and capture_message",
+  "stated": true,
+  "cost": 0.0217722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "ON ERROR: _release_payment wraps gcp_queue_publisher.publish_to_queue in try/except catching Exception; logs error, logs payload error message, sends to Sentry with capture_message level='error', swallows exception - method returns None",
+  "stated": true,
+  "cost": 0.044728199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.048820199999999994
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0564722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.018861199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0415872
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0487292
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.057466199999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0189182
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0416392
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0506562
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.056438199999999994
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "set filing.payment_completion_date, filing.payment_status_code=\"COMPLETED\", filing.status=Filing.Status.PAID, save",
+  "stated": true,
+  "cost": 0.0091062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "ORDER: Sets filing.payment_completion_date, filing.payment_status_code, filing.status, calls filing.save(); then branches to create_staff_review or publish_to_filer; then publish_to_emailer",
+  "stated": true,
+  "cost": 0.0121352
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "Otherwise: set `payment_completion_date`, `payment_status_code=\"COMPLETED\"` and `status=Filing.Status.PAID`, then `filing.save()` commits.",
+  "stated": true,
+  "cost": 0.023442200000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "B",
+  "quote": "It verifies the JWT, sets `payment_completion_date` and PAID, then commits.",
+  "stated": false,
+  "cost": 0.0257842
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "both publish_to_filer and publish_to_emailer wrap calls in suppress(Exception), swallowing all errors silently.",
+  "stated": true,
+  "cost": 0.0105232
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "then branches to create_staff_review or publish_to_filer; then publish_to_emailer; all three final steps wrapped with `suppress(Exception)` so exceptions logged but swallowed, later steps still run.",
+  "stated": true,
+  "cost": 0.0134272
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "`publish_to_filer` and `publish_to_emailer` wrap their calls in `suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0231742
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "B",
+  "quote": "`publish_to_filer` and `publish_to_emailer` swallow all exceptions, wrapped in `suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0258962
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "GOTCHA: both publish_to_filer and publish_to_emailer wrap calls in suppress(Exception), swallowing all errors silently.",
+  "stated": true,
+  "cost": 0.0090172
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "publish_to_filer wraps entire logic in `with suppress(Exception)` - catches all exceptions, logs to debug, swallows (no re-raise, no retry).",
+  "stated": true,
+  "cost": 0.012956200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "`publish_to_filer` and `publish_to_emailer` wrap their calls in `suppress(Exception)`. A failed publish is swallowed, the request returns 200, and the filing is never filed or emailed.",
+  "stated": true,
+  "cost": 0.0234332
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "B",
+  "quote": "`publish_to_filer` and `publish_to_emailer` swallow all exceptions, wrapped in `suppress(Exception)`. Failures show only at debug level, with no retry.",
+  "stated": true,
+  "cost": 0.0259902
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "already has payment_completion_date returns 200 OK",
+  "stated": true,
+  "cost": 0.0087522
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `filing.payment_completion_date` already set -> return 200 OK, drop from queue.",
+  "stated": true,
+  "cost": 0.0117312
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "Filing already has `payment_completion_date`: 200 (duplicate guard).",
+  "stated": true,
+  "cost": 0.023063200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "B",
+  "quote": "the duplicate guards (`payment_completion_date`, COMPLETED) block any redelivery from repairing them.",
+  "stated": true,
+  "cost": 0.0258152
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "if filing.filing_type in [\"continuationIn\"] create staff review, else publish to filer queue if effective_date \u2264 payment_completion_date",
+  "stated": false,
+  "cost": 0.0091362
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `filing.filing_type in [\"continuationIn\"]` -> create_staff_review(filing); else publish_to_filer(filing, payment_token).",
+  "stated": true,
+  "cost": 0.0120152
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "`filing_type in [\"continuationIn\"]`: create a staff `Review`. Otherwise publish to the filer only if `effective_date <= payment_completion_date`.",
+  "stated": false,
+  "cost": 0.0234272
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "B",
+  "quote": "For continuationIn it creates a `Review` (nr_number, identifier, completing_party taken from `filing_json` parties) in AWAITING_REVIEW.",
+  "stated": true,
+  "cost": 0.026049199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "If filing.status==COMPLETED, logs warning, returns.",
+  "stated": true,
+  "cost": 0.0131062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: in `process_payment`, if `filing_submission.status == Filing.Status.COMPLETED.value` -> log warning, send to Sentry, return without further action.",
+  "stated": false,
+  "cost": 0.0155092
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "**Duplicates:** no duplicate-message guard beyond the COMPLETED-status check.",
+  "stated": true,
+  "cost": 0.030888199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "B",
+  "quote": "The only guard against reprocessing is the COMPLETED-status check. A redelivery of a PAID filing is not blocked and would republish email and filer messages.",
+  "stated": true,
+  "cost": 0.0341722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.010588199999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "if `payment_token['paymentToken'].get('statusCode') == Filing.Status.COMPLETED.value` -> set `filing_submission.payment_completion_date` to current UTC time, commit",
+  "stated": true,
+  "cost": 0.019406200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "Duplicates: no duplicate-message guard beyond the COMPLETED-status check.",
+  "stated": true,
+  "cost": 0.0339552
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "B",
+  "quote": "The only guard against reprocessing is the COMPLETED-status check. A redelivery of a PAID filing is not blocked and would republish email and filer messages.",
+  "stated": false,
+  "cost": 0.034164200000000006
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.011173200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.018826199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "Duplicates: no duplicate-message guard beyond the COMPLETED-status check.",
+  "stated": true,
+  "cost": 0.0336702
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "B",
+  "quote": "The only guard against reprocessing is the COMPLETED-status check. A redelivery of a PAID filing is not blocked and would republish email and filer messages.",
+  "stated": true,
+  "cost": 0.0341292
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0135892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0170172
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "Duplicates:** no duplicate-message guard beyond the COMPLETED-status check.",
+  "stated": true,
+  "cost": 0.0341062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "B",
+  "quote": "A redelivery of a PAID filing is not blocked and would republish email and filer messages.",
+  "stated": true,
+  "cost": 0.0355202
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "If statusCode==TRANSACTION_FAILED, returns. If statusCode==COMPLETED: sets filing.payment_completion_date=now(utc), db.session.add/commit. Publishes email via `publish_email_message`... Unknown statusCode raises QueueException.",
+  "stated": true,
+  "cost": 0.0123682
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "RULE: in `process_payment`, if none of above conditions match and `statusCode` unknown -> log error, raise `QueueException`.",
+  "stated": true,
+  "cost": 0.0180412
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "Filing already COMPLETED: warn and return. `TRANSACTION_FAILED`: return. The filing is not changed here; the unit test expects status PENDING. `COMPLETED`: set payment_completion_date, commit, publish the email, then publish the filing only if `effective_date <= now`. Unknown statusCode: raise `QueueException`.",
+  "stated": true,
+  "cost": 0.033705200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "B",
+  "quote": "`statusCode == TRANSACTION_FAILED`: nothing is done. The filing stays PENDING. - `statusCode == COMPLETED`: set `payment_completion_date`, commit, then publish the email. Publish to the filer only if `effective_date` is absent or past. - Filing already COMPLETED: log a warning and a Sentry message, then return. - Unknown `statusCode`: raise `QueueException`.",
+  "stated": true,
+  "cost": 0.0372942
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.009086200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0157042
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0304782
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0349072
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0126312
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "if nested etype in ('dissolution', 'registration', 'changeOfRegistration', 'restoration', 'specialResolution', 'correction', 'amalgamationApplication', 'continuationIn') and option and filingId exist -> message_id = `'{etype}_{option}_{filing_id}'`.",
+  "stated": true,
+  "cost": 0.0293892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0240902
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0255982
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.012854200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0286072
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0243132
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.025836199999999997
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "Returns True if msg is None or status is FAILED.",
+  "stated": true,
+  "cost": 0.0156832
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0303062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "If there is no record, or its status is FAILED, it returns True. - Otherwise it returns False, which covers a record that is processing or complete.",
+  "stated": true,
+  "cost": 0.0244622
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "B",
+  "quote": "Returns False if seen count exceeds `MSG_RETRY_NUM`, or status is PROCESSING or COMPLETED. Returns True if not found or FAILED.",
+  "stated": true,
+  "cost": 0.0314052
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "Limits retries: if msg.message_seen_count > MSG_RETRY_NUM returns False. Returns True if msg is None or status is FAILED.",
+  "stated": true,
+  "cost": 0.013134200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "in `is_processable_message`, if msg.message_seen_count > MSG_RETRY_NUM -> return (False, msg).",
+  "stated": true,
+  "cost": 0.028807199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "If `msg.message_seen_count > MSG_RETRY_NUM`, it returns False.",
+  "stated": true,
+  "cost": 0.024408199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "B",
+  "quote": "Returns False if seen count exceeds `MSG_RETRY_NUM`, or status is PROCESSING or COMPLETED. Returns True if not found or FAILED.",
+  "stated": true,
+  "cost": 0.028146200000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.012523200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0301712
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.023982200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.025485200000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0138082
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "RULE: in `is_processable_message`, if is_cloud_event_format=False and message_id is None -> return (False, None).",
+  "stated": true,
+  "cost": 0.0286912
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.024007200000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.025515200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.014611200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.031684199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0277002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0315282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "receive_before_change (SQLAlchemy before_insert and before_update listener on Filing; modifies filing._status).",
+  "stated": true,
+  "cost": 0.025574200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "if filing.payment_completion_date OR filing.source == COLIN -> set filing._status to PAID in receive_before_change.",
+  "stated": true,
+  "cost": 0.048759199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "`receive_before_change` (before insert/update) derives `_status`:** ... Otherwise it applies the first match in this order: EPOCH if the type is `lear_epoch`; COMPLETED if `transaction_id`; PAID if `payment_completion_date` or the source is COLIN; PENDING if `payment_token`; else DRAFT.",
+  "stated": true,
+  "cost": 0.0675662
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "B",
+  "quote": "Status listener (insert/update, `_status`):",
+  "stated": true,
+  "cost": 0.0749452
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "get_future_effective_filing_ids() returns ids of PAID or APPROVED filings with effective_date <= now.",
+  "stated": true,
+  "cost": 0.0274912
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.04847119999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0702982
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07292219999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "for each filing_id, publish {'filing': {'id': filing_id}} to NATS subject from NATS_FILER_SUBJECT env var via ServiceWorker.publish()",
+  "stated": true,
+  "cost": 0.0257422
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "publishes each filing to queue via `queue_service.publish(subject, msg)` one by one in a loop",
+  "stated": true,
+  "cost": 0.0486172
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "for each filing id, `ServiceWorker.publish()` (from `entity_queue_common`) sends `{'filing': {'id': filing_id}}` to the NATS subject in `NATS_FILER_SUBJECT`.",
+  "stated": true,
+  "cost": 0.06842920000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "B",
+  "quote": "A batch job that asks the Legal API for filings whose effective date has arrived and publishes each filing ID to the entity-filer NATS/STAN queue.",
+  "stated": true,
+  "cost": 0.0749532
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0251602
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.048315199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0664072
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07271119999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.025217200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.048357199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0686692
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07494819999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "Checks if filing_core_submission.status == Filing.Status.COMPLETED: logs warning with filing_submission.business_id, filing_submission.id, filing_msg, returns (None, None)\u2014reprocessing guard.",
+  "stated": true,
+  "cost": 0.0367722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: if filing_core_submission.status == Filing.Status.COMPLETED -> logs warning and returns None, None; in main logic.",
+  "stated": true,
+  "cost": 0.0680142
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "`process_filing`: if the filing status is already COMPLETED, it logs a warning and returns `(None, None)`. This is the reprocessing guard.",
+  "stated": true,
+  "cost": 0.0472722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "B",
+  "quote": "If status is already `COMPLETED`, it returns None values with a warning (the only reprocessing guard).",
+  "stated": true,
+  "cost": 0.0525652
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "Sets filing_submission.transaction_id and status via set_processed(business_type). Commits business and filing_submission to database. For new-business filings (AMALGAMATIONAPPLICATION, CONTINUATIONIN, CONVERSION, INCORPORATIONAPPLICATION, REGISTRATION), updates business_id in filing_submission, calls business_profile.update_affiliation (except CONVERSION), consumes name request, updates business profile, publishes MRAS email.",
+  "stated": true,
+  "cost": 0.0376882
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "filing_submission.transaction_id set, filing_submission status set via set_processed(), filing_submission._meta_data set, business and filing_submission added to session and committed; then if filing type in [AMALGAMATIONAPPLICATION, CONTINUATIONIN, CONVERSION, INCORPORATIONAPPLICATION, REGISTRATION] business_id updated and committed, then affiliation updated",
+  "stated": true,
+  "cost": 0.0714002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "Status becomes COMPLETED, and the transaction is committed.",
+  "stated": true,
+  "cost": 0.0470282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "B",
+  "quote": "The pay worker, entity-filer and Custom filer commit PAID or COMPLETED before publishing or calling external services.",
+  "stated": true,
+  "cost": 0.0526762
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "All exceptions caught, captured to Sentry, not re-raised.",
+  "stated": true,
+  "cost": 0.0363302
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "ON ERROR: in `update_affiliation`: catches all exceptions; captures Sentry message with level 'error' and swallows exception (no re-raise, no retry).",
+  "stated": true,
+  "cost": 0.0706972
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "`business_profile`: failures are captured to Sentry and not re-raised.",
+  "stated": false,
+  "cost": 0.047095200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "B",
+  "quote": "it raises `QueueException`, but all exceptions are logged to Sentry and swallowed.",
+  "stated": true,
+  "cost": 0.0549932
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "Publishes email_message to qsm queue with filing_submission.status; catches and logs exception via capture_message without retry. Publishes event; catches and logs exception without retry.",
+  "stated": true,
+  "cost": 0.0392282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "email publish wrapped in try/except, catches Exception, sends to Sentry with capture_message(level='error'), swallows exception and continues; event publish wrapped in try/except, catches Exception, prints to stdout, sends to Sentry with capture_message(level='error'), swallows exception.",
+  "stated": true,
+  "cost": 0.0699952
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "`publish_event`, `publish_gcp_queue_event`, `publish_mras_email` and the email publish in `process_filing` catch broad exceptions. They only log or send to Sentry (`capture_message`) and never retry or re-raise.",
+  "stated": false,
+  "cost": 0.0476082
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "B",
+  "quote": "Failures in `publish_event`, `publish_gcp_queue_event` and `publish_mras_email` are caught, sent to Sentry via `capture_message` and logged, and never re-raised or retried.",
+  "stated": true,
+  "cost": 0.0557512
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "Publishes email_message to qsm queue with filing_submission.status; catches and logs exception via capture_message without retry. Publishes event; catches and logs exception without retry.",
+  "stated": true,
+  "cost": 0.038756200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "ON ERROR: catches Exception; swallows the error after logging with print(err) and sending to Sentry via capture_message() with level='error'; subsequent steps still run.",
+  "stated": true,
+  "cost": 0.0698582
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "`publish_event`, `publish_gcp_queue_event`, `publish_mras_email` and the email publish in `process_filing` catch broad exceptions. They only log or send to Sentry (`capture_message`) and never retry or re-raise.",
+  "stated": true,
+  "cost": 0.049461200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "B",
+  "quote": "Failures in `publish_event`, `publish_gcp_queue_event` and `publish_mras_email` are caught, sent to Sentry via `capture_message` and logged, and never re-raised or retried.",
+  "stated": true,
+  "cost": 0.0529592
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0361532
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0695102
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.048213200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0523612
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "QueueException and catch-all Exception logged via capture_message('Queue Error:' + json.dumps(filing_msg), level='error') and logger.error, message removed from queue (not retried).",
+  "stated": true,
+  "cost": 0.0366892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "QueueException or Exception caught, sent to Sentry via capture_message with level='error', logged with exc_info=True, swallowed (message removed from queue).",
+  "stated": true,
+  "cost": 0.0680812
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "`QueueException` and any other `Exception` are reported with `capture_message('Queue Error:'+...)` and logged. The message is then dropped, with no retry.",
+  "stated": true,
+  "cost": 0.0473242
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "B",
+  "quote": "Any other exception is sent to Sentry and logged, and the message is discarded with no retry.",
+  "stated": true,
+  "cost": 0.052577200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "notes-v3",
+  "quote": "Checks if filing_core_submission.status == Filing.Status.COMPLETED: logs warning with filing_submission.business_id, filing_submission.id, filing_msg, returns (None, None)\u2014reprocessing guard.",
+  "stated": true,
+  "cost": 0.0368112
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "notes-ledger",
+  "quote": "RULE: if filing_core_submission.status == Filing.Status.COMPLETED -> logs warning and returns None, None; in main logic.",
+  "stated": true,
+  "cost": 0.0707832
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "A-v3",
+  "quote": "if the filing status is already COMPLETED, it logs a warning and returns `(None, None)`. This is the reprocessing guard.",
+  "stated": true,
+  "cost": 0.0472362
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "B",
+  "quote": "If status is already `COMPLETED`, it returns None values with a warning (the only reprocessing guard).",
+  "stated": true,
+  "cost": 0.0547042
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "notes-v3",
+  "quote": "get_future_effective_filing_ids() returns ids of PAID or APPROVED filings with effective_date <= now.",
+  "stated": true,
+  "cost": 0.0381872
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0676442
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "A-v3",
+  "quote": "`get_future_effective_filing_ids()`:** returns PAID or APPROVED filings whose `effective_date <= now`.",
+  "stated": false,
+  "cost": 0.047282199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0523352
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "notes-v3",
+  "quote": "GOTCHA: Email and event failures silently logged, not retried or re-raised.",
+  "stated": true,
+  "cost": 0.0399522
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "notes-ledger",
+  "quote": "ABSENT: no permission check; no duplicate guard on filing processing; no retry on failed email or event publish",
+  "stated": true,
+  "cost": 0.07132920000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "A-v3",
+  "quote": "Publish and profile errors are suppressed. Downstream steps can be lost, and the duplicate guards (`payment_completion_date`, COMPLETED) block any redelivery from repairing them.",
+  "stated": true,
+  "cost": 0.0474272
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "B",
+  "quote": "Downstream steps can be lost, and the duplicate guards (`payment_completion_date`, COMPLETED) block any redelivery from repairing them.",
+  "stated": true,
+  "cost": 0.0527652
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0378572
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08395920000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07676019999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08862320000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0379322
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0832742
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "It calls CFS/PayBC, BCOL, auth-api and report-api over HTTP, and publishes events to GCP PubSub (payment status to a per-corp-type topic, account events to ACCOUNT_MAILER_TOPIC and AUTH_EVENT_TOPIC). ... `publish_status`: COMPLETED event only if the invoice is PAID; otherwise TRANSACTION_FAILED.",
+  "stated": true,
+  "cost": 0.08109519999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "B",
+  "quote": "gcp_queue_publisher.publish_to_queue(QueueMessage(source, message_type, payload, topic, ordering_key?, corp_type?))` becomes a CloudEvent with a uuid id, source `sbc-pay-<source>`, UTC time and the payload as data. A `None` topic is logged and skipped. Payment status events use topic `get_topic_for_corp_type(corp_type)` with camelized `PaymentToken(id, statusCode, filingId, corpTypeCode)`.",
+  "stated": true,
+  "cost": 0.0929082
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "topic=get_topic_for_corp_type(invoice.corp_type_code), corp_type=invoice.corp_type_code",
+  "stated": true,
+  "cost": 0.035973200000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "topic=result of `get_topic_for_corp_type(invoice.corp_type_code)`, corp_type=`invoice.corp_type_code`",
+  "stated": true,
+  "cost": 0.0821852
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "publishes events to GCP PubSub (payment status to a per-corp-type topic, account events to ACCOUNT_MAILER_TOPIC and AUTH_EVENT_TOPIC)",
+  "stated": true,
+  "cost": 0.0788512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "B",
+  "quote": "Payment status events use topic `get_topic_for_corp_type(corp_type)` with camelized `PaymentToken(id, statusCode, filingId, corpTypeCode)`.",
+  "stated": true,
+  "cost": 0.0865442
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "Pub/sub topic routing: CorpType.NRO returns NAMEX_PAY_TOPIC",
+  "stated": true,
+  "cost": 0.0359422
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "RULE: `get_topic_for_corp_type` \u2014 if corp_type == 'NRO' -> return NAMEX_PAY_TOPIC config;",
+  "stated": true,
+  "cost": 0.0821992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "`CorpType.NRO` goes to `NAMEX_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.0756852
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "B",
+  "quote": "`get_topic_for_corp_type` (`utils/util.py`): NRO goes to `NAMEX_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.0864232
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "product codes via CodeService lookup map Product.BUSINESS/BUSINESS_SEARCH to BUSINESS_PAY_TOPIC",
+  "stated": true,
+  "cost": 0.0361702
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "if product from code lookup in [Product.BUSINESS, Product.BUSINESS_SEARCH] -> return BUSINESS_PAY_TOPIC",
+  "stated": true,
+  "cost": 0.0823222
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "Product `BUSINESS` or `BUSINESS_SEARCH` goes to `BUSINESS_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.07597319999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "B",
+  "quote": "BUSINESS/BUSINESS_SEARCH go to `BUSINESS_PAY_TOPIC`",
+  "stated": true,
+  "cost": 0.0864512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "product codes via CodeService lookup map Product.BUSINESS/BUSINESS_SEARCH to BUSINESS_PAY_TOPIC, Product.STRR to STRR_PAY_TOPIC",
+  "stated": true,
+  "cost": 0.0362842
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "if product == Product.STRR -> return STRR_PAY_TOPIC",
+  "stated": true,
+  "cost": 0.08194119999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "Product `STRR` goes to `STRR_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.07562719999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "B",
+  "quote": "BUSINESS/BUSINESS_SEARCH go to `BUSINESS_PAY_TOPIC`, STRR to `STRR_PAY_TOPIC`, anything else returns None.",
+  "stated": true,
+  "cost": 0.0866152
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0356602
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "STRR_PAY_TOPIC (defaults to BUSINESS_PAY_TOPIC)",
+  "stated": true,
+  "cost": 0.0821372
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "Product `STRR` goes to `STRR_PAY_TOPIC`.",
+  "stated": false,
+  "cost": 0.0757132
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "B",
+  "quote": "`STRR_PAY_TOPIC` (defaults to the business topic)",
+  "stated": true,
+  "cost": 0.08626619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0369242
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0832512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0771672
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "B",
+  "quote": "It also calls the auth API and report API, and publishes events to GCP Pub/Sub topics.",
+  "stated": true,
+  "cost": 0.0894152
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0364742
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08169119999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "A-v3",
+  "quote": "A NATS/STAN queue worker that takes payment-status messages and applies them to filings in the business database.",
+  "stated": false,
+  "cost": 0.07571719999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0859302
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0370512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0818732
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0755242
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0895222
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "payload=create_event_payload(invoice, status_code)",
+  "stated": true,
+  "cost": 0.0285412
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0446512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0825282
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1001712
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "create_event_payload(invoice, status_code): Returns humps.camelize(asdict(PaymentToken(invoice.id, status_code, invoice.filing_id, invoice.corp_type_code))).",
+  "stated": true,
+  "cost": 0.0245852
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0446352
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0811672
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "B",
+  "quote": "Payment status events use topic `get_topic_for_corp_type(corp_type)` with camelized `PaymentToken(id, statusCode, filingId, corpTypeCode)`.",
+  "stated": true,
+  "cost": 0.0951652
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0254042
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "`is_processable_message` \u2013 called from `cb_subscription_handler`, checks `msg.get('paymentToken')` is not None/falsy AND `payment_token.get('corpTypeCode')` is not None/falsy AND `CorpType.find_by_id(corp_type_code)` returns truthy.",
+  "stated": true,
+  "cost": 0.0479992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "`is_processable_message`: paymentToken must exist, `corpTypeCode` must be present and `CorpType.find_by_id` must succeed. Otherwise the message is logged and skipped.",
+  "stated": true,
+  "cost": 0.08364120000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "B",
+  "quote": "Message with no `paymentToken.corpTypeCode`, or a code not in `CorpType`: not processed (`is_processable_message`). The tests accept BEN, CP, SP, GP, BC, ULC, CC and reject None, 'CSO' and a missing token.",
+  "stated": true,
+  "cost": 0.0978642
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "Validates with `is_processable_message` checking paymentToken.corpTypeCode exists and CorpType.find_by_id succeeds; if not, logs and skips.",
+  "stated": true,
+  "cost": 0.0245212
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "`is_processable_message` \u2013 called from `cb_subscription_handler`, checks `msg.get('paymentToken')` is not None/falsy AND `payment_token.get('corpTypeCode')` is not None/falsy AND `CorpType.find_by_id(corp_type_code)` returns truthy.",
+  "stated": true,
+  "cost": 0.0456712
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "`is_processable_message`: paymentToken must exist, `corpTypeCode` must be present and `CorpType.find_by_id` must succeed.",
+  "stated": true,
+  "cost": 0.08369320000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "B",
+  "quote": "Message with no `paymentToken.corpTypeCode`, or a code not in `CorpType`: not processed (`is_processable_message`).",
+  "stated": false,
+  "cost": 0.0965812
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "extract PaymentToken from ce.data (type==\"bc.registry.payment\", convert keys to snake_case)",
+  "stated": true,
+  "cost": 0.0243122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.044657199999999994
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "`POST /` (`resources/pay_filer.py`) carries a GCP cloud event (SimpleCloudEvent). `ce.data` must have type `\"bc.registry.payment\"` and holds a PaymentToken with keys converted to snake_case.",
+  "stated": true,
+  "cost": 0.08205919999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0959422
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "extract PaymentToken from ce.data (type==\"bc.registry.payment\", convert keys to snake_case)",
+  "stated": true,
+  "cost": 0.0242652
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0446052
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "`ce.data` must have type `\"bc.registry.payment\"` and holds a PaymentToken with keys converted to snake_case.",
+  "stated": true,
+  "cost": 0.0815772
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0945502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0240162
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0475362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0812782
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.09466619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.012754199999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0206172
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0434842
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0468592
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "set filing.payment_completion_date, filing.payment_status_code=\"COMPLETED\", filing.status=Filing.Status.PAID, save",
+  "stated": true,
+  "cost": 0.010649200000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "Sets filing.payment_completion_date, filing.payment_status_code, filing.status, calls filing.save()",
+  "stated": true,
+  "cost": 0.0176172
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "applies that payment to the matching filing (marks it PAID)",
+  "stated": true,
+  "cost": 0.0415242
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "B",
+  "quote": "It verifies the JWT, sets `payment_completion_date` and PAID, then commits.",
+  "stated": true,
+  "cost": 0.0453992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "if filing.filing_type in [\"continuationIn\"] create staff review",
+  "stated": false,
+  "cost": 0.0104782
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "if `filing.filing_type in [\"continuationIn\"]` -> create_staff_review(filing)",
+  "stated": true,
+  "cost": 0.0199562
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0414132
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "B",
+  "quote": "For continuationIn it creates a `Review` (nr_number, identifier, completing_party taken from `filing_json` parties) in AWAITING_REVIEW.",
+  "stated": true,
+  "cost": 0.0457432
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "if filing.filing_type in [\"continuationIn\"] create staff review",
+  "stated": false,
+  "cost": 0.0104832
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `filing.filing_type in [\"continuationIn\"]` -> create_staff_review(filing); else publish_to_filer(filing, payment_token).",
+  "stated": true,
+  "cost": 0.0178612
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0414082
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "B",
+  "quote": "For continuationIn it creates a `Review` (nr_number, identifier, completing_party taken from `filing_json` parties) in AWAITING_REVIEW.",
+  "stated": false,
+  "cost": 0.046823199999999995
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "if filing.filing_type in [\"continuationIn\"] create staff review, else publish to filer queue if effective_date \u2264 payment_completion_date",
+  "stated": true,
+  "cost": 0.0117592
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "if `filing.filing_type in [\"continuationIn\"]` -> create_staff_review(filing); else publish_to_filer(filing, payment_token).",
+  "stated": true,
+  "cost": 0.0177922
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "`filing_type in [\"continuationIn\"]`: create a staff `Review`. Otherwise publish to the filer only if `effective_date <= payment_completion_date`.",
+  "stated": true,
+  "cost": 0.0419342
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "B",
+  "quote": "`pay_filer.py`: the filing is continuationIn \u2192 create the Review and do not publish to the filer.",
+  "stated": true,
+  "cost": 0.0455092
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0143202
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "STATES: `Filing.Status.COMPLETED.value`, `Filing.Status.PAID.value`, `'TRANSACTION_FAILED'`.",
+  "stated": true,
+  "cost": 0.0216482
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "When a payment is confirmed, it publishes an email message and, if the effective date has arrived, a filing message for the filer.",
+  "stated": true,
+  "cost": 0.0453152
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "B",
+  "quote": "It consumes payment-status messages, marks the matching Filing as paid, then hands off to the email queue and (when due) the filer queue.",
+  "stated": true,
+  "cost": 0.04802519999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "If statusCode==COMPLETED: sets filing.payment_completion_date=now(utc), db.session.add/commit.",
+  "stated": true,
+  "cost": 0.0105932
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "if `payment_token['paymentToken'].get('statusCode') == Filing.Status.COMPLETED.value` -> set `filing_submission.payment_completion_date` to current UTC time, commit",
+  "stated": true,
+  "cost": 0.017911200000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "**DB write:** `filing.payment_completion_date = now(utc)`, committed through `db.session`.",
+  "stated": true,
+  "cost": 0.0416782
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "B",
+  "quote": "`filing.payment_completion_date` is set to now and committed.",
+  "stated": true,
+  "cost": 0.04532320000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "notes-v3",
+  "quote": "If effective_date<=now, publishes filing via `publish_filing` to APP_CONFIG.FILER_PUBLISH_OPTIONS['subject'].",
+  "stated": true,
+  "cost": 0.0118782
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "notes-ledger",
+  "quote": "RULE: in `process_payment`, if `not filing_submission.effective_date or filing_submission.effective_date <= datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)` -> publish filing to queue.",
+  "stated": true,
+  "cost": 0.0181362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "A-v3",
+  "quote": "`COMPLETED`: set payment_completion_date, commit, publish the email, then publish the filing only if `effective_date <= now`.",
+  "stated": true,
+  "cost": 0.0418232
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "B",
+  "quote": "`statusCode == COMPLETED`: set `payment_completion_date`, commit, then publish the email. Publish to the filer only if `effective_date` is absent or past.",
+  "stated": true,
+  "cost": 0.0457232
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "Checks if filing_core_submission.status == Filing.Status.COMPLETED: logs warning with filing_submission.business_id, filing_submission.id, filing_msg, returns (None, None)\u2014reprocessing guard.",
+  "stated": false,
+  "cost": 0.0369892
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: if filing_core_submission.status == Filing.Status.COMPLETED -> logs warning and returns None, None; in main logic.",
+  "stated": false,
+  "cost": 0.0694332
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "The only guards are the Flask-app check and the COMPLETED-status check.",
+  "stated": false,
+  "cost": 0.07528019999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "B",
+  "quote": "If status is already `COMPLETED`, it returns None values with a warning (the only reprocessing guard).",
+  "stated": true,
+  "cost": 0.08432819999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "Otherwise cascades _status: Filing.Status.EPOCH.value if filing_type=='lear_epoch', Filing.Status.COMPLETED.value if transaction_id, Filing.Status.PAID.value if payment_completion_date or source==Filing.Source.COLIN.value",
+  "stated": true,
+  "cost": 0.0391942
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "RULE: if filing.payment_completion_date OR filing.source == COLIN -> set filing._status to PAID in receive_before_change.",
+  "stated": false,
+  "cost": 0.07162819999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "Otherwise it applies the first match in this order: EPOCH if the type is `lear_epoch`; COMPLETED if `transaction_id`; PAID if `payment_completion_date` or the source is COLIN; PENDING if `payment_token`; else DRAFT.",
+  "stated": true,
+  "cost": 0.0783802
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "B",
+  "quote": "COMPLETED if `transaction_id`; PAID if `payment_completion_date` or source is COLIN; PENDING if `payment_token`; else DRAFT.",
+  "stated": true,
+  "cost": 0.08707319999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "Returns without modifying _status if filing._status in [Filing.Status.AWAITING_REVIEW.value, Filing.Status.CHANGE_REQUESTED.value, Filing.Status.REJECTED.value] or (filing._status==Filing.Status.APPROVED.value and not filing.transaction_id)",
+  "stated": true,
+  "cost": 0.037443199999999996
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "RULE: if filing._status in [AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED] OR (filing._status == APPROVED AND not filing.transaction_id) -> return without changing status in receive_before_change.",
+  "stated": true,
+  "cost": 0.06992219999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "It leaves `_status` untouched for AWAITING_REVIEW, CHANGE_REQUESTED and REJECTED, for APPROVED without a `transaction_id`, and when the `skip_status_listener` flag is set.",
+  "stated": true,
+  "cost": 0.0759292
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "B",
+  "quote": "Skipped if status is AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED, or APPROVED without `transaction_id`, or if `skip_status_listener` is set.",
+  "stated": true,
+  "cost": 0.08478720000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0363122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06902119999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "A-v3",
+  "stated": false,
+  "quote": "",
+  "cost": 0.07662319999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08403619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.037534200000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0700932
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0763002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08566820000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "get_future_effective_filing_ids() returns ids of PAID or APPROVED filings with effective_date <= now.",
+  "stated": true,
+  "cost": 0.0383232
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06905220000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0770342
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "B",
+  "quote": "A batch job that asks the Legal API for filings whose effective date has arrived and publishes each filing ID to the entity-filer NATS/STAN queue.",
+  "stated": false,
+  "cost": 0.0845722
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "for each filing_id, publish {'filing': {'id': filing_id}} to NATS subject from NATS_FILER_SUBJECT env var via ServiceWorker.publish()",
+  "stated": true,
+  "cost": 0.0369002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "publishes each filing to queue via `queue_service.publish(subject, msg)` one by one in a loop; `queue_service.publish(subject, msg)` where `subject = os.getenv('NATS_FILER_SUBJECT', '')` and `msg = {'filing': {'id': filing_id}}`.",
+  "stated": true,
+  "cost": 0.0699942
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "for each filing id, `ServiceWorker.publish()` (from `entity_queue_common`) sends `{'filing': {'id': filing_id}}` to the NATS subject in `NATS_FILER_SUBJECT`.",
+  "stated": true,
+  "cost": 0.0758112
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "B",
+  "quote": "A batch job that asks the Legal API for filings whose effective date has arrived and publishes each filing ID to the entity-filer NATS/STAN queue.",
+  "stated": true,
+  "cost": 0.0845242
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0363332
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0690372
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0751192
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0840672
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "ORM model for filings table in business-pay service. Stores filing metadata: id (primary key), effective_date, filing_type, filing_sub_type, filing_json (JSONB), payment fields (completion_date, status_code, token, account), and status",
+  "stated": true,
+  "cost": 0.0260692
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "License header and minimal Filing model for marking filings as paid in a business payment system.",
+  "stated": true,
+  "cost": 0.0479782
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "reads and writes the shared `filings` table and writes `reviews` (`database/filings.py`, `database/review.py`). `Filing.get_filing_by_payment_token` uses raw SQL on `payment_id`.",
+  "stated": false,
+  "cost": 0.0348352
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "B",
+  "quote": "**business-pay** (`business_pay/database/filings.py`): keeps its own minimal `Filing` mapping to the same table, with a copy of the status enum including CORRECTED.",
+  "stated": true,
+  "cost": 0.038246199999999994
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "set filing.payment_completion_date, filing.payment_status_code=\"COMPLETED\", filing.status=Filing.Status.PAID, save",
+  "stated": true,
+  "cost": 0.0257292
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "Sets filing.payment_completion_date, filing.payment_status_code, filing.status, calls filing.save()",
+  "stated": true,
+  "cost": 0.048073199999999996
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "Otherwise: set `payment_completion_date`, `payment_status_code=\"COMPLETED\"` and `status=Filing.Status.PAID`, then `filing.save()` commits.",
+  "stated": true,
+  "cost": 0.0347002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0383712
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.026068200000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0477322
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0359142
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "B",
+  "quote": "It does not go through this model's setters or listeners, so the schema validation and `payment_completion_date` check here do not apply to its writes (the status listener is not shown there).",
+  "stated": true,
+  "cost": 0.0406702
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.027571200000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0494402
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0361572
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "B",
+  "quote": "It does not go through this model's setters or listeners, so the schema validation and `payment_completion_date` check here do not apply to its writes (the status listener is not shown there).",
+  "stated": false,
+  "cost": 0.038283199999999996
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.019857200000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `payment_token.status_code != \"COMPLETED\"` -> return 200 OK, drop from queue.",
+  "stated": true,
+  "cost": 0.0403802
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0727732
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07795120000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "corp_type_code in [\"MHR\", \"BTR\"] returns 200 OK (ignored)",
+  "stated": true,
+  "cost": 0.018947199999999997
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `payment_token.corp_type_code in [\"MHR\", \"BTR\"]` -> return 200 OK, drop from queue.",
+  "stated": true,
+  "cost": 0.0404002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "`corp_type_code` in `[\"MHR\", \"BTR\"]`: 200, ignored.",
+  "stated": true,
+  "cost": 0.07045320000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "B",
+  "quote": "It must have status COMPLETED, and `corp_type_code` must not be in `[\"MHR\", \"BTR\"]`.",
+  "stated": true,
+  "cost": 0.0760662
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-v3",
+  "quote": "already has payment_completion_date returns 200 OK",
+  "stated": true,
+  "cost": 0.0187942
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "quote": "RULE: if `filing.payment_completion_date` already set -> return 200 OK, drop from queue.",
+  "stated": true,
+  "cost": 0.040272199999999994
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "A-v3",
+  "quote": "Filing already has `payment_completion_date`: 200 (duplicate guard).",
+  "stated": true,
+  "cost": 0.0703802
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "B",
+  "quote": "the duplicate guards (`payment_completion_date`, COMPLETED) block any redelivery from repairing them.",
+  "stated": true,
+  "cost": 0.0774032
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-v3",
+  "quote": "filing_identifier==None and corp_type_code==\"BC\" returns 200 OK (removed); filing not found returns 404 NOT_FOUND (retried)",
+  "stated": true,
+  "cost": 0.0192832
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "quote": "RULE: if filing not found AND `payment_token.filing_identifier == None` AND `payment_token.corp_type_code == \"BC\"` -> return 200 OK, drop from queue (in worker).\nRULE: if filing not found AND above condition false -> return 404 NOT_FOUND, put back on queue.",
+  "stated": true,
+  "cost": 0.04244119999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "A-v3",
+  "quote": "`filing_identifier` is None and `corp_type_code == \"BC\"`: 200, treated as removed.\n- Filing not found: 404, so Pub/Sub retries.",
+  "stated": true,
+  "cost": 0.0721692
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "B",
+  "quote": "`pay_filer.py`: the filing is not found yet \u2192 404 (redelivered).",
+  "stated": false,
+  "cost": 0.0761222
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0187362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0423042
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "A-v3",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0702322
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "B",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0757952
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "notes-v3",
+  "quote": "tries up to 5 times (0.2s waits) to find filing via `Filing.get_filing_by_payment_token`",
+  "stated": true,
+  "cost": 0.018973200000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0399162
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "A-v3",
+  "quote": "`process_payment` looks up the filing with `Filing.get_filing_by_payment_token`, retrying up to 5 times at 0.2s intervals.",
+  "stated": true,
+  "cost": 0.07058919999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "B",
+  "quote": "Filing lookup by payment id retries 5 times, 0.2s apart. If still missing, `FilingException` is raised.",
+  "stated": true,
+  "cost": 0.07607219999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "notes-v3",
+  "quote": "If filing.status==COMPLETED, logs warning, returns.",
+  "stated": true,
+  "cost": 0.0213402
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "notes-ledger",
+  "quote": "in `process_payment`, if `filing_submission.status == Filing.Status.COMPLETED.value` -> log warning, send to Sentry, return without further action.",
+  "stated": true,
+  "cost": 0.0434982
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "A-v3",
+  "quote": "Duplicates: no duplicate-message guard beyond the COMPLETED-status check.",
+  "stated": true,
+  "cost": 0.0704362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "B",
+  "quote": "The only guard against reprocessing is the COMPLETED-status check. A redelivery of a PAID filing is not blocked and would republish email and filer messages.",
+  "stated": true,
+  "cost": 0.0762092
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "notes-v3",
+  "quote": "if not found, raises FilingException (absorbed, logged to Sentry if prod)",
+  "stated": true,
+  "cost": 0.0188882
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "notes-ledger",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0431112
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "A-v3",
+  "quote": "A filing not found after about 1s of retries is dropped (Sentry in prod only). A payment message that arrives before the filing is saved is lost.",
+  "stated": true,
+  "cost": 0.0705542
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "B",
+  "quote": "`FilingException`: Sentry-logged only in prod, not re-raised, so the message is dropped.",
+  "stated": true,
+  "cost": 0.0760172
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-v3",
+  "quote": "Entry point: verify_gcp_jwt() checks Authorization bearer token against SUB_SERVICE_ACCOUNT config (returns error message if invalid or unauthorized; this chunk shows no explicit return action on invalid JWT). ... invalid JWT returns 403 FORBIDDEN",
+  "stated": true,
+  "cost": 0.0146732
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "quote": "ENTRY: POST /worker() - callable by any client with valid GCP JWT token; checks `verify_gcp_jwt(request)` returns falsy (no error), else returns 403 FORBIDDEN.",
+  "stated": true,
+  "cost": 0.0235952
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "A-v3",
+  "quote": "`verify_gcp_jwt` (`services/gcp_auth.py`) returns an error: 403.",
+  "stated": true,
+  "cost": 0.0391992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "B",
+  "quote": "`pay_filer.py`: the GCP JWT check fails \u2192 403.",
+  "stated": true,
+  "cost": 0.04542020000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-v3",
+  "quote": "retrieves audience (SUB_AUDIENCE) and expected service account email (SUB_SERVICE_ACCOUNT) from Flask config, and verifies the token via Google's id_token.verify_oauth2_token(token, requests.Request(), audience=audience)",
+  "stated": true,
+  "cost": 0.0145652
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "quote": "`id_token.verify_oauth2_token(token, requests.Request(), audience=audience)` \u2014 verifies OAuth2 token against audience from config key \"SUB_AUDIENCE\".",
+  "stated": true,
+  "cost": 0.0198322
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "A-v3",
+  "quote": "`verify_gcp_jwt` takes the bearer token from the Authorization header and calls Google `id_token.verify_oauth2_token(audience=SUB_AUDIENCE)`. It requires `email_verified` and `email == SUB_SERVICE_ACCOUNT`. It returns \"\" on success and an error string otherwise.",
+  "stated": true,
+  "cost": 0.033716199999999995
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "notes-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "notes-ledger",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "A-v3",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "B",
+  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
+  "cost": 0
+ }
+]
