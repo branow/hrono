@@ -6087,5 +6087,856 @@
    }
   ],
   "cost": 0.013373200000000002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0246488
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": true,
+    "quote": "if k == 'incorporationApplication' -> do not include 'priority' or 'waiveFees' fields, in `_get_filing_types`."
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0256486
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "Creates an invoice for a filing submission by calling the payment service"
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "posts to `payment_svc_url` (from `current_app.config.get('PAYMENT_SVC_URL')`) with Authorization header `'Bearer ' + token` (from `user_jwt.get_token_auth_header()`)"
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.013342600000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "if `_jwt.validate_roles([Role.STAFF.value])` is true \u2192 `waive_fees` set from `waiveFees` query param; otherwise `waive_fees = False`"
+   }
+  ],
+  "cost": 0.0037784
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "POST /payment-requests validates request against 'payment_request' schema -> returns Error.INVALID_REQUEST if invalid"
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "POST /payment-requests \u2014 requires auth; checks authorization via check_auth(business_identifier, corp_type_code, contains_role=MAKE_PAYMENT)"
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": true,
+    "quote": "no permission check that enforces staff-only access to waiveFees; no schema validation that waiveFees is actually restricted to staff in this document alone"
+   }
+  ],
+  "cost": 0.009409200000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": true,
+    "quote": "if waived amount > 0 and user does NOT have STAFF role \u2192 raises `BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED)` in `create`."
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0170584
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0155592
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.009586
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": "ENTRY: `_release_payment(invoice)` static; no check in this chunk"
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "ORDER: in `complete_post_invoice`, call `complete_payment(invoice, invoice_reference)`, then call `_release_payment(invoice)`."
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": true,
+    "quote": "logs error, logs payload error message, sends to Sentry with capture_message level='error', swallows exception - method returns None"
+   },
+   {
+    "claim": 6,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 7,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.011885999999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "Sets filing.payment_completion_date, filing.payment_status_code, filing.status, calls filing.save()"
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "then publish_to_emailer; all three final steps wrapped with `suppress(Exception)` so exceptions logged but swallowed, later steps still run."
+   },
+   {
+    "claim": 2,
+    "stated": true,
+    "quote": "publish_to_filer catches all exceptions silently, so failed publish does not prevent emailer publish or mark queue message complete"
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "if `filing.payment_completion_date` already set -> return 200 OK, drop from queue."
+   },
+   {
+    "claim": 4,
+    "stated": true,
+    "quote": "if `filing.filing_type in [\"continuationIn\"]` -> create_staff_review(filing); else publish_to_filer(filing, payment_token)."
+   }
+  ],
+  "cost": 0.0063618
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "if `filing_submission.status == Filing.Status.COMPLETED.value` -> log warning, send to Sentry, return without further action."
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.005602
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "if nested etype in ('dissolution', 'registration', 'changeOfRegistration', 'restoration', 'specialResolution', 'correction', 'amalgamationApplication', 'continuationIn') and option and filingId exist -> message_id = `'{etype}_{option}_{filing_id}'`"
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "if msg.message_seen_count > MSG_RETRY_NUM -> return (False, msg)."
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": true,
+    "quote": "if is_cloud_event_format=False and message_id is None -> return (False, None)."
+   },
+   {
+    "claim": 6,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0160404
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "if filing.payment_completion_date OR filing.source == COLIN -> set filing._status to PAID in receive_before_change."
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": true,
+    "quote": "publishes each filing to queue via `queue_service.publish(subject, msg)` one by one in a loop"
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0123028
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "if filing_core_submission.status == Filing.Status.COMPLETED -> logs warning and returns None, None"
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "filing_submission.transaction_id set, filing_submission status set via set_processed(), filing_submission._meta_data set, business and filing_submission added to session and committed; then if filing type in"
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "email publish wrapped in try/except, catches Exception, sends to Sentry with capture_message(level='error'), swallows exception and continues; event publish wrapped in try/except"
+   },
+   {
+    "claim": 4,
+    "stated": true,
+    "quote": "subsequent steps still run."
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 6,
+    "stated": true,
+    "quote": "QueueException or Exception caught, sent to Sentry via capture_message with level='error', logged with exc_info=True, swallowed (message removed from queue)."
+   },
+   {
+    "claim": 7,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 8,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 9,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0183424
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": true,
+    "quote": "topic=result of `get_topic_for_corp_type(invoice.corp_type_code)`"
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "if corp_type == 'NRO' -> return NAMEX_PAY_TOPIC config"
+   },
+   {
+    "claim": 4,
+    "stated": true,
+    "quote": "if product from code lookup in [Product.BUSINESS, Product.BUSINESS_SEARCH] -> return BUSINESS_PAY_TOPIC"
+   },
+   {
+    "claim": 5,
+    "stated": true,
+    "quote": "if product == Product.STRR -> return STRR_PAY_TOPIC"
+   },
+   {
+    "claim": 6,
+    "stated": true,
+    "quote": "STRR_PAY_TOPIC (defaults to BUSINESS_PAY_TOPIC)"
+   },
+   {
+    "claim": 7,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 8,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 9,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0203126
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "checks `msg.get('paymentToken')` is not None/falsy AND `payment_token.get('corpTypeCode')` is not None/falsy AND `CorpType.find_by_id(corp_type_code)` returns truthy."
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 6,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0117758
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "filing.status = Filing.Status.PAID"
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "filing.status = Filing.Status.AWAITING_REVIEW.value (when staff review created)"
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 6,
+    "stated": true,
+    "quote": "set `filing_submission.payment_completion_date` to current UTC time, commit"
+   },
+   {
+    "claim": 7,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.006724000000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 1,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 6,
+    "stated": true,
+    "quote": "`queue_service.publish(subject, msg)` where `subject = os.getenv('NATS_FILER_SUBJECT', '')` and `msg = {'filing': {'id': filing_id}}`"
+   },
+   {
+    "claim": 7,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.016817
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "minimal Filing model for marking filings as paid in a business payment system"
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "filing.payment_status_code = \"COMPLETED\"; filing.status = Filing.Status.PAID"
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.011726
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "if `payment_token.status_code != \"COMPLETED\"` -> return 200 OK, drop from queue."
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "if `payment_token.corp_type_code in [\"MHR\", \"BTR\"]` -> return 200 OK, drop from queue."
+   },
+   {
+    "claim": 2,
+    "stated": true,
+    "quote": "if `filing.payment_completion_date` already set -> return 200 OK, drop from queue."
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "if filing not found AND above condition false -> return 404 NOT_FOUND, put back on queue."
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 6,
+    "stated": true,
+    "quote": "if `filing_submission.status == Filing.Status.COMPLETED.value` -> log warning, send to Sentry, return without further action."
+   },
+   {
+    "claim": 7,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0178314
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "checks `verify_gcp_jwt(request)` returns falsy (no error), else returns 403 FORBIDDEN."
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "`id_token.verify_oauth2_token(token, requests.Request(), audience=audience)` \u2014 verifies OAuth2 token against audience from config key \"SUB_AUDIENCE\"."
+   },
+   {
+    "claim": 2,
+    "stated": true,
+    "quote": "if `claim[\"email_verified\"]` is false OR `claim[\"email\"]` != `current_app.config.get(\"SUB_SERVICE_ACCOUNT\")` -> set msg to \"Invalid service account or email not verified"
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "`claim[\"email\"]` != `current_app.config.get(\"SUB_SERVICE_ACCOUNT\")` -> set msg to \"Invalid service account or email not verified for email"
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": false,
+    "quote": ""
+   }
+  ],
+  "cost": 0.0090504
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "arm": "notes-ledger",
+  "verdicts": [
+   {
+    "claim": 0,
+    "stated": true,
+    "quote": "queue.publish_json(subject=filer_topic, payload=queue_message) where filer_topic = current_app.config[\"FILER_PUBLISH_OPTIONS\"][\"subject\"], payload from create_filing_msg(filing.id)."
+   },
+   {
+    "claim": 1,
+    "stated": true,
+    "quote": "queue.publish_json(subject=mail_topic, payload=email_msg) where mail_topic = current_app.config[\"EMAIL_PUBLISH_OPTIONS\"][\"subject\"], payload from create_email_msg(filing.id, filing.filing_type)."
+   },
+   {
+    "claim": 2,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 3,
+    "stated": true,
+    "quote": "in publish_to_filer, if `filing.effective_date <= filing.payment_completion_date` -> publish to filer queue; else skip publish (in worker)."
+   },
+   {
+    "claim": 4,
+    "stated": false,
+    "quote": ""
+   },
+   {
+    "claim": 5,
+    "stated": true,
+    "quote": "publishes_json({'filing': {'id': filing.id}}, current_app.config.get('NATS_FILER_SUBJECT'))"
+   }
+  ],
+  "cost": 0.009811199999999999
  }
 ]
