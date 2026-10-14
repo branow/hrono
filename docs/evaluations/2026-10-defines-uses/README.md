@@ -301,3 +301,41 @@ four questions, two runs.
 
 So this run does not test whether richer briefs help; they did not reach
 the agents.
+
+## Round 5 (2026-10-14): recall serves the rebuilt briefs
+
+In rounds 3 and 4 recall came from the v3 tree on the server, and the
+plugin's SessionStart message named the v3x export. So agents got the old
+briefs from recall and two exports to start from.
+
+`harness/tree_v3z.py` copies the v3 tree to `hrono-v3z.db`:
+- the 21 wide leaf briefs and the 6 rebuilt upper briefs are stored;
+- `store_brief` re-splits them into brief passages, and their 1,037 new
+  contents are embedded with the tree's model;
+- no LLM call.
+
+The server on port 8789 served this copy during the runs; the v3 tree was
+restored afterwards. A plugin home `~/hrono-eval/home-v3z`, whose
+`agent.json` names the v3z export, was used. Arm `hrono-v3zr`, Sonnet, the
+four questions, two runs. (A first attempt ran with the server down, so with
+no recall; it is set aside in `runs/void/`.)
+
+| arm | run a | run b | mean | errors a / b |
+|---|---|---|---|---|
+| code only (earlier runs) | 0.52 | 0.46 | 0.49 | 3 / 5 |
+| code + rebuilt sub-tree, recall on its briefs | 0.50 | 0.50 | 0.50 | 4 / 3 |
+
+**What the agents got.**
+- Recall attached about 10,000 characters per prompt. The rebuilt briefs
+  ranked first (694, 577, 645, 833, 620, 834, 796, 797).
+- A wide brief runs 15,000-30,000 characters, so under the 10,000-character
+  cap an agent saw the head of one or two of them.
+- Agents also opened 0-4 rebuilt leaf briefs per run.
+
+**No gain over code only.** With the rebuilt condensations, linked
+condensations in the leaf briefs, wide leaf briefs, rebuilt upper briefs,
+and recall serving them, Sonnet scores 0.50 against 0.49 on the four
+questions.
+
+On these questions the information in the rebuilt briefs does not change
+what Sonnet finds in 30 turns with the code.

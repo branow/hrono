@@ -160,6 +160,12 @@ ROUND_2 = {
         f"hrono-v3z{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
         for run in "ab"
     },
+    # the same, with the server on port 8789 serving hrono-v3z.db (the v3
+    # tree with these briefs stored), so recall attaches the new briefs
+    **{
+        f"hrono-v3zr{run}": (SYSTEM_CODE_R2, MAP_H, None, True, TURNS_H)
+        for run in "ab"
+    },
     # the same once more, after the plugin caps recall at Claude Code's
     # 10,000-character inline limit: above it the v3f runs got a file path
     # and a 2 KB preview, and opened the file in 1 of 15 runs
@@ -186,6 +192,9 @@ def run_round_2(kind, arm, q):
         export, home = EXPORT_V3Y, HRONO_HOME_V3X
     if "-v3z" in arm:
         export, home = EXPORT_V3Z, HRONO_HOME_V3X
+    if "-v3zr" in arm:
+        # its own plugin home, whose agent.json points at the v3z export
+        export, home = EXPORT_V3Z, Path.home() / "hrono-eval" / "home-v3z"
     prompt = ARCH.format(question=q["question"])
     if cwd is not None:
         prompt = prompt.replace(
