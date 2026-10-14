@@ -1,0 +1,678 @@
+{
+ "hard-inconsistency-1": {
+  "structured": {
+   "facts": [
+    {
+     "fact": 0,
+     "claims": [
+      {
+       "claim": "Most filing screens in the filings UI (for example AnnualReport and StandaloneOfficeAddressFiling) put the waive flag in the filing header only when the 'No Fee' option is chosen in the staff payment dialog.",
+       "kind": "local"
+      },
+      {
+       "claim": "The staff payment dialog is shown only to users with the staff role.",
+       "kind": "local"
+      },
+      {
+       "claim": "ContinuationOut.vue always sets header.waiveFees = true without checking the role at that point.",
+       "kind": "local"
+      },
+      {
+       "claim": "ContinuationOut.vue's created() hook throws 'This is a Staff only Filing.' for non-staff users.",
+       "kind": "local"
+      },
+      {
+       "claim": "The staff-only check in ContinuationOut.vue's created() hook means the screen is staff-only despite the unconditional waiveFees assignment.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 1,
+     "claims": [
+      {
+       "claim": "Both legal API versions copy the header's waive flag into the fee lines sent to the payment service.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The legal API does not check the submitter's role when copying the waive flag.",
+       "kind": "local"
+      },
+      {
+       "claim": "Court order, registrar's notation and registrar's order lines get no waiveFees.",
+       "kind": "local"
+      },
+      {
+       "claim": "In v2, put back on and admin freeze lines also get no waiveFees.",
+       "kind": "local"
+      },
+      {
+       "claim": "In v1, the incorporation application line gets no waiveFees.",
+       "kind": "local"
+      },
+      {
+       "claim": "In the legal API, only the routing slip, BCOL and DAT account details are restricted to staff or system tokens.",
+       "kind": "local"
+      }
+     ]
+    },
+    {
+     "fact": 2,
+     "claims": [
+      {
+       "claim": "The legal API creates the invoice by posting to the payment service.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The legal API uses the end user's own bearer token for that post.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The payment service therefore sees the customer, not a privileged service account.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 3,
+     "claims": [
+      {
+       "claim": "The payment service's fee-quote endpoint ignores the waive query parameter unless the caller has the staff role.",
+       "kind": "local"
+      }
+     ]
+    },
+    {
+     "fact": 4,
+     "claims": [
+      {
+       "claim": "The payment service's invoice-creation endpoint checks the request schema.",
+       "kind": "local"
+      },
+      {
+       "claim": "The invoice-creation endpoint checks that the caller has the make-payment permission on the business.",
+       "kind": "local"
+      },
+      {
+       "claim": "The invoice-creation fee calculation passes each line's waive flag straight to the fee schedule with no staff check.",
+       "kind": "local"
+      },
+      {
+       "claim": "The filing-type schema says 'Only for staff users' only in a title string.",
+       "kind": "local"
+      },
+      {
+       "claim": "The filing-type schema does not enforce the staff-only restriction.",
+       "kind": "local"
+      }
+     ]
+    },
+    {
+     "fact": 5,
+     "claims": [
+      {
+       "claim": "When the waive flag is set, the fee schedule zeroes the filing, priority, future-effective and service fees.",
+       "kind": "local"
+      },
+      {
+       "claim": "When the waive flag is set, the fee schedule records the original fixed amount as the waived amount.",
+       "kind": "local"
+      },
+      {
+       "claim": "Creating the invoice's line item refuses a non-staff caller with FEE_OVERRIDE_NOT_ALLOWED.",
+       "kind": "local"
+      },
+      {
+       "claim": "A non-staff user who adds the waive flag to a filing sent to the legal API is refused at invoice creation.",
+       "kind": "connection"
+      },
+      {
+       "claim": "A variable-fee filing, whose waived amount stays 0, slips through the line-item refusal.",
+       "kind": "local"
+      },
+      {
+       "claim": "The fee quote shows the full amount for such a non-staff waive request.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 6,
+     "claims": [
+      {
+       "claim": "The v2 legal API marks a fee line as future-effective only for incorporation, amalgamation, continuation-in, alteration and voluntary dissolution.",
+       "kind": "local"
+      },
+      {
+       "claim": "The v1 legal API marks a fee line as future-effective only for incorporation and voluntary dissolution.",
+       "kind": "local"
+      },
+      {
+       "claim": "The quote endpoint passes the futureEffective query flag for any filing type.",
+       "kind": "local"
+      },
+      {
+       "claim": "FeeSchedule adds the future-effective surcharge whenever the fee schedule has a future_effective_fee configured and filing fees apply to the account.",
+       "kind": "local"
+      },
+      {
+       "claim": "Quotes and invoices can disagree on future-effective surcharges.",
+       "kind": "connection"
+      }
+     ]
+    }
+   ]
+  },
+  "text": "{\"facts\":[{\"fact\":0,\"claims\":[{\"claim\":\"Most filing screens in the filings UI (for example AnnualReport and StandaloneOfficeAddressFiling) put the waive flag in the filing header only when the 'No Fee' option is chosen in the staff payment dialog.\",\"kind\":\"local\"},{\"claim\":\"The staff payment dialog is shown only to users with the staff role.\",\"kind\":\"local\"},{\"claim\":\"ContinuationOut.vue always sets header.waiveFees = true without checking the role at that point.\",\"kind\":\"local\"},{\"claim\":\"ContinuationOut.vue's created() hook throws 'This is a Staff only Filing.' for non-staff users.\",\"kind\":\"local\"},{\"claim\":\"The staff-only check in ContinuationOut.vue's created() hook means the screen is staff-only despite the unconditional waiveFees assignment.\",\"kind\":\"connection\"}]},{\"fact\":1,\"claims\":[{\"claim\":\"Both legal API versions copy the header's waive flag into the fee lines sent to the payment service.\",\"kind\":\"connection\"},{\"claim\":\"The legal API does not check the submitter's role when copying the waive flag.\",\"kind\":\"local\"},{\"claim\":\"Court order, registrar's notation and registrar's order lines get no waiveFees.\",\"kind\":\"local\"},{\"claim\":\"In v2, put back on and admin freeze lines also get no waiveFees.\",\"kind\":\"local\"},{\"claim\":\"In v1, the incorporation application line gets no waiveFees.\",\"kind\":\"local\"},{\"claim\":\"In the legal API, only the routing slip, BCOL and DAT account details are restricted to staff or system tokens.\",\"kind\":\"local\"}]},{\"fact\":2,\"claims\":[{\"claim\":\"The legal API creates the invoice by posting to the payment service.\",\"kind\":\"connection\"},{\"claim\":\"The legal API uses the end user's own bearer token for that post.\",\"kind\":\"connection\"},{\"claim\":\"The payment service therefore sees the customer, not a privileged service account.\",\"kind\":\"connection\"}]},{\"fact\":3,\"claims\":[{\"claim\":\"The payment service's fee-quote endpoint ignores the waive query parameter unless the caller has the staff role.\",\"kind\":\"local\"}]},{\"fact\":4,\"claims\":[{\"claim\":\"The payment service's invoice-creation endpoint checks the request schema.\",\"kind\":\"local\"},{\"claim\":\"The invoice-creation endpoint checks that the caller has the make-payment permission on the business.\",\"kind\":\"local\"},{\"claim\":\"The invoice-creation fee calculation passes each line's waive flag straight to the fee schedule with no staff check.\",\"kind\":\"local\"},{\"claim\":\"The filing-type schema says 'Only for staff users' only in a title string.\",\"kind\":\"local\"},{\"claim\":\"The filing-type schema does not enforce the staff-only restriction.\",\"kind\":\"local\"}]},{\"fact\":5,\"claims\":[{\"claim\":\"When the waive flag is set, the fee schedule zeroes the filing, priority, future-effective and service fees.\",\"kind\":\"local\"},{\"claim\":\"When the waive flag is set, the fee schedule records the original fixed amount as the waived amount.\",\"kind\":\"local\"},{\"claim\":\"Creating the invoice's line item refuses a non-staff caller with FEE_OVERRIDE_NOT_ALLOWED.\",\"kind\":\"local\"},{\"claim\":\"A non-staff user who adds the waive flag to a filing sent to the legal API is refused at invoice creation.\",\"kind\":\"connection\"},{\"claim\":\"A variable-fee filing, whose waived amount stays 0, slips through the line-item refusal.\",\"kind\":\"local\"},{\"claim\":\"The fee quote shows the full amount for such a non-staff waive request.\",\"kind\":\"connection\"}]},{\"fact\":6,\"claims\":[{\"claim\":\"The v2 legal API marks a fee line as future-effective only for incorporation, amalgamation, continuation-in, alteration and voluntary dissolution.\",\"kind\":\"local\"},{\"claim\":\"The v1 legal API marks a fee line as future-effective only for incorporation and voluntary dissolution.\",\"kind\":\"local\"},{\"claim\":\"The quote endpoint passes the futureEffective query flag for any filing type.\",\"kind\":\"local\"},{\"claim\":\"FeeSchedule adds the future-effective surcharge whenever the fee schedule has a future_effective_fee configured and filing fees apply to the account.\",\"kind\":\"local\"},{\"claim\":\"Quotes and invoices can disagree on future-effective surcharges.\",\"kind\":\"connection\"}]}]}",
+  "cost": 0.026294
+ },
+ "hard-failure-1": {
+  "structured": {
+   "facts": [
+    {
+     "fact": 0,
+     "claims": [
+      {
+       "claim": "For credit card/PayBC payments, a failed payment event publish is marked by PaymentTransaction.publish_status as EVENT_FAILED.",
+       "kind": "local"
+      },
+      {
+       "claim": "find_stale_records excludes only COMPLETED, CANCELLED and FAILED transactions.",
+       "kind": "local"
+      },
+      {
+       "claim": "find_stale_records is limited to the CC and DIRECT_PAY payment methods.",
+       "kind": "local"
+      },
+      {
+       "claim": "The stale-payment job finds the EVENT_FAILED transaction.",
+       "kind": "connection"
+      },
+      {
+       "claim": "update_transaction republishes the event for each invoice when the payment is already COMPLETED.",
+       "kind": "local"
+      },
+      {
+       "claim": "The stale-payment job's update_transaction repairs a failed publish by republishing, based on the EVENT_FAILED status.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 1,
+     "claims": [
+      {
+       "claim": "For BCOL drawdown, internal, PAD, EFT and EJV, the event is sent by BasePaymentSystemService._release_payment.",
+       "kind": "local"
+      },
+      {
+       "claim": "_release_payment is called from complete_post_invoice.",
+       "kind": "connection"
+      },
+      {
+       "claim": "For PAD, EFT and EJV the event is sent when the invoice is created, not when the money is collected.",
+       "kind": "local"
+      },
+      {
+       "claim": "Online banking only uses _release_payment when a credit is applied (apply_credit).",
+       "kind": "local"
+      },
+      {
+       "claim": "A normal online-banking payment is released by pay-queue's payment_reconciliations._publish_payment_event.",
+       "kind": "local"
+      },
+      {
+       "claim": "In these paths a failed publish is only logged and sent to Sentry with capture_message.",
+       "kind": "local"
+      },
+      {
+       "claim": "No failure status is saved in these paths.",
+       "kind": "local"
+      },
+      {
+       "claim": "Because no failure status is saved, no job retries a failed publish in these paths.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 2,
+     "claims": [
+      {
+       "claim": "The GCP business-pay consumer first saves payment_completion_date, the status PAID and the payment status.",
+       "kind": "local"
+      },
+      {
+       "claim": "It then publishes to the filer and the emailer inside suppress(Exception).",
+       "kind": "connection"
+      },
+      {
+       "claim": "A failed publish there is silently lost.",
+       "kind": "local"
+      },
+      {
+       "claim": "A later duplicate payment event is dropped because payment_completion_date is already set.",
+       "kind": "local"
+      },
+      {
+       "claim": "For continuationIn it creates a staff Review and sets AWAITING_REVIEW instead of sending the filing to the filer.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 3,
+     "claims": [
+      {
+       "claim": "The legacy NATS entity-pay consumer treats a message as a duplicate only if the filing is already COMPLETED.",
+       "kind": "local"
+      },
+      {
+       "claim": "A second delivery for a filing that is PAID but not yet applied resets payment_completion_date.",
+       "kind": "local"
+      },
+      {
+       "claim": "A second delivery for a PAID but not yet applied filing sends the PAID email again.",
+       "kind": "connection"
+      },
+      {
+       "claim": "A second delivery for a PAID but not yet applied filing publishes to the filer again.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The legacy NATS entity-pay consumer has no staff-review branch.",
+       "kind": "local"
+      },
+      {
+       "claim": "It would therefore send a continuationIn straight to the filer.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 4,
+     "claims": [
+      {
+       "claim": "The emailer tracker builds '<type>_<option>_<filingId>' as message id only for certain filing types.",
+       "kind": "local"
+      },
+      {
+       "claim": "The tracked types are incorporationApplication, annualReport, changeOfDirectors, changeOfAddress, alteration, dissolution, registration, changeOfRegistration, restoration, specialResolution, correction, amalgamationApplication and continuationIn.",
+       "kind": "local"
+      },
+      {
+       "claim": "The tracker skips any id already seen whose status is not FAILED.",
+       "kind": "local"
+      },
+      {
+       "claim": "The tracker stops retrying a FAILED id once message_seen_count exceeds MSG_RETRY_NUM.",
+       "kind": "local"
+      },
+      {
+       "claim": "For any other filing type message_id is None.",
+       "kind": "local"
+      },
+      {
+       "claim": "When message_id is None, is_processable_message returns False.",
+       "kind": "local"
+      },
+      {
+       "claim": "Such a message is not processed at all by the emailer.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 5,
+     "claims": [
+      {
+       "claim": "The legal-api before_update listener derives the PAID status from payment_completion_date.",
+       "kind": "local"
+      },
+      {
+       "claim": "The scheduled future-effective-filings job asks legal-api's internal endpoint for every PAID or APPROVED filing whose effective_date is now or earlier.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The job puts each such filing back on the filer subject.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The job therefore also re-drives lost non-future-effective filings.",
+       "kind": "connection"
+      },
+      {
+       "claim": "This is the only automatic repair for a paid filing that never reached the filer, and it is indirect.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 6,
+     "claims": [
+      {
+       "claim": "The filer skips filings already COMPLETED.",
+       "kind": "local"
+      },
+      {
+       "claim": "The filer commits transaction_id (status COMPLETED) before the side effects run.",
+       "kind": "local"
+      },
+      {
+       "claim": "update_affiliation catches every error and only reports it to Sentry (business_profile.py:142).",
+       "kind": "local"
+      },
+      {
+       "claim": "The completed email, publish_event and the GCP event each have their own try/except.",
+       "kind": "local"
+      },
+      {
+       "claim": "A failure in one of the email, publish_event or GCP event steps does not stop the others.",
+       "kind": "local"
+      },
+      {
+       "claim": "An uncaught exception in consume_nr, update_business_profile, update_entity or publish_mras_email skips the steps after it.",
+       "kind": "local"
+      },
+      {
+       "claim": "The generic handler absorbs that exception and the message is removed from the queue.",
+       "kind": "connection"
+      },
+      {
+       "claim": "Replaying is a no-op because the filer skips COMPLETED filings.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The future-effective job only selects PAID/APPROVED filings, so it does not select these COMPLETED filings.",
+       "kind": "connection"
+      },
+      {
+       "claim": "Nothing repairs the missing affiliation, profile, email or event.",
+       "kind": "connection"
+      }
+     ]
+    }
+   ]
+  },
+  "text": "{\"facts\":[{\"fact\":0,\"claims\":[{\"claim\":\"For credit card/PayBC payments, a failed payment event publish is marked by PaymentTransaction.publish_status as EVENT_FAILED.\",\"kind\":\"local\"},{\"claim\":\"find_stale_records excludes only COMPLETED, CANCELLED and FAILED transactions.\",\"kind\":\"local\"},{\"claim\":\"find_stale_records is limited to the CC and DIRECT_PAY payment methods.\",\"kind\":\"local\"},{\"claim\":\"The stale-payment job finds the EVENT_FAILED transaction.\",\"kind\":\"connection\"},{\"claim\":\"update_transaction republishes the event for each invoice when the payment is already COMPLETED.\",\"kind\":\"local\"},{\"claim\":\"The stale-payment job's update_transaction repairs a failed publish by republishing, based on the EVENT_FAILED status.\",\"kind\":\"connection\"}]},{\"fact\":1,\"claims\":[{\"claim\":\"For BCOL drawdown, internal, PAD, EFT and EJV, the event is sent by BasePaymentSystemService._release_payment.\",\"kind\":\"local\"},{\"claim\":\"_release_payment is called from complete_post_invoice.\",\"kind\":\"connection\"},{\"claim\":\"For PAD, EFT and EJV the event is sent when the invoice is created, not when the money is collected.\",\"kind\":\"local\"},{\"claim\":\"Online banking only uses _release_payment when a credit is applied (apply_credit).\",\"kind\":\"local\"},{\"claim\":\"A normal online-banking payment is released by pay-queue's payment_reconciliations._publish_payment_event.\",\"kind\":\"local\"},{\"claim\":\"In these paths a failed publish is only logged and sent to Sentry with capture_message.\",\"kind\":\"local\"},{\"claim\":\"No failure status is saved in these paths.\",\"kind\":\"local\"},{\"claim\":\"Because no failure status is saved, no job retries a failed publish in these paths.\",\"kind\":\"connection\"}]},{\"fact\":2,\"claims\":[{\"claim\":\"The GCP business-pay consumer first saves payment_completion_date, the status PAID and the payment status.\",\"kind\":\"local\"},{\"claim\":\"It then publishes to the filer and the emailer inside suppress(Exception).\",\"kind\":\"connection\"},{\"claim\":\"A failed publish there is silently lost.\",\"kind\":\"local\"},{\"claim\":\"A later duplicate payment event is dropped because payment_completion_date is already set.\",\"kind\":\"local\"},{\"claim\":\"For continuationIn it creates a staff Review and sets AWAITING_REVIEW instead of sending the filing to the filer.\",\"kind\":\"connection\"}]},{\"fact\":3,\"claims\":[{\"claim\":\"The legacy NATS entity-pay consumer treats a message as a duplicate only if the filing is already COMPLETED.\",\"kind\":\"local\"},{\"claim\":\"A second delivery for a filing that is PAID but not yet applied resets payment_completion_date.\",\"kind\":\"local\"},{\"claim\":\"A second delivery for a PAID but not yet applied filing sends the PAID email again.\",\"kind\":\"connection\"},{\"claim\":\"A second delivery for a PAID but not yet applied filing publishes to the filer again.\",\"kind\":\"connection\"},{\"claim\":\"The legacy NATS entity-pay consumer has no staff-review branch.\",\"kind\":\"local\"},{\"claim\":\"It would therefore send a continuationIn straight to the filer.\",\"kind\":\"connection\"}]},{\"fact\":4,\"claims\":[{\"claim\":\"The emailer tracker builds '<type>_<option>_<filingId>' as message id only for certain filing types.\",\"kind\":\"local\"},{\"claim\":\"The tracked types are incorporationApplication, annualReport, changeOfDirectors, changeOfAddress, alteration, dissolution, registration, changeOfRegistration, restoration, specialResolution, correction, amalgamationApplication and continuationIn.\",\"kind\":\"local\"},{\"claim\":\"The tracker skips any id already seen whose status is not FAILED.\",\"kind\":\"local\"},{\"claim\":\"The tracker stops retrying a FAILED id once message_seen_count exceeds MSG_RETRY_NUM.\",\"kind\":\"local\"},{\"claim\":\"For any other filing type message_id is None.\",\"kind\":\"local\"},{\"claim\":\"When message_id is None, is_processable_message returns False.\",\"kind\":\"local\"},{\"claim\":\"Such a message is not processed at all by the emailer.\",\"kind\":\"connection\"}]},{\"fact\":5,\"claims\":[{\"claim\":\"The legal-api before_update listener derives the PAID status from payment_completion_date.\",\"kind\":\"local\"},{\"claim\":\"The scheduled future-effective-filings job asks legal-api's internal endpoint for every PAID or APPROVED filing whose effective_date is now or earlier.\",\"kind\":\"connection\"},{\"claim\":\"The job puts each such filing back on the filer subject.\",\"kind\":\"connection\"},{\"claim\":\"The job therefore also re-drives lost non-future-effective filings.\",\"kind\":\"connection\"},{\"claim\":\"This is the only automatic repair for a paid filing that never reached the filer, and it is indirect.\",\"kind\":\"connection\"}]},{\"fact\":6,\"claims\":[{\"claim\":\"The filer skips filings already COMPLETED.\",\"kind\":\"local\"},{\"claim\":\"The filer commits transaction_id (status COMPLETED) before the side effects run.\",\"kind\":\"local\"},{\"claim\":\"update_affiliation catches every error and only reports it to Sentry (business_profile.py:142).\",\"kind\":\"local\"},{\"claim\":\"The completed email, publish_event and the GCP event each have their own try/except.\",\"kind\":\"local\"},{\"claim\":\"A failure in one of the email, publish_event or GCP event steps does not stop the others.\",\"kind\":\"local\"},{\"claim\":\"An uncaught exception in consume_nr, update_business_profile, update_entity or publish_mras_email skips the steps after it.\",\"kind\":\"local\"},{\"claim\":\"The generic handler absorbs that exception and the message is removed from the queue.\",\"kind\":\"connection\"},{\"claim\":\"Replaying is a no-op because the filer skips COMPLETED filings.\",\"kind\":\"connection\"},{\"claim\":\"The future-effective job only selects PAID/APPROVED filings, so it does not select these COMPLETED filings.\",\"kind\":\"connection\"},{\"claim\":\"Nothing repairs the missing affiliation, profile, email or event.\",\"kind\":\"connection\"}]}]}",
+  "cost": 0.034075
+ },
+ "hard-legacy-0": {
+  "structured": {
+   "facts": [
+    {
+     "fact": 0,
+     "claims": [
+      {
+       "claim": "The pay API publishes payment-completed events only as GCP Pub/Sub CloudEvents.",
+       "kind": "local"
+      },
+      {
+       "claim": "The pay API publishes payment-failed events only as GCP Pub/Sub CloudEvents.",
+       "kind": "local"
+      },
+      {
+       "claim": "The pay API chooses the topic from the invoice's corp type.",
+       "kind": "local"
+      },
+      {
+       "claim": "NRO goes to NAMEX_PAY_TOPIC.",
+       "kind": "local"
+      },
+      {
+       "claim": "The BUSINESS and BUSINESS_SEARCH products go to BUSINESS_PAY_TOPIC.",
+       "kind": "local"
+      },
+      {
+       "claim": "STRR goes to STRR_PAY_TOPIC.",
+       "kind": "local"
+      },
+      {
+       "claim": "STRR_PAY_TOPIC defaults to BUSINESS_PAY_TOPIC.",
+       "kind": "local"
+      },
+      {
+       "claim": "Nothing in the pay API publishes these events to NATS.",
+       "kind": "local"
+      },
+      {
+       "claim": "The old entity-pay listener subscribes only to NATS.",
+       "kind": "local"
+      },
+      {
+       "claim": "Because the pay API publishes only to Pub/Sub and entity-pay only listens on NATS, entity-pay does not receive the pay API's payment events today.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 1,
+     "claims": [
+      {
+       "claim": "The pay API puts a flat camelized payment token directly into the CloudEvent data.",
+       "kind": "local"
+      },
+      {
+       "claim": "The payment token is built from invoice id, status, filing id and corp type.",
+       "kind": "local"
+      },
+      {
+       "claim": "The old entity-pay worker only processes JSON with a top-level 'paymentToken' wrapper.",
+       "kind": "local"
+      },
+      {
+       "claim": "The entity-pay worker requires the corpTypeCode to exist in lear's CorpType table.",
+       "kind": "local"
+      },
+      {
+       "claim": "The new business-pay worker reads ce.data with type 'bc.registry.payment'.",
+       "kind": "local"
+      },
+      {
+       "claim": "The business-pay worker converts the keys to snake_case.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay would silently skip every event the pay API currently sends, because the flat token lacks the 'paymentToken' wrapper.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 2,
+     "claims": [
+      {
+       "claim": "The staff-review gate exists only in business-pay.",
+       "kind": "connection"
+      },
+      {
+       "claim": "business-pay marks the filing PAID.",
+       "kind": "local"
+      },
+      {
+       "claim": "For continuationIn, business-pay creates a Review row with AWAITING_REVIEW.",
+       "kind": "local"
+      },
+      {
+       "claim": "For continuationIn, business-pay sets the filing to AWAITING_REVIEW.",
+       "kind": "local"
+      },
+      {
+       "claim": "For continuationIn, business-pay does not publish to the filer.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay has no review logic.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay sets the payment completion date.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay publishes non-future-effective filings straight to the filer.",
+       "kind": "local"
+      }
+     ]
+    },
+    {
+     "fact": 3,
+     "claims": [
+      {
+       "claim": "The entity-filer only skips filings that are already COMPLETED.",
+       "kind": "local"
+      },
+      {
+       "claim": "legal-api's before-insert/update listener sets a filing to PAID when it has a payment completion date and no transaction_id.",
+       "kind": "local"
+      },
+      {
+       "claim": "That listener skips filings in AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED, or APPROVED without a transaction.",
+       "kind": "local"
+      },
+      {
+       "claim": "In the old path a PENDING continuation-in filing never reaches AWAITING_REVIEW.",
+       "kind": "connection"
+      },
+      {
+       "claim": "In the old path a PENDING continuation-in filing becomes PAID via the legal-api listener.",
+       "kind": "connection"
+      },
+      {
+       "claim": "The future-effective-filings job asks legal-api for every PAID or APPROVED filing whose effective date has passed.",
+       "kind": "local"
+      },
+      {
+       "claim": "The future-effective-filings job pushes those filings onto the NATS filer subject.",
+       "kind": "local"
+      },
+      {
+       "claim": "Nothing downstream re-checks review status, so restoring the old path would let unreviewed continuation-in filings through.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 4,
+     "claims": [
+      {
+       "claim": "business-pay uses its own cut-down Filing model on the same filings table.",
+       "kind": "local"
+      },
+      {
+       "claim": "business-pay sets status PAID and payment_status_code itself.",
+       "kind": "local"
+      },
+      {
+       "claim": "legal-api's before-insert/update status listener doesn't run in business-pay.",
+       "kind": "connection"
+      },
+      {
+       "claim": "A change to status rules in legal_api/models/filing.py won't apply to the live payment path unless also copied into business-pay.",
+       "kind": "connection"
+      }
+     ]
+    },
+    {
+     "fact": 5,
+     "claims": [
+      {
+       "claim": "business-pay drops any non-COMPLETED token, including 'TRANSACTION_FAILED'.",
+       "kind": "local"
+      },
+      {
+       "claim": "business-pay hard-codes skips for MHR and BTR.",
+       "kind": "local"
+      },
+      {
+       "claim": "business-pay treats a set payment completion date as a duplicate.",
+       "kind": "local"
+      },
+      {
+       "claim": "When no filing is found, business-pay returns 404 so Pub/Sub redelivers, unless the corp type is BC with no filing identifier.",
+       "kind": "local"
+      },
+      {
+       "claim": "Product events routed to the business topic with no lear filing (e.g. STRR on the default topic) are redelivered over and over.",
+       "connection": "connection",
+       "kind": "connection"
+      },
+      {
+       "claim": "entity-pay polls 5 times.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay treats only a COMPLETED filing as a duplicate.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay swallows not-found errors.",
+       "kind": "local"
+      }
+     ]
+    },
+    {
+     "fact": 6,
+     "claims": [
+      {
+       "claim": "business-pay calls verify_gcp_jwt and returns 403 if verification fails.",
+       "kind": "local"
+      },
+      {
+       "claim": "The bearer token must pass id_token.verify_oauth2_token for SUB_AUDIENCE.",
+       "kind": "local"
+      },
+      {
+       "claim": "The token must have email_verified true.",
+       "kind": "local"
+      },
+      {
+       "claim": "The token email must equal SUB_SERVICE_ACCOUNT.",
+       "kind": "local"
+      },
+      {
+       "claim": "The check runs after the empty-body check, so a request with no body gets 200 without authentication.",
+       "kind": "local"
+      },
+      {
+       "claim": "entity-pay does no authentication on its NATS subject.",
+       "kind": "local"
+      }
+     ]
+    },
+    {
+     "fact": 7,
+     "claims": [
+      {
+       "claim": "business-pay publishes {'filing': {'id'}} to the filer subject over NATS/STAN.",
+       "kind": "connection"
+      },
+      {
+       "claim": "business-pay publishes an email with option 'PAID' to the emailer subject.",
+       "kind": "connection"
+      },
+      {
+       "claim": "business-pay publishes through its own QueueService inside suppress(Exception).",
+       "kind": "local"
+      },
+      {
+       "claim": "business-pay sends to the filer only when effective_date is on or before payment_completion_date.",
+       "kind": "local"
+      },
+      {
+       "claim": "A missing effective date or a publish failure is swallowed after the filing is already marked PAID.",
+       "kind": "local"
+      },
+      {
+       "claim": "The staff review endpoint publishes approvals to the same NATS filer subject.",
+       "connection": "connection",
+       "kind": "connection"
+      }
+     ]
+    }
+   ]
+  },
+  "text": "{\"facts\":[{\"fact\":0,\"claims\":[{\"claim\":\"The pay API publishes payment-completed events only as GCP Pub/Sub CloudEvents.\",\"kind\":\"local\"},{\"claim\":\"The pay API publishes payment-failed events only as GCP Pub/Sub CloudEvents.\",\"kind\":\"local\"},{\"claim\":\"The pay API chooses the topic from the invoice's corp type.\",\"kind\":\"local\"},{\"claim\":\"NRO goes to NAMEX_PAY_TOPIC.\",\"kind\":\"local\"},{\"claim\":\"The BUSINESS and BUSINESS_SEARCH products go to BUSINESS_PAY_TOPIC.\",\"kind\":\"local\"},{\"claim\":\"STRR goes to STRR_PAY_TOPIC.\",\"kind\":\"local\"},{\"claim\":\"STRR_PAY_TOPIC defaults to BUSINESS_PAY_TOPIC.\",\"kind\":\"local\"},{\"claim\":\"Nothing in the pay API publishes these events to NATS.\",\"kind\":\"local\"},{\"claim\":\"The old entity-pay listener subscribes only to NATS.\",\"kind\":\"local\"},{\"claim\":\"Because the pay API publishes only to Pub/Sub and entity-pay only listens on NATS, entity-pay does not receive the pay API's payment events today.\",\"kind\":\"connection\"}]},{\"fact\":1,\"claims\":[{\"claim\":\"The pay API puts a flat camelized payment token directly into the CloudEvent data.\",\"kind\":\"local\"},{\"claim\":\"The payment token is built from invoice id, status, filing id and corp type.\",\"kind\":\"local\"},{\"claim\":\"The old entity-pay worker only processes JSON with a top-level 'paymentToken' wrapper.\",\"kind\":\"local\"},{\"claim\":\"The entity-pay worker requires the corpTypeCode to exist in lear's CorpType table.\",\"kind\":\"local\"},{\"claim\":\"The new business-pay worker reads ce.data with type 'bc.registry.payment'.\",\"kind\":\"local\"},{\"claim\":\"The business-pay worker converts the keys to snake_case.\",\"kind\":\"local\"},{\"claim\":\"entity-pay would silently skip every event the pay API currently sends, because the flat token lacks the 'paymentToken' wrapper.\",\"kind\":\"connection\"}]},{\"fact\":2,\"claims\":[{\"claim\":\"The staff-review gate exists only in business-pay.\",\"kind\":\"connection\"},{\"claim\":\"business-pay marks the filing PAID.\",\"kind\":\"local\"},{\"claim\":\"For continuationIn, business-pay creates a Review row with AWAITING_REVIEW.\",\"kind\":\"local\"},{\"claim\":\"For continuationIn, business-pay sets the filing to AWAITING_REVIEW.\",\"kind\":\"local\"},{\"claim\":\"For continuationIn, business-pay does not publish to the filer.\",\"kind\":\"local\"},{\"claim\":\"entity-pay has no review logic.\",\"kind\":\"local\"},{\"claim\":\"entity-pay sets the payment completion date.\",\"kind\":\"local\"},{\"claim\":\"entity-pay publishes non-future-effective filings straight to the filer.\",\"kind\":\"local\"}]},{\"fact\":3,\"claims\":[{\"claim\":\"The entity-filer only skips filings that are already COMPLETED.\",\"kind\":\"local\"},{\"claim\":\"legal-api's before-insert/update listener sets a filing to PAID when it has a payment completion date and no transaction_id.\",\"kind\":\"local\"},{\"claim\":\"That listener skips filings in AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED, or APPROVED without a transaction.\",\"kind\":\"local\"},{\"claim\":\"In the old path a PENDING continuation-in filing never reaches AWAITING_REVIEW.\",\"kind\":\"connection\"},{\"claim\":\"In the old path a PENDING continuation-in filing becomes PAID via the legal-api listener.\",\"kind\":\"connection\"},{\"claim\":\"The future-effective-filings job asks legal-api for every PAID or APPROVED filing whose effective date has passed.\",\"kind\":\"local\"},{\"claim\":\"The future-effective-filings job pushes those filings onto the NATS filer subject.\",\"kind\":\"local\"},{\"claim\":\"Nothing downstream re-checks review status, so restoring the old path would let unreviewed continuation-in filings through.\",\"kind\":\"connection\"}]},{\"fact\":4,\"claims\":[{\"claim\":\"business-pay uses its own cut-down Filing model on the same filings table.\",\"kind\":\"local\"},{\"claim\":\"business-pay sets status PAID and payment_status_code itself.\",\"kind\":\"local\"},{\"claim\":\"legal-api's before-insert/update status listener doesn't run in business-pay.\",\"kind\":\"connection\"},{\"claim\":\"A change to status rules in legal_api/models/filing.py won't apply to the live payment path unless also copied into business-pay.\",\"kind\":\"connection\"}]},{\"fact\":5,\"claims\":[{\"claim\":\"business-pay drops any non-COMPLETED token, including 'TRANSACTION_FAILED'.\",\"kind\":\"local\"},{\"claim\":\"business-pay hard-codes skips for MHR and BTR.\",\"kind\":\"local\"},{\"claim\":\"business-pay treats a set payment completion date as a duplicate.\",\"kind\":\"local\"},{\"claim\":\"When no filing is found, business-pay returns 404 so Pub/Sub redelivers, unless the corp type is BC with no filing identifier.\",\"kind\":\"local\"},{\"claim\":\"Product events routed to the business topic with no lear filing (e.g. STRR on the default topic) are redelivered over and over.\",\"connection\":\"connection\",\"kind\":\"connection\"},{\"claim\":\"entity-pay polls 5 times.\",\"kind\":\"local\"},{\"claim\":\"entity-pay treats only a COMPLETED filing as a duplicate.\",\"kind\":\"local\"},{\"claim\":\"entity-pay swallows not-found errors.\",\"kind\":\"local\"}]},{\"fact\":6,\"claims\":[{\"claim\":\"business-pay calls verify_gcp_jwt and returns 403 if verification fails.\",\"kind\":\"local\"},{\"claim\":\"The bearer token must pass id_token.verify_oauth2_token for SUB_AUDIENCE.\",\"kind\":\"local\"},{\"claim\":\"The token must have email_verified true.\",\"kind\":\"local\"},{\"claim\":\"The token email must equal SUB_SERVICE_ACCOUNT.\",\"kind\":\"local\"},{\"claim\":\"The check runs after the empty-body check, so a request with no body gets 200 without authentication.\",\"kind\":\"local\"},{\"claim\":\"entity-pay does no authentication on its NATS subject.\",\"kind\":\"local\"}]},{\"fact\":7,\"claims\":[{\"claim\":\"business-pay publishes {'filing': {'id'}} to the filer subject over NATS/STAN.\",\"kind\":\"connection\"},{\"claim\":\"business-pay publishes an email with option 'PAID' to the emailer subject.\",\"kind\":\"connection\"},{\"claim\":\"business-pay publishes through its own QueueService inside suppress(Exception).\",\"kind\":\"local\"},{\"claim\":\"business-pay sends to the filer only when effective_date is on or before payment_completion_date.\",\"kind\":\"local\"},{\"claim\":\"A missing effective date or a publish failure is swallowed after the filing is already marked PAID.\",\"kind\":\"local\"},{\"claim\":\"The staff review endpoint publishes approvals to the same NATS filer subject.\",\"connection\":\"connection\",\"kind\":\"connection\"}]}]}",
+  "cost": 0.038599
+ }
+}
