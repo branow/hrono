@@ -615,6 +615,33 @@ CONNECT = (
     "only as far as the connection needs."
 )
 
+RATE = (
+    "Return the description in markdown as `brief`. Then, in `linked`, rate "
+    "each source of the CONNECTED ELSEWHERE block by its label ([L1], [L2], "
+    "...): `used` true if it shaped what you wrote about a connection, false "
+    "if it only shares a name with this part and does not matter to it; "
+    "`why` in a few words."
+)
+RATED = {
+    "type": "object",
+    "properties": {
+        "brief": {"type": "string"},
+        "linked": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string"},
+                    "used": {"type": "boolean"},
+                    "why": {"type": "string"},
+                },
+                "required": ["label", "used", "why"],
+            },
+        },
+    },
+    "required": ["brief", "linked"],
+}
+
 WORDS = 220  # of a linked section's notes shown in a block
 LINKED = 12  # linked sections at most per leaf
 
@@ -630,10 +657,17 @@ def brief_template(conn, variant: str) -> str:
         CHECKS + "\n\nOutput only the description",
         1,
     )
-    if variant == "B":
+    if variant in ("B", "BL"):
         template = template.replace(
             "\n\nLeave out:", CONNECT + "\n\nLeave out:", 1
         )
+    if variant == "BL":
+        template = template.replace(
+            "Output only the description in markdown, nothing else.",
+            RATE,
+            1,
+        )
+        assert RATE in template
     assert CHECKS in template
     return template
 
@@ -644,7 +678,13 @@ def clip(text: str, n: int = WORDS) -> str:
 
 
 def linked_block(
-    node: int, links: list[dict], condensed: dict, title: dict, conn
+    node: int,
+    links: list[dict],
+    condensed: dict,
+    title: dict,
+    conn,
+    notes=None,
+    labels: bool = False,
 ) -> str:
     """The notes of sections in other leaves this leaf is linked to, either
     way, rarest name first."""
@@ -682,16 +722,19 @@ def linked_block(
         if len(seen) >= LINKED:
             break
     blocks = []
-    for sid, (other_leaf, how) in seen.items():
+    for n, (sid, (other_leaf, how)) in enumerate(seen.items(), 1):
         got = condensed.get(str(sid))
         text = (
-            got["structured"]["condensed"]
+            notes(sid)
+            if notes
+            else got["structured"]["condensed"]
             if got
             else stored_condensation(conn, sid)
         )
         path = got["path"] if got else "?"
+        label = f"[L{n}] " if labels else ""
         blocks.append(
-            f'--- {path}, in "{title.get(other_leaf, "?")[:80]}"\n'
+            f'--- {label}{path}, in "{title.get(other_leaf, "?")[:80]}"\n'
             f"Link: {how}\n{clip(text)}"
         )
     return "\n\n".join(blocks)
@@ -704,7 +747,8 @@ def brief(variant: str) -> None:
     conn = c.connect()
     template = brief_template(conn, variant)
     condensed = all_condensed()
-    links = load("links.json") if variant == "B" else []
+    links = load("links.json") if variant in ("B", "BL") else []
+    ledger = load("ledger.json") if variant == "BL" else {}
     title = sl.titles(conn)
     out_name = f"briefs-{variant}.json"
     out = load(out_name)
@@ -716,27 +760,44 @@ def brief(variant: str) -> None:
             "WHERE m.node_id = ? ORDER BY s.uri, s.id",
             (node,),
         ).fetchall()
-        pairs = []
-        for sid, path in rows:
+
+        def notes(sid: int) -> str:
+            if ledger:
+                if str(sid) in ledger:
+                    return ledger[str(sid)]["text"]
+                return stored_condensation(conn2, sid)
             got = condensed.get(str(sid))
-            pairs.append(
-                (
-                    path,
-                    got["structured"]["condensed"]
-                    if got
-                    else stored_condensation(conn2, sid),
-                )
+            return (
+                got["structured"]["condensed"]
+                if got
+                else stored_condensation(conn2, sid)
             )
+
+        pairs = [(path, notes(sid)) for sid, path in rows]
         content = labeled(pairs)
         block = ""
-        if variant == "B":
-            block = linked_block(node, links, condensed, title, conn2)
+        if variant in ("B", "BL"):
+            block = linked_block(
+                node,
+                links,
+                condensed,
+                title,
+                conn2,
+                notes if ledger else None,
+                variant == "BL",
+            )
             if block:
                 content += (
                     "\n\n=== CONNECTED ELSEWHERE (not part of this part) ===\n"
                     + block
                 )
-        got = ask(template.replace("{content}", content), SONNET)
+        if variant == "BL":
+            got = ask(template.replace("{content}", content), SONNET, RATED)
+            rated = got.get("structured") or {}
+            got["text"] = rated.get("brief")
+            got["linked"] = rated.get("linked")
+        else:
+            got = ask(template.replace("{content}", content), SONNET)
         return str(node), {**got, "block": block}
 
     todo = [n for n in slice_leaves(conn) if str(n) not in out]
@@ -970,6 +1031,7 @@ def arm_pages(conn) -> dict[str, dict[int, str]]:
         "B0": {**stored, **b0},
         "B": {**stored, **b},
         "C": {**stored, **b, **up},
+        "BL": {**stored, **texts("briefs-BL.json")},
     }
 
 
