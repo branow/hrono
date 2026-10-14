@@ -64,7 +64,9 @@ def pages_by_arm(conn) -> dict[str, dict[tuple[str, int], str]]:
     leaf = exp.leaf_map(conn)
     parent = dict(conn.execute("SELECT child_id, parent_id FROM node_children"))
     secs: dict[str, list[int]] = {}
-    for sid, source, path in conn.execute("SELECT id, source, path FROM sections"):
+    for sid, source, path in conn.execute(
+        "SELECT id, source, path FROM sections"
+    ):
         secs.setdefault(f"{source}/{path}", []).append(sid)
     arms = exp.arm_pages(conn)
     ledger = {int(k): v["text"] for k, v in exp.load("ledger.json").items()}
@@ -72,7 +74,12 @@ def pages_by_arm(conn) -> dict[str, dict[tuple[str, int], str]]:
     for q in sl.questions():
         for i, fact in enumerate(q["facts"]):
             leaves = sorted(
-                {leaf[s] for p in fact["files"] for s in secs.get(p, []) if s in leaf}
+                {
+                    leaf[s]
+                    for p in fact["files"]
+                    for s in secs.get(p, [])
+                    if s in leaf
+                }
             )
             nodes = leaves + sorted({parent[n] for n in leaves if n in parent})
             for arm, texts in arms.items():
@@ -92,7 +99,9 @@ def pages_by_arm(conn) -> dict[str, dict[tuple[str, int], str]]:
     return out
 
 
-def run(arms: list[str], name: str, only: list[tuple[str, int]] | None = None) -> None:
+def run(
+    arms: list[str], name: str, only: list[tuple[str, int]] | None = None
+) -> None:
     conn = c.connect()
     pages = pages_by_arm(conn)
     split = exp.load("claims.json")
@@ -104,7 +113,10 @@ def run(arms: list[str], name: str, only: list[tuple[str, int]] | None = None) -
             for i, cl in enumerate(f["claims"]):
                 for arm in arms:
                     jobs.append((qid, f["fact"], i, arm, cl["claim"]))
-    done = {(r["qid"], r["fact"], r["claim"], r["arm"]): r for r in exp.load(name) or []}
+    done = {
+        (r["qid"], r["fact"], r["claim"], r["arm"]): r
+        for r in exp.load(name) or []
+    }
     todo = [j for j in jobs if (j[0], j[1], j[2], j[3]) not in done]
 
     def one(job):
@@ -118,17 +130,29 @@ def run(arms: list[str], name: str, only: list[tuple[str, int]] | None = None) -
         if n % 25 == 0:
             exp.save(name, rows)
     exp.save(name, rows)
-    print(name, len(rows), "errors", sum("error" in r for r in rows),
-          "cost", round(sum(r.get("cost") or 0 for r in rows), 2))
+    print(
+        name,
+        len(rows),
+        "errors",
+        sum("error" in r for r in rows),
+        "cost",
+        round(sum(r.get("cost") or 0 for r in rows), 2),
+    )
 
 
 def report(name: str) -> None:
     split = exp.load("claims.json")
-    kind = {(q, f["fact"], i): cl["kind"] for q, g in split.items()
-            for f in g["structured"]["facts"] for i, cl in enumerate(f["claims"])}
+    kind = {
+        (q, f["fact"], i): cl["kind"]
+        for q, g in split.items()
+        for f in g["structured"]["facts"]
+        for i, cl in enumerate(f["claims"])
+    }
     table: dict[str, dict[str, list[int]]] = {}
     for r in exp.load(name):
-        cell = table.setdefault(r["arm"], {}).setdefault(kind[(r["qid"], r["fact"], r["claim"])], [0, 0])
+        cell = table.setdefault(r["arm"], {}).setdefault(
+            kind[(r["qid"], r["fact"], r["claim"])], [0, 0]
+        )
         cell[0] += bool(r.get("stated"))
         cell[1] += 1
     for arm, cells in sorted(table.items()):
@@ -138,8 +162,11 @@ def report(name: str) -> None:
 if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "pilot":
-        run(["notes-ledger", "A-v3"], "judge2-pilot.json",
-            [("hard-inconsistency-1", 1), ("hard-inconsistency-1", 5)])
+        run(
+            ["notes-ledger", "A-v3"],
+            "judge2-pilot.json",
+            [("hard-inconsistency-1", 1), ("hard-inconsistency-1", 5)],
+        )
         report("judge2-pilot.json")
     elif cmd == "run":
         run(sys.argv[3].split(","), f"judge2-{sys.argv[2]}.json")

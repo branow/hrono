@@ -154,37 +154,92 @@ uv run --with claude-agent-sdk python notes_v3.py r1    # and r2
 uv run python exp.py report
 ```
 
-## Round 2 (2026-10-14): the batched judge undercounts
+## Round 2 (2026-10-14): a per-claim judge, ledger notes, rated links
 
-- The judge above checks all of a fact's claims in one call, and it answers
-  "no" with an empty quote on claims the notes state word for word (for
-  example `if waive_fees -> sets fee_amount, priority_fee,
-  future_effective_fee and service_fees all to 0`). Every number in the
-  table above is an undercount.
-- `harness/judge2.py`: one claim per call, thinking on, the quote asked for
-  before the verdict. One run, 540 calls, $24.71. 41 calls errored and count
-  as "no".
+**The batched judge undercounts.** It checks all of a fact's claims in one
+call, and it answered "no" with an empty quote on claims the notes state
+word for word (for example `if waive_fees -> sets fee_amount, priority_fee,
+future_effective_fee and service_fees all to 0`). Every number in the first
+table is an undercount. `harness/judge2.py` asks about one claim per call,
+with thinking on and the quote asked for before the verdict. 675 calls,
+$35.51, no errors.
 
-  | arm | connection (38) | local (97) |
-  |---|---|---|
-  | A-v3 (today's pages) | 9 | 47 |
-  | B (pages with linked notes) | 14 | 47 |
-  | notes-v3 (stored notes of the cited files) | 11 | 54 |
-  | notes-ledger (`harness/ledger.py`, verbatim lists, rules, error handling, no word target) | 12 | 58 |
-  | raw source (batched judge, so a lower bound) | 20 | 76 |
+New arms:
+- **notes-ledger**: `harness/ledger.py`, a condense prompt that keeps, line
+  by line and verbatim, entry checks, branch rules with every list member,
+  the order of saves and failing calls, what each error handler does, calls
+  out, states and absences. No word target (183 words a section against 79
+  for the stored notes). All 574 slice sections, Haiku, $5.19 for the
+  remainder after a usage-limit interruption.
+- **BL**: B's prompt over the ledger notes, with the linked sources labelled
+  [L1]... and the brief call also rating each as used or not relevant
+  (structured output). $3.68.
 
-- Linked notes lift connection claims, now by 5 of 38 (+13 points), and
-  local claims stay level. The ledger prompt adds 4 local claims over the
-  stored notes. Pages still state fewer local claims than their notes (47
-  against 54-58).
-- `data/` was scrubbed of credential-like strings copied from the repos'
-  config (connection strings, `.env` values). The ledger prompt now writes
-  `<secret>` instead.
+| arm | connection (38) | local (97) |
+|---|---|---|
+| A-v3 (today's pages) | 12 | 52 |
+| B (pages with linked notes) | 17 | 51 |
+| BL (B over ledger notes, links rated) | 15 | 50 |
+| notes-v3 (stored notes of the cited files) | 12 | 57 |
+| notes-ledger (ledger notes of the cited files) | 13 | 62 |
+| raw source (batched judge, a lower bound) | 20 | 76 |
 
-Left to do:
-1. Rerun the 41 errored calls.
-2. Finish the ledger condensation of all 574 slice sections
-   (`ledger.py condense-all`).
-3. Build B on the ledger notes, with the brief call marking each linked
-   source as used or not relevant.
-4. Judge it with `judge2.py`.
+Paired, claim by claim:
+- **B against A-v3**: connection +5 / −0, local +10 / −11. The local churn,
+  about ten claims each way, is what one judge run moves between two arms of
+  equal quality. A gain with no loss on connections is the clear signal.
+- **BL against B**: connection +1 / −3, local +12 / −13. Building on the
+  ledger notes and rating the links gives nothing on the pages.
+- **notes-ledger against notes-v3**: local +18 / −13. The ledger prompt keeps
+  somewhat more detail.
+
+**The links rated as not relevant.** 77 of 236 linked sources (33%).
+- Most reasons are right: "only shares a name" (`QueueException`, a factory
+  pattern, a URL key), unrelated tests, model exports.
+- Some are wrong. Five "parallel copies" of filer processors in the data
+  tool were dropped, though copies that drift are what hard questions ask
+  about. On business-pay's page, pay-api's publisher was dropped as "only
+  shares gcp_queue name"; it is the producer of the events business-pay
+  consumes.
+- As a filter for the next level the rating is usable, but it is not
+  reliable enough to delete links.
+
+## Reading, round 2
+
+- **Linking helps where it was meant to.** Connection claims rise from 12
+  to 17 of 38 (+13 points) with no claim lost, while local claims stay level.
+- **The brief is now where facts are lost, not the notes.**
+  - Pages state 50-52 local claims; the notes they are written from state
+    57-62.
+  - Richer notes do not reach the page: BL's notes are the ledger's, but its
+    pages state no more.
+  - A 300-900-word brief over 30-50 sections cannot carry every list and
+    condition, whatever the notes hold.
+- **Condensing loses less than round 1 suggested.** It costs about 15 of 76
+  local claims (raw 76, ledger notes 62), not the 30 the batched judge
+  showed.
+
+## Next
+
+- **Put the notes in the map, under the page.** hrono already stores a
+  condensation per section. The export can render them as the level below a
+  leaf page (or as one file per leaf next to its brief), so the page routes
+  and summarizes, and the notes carry the lists and conditions. An agent
+  that greps the export would then reach 62 of 97 local claims instead of
+  50, without opening the code. This keeps the tree and incremental update
+  as they are: a note changes only when its section does.
+- **Move linking into hrono:**
+  - `defines`/`uses` as a second cheap call after condense;
+  - the FTS5 matcher (porter for candidates, a whole-name check, channel
+    sharing, rarity caps);
+  - linked notes in the leaf brief prompt;
+  - the brief's used / not-relevant marks stored, for display and for
+    pruning parents' link blocks.
+
+  Skip links in parent briefs: C added nothing.
+- **Then run agents**, on the four questions with Opus and Sonnet, twice:
+  A-v3 pages against B pages plus notes in the export.
+
+Cost so far: round 1 $29, round 2 about $49 (ledger condense $6.08 counting
+the cited-section pilot, BL $3.68, per-claim judge $35.51 plus a $1.84
+pilot, raw ceiling $2.06).

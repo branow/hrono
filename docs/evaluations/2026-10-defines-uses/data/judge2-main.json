@@ -4491,331 +4491,1587 @@
   "cost": 0.033716199999999995
  },
  {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "Staff-payment header fields by `staffPaymentData.option`:\n  - FAS: `routingSlipNumber`, `priority`.\n  - BCOL: `bcolAccountNumber`, `datNumber`, `folioNumber`, `priority`.\n  - NO_FEE: `waiveFees`.\n  - NONE: nothing.",
+  "stated": true,
+  "cost": 0.06447800000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "Staff (`isRoleStaff && !fromStaffPayment`) get the staff-payment dialog first, in the views that have one.",
+  "stated": false,
+  "cost": 0.061673
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0484
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.063513
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "`AmalgamationOut` and `ContinuationOut`: `created()` throws or opens the resume dialog if `!isRoleStaff`.",
+  "stated": false,
+  "cost": 0.061892
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.071454
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.071414
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.071437
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.051719
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.062503
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.053547
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`create_invoice` then POSTs to payment with a 20s timeout.",
+  "stated": true,
+  "cost": 0.036239
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "Payment service: `POST {PAYMENT_SVC_URL}` (invoice), `GET/DELETE {PAYMENT_SVC_URL}/{payment_token}`, and `POST .../{payment_token}/receipts`. All send `Authorization: Bearer <caller's JWT>`.",
+  "stated": true,
+  "cost": 0.038496
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "All send `Authorization: Bearer <caller's JWT>`.",
+  "stated": true,
+  "cost": 0.037624000000000005
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "Fees (`fee.py`): `waiveFees` is honoured only if the JWT has STAFF. Otherwise `waive_fees=False`.",
+  "stated": true,
+  "cost": 0.0296002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "A client POSTs a payment request to `pay_api/resources` (`v1/invoice.py`, `v1/payment.py`). It is checked against `JSON Schema layer of pay-api` (`validate()`) and its JWT role.",
+  "stated": true,
+  "cost": 0.08828
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08615399999999998
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08321319999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "`filing_type.json` marks `waiveFees` \"Only for staff users\", but the schema has no check for that.",
+  "stated": false,
+  "cost": 0.08648499999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "`filing_type.json` marks `waiveFees` \"Only for staff users\", but the schema has no check for that. Any staff-only rule must be enforced elsewhere.",
+  "stated": true,
+  "cost": 0.08249419999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`waive_fees` zeroes fee, priority, future-effective and service fees.",
+  "stated": true,
+  "cost": 0.10344900000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.105911
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "`PaymentLineItem.create` raises `FEE_OVERRIDE_NOT_ALLOWED` for a waived fee unless the user has the STAFF role.",
+  "stated": true,
+  "cost": 0.103005
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.105014
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10414700000000002
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 5,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "Fees (`fee.py`): `waiveFees` is honoured only if the JWT has STAFF. Otherwise `waive_fees=False`.",
+  "stated": true,
+  "cost": 0.10503399999999999
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.083643
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.082053
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.082233
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08325800000000001
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08210499999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`PaymentTransaction.publish_status` swallows them and sets `EVENT_FAILED`.",
+  "stated": true,
+  "cost": 0.101569
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "`PaymentTransaction.find_stale_records`: status not in COMPLETED/CANCELLED/FAILED, older than the cutoff, method CC or DIRECT_PAY.",
+  "stated": true,
+  "cost": 0.0958572
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "`PaymentTransaction.find_stale_records`: status not in COMPLETED/CANCELLED/FAILED, older than the cutoff, method CC or DIRECT_PAY.",
+  "stated": true,
+  "cost": 0.098385
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.101439
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "A COMPLETED payment raises `COMPLETED_PAYMENT`, unless the transaction is `EVENT_FAILED`, in which case it republishes.",
+  "stated": false,
+  "cost": 0.0941102
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.09661719999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.065086
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.066034
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06411800000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06392500000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.063123
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "`_release_payment`, `_publish_queue_message` and `PaymentAccount.unlock_frozen_accounts` swallow publish errors (logged and sent to Sentry). `PaymentTransaction.publish_status` swallows them and sets `EVENT_FAILED`.",
+  "stated": false,
+  "cost": 0.065756
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.063215
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.066012
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "Otherwise set completion date (UTC now), `payment_status_code=\"COMPLETED\"`, `status=PAID`, `filing.save()`.",
+  "stated": true,
+  "cost": 0.029824
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "`create_staff_review`, `publish_to_filer` and `publish_to_emailer` all run under `suppress(Exception)`: failures are swallowed with no retry or record.",
+  "stated": true,
+  "cost": 0.030711
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "After `filing.save()` marks the filing PAID, a failed filer publish is swallowed and the message is acked (200). The filing stays PAID but is never processed, and a redelivery is dropped by the `payment_completion_date` guard.",
+  "stated": true,
+  "cost": 0.03
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "`filing.payment_completion_date` already set \u2192 200 drop (the only idempotency guard).",
+  "stated": true,
+  "cost": 0.029605
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "`filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`: Review status AWAITING_REVIEW, filing status AWAITING_REVIEW. Otherwise `publish_to_filer`",
+  "stated": true,
+  "cost": 0.030129
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0406512
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0391282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.044686000000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.044472000000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.041581
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.043109
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "Legacy types use `{etype}_{option}_{filingId}`, or `{etype}_{identifier}` (businessNumber), `{etype}_{new_bn}` (bnmove), `{etype}_{filing_id}` (affiliation) and `{etype}_{option}_{ar_year}_{business_id}` (AR reminder). Per-type conditions are in the function.",
+  "stated": true,
+  "cost": 0.032623
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.032286
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0322
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "It returns (False, msg) if `message_seen_count > MSG_RETRY_NUM`.",
+  "stated": true,
+  "cost": 0.036056
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "If no rule matches, there is no id, so the message is not processable.",
+  "stated": false,
+  "cost": 0.03147
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "It returns (False, None) if the message_id is missing, or if source is missing for a cloud event.",
+  "stated": true,
+  "cost": 0.0316
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.028335199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`Filing.receive_before_change` (before_insert/update) sets `_status`, in this order: ... `payment_completion_date` or source COLIN \u2192 PAID.",
+  "stated": true,
+  "cost": 0.08131
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.080472
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "ServiceWorker.publish() sends one `{'filing': {'id'}}` message per id to `NATS_FILER_SUBJECT`.",
+  "stated": true,
+  "cost": 0.0763902
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0744982
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.081603
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`process_filing`: if `filing_core_submission.status == Filing.Status.COMPLETED`, it logs a warning and returns None, None. This is the only idempotence check.",
+  "stated": true,
+  "cost": 0.054556
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "Set `transaction_id`, `set_processed(business_type)` and `_meta_data`, then add and commit.",
+  "stated": true,
+  "cost": 0.050219200000000006
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "`update_affiliation` swallows exceptions, and on failed `create_affiliation` calls `delete_affiliation`.",
+  "stated": false,
+  "cost": 0.10314200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "The email, NATS event and GCP event publishes are each wrapped in try/except.",
+  "stated": true,
+  "cost": 0.054282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "The email, NATS event and GCP event publishes are each wrapped in try/except. They report to Sentry (the event publish also prints) and swallow the error.",
+  "stated": true,
+  "cost": 0.054525
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "A failure after the first commit leaves the filing marked processed but with no affiliation, name-request consumption or events.",
+  "stated": true,
+  "cost": 0.0530842
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "`QueueException` and any other `Exception` go to Sentry `capture_message('Queue Error:'+json)`, are logged and are swallowed. The message is dropped.",
+  "stated": true,
+  "cost": 0.054568000000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "BL",
+  "quote": "A redelivery then returns early because the status is COMPLETED, so nothing completes the missing steps.",
+  "stated": true,
+  "cost": 0.05436
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.054081000000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "BL",
+  "quote": "A failure after the first commit leaves the filing marked processed but with no affiliation, name-request consumption or events. A redelivery then returns early because the status is COMPLETED, so nothing completes the missing steps.",
+  "stated": true,
+  "cost": 0.056781
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.102214
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.100674
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "Payment events (`PAYMENT`) go to `get_topic_for_corp_type(corp_type)`.",
+  "stated": true,
+  "cost": 0.1021
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "`get_topic_for_corp_type`: `NRO` goes to the NameX topic.",
+  "stated": true,
+  "cost": 0.098804
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "`get_topic_for_corp_type`: `NRO` goes to the NameX topic. Otherwise it looks up the corp type's `product` via `CodeService`. `BUSINESS` and `BUSINESS_SEARCH` go to the business topic, `STRR` to the STRR topic, and anything else returns None.",
+  "stated": true,
+  "cost": 0.09964200000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "`BUSINESS` and `BUSINESS_SEARCH` go to the business topic, `STRR` to the STRR topic, and anything else returns None.",
+  "stated": true,
+  "cost": 0.09896100000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.098537
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.09606320000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "BL",
+  "quote": "Consumes payment-status messages from NATS Streaming (subject `entity.filings`), updates the matching legal_api `Filing`, and hands work on by publishing an email message and a filing message.",
+  "stated": false,
+  "cost": 0.09908600000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10084800000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10605700000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10574099999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "**In:** `{\"paymentToken\": {\"id\": <payment_id>, \"statusCode\": <status>, \"corpTypeCode\": <code>}}` on `NATS_SUBJECT` (default `entity.filings`)",
+  "stated": true,
+  "cost": 0.10472500000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "`is_processable_message`: true only if `paymentToken` is truthy, it has a truthy `corpTypeCode`, and `CorpType.find_by_id(corpTypeCode)` is truthy. Tests expect BEN, CP, SP, GP, BC, ULC and CC to pass, and None or 'CSO' to fail.",
+  "stated": true,
+  "cost": 0.105112
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10493300000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.103956
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10406699999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.052399
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "Otherwise set completion date (UTC now), `payment_status_code=\"COMPLETED\"`, `status=PAID`, `filing.save()`.",
+  "stated": true,
+  "cost": 0.051859
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "`filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`: Review status AWAITING_REVIEW, filing status AWAITING_REVIEW.",
+  "stated": true,
+  "cost": 0.052063
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "`filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`: Review status AWAITING_REVIEW, filing status AWAITING_REVIEW.",
+  "stated": true,
+  "cost": 0.0402502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "`filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`: Review status AWAITING_REVIEW, filing status AWAITING_REVIEW. Otherwise `publish_to_filer`",
+  "stated": true,
+  "cost": 0.053229
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "The `entity-pay queue service` takes the payment message (`cb_subscription_handler`). It stamps `payment_completion_date` on the filing and publishes email and filer messages.",
+  "stated": true,
+  "cost": 0.055049999999999995
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "`statusCode == COMPLETED`: sets `payment_completion_date` to UTC now and commits.",
+  "stated": true,
+  "cost": 0.051703000000000006
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "BL",
+  "quote": "`statusCode == COMPLETED`: sets `payment_completion_date` to UTC now and commits. Then it publishes the email, and publishes the filing if `not effective_date or effective_date <= utcnow`. A future-dated filing gets no filer message here.",
+  "stated": true,
+  "cost": 0.052258
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`process_filing`: if `filing_core_submission.status == Filing.Status.COMPLETED`, it logs a warning and returns None, None. This is the only idempotence check.",
+  "stated": true,
+  "cost": 0.092614
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "`transaction_id` \u2192 COMPLETED.\n  - `payment_completion_date` or source COLIN \u2192 PAID.",
+  "stated": true,
+  "cost": 0.093944
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "skip when status is AWAITING_REVIEW, CHANGE_REQUESTED or REJECTED, or APPROVED with no `transaction_id`.",
+  "stated": true,
+  "cost": 0.090758
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.091762
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.095594
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.091628
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "It asks the legal API for filings whose effective date has arrived, then publishes each filing id to the entity-filer NATS queue.",
+  "stated": true,
+  "cost": 0.090575
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.093908
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "The Filing/Review models here are minimal copies of the legal-api tables.",
+  "stated": true,
+  "cost": 0.039964
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "Otherwise set completion date (UTC now), `payment_status_code=\"COMPLETED\"`, `status=PAID`, `filing.save()`.",
+  "stated": true,
+  "cost": 0.040214
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "[L3] business-pay: has its own minimal Filing with a matching Status enum, and looks filings up by payment id. It does not go through this model's listeners.",
+  "stated": true,
+  "cost": 0.041083
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "business-pay: has its own minimal Filing with a matching Status enum, and looks filings up by payment id. It does not go through this model's listeners.",
+  "stated": true,
+  "cost": 0.040281000000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "Empty `request.data`, a non-`SimpleCloudEvent`, `status_code != \"COMPLETED\"`, or `corp_type_code in [\"MHR\",\"BTR\"]` \u2192 200, message dropped.",
+  "stated": true,
+  "cost": 0.086948
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "Empty `request.data`, a non-`SimpleCloudEvent`, `status_code != \"COMPLETED\"`, or `corp_type_code in [\"MHR\",\"BTR\"]` \u2192 200, message dropped.",
+  "stated": true,
+  "cost": 0.0827402
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "`filing.payment_completion_date` already set \u2192 200 drop (the only idempotency guard).",
+  "stated": true,
+  "cost": 0.086505
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "Filing not found: if `filing_identifier is None` and `corp_type_code == \"BC\"` \u2192 200 drop; otherwise 404 so the message is redelivered.",
+  "stated": true,
+  "cost": 0.086864
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.088132
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.086154
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "BL",
+  "quote": "`process_payment` with the filing already `COMPLETED`: logs a warning, sends it to Sentry and returns.",
+  "stated": true,
+  "cost": 0.086601
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.088204
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "`verify_gcp_jwt(request)` returns a message (falsy = OK); a message gives 403.",
+  "stated": true,
+  "cost": 0.0447202
+ },
+ {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 1,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "takes the bearer token from the Authorization header and calls `id_token.verify_oauth2_token` with audience `SUB_AUDIENCE`. It then requires `email_verified` to be true and the email to equal `SUB_SERVICE_ACCOUNT`.",
+  "stated": true,
+  "cost": 0.0451092
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "It checks the Bearer token against audience `SUB_AUDIENCE`, then `email_verified` and `email == SUB_SERVICE_ACCOUNT`",
+  "stated": false,
+  "cost": 0.049135
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 2,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Validates that email_verified is true AND email matches the configured service account.",
+  "stated": true,
+  "cost": 0.017946
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 2,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "if `claim[\"email_verified\"]` is false OR `claim[\"email\"]` != `current_app.config.get(\"SUB_SERVICE_ACCOUNT\")` -> set msg to \"Invalid service account or email not verified for email: {claim['email']}\\n\".",
+  "stated": true,
+  "cost": 0.027803
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 2,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "It requires `email_verified` and `email == SUB_SERVICE_ACCOUNT`.",
+  "stated": true,
+  "cost": 0.043262
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 2,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "It then requires `email_verified` to be true and the email to equal `SUB_SERVICE_ACCOUNT`.",
+  "stated": true,
+  "cost": 0.048668
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "It checks the Bearer token against audience `SUB_AUDIENCE`, then `email_verified` and `email == SUB_SERVICE_ACCOUNT`; any exception becomes an \"Invalid token\" message.",
+  "stated": true,
+  "cost": 0.049206
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 3,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Validates that email_verified is true AND email matches the configured service account.",
+  "stated": true,
+  "cost": 0.018001
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 3,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "if `claim[\"email_verified\"]` is false OR `claim[\"email\"]` != `current_app.config.get(\"SUB_SERVICE_ACCOUNT\")` -> set msg to \"Invalid service account or email not verified for email: {claim['email']}\\n\".",
+  "stated": true,
+  "cost": 0.0236902
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 3,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "It requires `email_verified` and `email == SUB_SERVICE_ACCOUNT`.",
+  "stated": true,
+  "cost": 0.043322
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 3,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "It then requires `email_verified` to be true and the email to equal `SUB_SERVICE_ACCOUNT`.",
+  "stated": true,
+  "cost": 0.048738000000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "It checks the Bearer token against audience `SUB_AUDIENCE`, then `email_verified` and `email == SUB_SERVICE_ACCOUNT`",
+  "stated": true,
+  "cost": 0.049091
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 4,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.020766999999999997
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 4,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.029379000000000002
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 4,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Empty request: 200. - `verify_gcp_jwt` (`services/gcp_auth.py`) returns an error: 403.",
+  "stated": true,
+  "cost": 0.045718
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 4,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.049314
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0463292
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 5,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.017776999999999998
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 5,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.027009
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 5,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.045223
  },
  {
   "qid": "hard-legacy-0",
   "fact": 6,
   "claim": 5,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.051049000000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0443492
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 0,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "publish_to_filer publishes create_filing_msg(filing.id) to FILER_PUBLISH_OPTIONS[\"subject\"]",
+  "stated": false,
+  "cost": 0.018212000000000002
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 0,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.031827
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 0,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Out (NATS/STAN via `services/queue.py`):**\n  - Filer subject (`FILER_PUBLISH_OPTIONS[\"subject\"]`): `{\"filing\": {\"id\": filing.id}}` from `create_filing_msg`.",
+  "stated": true,
+  "cost": 0.046279999999999995
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 0,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "`services/queue.py` `publish_json(payload, subject)` publishes to NATS/STAN. The subject defaults to `NATS_FILER_SUBJECT`.",
+  "stated": true,
+  "cost": 0.051437
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "BL",
+  "quote": "Out: `queue.publish_json(subject, payload)` to `FILER_PUBLISH_OPTIONS[\"subject\"]` with `create_filing_msg(filing.id)`; ... Publishing uses STAN `publish` of a UTF-8 JSON payload.",
+  "stated": true,
+  "cost": 0.054481
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 1,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "publish_to_emailer publishes create_email_msg(filing.id, filing.filing_type) to EMAIL_PUBLISH_OPTIONS[\"subject\"]",
+  "stated": true,
+  "cost": 0.018260000000000002
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 1,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "STATES: email message sets option to \"PAID\" (hardcoded).",
+  "stated": true,
+  "cost": 0.029179999999999998
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 1,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Emailer subject (`EMAIL_PUBLISH_OPTIONS[\"subject\"]`): `{\"email\": {\"filingId\": id, \"type\": filing_type, \"option\": \"PAID\"}}` from `create_email_msg`.",
+  "stated": true,
+  "cost": 0.0420002
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 1,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Out, emailer:** `create_email_msg()` builds `{\"email\": {\"filingId\": identifier, \"type\": filing_type, \"option\": \"PAID\"}}.",
+  "stated": true,
+  "cost": 0.04986499999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "BL",
+  "quote": "to `EMAIL_PUBLISH_OPTIONS[\"subject\"]` with `create_email_msg(filing.id, filing.filing_type)` (option hardcoded \"PAID\").",
+  "stated": true,
+  "cost": 0.046218999999999996
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 2,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.019861999999999998
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 2,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "publish_to_filer wraps entire logic in `with suppress(Exception)` - catches all exceptions, logs to debug, swallows (no re-raise, no retry).",
+  "stated": true,
+  "cost": 0.032032
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 2,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "`publish_to_filer` and `publish_to_emailer` wrap their calls in `suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0416122
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 2,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "`publish_to_filer` and `publish_to_emailer` swallow all exceptions, wrapped in `suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0456092
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "BL",
+  "quote": "`create_staff_review`, `publish_to_filer` and `publish_to_emailer` all run under `suppress(Exception)`: failures are swallowed with no retry or record.",
+  "stated": true,
+  "cost": 0.055651000000000006
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 3,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "else publish to filer queue if effective_date \u2264 payment_completion_date",
+  "stated": true,
+  "cost": 0.01796
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 3,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "RULE: in publish_to_filer, if `filing.effective_date <= filing.payment_completion_date` -> publish to filer queue; else skip publish (in worker).",
+  "stated": true,
+  "cost": 0.0253772
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 3,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Otherwise publish to the filer only if `effective_date <= payment_completion_date`.",
+  "stated": true,
+  "cost": 0.041565200000000004
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 3,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "any other filing with `effective_date <= now()` \u2192 publish to entity-filer",
+  "stated": false,
+  "cost": 0.04964
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "BL",
+  "quote": "Otherwise `publish_to_filer`, which publishes only if `filing.effective_date <= payment_completion_date` (future-dated filings are skipped here).",
+  "stated": true,
+  "cost": 0.054058999999999996
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 4,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.018956999999999998
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 4,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.033987
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 4,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.046595000000000004
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 4,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "",
+  "stated": false,
+  "cost": 0.043155
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "BL",
+  "quote": "",
+  "stated": false,
+  "cost": 0.05776100000000001
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 5,
   "arm": "notes-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "if filing.status==APPROVED and effective_date <= datetime.now(timezone.utc) publishes to NATS_FILER_SUBJECT with {'filing': {'id': filing.id}}",
+  "stated": false,
+  "cost": 0.018353
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 5,
   "arm": "notes-ledger",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "stated": false,
+  "quote": "",
+  "cost": 0.035378
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 5,
   "arm": "A-v3",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "Emailer and filer messages are published to NATS. Approval publishes to the filer.",
+  "stated": true,
+  "cost": 0.045701
  },
  {
   "qid": "hard-legacy-0",
   "fact": 7,
   "claim": 5,
   "arm": "B",
-  "error": "Claude Code returned an error result: You've hit your session limit \u00b7 resets 5:50pm (Europe/Kiev) (exit code: 1)",
-  "cost": 0
+  "quote": "staff POST `/reviews/<id>` publishes `{filing: {id}}` to `NATS_FILER_SUBJECT` when status is APPROVED and `effective_date <= now`.",
+  "stated": true,
+  "cost": 0.049973
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "BL",
+  "quote": "[L7] legal-api `reviews.py`: staff review decisions publish to the same emailer and filer subjects (filer only when APPROVED and effective date has passed).",
+  "stated": true,
+  "cost": 0.055536999999999996
  }
 ]
