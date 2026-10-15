@@ -32,6 +32,7 @@ persist is serial.
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Mapping
 from typing import NamedTuple
 
@@ -45,8 +46,8 @@ from hrono.llm.client import (
 )
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
-from hrono.registry.collections.trees import DEFAULT_TREE
-from hrono.summarize import briefs, pool, spend
+from hrono.registry.collections.trees import DEFAULT_TREE, looks_up
+from hrono.summarize import briefs, lookup, pool, spend
 from hrono.summarize.faithfulness import faithfulness
 from hrono.summarize.resolve import (
     model_fingerprint,
@@ -68,6 +69,8 @@ class Written(NamedTuple):
     result: CompletionResult
     flagged: str
     unfaithful: str
+    text: str  # the brief, without the lookups' Used and Lookups sections
+    uses: tuple[lookup.Use, ...] = ()
 
 
 def brief(
@@ -87,7 +90,11 @@ def brief(
         # and briefs nothing without saying so.
         source_model = producer_model_name(conn, job.scope, "condense")
         prompt_name, template = resolve_prompt(conn, "brief")
-        prompt_hash = template_hash(template)
+        # a tree that looks things up asks more of the same prompt, so its
+        # briefs are written - and kept fresh - against the longer one
+        looking = looks_up(conn, tree)
+        asked = template + (lookup.INSTRUCTION if looking else "")
+        prompt_hash = template_hash(asked)
         fingerprint = model_fingerprint(model)
         pending = [
             (
@@ -108,27 +115,64 @@ def brief(
     pending = [(n, i, s) for (n, i, s) in pending if i.texts]
     if not pending:
         return {"briefed": 0, "skipped_pinned": held}
+    found = lookup.Files({})
+    own: dict[int, set[str]] = {}
+    if looking:
+        with context.database.connect() as conn:
+            found = lookup.files(conn, tree, source_model)
+            own = {node: _own_files(conn, node) for node, _, _ in pending}
 
     completion = client_for(context, model, "brief", client=client)
 
     def call(entry: Pending) -> Written:
-        _, inputs, _ = entry
+        node_id, inputs, _ = entry
         source = inputs.rendered
-        rendered = template.replace(_CONTENT_PLACEHOLDER, source)
+        if not looking:
+            rendered = template.replace(_CONTENT_PLACEHOLDER, source)
+            result, flagged = answer(
+                completion,
+                CompletionRequest(model=model, system="", content=rendered),
+                brief_gate(template, source),
+            )
+            return Written(
+                result,
+                flagged or _uncondensed(inputs.dropped),
+                json.dumps(faithfulness(result.text, source)),
+                result.text,
+            )
+        rendered = asked.replace(
+            _CONTENT_PLACEHOLDER, _with_paths(inputs, own[node_id])
+        )
         result, flagged = answer(
             completion,
-            CompletionRequest(model=model, system="", content=rendered),
+            CompletionRequest(
+                model=model,
+                system="",
+                content=rendered,
+                tools=lookup.toolbox(found),
+            ),
             brief_gate(template, source),
+        )
+        text, uses = lookup.split(result.text, own[node_id], found.texts)
+        # what it looked up is material too: a name it read in another
+        # topic's file is not an invention
+        read = "\n\n".join(
+            found.texts.get(lookup.CONDENSED + u.file + ".md", "")
+            + "\n"
+            + found.texts.get(lookup.SOURCE + u.file, "")
+            for u in uses
         )
         return Written(
             result,
             flagged or _uncondensed(inputs.dropped),
-            json.dumps(faithfulness(result.text, source)),
+            json.dumps(faithfulness(text, source + "\n\n" + read)),
+            text,
+            uses,
         )
 
     def keep(entry: Pending, written: Written) -> None:
         node_id, inputs, signature = entry
-        text = written.result.text
+        text = written.text
         with context.database.write() as conn:
             briefs.upsert(
                 conn,
@@ -147,6 +191,7 @@ def brief(
                 output_tokens=written.result.usage.output_tokens,
             )
             store_brief(conn, node_id, text, signature)
+            lookup.store_uses(conn, node_id, written.uses)
 
     briefed = pool.mapped(
         pending,
@@ -172,6 +217,31 @@ def brief(
     if tokens is not None:
         outcome["tokens"] = tokens
     return outcome
+
+
+def _own_files(conn: sqlite3.Connection, node_id: int) -> set[str]:
+    """A topic's member files, as ``<source>/<path>``."""
+    return {
+        f"{row['source']}/{row['path']}"
+        for row in conn.execute(
+            "SELECT s.source AS source, s.path AS path FROM node_members m "
+            "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ?",
+            (node_id,),
+        )
+    }
+
+
+def _with_paths(inputs: briefs.ReduceInput, own: set[str]) -> str:
+    """The topic's condensations, each under the path the tools use.
+
+    Measured: labelled by path alone, the writer guessed the tools' paths
+    without their source, found nothing and stopped looking.
+    """
+    full = {name.partition("/")[2]: name for name in own}
+    return briefs.labeled(
+        (lookup.SOURCE + full.get(label, label), text)
+        for label, text in zip(inputs.labels, inputs.texts, strict=True)
+    )
 
 
 def _uncondensed(dropped: int) -> str:

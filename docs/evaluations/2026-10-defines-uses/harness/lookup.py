@@ -39,9 +39,11 @@ MAX_OUT = 12_000  # characters a tool answer may return
 
 LOOKUP = """
 
-Before writing, look up what this topic connects to. You have read-only tools over the files of the whole system: `source/<repo>/<path>` is the text of each source file and `condensed/<repo>/<path>.md` its condensation. Use `Grep` (a regular expression, optionally limited to a path glob) and `Glob` to find files, and `Read` to read one. Find the other side of each message, queue, event, endpoint, call, table or file this topic sends to or receives from - who receives what it sends and what it does with it, who sends what it receives - and what an endpoint or function it calls really does. When a target is named through a configuration key, look the key up to find the name it holds, then search for that name. This topic's own files are already given above, under their paths: spend the lookups on the other parts. Work in order: first list every connection the topic's files show (each message, queue, endpoint, call, table or configuration key that names another part); then, for each, find the file on the other side with `Grep` and read what it does there. Mark something "(behaviour not in this topic)" only after you looked for it and did not find it. Use at most 15 tool calls.
+Before writing, look up what this topic connects to. You have read-only tools over the files of the whole system: `source/<repo>/<path>` is the text of each source file and `condensed/<repo>/<path>.md` its condensation. Use `Grep` (a regular expression, optionally limited to a path glob) and `Glob` to find files, and `Read` to read one. Find the other side of each message, queue, event, endpoint, call, table or file this topic sends to or receives from - who receives what it sends and what it does with it, who sends what it receives - and what an endpoint or function it calls really does. When a target is named through a configuration key, look the key up to find the name it holds, then search for that name. This topic's own files are already given above, under their paths: spend the lookups on the other parts. Work in order: first list every connection the topic's files show (each message, queue, endpoint, call, table or configuration key that names another part); then, for each, find the file on the other side with `Grep` and read what it does there. Mark something "(behaviour not in this topic)" only after you looked for it and did not find it. Use up to 15 tool calls.
 
-After the brief, add a final section `## Used`: one line for each looked-up file that a statement in the brief comes from - `- <path>: <the statement>`, with the path exactly as the tools print it (starting `source/` or `condensed/`) - and nothing for files you opened but did not use, nor for this topic's own files. A statement about another part must come from a file listed there."""
+After the brief, add a final section `## Used`: one line for each looked-up file that a statement in the brief comes from - `- <path>: <the statement>`, with the path exactly as the tools print it (starting `source/` or `condensed/`) - and nothing for files you opened but did not use, nor for this topic's own files. A statement about another part must come from a file listed there.
+
+Then a section `## Lookups`: one line per connection you listed - `- <connection>: <the path found on the other side>`, or `- <connection>: not found (searched: <patterns>)`."""
 
 
 def files(conn) -> dict[str, str]:
@@ -199,7 +201,7 @@ async def _write(prompt: str) -> dict:
         setting_sources=[],
         cwd=str(c.WORKDIR),
         cli_path=shutil.which("claude"),
-        thinking={"type": "disabled"},
+        thinking={"type": "enabled", "budget_tokens": 4000},
     )
     result = None
     async for message in query(prompt=prompt, options=options):
@@ -216,6 +218,7 @@ def used(text: str) -> list[tuple[str, str]]:
     part = text.split("## Used", 1)
     if len(part) < 2:
         return []
+    part[1] = part[1].split("## Lookups", 1)[0]
     return [
         (m.group(1).strip("` "), m.group(2).strip())
         for m in re.finditer(r"^- `?([^`:\s]+)`?:\s*(.+)$", part[1], re.M)

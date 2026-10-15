@@ -23,6 +23,7 @@ from typing import Protocol
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
 from hrono.errors import DomainError
+from hrono.llm.tools import Toolbox
 from hrono.registry import store
 
 # Neither condensations nor briefs have a word target, and a pack carries up
@@ -73,12 +74,17 @@ class CompletionRequest:
     ``claude-code`` provider honours it today; the others accept it and
     answer in plain text, so a caller that sets it reads ``structured`` and
     must cope with None.
+
+    ``tools`` are read-only lookups the model may make before it answers;
+    every provider runs the same call-answer loop over them, and the toolbox
+    records each call.
     """
 
     model: dict[str, object]
     system: str
     content: str
     schema: dict[str, object] | None = None
+    tools: Toolbox | None = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +125,8 @@ class AnthropicClient:
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         key, base_url = self._credential(request.model)
+        if request.tools is not None:
+            return self._converse(request, request.tools, key, base_url)
         try:
             response = self._invoke(
                 api_key=key,
@@ -133,6 +141,68 @@ class AnthropicClient:
         except Exception as exc:  # noqa: BLE001 - any SDK/transport failure
             raise LLMError("completion request failed") from exc
         return _read(response)
+
+    def _converse(
+        self,
+        request: CompletionRequest,
+        toolbox: Toolbox,
+        key: str,
+        base_url: str | None,
+    ) -> CompletionResult:
+        """Answer each tool call until the model writes its answer."""
+        messages: list[dict[str, object]] = [
+            {"role": "user", "content": request.content}
+        ]
+        specs = [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": dict(tool.parameters),
+            }
+            for tool in toolbox.tools
+        ]
+        spent: list[CompletionResult] = []
+        for _ in range(toolbox.turns):
+            try:
+                response = self._invoke(
+                    api_key=key,
+                    base_url=base_url,
+                    model=str(request.model["model"]),
+                    system=request.system,
+                    content=request.content,
+                    max_tokens=_max_tokens(request.model),
+                    messages=messages,
+                    tools=specs,
+                )
+            except LLMError:
+                raise
+            except Exception as exc:  # noqa: BLE001 - any SDK/transport failure
+                raise LLMError("completion request failed") from exc
+            spent.append(_read(response))
+            blocks = getattr(response, "content", None) or []
+            asked = [b for b in blocks if getattr(b, "type", "") == "tool_use"]
+            if not asked:
+                return summed(spent)
+            messages.append(
+                {"role": "assistant", "content": [_block(b) for b in blocks]}
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": getattr(b, "id", ""),
+                            "content": toolbox.call(
+                                str(getattr(b, "name", "")),
+                                dict(getattr(b, "input", None) or {}),
+                            ),
+                        }
+                        for b in asked
+                    ],
+                }
+            )
+        raise Unfinished("the model kept calling tools past its budget")
 
     def _credential(self, model: dict[str, object]) -> tuple[str, str | None]:
         return credential(self._database, self._cipher, model.get("connection"))
@@ -188,6 +258,40 @@ def _count(value: object) -> int | None:
     return value if isinstance(value, int) else None
 
 
+def _block(block: object) -> dict[str, object]:
+    """One reply block as the next request carries it back."""
+    if getattr(block, "type", "") == "tool_use":
+        return {
+            "type": "tool_use",
+            "id": getattr(block, "id", ""),
+            "name": getattr(block, "name", ""),
+            "input": dict(getattr(block, "input", None) or {}),
+        }
+    return {"type": "text", "text": getattr(block, "text", "")}
+
+
+def summed(results: list[CompletionResult]) -> CompletionResult:
+    """A tool loop's answer: the last reply's text, every turn's tokens."""
+    last = results[-1]
+
+    def total(name: str) -> int | None:
+        counts = [getattr(r.usage, name) for r in results]
+        known = [c for c in counts if c is not None]
+        return sum(known) if known else None
+
+    return CompletionResult(
+        text=last.text,
+        usage=Usage(
+            input_tokens=sum(r.usage.input_tokens for r in results),
+            output_tokens=sum(r.usage.output_tokens for r in results),
+            cache_read=total("cache_read"),
+            cache_creation=total("cache_creation"),
+            model=last.usage.model,
+        ),
+        structured=last.structured,
+    )
+
+
 def _default_invoke(
     *,
     api_key: str,
@@ -196,6 +300,8 @@ def _default_invoke(
     system: str,
     content: str,
     max_tokens: int,
+    messages: list[dict[str, object]] | None = None,
+    tools: list[dict[str, object]] | None = None,
 ) -> object:
     try:
         import anthropic
@@ -208,8 +314,10 @@ def _default_invoke(
     create_kwargs: dict[str, object] = {
         "model": model,
         "max_tokens": max_tokens,
-        "messages": [{"role": "user", "content": content}],
+        "messages": messages or [{"role": "user", "content": content}],
     }
+    if tools:
+        create_kwargs["tools"] = tools
     if system:
         create_kwargs["system"] = system
     return anthropic.Anthropic(**client_kwargs).messages.create(**create_kwargs)

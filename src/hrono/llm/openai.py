@@ -32,9 +32,12 @@ from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
     LLMError,
+    Unfinished,
     Usage,
+    summed,
 )
 from hrono.llm.ledger import Tally
+from hrono.llm.tools import Toolbox
 from hrono.llm.urls import api_root
 from hrono.registry import store
 
@@ -67,21 +70,80 @@ class OpenAIClient:
         key, base = credential(
             self._database, self._cipher, request.model.get("connection")
         )
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, object]] = []
         if request.system:
             messages.append({"role": "system", "content": request.system})
         messages.append({"role": "user", "content": request.content})
-        payload = self._send(  # type: ignore[operator]
+        if request.tools is not None:
+            return self._converse(request, request.tools, key, base, messages)
+        payload = self._post(key, base, request, messages, None)
+        return _completion(payload)
+
+    def _post(
+        self,
+        key: str | None,
+        base: str,
+        request: CompletionRequest,
+        messages: list[dict[str, object]],
+        tools: list[dict[str, object]] | None,
+    ) -> dict[str, object]:
+        body: dict[str, object] = {
+            "model": str(request.model["model"]),
+            "messages": messages,
+            "max_tokens": _max_tokens(request.model),
+        }
+        if tools:
+            body["tools"] = tools
+        return self._send(  # type: ignore[operator,no-any-return]
             api_root(base) + "/chat/completions",
             auth_headers(key),
-            {
-                "model": str(request.model["model"]),
-                "messages": messages,
-                "max_tokens": _max_tokens(request.model),
-            },
+            body,
             self._timeout,
         )
-        return _completion(payload)
+
+    def _converse(
+        self,
+        request: CompletionRequest,
+        toolbox: Toolbox,
+        key: str | None,
+        base: str,
+        messages: list[dict[str, object]],
+    ) -> CompletionResult:
+        """Answer each tool call until the model writes its answer."""
+        specs: list[dict[str, object]] = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": dict(tool.parameters),
+                },
+            }
+            for tool in toolbox.tools
+        ]
+        spent: list[CompletionResult] = []
+        for _ in range(toolbox.turns):
+            payload = self._post(key, base, request, messages, specs)
+            message = _message(payload)
+            asked = message.get("tool_calls") or []
+            if not isinstance(asked, list) or not asked:
+                spent.append(_completion(payload))
+                return summed(spent)
+            spent.append(_usage_only(payload))
+            messages.append(message)
+            for call in asked:
+                function = call.get("function") or {}
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.get("id", ""),
+                        "content": toolbox.call(
+                            str(function.get("name", "")),
+                            _arguments(function.get("arguments")),
+                        ),
+                    }
+                )
+        raise Unfinished("the model kept calling tools past its budget")
 
 
 def embeddings(
@@ -165,6 +227,33 @@ def post_json(
     if not isinstance(payload, dict):
         raise LLMError("the model server returned a malformed body")
     return payload
+
+
+def _message(payload: dict[str, object]) -> dict[str, object]:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise LLMError("the model server returned no choices")
+    first = choices[0]
+    message = first.get("message") if isinstance(first, dict) else None
+    if not isinstance(message, dict):
+        raise LLMError("the model server returned no message")
+    return message
+
+
+def _arguments(raw: object) -> dict[str, object]:
+    """A tool call's arguments; a reply that is not JSON reads as none."""
+    if isinstance(raw, dict):
+        return raw
+    try:
+        parsed = json.loads(str(raw or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _usage_only(payload: dict[str, object]) -> CompletionResult:
+    """A tool-calling turn: no text yet, but its tokens count."""
+    return _completion({**payload, "choices": [{"message": {"content": ""}}]})
 
 
 def _completion(payload: dict[str, object]) -> CompletionResult:

@@ -80,6 +80,7 @@ from hrono.llm.client import (
     Unfinished,
     Usage,
 )
+from hrono.llm.tools import Toolbox
 
 TIMEOUT = 300.0  # generous: a large judge prompt measured 32 s
 # One turn was too tight. A large section made the CLI answer
@@ -195,11 +196,12 @@ class ClaudeCodeClient:
 
 def _options(request: CompletionRequest, workdir: Path, stderr: _Stderr) -> Any:
     sdk = _sdk()
+    looked = _lookups(sdk, request.tools) if request.tools is not None else {}
     return sdk.ClaudeAgentOptions(
         model=str(request.model["model"]),
         system_prompt=request.system or SYSTEM,
-        tools=[],  # no tool use
-        max_turns=MAX_TURNS,
+        tools=[],  # none of the CLI's own tools; hrono's lookups come below
+        max_turns=MAX_TURNS + (request.tools.turns if request.tools else 0),
         # the operator's CLAUDE.md, skills, hooks, plugins, MCP servers and
         # output style are not part of this call; the module docstring says
         # why both switches are passed
@@ -214,7 +216,44 @@ def _options(request: CompletionRequest, workdir: Path, stderr: _Stderr) -> Any:
             if request.schema is not None
             else None
         ),
+        **looked,
     )
+
+
+def _lookups(sdk: Any, toolbox: Toolbox) -> dict[str, Any]:
+    """The toolbox as an in-process MCP server the CLI may call.
+
+    Measured: ``--safe-mode`` drops the operator's MCP servers but not one
+    passed in-process here, so the lookups survive the isolation.
+    """
+
+    def handler(name: str) -> Callable[[dict[str, Any]], Any]:
+        async def answer(arguments: dict[str, Any]) -> dict[str, Any]:
+            text = toolbox.call(name, arguments)
+            return {"content": [{"type": "text", "text": text}]}
+
+        return answer
+
+    server = sdk.create_sdk_mcp_server(
+        name=_SERVER,
+        version="1.0",
+        tools=[
+            sdk.SdkMcpTool(
+                name=tool.name,
+                description=tool.description,
+                input_schema=dict(tool.parameters),
+                handler=handler(tool.name),
+            )
+            for tool in toolbox.tools
+        ],
+    )
+    return {
+        "mcp_servers": {_SERVER: server},
+        "allowed_tools": [f"mcp__{_SERVER}__{t.name}" for t in toolbox.tools],
+    }
+
+
+_SERVER = "hrono"
 
 
 async def _result(

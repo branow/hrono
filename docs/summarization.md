@@ -51,6 +51,26 @@ stated 56 of 104 answer claims the cited sources state 75 of; the brief
 prompt told the writer the condensations "stay available" when nothing
 below a brief is shown, and to leave out lists and keep three hazards.
 
+**Lookups (a tree setting, off by default).** With "Look into other topics"
+on, a leaf brief's writer may read the rest of the tree before it writes
+(`summarize/lookup.py`). What it sees is what exists at that moment of a
+build - condense has run over every section, no brief is written yet - laid
+out as files: `source/<source>/<path>` (the text) and
+`condensed/<source>/<path>.md` (its condensations), behind read-only `Grep`,
+`Glob` and `Read` answered from the database, at most 15 calls. Every provider
+runs the same tool loop (`llm/tools.py`). The writer lists each connection
+its topic shows, finds the other side, and ends with `## Used`: the files a
+statement came from. Those, less the topic's own members and at most 12, are
+stored in `brief_uses` with each file's content signature; the `Used` and
+`Lookups` sections are cut from the stored text. They are the brief's
+dependencies across branches: `propagate` judges a leaf whose used file
+changed against that change, and a minor or major verdict marks the leaf and
+its ancestors stale; a `none` verdict records the file's new signature, so it
+is not judged again. Measured on the bcreg slice (2026-10-defines-uses, round
+9): the writer's declarations held - no statement about another part came
+from an undeclared file - and a brief that had described an endpoint from its
+name stated the query it really runs.
+
 **References are mechanical.** Member lists and links are rendered by code
 from topic metadata, never written by the LLM: no tokens, no hallucinated
 links. Briefs never contain routing ("for X see child Y").

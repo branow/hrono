@@ -45,6 +45,15 @@ class Tree(BaseModel):
             "The registered sources it maps. Only these are grouped into it."
         ),
     )
+    lookups: bool = Field(
+        default=False,
+        title="Look into other topics",
+        description=(
+            "While writing a brief, read the files of the other topics it "
+            "sends to or takes from. Briefs say more about how parts fit, at "
+            "a few more model calls each."
+        ),
+    )
 
 
 def _validate(config: dict[str, object], context: ValidationContext) -> None:
@@ -146,6 +155,12 @@ def sources_of(conn: sqlite3.Connection, tree: str) -> tuple[str, ...] | None:
     return tuple(
         str(name) for name in json.loads(row["config"]).get("sources", ())
     )
+
+
+def looks_up(conn: sqlite3.Connection, tree: str) -> bool:
+    """Whether a tree's leaf briefs are written with lookups."""
+    row = store.get(conn, "trees", tree)
+    return bool(row is not None and json.loads(row["config"]).get("lookups"))
 
 
 class SharedCorpus(DomainError):

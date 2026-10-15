@@ -150,6 +150,7 @@
   "Level {level}": "Рівень {level}",
   "Loaded once and run here. The first load downloads its weights, which takes a little while.": "Завантажується один раз і працює тут. Під час першого завантаження вона звантажує ваги, це трохи триває.",
   "Location": "Розташування",
+  "Look into other topics": "Зазирати в інші теми",
   "Master key": "Майстер-ключ",
   "Master key rotated: {n} secret re-encrypted|Master key rotated: {n} secrets re-encrypted": [
     "Майстер-ключ змінено: перешифровано {n} секрет",
@@ -330,6 +331,7 @@
   "Where the language models live: a provider, an endpoint, and how to authenticate to it.": "Де працюють мовні моделі: провайдер, адреса і спосіб автентифікації.",
   "Which files": "Які файли",
   "Which files of each repository are read.": "Які файли кожного репозиторію читаються.",
+  "While writing a brief, read the files of the other topics it sends to or takes from. Briefs say more about how parts fit, at a few more model calls each.": "Під час написання опису читати файли інших тем, яким тема щось передає або від яких отримує. Описи краще показують, як частини поєднуються, ціною кількох додаткових викликів моделі.",
   "Who can sign in to this server, and what each may do. Readers look, writers also run work, admins also change who has access": "Хто може входити на цей сервер і що кожному дозволено. Читачі переглядають, редактори ще й запускають роботу, адміни ще й керують доступом",
   "With this prompt": "З цим промптом",
   "Worked out from the files fetched, with the same filter a sync reads through. No model is called.": "Пораховано із завантажених файлів тим самим фільтром, що й під час оновлення. Модель не викликається.",

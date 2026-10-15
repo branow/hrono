@@ -36,7 +36,7 @@ from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion, CompletionRequest
 from hrono.llm.providers import client_for
 from hrono.registry.collections.trees import DEFAULT_TREE
-from hrono.summarize import briefs, spend
+from hrono.summarize import briefs, lookup, spend
 from hrono.summarize.resolve import (
     producer_model_name,
     resolve_prompt,
@@ -59,6 +59,7 @@ class _Topic:
     source: str  # the change: condensations added or changed, and removed
     summary: str  # its stored brief text
     signature: str  # the member set being judged (the re-run marker)
+    used: bool = False  # judged for a looked-up file, not its own members
 
 
 def propagate(
@@ -74,8 +75,10 @@ def propagate(
         _prompt_name, template = resolve_prompt(conn, "judge")
         # the judge reads what CONDENSE produced, not what the judge model is
         # called — the same producer rule `brief` follows.
-        topics = _changed_leaves(
-            conn, tree, producer_model_name(conn, job.scope, "condense")
+        condense_model = producer_model_name(conn, job.scope, "condense")
+        topics = _changed_leaves(conn, tree, condense_model)
+        topics += _changed_uses(
+            conn, tree, condense_model, {t.node_id for t in topics}
         )
     if not topics:
         return _outcome(())
@@ -135,6 +138,55 @@ def _changed_leaves(
             continue  # already judged at this exact member set
         source = _change(conn, node_id, model_name, brief["members"])
         topics.append(_Topic(node_id, source, brief["text"], signature))
+    return tuple(topics)
+
+
+def _changed_uses(
+    conn: sqlite3.Connection,
+    tree: str,
+    model_name: str,
+    judged: set[int],
+) -> tuple[_Topic, ...]:
+    """Leaves whose brief took a statement from a file that has changed.
+
+    Such a file is in another topic, so the leaf's own member signature never
+    moves for it: these rows are the only thing that says the brief may now
+    be wrong. A leaf already judged for its own members is left to that.
+    """
+    topics: list[_Topic] = []
+    for row in conn.execute(
+        "SELECT DISTINCT u.node_id AS node_id FROM brief_uses u "
+        "JOIN nodes n ON n.id = u.node_id WHERE n.tree = ? ORDER BY 1",
+        (tree,),
+    ).fetchall():
+        node_id = int(row["node_id"])
+        moved = lookup.changed_uses(conn, node_id)
+        brief = briefs.get(conn, node_id)
+        if node_id in judged or not moved or brief is None:
+            continue
+        parts = []
+        for file, statement in moved:
+            source, _, path = file.partition("/")
+            now = conn.execute(
+                "SELECT d.text AS text FROM sections s JOIN condensations d "
+                "ON d.content_hash = s.content_hash AND d.model_name = ? "
+                "WHERE s.source = ? AND s.path = ? ORDER BY s.id",
+                (model_name, source, path),
+            ).fetchall()
+            body = "\n\n".join(r["text"] for r in now) or "(the file is gone)"
+            parts.append(
+                f"--- {file} (the summary took from it: {statement}) ---\n"
+                + body
+            )
+        topics.append(
+            _Topic(
+                node_id,
+                "LOOKED-UP FILES THAT CHANGED:\n\n" + "\n\n".join(parts),
+                brief["text"],
+                brief["member_signature"],
+                used=True,
+            )
+        )
     return tuple(topics)
 
 
@@ -278,7 +330,14 @@ def _record(
     if verdict is None:  # the whole panel abstained: loud, not silent
         record(conn, tree, topic.node_id, "unparseable", "abstained")
         return  # unjudged, so a re-run must try again: no marker
-    briefs.mark_judged(conn, topic.node_id, topic.signature)
+    if topic.used:
+        # judged against these versions of its looked-up files; a material
+        # change also rewrites the leaf itself, its members being unchanged
+        lookup.settle_uses(conn, topic.node_id)
+        if verdict != "none":
+            briefs.mark_stale(conn, topic.node_id)
+    else:
+        briefs.mark_judged(conn, topic.node_id, topic.signature)
     if verdict == "none":
         record(conn, tree, topic.node_id, verdict, "skipped")
         return
