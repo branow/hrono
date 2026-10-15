@@ -23,9 +23,17 @@ function note(config) {
   if (fs.existsSync(root)) {
     const when = fs.statSync(root).mtime.toISOString().slice(0, 10);
     lines.push(
-      `It is exported at ${config.folder} (${when}). To understand an area, ` +
-        `find where something is, or see how parts fit, use the hrono skill ` +
-        `and start at ${root}.`,
+      `It is exported at ${config.folder} (${when}). A leaf brief.md states ` +
+        "what its sources do exactly - the checks that guard each entry " +
+        "point, every branch and the state it sets, what happens on errors, " +
+        "what it sends and receives and from which other parts - so one " +
+        "brief replaces many file reads. For a question about how something " +
+        "works or how parts fit, before reading code: grep the export's " +
+        "brief.md files for the names in the question, read the leaf briefs " +
+        "that match, and follow each brief's connections to the briefs of " +
+        "the parts on the other side, including what retries or repairs a " +
+        "failed step. Then open the source files to confirm the claims you " +
+        `make. The hrono skill has the details; for an overview, start at ${root}.`,
     );
   } else {
     lines.push(`It is not exported yet; the hrono-export skill writes it.`);
