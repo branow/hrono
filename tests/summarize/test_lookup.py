@@ -199,6 +199,16 @@ def test_a_looking_tree_stores_the_brief_and_its_relations(
     assert [(u["file"], u["statement"]) for u in uses] == [
         ("repo/filer/worker.py", "the consumer subscribes")
     ]
+    with db.connect() as conn:
+        audit = json.loads(
+            conn.execute(
+                "SELECT lookups FROM briefs WHERE node_id = ?", (_pay_node(db),)
+            ).fetchone()[0]
+        )
+    assert audit["calls"] == [
+        ["Grep", {"pattern": "subscribe", "path": "source/"}]
+    ]
+    assert audit["account"] == "- FILER_SUBJECT: source/repo/filer/worker.py"
 
 
 def test_turning_lookups_on_rewrites_the_briefs(db: Database) -> None:
