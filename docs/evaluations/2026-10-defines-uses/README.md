@@ -563,3 +563,34 @@ Spent this round about $55: the per-claim judge $42 (the raw source and the
 long W and I briefs are large inputs), briefs $4.27, condensations $0.97,
 16 agent runs $6.70. The judge is now the expensive part; next rounds judge
 only changed briefs, and score agents first.
+
+## Round 9, step 1 (2026-10-15): does the brief writer say which lookups it used?
+
+A lookup into another branch is a dependency incremental update does not
+know about. The plan stores only the lookups that shaped the brief, as
+relations an update follows, so first: is the writer's `Used` list reliable?
+`harness/lookup.py` gives the new seeded brief prompt read-only tools shaped
+like Claude Code's `Grep`, `Glob` and `Read` over virtual files
+`source/<repo>/<path>` and `condensed/<repo>/<path>.md` - what exists when a
+leaf brief is written in a real build (condense runs over every section
+first); no briefs. Own condensations from the new seeded condense prompt.
+Three topics, $1.16.
+
+- **future-effective job (523):** 5 lookups, 3 declared, each declared file
+  holds its statement. The brief now says the endpoint returns "the ids of
+  filings with status PAID or APPROVED and effective_date <= now" (from
+  legal-api `models/filing.py`). $0.18.
+- **business-pay (694) and entity-pay (797):** the writer looked up little
+  (2-5 calls of 15) and marked the filer and emailer "(behaviour not in this
+  topic)" without looking: the new brief prompt's rule gave it an easy way
+  out. After the instruction said to look first, it still stopped after 4
+  calls with weak finds (the emailer's `get_recipients`, not its consumer).
+- Declarations: no statement about another part came from an undeclared
+  file; entity-pay once declared its own files (now filtered in code) and
+  once wrote paths in its own form (now the instruction asks for the tools'
+  form). The own files were labelled without their repository, so guessed
+  paths missed; now labelled with the full path, and a lookup that finds
+  nothing says how paths begin.
+
+So far: what is declared is accurate; what is looked up is too little for
+two of three topics.
