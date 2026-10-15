@@ -281,6 +281,12 @@ class Use:
     statement: str
 
 
+def accounting(text: str) -> str:
+    """The writer's ``## Lookups`` section: each connection, found or not."""
+    _, found, tail = text.partition("\n## Lookups")
+    return tail.strip() if found else ""
+
+
 def split(
     text: str, own: Iterable[str], known: Mapping[str, str]
 ) -> tuple[str, tuple[Use, ...]]:

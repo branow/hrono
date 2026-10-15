@@ -71,6 +71,7 @@ class Written(NamedTuple):
     unfaithful: str
     text: str  # the brief, without the lookups' Used and Lookups sections
     uses: tuple[lookup.Use, ...] = ()
+    lookups: str = ""  # JSON: the tool calls and the writer's own account
 
 
 def brief(
@@ -143,13 +144,11 @@ def brief(
         rendered = asked.replace(
             _CONTENT_PLACEHOLDER, _with_paths(inputs, own[node_id])
         )
+        tools = lookup.toolbox(found)
         result, flagged = answer(
             completion,
             CompletionRequest(
-                model=model,
-                system="",
-                content=rendered,
-                tools=lookup.toolbox(found),
+                model=model, system="", content=rendered, tools=tools
             ),
             brief_gate(template, source),
         )
@@ -168,6 +167,12 @@ def brief(
             json.dumps(faithfulness(text, source + "\n\n" + read)),
             text,
             uses,
+            json.dumps(
+                {
+                    "calls": tools.calls,
+                    "account": lookup.accounting(result.text),
+                }
+            ),
         )
 
     def keep(entry: Pending, written: Written) -> None:
@@ -192,6 +197,10 @@ def brief(
             )
             store_brief(conn, node_id, text, signature)
             lookup.store_uses(conn, node_id, written.uses)
+            conn.execute(
+                "UPDATE briefs SET lookups = ? WHERE node_id = ?",
+                (written.lookups, node_id),
+            )
 
     briefed = pool.mapped(
         pending,

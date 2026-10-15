@@ -184,14 +184,15 @@ Below are descriptions of the parts of one area of a larger system, each \
 under its title. Write what a reader (human or AI agent) must know about the \
 whole area: what it does, and how work moves through its parts.
 
-Open with one or two sentences: what this area does and what it hands work \
-to or takes work from outside it. Then the end-to-end flows of the area - \
-the things a user or another system asks of it - each as numbered steps from \
-what starts it to what it ends with, naming at each step the part and the \
-function that does it and the state the record moves to, and what happens \
-when that step fails: what is left behind, and which part retries or repairs \
-it, or that none does. Then one line per part not already named in a flow, \
-saying its job. End with the hazards that come from how the parts interact.
+Open with one or two sentences: what this area does and what it hands work to \
+or takes work from outside it. Then the end-to-end flows of the area - the \
+things a user or another system asks of it - each as numbered steps from what \
+starts it to what it ends with, naming at each step the part and the function \
+that does it and the state the record moves to, and what happens when that \
+step fails: what is left behind, and which part retries or repairs it, or \
+that no part of this area does (a part elsewhere may). Then one line per part \
+not already named in a flow, saying its job. End with the hazards that come \
+from how the parts interact.
 
 Aim for 400 to 900 words, however many parts there are: every part's brief is \
 in the map below this one, so a step names the part, what it does and what \
