@@ -476,3 +476,90 @@ question.
 
 Spent this round about $6.50: flow briefs $2.16, briefings $1.16, 8 Sonnet
 and 8 Haiku agent runs.
+
+## Round 8 (2026-10-15): trace each claim, briefs that look things up
+
+Two questions only (hard-legacy-0, hard-failure-1: 104 claims), Sonnet
+agents at 900 words, against the code-only runs `code-w9a/b`.
+
+**Trace: where each claim is lost** (`harness/trace.py`; the per-claim judge
+of round 2, now also on the cited source files, arm `raw`):
+
+| layer | claims stated (of 104) |
+|---|---|
+| source of the cited files | 75 |
+| stored condensations | 57 |
+| stored leaf briefs and their upper briefs | 56 |
+| ledger condensations (round 2) | 58 |
+| ledger2 condensations (this round) | 60 |
+| wide leaf briefs W (round 4) | 65 |
+| investigating leaf briefs I (this round) | 76 |
+
+Why claims were lost:
+- **Condensation.** The seeded prompt aims at 60-120 words. The ledger
+  prompt also dropped the shape of what arrives, the order of an entry's
+  checks, polling loops and the path of an HTTP call. `ledger2`
+  (`harness/ledger.py`) asks for these: 58 -> 60. What remains is mostly
+  phrasing (states named, but not tied to the branch that sets them).
+- **Brief.** The seeded brief prompt says the notes "stay available" (they
+  do not), leaves out lists and enum values, and keeps at most three hazards.
+- **Connections.** The wrong future-effective statement came from here. The
+  job's condensation lists the config key `LEGAL_API_URL` among its uses,
+  not the endpoint `/internal/filings/future_effective`, so no link to
+  legal-api's route was made, and the brief described the endpoint from its
+  name. The same happens with queues: business-pay publishes to
+  `config["EMAIL_PUBLISH_OPTIONS"]["subject"]`, the emailer subscribes
+  through its own key, and name matching cannot connect them.
+
+**Investigating leaf briefs** (`harness/investigate.py`): the brief writer
+(Sonnet) gets two tools over the condensations of all 5,545 sections of the
+tree, `search` (SQLite FTS5) and `read`. Before writing, it finds the other
+side of each message, call and shared record, what an endpoint it calls
+really selects, and what repairs a failed step. 16 topics, 3-10 lookups
+each, $4.27. The future-effective job's brief now says the endpoint returns
+"ids of PAID or APPROVED filings with effective_date <= now". Local claims
+59 of 74 (source 59), connection claims 16 of 30 (source 16).
+
+The writer still gives up on some counterparts: the emailer's consumer
+("not found in the condensations"), what the filer does with a PAID filing.
+It searches only the stored (short) condensations, and topics written in
+the same pass cannot see each other's new briefs.
+
+**Agents.** Export `export-bcreg-v3w-L3` is v3z without flow briefs and
+`condensations.md`; each leaf brief of the slice ends with
+`## Linked topics` (paths to linked topics' briefs, from `links.json`).
+`export-bcreg-v3i-L3` is the same with the I briefs. The instruction says
+what a brief holds and how to use it (`MAP_V2`, `MAP_V3` in
+`harness/agent_v2.py`); no recall block.
+
+| arm | legacy-0 | failure-1 |
+|---|---|---|
+| code only (`code-w9a/b`) | 0.62, 0.62 | 0.29, 0.43 |
+| question-time briefing (round 7) | 0.69, 0.75 | 0.36, 0.43 |
+| W briefs + links, `MAP_V2` (`m2`) | 0.69, 0.69 | 0.50, 0.50 |
+| I briefs + links, `MAP_V2` (`i2`) | 0.69, 0.69 | 0.36, 0.50 |
+| I briefs + links, `MAP_V3` (`i3`) | 0.69, 0.69 | 0.43, 0.50 |
+| ceiling: the question's 13 I briefs inline (`o2`) | 0.56, 0.62 | 0.71, 0.71 |
+
+- With the old instruction ("the map points you to the right files") agents
+  read 1-3 briefs and went to the code. `MAP_V3` (trace the work end to end
+  through Connections first) gets them to read 5-7 briefs, the filer and
+  the future-effective job among them.
+- failure-1: the I briefs carry enough for 0.71 when the agent has all of
+  them; agents that find their own way get 0.43-0.50. The gap is which
+  briefs an agent reaches and what it takes from them.
+- legacy-0: the ceiling is no higher than code only. The answers are good;
+  what they miss are facts the question does not ask for directly (the
+  order of business-pay's auth and empty-body checks, the payload wrapper).
+  A 900-word answer chooses; this question does not separate the arms.
+- Cost per run is the same as code only ($0.17-0.58).
+
+**Also found:** 7 of the 21 W briefs begin with a note the Claude CLI's
+environment leaked into the answer ("the claude.ai Gmail ... connectors need
+authorization"). Only harness-written briefs; none in the stored tree.
+`investigate.clean` strips it.
+
+Spent this round about $55: the per-claim judge $42 (the raw source and the
+long W and I briefs are large inputs), briefs $4.27, condensations $0.97,
+16 agent runs $6.70. The judge is now the expensive part; next rounds judge
+only changed briefs, and score agents first.

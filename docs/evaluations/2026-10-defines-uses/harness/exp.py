@@ -1032,6 +1032,8 @@ def arm_pages(conn) -> dict[str, dict[int, str]]:
         "B": {**stored, **b},
         "C": {**stored, **b, **up},
         "BL": {**stored, **texts("briefs-BL.json")},
+        "W": {**stored, **texts("briefs-W.json")},
+        "I": {**stored, **texts("briefs-W.json"), **texts("briefs-I.json")},
     }
 
 

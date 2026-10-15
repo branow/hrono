@@ -6073,5 +6073,3749 @@
   "quote": "[L7] legal-api `reviews.py`: staff review decisions publish to the same emailer and filer subjects (filer only when APPROVED and effective date has passed).",
   "stated": true,
   "cost": 0.055536999999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "Notification to Queue failed, marking the transaction : {transaction_dao.id} as EVENT_FAILED",
+  "stated": true,
+  "cost": 0.075152
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "completed_status = [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value,\n                            TransactionStatus.FAILED.value]\n        return db.session.query(PaymentTransaction)\\\n            .join(Payment, Payment.id == PaymentTransaction.payment_id)\\\n            .filter(PaymentTransaction.status_code.notin_(completed_status))",
+  "stated": true,
+  "cost": 0.07472300000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "raw",
+  "quote": ".filter(Payment.payment_method_code.in_([PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value])) \\",
+  "stated": true,
+  "cost": 0.073898
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "completed_status = [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value, TransactionStatus.FAILED.value] ... .filter(PaymentTransaction.status_code.notin_(completed_status))",
+  "stated": true,
+  "cost": 0.07648200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "if transaction_dao.status_code == TransactionStatus.EVENT_FAILED.value:\n                transaction_dao.status_code = TransactionStatus.COMPLETED.value\n\n                # Publish status to Queue\n                for invoice in invoices:\n                    current_app.logger.info(f'Publishing stale payment for Invoice {invoice.id}.')\n                    PaymentTransaction.publish_status(transaction_dao, invoice)",
+  "stated": false,
+  "cost": 0.07584099999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "# if the transaction status is EVENT_FAILED then publish to queue and return, else raise error\n            if transaction_dao.status_code == TransactionStatus.EVENT_FAILED.value:\n                transaction_dao.status_code = TransactionStatus.COMPLETED.value\n\n                # Publish status to Queue\n                for invoice in invoices:\n                    current_app.logger.info(f'Publishing stale payment for Invoice {invoice.id}.')\n                    PaymentTransaction.publish_status(transaction_dao, invoice)",
+  "stated": true,
+  "cost": 0.077363
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.067714
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "self.complete_payment(invoice, invoice_reference)\n        # Publish message to the queue with payment token, so that they can release records on their side.\n        self._release_payment(invoice=invoice)",
+  "stated": true,
+  "cost": 0.068187
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0656962
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "def apply_credit(self, invoice: Invoice) -> None:\n        \"\"\"Apply credit to the invoice.\"\"\"\n        self._release_payment(invoice=invoice)",
+  "stated": true,
+  "cost": 0.06764819999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0656462
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "except Exception as e:  # NOQA pylint: disable=broad-except\n            current_app.logger.error(e)\n            current_app.logger.error('Notification to Queue failed for the Payment Event %s', payload)\n            capture_message(f'Notification to Queue failed for the Payment Event : {payload}.', level='error')",
+  "stated": true,
+  "cost": 0.06773420000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06553819999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.06560519999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "filing.payment_completion_date = datetime.now(timezone.utc)\n    filing.payment_status_code = \"COMPLETED\"\n    filing.status = Filing.Status.PAID\n    filing.save()",
+  "stated": true,
+  "cost": 0.029277200000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "def publish_to_filer(filing: Filing, payment_token: PaymentToken):\n    \"\"\"Publish a queue message to entity-filer once the filing has been marked as PAID.\"\"\"\n    with suppress(Exception):",
+  "stated": true,
+  "cost": 0.0306692
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "Once the filing is marked paid, no errors should escape to the Q",
+  "stated": true,
+  "cost": 0.0322982
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if filing.payment_completion_date:\n        # Already processed, so don't do anything but remove from Q\n        logger.debug(f\"already processed, duplicate ce: {str(ce)}\")\n        return {}, HTTPStatus.OK",
+  "stated": true,
+  "cost": 0.029338200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "staff_review_required = [\"continuationIn\"]\n    if filing.filing_type in staff_review_required:\n        # 4.a. Create staff review for the filing\n        create_staff_review(filing)\n    else:\n        # 4.b. Publish to filer Q, if the filing is not a FED (Effective date > now())\n        # ##\n        publish_to_filer(filing, payment_token)",
+  "stated": true,
+  "cost": 0.029887199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "if filing_submission.status == Filing.Status.COMPLETED.value:\n            # log and skip this\n            # it shouldn't be an error, but there could be something to investigate if\n            # multiple retries are happening on something that should have been completed.\n            logger.warning('Queue: Attempting to reprocess business.id=%s",
+  "stated": true,
+  "cost": 0.0260482
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "if filing_submission.status == Filing.Status.COMPLETED.value:\n            # log and skip this",
+  "stated": true,
+  "cost": 0.0251252
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "if filing_submission.status == Filing.Status.COMPLETED.value:\n            # log and skip this",
+  "stated": true,
+  "cost": 0.0253602
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if filing_submission.status == Filing.Status.COMPLETED.value:\n            # log and skip this",
+  "stated": true,
+  "cost": 0.025616200000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0226302
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0225932
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "if etype in ('dissolution', 'registration', 'changeOfRegistration',\n                     'restoration', 'specialResolution', 'correction', 'amalgamationApplication', 'continuationIn') \\\n                and (option := email.get('option', None)) \\\n                and (filing_id := email.get('filingId', None)):\n            # option contains current status of filing - PAID or COMPLETED or CHANGE_REQUESTED, etc\n            message_id = f'{etype}_{option}_{filing_id}'",
+  "stated": true,
+  "cost": 0.0467892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0453472
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "if msg is None or msg.status == MessageProcessing.Status.FAILED.value:\n        return True, msg\n\n    return False, msg",
+  "stated": true,
+  "cost": 0.0470362
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "# limit total number of retries to 1 + msg_retry_num\n    msg_retry_num = current_app.config.get('MSG_RETRY_NUM')\n    if msg and msg.message_seen_count > msg_retry_num:\n        return False, msg",
+  "stated": true,
+  "cost": 0.0459472
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "message_context_properties = {\n        'type': None,\n        'source': None,\n        'message_id': None,\n        'identifier': None,\n        'is_cloud_event_format': False\n    }",
+  "stated": true,
+  "cost": 0.0482212
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "if is_cloud_event_format:\n        if source is None or message_id is None:\n            return False, None\n        msg: MessageProcessing = \\\n            MessageProcessingService.find_message_by_source_and_message_id(source, message_id)\n    else:\n        if message_id is None:\n            return False, None",
+  "stated": true,
+  "cost": 0.0466262
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.047879200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "elif filing.payment_completion_date or filing.source == Filing.Source.COLIN.value:\n        filing._status = Filing.Status.PAID.value",
+  "stated": true,
+  "cost": 0.1033172
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "filings = db.session.query(Filing.id). \\\n            filter(Filing._status.in_([Filing.Status.PAID.value,\n                                       Filing.Status.APPROVED.value])). \\\n            filter(Filing.effective_date <= datetime.now(timezone.utc)).all()",
+  "stated": true,
+  "cost": 0.1038742
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "for filing_id in filing_ids:\n                msg = {'filing': {'id': filing_id}}\n                await queue_service.publish(subject, msg)",
+  "stated": true,
+  "cost": 0.1032402
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1027782
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.10282519999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "if filing_core_submission.status == Filing.Status.COMPLETED:\n            logger.warning('QueueFiler: Attempting to reprocess business.id=%s, filing.id=%s filing=%s',\n                           filing_submission.business_id, filing_submission.id, filing_msg)\n            return None, None",
+  "stated": true,
+  "cost": 0.1290602
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "filing_submission.transaction_id = transaction.id",
+  "stated": true,
+  "cost": 0.1301262
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "except Exception as err:  # pylint: disable=broad-except; note out any exception, but don't fail the call\n        sentry_sdk.capture_message(\n            f'Queue Error: Affiliation error for filing:{filing.id}, with err:{err}',\n            level='error'\n        )",
+  "stated": true,
+  "cost": 0.1301282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "try:\n                await publish_email_message(\n                    qsm, APP_CONFIG.EMAIL_PUBLISH_OPTIONS['subject'], filing_submission, filing_submission.status)\n            except Exception as err:  # pylint: disable=broad-except, unused-variable # noqa F841;\n                # mark any failure for human review\n                capture_message(\n                    f'Queue Error: Failed to place email for filing:{filing_submission.id}'\n                    f'on Queue with error:{err}',\n                    level='error'\n                )\n\n            try:\n                await publish_event(business, filing_submission)\n            except Exception as err:  # pylint: disable=broad-except, unused-variable # noqa F841;\n                # mark any failure for human review\n                print(err)\n                capture_message(\n                    f'Queue Error: Failed to publish event for filing:{filing_submission.id}'\n                    f'on Queue with error:{err}',\n                    level='error'\n                )\n\n            \ntry:\n                publish_gcp_queue_event(business, filing_submission)\n            except Exception as err:",
+  "stated": true,
+  "cost": 0.1315662
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "except Exception as err:  # pylint: disable=broad-except, unused-variable # noqa F841;\n                # mark any failure for human review\n                print(err)\n                capture_message(\n                    f'Queue Error: Failed to publish event for filing:{filing_submission.id}'",
+  "stated": true,
+  "cost": 0.1305842
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1300512
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "# Catch Exception so that any error is still caught and the message is removed from the queue",
+  "stated": true,
+  "cost": 0.1283222
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "raw",
+  "quote": "if filing_core_submission.status == Filing.Status.COMPLETED:\n            logger.warning('QueueFiler: Attempting to reprocess business.id=%s, filing.id=%s filing=%s',\n                           filing_submission.business_id, filing_submission.id, filing_msg)\n            return None, None",
+  "stated": true,
+  "cost": 0.1300892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "raw",
+  "quote": "filings = db.session.query(Filing.id). \\\n            filter(Filing._status.in_([Filing.Status.PAID.value,\n                                       Filing.Status.APPROVED.value])). \\\n            filter(Filing.effective_date <= datetime.now(timezone.utc)).all()",
+  "stated": true,
+  "cost": 0.1310752
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1293502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1535062
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "status_code = 'TRANSACTION_FAILED'",
+  "stated": false,
+  "cost": 0.15074120000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "topic=get_topic_for_corp_type(invoice.corp_type_code)",
+  "stated": true,
+  "cost": 0.1507522
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if corp_type == CorpType.NRO.value:\n        return current_app.config.get('NAMEX_PAY_TOPIC')",
+  "stated": true,
+  "cost": 0.1509912
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "if product_code in [Product.BUSINESS.value, Product.BUSINESS_SEARCH.value]:\n        return current_app.config.get('BUSINESS_PAY_TOPIC')",
+  "stated": true,
+  "cost": 0.15123419999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "if product_code == Product.STRR.value:\n        return current_app.config.get('STRR_PAY_TOPIC')",
+  "stated": true,
+  "cost": 0.1508932
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "STRR_PAY_TOPIC = os.getenv('STRR_PAY_TOPIC', BUSINESS_PAY_TOPIC)",
+  "stated": true,
+  "cost": 0.1510992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.15180319999999997
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1504932
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1525902
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "return humps.camelize(asdict(PaymentToken(invoice.id, status_code, invoice.filing_id, invoice.corp_type_code)))",
+  "stated": true,
+  "cost": 0.0862572
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "return humps.camelize(asdict(PaymentToken(invoice.id, status_code, invoice.filing_id, invoice.corp_type_code)))",
+  "stated": true,
+  "cost": 0.08365619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "if not (payment_token := msg.get('paymentToken', None)) or \\\n            not (corp_type_code := payment_token.get('corpTypeCode', None)) or \\\n            not CorpType.find_by_id(corp_type_code):\n        return False",
+  "stated": true,
+  "cost": 0.0855602
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if not (payment_token := msg.get('paymentToken', None)) or \\\n            not (corp_type_code := payment_token.get('corpTypeCode', None)) or \\\n            not CorpType.find_by_id(corp_type_code):\n        return False\n\n    return True",
+  "stated": true,
+  "cost": 0.0840472
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "if (\n        (ce.type == \"bc.registry.payment\")\n        and (data := ce.data)\n        and isinstance(data, dict)\n    ):\n        converted = dict_keys_to_snake_case(data)\n        pt = PaymentToken(**converted)",
+  "stated": true,
+  "cost": 0.08404320000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "converted = dict_keys_to_snake_case(data)",
+  "stated": true,
+  "cost": 0.0833362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0867122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "staff_review_required = [\"continuationIn\"]\n    if filing.filing_type in staff_review_required:\n        # 4.a. Create staff review for the filing\n        create_staff_review(filing)",
+  "stated": true,
+  "cost": 0.0392522
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "filing.status = Filing.Status.PAID",
+  "stated": true,
+  "cost": 0.0369822
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "staff_review_required = [\"continuationIn\"]\n    if filing.filing_type in staff_review_required:\n        # 4.a. Create staff review for the filing\n        create_staff_review(filing)",
+  "stated": true,
+  "cost": 0.0375262
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "staff_review_required = [\"continuationIn\"]\n    if filing.filing_type in staff_review_required:\n        # 4.a. Create staff review for the filing\n        create_staff_review(filing)",
+  "stated": true,
+  "cost": 0.0375212
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "staff_review_required = [\"continuationIn\"]\n    if filing.filing_type in staff_review_required:\n        # 4.a. Create staff review for the filing\n        create_staff_review(filing)\n    else:\n        # 4.b. Publish to filer Q, if the filing is not a FED (Effective date > now())\n        # ##\n        publish_to_filer(filing, payment_token)",
+  "stated": true,
+  "cost": 0.0381022
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0368282
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "filing_submission.payment_completion_date = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)",
+  "stated": true,
+  "cost": 0.0372812
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "raw",
+  "quote": "if not filing_submission.effective_date or \\\n                    filing_submission.effective_date <= \\\n                    datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc):\n                # if we're not a future effective date, then submit for processing\n                try:\n                    await publish_filing(filing_submission)",
+  "stated": true,
+  "cost": 0.0379162
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1356972
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "elif filing.transaction_id:\n        filing._status = Filing.Status.COMPLETED.value  # pylint: disable=protected-access\n    elif filing.payment_completion_date or filing.source == Filing.Source.COLIN.value:\n        filing._status = Filing.Status.PAID.value",
+  "stated": true,
+  "cost": 0.1368272
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "if (filing._status in [Filing.Status.AWAITING_REVIEW.value,\n                           Filing.Status.CHANGE_REQUESTED.value,\n                           Filing.Status.REJECTED.value] or\n            (filing._status == Filing.Status.APPROVED.value and not filing.transaction_id)):\n        return  # should not override status in the review process",
+  "stated": true,
+  "cost": 0.1358012
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.13452519999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.13589720000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "filings = db.session.query(Filing.id). \\\n            filter(Filing._status.in_([Filing.Status.PAID.value,\n                                       Filing.Status.APPROVED.value])). \\\n            filter(Filing.effective_date <= datetime.now(timezone.utc)).all()",
+  "stated": true,
+  "cost": 0.1369812
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "This module script is for putting filings with future effective dates on the entity filer queue.",
+  "stated": true,
+  "cost": 0.1347582
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1345362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "\"\"\"Limited filings coverage\n\nJust enough filings to mark as paid.\n\"\"\"",
+  "stated": true,
+  "cost": 0.11435419999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "filing.payment_completion_date = datetime.now(timezone.utc)\n    filing.payment_status_code = \"COMPLETED\"\n    filing.status = Filing.Status.PAID\n    filing.save()",
+  "stated": true,
+  "cost": 0.11475919999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1172932
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1173612
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "or payment_token.status_code != \"COMPLETED\"\n    ):\n        # no payment info, or not a payment COMPLETED token, take off Q\n        logger.debug(f\"Removed From Queue: no payment info in ce: {str(ce)}\")\n        return {}, HTTPStatus.OK",
+  "stated": true,
+  "cost": 0.0988062
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "if payment_token.corp_type_code in [\"MHR\", \"BTR\"]:\n        logger.debug(\n            f\"ignoring message for corp_type_code:{payment_token.corp_type_code},  {str(ce)}\")\n        return {}, HTTPStatus.OK",
+  "stated": true,
+  "cost": 0.09869119999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "if filing.payment_completion_date:\n        # Already processed, so don't do anything but remove from Q\n        logger.debug(f\"already processed, duplicate ce: {str(ce)}\")\n        return {}, HTTPStatus.OK",
+  "stated": true,
+  "cost": 0.0985282
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if payment_token.filing_identifier == None and \\\n           payment_token.corp_type_code == \"BC\":\n            logger.debug(\n                f\"Take Off Queue - BOGUS Filing Not Found: {payment_token} for : {str(ce)}\")\n            return {}, HTTPStatus.OK\n\n        logger.debug(\n            f\"Put Back on Queue - Filing Not Found: {payment_token} for : {str(ce)}\")\n        # The payment token might not be there yet, put back on Q\n        return {}, HTTPStatus.NOT_FOUND",
+  "stated": true,
+  "cost": 0.1010022
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0997302
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "# try to find the filing 5 times before putting back on the queue - in case payment token ends up on the queue\n        # before it is assigned to filing.\n        counter = 1\n        filing_submission = None\n        while not filing_submission and counter <= 5:",
+  "stated": true,
+  "cost": 0.09850220000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "raw",
+  "quote": "if filing_submission.status == Filing.Status.COMPLETED.value:\n            # log and skip this\n            # it shouldn't be an error, but there could be something to investigate if\n            # multiple retries are happening on something that should have been completed.\n            logger.warning('Queue: Attempting to reprocess business.id=%s, filing.id=%s payment=%s',",
+  "stated": true,
+  "cost": 0.0989442
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "raw",
+  "quote": "except FilingException:\n            # log to sentry and absorb the error,\n            # ie: do NOT raise it, otherwise the message would be put back on the queue",
+  "stated": true,
+  "cost": 0.0982272
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "if msg := verify_gcp_jwt(request):\n        logger.info(msg)\n        return {}, HTTPStatus.FORBIDDEN",
+  "stated": true,
+  "cost": 0.0568502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "audience = current_app.config.get(\"SUB_AUDIENCE\")\n        logger.debug('audience %s', audience)\n        claim = id_token.verify_oauth2_token(\n            token, requests.Request(), audience=audience\n        )",
+  "stated": true,
+  "cost": 0.057132199999999994
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "if not claim[\"email_verified\"] or claim[\"email\"] != sa_email:\n            msg = f\"Invalid service account or email not verified for email: {claim['email']}\\n\"",
+  "stated": true,
+  "cost": 0.0568082
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if not claim[\"email_verified\"] or claim[\"email\"] != sa_email:\n            msg = f\"Invalid service account or email not verified for email: {claim['email']}\\n\"",
+  "stated": true,
+  "cost": 0.0568732
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "if not request.data:\n        # logger(request, \"INFO\", f\"No incoming raw msg.\")\n        return {}, HTTPStatus.OK\n\n    if msg := verify_gcp_jwt(request):",
+  "stated": true,
+  "cost": 0.0578792
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "",
+  "stated": false,
+  "cost": 0.056314199999999995
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "raw",
+  "quote": "filer_topic = current_app.config[\"FILER_PUBLISH_OPTIONS\"][\"subject\"]\n            queue_message = create_filing_msg(filing.id)",
+  "stated": true,
+  "cost": 0.0585512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "raw",
+  "quote": "email_msg = {\"email\": {\"filingId\": identifier, \"type\": filing_type, \"option\": \"PAID\"}}",
+  "stated": true,
+  "cost": 0.0583192
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "raw",
+  "quote": "with suppress(Exception):\n        mail_topic = current_app.config[\"EMAIL_PUBLISH_OPTIONS\"][\"subject\"]\n        email_msg = create_email_msg(filing.id, filing.filing_type)\n        # await queue.publish(subject=mail_topic, msg=email_msg)\n        queue.publish_json(subject=mail_topic, payload=email_msg)",
+  "stated": true,
+  "cost": 0.0592412
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "raw",
+  "quote": "if filing.effective_date <= filing.payment_completion_date:\n            filer_topic = current_app.config[\"FILER_PUBLISH_OPTIONS\"][\"subject\"]\n            queue_message = create_filing_msg(filing.id)",
+  "stated": true,
+  "cost": 0.05984919999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "raw",
+  "quote": "Once the filing is marked paid, no errors should escape to the Q",
+  "stated": true,
+  "cost": 0.0609662
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "raw",
+  "quote": "if (filing.status == Filing.Status.APPROVED.value and\n            filing.effective_date <= datetime.now(timezone.utc)):\n        # filer notification\n        queue.publish_json(\n            {'filing': {'id': filing.id}},\n            current_app.config.get('NATS_FILER_SUBJECT'))",
+  "stated": true,
+  "cost": 0.0630722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "W",
+  "quote": "`PaymentTransaction.publish_status`: broad except \u2192 sets `transaction_dao.status_code = EVENT_FAILED`, not re-raised. A publish failure is therefore recorded on the transaction rather than raised.",
+  "stated": true,
+  "cost": 0.29498420000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "W",
+  "quote": "`PaymentTransaction.find_stale_records`: `status_code NOT IN [COMPLETED, CANCELLED, FAILED]` (all `TransactionStatus`)",
+  "stated": true,
+  "cost": 0.2968052
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "W",
+  "quote": "`PaymentTransaction.find_stale_records`: `status_code NOT IN [COMPLETED, CANCELLED, FAILED]` (all `TransactionStatus`) AND `transaction_start_time < now - timedelta` AND `payment_method_code IN [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]`.",
+  "stated": true,
+  "cost": 0.2954002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`PaymentTransaction.find_stale_records`: `status_code NOT IN [COMPLETED, CANCELLED, FAILED]` (all `TransactionStatus`) AND `transaction_start_time < now - timedelta` AND `payment_method_code IN [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]`.",
+  "stated": true,
+  "cost": 0.2992942
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.2958782
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "W",
+  "quote": "Payment `COMPLETED`: if the transaction is `EVENT_FAILED`, set it to `COMPLETED` and publish; otherwise `COMPLETED_PAYMENT`.",
+  "stated": true,
+  "cost": 0.2978852
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.15185020000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "W",
+  "quote": "`complete_post_invoice`: `complete_payment` then `_release_payment`.",
+  "stated": true,
+  "cost": 0.1499832
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1552422
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`OnlineBankingService.create_account` creates a CfsAccount with status `PENDING` and method `ONLINE_BANKING`. `process_cfs_refund` uses `_refund_and_create_credit_memo`; `cancel_invoice` uses `reverse_invoice`; `apply_credit` uses `_release_payment`.",
+  "stated": true,
+  "cost": 0.1542792
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1498072
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "W",
+  "quote": "`_release_payment`: a publish failure is caught by `except Exception` \u2192 log, Sentry `capture_message(level='error')`, swallowed, returns None.",
+  "stated": true,
+  "cost": 0.15301019999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.15059920000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1512962
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "W",
+  "quote": "Otherwise the handler sets `payment_completion_date = datetime.now(timezone.utc)`, `payment_status_code = \"COMPLETED\"` and `status = Filing.Status.PAID`, then calls `filing.save()`.",
+  "stated": true,
+  "cost": 0.0448022
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "W",
+  "quote": "The branch step (`create_staff_review` or `publish_to_filer`) and `publish_to_emailer` each run inside `with suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0460092
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "W",
+  "quote": "A Filer or Emailer publish failure is swallowed by `suppress`, so the filing stays PAID but may never reach the filer.",
+  "stated": true,
+  "cost": 0.044353199999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`filing.payment_completion_date` already set \u2192 200, dropped. This is the only idempotency guard.",
+  "stated": true,
+  "cost": 0.044313200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "W",
+  "quote": "`filing.filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`. Otherwise \u2192 `publish_to_filer(filing, payment_token)`.",
+  "stated": true,
+  "cost": 0.0446372
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0583322
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0575842
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.056899200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.057365200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "W",
+  "quote": "Any other `statusCode`: log an error and raise `QueueException`.",
+  "stated": true,
+  "cost": 0.0574292
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0580922
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "W",
+  "quote": "etype in ('dissolution', 'registration', 'changeOfRegistration', 'restoration', 'specialResolution', 'correction', 'amalgamationApplication', 'continuationIn') with option and filingId: `'{etype}_{option}_{filing_id}'`.",
+  "stated": true,
+  "cost": 0.0431892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0425022
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0422112
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`msg.message_seen_count > MSG_RETRY_NUM`: `(False, msg)`. `msg is None` or `msg.status == 'FAILED'`: `(True, msg)`.",
+  "stated": true,
+  "cost": 0.045632200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "W",
+  "quote": "Messages whose `message_id` stays None are not processable, since `is_processable_message` returns `(False, None)`.",
+  "stated": true,
+  "cost": 0.046246199999999994
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "W",
+  "quote": "Cloud event format and (source is None or message_id is None): `(False, None)`.\n- Not cloud event and message_id is None: `(False, None)`.",
+  "stated": true,
+  "cost": 0.0426862
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "W",
+  "quote": "Messages whose `message_id` stays None are not processable, since `is_processable_message` returns `(False, None)`.",
+  "stated": true,
+  "cost": 0.0444892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "W",
+  "quote": "`receive_before_change` (before_insert and before_update): no caller check; it only sets status by the rules below.",
+  "stated": true,
+  "cost": 0.1722672
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1733592
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "W",
+  "quote": "A batch job that fetches filings with future effective dates from the legal API and publishes each one to the entity-filer NATS subject.",
+  "stated": true,
+  "cost": 0.1722652
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1719182
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1719352
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "W",
+  "quote": "`process_filing`: `filing_core_submission.status == Filing.Status.COMPLETED` \u2192 log a warning and return `None, None`.",
+  "stated": true,
+  "cost": 0.1452552
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "W",
+  "quote": "The first commit happens before the external calls. If a later step raises, the DB changes stay committed and nothing rolls them back.",
+  "stated": true,
+  "cost": 0.1452462
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "W",
+  "quote": "`update_affiliation`: catches all exceptions, Sentry level 'error', swallows, no retry.",
+  "stated": true,
+  "cost": 0.1472932
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "W",
+  "quote": "Email publish is wrapped in try/except `Exception`. It sends Sentry `capture_message(level='error')` and swallows the error. Later steps still run. - Event publish (`publish_event`) is wrapped in try/except `Exception`. It prints to stdout, sends Sentry `capture_message(level='error')` and swallows the error. - `publish_event` and `publish_gcp_queue_event` catch all exceptions, call Sentry `capture_message`, log the error, and continue.",
+  "stated": true,
+  "cost": 0.1478112
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "W",
+  "quote": "Email publish is wrapped in try/except `Exception`. It sends Sentry `capture_message(level='error')` and swallows the error. Later steps still run.",
+  "stated": true,
+  "cost": 0.1476542
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1471112
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "W",
+  "quote": "`QueueException` or any other `Exception` \u2192 Sentry `capture_message('Queue Error:' + json.dumps(filing_msg), level='error')`, logged, swallowed. The message is removed from the queue.",
+  "stated": true,
+  "cost": 0.14660220000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "W",
+  "quote": "`process_filing`: `filing_core_submission.status == Filing.Status.COMPLETED` \u2192 log a warning and return `None, None`.",
+  "stated": true,
+  "cost": 0.1452992
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1449152
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "W",
+  "quote": "Publish and profile errors are suppressed. Downstream steps can be lost, and the duplicate guards (`payment_completion_date`, COMPLETED) block any redelivery from repairing them.",
+  "stated": true,
+  "cost": 0.1478602
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.29910620000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.29852120000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "W",
+  "quote": "Topic is `get_topic_for_corp_type(corp_type_code)` for payment events (`QueueMessageTypes.PAYMENT`, payload from `PaymentTransaction.create_event_payload`).",
+  "stated": true,
+  "cost": 0.2962122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`corp_type == 'NRO'` returns `NAMEX_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.2958562
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "W",
+  "quote": "A product in [`Product.BUSINESS`, `Product.BUSINESS_SEARCH`] returns `BUSINESS_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.2961542
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "W",
+  "quote": "`Product.STRR` returns `STRR_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.2957782
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "W",
+  "quote": "`STRR_PAY_TOPIC` (defaults to `BUSINESS_PAY_TOPIC`)",
+  "stated": true,
+  "cost": 0.2959592
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "W",
+  "quote": "Queue: GCP Pub/Sub as in Contract.",
+  "stated": true,
+  "cost": 0.3003582
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "W",
+  "quote": "Consumes payment-status messages from a NATS Streaming subject and updates legal_api `Filing` records.",
+  "stated": true,
+  "cost": 0.29863320000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.2979352
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.22961720000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.22986120000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "W",
+  "quote": "`worker.is_processable_message`:** true only if all three hold:\n  - `msg.get('paymentToken')` is truthy;",
+  "stated": true,
+  "cost": 0.2297452
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`worker.is_processable_message`: true only if all three hold: `msg.get('paymentToken')` is truthy; `payment_token.get('corpTypeCode')` is truthy; `CorpType.find_by_id(corp_type_code)` is truthy.",
+  "stated": true,
+  "cost": 0.2298322
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.2277482
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.2276862
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.19270220000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0747902
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "W",
+  "quote": "Otherwise the handler sets `payment_completion_date = datetime.now(timezone.utc)`, `payment_status_code = \"COMPLETED\"` and `status = Filing.Status.PAID`, then calls `filing.save()`.",
+  "stated": true,
+  "cost": 0.07554519999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "W",
+  "quote": "`filing.filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`. Otherwise \u2192 `publish_to_filer(filing, payment_token)`.\n- `create_staff_review` sets `review.status = ReviewStatus.AWAITING_REVIEW` and `filing.status = Filing.Status.AWAITING_REVIEW.value`.",
+  "stated": true,
+  "cost": 0.0760942
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "W",
+  "quote": "`filing.filing_type in [\"continuationIn\"]` \u2192 `create_staff_review(filing)`. Otherwise \u2192 `publish_to_filer(filing, payment_token)`.\n- `create_staff_review` sets `review.status = ReviewStatus.AWAITING_REVIEW` and `filing.status = Filing.Status.AWAITING_REVIEW.value`.",
+  "stated": true,
+  "cost": 0.0760942
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "W",
+  "quote": "This is the same filer path that business-pay skips for `continuationIn`. The continuationIn filing is later released by staff approval.",
+  "stated": true,
+  "cost": 0.0752302
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0778112
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "W",
+  "quote": "`statusCode == Filing.Status.COMPLETED.value`: set `payment_completion_date` to the current UTC time and commit.",
+  "stated": true,
+  "cost": 0.0752092
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "W",
+  "quote": "if `not filing_submission.effective_date or filing_submission.effective_date <= utcnow (UTC-aware)`, publish the filing;",
+  "stated": true,
+  "cost": 0.0752892
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "W",
+  "quote": "`process_filing`: `filing_core_submission.status == Filing.Status.COMPLETED` \u2192 log a warning and return `None, None`.",
+  "stated": true,
+  "cost": 0.20287219999999997
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "W",
+  "quote": "4. `transaction_id` \u2192 `COMPLETED`. 5. `payment_completion_date` or `source == COLIN` \u2192 `PAID`.",
+  "stated": true,
+  "cost": 0.2038972
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "W",
+  "quote": "`_status in [AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED]`, or (`_status == APPROVED` and not `transaction_id`) \u2192 return, status unchanged.",
+  "stated": true,
+  "cost": 0.1993112
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.20086020000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.19977219999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1985912
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "W",
+  "quote": "A batch job that fetches filings with future effective dates from the legal API and publishes each one to the entity-filer NATS subject.",
+  "stated": true,
+  "cost": 0.1989332
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1985812
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "W",
+  "quote": "business-pay `database/filings.py`: its own minimal Filing model duplicates the Status enum, but it omits `WITHDRAWN`.",
+  "stated": true,
+  "cost": 0.07776319999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "W",
+  "quote": "Otherwise the handler sets `payment_completion_date = datetime.now(timezone.utc)`, `payment_status_code = \"COMPLETED\"` and `status = Filing.Status.PAID`, then calls `filing.save()`.",
+  "stated": true,
+  "cost": 0.0780632
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0796322
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "W",
+  "quote": "business-pay writes the column with its own minimal model and bypasses these setters.",
+  "stated": true,
+  "cost": 0.0827302
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "W",
+  "quote": "`payment_token.status_code != \"COMPLETED\"` \u2192 200, dropped.",
+  "stated": true,
+  "cost": 0.2108542
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "W",
+  "quote": "`payment_token.corp_type_code in [\"MHR\", \"BTR\"]` \u2192 200, dropped.",
+  "stated": true,
+  "cost": 0.17890219999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "W",
+  "quote": "`filing.payment_completion_date` already set \u2192 200, dropped. This is the only idempotency guard.",
+  "stated": true,
+  "cost": 0.2108412
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "W",
+  "quote": "Filing not found AND `payment_token.filing_identifier == None` AND `corp_type_code == \"BC\"` \u2192 200, dropped. - Filing not found otherwise \u2192 404 NOT_FOUND, the message goes back on the queue.",
+  "stated": true,
+  "cost": 0.2126802
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.21347820000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.2105002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "W",
+  "quote": "`filing_submission.status == Filing.Status.COMPLETED.value`: log a warning, send to Sentry, and return.",
+  "stated": true,
+  "cost": 0.21421220000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.21478519999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "W",
+  "quote": "`POST /worker` | `verify_gcp_jwt(request)`. A truthy return (an error message) gives 403 FORBIDDEN.",
+  "stated": true,
+  "cost": 0.0726362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "W",
+  "quote": "It calls `id_token.verify_oauth2_token(token, requests.Request(), audience=config[\"SUB_AUDIENCE\"])`.",
+  "stated": true,
+  "cost": 0.0726532
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "W",
+  "quote": "It returns an error message if `claim[\"email_verified\"]` is false, or if `claim[\"email\"]` != `config[\"SUB_SERVICE_ACCOUNT\"]`.",
+  "stated": true,
+  "cost": 0.07263420000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "W",
+  "quote": "It returns an error message if `claim[\"email_verified\"]` is false, or if `claim[\"email\"]` != `config[\"SUB_SERVICE_ACCOUNT\"]`.",
+  "stated": true,
+  "cost": 0.0726942
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07402020000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0736702
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "W",
+  "quote": "Out, Filer queue:** - `queue.publish_json(subject=current_app.config[\"FILER_PUBLISH_OPTIONS\"][\"subject\"], payload=create_filing_msg(filing.id))`. - The payload shape is `{filing: {id}}`",
+  "stated": true,
+  "cost": 0.08138920000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "W",
+  "quote": "Out, Emailer queue:** - `queue.publish_json(subject=current_app.config[\"EMAIL_PUBLISH_OPTIONS\"][\"subject\"], payload=create_email_msg(filing.id, filing.filing_type))`. - The email message hardcodes option `\"PAID\"`.",
+  "stated": true,
+  "cost": 0.0814672
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "W",
+  "quote": "The branch step (`create_staff_review` or `publish_to_filer`) and `publish_to_emailer` each run inside `with suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0835992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "W",
+  "quote": "It publishes to the filer queue only when `filing.effective_date <= filing.payment_completion_date`.",
+  "stated": true,
+  "cost": 0.0824472
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "W",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0699602
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "W",
+  "quote": "It publishes `{filing: {id}}` to `NATS_FILER_SUBJECT` when `filing.status == APPROVED` and `effective_date <= now(UTC)`. It also publishes to `NATS_EMAILER_SUBJECT`. This is the same filer path that business-pay skips for `continuationIn`.",
+  "stated": true,
+  "cost": 0.08363519999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "`publish_status` catches `Exception` (broad), logs error and warning, sets transaction_dao.status_code to EVENT_FAILED, does not re-raise",
+  "stated": true,
+  "cost": 0.0449602
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "`find_stale_records` \u2013 if `status_code NOT IN [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value, TransactionStatus.FAILED.value]` AND `transaction_start_time < (now UTC - timedelta)` AND `payment_method_code IN [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]` -> returns those transactions",
+  "stated": true,
+  "cost": 0.045421199999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "`find_stale_records` \u2013 if `status_code NOT IN [TransactionStatus.COMPLETED.value, TransactionStatus.CANCELLED.value, TransactionStatus.FAILED.value]` AND `transaction_start_time < (now UTC - timedelta)` AND `payment_method_code IN [PaymentMethod.CC.value, PaymentMethod.DIRECT_PAY.value]` -> returns those transactions",
+  "stated": true,
+  "cost": 0.043251200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0417452
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0435492
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "if `transaction_dao.status_code == TransactionStatus.EVENT_FAILED.value` in stale payment branch -> set status to COMPLETED, publish, return; else `BusinessException(Error.COMPLETED_PAYMENT)`",
+  "stated": true,
+  "cost": 0.0456162
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0397202
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "In `complete_post_invoice`, `self._release_payment(invoice=invoice)` called.",
+  "stated": true,
+  "cost": 0.0398782
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0396472
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0412042
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.03966719999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "ON ERROR: catch Exception during queue publish, log error, log payload, call capture_message with level 'error', continue (swallowed).",
+  "stated": true,
+  "cost": 0.0400502
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0395442
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0396012
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "ORDER: Sets `filing.payment_completion_date`, `filing.payment_status_code = \"COMPLETED\"`, `filing.status = Filing.Status.PAID`, then `filing.save()`; after filing marked PAID, calls `create_staff_review` or `publish_to_filer`; then publishes to emailer.",
+  "stated": true,
+  "cost": 0.0136252
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "`publish_to_filer` and `publish_to_emailer` wrapped in `with suppress(Exception)` \u2013 all exceptions logged as debug, swallowed, and later steps still run.",
+  "stated": true,
+  "cost": 0.014302200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "`publish_to_filer` and `publish_to_emailer` wrapped in `with suppress(Exception)` \u2013 all exceptions logged as debug, swallowed, and later steps still run.",
+  "stated": true,
+  "cost": 0.015236199999999998
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "`if filing.payment_completion_date already set -> return 200 OK` (duplicate, remove from queue).",
+  "stated": true,
+  "cost": 0.012846199999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "`if filing.filing_type in [\"continuationIn\"] -> create staff review` (4.a); else `publish_to_filer` (4.b).",
+  "stated": true,
+  "cost": 0.0130502
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.015445200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "if `paymentToken.statusCode == 'COMPLETED'` -> set `filing_submission.payment_completion_date` to UTC now, commit to db",
+  "stated": true,
+  "cost": 0.0171222
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "no duplicate guard on message retry; no idempotency key or deduplication",
+  "stated": true,
+  "cost": 0.016692199999999997
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "no duplicate guard on message retry; no idempotency key or deduplication",
+  "stated": true,
+  "cost": 0.0160582
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "`paymentToken.statusCode` values checked: `'TRANSACTION_FAILED'`, `'COMPLETED'`",
+  "stated": true,
+  "cost": 0.0162272
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.013910200000000001
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "if email.type in ('dissolution', 'registration', 'changeOfRegistration', 'restoration', 'specialResolution', 'correction', 'amalgamationApplication', 'continuationIn') and option and filingId exist -> message_id = '{type}_{option}_{filingId}'; ",
+  "stated": true,
+  "cost": 0.0277382
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0270062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "if msg is None or msg.status == 'FAILED' -> return (True, msg); else -> return (False, msg).",
+  "stated": true,
+  "cost": 0.0294452
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "if msg exists and msg.message_seen_count > MSG_RETRY_NUM from app config -> return (False, msg); if msg is None or msg.status == 'FAILED' -> return (True, msg)",
+  "stated": true,
+  "cost": 0.0274612
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "no match -> return properties dict with all None/False values.",
+  "stated": true,
+  "cost": 0.0268352
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "if is_cloud_event_format is True and (source is None or message_id is None) -> return (False, None); if is_cloud_event_format is False and message_id is None -> return (False, None)",
+  "stated": true,
+  "cost": 0.027285200000000003
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.033553200000000005
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "`receive_before_change`: else if `filing.payment_completion_date` is truthy OR `filing.source == Filing.Source.COLIN.value` -> set `filing._status = Filing.Status.PAID.value`.",
+  "stated": true,
+  "cost": 0.052077200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.054664199999999996
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "Polls a legal API for filings with future effective dates and publishes each to a NATS queue for the entity filer to process.",
+  "stated": true,
+  "cost": 0.051675200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.051328200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0513652
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "if `filing_core_submission.status == Filing.Status.COMPLETED` -> logs warning and returns None, None (stops processing)",
+  "stated": true,
+  "cost": 0.0744062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "Saves `business` and `filing_submission` to `db.session`, commits. Then, if `filing_core_submission.filing_type` in [AMALGAMATIONAPPLICATION, CONTINUATIONIN, CONVERSION, INCORPORATIONAPPLICATION, REGISTRATION]: updates `filing_submission.business_id = business.id`, commits again; calls `business_profile.update_affiliation()`",
+  "stated": true,
+  "cost": 0.0780972
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "In `update_affiliation`: broad `except Exception` catches all; message sent to Sentry at level 'error'; `QueueException` raised only if any of three conditions fail (rv, deaffiliation, bootstrap_update status checks); original exception `err` not re-raised.",
+  "stated": false,
+  "cost": 0.0765292
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "`publish_email_message()` and `publish_event()` each wrapped in try/except catching `Exception`, logged to Sentry via `capture_message(..., level='error')` with filing ID and error, execution continues",
+  "stated": true,
+  "cost": 0.0765922
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "`publish_email_message()` and `publish_event()` each wrapped in try/except catching `Exception`, logged to Sentry via `capture_message(..., level='error')` with filing ID and error, execution continues; failed email or event publish does not stop further steps or rollback the commit.",
+  "stated": true,
+  "cost": 0.0749252
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0776272
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "`QueueException` or `Exception` - caught, logged at error level with `exc_info=True`, sent to Sentry via `capture_message('Queue Error:' + json.dumps(filing_msg), level='error')`, then swallowed; `process_filing` does not run.",
+  "stated": false,
+  "cost": 0.0758832
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0772502
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "notes-ledger2",
+  "quote": "`get_future_effective_filing_ids`: if `_status` in [PAID, APPROVED] AND `effective_date` <= now -> included.",
+  "stated": true,
+  "cost": 0.0766762
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "notes-ledger2",
+  "quote": "ABSENT: No retry on queue publish failure; no persistence or fallback mechanism.",
+  "stated": true,
+  "cost": 0.07820619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0825272
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0843772
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "topic from `get_topic_for_corp_type(invoice.corp_type_code)`",
+  "stated": true,
+  "cost": 0.0827682
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "`get_topic_for_corp_type()` if `corp_type == CorpType.NRO.value` -> return `current_app.config.get('NAMEX_PAY_TOPIC')`",
+  "stated": true,
+  "cost": 0.08310719999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "if `product_code in [Product.BUSINESS.value, Product.BUSINESS_SEARCH.value]` -> return `current_app.config.get('BUSINESS_PAY_TOPIC')`",
+  "stated": true,
+  "cost": 0.0832502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "if `product_code == Product.STRR.value` -> return `current_app.config.get('STRR_PAY_TOPIC')`",
+  "stated": true,
+  "cost": 0.08290420000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0825502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.08449920000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "notes-ledger2",
+  "quote": "Processes payment status updates from NATS Streaming queue and applies outcomes to filing records in a legal entity system.",
+  "stated": false,
+  "cost": 0.08284920000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0840912
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0481952
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0481692
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "IN: `nats.aio.client.Msg` with UTF-8 JSON payload containing `paymentToken` object; extracted dict requires `paymentToken.corpTypeCode` to exist and match a known `CorpType.id`, otherwise message is skipped without error.",
+  "stated": true,
+  "cost": 0.0491032
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "extracted dict requires `paymentToken.corpTypeCode` to exist and match a known `CorpType.id`, otherwise message is skipped without error.",
+  "stated": true,
+  "cost": 0.04871519999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "Cloud event with `ce.type == \"bc.registry.payment\"` and nested data dict; camelCase keys converted to snake_case via regex",
+  "stated": true,
+  "cost": 0.0486562
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "Cloud event with `ce.type == \"bc.registry.payment\"` and nested data dict; camelCase keys converted to snake_case via regex `(?<!^)(?=[A-Z])`",
+  "stated": true,
+  "cost": 0.0487992
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.04830519999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "if filing.filing_type in [\"continuationIn\"] -> create staff review` (4.a); else `publish_to_filer` (4.b).",
+  "stated": true,
+  "cost": 0.0197612
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "Sets `filing.payment_completion_date`, `filing.payment_status_code = \"COMPLETED\"`, `filing.status = Filing.Status.PAID`, then `filing.save()`",
+  "stated": true,
+  "cost": 0.017686200000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "`if filing.filing_type in [\"continuationIn\"] -> create staff review` (4.a)",
+  "stated": false,
+  "cost": 0.0212802
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0221952
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "`if filing.filing_type in [\"continuationIn\"] -> create staff review` (4.a); else `publish_to_filer` (4.b).",
+  "stated": true,
+  "cost": 0.019126200000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "STATES: `Filing.Status.COMPLETED.value`, `Filing.Status.PAID.value`; `paymentToken.statusCode` values checked: `'TRANSACTION_FAILED'`, `'COMPLETED'`; `APP_CONFIG.ENVIRONMENT` checked against `'prod'`.",
+  "stated": true,
+  "cost": 0.0195772
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "if `paymentToken.statusCode == 'COMPLETED'` -> set `filing_submission.payment_completion_date` to UTC now, commit to db, attempt email publish, attempt filing publish if `effective_date` is None or <= UTC now \u2014 in `process_payment`.",
+  "stated": true,
+  "cost": 0.017990199999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "notes-ledger2",
+  "quote": "attempt filing publish if `effective_date` is None or <= UTC now",
+  "stated": true,
+  "cost": 0.0173502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "if `filing_core_submission.status == Filing.Status.COMPLETED` -> logs warning and returns None, None (stops processing)",
+  "stated": false,
+  "cost": 0.0741662
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "In `receive_before_change`: else if `filing.transaction_id` is truthy -> set `filing._status = Filing.Status.COMPLETED.value`.\n\nRULE: In `receive_before_change`: else if `filing.payment_completion_date` is truthy OR `filing.source == Filing.Source.COLIN.value` -> set `filing._status = Filing.Status.PAID.value`.",
+  "stated": true,
+  "cost": 0.0773712
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "In `receive_before_change`: if `filing._status` in `[Filing.Status.AWAITING_REVIEW.value, Filing.Status.CHANGE_REQUESTED.value, Filing.Status.REJECTED.value]` OR (`filing._status == Filing.Status.APPROVED.value` AND `filing.transaction_id` is falsy) -> return early, skip status update.",
+  "stated": true,
+  "cost": 0.0772052
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0737642
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.07488619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0769502
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "Polls a legal API for filings with future effective dates and publishes each to a NATS queue for the entity filer to process.",
+  "stated": true,
+  "cost": 0.0741122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0737852
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "SQL dataclass for minimal Filing entity in a business payment system.",
+  "stated": true,
+  "cost": 0.0528012
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "ORDER: Sets `filing.payment_completion_date`, `filing.payment_status_code = \"COMPLETED\"`, `filing.status = Filing.Status.PAID`, then `filing.save()`",
+  "stated": true,
+  "cost": 0.05325619999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0441982
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0526432
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "`if payment_token.status_code != \"COMPLETED\" -> return 200 OK` (remove from queue).",
+  "stated": true,
+  "cost": 0.041637200000000006
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "`if payment_token.corp_type_code in [\"MHR\", \"BTR\"] -> return 200 OK` (remove from queue).",
+  "stated": true,
+  "cost": 0.0416472
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "`if filing.payment_completion_date already set -> return 200 OK` (duplicate, remove from queue).",
+  "stated": true,
+  "cost": 0.0415692
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "`if not filing found and payment_token.filing_identifier == None and payment_token.corp_type_code == \"BC\" -> return 200 OK` (remove; bogus filing).\n`if not filing found -> return 404 NOT_FOUND` (put back on queue; token may arrive later).",
+  "stated": true,
+  "cost": 0.042303200000000006
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.041336200000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "`while not filing_submission and counter <= 5` in `process_payment` \u2014 retry up to 5 times, sleep 0.2 seconds between retries, ends when filing found or counter exceeds 5",
+  "stated": true,
+  "cost": 0.04305319999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.04334519999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "notes-ledger2",
+  "quote": "if not found after loop, raise `FilingException`.",
+  "stated": true,
+  "cost": 0.0434282
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "verifies GCP JWT via `verify_gcp_jwt(request)` and returns 403 FORBIDDEN if it fails; then processes the event.",
+  "stated": true,
+  "cost": 0.0223872
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "google.oauth2.id_token.verify_oauth2_token(token, requests.Request(), audience=SUB_AUDIENCE config value) - no credential sent in call; verifies JWT against GCP OAuth provider.",
+  "stated": true,
+  "cost": 0.024324199999999997
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "if claim[\"email_verified\"] is false OR claim[\"email\"] != SUB_SERVICE_ACCOUNT config value -> sets msg to \"Invalid service account or email not verified for email: {claim['email']}\\n\"; otherwise msg stays empty string.",
+  "stated": true,
+  "cost": 0.022650200000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "if claim[\"email_verified\"] is false OR claim[\"email\"] != SUB_SERVICE_ACCOUNT config value -> sets msg to \"Invalid service account or email not verified for email: {claim['email']}\\n\"",
+  "stated": true,
+  "cost": 0.0225802
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0236812
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0218412
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0280332
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "notes-ledger2",
+  "quote": "`queue.publish_json(subject=mail_topic, payload=email_msg)` with `mail_topic` from `current_app.config[\"EMAIL_PUBLISH_OPTIONS\"][\"subject\"]`; payloads created by `create_filing_msg(filing.id)` and `create_email_msg(filing.id, filing.filing_type)`.",
+  "stated": true,
+  "cost": 0.025816199999999997
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "notes-ledger2",
+  "quote": "`publish_to_filer` and `publish_to_emailer` wrapped in `with suppress(Exception)` \u2013 all exceptions logged as debug, swallowed, and later steps still run.",
+  "stated": true,
+  "cost": 0.027488199999999997
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "notes-ledger2",
+  "quote": "`if filing.effective_date <= filing.payment_completion_date -> publish to filer queue` (not a FED); if greater, no publish to filer.",
+  "stated": true,
+  "cost": 0.026821200000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.026783200000000004
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "notes-ledger2",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0269692
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 0,
+  "arm": "I",
+  "quote": "`publish_status`: catches Exception, logs and sets the transaction `EVENT_FAILED`.",
+  "stated": true,
+  "cost": 0.2415062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 1,
+  "arm": "I",
+  "quote": "`PaymentTransaction.find_stale_records` returns rows where all of these hold:\n  - status is not in `[COMPLETED, CANCELLED, FAILED]`;\n  - `transaction_start_time < now UTC - delta`;\n  - method is in `[CC, DIRECT_PAY]`.",
+  "stated": true,
+  "cost": 0.2421122
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 2,
+  "arm": "I",
+  "quote": "`PaymentTransaction.find_stale_records` returns rows where all of these hold:\n  - status is not in `[COMPLETED, CANCELLED, FAILED]`;\n  - `transaction_start_time < now UTC - delta`;\n  - method is in `[CC, DIRECT_PAY]`.",
+  "stated": true,
+  "cost": 0.2420872
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 3,
+  "arm": "I",
+  "quote": "`publish_status`: catches Exception, logs and sets the transaction `EVENT_FAILED`. Only the stale-payment path in `update_transaction` re-publishes it; the stale payment job calls `update_transaction` again.",
+  "stated": true,
+  "cost": 0.24554620000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 4,
+  "arm": "I",
+  "quote": "If the transaction is EVENT_FAILED \u2192 set COMPLETED, publish and return.",
+  "stated": false,
+  "cost": 0.2439652
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 0,
+  "claim": 5,
+  "arm": "I",
+  "quote": "`publish_status`: catches Exception, logs and sets the transaction `EVENT_FAILED`. Only the stale-payment path in `update_transaction` re-publishes it; the stale payment job calls `update_transaction` again.",
+  "stated": true,
+  "cost": 0.24188720000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 0,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1313872
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 1,
+  "arm": "I",
+  "quote": "Otherwise `complete_post_invoice` runs `complete_payment` then `_release_payment`.",
+  "stated": true,
+  "cost": 0.1286752
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 2,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1330042
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 3,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1283862
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 4,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1301192
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 5,
+  "arm": "I",
+  "quote": "`_release_payment`: catches Exception, logs the error and payload, calls Sentry `capture_message` at error level and continues. A failed PAYMENT publish is not retried, so the payment status event can be lost.",
+  "stated": true,
+  "cost": 0.1317472
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 6,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.12920120000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 1,
+  "claim": 7,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1315282
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 0,
+  "arm": "I",
+  "quote": "Write: `filing.payment_completion_date`, `filing.payment_status_code = \"COMPLETED\"`, `filing.status = Filing.Status.PAID`, then `filing.save()`, which adds to the session and commits at once.",
+  "stated": true,
+  "cost": 0.0405502
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 1,
+  "arm": "I",
+  "quote": "`publish_to_filer` and `publish_to_emailer` are each wrapped in `with suppress(Exception)`.",
+  "stated": true,
+  "cost": 0.0401372
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 2,
+  "arm": "I",
+  "quote": "`publish_to_filer` and `publish_to_emailer` are each wrapped in `with suppress(Exception)`. Errors are logged at debug, swallowed, and later steps still run. The route still returns success.",
+  "stated": true,
+  "cost": 0.0403762
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 3,
+  "arm": "I",
+  "quote": "`filing.payment_completion_date` already set \u2192 200 OK (duplicate).",
+  "stated": true,
+  "cost": 0.0400112
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 2,
+  "claim": 4,
+  "arm": "I",
+  "quote": "`pay_filer.py`: `filing.filing_type in [\"continuationIn\"]` \u2192 `create_staff_review` (Review `AWAITING_REVIEW`, filing `AWAITING_REVIEW`). Otherwise \u2192 `publish_to_filer`.",
+  "stated": true,
+  "cost": 0.0406952
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 0,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.052512199999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 1,
+  "arm": "I",
+  "quote": "A redelivery for a still-`PAID` filing re-sets `payment_completion_date` and republishes both the email and the filing event.",
+  "stated": true,
+  "cost": 0.0504642
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 2,
+  "arm": "I",
+  "quote": "A redelivery for a still-`PAID` filing re-sets `payment_completion_date` and republishes both the email and the filing event.",
+  "stated": true,
+  "cost": 0.048969200000000004
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 3,
+  "arm": "I",
+  "quote": "A redelivery for a still-`PAID` filing re-sets `payment_completion_date` and republishes both the email and the filing event.",
+  "stated": true,
+  "cost": 0.0501702
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 4,
+  "arm": "I",
+  "quote": "`statusCode == 'TRANSACTION_FAILED'` \u2192 return with no change.",
+  "stated": true,
+  "cost": 0.051364200000000006
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 3,
+  "claim": 5,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0502722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 0,
+  "arm": "I",
+  "quote": "`dissolution`, `registration`, `changeOfRegistration`, `restoration`, `specialResolution`, `correction`, `amalgamationApplication` or `continuationIn`, with option and filingId: `{type}_{option}_{filingId}`.",
+  "stated": true,
+  "cost": 0.0428432
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 1,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0422112
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 2,
+  "arm": "I",
+  "quote": "Record is None or `status == 'FAILED'`: `(True, msg)`. - Otherwise (PROCESSING or COMPLETE): `(False, msg)`.",
+  "stated": true,
+  "cost": 0.044150199999999994
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 3,
+  "arm": "I",
+  "quote": "Existing record with `message_seen_count > MSG_RETRY_NUM` (app config): `(False, msg)`.",
+  "stated": true,
+  "cost": 0.0424062
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 4,
+  "arm": "I",
+  "quote": "No match: every property is None or False.",
+  "stated": true,
+  "cost": 0.041980199999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 5,
+  "arm": "I",
+  "quote": "Cloud-event format and (`source is None` or `message_id is None`): `(False, None)`. - Not cloud-event format and `message_id is None`: `(False, None)`.",
+  "stated": true,
+  "cost": 0.0424802
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 4,
+  "claim": 6,
+  "arm": "I",
+  "quote": "A message with no derivable `message_id` is silently dropped. This happens for an unmatched type or a missing option or filingId, and for `annualReport` with option COMPLETED",
+  "stated": true,
+  "cost": 0.058622999999999995
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 0,
+  "arm": "I",
+  "quote": "`receive_before_change` (listener on before_insert and before_update).** Checks run in this order: ... 5. Else `payment_completion_date` or `source == COLIN` \u2192 PAID.",
+  "stated": true,
+  "cost": 0.1360892
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 1,
+  "arm": "I",
+  "quote": "`get_future_effective_filing_ids()` returns ids of PAID or APPROVED filings with `effective_date <= now`.",
+  "stated": true,
+  "cost": 0.13602619999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 2,
+  "arm": "I",
+  "quote": "publishes each id to the NATS streaming subject that the entity filer consumes.",
+  "stated": true,
+  "cost": 0.13569720000000002
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 3,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1354652
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 5,
+  "claim": 4,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1387722
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 0,
+  "arm": "I",
+  "quote": "If `filing_core_submission.status == Filing.Status.COMPLETED`, it logs a warning and returns `None, None`.",
+  "stated": true,
+  "cost": 0.1165452
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 1,
+  "arm": "I",
+  "quote": "`business` and `filing_submission` are added to the session, then committed.",
+  "stated": true,
+  "cost": 0.1164212
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 2,
+  "arm": "I",
+  "quote": "`update_affiliation`: broad `except Exception` \u2192 Sentry. `QueueException` is raised only if the `rv`, deaffiliation or bootstrap-update status checks fail. The original error is not re-raised.",
+  "stated": false,
+  "cost": 0.1169132
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 3,
+  "arm": "I",
+  "quote": "`publish_email_message`, `publish_event` and `publish_gcp_queue_event` are each wrapped in a try/except for `Exception`.",
+  "stated": true,
+  "cost": 0.1166462
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 4,
+  "arm": "I",
+  "quote": "`publish_email_message`, `publish_event` and `publish_gcp_queue_event` are each wrapped in a try/except for `Exception`. They log, call Sentry `capture_message(level='error')` with the filing id, and swallow the error. Later steps still run.",
+  "stated": true,
+  "cost": 0.1170542
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 5,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.11868119999999999
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 6,
+  "arm": "I",
+  "quote": "`QueueException` and any other Exception \u2192 `capture_message('Queue Error:'+json)` at level error and `logger.error`, and the message is removed. It is not retried.",
+  "stated": true,
+  "cost": 0.1187172
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 7,
+  "arm": "I",
+  "quote": "If `filing_core_submission.status == Filing.Status.COMPLETED`, it logs a warning and returns `None, None`.",
+  "stated": true,
+  "cost": 0.1191392
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 8,
+  "arm": "I",
+  "quote": "**`get_future_effective_filing_ids`:** `_status` in [PAID, APPROVED] and `effective_date <= now`.",
+  "stated": false,
+  "cost": 0.1197152
+ },
+ {
+  "qid": "hard-failure-1",
+  "fact": 6,
+  "claim": 9,
+  "arm": "I",
+  "quote": "A failed entity-event, GCP or email publish is lost. The filing is already COMPLETED and nothing re-drives it. The DB commit comes before affiliation, `consume_nr` and profile updates. A failure there leaves a committed filing with no repair path.",
+  "stated": true,
+  "cost": 0.1205202
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 0,
+  "arm": "I",
+  "quote": "It publishes to GCP Pub/Sub topics (payment status, account mailer, auth events).",
+  "stated": true,
+  "cost": 0.2159972
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 1,
+  "arm": "I",
+  "quote": "Out, queues (`gcp_queue_publisher.publish_to_queue(QueueMessage)`): ... It builds a CloudEvent ... PAYMENT message: source PAY_API, type `QueueMessageTypes.PAYMENT` ... `publish_status` ... Otherwise \u2192 `'TRANSACTION_FAILED'`.",
+  "stated": true,
+  "cost": 0.2158122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 2,
+  "arm": "I",
+  "quote": "PAYMENT message: source PAY_API, type `QueueMessageTypes.PAYMENT`, topic `get_topic_for_corp_type(corp_type_code)`. Sent from `PaymentTransaction.publish_status` and `_release_payment`.",
+  "stated": true,
+  "cost": 0.2120432
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 3,
+  "arm": "I",
+  "quote": "`CorpType.NRO` \u2192 `NAMEX_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.2114472
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 4,
+  "arm": "I",
+  "quote": "`product_code` in [`BUSINESS`, `BUSINESS_SEARCH`] \u2192 `BUSINESS_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.2118152
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 5,
+  "arm": "I",
+  "quote": "`Product.STRR` \u2192 `STRR_PAY_TOPIC`.",
+  "stated": true,
+  "cost": 0.21138920000000003
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 6,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.21124520000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 7,
+  "arm": "I",
+  "quote": "It publishes to GCP Pub/Sub topics (payment status, account mailer, auth events).",
+  "stated": true,
+  "cost": 0.2155392
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 8,
+  "arm": "I",
+  "quote": "Entity-pay consumes payment-status messages from NATS Streaming (subject `entity.filings`, queue `filing-worker`)",
+  "stated": true,
+  "cost": 0.2140242
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 0,
+  "claim": 9,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.21378619999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 0,
+  "arm": "I",
+  "quote": "The payload is `humps.camelize(PaymentToken(invoice.id, status_code, invoice.filing_id, invoice.corp_type_code))`.",
+  "stated": true,
+  "cost": 0.1962622
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 1,
+  "arm": "I",
+  "quote": "The payload is `humps.camelize(PaymentToken(invoice.id, status_code, invoice.filing_id, invoice.corp_type_code))`.",
+  "stated": true,
+  "cost": 0.1962312
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 2,
+  "arm": "I",
+  "quote": "`is_processable_message`: `paymentToken` is missing or falsy \u2192 False.",
+  "stated": true,
+  "cost": 0.1977002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 3,
+  "arm": "I",
+  "quote": "`is_processable_message`: `CorpType.find_by_id` returns None \u2192 False.",
+  "stated": true,
+  "cost": 0.1972772
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 4,
+  "arm": "I",
+  "quote": "The body is a CloudEvent (`SimpleCloudEvent`) whose `ce.type` must be `\"bc.registry.payment\"`. - `ce.data` must be a dict. Its camelCase keys are converted to snake_case",
+  "stated": true,
+  "cost": 0.1965132
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 5,
+  "arm": "I",
+  "quote": "`ce.data` must be a dict. Its camelCase keys are converted to snake_case with the regex `(?<!^)(?=[A-Z])`.",
+  "stated": true,
+  "cost": 0.1962362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 1,
+  "claim": 6,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1980522
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 0,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0691932
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 1,
+  "arm": "I",
+  "quote": "Write: `filing.payment_completion_date`, `filing.payment_status_code = \"COMPLETED\"`, `filing.status = Filing.Status.PAID`, then `filing.save()`",
+  "stated": true,
+  "cost": 0.06781820000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 2,
+  "arm": "I",
+  "quote": "Write for continuationIn: a `Review` row (`create_staff_review`) with `ReviewStatus.AWAITING_REVIEW`, and `filing.status = Filing.Status.AWAITING_REVIEW.value`.",
+  "stated": true,
+  "cost": 0.0680422
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 3,
+  "arm": "I",
+  "quote": "Write for continuationIn: a `Review` row (`create_staff_review`) with `ReviewStatus.AWAITING_REVIEW`, and `filing.status = Filing.Status.AWAITING_REVIEW.value`.",
+  "stated": true,
+  "cost": 0.06803719999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 4,
+  "arm": "I",
+  "quote": "`pay_filer.py`: `filing.filing_type in [\"continuationIn\"]` \u2192 `create_staff_review` (Review `AWAITING_REVIEW`, filing `AWAITING_REVIEW`). Otherwise \u2192 `publish_to_filer`.",
+  "stated": true,
+  "cost": 0.0681032
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 5,
+  "arm": "I",
+  "quote": "Business-pay instead sets status PAID and `payment_status_code`, returns 404 to get redelivery, and adds the continuationIn review and the MHR/BTR/BC filtering.",
+  "stated": true,
+  "cost": 0.0697692
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 6,
+  "arm": "I",
+  "quote": "DB write: `filing_submission.payment_completion_date = utcnow` (legal_api `Filing` model), committed via `db.session`.",
+  "stated": true,
+  "cost": 0.0676422
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 2,
+  "claim": 7,
+  "arm": "I",
+  "quote": "Publish to the filer only if `effective_date` is None or `<= utcnow`. A future-effective filing is not sent to the filer.",
+  "stated": true,
+  "cost": 0.0676872
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 0,
+  "arm": "I",
+  "quote": "There is no duplicate guard beyond the COMPLETED status check.",
+  "stated": true,
+  "cost": 0.1567472
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 1,
+  "arm": "I",
+  "quote": "Else `transaction_id` \u2192 COMPLETED. 5. Else `payment_completion_date` or `source == COLIN` \u2192 PAID.",
+  "stated": true,
+  "cost": 0.1583122
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 2,
+  "arm": "I",
+  "quote": "Return early if `_status` is in [AWAITING_REVIEW, CHANGE_REQUESTED, REJECTED], or `_status == APPROVED` with no `transaction_id`.",
+  "stated": true,
+  "cost": 0.15726120000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 3,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1581352
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 4,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1582522
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 5,
+  "arm": "I",
+  "quote": "`get_future_effective_filing_ids()` returns ids of PAID or APPROVED filings with `effective_date <= now`.",
+  "stated": true,
+  "cost": 0.1569962
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 6,
+  "arm": "I",
+  "quote": "It gets a service-account token, asks legal-api for the ids of filings whose effective date has arrived, and publishes each id to the NATS streaming subject that the entity filer consumes.",
+  "stated": true,
+  "cost": 0.1571332
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 3,
+  "claim": 7,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.15657120000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 0,
+  "arm": "I",
+  "quote": "It reads the `filings` table with raw SQL on `payment_id = :pay_token`, with its own copy of the Status enum.",
+  "stated": true,
+  "cost": 0.0705242
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 1,
+  "arm": "I",
+  "quote": "Business-pay instead sets status PAID and `payment_status_code`, returns 404 to get redelivery",
+  "stated": true,
+  "cost": 0.0704292
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 2,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0735232
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 4,
+  "claim": 3,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0728512
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 0,
+  "arm": "I",
+  "quote": "Status filter. Non-COMPLETED payment statuses such as TRANSACTION_FAILED are acknowledged and ignored. The filing is never updated for a failed payment.",
+  "stated": true,
+  "cost": 0.1438962
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 1,
+  "arm": "I",
+  "quote": "`payment_token.corp_type_code in [\"MHR\", \"BTR\"]` \u2192 200 OK.",
+  "stated": true,
+  "cost": 0.14360119999999998
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 2,
+  "arm": "I",
+  "quote": "`filing.payment_completion_date` already set \u2192 200 OK (duplicate).",
+  "stated": true,
+  "cost": 0.1435332
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 3,
+  "arm": "I",
+  "quote": "6. Filing not found, and `filing_identifier == None`, and `corp_type_code == \"BC\"` \u2192 200 OK (bogus filing).\n7. Filing not found otherwise \u2192 404 NOT_FOUND, so the message is redelivered.",
+  "stated": true,
+  "cost": 0.1441972
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 4,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.1459702
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 5,
+  "arm": "I",
+  "quote": "The only retry is the 5-attempt, 0.2s filing lookup.",
+  "stated": true,
+  "cost": 0.1451772
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 6,
+  "arm": "I",
+  "quote": "A redelivered `COMPLETED` message for an already-`COMPLETED` filing only triggers Sentry. A redelivery for a still-`PAID` filing re-sets `payment_completion_date` and republishes both the email and the filing event.",
+  "stated": true,
+  "cost": 0.1467042
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 5,
+  "claim": 7,
+  "arm": "I",
+  "quote": "A filing not found after about 1s raises `FilingException`, which is swallowed and the message dropped.",
+  "stated": true,
+  "cost": 0.14357720000000002
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 0,
+  "arm": "I",
+  "quote": "`POST /` runs its checks in this order:\n1. `verify_gcp_jwt(request)` returns a message string, not an exception. If the message is non-empty, the route returns 403 FORBIDDEN.",
+  "stated": true,
+  "cost": 0.0657472
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 1,
+  "arm": "I",
+  "quote": "It calls `id_token.verify_oauth2_token(token, requests.Request(), audience=SUB_AUDIENCE)`.",
+  "stated": true,
+  "cost": 0.0655342
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 2,
+  "arm": "I",
+  "quote": "If `claim[\"email_verified\"]` is false, or `claim[\"email\"] != SUB_SERVICE_ACCOUNT`, it returns \"Invalid service account or email not verified for email: {email}\\n\".",
+  "stated": true,
+  "cost": 0.0656452
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 3,
+  "arm": "I",
+  "quote": "If `claim[\"email_verified\"]` is false, or `claim[\"email\"] != SUB_SERVICE_ACCOUNT`, it returns \"Invalid service account or email not verified for email: {email}\\n\".",
+  "stated": true,
+  "cost": 0.0657152
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 4,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0662362
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 6,
+  "claim": 5,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0650162
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 0,
+  "arm": "I",
+  "quote": "Payment events arrive at business-pay (`POST /`, Pub/Sub). It publishes `{\"filing\":{\"id\"}}` to the filer subject and an emailer message with option `PAID`.",
+  "stated": true,
+  "cost": 0.07845919999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 1,
+  "arm": "I",
+  "quote": "Payload: `create_email_msg(filing.id, filing.filing_type)` = `{\"email\": {\"filingId\", \"type\", \"option\": \"PAID\"}}`.",
+  "stated": true,
+  "cost": 0.07578220000000001
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 2,
+  "arm": "I",
+  "quote": "`publish_to_filer` and `publish_to_emailer` are each wrapped in `with suppress(Exception)`. Errors are logged at debug, swallowed, and later steps still run.",
+  "stated": true,
+  "cost": 0.07858419999999999
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 3,
+  "arm": "I",
+  "quote": "`filing.effective_date <= filing.payment_completion_date` \u2192 publish to the Filer queue (not a future-effective filing). A greater effective date means no filer publish; a future-effective-filings job is expected to do that later.",
+  "stated": true,
+  "cost": 0.0781722
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 4,
+  "arm": "I",
+  "quote": "",
+  "stated": false,
+  "cost": 0.0765842
+ },
+ {
+  "qid": "hard-legacy-0",
+  "fact": 7,
+  "claim": 5,
+  "arm": "I",
+  "quote": "On APPROVED with `effective_date <= now`, legal-api publishes to `NATS_FILER_SUBJECT` itself.",
+  "stated": true,
+  "cost": 0.07785020000000001
  }
 ]

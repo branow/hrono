@@ -70,6 +70,15 @@ def pages_by_arm(conn) -> dict[str, dict[tuple[str, int], str]]:
         secs.setdefault(f"{source}/{path}", []).append(sid)
     arms = exp.arm_pages(conn)
     ledger = {int(k): v["text"] for k, v in exp.load("ledger.json").items()}
+    ledger2 = {int(k): v["text"] for k, v in exp.load("ledger2.json").items()}
+    body: dict[str, list[str]] = {}
+    for source, path, text in conn.execute(
+        "SELECT s.source, s.path, ct.body FROM sections s JOIN contents ct"
+        " USING (content_hash) ORDER BY s.source, s.path, s.ordinal"
+    ):
+        body.setdefault(f"{source}/{path}", []).append(
+            text.decode() if isinstance(text, bytes) else text
+        )
     out: dict[str, dict] = {}
     for q in sl.questions():
         for i, fact in enumerate(q["facts"]):
@@ -88,6 +97,15 @@ def pages_by_arm(conn) -> dict[str, dict[tuple[str, int], str]]:
                 )
             out.setdefault("notes-v3", {})[(q["qid"], i)] = "\n\n".join(
                 f"--- {p} ---\n{exp.stored_condensation(conn, s)}"
+                for p in fact["files"]
+                for s in secs.get(p, [])
+            )
+            out.setdefault("raw", {})[(q["qid"], i)] = "\n\n".join(
+                f"--- {p} ---\n" + "\n".join(body.get(p, []))
+                for p in fact["files"]
+            )
+            out.setdefault("notes-ledger2", {})[(q["qid"], i)] = "\n\n".join(
+                f"--- {p} ---\n{ledger2.get(s, '')}"
                 for p in fact["files"]
                 for s in secs.get(p, [])
             )
@@ -168,6 +186,13 @@ if __name__ == "__main__":
             [("hard-inconsistency-1", 1), ("hard-inconsistency-1", 5)],
         )
         report("judge2-pilot.json")
+    elif cmd == "trace":
+        qids = sys.argv[3].split(",")
+        split = exp.load("claims.json")
+        only = [
+            (q, f["fact"]) for q in qids for f in split[q]["structured"]["facts"]
+        ]
+        run(sys.argv[2].split(","), "judge2-main.json", only)
     elif cmd == "run":
         run(sys.argv[3].split(","), f"judge2-{sys.argv[2]}.json")
         report(f"judge2-{sys.argv[2]}.json")
