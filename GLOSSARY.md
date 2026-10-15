@@ -23,11 +23,11 @@ gets clustered, and what an agent reads when it explores.
 reassembles byte-identically from its passages. Passages exist for retrieval;
 sections exist for structure. They are not interchangeable.
 
-**condensation** — what the first LLM pass writes about one section: its
-essential information, identifiers copied verbatim, plus `GOTCHA:` lines for
-anything non-obvious that could hurt a newcomer. Cached by the section's content
-hash, so an unchanged file is never condensed twice. This is the **map** half of
-map-reduce.
+**condensation** — what the first LLM pass writes about one section: every
+check, branch, error path and call it holds, identifiers copied verbatim. It is
+what the brief is written from and is never shown to an agent. Cached by the
+section's content hash, so an unchanged file is never condensed twice. This is
+the **map** half of map-reduce.
 
 **topic** — a group of related sections, or of other topics, plus a brief. The
 node of the tree. Bottom-level topics hold sections; topics above hold topics.

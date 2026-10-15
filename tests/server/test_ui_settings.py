@@ -673,6 +673,7 @@ def test_a_tree_is_created_from_the_page(browser: Browser) -> None:
     assert browser.stored("trees", "beta") == {
         "name": "beta",
         "sources": ["gh"],
+        "lookups": False,
     }
     assert "/ui/config?tree=beta" in answer.text  # in the switcher
 
