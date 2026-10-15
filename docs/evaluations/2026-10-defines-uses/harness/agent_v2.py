@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -52,6 +53,32 @@ How to work:
 2. Trace the work end to end before reading code. From each brief's Connections and Linked topics, list the parts the work passes through: who sends it, who receives it next and what that part does with it, what each part does when a step fails, and which job or listener retries, repairs or re-drives it - or that nothing does. Read the brief of every part on that list you have not read yet, and repeat until the list is complete for every part of the question. This usually takes 5 to 10 briefs; they are cheap to read.
 3. Then open the source files to check the claims you will make - exact conditions, lists, ordering and error handling - and whatever a brief says it could not find. Where code and brief disagree, the code wins.
 4. Answer every part of the question, with the consequences the briefs give for each part involved."""
+
+
+def map_plugin(export: Path) -> str:
+    """What the hrono plugin now says: its session note and the hrono skill."""
+    plugin = exp.HERE.parents[3] / "plugins" / "hrono"
+    js = (plugin / "scripts" / "hooks" / "session-start.js").read_text()
+    parts = re.findall(
+        r'(`[^`]*`|"[^"]*")',
+        js[
+            js.index("It is exported at") - 2 : js.index(
+                "lines.push(`It is not"
+            )
+        ],
+    )
+    note = "".join(p[1:-1] for p in parts)
+    note = note.replace("${config.folder}", str(export)).replace(
+        " (${when})", ""
+    )
+    note = note.replace("${root}", str(export / "root.md"))
+    skill = (
+        (plugin / "skills" / "hrono" / "SKILL.md")
+        .read_text()
+        .split("---", 2)[2]
+    )
+    head = 'This project has an hrono map (tree "bcreg"): briefs of everything its sources hold, from one overview down to the files. '
+    return "\n\n" + head + note + "\n\nThe hrono skill:\n" + skill.strip()
 
 
 def folders() -> dict[int, Path]:
