@@ -63,75 +63,110 @@ def _validate(config: dict[str, object], context: ValidationContext) -> None:
         )
 
 
-# The defaults are the prompts the 2026-10 experiments on the bcreg corpus
-# settled on: condense `purpose-decisions`
-# (docs/evaluations/2026-10-condense-prompts/), the leaf brief `core-states`
-# and the upper brief `area-flows` (docs/evaluations/2026-10-brief-prompts/),
-# each scored against the verified facts of the agents evaluation. The judge
-# is the relevance judge of update-threshold.ipynb. Each op appends its
-# content at the placeholder.
+# The defaults come from the 2026-10 experiments on the bcreg corpus
+# (docs/evaluations/2026-10-defines-uses/, round 8), which traced each answer
+# claim through the tree. Nothing below a brief is shown to an agent, so
+# neither prompt has a word target: the condensation keeps every check, branch,
+# list, loop, error path and call out (the `ledger2` prompt), and the brief
+# keeps them all for its reader (the `W` prompt). Both say what the code does,
+# never what a name suggests. The judge is the relevance judge of
+# update-threshold.ipynb. Each op appends its content at the placeholder.
 
 _CONDENSE = """\
-Condense this content chunk. Start with one sentence saying what it is for, \
-in the terms of the system it belongs to: the job it does (for example \
-"Applies a confirmed payment to its business filing"), not how it is built. \
-If it is a test, fixture, configuration, build file, migration or \
-documentation, say so in that first sentence and name what it serves.
+Condense this content chunk. The condensation is what the brief of its topic \
+is written from, in place of the chunk: a writer must be able to answer exact \
+questions about the chunk from the condensation alone.
 
-Then give what a reader needs to find and change its behaviour: what comes \
-in, what goes out and in what shape, the steps of its main flow, and every \
-decision it makes - the condition, the outcome, and the function, constant, \
-list or field that holds it. Name identifiers together with what they do, \
-never as bare lists. Mechanism (frameworks, queues, retries, wiring) comes \
-after the purpose. Boilerplate (licence headers, imports, logging and server \
-setup, plain configuration) collapses to one short line, or to nothing. Aim \
-for 60 to 120 words; a chunk with many decisions may use up to 250. Copy \
-names and values VERBATIM from the content - never infer or add ones that \
-are not literally there. If the code itself shows something a newcomer could \
-be hurt by (an exception swallowed, a partial or non-transactional update, a \
-hard-coded special case, behaviour differing from what a name says), add a \
-line starting with 'GOTCHA:' for each. Never guess about spelling, naming or \
-intent. Output only the condensed content.
+Start with one sentence saying what it is for, in the terms of the system it \
+belongs to: the job it does (for example "Applies a confirmed payment to its \
+business filing"), not how it is built. If it is a test, fixture, \
+configuration, build file, migration or documentation, say so in that first \
+sentence and name what it serves.
+
+Then, for code, keep every one of these that the chunk has, each on its own \
+line:
+- IN: what arrives and its exact shape: the fields read, the type or format \
+checked, conversions, and what happens to input that does not fit.
+- ENTRY: each route, handler, listener, job or public function: who may call \
+it and the checks that guard it, in the order they run, each with its exact \
+condition (what it compares with what), or "no check in this chunk".
+- RULE: each branch that changes the outcome: `if <exact condition> -> \
+<outcome>`, with the function that holds it. When a condition tests \
+membership in a list, set, map or group, copy every member verbatim; never \
+write "certain types" or "some statuses".
+- LOOP: each loop that polls, retries or waits: how many times, the wait, and \
+what ends it.
+- ORDER: what is saved or committed, and in which order relative to calls \
+that can fail (for example "commits status PAID, then publishes; a failed \
+publish leaves it PAID").
+- ON ERROR: each error handler: what it catches and what happens - \
+re-raised, retried (how often), recorded (where), only logged, reported, or \
+swallowed - and which later steps still run.
+- CALLS OUT: each call to another service, queue, topic, email, file or \
+table: the target as written (for an HTTP call, the method and the path after \
+the base URL, and the variable that holds the base), the configuration key \
+when the target comes from one, the credential sent, and the payload shape.
+- STATES: each status or field value it sets or skips on, verbatim, with the \
+branch that sets it.
+- ABSENT: what the chunk plainly lacks where a reader would expect it (no \
+permission check, no duplicate guard, no retry), as what this chunk shows, \
+never as a claim about the system.
+For documentation, configuration or other text, keep every decision, rule, \
+value, step, name and reference to another document or system that a reader \
+would look up, in the same spirit.
+
+No word target: a chunk with one simple function needs three lines, a chunk \
+with many branches needs all of them. Boilerplate (licence headers, imports, \
+logging and server setup) collapses to one short line, or to nothing. Copy \
+names, values and lists VERBATIM from the content - never infer or add ones \
+that are not literally there, never guess about spelling, naming or intent. \
+Never copy a password, token, key or a connection string that carries \
+credentials; write <secret> in its place. Output only the condensation.
 
 {content}"""
 
 _BRIEF = """\
-Below are notes on the sources of one part of a larger system, each under \
-its source's name. Write what a reader (human or AI agent) must know about \
-this part to understand its role in the system and to find where to change \
-it. The notes stay available below this description, so leave detail to \
-them: keep what is fundamental, drop what is obvious or minor.
+Below are the condensations of the sources of one topic of a larger system, \
+each under its source's name. Write the brief of this topic. A reader (human \
+or AI agent) gets only this brief - the condensations are not shown anywhere \
+- so everything a reader needs to answer exact questions about this topic \
+must be in it.
 
-Keep, in this order:
-1. One or two sentences: what this part does and what it hands work to or \
+Write, in this order:
+1. One or two sentences: what this topic does and what it hands work to or \
 takes work from.
-2. Its contract with the rest of the system: what reaches it and from where, \
-what it sends or writes and to where, with the shape of messages or records \
-that cross the boundary.
-3. The decisions that shape its behaviour, one line each: the condition, the \
-outcome, and the function, constant or list that holds it. Include every \
-step that moves a record from one state to another (created, submitted, \
-paid, reviewed, resubmitted, completed, deleted - whatever this part has) \
-and every check that refuses a caller (authorization, validation, locks), \
-naming the function that does it.
-4. Hazards that lose, duplicate or corrupt work, or fail silently - at most \
-three.
-5. The two to four sources to open first, and what each holds.
+2. Contract: what reaches it and from where, what it sends or writes and to \
+where, with the exact shape of messages or records that cross the boundary.
+3. Entry points: for each route, handler, listener, job or public function, \
+the checks that guard it in the order they run, each with its exact \
+condition, or that none is shown.
+4. Decisions: every branch that changes an outcome, one line each - the \
+exact condition, the outcome, and the function that holds it. Copy every \
+member of a list, set or group verbatim. Include every state a record moves \
+to and every check that refuses a caller.
+5. Order and failure: what is saved or committed before a step that can \
+fail; for each error handler, what it catches, what happens, and which later \
+steps still run; each loop that polls or retries.
+6. Connections: each other part of the system it calls, publishes to, \
+consumes from, or shares a record or configuration key with - named as the \
+condensations name it - and what crosses, in which direction.
+7. Hazards: where work can be lost, duplicated, corrupted or let through \
+unchecked, as the condensations show it.
+8. The sources to open first, and what each holds.
+For documentation or other text, keep its decisions, rules, steps and \
+references in the same spirit, under headings that fit it.
 
-Leave out: startup and wiring, configuration keys and defaults, lists of \
-fields or enum values, health checks, version helpers, logging, test \
-plumbing, and any hazard about style, naming or types. Name a test only when \
-it pins down a behaviour from point 3. If the notes cover unrelated things, \
-say so and give each its own short description.
-
-Write compactly: one line per decision, no padding. Aim for 250 to 500 \
-words; a part with several distinct jobs may use up to 800. Write about the \
-part itself. Never describe the text you were given: no "this group", "this \
-set", "these chunks", "the summaries", "condensed" or "the files above". Say \
-what things do, never only that they exist: a name without what it does is \
-noise. Licences, server and logging setup, environment defaults and \
-packaging get one line at most, and only if they matter to a reader. Mention \
-only what is actually present - do not invent anything.
+Say what the condensations show, never what a name suggests: when what a \
+called job, endpoint or function does lives outside this topic, name it with \
+what it is called with and mark it "(behaviour not in this topic)". Every \
+check comes with its condition. Keep names, values and lists verbatim. No \
+word target: one line per fact, no padding, no repetition. Leave out only \
+startup and wiring, packaging, build and deployment files, logging setup, \
+licences and test plumbing; name a test only when it pins down a decision. If \
+the topic covers unrelated things, give each its own part. Write about the \
+topic itself. Never describe the text you were given: no "this group", "this \
+set", "these chunks", "the summaries", "condensed" or "the files above". \
+Mention only what is actually present - do not invent anything.
 
 Output only the description in markdown, nothing else.
 
@@ -146,18 +181,19 @@ Open with one or two sentences: what this area does and what it hands work \
 to or takes work from outside it. Then the end-to-end flows of the area - \
 the things a user or another system asks of it - each as numbered steps from \
 what starts it to what it ends with, naming at each step the part and the \
-function that does it and the state the record moves to. Then one line per \
-part not already named in a flow, saying its job. End with at most three \
-hazards that come from how the parts interact.
+function that does it and the state the record moves to, and what happens \
+when that step fails: what is left behind, and which part retries or repairs \
+it, or that none does. Then one line per part not already named in a flow, \
+saying its job. End with the hazards that come from how the parts interact.
 
-Aim for 300 to 600 words, however many parts there are. Leave out what one \
-part's description already says in detail - a reader opens that part for it \
-- and setup, configuration, field lists and style hazards. Name a part by \
-its title so a reader can open it. Mention only what the descriptions say - \
-do not invent anything. Write about the part itself. Never describe the text \
-you were given: no "this group", "this set", "these chunks", "the \
-summaries", "condensed" or "the files above". Output only the description in \
-markdown, nothing else.
+No word target: as long as the flows need, one line per step, no padding. \
+Leave out what only one part's description needs - a reader opens that part \
+for it - and setup, configuration, field lists and style hazards. Name a \
+part by its title so a reader can open it. Mention only what the \
+descriptions say - do not invent anything. Write about the area itself. \
+Never describe the text you were given: no "this group", "this set", "these \
+chunks", "the summaries", "condensed" or "the files above". Output only the \
+description in markdown, nothing else.
 
 {content}"""
 

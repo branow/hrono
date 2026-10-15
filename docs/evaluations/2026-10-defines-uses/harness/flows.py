@@ -14,7 +14,6 @@ Usage: uv run --with networkx python flows.py groups
 
 from __future__ import annotations
 
-import json
 import sys
 
 import exp
@@ -40,8 +39,12 @@ def graph():
     g = nx.Graph()
     for it in exp.load("links.json"):
         a, b = it["from_leaf"], it["to_leaf"]
-        w = (2.0 if it["kind"] in ("shares", "sends", "receives") else 1.0) / max(1, it["tree_leaves"]) ** 0.5
-        g.add_edge(a, b, weight=g.get_edge_data(a, b, {"weight": 0})["weight"] + w)
+        w = (
+            2.0 if it["kind"] in ("shares", "sends", "receives") else 1.0
+        ) / max(1, it["tree_leaves"]) ** 0.5
+        g.add_edge(
+            a, b, weight=g.get_edge_data(a, b, {"weight": 0})["weight"] + w
+        )
     return g
 
 
@@ -49,7 +52,10 @@ def groups() -> None:
     import networkx as nx
 
     g = graph()
-    comms = [sorted(x) for x in nx.community.louvain_communities(g, weight="weight", seed=1)]
+    comms = [
+        sorted(x)
+        for x in nx.community.louvain_communities(g, weight="weight", seed=1)
+    ]
     comms = [x for x in sorted(comms, key=len, reverse=True) if len(x) >= 5]
     exp.save("flow-groups.json", comms)
     print([len(x) for x in comms])
@@ -66,23 +72,39 @@ def brief() -> None:
     def one(job):
         i, members = job
         mset = set(members)
-        parts = [f"=== {title.get(n, n)} ===\n{wide.get(n) or stored.get(n, '')}" for n in members]
+        parts = [
+            f"=== {title.get(n, n)} ===\n{wide.get(n) or stored.get(n, '')}"
+            for n in members
+        ]
         lines = []
         for it in sorted(links, key=lambda x: x["tree_leaves"]):
             a, b = it["from_leaf"], it["to_leaf"]
             if a in mset and b in mset:
-                lines.append(f'- "{title.get(a, a)[:70]}" {it["direction"]} `{it["name"]}` ({it["kind"]} in "{title.get(b, b)[:70]}"): {exp.clip(it["what"], 30)}')
+                lines.append(
+                    f'- "{title.get(a, a)[:70]}" {it["direction"]} `{it["name"]}` ({it["kind"]} in "{title.get(b, b)[:70]}"): {exp.clip(it["what"], 30)}'
+                )
         lines = list(dict.fromkeys(lines))[:150]
         content = "\n\n".join(parts) + "\n\n=== LINKS ===\n" + "\n".join(lines)
         got = exp.ask(FLOW.replace("{content}", content), exp.SONNET)
         return str(i), {**got, "members": members}
 
-    jobs = [(i, m) for i, m in enumerate(exp.load("flow-groups.json")) if str(i) not in out]
+    jobs = [
+        (i, m)
+        for i, m in enumerate(exp.load("flow-groups.json"))
+        if str(i) not in out
+    ]
     for i, got in exp.run_pool(one, jobs, 4):
         out[i] = got
         exp.save("flow-briefs.json", out)
     for k, v in out.items():
-        print(k, len(v["members"]), "topics", len((v.get("text") or "").split()), "words", v.get("error"))
+        print(
+            k,
+            len(v["members"]),
+            "topics",
+            len((v.get("text") or "").split()),
+            "words",
+            v.get("error"),
+        )
     print("cost", round(sum(v.get("cost") or 0 for v in out.values()), 2))
 
 

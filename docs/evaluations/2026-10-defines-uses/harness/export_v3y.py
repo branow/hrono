@@ -67,8 +67,7 @@ def main() -> None:
         )
         swap(
             d / "brief.md",
-            text
-            + "\n\nCondensation of every section of this topic: "
+            text + "\n\nCondensation of every section of this topic: "
             "[condensations.md](condensations.md).",
             "## Sources",
         )

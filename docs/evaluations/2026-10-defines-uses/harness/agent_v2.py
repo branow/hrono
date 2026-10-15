@@ -1,4 +1,4 @@
-# ruff: noqa: E501 - experiment harness; prompts read best whole
+# ruff: noqa: E501, SIM115, B007 - experiment harness; prompts read best whole
 """Round 8: what the agent is told, and links it can follow.
 
 Agents with the map grep it, read one to three briefs, then read code and
@@ -27,7 +27,9 @@ from pathlib import Path
 import exp
 
 SRC = Path.home() / "hrono-eval" / "export-bcreg-v3z-L3"
-EXPORT = Path.home() / "hrono-eval" / os.environ.get("EXPORT", "export-bcreg-v3w-L3")
+EXPORT = (
+    Path.home() / "hrono-eval" / os.environ.get("EXPORT", "export-bcreg-v3w-L3")
+)
 LINKED = 12  # linked topics listed per brief at most
 
 MAP_V2 = """
@@ -75,14 +77,22 @@ def export() -> None:
         if a == b or a not in where or b not in where:
             continue
         by_leaf.setdefault(a, {}).setdefault(b, []).append(link)
-        flipped = {**link, "direction": {"sends": "receives", "receives": "sends"}.get(link["direction"], "read by")}
+        flipped = {
+            **link,
+            "direction": {"sends": "receives", "receives": "sends"}.get(
+                link["direction"], "read by"
+            ),
+        }
         by_leaf.setdefault(b, {}).setdefault(a, []).append(flipped)
     done = 0
     for leaf, others in by_leaf.items():
         brief = where[leaf]
         order = sorted(
             others.items(),
-            key=lambda kv: (min(rank.get(x["kind"], 2) for x in kv[1]), -len(kv[1])),
+            key=lambda kv: (
+                min(rank.get(x["kind"], 2) for x in kv[1]),
+                -len(kv[1]),
+            ),
         )[:LINKED]
         lines = ["", "## Linked topics", ""]
         for other, links in order:
@@ -90,7 +100,9 @@ def export() -> None:
                 *([".."] * len(brief.parent.relative_to(EXPORT).parts)),
                 where[other].relative_to(EXPORT),
             )
-            title = where[other].read_text().splitlines()[0].lstrip("# ").strip()
+            title = (
+                where[other].read_text().splitlines()[0].lstrip("# ").strip()
+            )
             names = sorted(
                 {
                     f"{'shares' if x['kind'] == 'shares' else x['direction']} `{x['name']}`"
@@ -98,7 +110,9 @@ def export() -> None:
                 }
             )[:4]
             lines.append(f"- [{title}]({rel}): " + "; ".join(names))
-        brief.write_text(brief.read_text().rstrip() + "\n" + "\n".join(lines) + "\n")
+        brief.write_text(
+            brief.read_text().rstrip() + "\n" + "\n".join(lines) + "\n"
+        )
         done += 1
     print("briefs with linked topics", done, "export", EXPORT)
 
@@ -111,28 +125,46 @@ def oracle(qid: str) -> str:
     conn = c.connect()
     leaf = exp.leaf_map(conn)
     secs: dict[str, list[int]] = {}
-    for sid, source, path in conn.execute("SELECT id, source, path FROM sections"):
+    for sid, source, path in conn.execute(
+        "SELECT id, source, path FROM sections"
+    ):
         secs.setdefault(f"{source}/{path}", []).append(sid)
     q = [x for x in sl.questions() if x["qid"] == qid][0]
-    nodes = sorted({leaf[s] for f in q["facts"] for p in f["files"] for s in secs.get(p, []) if s in leaf})
+    nodes = sorted(
+        {
+            leaf[s]
+            for f in q["facts"]
+            for p in f["files"]
+            for s in secs.get(p, [])
+            if s in leaf
+        }
+    )
     where = folders()
     parts = [
         f"=== {where[n].relative_to(EXPORT)} ===\n{where[n].read_text()}"
         for n in nodes
         if n in where
     ]
-    return "The briefs of the topics this question touches:\n\n" + "\n\n".join(parts)
+    return "The briefs of the topics this question touches:\n\n" + "\n\n".join(
+        parts
+    )
 
 
 def run(qid: str, name: str, words: int = 900) -> None:
     import common
     import run_arms
 
-    q = [x for x in json.load(open(common.DATA / "hard15.json")) if x["qid"] == qid][0]
+    q = [
+        x
+        for x in json.load(open(common.DATA / "hard15.json"))
+        if x["qid"] == qid
+    ][0]
     prompt = run_arms.ARCH.format(question=q["question"]).replace(
         "at most 400 words", f"at most {words} words"
     )
-    prompt += (MAP_V3 if os.environ.get("MAP") == "3" else MAP_V2).format(export=EXPORT)
+    prompt += (MAP_V3 if os.environ.get("MAP") == "3" else MAP_V2).format(
+        export=EXPORT
+    )
     if os.environ.get("ORACLE"):
         prompt += "\n\n" + oracle(qid)
     r = common.run_agent(
@@ -142,7 +174,9 @@ def run(qid: str, name: str, words: int = 900) -> None:
         key=qid,
         max_turns=run_arms.TURNS_H,
         tools=["Read", "Grep", "Glob"],
-        system=run_arms.SYSTEM_CODE_R2.format(corpus=common.CORPUS, export=EXPORT),
+        system=run_arms.SYSTEM_CODE_R2.format(
+            corpus=common.CORPUS, export=EXPORT
+        ),
         add_dirs=[EXPORT],
         disallow_bash=False,
         cwd=None,
@@ -152,12 +186,19 @@ def run(qid: str, name: str, words: int = 900) -> None:
     )
     out = common.RUNS / f"hard15-{name}.jsonl"
     with out.open("a") as f:
-        f.write(json.dumps({"qid": qid, "set": "hard15", "arm": name, **r}) + "\n")
+        f.write(
+            json.dumps({"qid": qid, "set": "hard15", "arm": name, **r}) + "\n"
+        )
 
 
 if __name__ == "__main__":
     if sys.argv[1] == "export":
         export()
     else:
-        sys.path.insert(0, str(exp.HERE.parents[1] / "2026-10-bc-registries-agents" / "harness"))
+        sys.path.insert(
+            0,
+            str(
+                exp.HERE.parents[1] / "2026-10-bc-registries-agents" / "harness"
+            ),
+        )
         run(sys.argv[2], sys.argv[3])
