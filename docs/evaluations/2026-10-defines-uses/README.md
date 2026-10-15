@@ -642,3 +642,64 @@ Spent in step 4: about $13 at API prices (billed to the subscription through
 the `claude-code` provider): condense $1.70, leaf briefs $3.40, upper briefs
 $4.00 and their rewrite $1.60, four agent runs and their scoring $2.40. Over
 the $5-8 estimate, because of the runaway upper briefs.
+
+## Round 9, what the v9 run showed (2026-10-15, no new calls)
+
+Read from the four agent transcripts, the 16 leaf and 9 upper briefs, the 380
+condensations and the 26 stored relations of the v9 run.
+
+**Where each missed fact was.** failure-1 lost the legacy consumer's
+duplicate rule (fact 3), the emailer tracker (fact 4) and the filer's partial
+failure (fact 6). All three are stated in leaf briefs - entity-pay (797), the
+entity-emailer worker and tracker (579: every `message_id` rule,
+`is_processable_message` returning False for a None id, the `MSG_RETRY_NUM`
+cap), the filer processors (607) - that no agent opened. Both answers treated
+"processing dies partway" only at business-pay and never followed the work to
+the filer and emailer.
+
+**Why agents did not get there.**
+- The area brief over business-pay, filer and emailer (459) has a `Flows`
+  section that walks exactly that chain, with what each step leaves behind on
+  failure. The export cut every upper page to its opening paragraph
+  (`export/render.py` `_routing`), so no agent could see it.
+- A service is split into a logic topic and a packaging-and-tests topic with
+  near-identical titles ("business-pay queue service"); one legacy-0 run read
+  only the packaging one and went to the code.
+- business-pay's brief named the filer and emailer subjects but said "what
+  the filer does with the message is not in this topic": its lookup stopped
+  at entity-filer's `config.py`, which names the subject, not what consumes
+  it. The leaf briefs give up on 1-8 connections each and keep 1-3
+  relations, several of them helpers (`base_model.py`, an example runner).
+  The run used no thinking; the pilot that looked deep did.
+- The brief text cited the tools' virtual paths (`condensed/...config.py.md`),
+  which do not exist in the export.
+
+**A wrong fact, and where it came from.** Haiku condensed
+`return {}, HTTPStatus.NOT_FOUND` as "503 NOT_FOUND" (1 of 85 number-name
+pairs in the tree's condensations disagrees, and this is the one). The brief
+kept it ("503 (the code names it NOT_FOUND)"), the area flow kept it, and one
+answer repeated it; the other run caught it by reading the code. The area
+flow also said "no part retries" a lost filer message, where the repair job
+lives in another area.
+
+**Not a tree problem.** legacy-0's half scores are mostly facts the question
+does not ask (the order of business-pay's checks) or comparisons across two
+briefs the agent read (the legacy consumer expects a `paymentToken` wrapper
+the pay API no longer sends). Both answers ran past the 900-word cap.
+
+**Fixed** (commits `751c52a`, `f2490c6`):
+1. Export: middle pages keep their flows and hazards (not the per-part list
+   their children listing repeats); only the root is cut to its opening.
+2. Condense prompt: a constant, status or error code is written as the code
+   writes it, never as the number it stands for.
+3. Lookups instruction: reach the handler that acts on a message, not the
+   file that names it; for a shared record, the other owner's rules that
+   apply or are bypassed; Used only for files on the other side of a
+   connection; never the tools' paths, and any that slip in are rewritten.
+4. Brief calls with lookups think (budget 4,000), in every provider.
+5. A brief opens with a title saying what its topic holds.
+6. Upper flows say no part of their area repairs a step, not that none does.
+7. Plugin: read the area brief above each leaf for its flows, and follow the
+   work to its end.
+8. Each lookup brief stores its tool calls and its own account of every
+   connection, so a later run can be audited without paying again.
