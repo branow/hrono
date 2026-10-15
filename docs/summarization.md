@@ -43,7 +43,10 @@ Two layers, gotcha-aware, content-addressed.
    its end-to-end flows as numbered steps naming the part, the function, the
    state at each step and what a failed step leaves behind and what repairs
    it, one line per part not in a flow, and the hazards from how the parts
-   interact. No word target. The model is never told it is in a tree.
+   interact. 400 to 900 words: the children's briefs are below it in the
+   map, so a step names the part and what passes on, never its own checks
+   or lists (without a range the bcreg root ran to 13,600 words). The model
+   is never told it is in a tree.
 
 Why no word targets (docs/evaluations/2026-10-defines-uses/, round 8): with
 the 60-120 word condensation and the 250-500 word brief, the leaf briefs

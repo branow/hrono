@@ -68,8 +68,10 @@ def _validate(config: dict[str, object], context: ValidationContext) -> None:
 # claim through the tree. Nothing below a brief is shown to an agent, so
 # neither prompt has a word target: the condensation keeps every check, branch,
 # list, loop, error path and call out (the `ledger2` prompt), and the brief
-# keeps them all for its reader (the `W` prompt). Both say what the code does,
-# never what a name suggests. The judge is the relevance judge of
+# keeps them all for its reader (the `W` prompt). The upper brief does keep a
+# range: its children's briefs sit below it in the map, and without one the
+# root of the bcreg sub-tree ran to 13,600 words (round 9). Both say what the
+# code does, never what a name suggests. The judge is the relevance judge of
 # update-threshold.ipynb. Each op appends its content at the placeholder.
 
 _CONDENSE = """\
@@ -186,14 +188,15 @@ when that step fails: what is left behind, and which part retries or repairs \
 it, or that none does. Then one line per part not already named in a flow, \
 saying its job. End with the hazards that come from how the parts interact.
 
-No word target: as long as the flows need, one line per step, no padding. \
-Leave out what only one part's description needs - a reader opens that part \
-for it - and setup, configuration, field lists and style hazards. Name a \
-part by its title so a reader can open it. Mention only what the \
-descriptions say - do not invent anything. Write about the area itself. \
-Never describe the text you were given: no "this group", "this set", "these \
-chunks", "the summaries", "condensed" or "the files above". Output only the \
-description in markdown, nothing else.
+Aim for 400 to 900 words, however many parts there are: every part's brief is \
+in the map below this one, so a step names the part, what it does and what \
+passes on, never the part's own checks, lists or fields - a reader opens the \
+part for those. Leave out setup, configuration and style hazards. Name a part \
+by its title so a reader can open it. Mention only what the descriptions say \
+- do not invent anything. Write about the area itself. Never describe the \
+text you were given: no "this group", "this set", "these chunks", "the \
+summaries", "condensed" or "the files above". Output only the description in \
+markdown, nothing else.
 
 {content}"""
 
