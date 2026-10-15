@@ -34,6 +34,7 @@ from hrono.export.collapse import WIDTH
 from hrono.export.saved import ROOT_PAGE
 from hrono.jobs.worker import enqueue
 from hrono.server import prose
+from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, Writer, _fields, _trees, router, templates
 from hrono.server.ui.jobs import clock
 
@@ -80,7 +81,9 @@ def export_page(
             "flagged": [
                 {
                     "title": flag.title,
-                    "why": flag.why,
+                    "why": _("no brief")
+                    if flag.why == "no brief"
+                    else flag.why,
                     "link": page_link(tree, flag.page),
                 }
                 for flag in kept.flagged
@@ -172,7 +175,7 @@ def connect_snippets(
     return [
         (
             "cli",
-            "Command line",
+            _("Command line"),
             f"hrono profile add {name_arg} --server {shlex.quote(server)}"
             f" --token {TOKEN}\n"
             f"hrono profile use {name_arg}\n"
@@ -187,7 +190,7 @@ def connect_snippets(
         ),
         (
             "export",
-            "Export",
+            _("Export"),
             f"hrono profile use {name_arg} && \\\n"
             f"hrono tree export {name_arg} -o {folder} --levels {levels}\n"
             f"curl -s {shlex.quote(f'{base}/export.zip?levels={levels}')}"

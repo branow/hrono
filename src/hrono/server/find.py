@@ -31,6 +31,7 @@ from hrono.cluster import incubator
 from hrono.health import triage
 from hrono.registry.collections import trees
 from hrono.server import where as where_module
+from hrono.server.i18n import gettext as _
 
 # Enough candidate passages that a section-heavy word cannot crowd the briefs
 # out, few enough that one request stays a fraction of a second.
@@ -109,7 +110,7 @@ def search(conn: sqlite3.Connection, tree: str, query: str) -> Found:
         topics=tuple(
             Topic(
                 node,
-                called.get(node, f"topic {node}"),
+                called.get(node, _("topic {id}", id=node)),
                 wheres.get(node, ""),
                 why,
                 snip,
@@ -207,7 +208,9 @@ def _section(
         source=str(row["origin"]),
         version=str(row["version"])[:12],
         topic=home,
-        topic_name="" if home is None else called.get(home, f"topic {home}"),
+        topic_name=""
+        if home is None
+        else called.get(home, _("topic {id}", id=home)),
         parked=home is None
         and incubator.parked_batch(conn, tree, section) is not None,
         snippet=_marked(row["snip"]),

@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% from "_parts.html" import start_sync, follow with context %}
-{% block title %}hrono — {{ tree }} export{% endblock %}
+{% block title %}hrono — {{ tree }} {{ _("export") }}{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Export<span class="tip" tabindex="0" role="note" data-tip="The tree as a folder of Markdown files an agent reads: root.md first, one link per level down to the source text">?</span></h1>
+  <h1>{{ _("Export") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The tree as a folder of Markdown files an agent reads: root.md first, one link per level down to the source text") }}">?</span></h1>
 </div>
 
 {% if not built %}
 <div class="card">
   <div class="card-body stack" data-empty>
-    <h2>Nothing to export yet</h2>
-    <p class="hint">{{ tree }} has not been built, so there are no topics to write out. Build it first, then come back here.</p>
-    <div>{{ start_sync(tree, user, "Build it now") }}</div>
+    <h2>{{ _("Nothing to export yet") }}</h2>
+    <p class="hint">{{ _("{tree} has not been built, so there are no topics to write out. Build it first, then come back here.", tree=tree) }}</p>
+    <div>{{ start_sync(tree, user, _("Build it now")) }}</div>
   </div>
 </div>
 {% else %}
@@ -19,35 +19,35 @@
   {% if can_write %}
   <form class="toolbar" method="post" action="/ui/trees/{{ tree }}/export">
     <label class="field">
-      <span>Depth<span class="tip" tabindex="0" role="note" data-tip="Hops from root.md to a section. Fewer hops make each page list more topics. At least 2">?</span></span>
+      <span>{{ _("Depth") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Hops from root.md to a section. Fewer hops make each page list more topics. At least 2") }}">?</span></span>
       <input class="narrow" type="number" name="levels" min="2" max="30" value="{{ levels }}">
     </label>
-    <button class="btn primary" type="submit"{% if running %} disabled{% endif %}>{{ "Export again" if exported else "Export" }}</button>
-    {% if exported %}<a class="btn" href="{{ download }}" download>Download .zip</a>{% endif %}
+    <button class="btn primary" type="submit"{% if running %} disabled{% endif %}>{{ _("Export again") if exported else _("Export") }}</button>
+    {% if exported %}<a class="btn" href="{{ download }}" download>{{ _("Download .zip") }}</a>{% endif %}
   </form>
   {% elif exported %}
-  <div class="toolbar"><a class="btn primary" href="{{ download }}" download>Download .zip</a></div>
+  <div class="toolbar"><a class="btn primary" href="{{ download }}" download>{{ _("Download .zip") }}</a></div>
   {% endif %}
 
-  {% if running %}{{ follow(running, "Exporting the tree") }}{% endif %}
+  {% if running %}{{ follow(running, _("Exporting the tree")) }}{% endif %}
 
   {% if not exported %}
   {% if not running %}
   <div class="card">
     <div class="card-body stack" data-empty>
-      <h2>Not exported yet</h2>
-      <p class="hint">{% if can_write %}Press Export to write the tree as Markdown files.{% else %}A writer can export it from this page.{% endif %}</p>
+      <h2>{{ _("Not exported yet") }}</h2>
+      <p class="hint">{% if can_write %}{{ _("Press Export to write the tree as Markdown files.") }}{% else %}{{ _("A writer can export it from this page.") }}{% endif %}</p>
     </div>
   </div>
   {% endif %}
   {% else %}
-  <p class="hint">Exported {{ built_at }} at {{ levels }} hops<span class="tip" tabindex="0" role="note" data-tip="The export does not change until the next one">?</span></p>
+  <p class="hint">{{ n_(levels, "Exported {when} at {n} hop", "Exported {when} at {n} hops", when=built_at) }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The export does not change until the next one") }}">?</span></p>
 
   {% if flagged %}
   <div class="callout warn">
     <div class="body">
-      <div class="title">{{ flagged|length }} topic{{ '' if flagged|length == 1 else 's' }} without a usable brief</div>
-      <p class="hint">An agent reads these pages first. Rewrite or regenerate these briefs before handing the export over.</p>
+      <div class="title">{{ n_(flagged|length, "{n} topic without a usable brief", "{n} topics without a usable brief") }}</div>
+      <p class="hint">{{ _("An agent reads these pages first. Rewrite or regenerate these briefs before handing the export over.") }}</p>
       <ul>
         {% for item in flagged %}
         <li><a href="{{ item.link }}">{{ item.title }}</a> <span class="hint">{{ item.why }}</span></li>
@@ -57,30 +57,30 @@
   </div>
   {% endif %}
 
-  <section class="stats" aria-label="export shape">
+  <section class="stats" aria-label="{{ _("export shape") }}">
     <div class="stat">
       <div class="figure num">{{ shape.levels }}</div>
-      <div class="label">hops</div>
+      <div class="label">{{ n_(shape.levels, "hop", "hops") }}</div>
     </div>
     <div class="stat">
       <div class="figure num per-level">{{ shape.pages_per_level|join(" / ") }}</div>
-      <div class="label">pages per level<span class="tip" tabindex="0" role="note" data-tip="Root first, then each level down; the last is the topics that list source files">?</span></div>
+      <div class="label">{{ _("pages per level") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Root first, then each level down; the last is the topics that list source files") }}">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ shape.widest_page }}</div>
-      <div class="label">entries on the widest page<span class="tip" tabindex="0" role="note" data-tip="A page should list at most {{ budget }}, about as much to read as one section">?</span></div>
+      <div class="label">{{ n_(shape.widest_page, "entry on the widest page", "entries on the widest page") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("A page should list at most {budget}, about as much to read as one section", budget=budget) }}">?</span></div>
     </div>
     <div class="stat">
       <div class="figure num">{{ files }}</div>
-      <div class="label">files, <span title="{{ "{:,}".format(size) }} bytes">{{ size|weight }}</span></div>
+      <div class="label">{{ n_(files, "file,", "files,") }} <span title="{{ n_(size, "{shown} byte", "{shown} bytes", shown="{:,}".format(size)) }}">{{ size|weight }}</span></div>
     </div>
   </section>
 
   {% if not shape.within_budget %}
   <div class="callout warn">
     <div class="body">
-      <div class="title">One page lists {{ shape.widest_page }} entries, over the {{ budget }} an agent reads comfortably</div>
-      <p class="hint">The hop limit was kept, so that page is wide. Allow one more hop to narrow it.</p>
+      <div class="title">{{ n_(shape.widest_page, "One page lists {n} entry, over the {budget} an agent reads comfortably", "One page lists {n} entries, over the {budget} an agent reads comfortably", budget=budget) }}</div>
+      <p class="hint">{{ _("The hop limit was kept, so that page is wide. Allow one more hop to narrow it.") }}</p>
     </div>
   </div>
   {% endif %}
@@ -89,13 +89,14 @@
 
   <section class="card" id="connect">
     <div class="card-body stack">
-      <h2>Connect an agent</h2>
-      <p class="hint">Replace <code>YOUR_TOKEN</code> with a token from Access; a reader's is enough.<span class="tip" tabindex="0" role="note" data-tip="Each snippet is filled with this server and tree. The export snippet uses the profile the first one adds; if you added it already, skip that profile add line, which fails on a duplicate">?</span></p>
+      <h2>{{ _("Connect an agent") }}</h2>
+      {% set token %}<code>YOUR_TOKEN</code>{% endset %}
+      <p class="hint">{{ (_("Replace {token} with a token from Access; a reader's is enough.")|e).format(token=token) }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Each snippet is filled with this server and tree. The export snippet uses the profile the first one adds; if you added it already, skip that profile add line, which fails on a duplicate") }}">?</span></p>
       {% for key, heading, text in snippets %}
       <div class="stack" data-snippet="{{ key }}">
         <div class="act-row">
           <h3>{{ heading }}</h3>
-          <button class="btn small" type="button" data-copy="snippet-{{ key }}" hidden>Copy</button>
+          <button class="btn small" type="button" data-copy="snippet-{{ key }}" hidden>{{ _("Copy") }}</button>
         </div>
         <pre class="mono snippet" id="snippet-{{ key }}"><code>{{ text }}</code></pre>
       </div>
@@ -107,8 +108,8 @@
       button.hidden = false;
       button.addEventListener("click", async () => {
         const code = document.getElementById(button.dataset.copy);
-        try { await navigator.clipboard.writeText(code.textContent); button.textContent = "Copied"; }
-        catch { getSelection().selectAllChildren(code); button.textContent = "Press Ctrl+C"; }
+        try { await navigator.clipboard.writeText(code.textContent); button.textContent = {{ _("Copied")|tojson }}; }
+        catch { getSelection().selectAllChildren(code); button.textContent = {{ _("Press Ctrl+C")|tojson }}; }
       });
     });
   </script>

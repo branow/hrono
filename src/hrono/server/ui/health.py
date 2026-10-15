@@ -7,7 +7,9 @@ that took a lesser role would be a weaker second authorization for it.
 
 from __future__ import annotations
 
+import re
 import sqlite3
+from dataclasses import dataclass, replace
 from urllib.parse import quote, urlencode
 
 from fastapi import Request
@@ -19,6 +21,8 @@ from hrono.cluster.recipe import MIN_POINTS
 from hrono.errors import AppError, DomainError
 from hrono.health import attention, report, triage
 from hrono.jobs.worker import enqueue
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -30,6 +34,7 @@ from hrono.server.ui import (
     write_off_loop,
 )
 from hrono.server.ui.jobs import clock
+from hrono.server.ui.nodes import refusal
 
 
 @router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)
@@ -43,7 +48,7 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
         trees = _trees(conn)
         kept = report.load(conn, tree)
         checking = _checking(conn, tree)
-    items = kept.items if kept is not None else ()
+    items = tuple(_shown(item) for item in kept.items) if kept else ()
     context = {
         "checked_at": clock(kept.checked_at) if kept is not None else "",
         "checked": kept is not None,
@@ -52,7 +57,9 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
         "parked": kept.parked if kept is not None else (),
         "misfit_total": kept.misfit_total if kept is not None else 0,
         "misfits": kept.misfits if kept is not None else (),
-        "stale": kept.stale if kept is not None else (),
+        "stale": tuple(replace(row, why=_why(row.why)) for row in kept.stale)
+        if kept is not None
+        else (),
         "held": kept.held if kept is not None else (),
         "topics": kept.topics if kept is not None else (),
     }
@@ -82,7 +89,7 @@ async def place_from_health(
     fields = await _fields(request)
     section, target = fields.get("section", ""), fields.get("to_node", "")
     if not (section.isdigit() and target.isdigit()):
-        return _here(tree, error="choose a topic")
+        return _here(tree, error=_("choose a topic"))
     try:
         await write_off_loop(
             request.app.state.db,
@@ -91,9 +98,16 @@ async def place_from_health(
             ),
         )
     except (AppError, DomainError) as exc:
-        return _here(tree, error=str(exc))
+        return _here(tree, error=refusal(exc))
     await run_in_threadpool(report.refresh, request.app.state.db, tree)
-    return _here(tree, done=f"section {section} filed in topic {target}")
+    return _here(
+        tree,
+        done=_(
+            "section {section} filed in topic {topic}",
+            section=section,
+            topic=target,
+        ),
+    )
 
 
 @router.post("/ui/trees/{tree}/triage/regenerate")
@@ -104,7 +118,7 @@ async def regenerate_from_health(
     fields = await _fields(request)
     node = fields.get("node", "")
     if not node.isdigit():
-        return _here(tree, error="choose a topic")
+        return _here(tree, error=_("choose a topic"))
     try:
 
         def _level(conn: object) -> int:
@@ -117,7 +131,7 @@ async def regenerate_from_health(
 
         level = await read_off_loop(request.app.state.db, _level)
     except AppError as exc:
-        return _here(tree, error=str(exc))
+        return _here(tree, error=refusal(exc))
     op = "brief" if level == 0 else "brief-upper"
     started = enqueue(
         request.app.state.db,
@@ -126,9 +140,9 @@ async def regenerate_from_health(
         tree=tree,
         started_by=user.name,
     )
+    said = _("Rewriting the brief of topic {id}.", id=node)
     return RedirectResponse(
-        f"/ui/jobs?tree={tree}"
-        f"&done={quote(f'Rewriting the brief of topic {node}.')}&run={started}",
+        f"/ui/jobs?tree={tree}&done={quote(said)}&run={started}",
         status_code=303,
     )
 
@@ -141,16 +155,16 @@ async def release_from_health(
     fields = await _fields(request)
     kind, target = fields.get("kind", ""), fields.get("target", "")
     if not target.isdigit():
-        return _here(tree, error="choose an edit to release")
+        return _here(tree, error=_("choose an edit to release"))
     try:
         await write_off_loop(
             request.app.state.db,
             lambda conn: attention.release(conn, tree, kind, int(target)),
         )
     except AppError as exc:
-        return _here(tree, error=str(exc))
+        return _here(tree, error=refusal(exc))
     await run_in_threadpool(report.refresh, request.app.state.db, tree)
-    return _here(tree, done="handed back to automation")
+    return _here(tree, done=_("handed back to automation"))
 
 
 @router.post("/ui/trees/{tree}/triage/recheck")
@@ -169,6 +183,92 @@ def _checking(conn: sqlite3.Connection, tree: str) -> str:
         (tree,),
     ).fetchone()
     return str(row["id"]) if row else ""
+
+
+@dataclass(frozen=True)
+class Shown:
+    """One check as the page says it, in the reader's language."""
+
+    count: int
+    said: str
+    detail: str
+    link: str
+
+
+def _shown(item: triage.Item) -> Shown:
+    """A stored check's sentence and detail, said in the page's language.
+
+    The report stores the English (it is the API's too); the page picks the
+    sentence again by the check's kind, so a count agrees with its noun.
+    """
+    n, said, detail = item.count, item.said, item.detail
+    if item.kind == "topics cut off from the root":
+        said = n_(
+            n,
+            "{n} topic is cut off from the root",
+            "{n} topics are cut off from the root",
+        )
+        if not n:
+            said = _("Every topic can be reached from the root")
+        detail = _("Everything beneath them is missing from the export.")
+    elif item.kind == "topics with no usable brief, or a stale one":
+        said = n_(
+            n,
+            "{n} topic has no usable brief, or a stale one",
+            "{n} topics have no usable brief, or a stale one",
+        )
+        if not n:
+            said = _("Every topic has a brief that holds")
+        people = re.search(r"; (\d+) needs? a person\.$", detail)
+        detail = (
+            n_(
+                int(people.group(1)),
+                "Recall cannot answer from them until they are rewritten; {n} needs a person.",  # noqa: E501
+                "Recall cannot answer from them until they are rewritten; {n} need a person.",  # noqa: E501
+            )
+            if people
+            else _("Recall cannot answer from them until a sync rewrites them.")
+        )
+    elif item.kind == "sections waiting for a topic":
+        said = n_(
+            n,
+            "{n} section is waiting for a topic",
+            "{n} sections are waiting for a topic",
+        )
+        if not n:
+            said = _("No sections are waiting for a topic")
+        detail = _("Read and embedded, but not on the map yet.")
+    elif item.kind == "sections placed without a score":
+        said = n_(
+            n,
+            "{n} section was placed without a score",
+            "{n} sections were placed without a score",
+        )
+        if not n:
+            said = _("Every section was placed by a score")
+        detail = _("Filed by rule rather than matched to a topic.")
+    elif item.kind == "runs that failed":
+        said = n_(n, "{n} run has failed", "{n} runs have failed")
+        if not n:
+            said = _("No run has failed")
+        detail = _("Open Runs for the code and message each one failed with.")
+    return Shown(count=n, said=said, detail=detail, link=item.link)
+
+
+def _why(why: str) -> str:
+    """Why a brief is listed (`briefs.stale_why`), in the page's language."""
+    if why == "it has no brief yet":
+        return _("it has no brief yet")
+    if why == "something beneath it changed since it was written":
+        return _("something beneath it changed since it was written")
+    if why == "its members changed since it was written":
+        return _("its members changed since it was written")
+    if why == "its prompt or model changed since it was written":
+        return _("its prompt or model changed since it was written")
+    inner = re.fullmatch(r"what was stored is not a brief \((.*)\)", why, re.S)
+    if inner:
+        return _("what was stored is not a brief ({why})", why=inner.group(1))
+    return why
 
 
 def _here(tree: str, **outcome: str) -> Response:

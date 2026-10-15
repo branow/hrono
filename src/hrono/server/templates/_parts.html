@@ -1,12 +1,12 @@
 {# The one way an empty state offers its next step: a button, never a command
-   to type elsewhere. #}
+   to type elsewhere. The label is English, translated here. #}
 {% macro start_sync(tree, user, label="Sync now", primary=true) -%}
 {%- if user.role in ("writer", "admin") -%}
 <form class="inline" method="post" action="/ui/trees/{{ tree }}/sync">
-  <button class="btn{{ ' primary' if primary }}" type="submit">{{ label }}</button>
+  <button class="btn{{ ' primary' if primary }}" type="submit">{{ _(label) }}</button>
 </form>
 {%- else -%}
-<a class="btn" href="/ui/guide?tree={{ tree }}">How a tree gets built</a>
+<a class="btn" href="/ui/guide?tree={{ tree }}">{{ _("How a tree gets built") }}</a>
 {%- endif -%}
 {%- endmacro %}
 
@@ -15,24 +15,24 @@
    and the two are never added. ``short`` marks it "est." for a table row,
    whose page already says it in full above. #}
 {% macro money(s, short=false) -%}
-{%- if s.billed %}<span class="num" data-spend="metered">{{ s.paid }}{% if s.paid == "unknown" and s.unpriced %} <span class="faint">no price for {{ s.unpriced|join(", ") }}</span>{% endif %}</span>{% endif -%}
-{%- if s.subscription and short %} <span class="num" data-spend="estimate" title="An estimate, not billed: a subscription charged nothing per call. This is what the same tokens would cost at the API's prices.">{{ "~" ~ s.estimate if s.estimate != "unknown" else "unknown" }} <span class="faint est">est.</span></span>
-{%- elif s.subscription %} <span class="num" data-spend="estimate" title="Billed through a subscription, so nothing was charged per call. This is what the same tokens would cost at the API's prices.">{{ "~" ~ s.estimate if s.estimate != "unknown" else "unknown" }} <span class="faint est">est.</span></span>{% endif -%}
-{%- if not s.billed and not s.subscription %}<span class="faint" data-spend="none">no charge</span>{% endif -%}
+{%- if s.billed %}<span class="num" data-spend="metered">{{ _("unknown") if s.paid == "unknown" else s.paid }}{% if s.paid == "unknown" and s.unpriced %} <span class="faint">{{ _("no price for {models}", models=s.unpriced|join(", ")) }}</span>{% endif %}</span>{% endif -%}
+{%- if s.subscription and short %} <span class="num" data-spend="estimate" title="{{ _("An estimate, not billed: a subscription charged nothing per call. This is what the same tokens would cost at the API's prices.") }}">{{ "~" ~ s.estimate if s.estimate != "unknown" else _("unknown") }} <span class="faint est">{{ _("est.") }}</span></span>
+{%- elif s.subscription %} <span class="num" data-spend="estimate" title="{{ _("Billed through a subscription, so nothing was charged per call. This is what the same tokens would cost at the API's prices.") }}">{{ "~" ~ s.estimate if s.estimate != "unknown" else _("unknown") }} <span class="faint est">{{ _("est.") }}</span></span>{% endif -%}
+{%- if not s.billed and not s.subscription %}<span class="faint" data-spend="none">{{ _("no charge") }}</span>{% endif -%}
 {%- endmacro %}
 
 {# A run with no ledger rows is one of two things the page must not blur: a run
    made before spend was recorded (unknown) and a run that called no model. #}
 {% macro unrecorded(before, cost=None) -%}
-{%- if cost %}<span class="num" data-spend="tokens-only">{{ "{:,}".format(cost.input) }} in, {{ "{:,}".format(cost.output) }} out</span> <span class="faint" data-spend="unknown">cost not recorded</span>
-{%- elif before %}<span class="faint" data-spend="unknown">not recorded: this ran before spend was kept</span>{% else %}<span class="faint" data-spend="none">no model calls</span>{% endif -%}
+{%- if cost %}<span class="num" data-spend="tokens-only">{{ _("{input} in, {output} out", input="{:,}".format(cost.input), output="{:,}".format(cost.output)) }}</span> <span class="faint" data-spend="unknown">{{ _("cost not recorded") }}</span>
+{%- elif before %}<span class="faint" data-spend="unknown">{{ _("not recorded: this ran before spend was kept") }}</span>{% else %}<span class="faint" data-spend="none">{{ _("no model calls") }}</span>{% endif -%}
 {%- endmacro %}
 
 {# A refusal, field by field, in the words the server gave. #}
 {% macro problems(list, title) %}
 <div class="callout bad">
   <div class="body">
-    <div class="title">{{ title }}</div>
+    <div class="title">{{ _(title) }}</div>
     <ul class="field-errors">
       {% for problem in list %}
       <li><code>{{ problem.field or "config" }}</code> {{ problem.msg|idents }}</li>
@@ -46,7 +46,7 @@
 {% macro input_for(field, id) %}
 {% if field.kind == "choice" %}
 <select id="{{ id }}" name="{{ field.input_name }}">
-  {% if not field.required %}<option value=""{% if not field.value %} selected{% endif %}>— none —</option>{% endif %}
+  {% if not field.required %}<option value=""{% if not field.value %} selected{% endif %}>{{ _("— none —") }}</option>{% endif %}
   {% for choice in field.choices %}
   <option value="{{ choice }}"{% if choice == field.value %} selected{% endif %}>{{ choice }}</option>
   {% endfor %}
@@ -56,13 +56,13 @@
   {% for choice in field.choices %}
   <li><label class="confirm mild"><input type="checkbox" name="{{ field.input_name }}" value="{{ choice }}"{% if choice in field.picked %} checked{% endif %}> {{ choice }}</label></li>
   {% else %}
-  <li><span class="hint">none registered yet</span></li>
+  <li><span class="hint">{{ _("none registered yet") }}</span></li>
   {% endfor %}
 </ul>
 {% elif field.kind == "toggle" %}
 <label class="confirm mild"><input type="checkbox" id="{{ id }}" name="{{ field.input_name }}" value="1"{% if field.checked %} checked{% endif %}> {{ field.label or field.path }}</label>
 {% elif field.kind == "lines" %}
-<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="3" spellcheck="false" placeholder="one per line{% if field.example %}, e.g. {{ field.example }}{% endif %}">{{ field.value }}</textarea>
+<textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="3" spellcheck="false" placeholder="{% if field.example %}{{ _("one per line, e.g. {example}", example=field.example) }}{% else %}{{ _("one per line") }}{% endif %}">{{ field.value }}</textarea>
 {% elif field.kind == "json" %}
 <textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="4" spellcheck="false" placeholder="{{ field.example or '{}' }}">{{ field.value }}</textarea>
 {% elif field.kind == "roomy" %}
@@ -84,14 +84,14 @@
     {% for field in fields %}
     {% set id = "f-" ~ scope ~ "-" ~ field.path|replace(".", "-") %}
     <div class="field{% if field.kind in ('roomy', 'json', 'lines', 'multi') %} wide{% endif %}">
-      {% set says = (field.help ~ " " if field.help else "") ~ "Key: `" ~ field.path ~ "`" %}
+      {% set says = (field.help ~ " " if field.help else "") ~ _("Key: {key}", key="`" ~ field.path ~ "`") %}
       {% if field.kind != "toggle" %}
-      <label for="{{ id }}">{{ field.label or field.path }}{% if field.required %}<span class="needed" title="required">*</span>{% endif %}<span class="tip" tabindex="0" role="note" data-tip="{{ says }}">?</span></label>
+      <label for="{{ id }}">{{ field.label or field.path }}{% if field.required %}<span class="needed" title="{{ _("required") }}">*</span>{% endif %}<span class="tip" tabindex="0" role="note" data-tip="{{ says }}">?</span></label>
       {{ input_for(field, id) }}
       {% else %}
       <div class="row">{{ input_for(field, id) }}<span class="tip" tabindex="0" role="note" data-tip="{{ says }}">?</span></div>
       {% endif %}
-      {% if field.kind == "secret" and field.value == "***" %}<p class="hint">Leave <code>***</code> to keep the stored one.</p>{% endif %}
+      {% if field.kind == "secret" and field.value == "***" %}<p class="hint">{{ _("Leave") }} <code>***</code> {{ _("to keep the stored one.") }}</p>{% endif %}
     </div>
     {% endfor %}
   </fieldset>
@@ -107,9 +107,9 @@
   <div class="body">
     <div class="live-line">
       <span class="spinner" aria-hidden="true"></span>
-      <span class="title">{{ label }}</span>
+      <span class="title">{{ _(label) }}</span>
       <span class="live-progress faint num"></span>
-      <a class="small" href="/ui/jobs/{{ job }}">Details</a>
+      <a class="small" href="/ui/jobs/{{ job }}">{{ _("Details") }}</a>
     </div>
   </div>
 </div>

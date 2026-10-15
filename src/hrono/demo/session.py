@@ -39,6 +39,7 @@ from hrono.registry import store
 log = logging.getLogger(__name__)
 
 KEPT = 20  # conversations kept in memory; the oldest goes first
+FAILED = "the turn failed on the server"  # the page words it in its language
 
 
 @dataclass(frozen=True)
@@ -130,7 +131,7 @@ def turn(talk: Conversation, database: Database, question: str) -> None:
         steps.add("failed", message=str(exc))
     except Exception:
         log.exception("demo turn failed")
-        steps.add("failed", message="the turn failed on the server")
+        steps.add("failed", message=FAILED)
     finally:
         with talk.lock:
             talk.busy = False

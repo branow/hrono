@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% from "_parts.html" import start_sync with context %}
-{% block title %}hrono — {{ tree }} jobs{% endblock %}
+{% block title %}hrono — {{ _("{tree} jobs", tree=tree) }}{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Runs<span class="tip" tabindex="0" role="note" data-tip="Background work. Each run is one instruction; the indented lines are the pieces it was broken into">?</span></h1>
+  <h1>{{ _("Runs") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Background work. Each run is one instruction; the indented lines are the pieces it was broken into") }}">?</span></h1>
 </div>
 
 {% if can_run %}
 <section class="card mb-4">
   <div class="card-head">
-    <h2>Run something<span class="tip" tabindex="0" role="note" data-tip="Every stage this build can run. The whole-pipeline ones compose the rest in the correct order; a single stage run out of order can leave a tree that looks right and is wrong">?</span></h2>
+    <h2>{{ _("Run something") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Every stage this build can run. The whole-pipeline ones compose the rest in the correct order; a single stage run out of order can leave a tree that looks right and is wrong") }}">?</span></h2>
   </div>
   <div class="card-body stack">
     <ul class="whole-ops">
@@ -25,7 +25,7 @@
     </ul>
 
     <details class="reveal">
-      <summary class="twisty">One stage at a time, in pipeline order<span class="tip" tabindex="0" role="note" data-tip="Redo part of a tree: re-condense after changing a prompt, re-brief one source, regroup the sections. Running a stage before the one it depends on leaves a tree that looks finished and is not — the three above exist to get the order right for you">?</span></summary>
+      <summary class="twisty">{{ _("One stage at a time, in pipeline order") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Redo part of a tree: re-condense after changing a prompt, re-brief one source, regroup the sections. Running a stage before the one it depends on leaves a tree that looks finished and is not — the three above exist to get the order right for you") }}">?</span></summary>
       <ul class="stages">
         {% for item in runnable if not item.whole %}
         <li>
@@ -34,12 +34,12 @@
             <code class="stage-op">{{ loop.index }}. {{ item.op }}</code>
             <span class="stage-does">{{ item.means }}</span>
             {% if item.per_source and sources %}
-            <select name="source" aria-label="which source {{ item.op }} runs over">
-              <option value="">every source</option>
+            <select name="source" aria-label="{{ _("which source {op} runs over", op=item.op) }}">
+              <option value="">{{ _("every source") }}</option>
               {% for source in sources %}<option value="{{ source }}">{{ source }}</option>{% endfor %}
             </select>
             {% endif %}
-            <button class="btn small" type="submit">Run</button>
+            <button class="btn small" type="submit">{{ _("Run") }}</button>
           </form>
         </li>
         {% endfor %}
@@ -49,35 +49,35 @@
 </section>
 {% endif %}
 
-<form class="toolbar mb-3" method="get" action="/ui/jobs" aria-label="filter runs" data-live>
+<form class="toolbar mb-3" method="get" action="/ui/jobs" aria-label="{{ _("filter runs") }}" data-live>
   <input type="hidden" name="tree" value="{{ tree }}">
   <label class="field">
-    <span>Status</span>
+    <span>{{ _("Status") }}</span>
     <select name="status">
-      <option value="">any</option>
-      {% for state in statuses %}<option value="{{ state }}"{% if filters.status == state %} selected{% endif %}>{{ state }}</option>{% endfor %}
+      <option value="">{{ _("any") }}</option>
+      {% for state in statuses %}<option value="{{ state }}"{% if filters.status == state %} selected{% endif %}>{{ status_labels()[state] }}</option>{% endfor %}
     </select>
   </label>
   <label class="field">
-    <span>What ran</span>
+    <span>{{ _("What ran") }}</span>
     <select name="op">
-      <option value="">anything</option>
+      <option value="">{{ _("anything") }}</option>
       {% for name in ops %}<option value="{{ name }}"{% if filters.op == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
     </select>
   </label>
-  <button class="btn small" type="submit" data-static>Show</button>
-  <span class="hint">{{ paging.total }} run{{ '' if paging.total == 1 else 's' }}</span>
+  <button class="btn small" type="submit" data-static>{{ _("Show") }}</button>
+  <span class="hint">{{ n_(paging.total, "{n} run", "{n} runs") }}</span>
 </form>
 
 <section class="card">
   {% if not jobs %}
   <div class="card-body empty">
     {% if filters.status or filters.op %}
-    <div class="title">No runs match</div>
-    <p class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">Show every run</a></p>
+    <div class="title">{{ _("No runs match") }}</div>
+    <p class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("Show every run") }}</a></p>
     {% else %}
-    <div class="title">No runs for {{ tree }} yet</div>
-    <p class="mt-3">{{ start_sync(tree, user, "Start a sync") }}</p>
+    <div class="title">{{ _("No runs for {tree} yet", tree=tree) }}</div>
+    <p class="mt-3">{{ start_sync(tree, user, _("Start a sync")) }}</p>
     {% endif %}
   </div>
   {% else %}
@@ -85,31 +85,31 @@
     <table class="runs">
       <thead>
         <tr>
-          <th>Started</th>
-          <th>What ran</th>
-          <th>Status</th>
-          <th>Took</th>
-          <th>Tokens</th>
-          <th>Run</th>
-          <th><span class="visually-hidden">actions</span></th>
+          <th>{{ _("Started") }}</th>
+          <th>{{ _("What ran") }}</th>
+          <th>{{ _("Status") }}</th>
+          <th>{{ _("Took") }}</th>
+          <th>{{ _("Tokens") }}</th>
+          <th>{{ _("Run") }}</th>
+          <th><span class="visually-hidden">{{ _("actions") }}</span></th>
         </tr>
       </thead>
       <tbody>
       {% for job in jobs %}
       <tr id="job-{{ job.id }}" data-job="{{ job.id }}" {% if job.live %}data-live="1"{% endif %}>
         <td class="when">{{ job.started }}</td>
-        <td class="nowrap"><a class="runlink" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.means }}"><code>{{ job.op }}</code></a>{% if job.failure and job.failure.stage %} <span class="hint">at {{ job.failure.stage }}</span>{% endif %}</td>
-        <td class="nowrap"><span class="state status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span>
-          <span class="progress num faint" title="stages done">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</span>
+        <td class="nowrap"><a class="runlink" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.means }}"><code>{{ job.op }}</code></a>{% if job.failure and job.failure.stage %} <span class="hint">{{ _("at {stage}", stage=job.failure.stage) }}</span>{% endif %}</td>
+        <td class="nowrap"><span class="state status" data-state="{{ job.status|status_word }}">{{ job.status|status_label }}</span>
+          <span class="progress num faint" title="{{ _("stages done") }}">{% if job.progress %}{{ job.progress.done }}/{{ job.progress.total }}{% endif %}</span>
           {% if job.live and job.progress and job.progress.total %}<span class="bar"><span style="width:{{ (100 * job.progress.done / job.progress.total)|round|int }}%"></span></span>{% endif %}
         </td>
         <td class="when">{{ job.took }}</td>
-        <td class="num nowrap">{% if job.usage %}{% set tin = job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation %}<span title="{{ "{:,}".format(tin) }} in / {{ "{:,}".format(job.usage.tokens.output) }} out">{{ tin|compact }} in / {{ job.usage.tokens.output|compact }} out</span>{% elif job.cost %}{{ job.cost.input }} in / {{ job.cost.output }} out{% elif job.before_ledger %}<span class="faint" title="This ran before spend was recorded">unknown</span>{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td class="num nowrap">{% if job.usage %}{% set tin = job.usage.tokens.input + job.usage.tokens.cache_read + job.usage.tokens.cache_creation %}<span title="{{ _("{tin} in / {tout} out", tin="{:,}".format(tin), tout="{:,}".format(job.usage.tokens.output)) }}">{{ _("{tin} in / {tout} out", tin=tin|compact, tout=job.usage.tokens.output|compact) }}</span>{% elif job.cost %}{{ _("{tin} in / {tout} out", tin=job.cost.input, tout=job.cost.output) }}{% elif job.before_ledger %}<span class="faint" title="{{ _("This ran before spend was recorded") }}">{{ _("unknown") }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>
         <td><a class="faint" href="/ui/jobs/{{ job.id }}?tree={{ tree }}" title="{{ job.id }}"><code>{{ job.short_id }}</code></a></td>
         <td class="nowrap">
           {% if job.live and can_write %}
           <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel">
-            <button class="btn small" type="submit">Stop</button>
+            <button class="btn small" type="submit">{{ _("Stop") }}</button>
           </form>
           {% endif %}
         </td>
@@ -120,9 +120,9 @@
   </div>
   {% if paging.pages > 1 %}
   <div class="card-body row">
-    {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">Newer</a>{% endif %}
-    <span class="hint">page {{ paging.page }} of {{ paging.pages }}</span>
-    {% if paging.older %}<a class="btn small" href="{{ paging.older }}">Older</a>{% endif %}
+    {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">{{ _("Newer") }}</a>{% endif %}
+    <span class="hint">{{ _("page {page} of {pages}", page=paging.page, pages=paging.pages) }}</span>
+    {% if paging.older %}<a class="btn small" href="{{ paging.older }}">{{ _("Older") }}</a>{% endif %}
   </div>
   {% endif %}
   {% endif %}
@@ -132,12 +132,13 @@
 // — so this view is live with no library and nothing vendored. The cookie
 // rides along and no script can read it.
 const word = window.statusWord;
+const label = window.statusLabel;
 for (const row of document.querySelectorAll('tr[data-live]')) {
   const source = new EventSource('/jobs/' + row.dataset.job + '/events');
   source.addEventListener('state', (event) => {
     const state = JSON.parse(event.data);
     const badge = row.querySelector('.status');
-    badge.textContent = word(state.status);
+    badge.textContent = label(state.status);
     // the badge takes its colour from data-state, so a live update that moved
     // only the text would leave a finished run painted as a running one
     badge.dataset.state = word(state.status);

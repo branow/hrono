@@ -2,10 +2,10 @@
    is lit, the latest is marked, and the rest of each opened level is there
    faintly for context. A circle map of hundreds of topics cannot fit in half
    a screen; a list of the opened path always does. #}
-<ul class="demo-trail" aria-label="the topics the agent opened, in the tree">
+<ul class="demo-trail" aria-label="{{ _("the topics the agent opened, in the tree") }}">
   {% for node in graph.nodes %}
   <li class="{% if node.id in visited %}visited{% endif %}{% if node.id == current %} reading{% endif %}" style="--depth: {{ node.depth }}" data-node="{{ node.id }}">
-    <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}" target="_blank" rel="noopener" title="{{ node.name }}{% if node.where %} — in {{ node.where }}{% endif %}">{{ node.name }}</a>
+    <a href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}" target="_blank" rel="noopener" title="{{ node.name }}{% if node.where %} — {{ _("in {where}", where=node.where) }}{% endif %}">{{ node.name }}</a>
     <span class="holds">{{ node.holds|counted(node.holds_what) }}</span>
   </li>
   {% endfor %}

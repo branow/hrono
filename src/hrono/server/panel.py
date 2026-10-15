@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 from hrono import naming
 from hrono.server import where as where_module
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 from hrono.summarize import briefs
 
 # Enough of a section to recognise which one it is, in a column a third of the
@@ -144,8 +146,16 @@ def _children(
 def _detail(row: sqlite3.Row, place: str) -> str:
     """What a child holds, and where — the line under its name."""
     held = int(row["members"]) or int(row["kids"])
-    counted = f"{held} {'sections' if int(row['members']) else 'topics'}"
-    return f"{counted}, in {place}" if place else counted
+    counted = (
+        n_(held, "{n} section", "{n} sections")
+        if int(row["members"])
+        else n_(held, "{n} topic", "{n} topics")
+    )
+    return (
+        _("{holds}, in {where}", holds=counted, where=place)
+        if place
+        else counted
+    )
 
 
 def _relative(path: str, stem: str) -> str:
@@ -159,6 +169,6 @@ def _relative(path: str, stem: str) -> str:
 
 def _preview(body: object) -> str:
     if body is None:
-        return "(content not stored)"
+        return _("(content not stored)")
     text = bytes(body).decode("utf-8", "replace").strip()
     return text[:PREVIEW_CHARS] + ("…" if len(text) > PREVIEW_CHARS else "")

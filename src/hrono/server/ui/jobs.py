@@ -24,8 +24,10 @@ from hrono.jobs.ops import OPS
 from hrono.jobs.scope import SOURCE_SCOPED, fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.registry import store as registry_store
-from hrono.server import events, failures, outcome
+from hrono.server import events, failures, i18n, outcome
 from hrono.server.changed import changed
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -197,7 +199,7 @@ def _runnable() -> list[dict[str, object]]:
     return [
         {
             "op": name,
-            "means": MEANS.get(name, ""),
+            "means": _(MEANS.get(name, "")),
             "whole": name in WHOLE,
             "per_source": name in SOURCE_SCOPED,
         }
@@ -236,7 +238,7 @@ def render_job(
         "started": clock(job.created_at),
         "took": _elapsed(job.created_at, job.updated_at, live=status in _LIVE),
         "op": job.op,
-        "means": MEANS.get(job.op, ""),
+        "means": _(MEANS.get(job.op, "")),
         "status": status,
         "live": status in _LIVE,
         "progress": (
@@ -265,7 +267,7 @@ def render_job(
         "children": [
             {
                 "op": str(child["op"]),
-                "means": MEANS.get(str(child["op"]), ""),
+                "means": _(MEANS.get(str(child["op"]), "")),
                 "status": str(child["status"]),
                 "scope": to_job(child).scope,
                 "outcome": outcome.read(to_job(child).result),
@@ -295,15 +297,15 @@ def _stages(result: Mapping[str, object] | None) -> list[dict[str, object]]:
 
 def _seconds(seconds: float) -> str:
     if seconds < 60:
-        return f"{seconds:.1f}s"
-    return f"{int(seconds) // 60}m {int(seconds) % 60:02d}s"
+        return _("{s}s", s=f"{seconds:.1f}")
+    return _("{m}m {s}s", m=int(seconds) // 60, s=f"{int(seconds) % 60:02d}")
 
 
 def clock(stamp: str) -> str:
     """The time of day a run started. Three `maintain` rows with no clock on
     them are three indistinguishable rows."""
-    moment = _parsed(stamp)
-    return "" if moment is None else moment.strftime("%d %b %H:%M")
+    at = _parsed(stamp)
+    return "" if at is None else i18n.moment(at)
 
 
 def _elapsed(start: str, end: str, *, live: bool) -> str:
@@ -315,10 +317,10 @@ def _elapsed(start: str, end: str, *, live: bool) -> str:
         ((datetime.now(UTC) if live else ended) - began).total_seconds()
     )
     if seconds < 60:
-        return f"{seconds}s"
+        return _("{s}s", s=seconds)
     if seconds < 3600:
-        return f"{seconds // 60}m {seconds % 60:02d}s"
-    return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
+        return _("{m}m {s}s", m=seconds // 60, s=f"{seconds % 60:02d}")
+    return _("{h}h {m}m", h=seconds // 3600, m=f"{(seconds % 3600) // 60:02d}")
 
 
 def _parsed(stamp: str) -> datetime | None:
@@ -385,18 +387,26 @@ async def revert_from_the_page(
 ) -> Response:
     """Undo the run's changes, then show the run again, now reverted."""
 
-    def work() -> str:
+    def work() -> tuple[str | None, int]:
         with request.app.state.db.write() as conn:
             if job_store.get(conn, job_id) is None:
                 raise NotFound(f"job not found: {job_id}")
             why = journal.blocker(conn, job_id)
             if why is not None:
-                return f"Cannot revert this run: {why}."
-            undone = journal.revert(conn, job_id, user.name)
-        return f"Reverted: {undone} changes undone. Sync again to replay it."
+                return why, 0
+            return None, journal.revert(conn, job_id, user.name)
 
-    said = await run_in_threadpool(work)
-    key = "error" if said.startswith("Cannot") else "done"
+    why, undone = await run_in_threadpool(work)
+    key = "done" if why is None else "error"
+    said = (
+        _("Cannot revert this run: {why}.", why=why)
+        if why is not None
+        else n_(
+            undone,
+            "Reverted: {n} changes undone. Sync again to replay it.",
+            "Reverted: {n} changes undone. Sync again to replay it.",
+        )
+    )
     query = urlencode({"tree": tree or "default", key: said})
     return RedirectResponse(f"/ui/jobs/{job_id}?{query}", status_code=303)
 
@@ -430,7 +440,7 @@ async def run_from_the_page(
         )
     return RedirectResponse(
         f"/ui/jobs?tree={tree or 'default'}"
-        f"&done={quote(f'Started {op}.')}&run={started}",
+        f"&done={quote(_('Started {op}.', op=op))}&run={started}",
         status_code=303,
     )
 
@@ -450,9 +460,13 @@ def cancel_from_the_page(
         if job_store.get(conn, job_id) is None:
             raise NotFound(f"job not found: {job_id}")
         outcome = cancel(conn, job_id)
-    notice = f"Stopped {outcome.stopped}."
+    notice = _("Stopped {n}.", n=outcome.stopped)
     if outcome.running:
-        notice += f" {outcome.running} told to stop; each finishes its step."
+        notice += " " + n_(
+            outcome.running,
+            "{n} told to stop; each finishes its step.",
+            "{n} told to stop; each finishes its step.",
+        )
     return RedirectResponse(
         f"/ui/jobs?tree={tree or 'default'}&done={quote(notice)}",
         status_code=303,
@@ -487,6 +501,6 @@ def retry_from_the_page(
         )
     return RedirectResponse(
         f"/ui/jobs/{again}?tree={tree or job.tree or 'default'}"
-        f"&done={quote(f'Started again from {job_id[:8]}.')}",
+        f"&done={quote(_('Started again from {run}.', run=job_id[:8]))}",
         status_code=303,
     )

@@ -28,6 +28,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from hrono.server import i18n
+
 # One line per counted thing: the field an op emits -> how to say it, as
 # (singular, plural). The count goes in front.
 COUNTED: dict[str, tuple[str, str]] = {
@@ -41,6 +43,7 @@ COUNTED: dict[str, tuple[str, str]] = {
     "files_gone": ("file gone from the source", "files gone from the source"),
     "sections": ("section read", "sections read"),
     "files": ("file read", "files read"),
+    "levels": ("level", "levels"),
     "nodes": ("topic made", "topics made"),
     "topics": ("topic made", "topics made"),
     "judged": ("topic judged", "topics judged"),
@@ -167,7 +170,7 @@ def read(result: Mapping[str, object] | None) -> Outcome:
         did=sorted(did),
         found=found,
         next=[
-            {"says": NEXT[key][0], "op": NEXT[key][1]}
+            {"says": i18n.gettext(NEXT[key][0]), "op": NEXT[key][1]}
             for key, value in flat.items()
             if key in NEXT and value is True
         ],
@@ -199,7 +202,7 @@ def _is_count(value: object) -> bool:
 
 def _counted(key: str, count: int) -> str:
     singular, plural = COUNTED[key]
-    return f"{count} {singular if count == 1 else plural}"
+    return i18n.ngettext(count, "{n} " + singular, "{n} " + plural)
 
 
 def _unnamed(key: str, count: int) -> str:
@@ -213,5 +216,9 @@ def _unnamed(key: str, count: int) -> str:
 
 def _measured(key: str, value: object) -> str:
     if key == "misfit_rate":
-        return f"{MEASURED[key]} {float(value) * 100:.1f}%"
+        return i18n.gettext(
+            "misfit rate {rate}", rate=f"{float(value) * 100:.1f}%"
+        )
+    if key == "drift":
+        return i18n.gettext("drift since the last settle {drift}", drift=value)
     return f"{MEASURED[key]} {value}"

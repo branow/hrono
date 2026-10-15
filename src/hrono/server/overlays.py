@@ -25,6 +25,8 @@ from hrono.cluster.placement import TAU
 from hrono.db.update_log import recent
 from hrono.embed.model import resolve_embedding_model
 from hrono.errors import DomainError
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 
 KINDS = ("pull", "proximity", "propagation")
 VECTOR_KINDS = frozenset({"pull", "proximity"})
@@ -98,7 +100,8 @@ def build(
         try:
             model = str(resolve_embedding_model(conn, {})["name"])
         except DomainError as exc:
-            unavailable = str(exc)
+            # the model resolver's own words, translated where it has them
+            unavailable = _(str(exc))
         else:
             centroids = cluster_store.node_centroids(conn, tree, model, visible)
             if "pull" in kinds:
@@ -129,7 +132,7 @@ def _pull(
             kind="pull",
             source=holder,
             target=puller,
-            label=f"{count} section{'s' if count != 1 else ''} nearer",
+            label=n_(count, "{n} section nearer", "{n} sections nearer"),
             weight=float(count),
         )
         for (holder, puller), count in sorted(counts.items())
@@ -155,7 +158,7 @@ def _proximity(
             kind="proximity",
             source=left,
             target=right,
-            label=f"{similarity:.2f} similar",
+            label=_("{similarity} similar", similarity=f"{similarity:.2f}"),
             weight=similarity,
         )
         for index, left in enumerate(drawn)

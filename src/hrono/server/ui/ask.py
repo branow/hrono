@@ -32,6 +32,7 @@ from hrono.errors import Unavailable
 from hrono.naming import name, names
 from hrono.recall.ask import ask
 from hrono.recall.engine import Hit
+from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, _trees, ask_history, router, templates
 
 HISTORY_COOKIE = "hrono_asked"
@@ -61,6 +62,9 @@ def ask_page(
         hits = [_shown(conn, tree, hit) for hit in outcome.hits]
         for index, shown in enumerate(hits):
             shown["status"] = change.status[index] if change else None
+            shown["status_label"] = (
+                _status(change.status[index]) if change else None
+            )
         explore = _explore(conn, tree) if outcome.refused else []
     page = templates.TemplateResponse(
         request,
@@ -113,9 +117,9 @@ def _answer(request: Request, tree: str, question: str) -> Answer:
 
 
 def _shown(conn: sqlite3.Connection, tree: str, hit: Hit) -> dict[str, object]:
-    path, _, version = hit.uri.rpartition("@")
+    path, _at, version = hit.uri.rpartition("@")
     return {
-        "kind": "brief" if hit.kind == "summary" else "source",
+        "kind": _("brief") if hit.kind == "summary" else _("source"),
         "path": path,
         "version": version[:12],
         "where": unquote(hit.header.removeprefix(hit.uri).strip()),
@@ -130,6 +134,15 @@ def _shown(conn: sqlite3.Connection, tree: str, hit: Hit) -> dict[str, object]:
             "link": f"/ui/trees/{tree}/nodes/{hit.topic}?tree={tree}",
         },
     }
+
+
+def _status(status: str) -> str:
+    """A passage's mark against the last answer, in the page's language."""
+    moved = status.removeprefix("moved from #")
+    if moved != status:
+        return _("moved from #{rank}", rank=moved)
+    marks = {"new": _("new"), "same": _("same"), "changed": _("changed")}
+    return marks.get(status, status)
 
 
 def _explore(conn: sqlite3.Connection, tree: str) -> list[dict[str, str]]:

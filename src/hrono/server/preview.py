@@ -14,6 +14,7 @@ from hrono import naming
 from hrono.jobs import store as job_store
 from hrono.jobs.model import to_job
 from hrono.server import failures
+from hrono.server.i18n import gettext as _
 from hrono.summarize import briefs
 from hrono.summarize.brief_preview import ROLES
 
@@ -103,8 +104,11 @@ def panel(conn: sqlite3.Connection, job_id: str) -> Panel | None:
         text=str(result.get("text") or ""),
         flagged=str(result.get("flagged") or ""),
         tokens=(
-            f"{int(tokens.get('input', 0)):,} in, "
-            f"{int(tokens.get('output', 0)):,} out"
+            _(
+                "{tokens_in} in, {tokens_out} out",
+                tokens_in=f"{int(tokens.get('input', 0)):,}",
+                tokens_out=f"{int(tokens.get('output', 0)):,}",
+            )
             if isinstance(tokens, dict)
             else ""
         ),

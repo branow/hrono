@@ -1,75 +1,75 @@
 {% extends "base.html" %}
-{% block title %}hrono — {{ tree }} demo{% endblock %}
+{% block title %}hrono — {{ tree }} {{ _("demo") }}{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Agent demo<span class="tip" tabindex="0" role="note" data-tip="An agent answers from this tree while you watch: what recall attached, every page and file it opened, and its answer. In real use the agent runs in your project with its own file tools; here two stand-ins, open_topic and open_source, run on the server so each step can be shown">?</span></h1>
-  <p class="said">A demonstration, not the real setup: the agent's steps run here so each one can be shown.</p>
+  <h1>{{ _("Agent demo") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("An agent answers from this tree while you watch: what recall attached, every page and file it opened, and its answer. In real use the agent runs in your project with its own file tools; here two stand-ins, open_topic and open_source, run on the server so each step can be shown") }}">?</span></h1>
+  <p class="said">{{ _("A demonstration, not the real setup: the agent's steps run here so each one can be shown.") }}</p>
 </div>
 
 {% if not exported %}
 <section class="card">
   <div class="card-body empty">
-    <div class="title">Export this tree first</div>
-    <p class="hint">The agent reads the tree's export, the same files a real agent is handed.</p>
-    <div class="mt-3">{% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/export"><button class="btn primary" type="submit">Export now</button></form>{% else %}<a class="btn" href="/ui/trees/{{ tree }}/export?tree={{ tree }}">Export</a>{% endif %}</div>
+    <div class="title">{{ _("Export this tree first") }}</div>
+    <p class="hint">{{ _("The agent reads the tree's export, the same files a real agent is handed.") }}</p>
+    <div class="mt-3">{% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/export"><button class="btn primary" type="submit">{{ _("Export now") }}</button></form>{% else %}<a class="btn" href="/ui/trees/{{ tree }}/export?tree={{ tree }}">{{ _("Export") }}</a>{% endif %}</div>
   </div>
 </section>
 {% elif not connections %}
 <section class="card">
   <div class="card-body empty">
-    <div class="title">No model to run it on</div>
-    <p class="hint">The agent runs on a text model you have set up in Settings.</p>
-    <div class="mt-3"><a class="btn primary" href="/ui/config?tree={{ tree }}&amp;section=connections">Add a connection</a></div>
+    <div class="title">{{ _("No model to run it on") }}</div>
+    <p class="hint">{{ _("The agent runs on a text model you have set up in Settings.") }}</p>
+    <div class="mt-3"><a class="btn primary" href="/ui/config?tree={{ tree }}&amp;section=connections">{{ _("Add a connection") }}</a></div>
   </div>
 </section>
 {% else %}
 <div class="chat-shell" id="shell">
-  <section class="chat" aria-label="conversation">
+  <section class="chat" aria-label="{{ _("conversation") }}">
     <div class="chat-bar">
-      <label class="chat-pick"><span class="visually-hidden">Connection</span>
-        <select id="connection" aria-label="connection">
+      <label class="chat-pick"><span class="visually-hidden">{{ _("Connection") }}</span>
+        <select id="connection" aria-label="{{ _("connection") }}">
           {% for c in connections %}<option value="{{ c.name }}">{{ c.name }}{% if c.provider %} ({{ c.provider }}){% endif %}</option>{% endfor %}
         </select>
       </label>
-      <label class="chat-pick"><span class="visually-hidden">Model</span>
-        <select id="model" aria-label="model"></select>
+      <label class="chat-pick"><span class="visually-hidden">{{ _("Model") }}</span>
+        <select id="model" aria-label="{{ _("model") }}"></select>
       </label>
-      <span class="hint" id="no-model" hidden>No text model on this connection. <a href="/ui/config?tree={{ tree }}&amp;section=models">Add one</a>.</span>
+      <span class="hint" id="no-model" hidden>{{ _("No text model on this connection.") }} <a href="/ui/config?tree={{ tree }}&amp;section=models">{{ _("Add one") }}</a>.</span>
       <span class="grow"></span>
-      <button class="btn small quiet" type="button" id="fresh" hidden>New chat</button>
-      <button class="btn small" type="button" id="toggle-side" aria-controls="side" aria-expanded="true">Hide details</button>
+      <button class="btn small quiet" type="button" id="fresh" hidden>{{ _("New chat") }}</button>
+      <button class="btn small" type="button" id="toggle-side" aria-controls="side" aria-expanded="true">{{ _("Hide details") }}</button>
     </div>
 
     <div class="chat-log" id="log" aria-live="polite">
       <div class="chat-hello" id="hello">
-        <div class="title">Ask about this project</div>
-        <p class="hint">The agent reads this tree's export to answer. What recall attached and every topic and file it opened appear beside the chat.</p>
+        <div class="title">{{ _("Ask about this project") }}</div>
+        <p class="hint">{{ _("The agent reads this tree's export to answer. What recall attached and every topic and file it opened appear beside the chat.") }}</p>
       </div>
     </div>
 
     <div class="composer-dock">
     <form id="ask" class="composer">
-      <label class="visually-hidden" for="question">Question</label>
-      <textarea id="question" name="question" rows="1" placeholder="Ask a question about this project" required {% if not can_write %}disabled{% endif %}></textarea>
-      <button class="send" type="submit" aria-label="Send" {% if not can_write %}disabled title="Asking runs a model, so it needs the writer role"{% endif %}>
+      <label class="visually-hidden" for="question">{{ _("Question") }}</label>
+      <textarea id="question" name="question" rows="1" placeholder="{{ _("Ask a question about this project") }}" required {% if not can_write %}disabled{% endif %}></textarea>
+      <button class="send" type="submit" aria-label="{{ _("Send") }}" {% if not can_write %}disabled title="{{ _("Asking runs a model, so it needs the writer role") }}"{% endif %}>
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </form>
     </div>
   </section>
 
-  <aside class="side" id="side" aria-label="what the agent used">
+  <aside class="side" id="side" aria-label="{{ _("what the agent used") }}">
     <div class="side-tabs" role="tablist">
-      <button type="button" role="tab" id="tab-recall" aria-selected="true" aria-controls="pane-recall">Recall <span class="num faint" id="count-recall"></span></button>
-      <button type="button" role="tab" id="tab-path" aria-selected="false" aria-controls="pane-path">Path <span class="num faint" id="count-path"></span></button>
+      <button type="button" role="tab" id="tab-recall" aria-selected="true" aria-controls="pane-recall">{{ _("Recall") }} <span class="num faint" id="count-recall"></span></button>
+      <button type="button" role="tab" id="tab-path" aria-selected="false" aria-controls="pane-path">{{ _("Path") }} <span class="num faint" id="count-path"></span></button>
     </div>
     <div class="side-pane" role="tabpanel" id="pane-recall" aria-labelledby="tab-recall">
-      <p class="hint side-empty">What recall attached to the question appears here.</p>
+      <p class="hint side-empty">{{ _("What recall attached to the question appears here.") }}</p>
     </div>
     <div class="side-pane" role="tabpanel" id="pane-path" aria-labelledby="tab-path" hidden>
-      <p class="hint side-empty">Every topic and file the agent opens appears here, in order.</p>
+      <p class="hint side-empty">{{ _("Every topic and file the agent opens appears here, in order.") }}</p>
     </div>
-    <p class="side-note faint small">From the export of {{ exported }}</p>
+    <p class="side-note faint small">{{ _("From the export of {date}", date=exported) }}</p>
   </aside>
 </div>
 
@@ -78,6 +78,12 @@
 (function () {
   "use strict";
   var tree = {{ tree|tojson }};
+  var counts = {{ counts|tojson }};
+  var slavic = {{ (lang() == "uk")|tojson }};
+  // the message the page shows, its {slots} filled from ``values``
+  function say(text, values) {
+    return text.replace(/\{(\w+)\}/g, function (all, key) { return key in values ? values[key] : all; });
+  }
   var models = JSON.parse(document.getElementById("models").textContent);
   var connection = document.getElementById("connection");
   var model = document.getElementById("model");
@@ -106,7 +112,18 @@
     if (text !== undefined) node.textContent = text;
     return node;
   }
-  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  // a counted phrase in the form its number takes: one of three in
+  // Ukrainian (1, 2-4, 5+), the first or the last in English
+  function plural(key, n, shown) {
+    var form;
+    if (slavic) {
+      var tens = n % 100, ones = n % 10;
+      form = ones === 1 && tens !== 11 ? 0 : (ones >= 2 && ones <= 4 && !(tens >= 12 && tens <= 14) ? 1 : 2);
+    } else {
+      form = n === 1 ? 0 : 2;
+    }
+    return counts[key][form].replace("{n}", shown === undefined ? n : shown);
+  }
   function topicUrl(id) { return "/ui/trees/" + encodeURIComponent(tree) + "/nodes/" + id + "?tree=" + encodeURIComponent(tree); }
 
   /* ---- the model picker ---- */
@@ -126,7 +143,7 @@
   var toggle = document.getElementById("toggle-side");
   function showSide(on) {
     shell.classList.toggle("side-off", !on);
-    toggle.textContent = on ? "Hide details" : "Show details";
+    toggle.textContent = on ? {{ _("Hide details")|tojson }} : {{ _("Show details")|tojson }};
     toggle.setAttribute("aria-expanded", String(on));
     try { localStorage.setItem("hrono-demo-side", on ? "1" : "0"); } catch (e) {}
   }
@@ -151,7 +168,7 @@
     var theirs = el("div", "msg agent");
     var work = el("details", "work");
     var summary = el("summary");
-    var status = el("span", "status thinking", "Thinking");
+    var status = el("span", "status thinking", {{ _("Thinking")|tojson }});
     summary.append(status);
     var steps = el("ol", "work-steps");
     work.append(summary, steps);
@@ -186,56 +203,56 @@
 
   function settle(failed) {
     var parts = [];
-    if (turn.hits) parts.push("recalled " + plural(turn.hits, "passage", "passages"));
-    if (turn.topics) parts.push("opened " + plural(turn.topics, "topic", "topics"));
-    if (turn.files) parts.push("read " + plural(turn.files, "file", "files"));
-    var said = parts.length ? parts.join(", ") : "answered from what it already had";
+    if (turn.hits) parts.push(plural("recalled", turn.hits));
+    if (turn.topics) parts.push(plural("opened", turn.topics));
+    if (turn.files) parts.push(plural("read", turn.files));
+    var said = parts.length ? parts.join(", ") : {{ _("answered from what it already had")|tojson }};
     turn.status.className = "status";
-    turn.status.textContent = failed ? "Stopped" : said.charAt(0).toUpperCase() + said.slice(1);
+    turn.status.textContent = failed ? {{ _("Stopped")|tojson }} : said.charAt(0).toUpperCase() + said.slice(1);
   }
 
   var shown = {
     asked: function (s) { startTurn(s.text); },
     recall: function (s) {
       if (s.problem) {
-        workLine("Recall could not run, so nothing was attached", "faint");
-        var why = el("p", "hint", "Recall could not run, so the agent started with no passages attached.");
+        workLine({{ _("Recall could not run, so nothing was attached")|tojson }}, "faint");
+        var why = el("p", "hint", {{ _("Recall could not run, so the agent started with no passages attached.")|tojson }});
         why.title = s.problem;
         turn.recallBox.append(why);
         return;
       }
       if (!s.hits.length) {
-        workLine("Recall attached nothing", "faint");
-        turn.recallBox.append(el("p", "hint", "Recall attached nothing: " + (s.refused || "no passage was confident enough") + "."));
+        workLine({{ _("Recall attached nothing")|tojson }}, "faint");
+        turn.recallBox.append(el("p", "hint", say({{ _("Recall attached nothing: {why}.")|tojson }}, { why: s.refused || {{ _("no passage was confident enough")|tojson }} })));
         return;
       }
       turn.hits = s.hits.length;
-      workLine("Recall attached " + plural(s.hits.length, "passage", "passages"));
+      workLine(plural("attached", s.hits.length));
       s.hits.forEach(function (h) {
         var card = el("details", "hit");
         var sum = el("summary");
         var top = el("span", "hit-top");
-        top.append(el("span", "hit-kind", h.kind === "brief" ? "Topic brief" : "Source"), el("span", "hit-score num", h.score.toFixed(2)));
+        top.append(el("span", "hit-kind", h.kind === "brief" ? {{ _("Topic brief")|tojson }} : {{ _("Source")|tojson }}), el("span", "hit-score num", h.score.toFixed(2)));
         sum.append(top, el("span", "hit-title", h.title));
         // a source's title is already its path; say only where it came from
         var where = h.path && h.title.indexOf(h.path) === -1 ? h.path : "";
         if (h.source || where) sum.append(el("span", "hit-path mono", [h.source, where].filter(Boolean).join(": ")));
         card.append(sum, el("pre", "hit-body", h.body || ""));
         if (h.topic) {
-          var link = el("a", "small", "Open its topic");
+          var link = el("a", "small", {{ _("Open its topic")|tojson }});
           link.href = topicUrl(h.topic); link.target = "_blank"; link.rel = "noopener";
           card.append(link);
         }
         turn.recallBox.append(card);
       });
       updateCounts();
-      doing("Reading the map");
+      doing({{ _("Reading the map")|tojson }});
     },
     prompt: function (s) {
       var card = el("details", "hit prompt");
       var sum = el("summary");
-      sum.append(el("span", "hit-title", "What the model received"));
-      card.append(sum, el("pre", "hit-body", "Instructions\n\n" + s.system + "\n\nPrompt\n\n" + s.text));
+      sum.append(el("span", "hit-title", {{ _("What the model received")|tojson }}));
+      card.append(sum, el("pre", "hit-body", {{ _("Instructions")|tojson }} + "\n\n" + s.system + "\n\n" + {{ _("Prompt")|tojson }} + "\n\n" + s.text));
       turn.recallBox.append(card);
     },
     say: function (s) {
@@ -246,10 +263,10 @@
     tool: function (s) {
       var isTopic = s.tool === "open_topic";
       if (isTopic) turn.topics += 1; else turn.files += 1;
-      doing((isTopic ? "Opening " : "Reading ") + s.label);
-      workLine((isTopic ? "Opened " : "Read ") + s.label, "act");
+      doing(say(isTopic ? {{ _("Opening {label}")|tojson }} : {{ _("Reading {label}")|tojson }}, { label: s.label }));
+      workLine(say(isTopic ? {{ _("Opened {label}")|tojson }} : {{ _("Read {label}")|tojson }}, { label: s.label }), "act");
       var item = el("li", isTopic ? "topic" : "file");
-      var mark = el("span", "path-mark", isTopic ? (s.level === null || s.level === undefined ? "" : "L" + s.level) : "file");
+      var mark = el("span", "path-mark", isTopic ? (s.level === null || s.level === undefined ? "" : say({{ _("L{level}")|tojson }}, { level: s.level })) : {{ _("file")|tojson }});
       var name;
       if (isTopic && s.node) {
         name = el("a", "path-name", s.label);
@@ -257,7 +274,7 @@
       } else {
         name = el("span", "path-name mono", s.label);
       }
-      var size = el("span", "path-size faint num", s.size.toLocaleString() + " chars");
+      var size = el("span", "path-size faint num", plural("chars", s.size, s.size.toLocaleString()));
       item.append(mark, name, size);
       turn.pathBox.append(item);
       updateCounts();
@@ -307,14 +324,14 @@
         });
         source.onerror = function () { source.close(); running(false); };
       })
-      .catch(function () { shown.failed({ message: "The server could not be reached." }); running(false); });
+      .catch(function () { shown.failed({ message: {{ _("The server could not be reached.")|tojson }} }); running(false); });
   });
 
   function fresh() {
     talk = ""; turn = null;
     log.replaceChildren(hello); hello.hidden = false;
-    paneRecall.replaceChildren(el("p", "hint side-empty", "What recall attached to the question appears here."));
-    panePath.replaceChildren(el("p", "hint side-empty", "Every topic and file the agent opens appears here, in order."));
+    paneRecall.replaceChildren(el("p", "hint side-empty", {{ _("What recall attached to the question appears here.")|tojson }}));
+    panePath.replaceChildren(el("p", "hint side-empty", {{ _("Every topic and file the agent opens appears here, in order.")|tojson }}));
     document.getElementById("fresh").hidden = true;
     document.getElementById("count-recall").textContent = "";
     document.getElementById("count-path").textContent = "";

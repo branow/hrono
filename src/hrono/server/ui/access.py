@@ -25,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 
 from hrono.auth import users
 from hrono.errors import AppError, Invalid
+from hrono.server.i18n import gettext as _
 from hrono.server.rotation import rotate_running
 from hrono.server.ui import (
     Admin,
@@ -77,7 +78,10 @@ async def re_role(request: Request, user: Admin, name: str) -> Response:
         )
     except AppError as exc:
         return _refused(request, user, form, exc)
-    return _settled(form, done=f"{changed.name} is now {changed.role}")
+    return _settled(
+        form,
+        done=_("{name} is now {role}", name=changed.name, role=_(changed.role)),
+    )
 
 
 @router.post("/ui/access/{name}/reissue")
@@ -85,7 +89,10 @@ async def reissue(request: Request, user: Admin, name: str) -> Response:
     form = await _fields(request)
     if not form.get("confirm"):
         return _refused(
-            request, user, form, Invalid(f"confirm to reissue: {name}")
+            request,
+            user,
+            form,
+            Invalid(_("confirm to reissue: {name}", name=name)),
         )
     try:
         changed, token = await write_off_loop(
@@ -106,7 +113,10 @@ async def remove(request: Request, user: Admin, name: str) -> Response:
     form = await _fields(request)
     if not form.get("confirm"):
         return _refused(
-            request, user, form, Invalid(f"confirm to delete: {name}")
+            request,
+            user,
+            form,
+            Invalid(_("confirm to delete: {name}", name=name)),
         )
     try:
         gone = await write_off_loop(
@@ -115,8 +125,10 @@ async def remove(request: Request, user: Admin, name: str) -> Response:
     except AppError as exc:
         return _refused(request, user, form, exc)
     if not gone:
-        return _refused(request, user, form, Invalid(f"user not found: {name}"))
-    return _settled(form, done=f"deleted {name}")
+        return _refused(
+            request, user, form, Invalid(_("user not found: {name}", name=name))
+        )
+    return _settled(form, done=_("deleted {name}", name=name))
 
 
 @router.post("/ui/access/rotate-key")
@@ -125,7 +137,7 @@ async def rotate_key(request: Request, user: Admin) -> Response:
     form = await _fields(request)
     if not form.get("confirm"):
         return _refused(
-            request, user, form, Invalid("confirm to rotate the master key")
+            request, user, form, Invalid(_("confirm to rotate the master key"))
         )
     try:
         result = await run_in_threadpool(

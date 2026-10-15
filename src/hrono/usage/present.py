@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from hrono.server.i18n import gettext
+
 
 def duration(seconds: float) -> str:
     """Model time in the unit a person reads it in."""
     if seconds < 60:
-        return f"{seconds:.1f}s"
+        return gettext("{value}s", value=f"{seconds:.1f}")
     if seconds < 3600:
-        return f"{seconds / 60:.1f}m"
-    return f"{seconds / 3600:.2f}h"
+        return gettext("{value}m", value=f"{seconds / 60:.1f}")
+    return gettext("{value}h", value=f"{seconds / 3600:.2f}")
 
 
 def usd(amount: object, billed: bool) -> str:

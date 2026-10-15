@@ -1,24 +1,24 @@
 {% extends "base.html" %}
-{% block title %}hrono — {{ tree }} ask{% endblock %}
+{% block title %}hrono — {{ tree }} {{ _("ask") }}{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Recall<span class="tip" tabindex="0" role="note" data-tip="What recall hands an agent for this question: the passages, their source and score, and the topic that holds each. Questions you ask are kept in this browser only, for a day">?</span></h1>
+  <h1>{{ _("Recall") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What recall hands an agent for this question: the passages, their source and score, and the topic that holds each. Questions you ask are kept in this browser only, for a day") }}">?</span></h1>
 </div>
 
 <div class="stack">
   <form class="searchbar" method="get" action="/ui/trees/{{ tree }}/ask" role="search">
     <input type="hidden" name="tree" value="{{ tree }}">
     <label class="grow">
-      <span class="visually-hidden">Question</span>
-      <input type="search" name="q" value="{{ question }}" placeholder="How are tokens signed?" autofocus>
+      <span class="visually-hidden">{{ _("Question") }}</span>
+      <input type="search" name="q" value="{{ question }}" placeholder="{{ _("How are tokens signed?") }}" autofocus>
     </label>
-    <button class="btn primary" type="submit">Ask</button>
+    <button class="btn primary" type="submit">{{ _("Ask") }}</button>
   </form>
 
 
   {% if asked %}
-  <nav class="crumbs" aria-label="asked before">
-    <span>Asked before<span class="tip" tabindex="0" role="note" data-tip="Kept in this browser only, for a day. Ask one again to see what changed since">?</span>:</span>
+  <nav class="crumbs" aria-label="{{ _("asked before") }}">
+    <span>{{ _("Asked before") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Kept in this browser only, for a day. Ask one again to see what changed since") }}">?</span>:</span>
     {% for text, link in asked %}
     <a href="{{ link }}">{{ text }}</a>{% if not loop.last %},{% endif %}
     {% endfor %}
@@ -26,28 +26,30 @@
   {% endif %}
 
   {% if change %}
-  <p class="hint" id="change">Compared with the last time you asked this: {{ change.fresh }} new, {% if change.changed %}{{ change.changed }} changed, {% endif %}{{ change.dropped|length }} dropped out.</p>
+  <p class="hint" id="change">{{ _("Compared with the last time you asked this:") }} {{ n_(change.fresh, "{n} new", "{n} new") }}, {% if change.changed %}{{ n_(change.changed, "{n} changed", "{n} changed") }}, {% endif %}{{ n_(change.dropped|length, "{n} dropped out", "{n} dropped out") }}.</p>
   {% endif %}
 
   {% if problem %}
   <div class="callout warn" id="answer">
     <div class="body">
       {% if loading %}
-      <div class="title">The embedding model is still loading</div>
-      <p class="hint">{{ problem }}. Ask again in a few seconds.</p>
-      <div><a class="btn small" href="/ui/trees/{{ tree }}/ask?tree={{ tree }}&q={{ question|urlencode }}">Ask again</a></div>
+      <div class="title">{{ _("The embedding model is still loading") }}</div>
+      <p class="hint">{{ problem }}. {{ _("Ask again in a few seconds.") }}</p>
+      <div><a class="btn small" href="/ui/trees/{{ tree }}/ask?tree={{ tree }}&q={{ question|urlencode }}">{{ _("Ask again") }}</a></div>
       {% else %}
-      <div class="title">Recall cannot run on this server yet</div>
+      <div class="title">{{ _("Recall cannot run on this server yet") }}</div>
       {% set first = problem.split(";")[0] %}
-      <p class="hint">{{ first[:1]|upper }}{{ first[1:] }}. Install the in-process backend with <code>uv pip install "hrono[embed]"</code> and restart the server, or check the embedding model in <a href="/ui/config?tree={{ tree }}&amp;section=models">Settings</a>.</p>
+      {% set command %}<code>uv pip install "hrono[embed]"</code>{% endset %}
+      {% set settings %}<a href="/ui/config?tree={{ tree }}&amp;section=models">{{ _("Settings") }}</a>{% endset %}
+      <p class="hint">{{ first[:1]|upper }}{{ first[1:] }}. {{ (_("Install the in-process backend with {command} and restart the server, or check the embedding model in {settings}.")|e).format(command=command, settings=settings) }}</p>
       {% endif %}
     </div>
   </div>
   {% elif refused %}
   <div class="callout" id="answer">
     <div class="body">
-      <div class="title">Nothing here answers that confidently</div>
-      <p class="hint">Recall returns nothing rather than a guess an agent would trust. That is the answer an agent gets too. Start from one of these topics instead:</p>
+      <div class="title">{{ _("Nothing here answers that confidently") }}</div>
+      <p class="hint">{{ _("Recall returns nothing rather than a guess an agent would trust. That is the answer an agent gets too. Start from one of these topics instead:") }}</p>
       {% if explore %}
       <ul>
         {% for topic in explore %}
@@ -55,28 +57,29 @@
         {% endfor %}
       </ul>
       {% else %}
-      <p class="hint">This tree has no topics yet.</p>
+      <p class="hint">{{ _("This tree has no topics yet.") }}</p>
       {% endif %}
-      <div><a class="btn small" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Open the map</a></div>
+      <div><a class="btn small" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">{{ _("Open the map") }}</a></div>
     </div>
   </div>
   {% elif hits %}
-  <section class="stack" id="answer" aria-label="passages">
-    <p class="hint">{{ hits|length }} passage{{ '' if hits|length == 1 else 's' }}, best first, as an agent receives them.</p>
+  <section class="stack" id="answer" aria-label="{{ _("passages") }}">
+    <p class="hint">{{ n_(hits|length, "{n} passage, best first, as an agent receives them.", "{n} passages, best first, as an agent receives them.") }}</p>
     {% for hit in hits %}
     <article class="card">
       <div class="card-body stack">
         <div class="spread">
           <div class="mono small">
             <span class="chip">{{ hit.kind }}</span>
-            {% if hit.status %}<span class="chip {{ 'accent' if hit.status == 'new' else ('plain' if hit.status == 'same' else 'warn') }}">{{ hit.status }}</span>{% endif %}
+            {% if hit.status %}<span class="chip {{ 'accent' if hit.status == 'new' else ('plain' if hit.status == 'same' else 'warn') }}">{{ hit.status_label }}</span>{% endif %}
             {{ hit.path }}{% if hit.where %} <span class="faint">{{ hit.where }}</span>{% endif %}
-            <span class="faint">bytes {{ hit.start }}–{{ hit.end }} @{{ hit.version }}</span>
+            <span class="faint">{{ _("bytes {start}–{end} @{version}", start=hit.start, end=hit.end, version=hit.version) }}</span>
           </div>
-          <div class="num nowrap" title="fused score: higher ranks first">score {{ "%.3f"|format(hit.score) }}</div>
+          <div class="num nowrap" title="{{ _("fused score: higher ranks first") }}">{{ _("score {score}", score="%.3f"|format(hit.score)) }}</div>
         </div>
         {% if hit.topic %}
-        <div class="hint">in <a href="{{ hit.topic.link }}">{{ hit.topic.title }}</a></div>
+        {% set topic %}<a href="{{ hit.topic.link }}">{{ hit.topic.title }}</a>{% endset %}
+        <div class="hint">{{ (_("in {topic}")|e).format(topic=topic) }}</div>
         {% endif %}
         <pre class="mono passage">{{ hit.body }}</pre>
       </div>
@@ -85,11 +88,11 @@
   </section>
   {% endif %}
   {% if change and change.dropped %}
-  <section class="stack" id="dropped" aria-label="dropped out">
-    <p class="hint">Dropped out since the last time you asked this:</p>
+  <section class="stack" id="dropped" aria-label="{{ _("dropped out") }}">
+    <p class="hint">{{ _("Dropped out since the last time you asked this:") }}</p>
     <ul>
       {% for rank, seen in change.dropped %}
-      <li class="mono small">#{{ rank }} {{ seen.label }} <span class="faint">score {{ "%.3f"|format(seen.score) }}</span></li>
+      <li class="mono small">#{{ rank }} {{ seen.label }} <span class="faint">{{ _("score {score}", score="%.3f"|format(seen.score)) }}</span></li>
       {% endfor %}
     </ul>
   </section>

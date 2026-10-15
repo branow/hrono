@@ -47,6 +47,7 @@ from hrono.registry.engine import build_router
 from hrono.server.edits import router as edits_router
 from hrono.server.errors import install as install_errors
 from hrono.server.freshness import Heads
+from hrono.server.i18n import Language
 from hrono.server.jobs import router as jobs_router
 from hrono.server.trees import router as trees_router
 from hrono.server.ui import LoginRequired
@@ -211,6 +212,7 @@ def create_app(
     app = FastAPI(title="hrono", version=_VERSION, lifespan=lifespan)
     app.state.heads = Heads()
     install_errors(app)
+    app.add_middleware(Language)
 
     @app.exception_handler(LoginRequired)
     def _to_login(request: Request, exc: Exception) -> Response:

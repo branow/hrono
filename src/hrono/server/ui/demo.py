@@ -37,8 +37,11 @@ from hrono.demo.agents import mcp
 from hrono.demo.steps import FINAL, Step
 from hrono.errors import AppError
 from hrono.export import saved
+from hrono.recall.window import EXPLORE_MESSAGE
 from hrono.registry import store
 from hrono.server import graph, prose
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 from hrono.server.ui import Reader, Writer, _fields, _trees, router, templates
 
 POLL_SECONDS = 0.25
@@ -62,6 +65,7 @@ def demo_page(request: Request, user: Reader, tree: str) -> Response:
             "connections": connections,
             "models": models,
             "can_write": user.role in {"writer", "admin"},
+            "counts": _counts(),
         },
     )
 
@@ -72,7 +76,7 @@ async def demo_ask(request: Request, user: Writer, tree: str) -> Response:
     fields = await _fields(request)
     question = fields.get("question", "").strip()
     if not question:
-        return _problem("Type a question first.")
+        return _problem(_("Type a question first."))
     talks: session.Conversations = _conversations(request)
     talk = talks.get(fields.get("conversation", ""))
     if talk is None or talk.tree != tree or talk.model != fields.get("model"):
@@ -81,7 +85,7 @@ async def demo_ask(request: Request, user: Writer, tree: str) -> Response:
         except AppError as exc:
             return _problem(exc.message)
     if not session.begin(talk, question):
-        return _problem("The last question is still being answered.")
+        return _problem(_("The last question is still being answered."))
     after = len(talk.steps)
     threading.Thread(
         target=session.turn,
@@ -217,9 +221,37 @@ def _choices(
 def _shown(step: Step) -> dict[str, object]:
     """A step as the page receives it; model text also comes as HTML."""
     data = dict(step.data)
+    if step.kind == "failed" and data.get("message") == session.FAILED:
+        data["message"] = _("the turn failed on the server")
+    if step.kind == "recall" and data.get("refused") == EXPLORE_MESSAGE:
+        data["refused"] = _("no confident matches - explore the map.")
     if step.kind in ("answer", "say"):
         data["html"] = prose.markdown(str(data.get("text") or ""))
     return {"kind": step.kind, **data}
+
+
+def _counts() -> dict[str, list[str]]:
+    """The page script's counted phrases, each in the three forms a count
+    can take (1, 2, 5), ``{n}`` left for the script to fill.
+
+    The script picks the form by the same rule as ``i18n.ngettext``; in
+    English the second and third are the same.
+    """
+    phrases = {
+        "recalled": lambda k: n_(
+            k, "recalled {n} passage", "recalled {n} passages"
+        ),
+        "opened": lambda k: n_(k, "opened {n} topic", "opened {n} topics"),
+        "read": lambda k: n_(k, "read {n} file", "read {n} files"),
+        "attached": lambda k: n_(
+            k, "Recall attached {n} passage", "Recall attached {n} passages"
+        ),
+        "chars": lambda k: n_(k, "{n} char", "{n} chars"),
+    }
+    return {
+        key: [say(k).replace(str(k), "{n}", 1) for k in (1, 2, 5)]
+        for key, say in phrases.items()
+    }
 
 
 def _problem(message: str) -> Response:

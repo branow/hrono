@@ -60,6 +60,7 @@ from hrono.registry.write import decrypt, unmask
 from hrono.server import config_view, forms
 from hrono.server import preview as preview_view
 from hrono.server.auth import allows, require_role
+from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.summarize import pool
 
@@ -67,6 +68,19 @@ FROZEN = (
     "a shipped default cannot be edited — reset it, or add your own beside it"
 )
 VIEWS = ("form", "json")
+
+
+def _named(collection: str) -> str:
+    """A collection's name as an outcome line says it, in the page's words."""
+    return {
+        "trees": _("trees"),
+        "sources": _("sources"),
+        "connections": _("connections"),
+        "models": _("models"),
+        "prompts": _("prompts"),
+    }.get(collection, collection)
+
+
 # Trees first: a tree is what every other collection is in service of, and the
 # page's job is to answer "how do I make one" before it answers anything else.
 ORDER = ("trees", "sources", "connections", "models", "prompts")
@@ -165,9 +179,9 @@ async def preview_on_a_topic(request: Request, user: Reader) -> Response:
         )
     if not preview_view.previewable(role) or not topic.isdigit():
         message = (
-            "pick a topic to preview on"
+            _("pick a topic to preview on")
             if preview_view.previewable(role)
-            else "only a brief prompt can be previewed"
+            else _("only a brief prompt can be previewed")
         )
         return _render(
             request,
@@ -220,7 +234,7 @@ async def item_from_the_page(
             user,
             tree,
             **spot,
-            draft=_refused(collection, [problem(FROZEN)]),
+            draft=_refused(collection, [problem(_(FROZEN))]),
         )
     sent = kept_secrets(descriptor, row, body, request)
     try:
@@ -253,7 +267,13 @@ async def item_from_the_page(
             ),
         )
     return _settled(
-        tree, collection, done=f"{collection}: saved {sent.get('name', name)}"
+        tree,
+        collection,
+        done=_(
+            "{collection}: saved {name}",
+            collection=_named(collection),
+            name=sent.get("name", name),
+        ),
     )
 
 
@@ -342,7 +362,7 @@ async def delete_from_the_page(
             user,
             tree,
             delete=doomed,
-            error=f"confirm to delete: {name}",
+            error=_("confirm to delete: {name}", name=name),
         )
     try:
         result = await run_in_threadpool(
@@ -352,13 +372,24 @@ async def delete_from_the_page(
         return _render(request, user, tree, delete=doomed, error=exc.message)
     if "reset" in result:
         return _settled(
-            tree, collection, done=f"{collection}: {name} reset to default"
+            tree,
+            collection,
+            done=_(
+                "{collection}: {name} reset to default",
+                collection=_named(collection),
+                name=name,
+            ),
         )
     note = result.get("note", "")
     return _settled(
         tree,
         collection,
-        done=f"{collection}: deleted {name}" + (f" — {note}" if note else ""),
+        done=_(
+            "{collection}: deleted {name}",
+            collection=_named(collection),
+            name=name,
+        )
+        + (f" — {note}" if note else ""),
     )
 
 
@@ -371,19 +402,20 @@ def _said(
     """
     written = list(result.get("written", []))  # type: ignore[call-overload]
     removed = list(result.get("removed", []))  # type: ignore[call-overload]
+    named = _named(collection)
     if not written and not removed:
-        return f"{collection}: nothing to change"
+        return _("{collection}: nothing to change", collection=named)
     parts = []
     if written:
         added = [name for name in written if name not in held]
         if added:
-            parts.append(f"added {', '.join(added)}")
+            parts.append(_("added {names}", names=", ".join(added)))
         changed = [name for name in written if name in held]
         if changed:
-            parts.append(f"changed {', '.join(changed)}")
+            parts.append(_("changed {names}", names=", ".join(changed)))
     if removed:
-        parts.append(f"removed {', '.join(removed)}")
-    return f"{collection}: " + ", ".join(parts)
+        parts.append(_("removed {names}", names=", ".join(removed)))
+    return f"{named}: " + ", ".join(parts)
 
 
 def _render(
@@ -480,17 +512,21 @@ def _environment(conn: sqlite3.Connection) -> list[tuple[str, str]]:
         for row in conn.execute("PRAGMA database_list").fetchall()
     }
     return [
-        ("Version", version("hrono")),
-        ("Database", files.get("main") or "in memory"),
-        ("LLM calls at once", _width()),
+        (_("Version"), version("hrono")),
+        (_("Database"), files.get("main") or _("in memory")),
+        (_("LLM calls at once"), _width()),
     ]
 
 
 def _width() -> str:
     """The LLM pool width, and whether the environment or the default set it."""
     if os.environ.get(pool.ENV_WIDTH) is None:
-        return f"{pool.width()} (the default; {pool.ENV_WIDTH} changes it)"
-    return f"{pool.width()} (from {pool.ENV_WIDTH})"
+        return _(
+            "{width} (the default; {env} changes it)",
+            width=pool.width(),
+            env=pool.ENV_WIDTH,
+        )
+    return _("{width} (from {env})", width=pool.width(), env=pool.ENV_WIDTH)
 
 
 def _showing(section: str, edit: str, add: str, delete: str) -> str:
@@ -571,7 +607,7 @@ def _collection(
         "can_write": writable,
         "document": table.document,
         "headings": [
-            column.heading
+            _(column.heading)
             for column in config_view.COLUMNS.get(descriptor.collection, ())
         ],
         "rows": [
@@ -770,17 +806,23 @@ def _parsed_list(
     except json.JSONDecodeError as exc:
         return None, [
             problem(
-                f"not valid JSON: {exc.msg} "
-                f"(line {exc.lineno}, column {exc.colno})",
+                _(
+                    "not valid JSON: {error} (line {line}, column {column})",
+                    error=exc.msg,
+                    line=exc.lineno,
+                    column=exc.colno,
+                ),
                 field="config",
             )
         ]
     if not isinstance(body, list):
-        return None, [problem("a collection is a JSON array", field="config")]
+        return None, [
+            problem(_("a collection is a JSON array"), field="config")
+        ]
     bad = [item for item in body if not isinstance(item, dict)]
     if bad:
         return None, [
-            problem("every entry must be a JSON object", field="config")
+            problem(_("every entry must be a JSON object"), field="config")
         ]
     return body, []
 

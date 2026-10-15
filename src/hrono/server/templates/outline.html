@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}hrono — {{ tree }} outline{% endblock %}
+{% block title %}hrono — {{ _("{tree} outline", tree=tree) }}{% endblock %}
 {% macro branch(row, depth) %}
 <li>
   {% if row.kids %}
-  <details{% if expanded or depth < open_levels %} open{% endif %}>
+  {{ ("<details open>" if expanded or depth < open_levels else "<details>")|safe }}
     <summary class="twisty">{{ line(row) }}</summary>
     <ul class="outline">
       {% for kid in row.kids %}{{ branch(kid, depth + 1) }}{% endfor %}
@@ -16,24 +16,24 @@
 {% endmacro %}
 {% macro line(row) %}
 <a class="ol-name" href="/ui/trees/{{ tree }}/nodes/{{ row.id }}?tree={{ tree }}" title="{{ row.name }}">{{ row.name }}</a>
-<span class="ol-meta" title="{{ row.sections }} section{{ '' if row.sections == 1 else 's' }} beneath this topic">{{ row.holds }} {{ row.holds_what if row.holds != 1 else row.holds_what[:-1] }}{% if row.where %}<span class="mono gap">{{ row.where }}</span>{% endif %}</span>
-{% if not row.healthy %}<span class="ol-warn" title="No usable brief, or a stale one: recall cannot answer from this topic">needs a brief</span>{% endif %}
+<span class="ol-meta" title="{{ n_(row.sections, "{n} section beneath this topic", "{n} sections beneath this topic") }}">{{ row.holds|counted(row.holds_what) }}{% if row.where %}<span class="mono gap">{{ row.where }}</span>{% endif %}</span>
+{% if not row.healthy %}<span class="ol-warn" title="{{ _("No usable brief, or a stale one: recall cannot answer from this topic") }}">{{ _("needs a brief") }}</span>{% endif %}
 {% endmacro %}
 {% block main %}
 <div class="page-head">
-  <h1>Outline<span class="tip" tabindex="0" role="note" data-tip="The same topics as the map, as a list. Open a row to see what is under it; click a name to open the topic">?</span></h1>
+  <h1>{{ _("Outline") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The same topics as the map, as a list. Open a row to see what is under it; click a name to open the topic") }}">?</span></h1>
 </div>
 
 {% if not rows %}
 <div class="empty">
-  <div class="title">No topics yet</div>
-  <p class="hint">This tree has not been built. Run a sync from Home.</p>
+  <div class="title">{{ _("No topics yet") }}</div>
+  <p class="hint">{{ _("This tree has not been built. Run a sync from Home.") }}</p>
 </div>
 {% else %}
 <div class="stack">
-  <p class="hint">{{ topics }} topic{{ '' if topics == 1 else 's' }}.
-    {% if expanded %}<a href="/ui/trees/{{ tree }}/outline?tree={{ tree }}">Collapse</a>{% else %}<a href="/ui/trees/{{ tree }}/outline?tree={{ tree }}&amp;open=all">Expand all</a>{% endif %}</p>
-  <section class="card" aria-label="outline">
+  <p class="hint">{{ topics|counted("topics") }}.
+    {% if expanded %}<a href="/ui/trees/{{ tree }}/outline?tree={{ tree }}">{{ _("Collapse") }}</a>{% else %}<a href="/ui/trees/{{ tree }}/outline?tree={{ tree }}&amp;open=all">{{ _("Expand all") }}</a>{% endif %}</p>
+  <section class="card" aria-label="{{ _("outline") }}">
     <div class="card-body">
       <ul class="outline root">
         {% for row in rows %}{{ branch(row, 0) }}{% endfor %}

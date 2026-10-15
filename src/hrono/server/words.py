@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from hrono.server.i18n import ngettext
+
 
 def counted(count: int, plural: str) -> str:
     """`1 topic`, `3 topics`: the count and its noun, agreeing.
 
     Takes the plural because that is what the data already carries
     (`holds_what` is "sections" or "topics"), and every noun on this page
-    forms its singular by losing the final `s`.
+    forms its singular by losing the final `s`. In Ukrainian the noun takes
+    one of three forms, from the catalog's ``"{n} topic|{n} topics"``.
     """
-    return f"{count} {plural if count != 1 else plural.removesuffix('s')}"
+    singular = plural.removesuffix("s")
+    return ngettext(count, f"{{n}} {singular}", f"{{n}} {plural}")
 
 
 def size(count: int) -> str:

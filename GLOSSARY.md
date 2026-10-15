@@ -91,3 +91,50 @@ a URL carries. On screen it is always a topic.
 
 **paragraph** — not a unit in hrono. Splitting is by structure and byte budget,
 never by paragraph.
+
+## In Ukrainian
+
+The dashboard also speaks Ukrainian (`src/hrono/server/locales/uk/`). These
+are its words for the terms above and for the dashboard's own, chosen to read
+naturally and to take about the room the English does. A translation uses
+them and nothing else for these ideas.
+
+| English | Українською |
+|---|---|
+| source | джерело |
+| section | фрагмент |
+| passage | уривок |
+| condensation | конспект |
+| topic | тема |
+| bottom topic | нижня тема |
+| brief | опис |
+| tree | дерево |
+| root | корінь |
+| level | рівень |
+| map | мапа |
+| sync | оновлення; оновити |
+| maintain, build | побудова; побудувати |
+| recall | довідка |
+| explore | навігація деревом |
+| job, run | запуск |
+| stale | застарілий |
+| pin | закріпити; закріплено |
+| parked, waiting | очікує теми; очікують |
+| misfit | не на своєму місці |
+| forced | примусово |
+| hand edit | правка |
+| revert, undo | відкотити; скасувати |
+| connection | підключення |
+| model | модель |
+| prompt | промпт |
+| token (sign-in) | токен |
+| tokens (of a model) | токени |
+| reader, writer, admin | читач, редактор, адмін |
+| spend | витрати |
+
+The menu: Огляд (Home, Overview), Мапа, Пошук, Зміст (Outline), Запит (Ask),
+Довідка (Recall), Демо агента, Запуски, Зміни, Облік (Usage), Стан (Health),
+Експорт, Параметри (Settings), Доступ (Access), Тема (Topic), Посібник
+(Guide). A run's status: у черзі, триває, готово, помилка, скасовано.
+
+Not used in Ukrainian either: кластер, чанк, вузол (on screen), абзац.

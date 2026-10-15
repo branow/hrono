@@ -18,6 +18,7 @@ import re
 import sqlite3
 from collections.abc import Iterable
 
+from hrono.server.i18n import gettext
 from hrono.summarize import briefs
 
 
@@ -47,7 +48,7 @@ def names(conn: sqlite3.Connection, node_ids: Iterable[int]) -> dict[int, str]:
 
 def name(conn: sqlite3.Connection, node_id: int) -> str:
     """One topic's display name (``names`` for a single topic)."""
-    return names(conn, [node_id]).get(node_id, f"topic {node_id}")
+    return names(conn, [node_id]).get(node_id, _fallback(node_id))
 
 
 def _families(conn: sqlite3.Connection, wanted: list[int]) -> list[list[int]]:
@@ -110,7 +111,15 @@ def heading(conn: sqlite3.Connection, node_id: int) -> str:
         found = title(unframe(line.lstrip("#").strip()))
         if found and slug(found) not in _BOILERPLATE:
             return found
-    return f"topic {node_id}"
+    return _fallback(node_id)
+
+
+def _fallback(node_id: int) -> str:
+    """A topic with no title yet, named by its id in the reader's language.
+
+    Outside a dashboard request (an export, the API) the language is English.
+    """
+    return gettext("topic {id}", id=node_id)
 
 
 def _brief_text(conn: sqlite3.Connection, node_id: int) -> str:

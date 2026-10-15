@@ -17,6 +17,8 @@ from fastapi.responses import HTMLResponse, Response
 
 from hrono.db import update_log
 from hrono.server import graph, labels, overlays, panel
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.server.words import counted
 
@@ -42,10 +44,7 @@ NO_OPEN = "\x00"
 # small tree at a glance; past a few dozen topics a row of circles is wider
 # than any window and its names are cut to a slot, so a big tree opens as the
 # list, where every name is whole and a thousand rows still scroll.
-VIEWS = {
-    "circles": "Each topic a circle under its parent; best for a small tree",
-    "list": "Each topic a row, indented under its parent; best for a big tree",
-}
+VIEWS = ("circles", "list")
 LIST_AT = 60
 
 
@@ -331,15 +330,27 @@ def _view_switch(
     A switch link always names its view, so the choice survives a tree
     growing past `LIST_AT` while the reader is on it.
     """
+    words = {
+        "circles": (
+            _("Circles"),
+            _("Each topic a circle under its parent; best for a small tree"),
+        ),
+        "list": (
+            _("List"),
+            _(
+                "Each topic a row, indented under its parent; best for a big tree"  # noqa: E501
+            ),
+        ),
+    }
     return [
         {
             "name": name,
-            "label": name.capitalize(),
-            "says": says,
+            "label": words[name][0],
+            "says": words[name][1],
             "on": name == shown,
             "href": _graph_url(tree, open, edges, focus=focus, view=name),
         }
-        for name, says in VIEWS.items()
+        for name in VIEWS
     ]
 
 
@@ -359,9 +370,11 @@ def _chips(
             "x": round(node.x + node.radius + CHIP_GAP, 1),
             "y": round(node.y + 4, 1),
             "text": _more(unseen[node.id]),
-            "says": (
-                f"{unseen[node.id]} more overlay arcs touch {node.name}. "
-                "Open them on their own."
+            "says": n_(
+                unseen[node.id],
+                "{n} more overlay arc touches {name}. Open it on its own.",
+                "{n} more overlay arcs touch {name}. Open them on their own.",
+                name=node.name,
             ),
             "href": _graph_url(
                 tree, open, edges, focus=focus, arcs=str(node.id), view=view
@@ -373,7 +386,7 @@ def _chips(
 
 
 def _more(count: int) -> str:
-    return f"+{count} arc{'s' if count != 1 else ''}"
+    return n_(count, "+{n} arc", "+{n} arcs")
 
 
 def _only(
@@ -465,11 +478,11 @@ def _folding(
     """
     wide_open = branches <= opened
     return {
-        "label": "Collapse" if wide_open else "Expand all",
+        "label": _("Collapse") if wide_open else _("Expand all"),
         "says": (
-            "Show only the root"
+            _("Show only the root")
             if wide_open
-            else "Open every topic that has something under it"
+            else _("Open every topic that has something under it")
         ),
         "href": _graph_url(
             tree,

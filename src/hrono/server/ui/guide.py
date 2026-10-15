@@ -34,40 +34,54 @@ from hrono.export.collapse import WIDTH
 from hrono.recall.gate import COVERAGE
 from hrono.recall.window import CAP, EXPLORE_MESSAGE
 from hrono.registry import store
+from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, _trees, router, templates
 from hrono.server.ui.export import DEFAULT_LEVELS
 from hrono.summarize.propagate import BEST_OF, D_MAX
 from hrono.tree.settle import CHURN_THRESHOLD, MISFIT_FACTOR
 
+
 # What each kind of account may do, least first. Each line is a claim about the
 # routes, and `tests/server/test_ui_guide.py` makes a request as each role to
 # hold it to that: a role added or loosened there fails the page's own words.
-ACCOUNTS = (
-    (
-        "reader",
-        "Looks at everything: the map, topics, runs, health, and the Ask and "
-        "Export pages.",
-    ),
-    (
-        "writer",
-        "Also changes settings and starts a sync, a first build, and a "
-        "run's stop or retry.",
-    ),
-    (
-        "admin",
-        "Also edits topics by hand, runs a single stage, and manages accounts.",
-    ),
-)
+# Built per request, so each line is in the reader's language.
+def _accounts() -> tuple[tuple[str, str], ...]:
+    return (
+        (
+            _("reader"),
+            _(
+                "Looks at everything: the map, topics, runs, health, and the Ask and Export pages."  # noqa: E501
+            ),
+        ),
+        (
+            _("writer"),
+            _(
+                "Also changes settings and starts a sync, a first build, and a run's stop or retry."  # noqa: E501
+            ),
+        ),
+        (
+            _("admin"),
+            _(
+                "Also edits topics by hand, runs a single stage, and manages accounts."  # noqa: E501
+            ),
+        ),
+    )
+
 
 # What each configured model role is called FOR, in the order the pipeline
 # calls them. The registry stores the role; what the role means is this page's.
-ROLES = (
-    ("condense", "reads one section and writes what it says"),
-    ("brief", "reads a topic's condensations and writes its brief"),
-    ("brief-upper", "reads child briefs and writes the brief above them"),
-    ("judge", "decides whether a change made a brief wrong"),
-    ("embedding", "turns a section into the vector it is placed by"),
-)
+# The role is the registry's identifier and stays as it is.
+def _roles() -> tuple[tuple[str, str], ...]:
+    return (
+        ("condense", _("reads one section and writes what it says")),
+        ("brief", _("reads a topic's condensations and writes its brief")),
+        (
+            "brief-upper",
+            _("reads child briefs and writes the brief above them"),
+        ),
+        ("judge", _("decides whether a change made a brief wrong")),
+        ("embedding", _("turns a section into the vector it is placed by")),
+    )
 
 
 @router.get("/ui/guide", response_class=HTMLResponse)
@@ -104,7 +118,7 @@ def guide_page(request: Request, user: Reader, tree: str = "") -> Response:
                 "refusal": EXPLORE_MESSAGE,
             },
             "export": {"hops": DEFAULT_LEVELS, "width": WIDTH},
-            "accounts": ACCOUNTS,
+            "accounts": _accounts(),
             "can_write": user.role in {"writer", "admin"},
         },
     )
@@ -202,5 +216,5 @@ def _writers(conn: sqlite3.Connection) -> list[dict[str, str]]:
             "name": held.get(role, {}).get("name", ""),
             "model": held.get(role, {}).get("model", ""),
         }
-        for role, does in ROLES
+        for role, does in _roles()
     ]

@@ -8,6 +8,7 @@ API-equivalent ESTIMATE and is never called spend nor added to it.
 
 from __future__ import annotations
 
+from hrono.server.i18n import gettext as _
 from hrono.usage.present import duration, usd
 
 UNKNOWN = "not recorded"
@@ -30,13 +31,16 @@ def describe(view: dict[str, object] | None) -> dict[str, object] | None:
     return {
         "calls": int(view["calls"]),  # type: ignore[call-overload]
         "failed": int(view["failed"]),  # type: ignore[call-overload]
-        "tokens": f"{int(tokens.get('input', 0)):,} in, "
-        f"{int(tokens.get('output', 0)):,} out",
+        "tokens": _(
+            "{tokens_in} in, {tokens_out} out",
+            tokens_in=f"{int(tokens.get('input', 0)):,}",
+            tokens_out=f"{int(tokens.get('output', 0)):,}",
+        ),
         "volume": int(tokens.get("input", 0)) + int(tokens.get("output", 0)),
         "tokens_in": int(tokens.get("input", 0)),
         "tokens_out": int(tokens.get("output", 0)),
         "tokens_cached": cached,
-        "cached": f"{cached:,} cached" if cached else "",
+        "cached": _("{cached} cached", cached=f"{cached:,}") if cached else "",
         "time": duration(float(view["model_seconds"])),  # type: ignore[arg-type]
         "paid": usd(cost.get("metered"), "metered" in billing),
         "estimate": usd(

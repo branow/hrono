@@ -1,65 +1,74 @@
 {% extends "base.html" %}
 {% from "_parts.html" import start_sync with context %}
-{% block title %}hrono — {{ tree }} activity{% endblock %}
+{% block title %}hrono — {{ _("{tree} activity", tree=tree) }}{% endblock %}
 {% block main %}
+{# The judge's words, as stored, said in the reader's language. #}
+{% set said = {
+  "none": _("none"), "minor": _("minor"), "major": _("major"),
+  "unparseable": _("unparseable"), "home": _("nearest"), "drain": _("from waiting"),
+  "skipped": _("skipped"), "propagated": _("propagated"), "abstained": _("abstained"),
+  "forced": _("forced"), "core": _("placed"),
+} %}
+{% macro em(word) %}<em>{{ word }}</em>{% endmacro %}
+{% macro strong(word) %}<strong>{{ word }}</strong>{% endmacro %}
 <div class="page-head">
-  <h1>What changed<span class="tip" tabindex="0" role="note" data-tip="When a source file changes, a judge model is asked once whether the new content changes what the topic's brief says; if it does, the briefs above are marked for a rewrite. This is every one of those decisions — the only record of why a summary was, or was not, rewritten, and what one edit cost">?</span></h1>
+  <h1>{{ _("What changed") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("When a source file changes, a judge model is asked once whether the new content changes what the topic's brief says; if it does, the briefs above are marked for a rewrite. This is every one of those decisions — the only record of why a summary was, or was not, rewritten, and what one edit cost") }}">?</span></h1>
 </div>
 
 <section class="card">
   {% if not rows and not (filters.verdict or filters.action or filters.topic) %}
   <div class="card-body empty">
-    <div class="title">Nothing decided about {{ tree }} yet</div>
-    <p class="hint">A decision is recorded when a sync finds a source changed. Until one has, there is nothing to list.</p>
-    <div class="mt-3">{{ start_sync(tree, user, "Sync now", false) }}</div>
+    <div class="title">{{ _("Nothing decided about {tree} yet", tree=tree) }}</div>
+    <p class="hint">{{ _("A decision is recorded when a sync finds a source changed. Until one has, there is nothing to list.") }}</p>
+    <div class="mt-3">{{ start_sync(tree, user, _("Sync now"), false) }}</div>
   </div>
   {% else %}
   <div class="card-head">
-    <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/activity" aria-label="filter decisions" data-live>
+    <form class="toolbar" method="get" action="/ui/trees/{{ tree }}/activity" aria-label="{{ _("filter decisions") }}" data-live>
       <label class="field">
-        <span>Verdict</span>
+        <span>{{ _("Verdict") }}</span>
         <select name="verdict">
-          <option value="">any</option>
-          {% for name in verdicts %}<option value="{{ name }}"{% if filters.verdict == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+          <option value="">{{ _("any") }}</option>
+          {% for name in verdicts %}<option value="{{ name }}"{% if filters.verdict == name %} selected{% endif %}>{{ said.get(name, name) }}</option>{% endfor %}
         </select>
       </label>
       <label class="field">
-        <span>What it did</span>
+        <span>{{ _("What it did") }}</span>
         <select name="action">
-          <option value="">anything</option>
-          {% for name in actions %}<option value="{{ name }}"{% if filters.action == name %} selected{% endif %}>{{ name }}</option>{% endfor %}
+          <option value="">{{ _("anything") }}</option>
+          {% for name in actions %}<option value="{{ name }}"{% if filters.action == name %} selected{% endif %}>{{ said.get(name, name) }}</option>{% endfor %}
         </select>
       </label>
       <label class="field">
-        <span>Topic</span>
+        <span>{{ _("Topic") }}</span>
         <input type="text" name="topic" inputmode="numeric" size="6" value="{{ filters.topic }}">
       </label>
-      <button class="btn small" type="submit" data-static>Show</button>
-      {% if filters.verdict or filters.action or filters.topic %}<a class="btn small" href="/ui/trees/{{ tree }}/activity">Clear</a>{% endif %}
+      <button class="btn small" type="submit" data-static>{{ _("Show") }}</button>
+      {% if filters.verdict or filters.action or filters.topic %}<a class="btn small" href="/ui/trees/{{ tree }}/activity">{{ _("Clear") }}</a>{% endif %}
     </form>
     {% if rows %}
-    <p class="notes small">showing {{ first }}–{{ first + rows|length - 1 }} of {{ total }}, newest first</p>
+    <p class="notes small">{{ _("showing {first}–{last} of {total}, newest first", first=first, last=first + rows|length - 1, total=total) }}</p>
     {% endif %}
   </div>
   {% if not rows %}
   <div class="card-body empty">
-    <div class="title">No decisions match</div>
+    <div class="title">{{ _("No decisions match") }}</div>
   </div>
   {% else %}
   {% if climbs.links %}
   <div class="card-body">
-    <h3 class="sub">What a change touched<span class="tip" tabindex="0" role="note" data-tip="A line per topic whose change forced a summary above it to be rewritten. Several lines meeting on one topic is one edit restaling a whole branch">?</span></h3>
+    <h3 class="sub">{{ _("What a change touched") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("A line per topic whose change forced a summary above it to be rewritten. Several lines meeting on one topic is one edit restaling a whole branch") }}">?</span></h3>
     <svg class="figure climb" viewBox="0 0 {{ climbs.width }} {{ climbs.height }}" width="{{ climbs.width }}" height="{{ climbs.height }}" role="img"
-         aria-label="{{ climbs.links|length }} climb{{ '' if climbs.links|length == 1 else 's' }}: each runs from the topic that changed to the summary above it that had to be rewritten">
+         aria-label="{{ n_(climbs.links|length, "{n} climb: each runs from the topic that changed to the summary above it that had to be rewritten", "{n} climbs: each runs from the topic that changed to the summary above it that had to be rewritten") }}">
       <g class="fig-ink">
         {% for link in climbs.links %}
         <path class="link propagation" d="M{{ link.x1 }},{{ link.y1 }} L{{ link.x2 }},{{ link.y2 }}"/>
         {% endfor %}
         {% for link in climbs.links %}
         <circle class="fig-disc" cx="{{ link.x1 }}" cy="{{ link.y1 }}" r="7"/>
-        <text class="fig-note" x="{{ link.x1 }}" y="{{ link.y1 + 19 }}">topic {{ link.from }}</text>
+        <text class="fig-note" x="{{ link.x1 }}" y="{{ link.y1 + 19 }}">{{ _("topic {id}", id=link.from) }}</text>
         <circle class="fig-disc" cx="{{ link.x2 }}" cy="{{ link.y2 }}" r="7"/>
-        <text class="fig-note" x="{{ link.x2 }}" y="{{ link.y2 - 11 }}">topic {{ link.to }}</text>
+        <text class="fig-note" x="{{ link.x2 }}" y="{{ link.y2 - 11 }}">{{ _("topic {id}", id=link.to) }}</text>
         {% endfor %}
       </g>
     </svg>
@@ -69,47 +78,46 @@
     <table>
       <thead>
         <tr>
-          <th class="when">When</th>
-          <th>Topic</th>
-          <th>Verdict</th>
-          <th>What it did</th>
-          <th>Climbed to</th>
+          <th class="when">{{ _("When") }}</th>
+          <th>{{ _("Topic") }}</th>
+          <th>{{ _("Verdict") }}</th>
+          <th>{{ _("What it did") }}</th>
+          <th>{{ _("Climbed to") }}</th>
         </tr>
       </thead>
       <tbody>
       {% for row in rows %}
       <tr class="{% if row.abstained %}needs{% endif %}">
         <td class="when">{{ row.when }}</td>
-        <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">topic {{ row.node_id }}</a></td>
-        <td><span class="chip">{{ row.verdict }}</span></td>
+        <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">{{ _("topic {id}", id=row.node_id) }}</a></td>
+        <td><span class="chip">{{ said.get(row.verdict, row.verdict) }}</span></td>
         <td>
           {% if row.abstained %}
-          <span class="chip warn" title="The model could not be read, so no decision was recorded and the summary above may still be out of date">{{ row.action }}</span>
-          {% else %}{{ row.action }}{% endif %}
+          <span class="chip warn" title="{{ _("The model could not be read, so no decision was recorded and the summary above may still be out of date") }}">{{ said.get(row.action, row.action) }}</span>
+          {% else %}{{ said.get(row.action, row.action) }}{% endif %}
         </td>
-        <td>{% if row.climbed_to %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.climbed_to }}?tree={{ tree }}">topic {{ row.climbed_to }}</a>{% else %}<span class="faint">—</span>{% endif %}</td>
+        <td>{% if row.climbed_to %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.climbed_to }}?tree={{ tree }}">{{ _("topic {id}", id=row.climbed_to) }}</a>{% else %}<span class="faint">—</span>{% endif %}</td>
       </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
   {% if paging.pages > 1 %}
-  <nav class="card-body row" aria-label="Decision pages">
-    {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">Newer</a>{% endif %}
-    <span class="faint small">page {{ paging.page }} of {{ paging.pages }}</span>
-    {% if paging.older %}<a class="btn small" href="{{ paging.older }}">Older</a>{% endif %}
+  <nav class="card-body row" aria-label="{{ _("Decision pages") }}">
+    {% if paging.newer %}<a class="btn small" href="{{ paging.newer }}">{{ _("Newer") }}</a>{% endif %}
+    <span class="faint small">{{ _("page {page} of {pages}", page=paging.page, pages=paging.pages) }}</span>
+    {% if paging.older %}<a class="btn small" href="{{ paging.older }}">{{ _("Older") }}</a>{% endif %}
   </nav>
   {% endif %}
   {% endif %}
   <div class="card-foot">
     <details class="reveal">
-      <summary>How to read this</summary>
+      <summary>{{ _("How to read this") }}</summary>
       <p class="hint">
-        <strong>verdict</strong> is the judge's majority answer to how much the change altered what a reader
-        must know — <em>none</em>, <em>minor</em> or <em>major</em>.
-        <strong>climbed to</strong> is the highest topic whose brief was marked
-        for a rewrite. A <em>none</em> verdict climbs nowhere. An amber row is one where no judgement could be reached,
-        which leaves a summary possibly out of date.
+        {{ (_("{verdict} is the judge's majority answer to how much the change altered what a reader must know — {none}, {minor} or {major}.")|e)|replace("{verdict}", strong(_("verdict")))|replace("{none}", em(said.none))|replace("{minor}", em(said.minor))|replace("{major}", em(said.major)) }}
+        {{ (_("{climbed} is the highest topic whose brief was marked for a rewrite.")|e)|replace("{climbed}", strong(_("climbed to"))) }}
+        {{ (_("A {none} verdict climbs nowhere.")|e)|replace("{none}", em(said.none)) }}
+        {{ _("An amber row is one where no judgement could be reached, which leaves a summary possibly out of date.") }}
       </p>
     </details>
   </div>

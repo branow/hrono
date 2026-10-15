@@ -47,6 +47,7 @@ from pydantic.fields import FieldInfo
 
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import MASK
+from hrono.server.i18n import gettext as _
 
 # Which string fields get a box rather than a line. Judged by name, and kept
 # HERE rather than on the descriptor: how tall an input is, is this page's
@@ -252,7 +253,9 @@ def _fields(
         path = f"{prefix}{name}"
         inner, optional = _unwrap(info.annotation)
         held = _at(values, path)
-        section = _group(info) or group
+        # the model declares its words in English; a form is built per
+        # request, so they are said here in the page's language
+        section = _(_group(info)) or group
         if _is_model(inner):
             out.extend(
                 _fields(
@@ -268,8 +271,8 @@ def _fields(
         out.append(
             _field(
                 path=path,
-                label=info.title or "",
-                help=info.description or "",
+                label=_(info.title or ""),
+                help=_(info.description or ""),
                 example=str(info.examples[0]) if info.examples else "",
                 group=section,
                 annotation=inner,
