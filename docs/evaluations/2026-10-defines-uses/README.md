@@ -406,3 +406,73 @@ reach the block: a hard question's answer spans more topics than nine
 clipped entries hold.
 
 Spent this round: 14 agent runs, about $3.50.
+
+## Round 7 (2026-10-15): flow topics and a question-time briefing
+
+**Flow topics** (`harness/flows.py`). The leaf topics that have links are
+grouped by the link graph: Louvain, channel links weighted up, common names
+down. The 4 groups are real flows across areas:
+- the pay-api internals;
+- the filing-payment flow (legal-api, business-pay, the future-effective
+  job, pay-api's endpoints);
+- the filings UI;
+- the NATS queue workers (entity-pay, the filer, the emailer, the shared
+  queue library).
+
+Each got a flow brief written from its members' briefs and the links between
+them: 1,400-2,500 words, $2.16. The flow briefs state hand-offs no topic
+brief did (the old listener's input shape, the filer committing before its
+side effects).
+
+**Choosing a flow for a question fails.**
+- Cosine scores of the four flows sit within 0.83-0.89, and the longest wins
+  every time.
+- Word overlap picks wrong too.
+- A hard question spans two or three flows anyway (`hard-failure-1` needs
+  the pay-api jobs, business-pay and the repair job, and the queue workers).
+
+**Listed flow briefs are not read.** With the 4 flow briefs in the export
+and listed in the recall block with their paths, and the block saying to
+open them, no run opened one.
+
+**A question-time briefing** (`linked_recall.py compose`). One Sonnet call
+reads the 4 flow briefs and the leaf briefs linked recall picks, and writes
+a briefing for the question (verbatim facts, files to verify, what to
+check). It goes inline, clipped to 10,000 characters. About $0.60 a
+question.
+
+| question | agent | code only, 900 words | hrono briefing, 900 words |
+|---|---|---|---|
+| hard-legacy-0 | Sonnet | 0.62, 0.62 | 0.69, 0.75 |
+| hard-failure-1 | Sonnet | 0.29, 0.43 | 0.36, 0.43 |
+| hard-legacy-0 | Haiku | 0, 0 (no answer in 30 turns) | 0 (no answer), 0.44 |
+| hard-failure-1 | Haiku | 0, 0 (no answer in 30 turns) | 0.36, 0 (no answer) |
+
+- **Sonnet gains +0.10 on `hard-legacy-0` and +0.04 on `hard-failure-1`.**
+- **The briefing held fact 6, and the answers still left it out** (the filer
+  commits before its side effects; post-commit failures are swallowed).
+- **The tree itself carries a wrong statement.** The future-effective job
+  "re-offers only future-effective filings": the job's endpoint returns
+  every PAID or APPROVED filing that is due. The briefing passed it on, and
+  no run got fact 5.
+- **Haiku answered in 2 of 4 runs with the briefing, 0 of 4 without it.** It
+  hits 30 turns otherwise.
+
+## What blocks a large, consistent gain
+
+1. **Delivery.** Agents use what recall puts inline (at most 10,000
+   characters) and almost never open what is listed: briefs, flow briefs or
+   condensations, whatever the instruction says.
+2. **Selection.**
+   - A hard question needs about 11 leaf topics over two or three flows.
+   - Similarity picks the wrong starting topics for plainly worded questions
+     (a UI test suite, locale files) and cannot tell flows apart.
+   - Links help a little: 16 of 45 answer topics reach the block, against
+     10-12 for a plain top 9.
+3. **Correctness.** A wrong statement in a brief (the future-effective job)
+   travels into everything built on it, and the agent trusts it.
+4. **Use.** A fact inline is not a fact in the answer: the agent answers
+   from what it read in the code and keeps its own reading of the question.
+
+Spent this round about $6.50: flow briefs $2.16, briefings $1.16, 8 Sonnet
+and 8 Haiku agent runs.

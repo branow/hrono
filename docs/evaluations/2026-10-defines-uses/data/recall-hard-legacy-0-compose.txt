@@ -1,0 +1,157 @@
+hrono recall: a briefing for this question, written from hrono's flow and topic briefs (the briefs are in /Users/orest/hrono-eval/export-bcreg-v3z-L3). Verify in the code.
+
+# Briefing: entity-pay (NATS) vs business-pay (Pub/Sub) payment-completion listeners
+
+## 1. Components and files
+
+- **pay-api (publisher)**
+  - `pay_api/services/payment_transaction.py` (`update_transaction`, `_update_receipt_details`, `publish_status`)
+  - `pay_api/services/base_payment_system.py` (`_release_payment`)
+  - `pay_api/services/gcp_queue_publisher.py`
+  - `pay_api/utils/util.py` (`get_topic_for_corp_type`)
+  - `pay_api/config.py` (topic names)
+- **business-pay (newer, Pub/Sub push)**
+  - `resources/pay_filer.py`, `services/gcp_auth.py`, `services/queue.py`
+  - `tests/integration/test_worker_queue.py`
+  - The notes say `src/business_pay` decision code is not covered by the briefs.
+- **entity-pay (older, NATS)**
+  - `worker.py`, `pay_filer.py`, `q_cli.py`, `config.py`
+  - Shared plumbing: `entity_queue_common` (`service.py`, `messages.py`, `exceptions.py`)
+- **legal-api**
+  - `resources/v2/admin/reviews.py` (staff review, releases `continuationIn`)
+  - `models/filing.py` (status listener)
+  - `business_filings.py`
+- **Downstream**
+  - entity-filer: `worker.py`, `utils.py`, `filing_meta.py`
+  - entity-emailer: `worker.py`, `message_tracker/tracker.py`
+- **Jobs**
+  - future-effective-filings job (`file_future_effective.py`, `config.py`, `k8s/templates/bc.yaml`)
+  - It is the only repair for future-effective filings.
+
+## 2. Facts per part of the question
+
+### Which listener gets the events today
+
+- pay-api publishes only through `gcp_queue_publisher.publish_to_queue`. This is Pub/Sub, and the message is a SimpleCloudEvent.
+- `_release_payment` / `publish_status` publishes type `PAYMENT` to `get_topic_for_corp_type(corp_type)`:
+  - `NRO` → `NAMEX_PAY_TOPIC`
+  - product `BUSINESS` / `BUSINESS_SEARCH` → `BUSINESS_PAY_TOPIC`
+  - `STRR` → `STRR_PAY_TOPIC`
+  - anything else → None, so nothing is published
+- The notes show no pay-api path that publishes to NATS.
+- entity-pay consumes `{"paymentToken": {"id","statusCode","corpTypeCode"}}` on `entity.filings`, queue `filing-worker`. The notes show no producer of that message.
+- On this evidence business-pay is the live listener. Verify that nothing else still feeds `entity.filings`.
+
+### Duplicate payments
+
+- **business-pay**
+  - It drops the message with 200 if `payment_completion_date` is already set. This is "the only idempotency guard".
+  - Otherwise it sets `payment_completion_date = now`, `payment_status_code = "COMPLETED"` and `status = PAID`, then saves.
+- **entity-pay**
+  - `process_payment`: "`COMPLETED` status already → warn, Sentry, return".
+  - Otherwise `statusCode == COMPLETED` sets `payment_completion_date` and commits (the filing becomes `PAID`).
+  - The notes do not say whether the "already" check looks at `payment_completion_date` or at the filing status.
+- **entity-filer**
+  - It only skips a filing whose status is already `COMPLETED`.
+  - A duplicate filer message before the first run finishes is not guarded in the notes.
+- **pay-api**
+  - `update_transaction` has no idempotency guard.
+  - A payment already `COMPLETED` is republished only if the transaction is `EVENT_FAILED`. Otherwise it raises `COMPLETED_PAYMENT`.
+
+### Failed or cancelled payments
+
+- **pay-api**
+  - It publishes `COMPLETED` only if the transaction is `COMPLETED` and the invoice is `PAID`.
+  - If the transaction is not `COMPLETED`, it publishes `TRANSACTION_FAILED`.
+  - If the transaction is `COMPLETED` but the invoice is not `PAID`, it publishes nothing.
+  - A publish failure sets the transaction to `EVENT_FAILED`.
+- **business-pay**
+  - It drops with 200 when `payment_token.status_code != "COMPLETED"`.
+  - So `TRANSACTION_FAILED` and any other status are silently ignored.
+- **entity-pay**
+  - `TRANSACTION_FAILED` → return, and the filing stays PENDING.
+  - Any other statusCode → `QueueException`.
+  - entity-pay re-raises `OperationalError` only, so the `QueueException` is swallowed.
+- legal-api has its own cancel route (`reset_filing_to_draft`). It is outside both listeners.
+- The notes show no "cancelled" payment message specific to either listener.
+
+### Unknown product types
+
+- **pay-api**
+  - It publishes nothing when `get_topic_for_corp_type` returns None.
+  - `CSO, RPT, PPR, VS` never publish.
+- **entity-pay**
+  - `is_processable_message` needs a truthy `paymentToken`, a truthy `corpTypeCode` and a `CorpType.find_by_id` hit.
+  - An unknown corp type is not processed.
+- **business-pay**
+  - It drops `corp_type_code in ["MHR","BTR"]`.
+  - It drops the message if the filing is not found AND `filing_identifier == None` AND `corp_type_code == "BC"`.
+  - Any other not-found filing returns 404, so the message is retried.
+  - The notes show no `CorpType` lookup, so an unknown type is not rejected there.
+- The pay-api `CorpType` enum lists BTR, ESRA, MHR, NRO, PPR, VS, CSO, RPT.
+
+### Filings that need staff review (`continuationIn`)
+
+- **business-pay**
+  - It creates a Review and sets both Review and Filing to `AWAITING_REVIEW`.
+  - It publishes nothing to the filer.
+  - The PAID email is still always published.
+  - Staff approval releases it. `POST /reviews/<review_id>` publishes `{filing:{id}}` to `NATS_FILER_SUBJECT` only if `filing.status == APPROVED` and `effective_date <= now(UTC)`.
+- **entity-pay**
+  - The notes show no `continuationIn` branch.
+  - It publishes `{'email': {...,'option':'PAID'}}` to `EMAIL_PUBLISH_OPTIONS['subject']` (default `entity.email`).
+  - It then publishes `{'filing': {'id'}}` to `FILER_PUBLISH_OPTIONS['subject']` (default `entity.filing.filer`) if `not effective_date or effective_date <= utcnow`.
+  - So it would send a review-required filing straight to the filer.
+- **Filer gate**
+  - business-pay: `effective_date <= payment_completion_date`.
+  - entity-pay: `not effective_date or effective_date <= utcnow`.
+  - Future-effective filings are not published by either. The future-effective job offers them to the filer later.
+
+### Failure handling after the commit
+
+- **business-pay**
+  - Filer and emailer publishes are wrapped in `suppress(Exception)`. Errors are swallowed with no Sentry, and the message is still acked with 200.
+  - The filing stays PAID. No job repairs a lost immediate publish.
+  - A DB error in `get_filing_by_payment_token` returns None and looks like "not found" (404, retried).
+- **entity-pay**
+  - Publish failures go to Sentry and are swallowed.
+  - `payment_completion_date` is already committed, so the filing stays PAID and unfiled.
+  - `FilingException` is absorbed, with Sentry only when `ENVIRONMENT == 'prod'`.
+
+### Risk if only the old listener is fixed
+
+- Live traffic goes through business-pay, so a fix in entity-pay would not change what is happening today.
+- The two disagree on the duplicate guard, on non-COMPLETED statuses, on `continuationIn`, on the corp-type filter and on the effective-date test. They are independent implementations.
+- Other divergences:
+  - Entity-filer defaults `NATS_FILER_SUBJECT` and `NATS_QUEUE` to `error`. entity-pay defaults to `entity.filing.filer` and `filing-worker`.
+  - Vault maps differ. business-pay adds `gcp-queue`.
+  - Input shapes differ (NATS `paymentToken` vs Pub/Sub envelope).
+
+### Risk if the old one is brought back as a fallback
+
+- If both listen to the same payment, two filer messages and two PAID emails are possible. The notes show no cross-listener dedupe and no duplicate guard on the NATS publish.
+- A `continuationIn` filing could be sent to the filer by entity-pay before staff review, bypassing business-pay's `AWAITING_REVIEW` gate.
+- Subject mismatch: if env vars are unset, subjects do not match across components. The defaults are:
+  - future-effective `file_future_effective.py`: `''`
+  - future-effective `config.py`: `entity.filing.filer`
+  - business-pay: `entity.filing.filer`
+  - involuntary-dissolutions: `entity.filer`
+  - entity-filer: `'error'`
+- Non-COMPLETED outcomes would diverge. entity-pay raises `QueueException` on other statuses, while business-pay drops them with 200.
+
+## 3. Disagreements and gaps to verify
+
+- **Endpoint and field names.** One brief says business-pay is `POST /worker`. The other says `POST /` with a base64 SimpleCloudEvent (`id`, `statusCode`, `filingIdentifier`, `corpTypeCode`) and `verify_oauth2_token`. The first uses `claim["email"] == SUB_SERVICE_ACCOUNT` and audience `SUB_AUDIENCE`. Check which is current.
+- **Business-pay decision code.** `src/business_pay` is stated to be "not in the briefs" in one place. The other brief details the drop conditions. Verify those conditions in code.
+- **entity-pay "COMPLETED status already".** The notes do not say whether this is the filing status or `payment_completion_date`.
+- **What pay-api publishes versus what each listener reads.** pay-api sends message types `COMPLETED` / `TRANSACTION_FAILED` and a payload from `create_event_payload`. Business-pay checks `payment_token.status_code`, and entity-pay checks `statusCode`. Confirm the field mapping.
+- **Cancelled payments.** The notes name no specific cancelled status in either listener.
+- **Corp types.** Whether an unknown corp type for business-pay is possible, given pay-api's topic routing returns None for it.
+- **Legal-api status mapping.** Business-pay's `Filing.Status` omits `WITHDRAWN` and lists `CORRECTED` as a plain member (legal-api derives it).
+- **NATS producer.** Whether anything still publishes `paymentToken` on `entity.filings`.
+
+## 4. Files to open first, in order
+
+1. `pay_api/services/payment_transaction.py` (`publish_status`) and `pay_api/utils/util.py` (`get_topic_for_corp_type`): confirm what is published and where.
+2. business-pay `resources/pay_filer.py`, then `services/gcp_auth.py` and `services/queue.py`: drop conditions, the `continuationIn` branch, the effective-date gate and the `suppress`.
+3. entity-pay `worker.py`, `pay_filer.py` and `config.py`: `is_pro

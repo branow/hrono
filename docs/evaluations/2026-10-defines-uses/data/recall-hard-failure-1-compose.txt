@@ -1,0 +1,137 @@
+hrono recall: a briefing for this question, written from hrono's flow and topic briefs (the briefs are in /Users/orest/hrono-eval/export-bcreg-v3z-L3). Verify in the code.
+
+# Briefing: "payment completed" notification, failure states and repair
+
+## 1. Components and files
+
+**pay-api (publisher)**
+- `pay_api/services/payment_transaction.py`: `update_transaction`, `_update_receipt_details`, `publish_status`, `create_event_payload`
+- `pay_api/services/base_payment_system.py`: `_release_payment`, `complete_payment`
+- `pay_api/services/gcp_queue_publisher.py`: `publish_to_queue`
+- `pay_api/utils/util.py`: `get_topic_for_corp_type`
+- `pay_api/services/payment_service.py`, `factory/payment_system_factory.py`, and the per-method services (`bcol_service.py`, `pad_service.py`, `ejv_pay_service.py`, `internal_pay_service.py`, `paybc_service.py`, `direct_pay_service.py`)
+
+**Registry consumers**
+- business-pay (Pub/Sub → NATS): `resources/pay_filer.py`, `services/gcp_auth.py`, `services/queue.py`, `services/__init__.py`, `database/filings.py`, `database/review.py`, `config.py`
+- entity-pay (NATS variant): `worker.py`, `pay_filer.py`, `config.py`
+- entity-filer: `worker.py` (`cb_subscription_handler`, `process_filing`), `utils.py`
+- entity-emailer: `worker.py`, `message_tracker/tracker.py`, `email_processors/*`
+- legal-api, which also publishes the filer message: `reviews.py`, `business_filings.py` (`process_colin_filing`)
+
+**Repair or retry candidates**
+- payment-jobs `UPDATE_STALE_PAYMENTS`
+- the future-effective-filings job: `file_future_effective.py`, `config.py`, `k8s/templates/bc.yaml`
+- the entity-bn admin resubmit paths
+- business-filings-ui `TodoList.vue` (`checkIfProcessed`, `doResumePayment`, `cancelPaymentAndSetToDraft`)
+
+## 2. Facts by question part
+
+### A. Notification never published (pay-api side)
+
+**What gets published**
+- `PaymentTransaction.update_transaction`: no receipt details → transaction `FAILED`. Otherwise payment `COMPLETED` and invoice `PAID`.
+- If `paid_amount < invoice_amount`, the notes record a critical log plus Sentry, and the payment is not completed.
+- `publish_status` publishes `PAYMENT` (payload from `create_event_payload`) to `get_topic_for_corp_type(corp_type)`.
+  - Transaction `COMPLETED` and invoice `PAID` → `COMPLETED`.
+  - Transaction `COMPLETED` but invoice not `PAID` → logs and returns, nothing published.
+  - Transaction not `COMPLETED` → `TRANSACTION_FAILED`.
+- Topic mapping:
+  - `NRO` → `NAMEX_PAY_TOPIC`
+  - product `BUSINESS` / `BUSINESS_SEARCH` → `BUSINESS_PAY_TOPIC`
+  - `STRR` → `STRR_PAY_TOPIC`
+  - anything else → None
+- `publish_to_queue` skips with a log when the topic is None.
+- `_release_payment` never publishes for `CSO, RPT, PPR, VS`.
+
+**Failure handling**
+- `publish_status` catches every exception and sets the transaction `EVENT_FAILED` without re-raising. The invoice and payment stay `PAID` / `COMPLETED`.
+- `_release_payment` (used by BCOL, EJV, internal and sandbox paths via `complete_post_invoice`) catches the failure, logs it, calls Sentry `capture_message(level='error')`, swallows it and returns None. The notes show no `EVENT_FAILED` marker there.
+- `gcp_queue_publisher.publish_to_queue` itself has no retry or error handling.
+- The only retry that is visible is in `update_transaction`. If the payment is already `COMPLETED` and the transaction is `EVENT_FAILED`, it sets the transaction `COMPLETED` and publishes again. Anything else is `COMPLETED_PAYMENT`. This runs only if something calls `update_transaction` again for that transaction. The notes do not say what does.
+- The flow brief says nothing repairs a lost lock/unlock event, and lists only these repairs:
+  - `ERRORED` re-selection
+  - the 10 s GET-after-create recovery
+  - `handle_unlinked_refund_requested_invoices`
+  - `UPDATE_STALE_PAYMENTS`
+- `UPDATE_STALE_PAYMENTS` covers stale CC/DIRECT_PAY transactions after 30 min, and created direct-pay invoices after 2 days.
+
+### B. Which payment methods have an automatic retry
+
+- Per the notes, the only scheduled repair touching payments is `UPDATE_STALE_PAYMENTS`, and it applies to CC and DIRECT_PAY only.
+- Its effect on the notification is not described. Verify whether it re-publishes or only reconciles status.
+- `_update_receipt_details` calls `publish_status` only when the invoice method is not in `[PAD, EFT]`.
+  - PAD and EFT therefore do not publish through this path. Their completion arrives via payment-jobs and pay-queue reconciliation, and the notes do not show that publishing.
+  - Verify who publishes `PAYMENT`/`COMPLETED` for PAD, EFT, ONLINE_BANKING, DRAWDOWN (BCOL), EJV and INTERNAL.
+- For BCOL, EJV and INTERNAL, `complete_post_invoice` → `_release_payment` publishes once with no retry.
+- EJV publishes only when its reference is ACTIVE. INTERNAL publishes only when the invoice is not `APPROVED`.
+- Pub/Sub's own redelivery depends on the consumer returning non-200. See C.
+
+### C. Consumer side (business-pay)
+
+**Entry and auth**
+- `POST /worker`, `verify_gcp_jwt`. It needs `email_verified` and `claim["email"] == SUB_SERVICE_ACCOUNT`, with audience `SUB_AUDIENCE`. Otherwise 403.
+
+**Dropped with 200 (not retried) when any of these holds**
+- `not request.data`
+- the event is not a `SimpleCloudEvent`
+- `status_code != "COMPLETED"`, which includes `TRANSACTION_FAILED`
+- `corp_type_code in ["MHR","BTR"]`
+- filing not found AND `filing_identifier == None` AND `corp_type_code == "BC"`
+- `payment_completion_date` already set. This is the only idempotency guard.
+
+**Not found otherwise**
+- 404, so the message is retried.
+- `Filing.get_filing_by_payment_token` (matches `f.payment_id = :pay_token`) catches `Exception`, prints it and returns None. A DB error therefore looks like "not found" (404, or the BC drop).
+
+**On success**
+- It sets `payment_completion_date`, `payment_status_code="COMPLETED"` and `status=PAID`, then `filing.save()` commits.
+- This happens before any publish, with no transaction or rollback around the later steps.
+- `continuationIn` → `create_staff_review`, which sets Review and Filing `AWAITING_REVIEW` and does not publish to the filer.
+- Otherwise `publish_to_filer` publishes `{filing:{id}}` only if `effective_date <= payment_completion_date`.
+- `publish_to_emailer` always runs and publishes `{email:{filingId,type,option:"PAID"}}`.
+- The branch step and the emailer publish are each in `with suppress(Exception)`. Nothing is re-raised, retried or sent to Sentry, and the message is still acked with 200.
+
+**Delivered twice**
+- The second delivery finds `payment_completion_date` set and returns 200 with no republish.
+- A duplicate can still occur if `save()` succeeded but the first delivery was not acked. In that case the filer publish may have been skipped or swallowed, and the redelivery is dropped.
+- There is no duplicate guard on the Queue extension.
+- The entity-pay variant has `COMPLETED` status already → warn and Sentry, return.
+
+**Resulting state when the filer or emailer publish is lost**
+- The filing stays `PAID` with `payment_completion_date` set, unfiled.
+- Confirmation emails are lost, and the filer and emailer are not applied or sent.
+- Staff never see an error.
+- No job repairs a lost immediate filer or emailer publish.
+- The future-effective job re-offers only future-effective filings. It calls `GET /internal/filings/future_effective` (needs `UserRoles.system`) and publishes with no duplicate guard.
+- Verify that endpoint's query. It is not shown whether it would pick up a PAID immediate filing.
+
+**Future-effective filings**
+- They are intentionally not published at payment time and are left to the future-effective job.
+
+### D. Processing dies partway (filer and emailer)
+
+**entity-filer**
+- It creates a versioning transaction and runs the processors.
+- It then sets `transaction_id`, `set_processed()` and `_meta_data`, and commits.
+- Post-commit steps follow: affiliation, `consume_nr`, `update_business_profile`, `update_entity`, `publish_mras_email`, `publish_email_message`, `publish_event` and the GCP event.
+- Post-commit failures are swallowed with Sentry and the filing stays `COMPLETED`.
+- A processor failure before the commit means no commit. `OperationalError` and `FilingException` are re-raised, so the message is redelivered. `QueueException` and other exceptions are Sentry'd and swallowed, and the message is dropped. The filing stays `PAID`, uncompleted.
+- `COMPLETED` status on redelivery → warn and return, which gives idempotency.
+- `replace_file_with_certified_copy` (Minio) has no error handling. The exception reaches the handler's catch-all, the DB is not committed and the message is dropped.
+
+**entity-emailer**
+- Tracker order: `start_tracking_message` → `process_email` → `send_email` → `complete_tracking_message`.
+- `send_email` POSTs to `NOTIFY_API_URL`. Non-200 → `EmailException`, re-raised (redelivered) and the tracker is marked FAILED.
+- `OperationalError` is re-raised. `QueueException` and other exceptions are marked failed and dropped.
+- Retries are bounded by `message_seen_count > MSG_RETRY_NUM`.
+- Receipt or PDF fetch failures are logged only, and the email is sent without the attachment.
+- Auth lookup failures return None recipients silently, and a processor returns `{}`.
+- There is no handling shown for an existing PROCESSING or COMPLETED tracker record.
+
+### E. What the customer-facing UI offers
+- `TodoList.checkIfProcessed` polls `fetchFiling` up to 5 times at 1 s intervals, looking for PAID, COMPLETED or AWAITING_REVIEW. After that it only logs.
+- `TodoList` offers Resume Payment and Cancel Payment (PATCH, which resets the filing to DRAFT only on a 200/202 payment delete). No job repairs an abandoned payment.
+
+## 3. Disagreements, vague spots and things to verify
+- **Who consumes `PAYMENT`.** The notes show business-pay as the Pub/Sub consumer and entity-pay as the legacy NATS consumer (`paymentToken` shape on `entity.filings`). Which is live is not stated.
+- **Subject mismatch.** Defaults differ: entity-fil

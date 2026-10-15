@@ -1,0 +1,100 @@
+hrono recall: the flow this question belongs to, as the flow brief that describes it across topics, then the topics that fit the question.
+
+# Flow brief: filing lifecycle across legal-api, business-pay, the filer queue, and the scheduled jobs
+
+## 1. What this flow does
+A filing is submitted through legal-api, invoiced with the payment service, and marked PAID by business-pay when payment completes. A `{filing: {id}}` message is then published to the filer subject (`NATS_FILER_SUBJECT`), and an email message to the emailer subject. Filings that are future-effective, need staff review (`continuationIn`), come from COLIN, or arise from involuntary dissolution reach the filer through other producers. Scheduled jobs (involuntary-dissolutions, furnishings, future-effective-filings, email-reminder) drive dissolution notices, filer publishes and AR reminders. Hand-offs are mostly swallowed or only logged.
+
+## 2. End-to-end paths
+
+### Path A: filing submission → payment → PAID → filer/emailer
+1. **legal-api REST resources (v1/v2)**: `ListFilingResource.put/post` (`/<identifier>/filings`). `authorized(identifier, jwt, ['edit'])` AND `is_allowed(...)` must pass (else 401). Draft or `only_validate` returns early. Otherwise `rsbc_schemas.validate(json, 'filing')`: 200 if valid, 400 if not. `_save_filing` then saves the filing (status rules in the Filing model: `payment_token` + valid JSON → PENDING).
+   - A bare `except Exception` around `_save_filing` only prints, and execution continues to `complete_filing`.
+2. `complete_filing` runs `check_and_update_nr` → `get_filing_types` → `create_invoice` → `set_effective_date`.
+   - If `filing.source == COLIN`, it calls `process_colin_filing` (see Path D) and returns.
+   - `create_invoice` POSTs to `PAYMENT_SVC_URL` with `Authorization: Bearer <user_jwt>` (timeout 20.0).
+   - Response 200/201: `payment_token`, `payment_status_code`, `payment_account` and `submitter_roles` are saved.
+   - Response 400: `payment_status_code` is set to the error type, then saved.
+   - Anything else, or ConnectionError/Timeout: 402 `unable to create invoice for payment.` There is no retry.
+3. **business-pay** `POST /worker` receives a GCP Pub/Sub push with `Authorization: Bearer <jwt>`. `verify_gcp_jwt` requires `claim["email_verified"]` and `claim["email"] == SUB_SERVICE_ACCOUNT`, with audience `SUB_AUDIENCE`; otherwise 403.
+   - Dropped with 200 when any of these holds:
+     - `not request.data`
+     - the cloud event is not a `SimpleCloudEvent`
+     - `payment_token.status_code != "COMPLETED"`
+     - `corp_type_code in ["MHR","BTR"]`
+     - the filing is not found AND `filing_identifier == None` AND `corp_type_code == "BC"`
+     - `payment_completion_date` is already set (the only idempotency guard)
+   - A filing that is not found otherwise returns 404, so the message is retried.
+   - Otherwise it sets `payment_completion_date = now`, `payment_status_code = "COMPLETED"` and `status = PAID`, then saves.
+4. Branch on `filing_type`:
+   - `continuationIn`: `create_staff_review` sets Review `AWAITING_REVIEW` and `Filing.Status.AWAITING_REVIEW`. Nothing is published to the filer (see Path B).
+   - Otherwise `publish_to_filer` publishes `{filing: {id}}` to `FILER_PUBLISH_OPTIONS["subject"]` only if `filing.effective_date <= filing.payment_completion_date`. If not, no publish happens. Future-effective filings are left for Path C.
+5. `publish_to_emailer` always runs, publishing `{email: {filingId, type, option: "PAID"}}` to `EMAIL_PUBLISH_OPTIONS["subject"]`.
+6. The filer consumes the filing message. The entity-filer is outside these briefs.
+
+### Path B: continuationIn staff review
+1. business-pay sets Filing and Review to AWAITING_REVIEW (Path A step 4).
+2. **legal-api v2 admin** `GET /reviews` (staff) lists reviews with status `CHANGE_REQUESTED`, `AWAITING_REVIEW` or `RESUBMITTED`, and appends NR expiry dates from namex.
+3. `POST /reviews/<review_id>` (staff) applies these checks:
+   - Review not found: 404.
+   - `review.status` not in [`AWAITING_REVIEW`, `RESUBMITTED`]: 400 `'No changes allowed.'`
+   - Missing status: 400 `'Status is required.'`
+   - Status not in [`CHANGE_REQUESTED`, `APPROVED`, `REJECTED`]: 400 `'Invalid Status.'`
+   - `CHANGE_REQUESTED` or `REJECTED` with no comment: 400 `'Comment is required.'`
+   - Otherwise it saves a `ReviewResult` and the review, calls `filing.set_review_decision()`, and publishes to `NATS_EMAILER_SUBJECT`: `{email: {filingId, type, option: filing.status}}`.
+   - It then publishes `{filing: {id}}` to `NATS_FILER_SUBJECT` if `filing.status == APPROVED` and `effective_date <= now(UTC)`.
+4. On `CHANGE_REQUESTED`, the submitter resubmits through `resubmit_filing_for_review`. This sets the review to `RESUBMITTED`, and `resubmit_filing_to_awaiting_review` requires filing status `CHANGE_REQUESTED`. The cycle returns to step 2.
+
+### Path C: future-effective filings
+1. **future-effective-filings job** fetches a token with `POST ACCOUNT_SVC_AUTH_URL` (basic auth, client_credentials). `get_bearer_token` swallows every exception and returns `None`.
+2. It calls `GET {LEGAL_API_URL}/internal/filings/future_effective` with `Bearer <token>`. The route requires `UserRoles.system`. A non-200 response raises. If the list is empty it logs 'No filings found to apply.'
+3. For each id it publishes `{'filing': {'id': filing_id}}` to `NATS_FILER_SUBJECT`. Per-filing exceptions are logged and the loop continues. There is no retry.
+
+### Path D: COLIN-sourced filings and the COLIN sync
+1. `process_colin_filing`: a missing `colin_event_ids` raises KeyError, returned as 400 `missing filing/header/colinIds`; any other exception returns 400 `unable to publish for post processing`.
+   - An epoch filing exists AND `is_before_epoch_filing`: `transaction_id` is copied from the epoch filing and `set_processed` runs. There is no publish.
+   - Otherwise it publishes `{filing: {id}}`.
+2. colin-api, holding the `colin` role, calls legal-api `/internal/*`.
+   - `GET /internal/filings` has no role check on the v1 path. The v2 path requires `UserRoles.colin`.
+   - `PATCH /internal/filings/<filing_id>` appends `ColinEventId`s, saved per id with no duplicate guard.
+   - `POST /internal/filings/colin_id/<colin_id>` inserts into `colin_last_update` and requires `COLIN_SVC_ROLE`. The v1 source interpolates the raw `colin_id` into SQL.
+   - `GET/POST /internal/tax_ids` set `tax_id` per identifier. A missing business is only logged.
+3. Within `GET /internal/filings`, a failed `set_from_primary_or_holding_business_data` is logged and the filing skipped.
+
+### Path E: involuntary dissolution (jobs → filer → notices)
+1. **Involuntary-dissolutions job** `run()` does nothing unless flag `enable-involuntary-dissolution` is on. Each stage runs only if `can_run_today()` matches the cron in `Configuration` (`DISSOLUTIONS_STAGE_1/2/3_SCHEDULE`).
+   - **Stage 1:** it skips if a batch already ran today. It takes up to `NUM_DISSOLUTIONS_ALLOWED` businesses from `InvoluntaryDissolutionService.get_businesses_eligible`; a value of 0 creates no batch.
+     - It creates a `Batch` (INVOLUNTARY_DISSOLUTION, PROCESSING).
+     - I …
+
+## entity-pay queue service: packaging, config and deployment files (fits the question) - lear-sbc-auth-sbc-pay-monorepo-area-454/entity-pay-queueservices-entity-pay-796/brief.md
+# entity-pay (queue_services/entity-pay)
+
+A packaging and deployment shell for the entity-pay NATS/STAN queue worker, run as `python /opt/app-root/pay_filer.py`. The notes cover only build, config and dependency files. The handler `pay_filer.py` and the `src/entity_pay` sources that process payment messages are not in the notes, so the handling logic is not described here.
+
+
+## Contract with the rest of the system
+...
+- It publishes the email message first, then the filing message. It does this only after setting `payment_completion_date` and committing.
+  - It publishes the filing only when `effective_date` is empty or `<=` now (UTC).
+  - It does nothing if the filing is already `COMPLETED` (it logs a warning and sends it to Sentry) or the status is `TRANSACTION_FAILED`.
+  - An unknown `statusCode` raises `QueueException`.
+  - `is_processable_message` needs `paymentToken`, `corpTypeCode`, and a `CorpType.find_by_id` hit.
+  - `OperationalError` is re-raised.
+  - `FilingException` is absorbed. It goes to Sentry at error level only when `ENVIRONMENT == 'prod'`. The `ENVIRONMENT` default here is `'prod'`.
+
+
+## Brief: legal-api v2 business resources, document/Minio endpoints, internal services (fits the question) - lear-legal-api-area-filings-validation-support-tooling-and-q-460/legal-api-v2-business-resources-documents-internal-services--577/brief.md
+- PATCH (cancel payment):
+  - 'T' identifier → Filing by temp_reg and id. Otherwise `Business.get_filing_by_id`.
+  - `filing_id` falsy → 400.
+  - `authorized` False → 401.
+  - Filing not found → 404.
+  - Payment delete status in (200, 202) → `filing.reset_filing_to_draft()`. Otherwise no change.
+  - Response is 202.
+...
+- Cancel payment: catches `ConnectionError` and `Timeout`, logs, and returns 500, with no retry. It also catches `BusinessException` and returns `err.status_code` and `err.error`.
+- `get_payment_update`: catches `ConnectionError` and `Timeout`, logs, and swallows. `filing_dict` is unchanged.
+- `create_invoice`: catches `ConnectionError` and `Timeout`, logs, and returns an error dict with 402 (not re-raised).
+- `_get_receipt`: `receipt.status_code != 201` → logs the error and returns the receipt content and status anyway.
+- Tasks: `ConnectionError` or `Timeout` on the payment fetch → logged, and `'pay_connection_error'` is returned, converted to 503. Pending filings stay in the original list.
