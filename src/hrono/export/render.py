@@ -49,8 +49,10 @@ def render(
         directory = _directory(node_id, parent, tree.root, stems)
         path = "root.md" if node_id == tree.root else _under(directory, "brief")
         text = _brief_text(conn, node_id)
-        if node.children:
+        if node_id == tree.root:
             text = _routing(text)
+        elif node.children:
+            text = _index(text)
         files[path] = _node_markdown(
             conn,
             tree,
@@ -102,7 +104,7 @@ def _node_markdown(
 
 
 def _routing(brief: str) -> str:
-    """An index page's opening, which says what its subtree is about.
+    """The root page's opening, which says what the whole tree is about.
 
     The root is read first and the pages under it next, and every later turn
     carries them, so their length is paid for on each turn (a 24 KB root makes
@@ -119,6 +121,28 @@ def _routing(brief: str) -> str:
         prose = prose or bool(line.strip() and not line.startswith("#"))
         kept.append(line)
     return "\n".join(kept)
+
+
+# An upper brief's one-line-per-part list says what ## Children already says.
+_LISTING = re.compile(r"^##\s+other parts\b", re.IGNORECASE)
+
+
+def _index(brief: str) -> str:
+    """A middle page: its brief less the part list ``## Children`` repeats.
+
+    Its flows are what it is for: they name every part a piece of work
+    passes through and what each does when a step fails. Cut to its opening,
+    as the root is, the area page held nothing that led an agent from the
+    part it found to the next one (round 9 of 2026-10-defines-uses).
+    """
+    kept: list[str] = []
+    skipping = False
+    for line in brief.splitlines():
+        if line.startswith("## "):
+            skipping = bool(_LISTING.match(line))
+        if not skipping:
+            kept.append(line)
+    return "\n".join(kept).rstrip()
 
 
 def _child_entry(

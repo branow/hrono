@@ -15,13 +15,14 @@ and which other parts it connects to. One brief replaces many file reads.
 
 1. Grep the export's `brief.md` files for the components, names, statuses
    and terms in the question, and read in full the leaf briefs that match.
-2. Follow the work end to end before reading code: from each brief's
-   connections, find the parts on the other side of each message, call or
-   shared record - who sends it, who receives it and what that part does,
-   what happens when a step fails and what retries or repairs it - and read
-   their briefs too. An upper brief (the `brief.md` of a folder above)
-   describes the flows across its parts.
-3. A leaf ends with `## Sources`: the files it was written from. Open them
+2. Read the `brief.md` of the folder above each leaf you read. Its `Flows`
+   name every part a piece of work passes through, step by step, and what
+   each does when a step fails.
+3. Follow the work to its end before reading code: every part that
+   receives it after the one you found, what each does when it fails, and
+   what retries or repairs it - or that nothing does. Read those parts'
+   briefs too, from the flows and from each leaf's connections.
+4. A leaf ends with `## Sources`: the files it was written from. Open them
    to confirm the claims you will make; where the code and a brief
    disagree, the code wins.
 

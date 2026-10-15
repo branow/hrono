@@ -80,7 +80,7 @@ from hrono.llm.client import (
     Unfinished,
     Usage,
 )
-from hrono.llm.tools import Toolbox
+from hrono.llm.tools import THINKING_BUDGET, Toolbox
 
 TIMEOUT = 300.0  # generous: a large judge prompt measured 32 s
 # One turn was too tight. A large section made the CLI answer
@@ -207,7 +207,11 @@ def _options(request: CompletionRequest, workdir: Path, stderr: _Stderr) -> Any:
         # why both switches are passed
         setting_sources=[],
         extra_args={"safe-mode": None},
-        thinking={"type": "disabled"},
+        thinking=(
+            {"type": "enabled", "budget_tokens": THINKING_BUDGET}
+            if request.tools is not None
+            else {"type": "disabled"}
+        ),
         cwd=str(workdir),
         cli_path=shutil.which("claude"),
         stderr=stderr,

@@ -17,6 +17,11 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 SPENT = "No lookups left. Write the answer now with what you found."
+# Thinking is off for every other call (it dominated condense's cost for
+# nothing). Deciding what to look up next is real reasoning: measured on the
+# bcreg slice, the same brief writer made 2-5 shallow lookups without it and
+# 8-11 that reached the other side of each connection with it (round 9).
+THINKING_BUDGET = 4000
 
 
 @dataclass(frozen=True)

@@ -122,8 +122,10 @@ with many branches needs all of them. Boilerplate (licence headers, imports, \
 logging and server setup) collapses to one short line, or to nothing. Copy \
 names, values and lists VERBATIM from the content - never infer or add ones \
 that are not literally there, never guess about spelling, naming or intent. \
-Never copy a password, token, key or a connection string that carries \
-credentials; write <secret> in its place. Output only the condensation.
+Write a constant, status or error code as the code writes it \
+(`HTTPStatus.NOT_FOUND`, not a number it stands for). Never copy a password, \
+token, key or a connection string that carries credentials; write <secret> in \
+its place. Output only the condensation.
 
 {content}"""
 
@@ -134,7 +136,10 @@ or AI agent) gets only this brief - the condensations are not shown anywhere \
 - so everything a reader needs to answer exact questions about this topic \
 must be in it.
 
-Write, in this order:
+Open with a `# ` title saying what this topic holds, so it is told apart \
+from other topics of the same service or system (for example "business-pay: \
+build, deployment and tests" when it holds only those, not "business-pay"). \
+Then write, in this order:
 1. One or two sentences: what this topic does and what it hands work to or \
 takes work from.
 2. Contract: what reaches it and from where, what it sends or writes and to \

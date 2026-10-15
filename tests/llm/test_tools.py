@@ -49,6 +49,7 @@ def test_anthropic_answers_each_call_then_returns_the_text(
     replies = [
         _reply(
             [
+                SimpleNamespace(type="thinking", thinking="hm", signature="s1"),
                 SimpleNamespace(type="text", text="Looking."),
                 SimpleNamespace(
                     type="tool_use", id="t1", name="Read", input={"path": "a"}
@@ -61,6 +62,7 @@ def test_anthropic_answers_each_call_then_returns_the_text(
     def invoke(**kwargs: object) -> object:
         sent.append(json.loads(json.dumps(kwargs["messages"])))
         assert kwargs["tools"][0]["name"] == "Read"  # type: ignore[index]
+        assert kwargs["thinking"]["type"] == "enabled"  # type: ignore[index]
         return replies[len(sent) - 1]
 
     box = _toolbox()
@@ -70,6 +72,8 @@ def test_anthropic_answers_each_call_then_returns_the_text(
     assert result.text == "The brief."
     assert result.usage.input_tokens == 40  # both turns count
     assert box.calls == [("Read", {"path": "a"})]
+    carried = sent[1][-2]["content"][0]  # type: ignore[index]
+    assert carried == {"type": "thinking", "thinking": "hm", "signature": "s1"}
     answered = sent[1][-1]["content"][0]  # type: ignore[index]
     assert answered == {
         "type": "tool_result",
@@ -133,10 +137,12 @@ def test_claude_code_offers_the_toolbox_as_its_only_tools(
     assert set(options.mcp_servers) == {"hrono"}
     assert options.tools == []  # none of the CLI's own
     assert options.max_turns > box.most
+    assert options.thinking["type"] == "enabled"  # deciding what to look up
     plain = sdk_options(
         CompletionRequest({"name": "s", "model": "m"}, "", "x"), tmp_path, print
     )
     assert not plain.mcp_servers and not plain.allowed_tools
+    assert plain.thinking == {"type": "disabled"}
 
 
 def test_a_spent_budget_is_said_not_raised() -> None:

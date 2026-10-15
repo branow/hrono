@@ -23,7 +23,7 @@ from typing import Protocol
 from hrono.crypto.cipher import Cipher
 from hrono.db.database import Database
 from hrono.errors import DomainError
-from hrono.llm.tools import Toolbox
+from hrono.llm.tools import THINKING_BUDGET, Toolbox
 from hrono.registry import store
 
 # Neither condensations nor briefs have a word target, and a pack carries up
@@ -173,6 +173,10 @@ class AnthropicClient:
                     max_tokens=_max_tokens(request.model),
                     messages=messages,
                     tools=specs,
+                    thinking={
+                        "type": "enabled",
+                        "budget_tokens": THINKING_BUDGET,
+                    },
                 )
             except LLMError:
                 raise
@@ -259,8 +263,21 @@ def _count(value: object) -> int | None:
 
 
 def _block(block: object) -> dict[str, object]:
-    """One reply block as the next request carries it back."""
-    if getattr(block, "type", "") == "tool_use":
+    """One reply block as the next request carries it back.
+
+    Thinking goes back unchanged, signature and all: the API refuses a tool
+    turn whose earlier thinking was dropped or altered.
+    """
+    kind = getattr(block, "type", "")
+    if kind == "thinking":
+        return {
+            "type": "thinking",
+            "thinking": getattr(block, "thinking", ""),
+            "signature": getattr(block, "signature", ""),
+        }
+    if kind == "redacted_thinking":
+        return {"type": "redacted_thinking", "data": getattr(block, "data", "")}
+    if kind == "tool_use":
         return {
             "type": "tool_use",
             "id": getattr(block, "id", ""),
@@ -302,6 +319,7 @@ def _default_invoke(
     max_tokens: int,
     messages: list[dict[str, object]] | None = None,
     tools: list[dict[str, object]] | None = None,
+    thinking: dict[str, object] | None = None,
 ) -> object:
     try:
         import anthropic
@@ -318,6 +336,8 @@ def _default_invoke(
     }
     if tools:
         create_kwargs["tools"] = tools
+    if thinking:
+        create_kwargs["thinking"] = thinking
     if system:
         create_kwargs["system"] = system
     return anthropic.Anthropic(**client_kwargs).messages.create(**create_kwargs)

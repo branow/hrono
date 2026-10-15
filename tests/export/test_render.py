@@ -480,11 +480,12 @@ def test_a_brief_opening_with_a_heading_is_named_by_its_subject(
     assert "condensations" not in root
 
 
-def test_only_a_page_with_children_is_trimmed_to_its_opening(
+def test_only_the_root_is_trimmed_to_its_opening(
     tmp_path: object,
 ) -> None:
-    # the root, a middle index page and a leaf. The middle page has
-    # children and keeps its opening; the leaf has none and keeps every fact.
+    # the root, a middle index page and a leaf. The root is read on every
+    # turn and keeps its opening; a middle page keeps its flows, and a leaf
+    # keeps every fact.
     database = Database.at(tmp_path / "m.db")
     text = "# Topic\n\nIntro.\n\n## Facts\n- TAU is 7."
     with database.connect() as conn, conn:
@@ -544,8 +545,9 @@ def test_only_a_page_with_children_is_trimmed_to_its_opening(
         leaves_md = [c for c in pages.values() if "## Sources" in c]
         assert indexes
         assert leaves_md
-        assert all("TAU is 7" not in c for c in indexes)
+        assert all("TAU is 7" in c for c in indexes)
         assert all("TAU is 7" in c for c in leaves_md)
+        assert "TAU is 7" not in files["root.md"]
     finally:
         database.close()
 
@@ -824,3 +826,15 @@ def test_an_index_page_below_the_root_says_where_its_children_are(
     page = files[_page(ids["root"])]
     assert f"These are in the folder root-{ids['root']}/." in page
     assert "These are in the folder" not in files["root.md"]
+
+
+def test_a_middle_page_drops_the_part_list_its_children_repeat() -> None:
+    from hrono.export.render import _index
+
+    text = (
+        "# Area\n\nIntro.\n\n## Flows\n1. A sends to B.\n\n"
+        "## Other parts\n- C does c.\n\n## Hazards\n- B drops it."
+    )
+    kept = _index(text)
+    assert "1. A sends to B." in kept and "B drops it." in kept
+    assert "C does c." not in kept
