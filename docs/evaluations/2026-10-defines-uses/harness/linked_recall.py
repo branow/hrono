@@ -35,6 +35,7 @@ TOPICS = 12  # topics in the block, seeds first
 PER_TOPIC = 2  # brief passages per seed topic; 1 per linked topic
 CLIP = 700  # characters of a passage shown
 CAP = 10_000  # characters Claude Code shows inline
+RECALL = ""  # which saved block a run gets: "" or "-flow"
 
 
 def block(qid: str) -> str:
@@ -46,12 +47,21 @@ def block(qid: str) -> str:
     db.row_factory = sqlite3.Row
     cfg = resolve_embedding_model(db, {})
     enc = encoder_for(str(cfg["model"]))
-    q = [x for x in json.load(open(Path.home() / "hrono-deep/data/hard15.json")) if x["qid"] == qid][0]
+    q = [
+        x
+        for x in json.load(open(Path.home() / "hrono-deep/data/hard15.json"))
+        if x["qid"] == qid
+    ][0]
     level = dict(db.execute("SELECT id, level FROM nodes"))
-    title = {n: (t or "").strip().splitlines()[0].lstrip("# ") for n, t in db.execute("SELECT node_id, text FROM briefs")}
+    title = {
+        n: (t or "").strip().splitlines()[0].lstrip("# ")
+        for n, t in db.execute("SELECT node_id, text FROM briefs")
+    }
     passages = {
         r["id"]: (int(r["source"].removeprefix("node-")), r["content_hash"])
-        for r in db.execute("SELECT id, source, content_hash FROM passages WHERE source_type = 'node'")
+        for r in db.execute(
+            "SELECT id, source, content_hash FROM passages WHERE source_type = 'node'"
+        )
     }
     vecs = [list(v) for v in enc(query.sentences(q["question"]))]
     by_topic: dict[int, list[tuple[float, int]]] = {}
@@ -79,7 +89,11 @@ def block(qid: str) -> str:
     # a topic tied to a seed by a channel (a shared queue subject or topic,
     # a send matched to a receive) first, then the rest by fit to the question
     linked = sorted(
-        (n for n in (hop1 | hop2) - set(seeds) if level.get(n) == 0 and n in rank),
+        (
+            n
+            for n in (hop1 | hop2) - set(seeds)
+            if level.get(n) == 0 and n in rank
+        ),
         key=lambda n: (n not in channel, n not in hop1, rank[n]),
     )
     chosen = (seeds + linked)[:TOPICS]
@@ -94,18 +108,74 @@ def block(qid: str) -> str:
         ]
         texts = []
         for _, pid in sorted(hits, key=lambda h: h[1]):
-            body = db.execute("SELECT body FROM contents WHERE content_hash = ?", (passages[pid][1],)).fetchone()[0]
+            body = db.execute(
+                "SELECT body FROM contents WHERE content_hash = ?",
+                (passages[pid][1],),
+            ).fetchone()[0]
             body = (body.decode() if isinstance(body, bytes) else body).strip()
             texts.append(body if len(body) <= CLIP else body[:CLIP] + " …")
         folder = next(EXPORT.rglob(f"*-{n}"), None)
         rel = folder.relative_to(EXPORT) if folder else "?"
         why = "fits the question" if n in seeds else "linked to a topic above"
-        out.append(f"\n## {title.get(n, n)} ({why}) - {rel}/brief.md\n" + "\n...\n".join(texts))
+        out.append(
+            f"\n## {title.get(n, n)} ({why}) - {rel}/brief.md\n"
+            + "\n...\n".join(texts)
+        )
     text = "\n".join(out)
     while len(text) > CAP and len(out) > 2:
         out.pop()
         text = "\n".join(out)
     return text
+
+
+FLOW_CHARS = 7_000  # of the best flow brief, attached whole when it fits
+
+
+def flow_block(qid: str) -> str:
+    """The best flow brief for the question, whole up to FLOW_CHARS, then the
+    seed topics' best lines from block() until the cap."""
+    import re
+
+    from hrono.embed.model import resolve_embedding_model
+    from hrono.embed.runner import encoder_for
+    from hrono.recall import query
+
+    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    db.row_factory = sqlite3.Row
+    enc = encoder_for(str(resolve_embedding_model(db, {})["model"]))
+    q = [
+        x
+        for x in json.load(open(Path.home() / "hrono-deep/data/hard15.json"))
+        if x["qid"] == qid
+    ][0]
+    import numpy
+
+    qv = numpy.array([list(v) for v in enc(query.sentences(q["question"]))])
+    qv /= numpy.linalg.norm(qv, axis=1, keepdims=True)
+    flows = exp.load("flow-briefs.json")
+    score = {}
+    for k, v in flows.items():
+        paras = [x for x in re.split(r"\n\s*\n", v["text"]) if len(x) > 80]
+        pv = numpy.array([list(x) for x in enc(paras)])
+        pv /= numpy.linalg.norm(pv, axis=1, keepdims=True)
+        score[k] = float(numpy.sort((pv @ qv.T).max(axis=1))[-3:].mean())
+    best = max(score, key=score.get)
+    text = flows[best]["text"]
+    if len(text) > FLOW_CHARS:
+        text = text[:FLOW_CHARS] + " …"
+    head = (
+        "hrono recall: the flow this question belongs to, as the flow brief that "
+        "describes it across topics, then the topics that fit the question.\n\n"
+        + text
+    )
+    rest = block(qid).split("\n## ")
+    out = head
+    for part in rest[1:]:
+        if len(out) + len(part) + 4 > CAP:
+            break
+        out += "\n\n## " + part
+    print("flow scores", {k: round(v, 3) for k, v in score.items()}, "->", best)
+    return out
 
 
 def run(qid: str, name: str, words: int = 400, hrono: bool = True) -> None:
@@ -114,21 +184,27 @@ def run(qid: str, name: str, words: int = 400, hrono: bool = True) -> None:
     import common
     import run_arms
 
-    q = [x for x in json.load(open(common.DATA / "hard15.json")) if x["qid"] == qid][0]
+    q = [
+        x
+        for x in json.load(open(common.DATA / "hard15.json"))
+        if x["qid"] == qid
+    ][0]
     prompt = run_arms.ARCH.format(question=q["question"]).replace(
         "at most 400 words", f"at most {words} words"
     )
     if hrono:
-        recall = (exp.DATA / f"recall-{qid}.txt").read_text()
+        recall = (exp.DATA / f"recall-{qid}{RECALL}.txt").read_text()
         prompt += run_arms.MAP_H.format(export=EXPORT) + "\n\n" + recall
     r = common.run_agent(
         prompt,
-        model="sonnet",
+        model=name.partition("@")[2] or "sonnet",
         role=f"hard15:{name}",
         key=qid,
         max_turns=run_arms.TURNS_H,
         tools=["Read", "Grep", "Glob"],
-        system=run_arms.SYSTEM_CODE_R2.format(corpus=common.CORPUS, export=EXPORT),
+        system=run_arms.SYSTEM_CODE_R2.format(
+            corpus=common.CORPUS, export=EXPORT
+        ),
         add_dirs=[EXPORT] if hrono else [],
         disallow_bash=False,
         cwd=None,
@@ -138,16 +214,92 @@ def run(qid: str, name: str, words: int = 400, hrono: bool = True) -> None:
     )
     out = common.RUNS / f"hard15-{name}.jsonl"
     with out.open("a") as f:
-        f.write(json.dumps({"qid": qid, "set": "hard15", "arm": name, **r}) + "\n")
+        f.write(
+            json.dumps({"qid": qid, "set": "hard15", "arm": name, **r}) + "\n"
+        )
+
+
+COMPOSE = """You prepare a briefing for an engineer who is about to answer a question about a codebase by reading the code. Below are notes from a knowledge base of that codebase: flow briefs (each describes one flow across services) and topic briefs (each describes one part). Using only these notes, write the briefing that best prepares the engineer for THIS question.
+
+QUESTION:
+{question}
+
+Write:
+1. The components this question involves, across every service and flow the notes show (not only the obvious one), each with its file paths.
+2. For each part of the question, the facts the notes give that bear on it: exact conditions, lists, statuses, error handling, what is committed before what, who publishes and who consumes, and what repairs a failure or that nothing does. Copy names, values and lists verbatim.
+3. Where the notes disagree, are vague, or name a check without its condition: say so, as something to verify in the code.
+4. The files to open first to verify, in order.
+
+At most 1,300 words. Only what the notes say; never invent. No preamble.
+
+NOTES:
+{notes}"""
+
+
+def compose(qid: str) -> str:
+    """A question-time briefing: an LLM reads the flow briefs and the leaf
+    briefs of the topics the linked recall picks, and writes what fits."""
+    import re
+
+    q = [
+        x
+        for x in json.load(open(Path.home() / "hrono-deep/data/hard15.json"))
+        if x["qid"] == qid
+    ][0]
+    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    briefs = dict(db.execute("SELECT node_id, text FROM briefs"))
+    picked = [
+        int(x)
+        for x in re.findall(
+            r"-(\d+)/brief\.md", (exp.DATA / f"recall-{qid}.txt").read_text()
+        )
+    ]
+    notes = [
+        f"=== FLOW BRIEF ===\n{v['text']}"
+        for v in exp.load("flow-briefs.json").values()
+    ]
+    folders = {}
+    for n in picked:
+        folder = next(EXPORT.rglob(f"*-{n}"), None)
+        folders[n] = folder.relative_to(EXPORT) if folder else "?"
+        notes.append(
+            f"=== TOPIC BRIEF ({folders[n]}/brief.md) ===\n{briefs.get(n, '')}"
+        )
+    got = exp.ask(
+        COMPOSE.format(question=q["question"], notes="\n\n".join(notes)),
+        exp.SONNET,
+    )
+    text = (
+        "hrono recall: a briefing for this question, written from hrono's flow and topic briefs "
+        f"(the briefs are in {EXPORT}). Verify in the code.\n\n"
+        + (got.get("text") or "")
+    )
+    print("cost", round(got.get("cost") or 0, 3), "chars", len(text))
+    return text[:10_000]
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "block":
+    if sys.argv[1] == "compose":
+        text = compose(sys.argv[2])
+        (exp.DATA / f"recall-{sys.argv[2]}-compose.txt").write_text(text)
+    elif sys.argv[1] == "flow":
+        text = flow_block(sys.argv[2])
+        (exp.DATA / f"recall-{sys.argv[2]}-flow.txt").write_text(text)
+        print(len(text), "chars")
+    elif sys.argv[1] == "block":
         text = block(sys.argv[2])
         (exp.DATA / f"recall-{sys.argv[2]}.txt").write_text(text)
         print(len(text), "chars")
-        print("\n".join(line for line in text.splitlines() if line.startswith("## ")))
+        print(
+            "\n".join(
+                line for line in text.splitlines() if line.startswith("## ")
+            )
+        )
     else:
+        if "-flow" in sys.argv[3] or "-f" in sys.argv[3].split("@")[0][-4:]:
+            RECALL = "-flows"
+        if "-c" in sys.argv[3].split("@")[0][-4:]:
+            RECALL = "-compose"
         # run QID NAME [WORDS] [code]
         run(
             sys.argv[2],
