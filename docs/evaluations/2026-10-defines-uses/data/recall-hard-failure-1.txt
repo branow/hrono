@@ -1,0 +1,99 @@
+hrono recall: the topics that fit this question, and the topics linked to them (by a shared name such as a queue subject or a call). Each topic's brief is at /Users/orest/hrono-eval/export-bcreg-v3z-L3/<area>/<topic>/brief.md; the best-matching lines of each are below.
+
+## entity-pay queue service: packaging, config and deployment files (fits the question) - lear-sbc-auth-sbc-pay-monorepo-area-454/entity-pay-queueservices-entity-pay-796/brief.md
+# entity-pay (queue_services/entity-pay)
+
+A packaging and deployment shell for the entity-pay NATS/STAN queue worker, run as `python /opt/app-root/pay_filer.py`. The notes cover only build, config and dependency files. The handler `pay_filer.py` and the `src/entity_pay` sources that process payment messages are not in the notes, so the handling logic is not described here.
+
+## Contract with the rest of the system
+...
+- It publishes the email message first, then the filing message. It does this only after setting `payment_completion_date` and committing.
+  - It publishes the filing only when `effective_date` is empty or `<=` now (UTC).
+  - It does nothing if the filing is already `COMPLETED` (it logs a warning and sends it to Sentry) or the status is `TRANSACTION_FAILED`.
+  - An unknown `statusCode` raises `QueueException`.
+  - `is_processable_message` needs `paymentToken`, `corpTypeCode`, and a `CorpType.find_by_id` hit.
+  - `OperationalError` is re-raised.
+  - `FilingException` is absorbed. It goes to Sentry at error level only when `ENVIRONMENT == 'prod'`. The `ENVIRONMENT` default here is `'prod'`.
+
+## Brief: legal-api v2 business resources, document/Minio endpoints, internal services (fits the question) - lear-legal-api-area-filings-validation-support-tooling-and-q-460/legal-api-v2-business-resources-documents-internal-services--577/brief.md
+- PATCH (cancel payment):
+  - 'T' identifier → Filing by temp_reg and id. Otherwise `Business.get_filing_by_id`.
+  - `filing_id` falsy → 400.
+  - `authorized` False → 401.
+  - Filing not found → 404.
+  - Payment delete status in (200, 202) → `filing.reset_filing_to_draft()`. Otherwise no change.
+  - Response is 202.
+...
+- Cancel payment: catches `ConnectionError` and `Timeout`, logs, and returns 500, with no retry. It also catches `BusinessException` and returns `err.status_code` and `err.error`.
+- `get_payment_update`: catches `ConnectionError` and `Timeout`, logs, and swallows. `filing_dict` is unchanged.
+- `create_invoice`: catches `ConnectionError` and `Timeout`, logs, and returns an error dict with 402 (not re-raised).
+- `_get_receipt`: `receipt.status_code != 201` → logs the error and returns the receipt content and status anyway.
+- Tasks: `ConnectionError` or `Timeout` on the payment fetch → logged, and `'pay_connection_error'` is returned, converted to 503. Pending filings stay in the original list.
+
+## Brief: business-filings-ui filing views, styles and auth pages (`src/views/`, `src/assets/`, `EntityInfo/`) (fits the question) - bc-registries-business-filing-and-auth-web-area-452/business-filing-ui-bc-registries-filing-views-entity-header--534/brief.md
+- `onClickFilePay` catch:
+  - `error?.response?.status === StatusCodes.PAYMENT_REQUIRED` (402) → `haveChanges = false`, `paymentErrorDialog = true` (AmalgamationOut and ContinuationOut only clear `haveChanges`, with no dialog flag noted).
+  - Otherwise → `saveErrorReason = SaveErrorReasons.FILE_PAY`.
+  - Both paths return `error?.response?.data?.filing || null` and do not re-raise.
+- After `onClickFilePay` saves: `filingId > 0` is stored. If `!paymentErrorDialog && !saveErrorReason` (or just `!saveErrorReason`), `onClickFilePayFinish()` runs.
+...
+## Order and failure
+- `saveFiling` resets `saveErrors` and `saveWarnings` to `[]`, then checks pending tasks (new filings only), builds the payload, and calls create or update.
+- On failure, `saveFiling` sets `saveErrors = error?.response?.data?.errors || []` and `saveWarnings = error?.response?.data?.warnings || []`, then re-throws. The callers (`onClickSave`, `onClickSaveResume`, `onClickFilePay`) swallow the error, set `saveErrorReason`, and return `error?.response?.data?.filing || null`. `filingId` is then still extracted from that filing.
+- `filingId` comes from `+savedFiling?.header?.filingId || 0`, and is stored only if >0.
+- On a 402, `haveChanges` is cleared before the payment dial …
+
+## business-pay queue service brief (linked to a topic above) - bc-registry-business-filing-platform-lear-colin-459/business-pay-queue-service-694/brief.md
+## Decisions (`pay_filer.py`)
+- Empty request: 200.
+- `verify_gcp_jwt` (`services/gcp_auth.py`) returns an error: 403.
+- Invalid cloud event: 200, acked and dropped.
+- Missing or incomplete payment token: 200.
+- `corp_type_code` in `["MHR", "BTR"]`: 200, ignored.
+- `filing_identifier` is None and `corp_type_code == "BC"`: 200, treated as removed.
+- Filing not found: 404, so Pub/Sub retries.
+- Filing already has `payment_completion_date`: 200 (duplicate guard).
+- Otherwise: set `payment_completion_date`, `payment_status_code="COMPLETED"` and `status=Filing.Status.PAID`, then `filing.save()` commits.
+- `filing_type in ["continuationIn"]`: create a staff `Review`. Otherwise publish to the filer …
+
+## Brief: legal-api REST resources (v1 restx namespaces, v2 blueprints) for the Legal Entities System (linked to a topic above) - lear-sbc-auth-sbc-pay-monorepo-area-454/legal-api-rest-resources-v1-and-v2-645/brief.md
+- `requests.delete` to payment, then on success `reset_filing_to_draft()`.
+- ConnectionError or Timeout → logged, 500 'Unable to cancel payment for the filing.'; no retry.
+- `BusinessException` → its message and status.
+
+**Comments**
+- `post` catches BusinessException into the reply under 'errors' and returns `err.status_code or (201 if POST else 202)`. There is no log or Sentry.
+
+**InternalFilings.patch**
+- For each colin_id: create `ColinEventId`, append to `filing.colin_event_ids`, `filing.save()`.
+- BusinessException → logged and message returned.
+- Outer Exception → logged and re-raised.
+
+**ColinLastUpdate**
+
+## pay-api services layer (sbc-pay): payment-system selection, invoice/payment lifecycle, CFS/PayBC/BCOL/Direct Pay/EJV/internal integrations (linked to a topic above) - payment-system-eft-payments-refunds-and-reconciliation-bc-re-458/pay-api-service-layer-payment-orchestration-and-payment-syst-833/brief.md
+- `PaymentTransaction.update_transaction`: refuses if the transaction is already COMPLETED. A COMPLETED payment is re-published only when the transaction is EVENT_FAILED. `get_receipt` is called on the pay system. No receipt → FAILED. Otherwise `_update_receipt_details`, then unlock frozen accounts.
+- `create_transaction_for_invoice` refuses PAD. Existing transactions are set CANCELLED before a new one is created. `_validate_redirect_url_and_throw_error` applies to CC and DIRECT_PAY.
+- `publish_status`: COMPLETED event only if the invoice is PAID; otherwise TRANSACTION_FAILED.
+- `PaymentSystemService.complete_payment`: Payment COMPLETED, invoice PAID, reference COMPLETED, Receipt created. `_ …
+
+## Entity-emailer email processors (linked to a topic above) - bc-registry-business-filing-platform-lear-colin-459/each-processor-builds-the-email-payload-for-one-filing-or-no-706/brief.md
+- **restoration_notification:** `_get_paid_pdfs` or `_get_completed_pdfs` runs by status. Recipients are the contactPoint email and Applicant parties.
+- **special_resolution_helper:**
+  - `get_completed_pdfs`: always specialResolution. Adds certificateOfNameChange, certifiedRules or certifiedMemorandum when the matching flag is set.
+  - `get_paid_pdfs`: specialResolutionApplication plus a receipt. The receipt's `effectiveDateTime` is empty if it equals the filing date.
+
+## Dashboard UI components (address lists, party lists, to-do list, staff/entity menus) (linked to a topic above) - bc-registries-business-filing-and-auth-web-area-452/dashboard-ui-components-address-lists-party-lists-to-do-list-683/brief.md
+- **`doDeleteDraft`**: DELETE `businesses/{id}/filings/{filingId}` after a confirm dialog. Its only failure check is `if (!res) throw`.
+- **`cancelPaymentAndSetToDraft`**: PATCH `businesses/{id}/filings/{filingId}` with an empty body, after the `confirmCancelPayment` dialog. Success emits `reloadData`. Any error sets `cancelPaymentErrors` and opens the dialog.
+- **`doResumePayment`**: navigates to `authWebUrl/makepayment/{paymentToken}/{returnUrl}`.
+- **`doFileNow` and `doResumeFiling`**: route by `item.name` through `$router.push` or URL navigation.
+- **`PaymentPendingOnlineBanking`**: calls `PayServices.fetchCfsAccountId(payApiUrl, +accountId)` on mount, with no error handling.
+
+## Brief: entity-filer worker (`queue_services/entity-filer/src/entity_filer`) (linked to a topic above) - bc-registry-business-filing-platform-lear-colin-459/entity-filer-queue-worker-606/brief.md
+- New-business filings are AMALGAMATIONAPPLICATION, CONTINUATIONIN, CONVERSION, INCORPORATIONAPPLICATION and REGISTRATION. They update `business_id` in the filing, call `business_profile.update_affiliation` (except CONVERSION), consume the name request, update the business profile and publish the MRAS email.
+- Other filings call `business_profile.update_entity` and conditionally `name_request.consume_nr`.
+- `cb_subscription_handler` error policy:
+  - `OperationalError` is re-raised, so a DB outage blocks and drains the queue.
+  - `FilingException` is re-raised, so the message is reprocessed.
+  - `QueueException` and any other `Exception` are reported with `capture_message('Queue Error:'+...) …

@@ -1,0 +1,86 @@
+hrono recall: the topics that fit this question, and the topics linked to them (by a shared name such as a queue subject or a call). Each topic's brief is at /Users/orest/hrono-eval/export-bcreg-v3z-L3/<area>/<topic>/brief.md; the best-matching lines of each are below.
+
+## Test suite for a Vue + TypeScript filing UI (fits the question) - bc-registries-business-filing-and-auth-web-area-452/test-suite-for-a-vue-typescript-filing-ui-804/brief.md
+- **Payment state banners.** Each payment state component has fixed expected copy:
+...
+- `PaymentPaid`: h4 "Paid"; p contains "This filing is paid but".
+  - `PaymentPending`: h4 "Payment Incomplete"; two p's, "This filing is pending payment" and "You may continue this filing".
+  - `PaymentUnsuccessful`: h4 "Payment Unsuccessful"; two p's, "This filing is pending payment" and "You may continue this filing".
+  - `PaymentIncomplete`: h4 is "Payment Incomplete - <payErrorObj.title>". The p shows `payErrorObj.detail` with HTML tags stripped. With `filing: null` the title part is empty and the p is empty.
+  - `PaymentPendingOnlineBanking`: h4 "Online Banking Payment Pending", a p "This filing is pending", and 6 li instructions. With a filing, its `draftTitle` (e.g. "Director Change" …
+
+## auth-web locale files (`auth-web/src/locales`) (fits the question) - bc-registries-business-filing-and-auth-web-area-452/auth-web-locale-files-auth-web-src-locales-559/brief.md
+- **Payment errors:** `payment*ErrorTitle/SubText`. The text states what happens in each case:
+  - generic error or cancel: the account state becomes pending
+  - duplicate: processing is skipped
+  - timeout: the draft is saved
+  - declined, invalid card, expired card and validation errors each have their own pair
+- **Business removal:** paired confirm/success texts for Name Request, Incorporation Application, Amalgamation, Continuation In, Registration and Firm. They note that the Name Request is kept for reuse. The Firm texts say the business number and proprietor name are needed to re-add the business.
+...
+- **Login options and misc:** BC Services Card and BCeID login option text, launcher texts (`assetLauncher*`, `pprLauncher*`, `mhrLauncher*`), invite-member text for standard and IDIR users, passcode generation, Wills Registry terms checkbox, statutory and service fee selection, activity log empty state, the 404 page.
+- **Search:** `searchAccountStartMessage`, `searchAccountNoResult`, `searchReviewStartMessage`, `searchReviewsNoResult`.
+
+## pay-queue services: payment reconciliation, CGI/EJV feedback, identifier updates (fits the question) - payment-system-eft-payments-refunds-and-reconciliation-bc-re-458/pay-queue-services-payment-reconciliation-cgi-ejv-feedback-i-664/brief.md
+- `_create_payment_records` / `_save_payment` / `_get_settlement_type`:
+  - PAD/PADR/PAYR: one payment per row, COMPLETED if status is "paid", otherwise FAILED.
+  - BOLP: summed payment plus online-banking mail.
+  - EFTP: marks the existing payment (receipt_number == source txn) COMPLETED.
+  - COMPLETED is skipped if one already exists for the invoice_number. FAILED looks up an existing COMPLETED or latest FAILED.
+- `_create_credit_records`: creates `CreditModel` for RECEIPT rows unless the cfs_identifier already exists.
+- `_sync_credit_records`: refreshes `remaining_amount` via `CFSService.get_cms/get_receipt` and rolls up `PaymentAccountModel.credit`.
+- `_publish_online_banking_mailer_even …
+...
+## Hazards
+- `_is_processed_or_processing` sets `feedback_file_ref` before processing. If processing then fails, the file is treated as processed and never reprocessed. It also returns on the first duplicate.
+- Partial state: `_process_failed_payments` saves the freeze and `has_nsf_invoices` before the CFS calls, so a CFS failure leaves them set. Rows commit one by one. No duplicate guard exists on receipt creation or on FAILED payments.
+- CGI feedback parsing uses hardcoded fixed-width slices, so format drift corrupts statuses. Invoice, reference, distribution and receipt updates are not transactional. `new_identifier` is not validated.
+
+## pay-api services layer (sbc-pay): payment-system selection, invoice/payment lifecycle, CFS/PayBC/BCOL/Direct Pay/EJV/internal integrations (linked to a topic above) - payment-system-eft-payments-refunds-and-reconciliation-bc-re-458/pay-api-service-layer-payment-orchestration-and-payment-syst-833/brief.md
+- **Refunds and statements**
+  - `get_refund_partials_by_payment_line_item_id` filters on `PaymentLineItemModel.id` but queries only `RefundPartialModel`; the join is missing.
+  - `InvoiceReference.find_completed_reference_by_invoice_id` and `find_any_active_reference_by_invoice_number` wrap a None dao without a guard.
+  - `generate_interim_statement` has no duplicate guard.
+  - `StatementSettings.update_statement_settings` does not check that the new frequency differs.
+- **Payments and transactions**
+  - `PaymentTransaction.update_transaction` has no idempotency guard.
+  - `Payment.find_by_id` does not guard null.
+  - Duplicate receipt numbers are not guarded.
+  - `__save_receipt` does not  …
+
+## Brief: payment-jobs (`jobs/payment-jobs`) (linked to a topic above) - payment-system-eft-payments-refunds-and-reconciliation-bc-re-458/payment-jobs-scheduled-back-office-jobs-for-the-payment-syst-635/brief.md
+- `_notify_for_monthly`:
+    - The date is `statement_date_override`, or the first day of the previous month.
+    - Accounts are those with `StatementFrequency.MONTHLY` and `payment_method == EFT`.
+    - If there is no recent statement, skip.
+    - If `action == OVERDUE`:
+      - It publishes the lock-account event.
+      - It saves `statement.overdue_notification_date` and `payment_account.has_overdue_invoices`.
+      - It calls `add_to_non_sufficient_funds`, with description `'EFT invoice overdue'`.
+      - It sends no separate email.
+    - If `action != OVERDUE and emails and total_due > 0`, publish the payment notification.
+  - `_find_most_recent_statement`: it returns the statement only …
+
+## pay-api services layer (sbc-pay `pay_api/services`) (linked to a topic above) - lear-sbc-auth-sbc-pay-monorepo-area-454/pay-api-service-layer-payapi-services-834/brief.md
+- `gcp_queue/logging.py`: no error handling, no severity validation, no non-empty check on the message, and the trace header format is not validated before indexing.
+- `invoice.py`: no mutation operations and no state-transition validation.
+- `payment_transaction.py`: no rollback mechanism and no duplicate guard.
+- `statement.py`: no authentication beyond the token comparison, no rate limiting, no audit logging and no rollback on partial failures.
+- The `DirectPayService` and `RefundService` bodies were not provided, so nothing is known about them.
+
+## Payment jobs (cron-driven batch runner) (linked to a topic above) - jobs-batch-jobs-their-openshift-packaging-and-ci-cd-449/payment-jobs-cron-driven-batch-runner-708/brief.md
+## Hazards
+
+- A failed lock or unlock publish is swallowed, so an NSF account can stay unsuspended or locked with only a Sentry message as a trace.
+- The crontab references `run_send_statement_notificaton.sh`, and the file on disk uses the same misspelling. Renaming one side without the other breaks notifications silently.
+- SEND_NOTIFICATIONS is scheduled both every minute and every 4 hours, and the notes show no duplicate guard. The same statements could be notified twice or overlapping runs could collide. The notes show no overlap protection for the 30-minute jobs either.
+
+## pay-api core package (`pay_api`): app factory, config, exceptions, shared utils (linked to a topic above) - lear-sbc-auth-sbc-pay-monorepo-area-454/pay-api-core-package-app-factory-config-shared-utilities-619/brief.md
+- General: `INVALID_CORP_OR_FILING_TYPE`, `INVALID_PAYMENT_ID`, `INVALID_PAYMENT_METHOD`, `INVALID_TRANSACTION`, `INVALID_REFUND`, `INVALID_REDIRECT_URI`, `INVALID_TRANSACTION_ID`, `INVALID_ACCOUNT_ID`, `COMPLETED_PAYMENT`, `ACCOUNT_IN_PAD_CONFIRMATION_PERIOD`, `PAD_CURRENTLY_NSF`, `CANCELLED_PAYMENT`, `INVALID_INVOICE_ID`.
+  - BCOL: `BCOL_UNAVAILABLE`, `BCOL_ACCOUNT_CLOSED`, `BCOL_USER_REVOKED`, `BCOL_ACCOUNT_REVOKED`, `BCOL_ACCOUNT_INSUFFICIENT_FUNDS`, `BCOL_INVALID_ACCOUNT`, `BCOL_ERROR`.
+  - Other: `INVALID_REQUEST`, `PATCH_INVALID_ACTION`, `PAYMENT_SEARCH_TOO_MANY_RECORDS`, `DIRECT_PAY_INVALID_RESPONSE`, `ACCOUNT_EXISTS`, `OUTSTANDING_CREDIT`, `TRANSACTIONS_IN_PROGRESS`, `FROZEN_ACCOUNT …
+
+## pay-api data-model layer (`pay_api/models`, plus `utils/json_util.py` and `utils/util.py`) (linked to a topic above) - payment-system-eft-payments-refunds-and-reconciliation-bc-re-458/data-model-layer-of-pay-api-payapi-models-728/brief.md
+- `Payment.search_account_payments`: when `payment_status == PaymentStatus.FAILED.value`, it excludes two sets of payments.
+  - Payments whose `InvoiceReference.status_code` is not in `[InvoiceReferenceStatus.ACTIVE.value, InvoiceReferenceStatus.COMPLETED.value]`.
+  - Payments whose `cons_inv_number` matches the consolidated subquery. That subquery selects payments with `payment_status_code == PaymentStatus.CREATED.value AND payment_method_code == PaymentMethodEnum.CC.value`.
+- `Payment.find_payments_to_consolidate`: includes a payment if `payment_status_code == PaymentStatus.FAILED.value` OR `invoice_number` is in the consolidated subquery. That subquery selects payments with FAILED status  …

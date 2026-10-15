@@ -339,3 +339,70 @@ questions.
 
 On these questions the information in the rebuilt briefs does not change
 what Sonnet finds in 30 turns with the code.
+
+## Round 6 (2026-10-15): one question at a time, recall that follows links
+
+From here on, one question at a time, two runs, extended only once it
+works.
+
+**Recall cannot reach the topics a hard question needs.**
+- On `hard-failure-1`, the leaf topics holding the missed facts rank low
+  among 432 by brief passages: the filer (606) 24th, the emailer (579) 19th,
+  the repair job (523) 73rd.
+- The top topics (796 entity-pay, 577 legal-api, 694 business-pay) are
+  linked to them by name: a shared queue subject, a publish call.
+
+`harness/linked_recall.py` builds the block a link-following recall would
+attach, within the 10,000-character cap:
+- the 3 best topics by brief passages, 2 passages each;
+- then linked topics, one hop or two from them, 1 passage each. Topics tied
+  to a seed by a channel link (a shared subject, a send matched to a
+  receive) come first, then the rest by fit to the question;
+- every passage clipped to 700 characters.
+
+The block goes into the prompt where the plugin's hook would put it; the
+plugin is off.
+
+**The 400-word answer cap limits every arm.** Both code-only and hrono
+answers to `hard-failure-1` filled 400 words with the pay-api half of the
+question. They never reached the emailer, the filer or the repair job. The
+runs below allow 900 words, for both arms.
+
+| question | arm | runs | coverage |
+|---|---|---|---|
+| hard-failure-1 | code only, 400 words (earlier) | 2 | 0.36, 0.43 |
+| hard-failure-1 | hrono, linked recall, 400 words | 2 | 0.36, 0.43 |
+| hard-failure-1 | code only, 900 words | 2 | 0.29, 0.43 |
+| hard-failure-1 | hrono, linked recall (by fit), 900 words | 2 | 0.43, 0.57 |
+| hard-failure-1 | hrono, linked recall (channel first), 900 words | 2 | 0.43, 0.43 |
+| hard-legacy-0 | code only, 900 words | 2 | 0.62, 0.62 |
+| hard-legacy-0 | hrono, linked recall (channel first), 900 words | 2 | 0.62, 0.69 |
+
+- **`hard-failure-1`:** hrono 0.47 over four runs against 0.36 for code
+  only. The gain is facts 3 and 5 (the legacy listener's duplicate rule; the
+  future-effective job as the only repair), which came from the linked
+  topics. Fact 6 (the filer commits before its side effects) is missed even
+  with the filer in the block: the answers read "processing dies partway"
+  as the pay consumer, not the filer.
+- **`hard-legacy-0`:** level. The seed topics were a UI test suite and
+  auth-web locale files, because the question's plain words ("streaming
+  bus", "push-subscription") match no brief well. Neither listener reached
+  the block.
+- Lifting the cap raised code only on `hard-legacy-0` from 0.44 to 0.62.
+
+**Offline seed check** (`harness/seeds.py`, embeddings only, no agent).
+Over the four questions, how many of the 45 leaf topics that hold an
+answer's cited files land in the block:
+
+| seeds from | answer topics in the block | in a plain top 9 |
+|---|---|---|
+| brief passages (as above) | 13 / 45 | 11 / 45 |
+| brief passages, test topics skipped | 14 / 45 | 12 / 45 |
+| brief and source passages | 16 / 45 | 10 / 45 |
+| brief and source passages, test topics skipped | 16 / 45 | 11 / 45 |
+
+Links add a few answer topics over a plain top 9. Still, at most 16 of 45
+reach the block: a hard question's answer spans more topics than nine
+clipped entries hold.
+
+Spent this round: 14 agent runs, about $3.50.
