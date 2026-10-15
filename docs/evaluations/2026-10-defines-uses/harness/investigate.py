@@ -165,7 +165,6 @@ async def _write(prompt: str) -> dict:
         allowed_tools=["mcp__tree__search", "mcp__tree__read"],
         max_turns=24,
         setting_sources=[],
-        extra_args={"safe-mode": None},  # no MCP servers or their notes
         cwd=str(c.WORKDIR),
         cli_path=shutil.which("claude"),
         thinking={"type": "disabled"},
