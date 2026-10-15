@@ -38,19 +38,38 @@ No word target: a chunk with one simple function needs three lines, a chunk with
 {content}"""
 
 
-def condense(everything: bool = False) -> None:
+# Round 8: what the trace showed the ledger still loses - the shape of what
+# arrives and how it is parsed, the order of an entry's checks, loops that
+# poll or retry, and the endpoint path a call goes to (written under a base
+# URL variable, so the link to the route's owner was never made).
+LEDGER2 = LEDGER.replace(
+    "- ENTRY: each route",
+    "- IN: what arrives and its exact shape - the fields read, the type or format checked (for example `event.type == 'order.created'`), conversions (camelCase to snake_case), and what happens to input that does not fit.\n- ENTRY: each route",
+).replace(
+    "or \"no check in this chunk\".",
+    "or \"no check in this chunk\". When an entry runs several checks, give them in the order the code runs them, and what a request that stops at each one gets back.",
+).replace(
+    "- ORDER:",
+    "- LOOP: each loop that polls, retries or waits: how many times, the wait, and what ends it.\n- ORDER:",
+).replace(
+    "the target as written,",
+    "the target as written (for an HTTP call, the method and the path after the base URL variable, for example `GET /internal/orders/pending` with base `ORDERS_API_URL`),",
+)
+
+
+def condense(everything: bool = False, prompt: str = LEDGER, name: str = "ledger.json") -> None:
     conn = c.connect()
     sids = (
         exp.members(conn, exp.slice_leaves(conn))
         if everything
         else sl.slice_sections(conn)
     )
-    done = exp.load("ledger.json")
+    done = exp.load(name)
     todo = [s for s in sids if str(s) not in done]
     items = [c.section(conn, s) for s in todo]
 
     def one(item: dict) -> tuple[str, dict]:
-        got = exp.ask(LEDGER.replace("{content}", item["body"]), exp.HAIKU)
+        got = exp.ask(prompt.replace("{content}", item["body"]), exp.HAIKU)
         return str(item["id"]), {
             "path": f"{item['source']}/{item['path']}",
             **got,
@@ -58,7 +77,7 @@ def condense(everything: bool = False) -> None:
 
     for sid, got in exp.run_pool(one, items):
         done[sid] = got
-    exp.save("ledger.json", done)
+    exp.save(name, done)
     words = [len((v.get("text") or "").split()) for v in done.values()]
     print(
         "sections",
@@ -123,5 +142,6 @@ if __name__ == "__main__":
     {
         "condense": condense,
         "condense-all": lambda: condense(True),
+        "condense2": lambda: condense(False, LEDGER2, "ledger2.json"),
         "judge": lambda: judge(sys.argv[2]),
     }[sys.argv[1]]()
