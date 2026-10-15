@@ -15,7 +15,8 @@ it is kept, and an idempotent re-run fills only the gaps. A section the model
 refuses twice is recorded as refused for this model and prompt, so a re-run
 skips it until its body, the model or the prompt changes, instead of paying two
 calls on every sync to be refused again. No token cap and no truncation: the
-recipe (identifiers verbatim, GOTCHA lines) lives in the prompt, not this code.
+recipe (every check, branch and call, identifiers verbatim) lives in the
+prompt, not this code.
 
 Because the calls are keyed by CONTENT HASH they are independent of each other,
 so they run in ``pool.mapped``'s bounded worker pool rather than one at a time:

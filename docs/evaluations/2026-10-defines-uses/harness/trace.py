@@ -1,3 +1,4 @@
+# ruff: noqa: B905 - experiment harness
 """Where each answer claim is lost: raw source -> stored condensation
 (notes-v3) -> stored leaf brief and its upper brief (A-v3)."""
 
@@ -5,7 +6,9 @@ import sys
 
 import exp
 
-ARMS = sys.argv[2].split(",") if len(sys.argv) > 2 else ["raw", "notes-v3", "A-v3"]
+ARMS = (
+    sys.argv[2].split(",") if len(sys.argv) > 2 else ["raw", "notes-v3", "A-v3"]
+)
 
 
 def table(qids: list[str]) -> None:
@@ -22,7 +25,9 @@ def table(qids: list[str]) -> None:
                 marks = []
                 for a in ARMS:
                     r = got.get((qid, f["fact"], i, a))
-                    marks.append("?" if r is None else "Y" if r.get("stated") else ".")
+                    marks.append(
+                        "?" if r is None else "Y" if r.get("stated") else "."
+                    )
                 print(f["fact"], i, " ".join(marks), cl["kind"][0], cl["claim"])
                 for a, m in zip(ARMS, marks):
                     lost[a] += m == "Y"

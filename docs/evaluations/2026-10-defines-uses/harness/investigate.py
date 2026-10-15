@@ -1,4 +1,4 @@
-# ruff: noqa: E501 - experiment harness; prompts read best whole
+# ruff: noqa: E501, SIM115, B007 - experiment harness; prompts read best whole
 """Round 8: a leaf brief writer that looks things up before it writes.
 
 The trace showed the facts a hard question needs that no brief states are
@@ -19,7 +19,6 @@ Usage: uv run --with claude-agent-sdk python investigate.py index
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 import shutil
 import sqlite3
@@ -107,9 +106,13 @@ def search(query: str) -> str:
         "FROM docs WHERE docs MATCH ? ORDER BY bm25(docs, 2.0, 1.0) LIMIT 10",
         (fts,),
     ).fetchall()
-    return "\n".join(
-        f"section {s} | {p} | topic: {t}\n  {snip}" for s, p, t, snip in rows
-    ) or "no match"
+    return (
+        "\n".join(
+            f"section {s} | {p} | topic: {t}\n  {snip}"
+            for s, p, t, snip in rows
+        )
+        or "no match"
+    )
 
 
 def read(sid: int) -> str:
@@ -131,17 +134,29 @@ async def _write(prompt: str) -> dict:
 
     calls = []
 
-    @tool("search", "Full-text search over the condensations of every section in the system. Returns up to 10 hits: section id, source path, topic, matching snippet.", {"query": str})
+    @tool(
+        "search",
+        "Full-text search over the condensations of every section in the system. Returns up to 10 hits: section id, source path, topic, matching snippet.",
+        {"query": str},
+    )
     async def _search(args):
         calls.append(("search", args["query"]))
         return {"content": [{"type": "text", "text": search(args["query"])}]}
 
-    @tool("read", "The condensation of one section, by section id.", {"section": int})
+    @tool(
+        "read",
+        "The condensation of one section, by section id.",
+        {"section": int},
+    )
     async def _read(args):
         calls.append(("read", args["section"]))
-        return {"content": [{"type": "text", "text": read(int(args["section"]))}]}
+        return {
+            "content": [{"type": "text", "text": read(int(args["section"]))}]
+        }
 
-    server = create_sdk_mcp_server(name="tree", version="1.0", tools=[_search, _read])
+    server = create_sdk_mcp_server(
+        name="tree", version="1.0", tools=[_search, _read]
+    )
     options = ClaudeAgentOptions(
         model=exp.SONNET,
         system_prompt="You write briefs of parts of a software system for a knowledge base.",
@@ -158,7 +173,11 @@ async def _write(prompt: str) -> dict:
     async for message in query(prompt=prompt, options=options):
         if isinstance(message, ResultMessage):
             result = message
-    return {"text": clean(result.result or ""), "cost": result.total_cost_usd, "calls": calls}
+    return {
+        "text": clean(result.result or ""),
+        "cost": result.total_cost_usd,
+        "calls": calls,
+    }
 
 
 def clean(text: str) -> str:
@@ -169,11 +188,24 @@ def clean(text: str) -> str:
 def question_leaves(conn) -> list[int]:
     leaf = exp.leaf_map(conn)
     secs: dict[str, list[int]] = {}
-    for sid, source, path in conn.execute("SELECT id, source, path FROM sections"):
+    for sid, source, path in conn.execute(
+        "SELECT id, source, path FROM sections"
+    ):
         secs.setdefault(f"{source}/{path}", []).append(sid)
-    qs = [q for q in sl.questions() if q["qid"] in ("hard-legacy-0", "hard-failure-1")]
+    qs = [
+        q
+        for q in sl.questions()
+        if q["qid"] in ("hard-legacy-0", "hard-failure-1")
+    ]
     return sorted(
-        {leaf[s] for q in qs for f in q["facts"] for p in f["files"] for s in secs.get(p, []) if s in leaf}
+        {
+            leaf[s]
+            for q in qs
+            for f in q["facts"]
+            for p in f["files"]
+            for s in secs.get(p, [])
+            if s in leaf
+        }
     )
 
 
@@ -185,7 +217,11 @@ def brief(which: str) -> None:
     links = exp.load("links.json")
     condensed = exp.all_condensed()
     title = sl.titles(conn)
-    nodes = question_leaves(conn) if which == "questions" else [int(x) for x in which.split(",")]
+    nodes = (
+        question_leaves(conn)
+        if which == "questions"
+        else [int(x) for x in which.split(",")]
+    )
     out = exp.load(OUT)
 
     def one(node: int):
@@ -199,10 +235,15 @@ def brief(which: str) -> None:
         content = labeled([(path, notes(sid)) for sid, path in rows])
         block = exp.linked_block(node, links, condensed, title, conn2, notes)
         if block:
-            content += "\n\n=== CONDENSATIONS FROM OTHER TOPICS THAT SHARE NAMES ===\n" + block
+            content += (
+                "\n\n=== CONDENSATIONS FROM OTHER TOPICS THAT SHARE NAMES ===\n"
+                + block
+            )
         for attempt in range(3):
             try:
-                return str(node), asyncio.run(_write(INVESTIGATE.replace("{content}", content)))
+                return str(node), asyncio.run(
+                    _write(INVESTIGATE.replace("{content}", content))
+                )
             except Exception as exc:  # noqa: BLE001
                 err = str(exc)
         return str(node), {"error": err, "cost": 0}
@@ -212,7 +253,14 @@ def brief(which: str) -> None:
     for node, got in exp.run_pool(one, todo, 4):
         out[node] = got
         exp.save(OUT, out)
-        print(node, len((got.get("text") or "").split()), "words", len(got.get("calls") or []), "lookups", round(got.get("cost") or 0, 2))
+        print(
+            node,
+            len((got.get("text") or "").split()),
+            "words",
+            len(got.get("calls") or []),
+            "lookups",
+            round(got.get("cost") or 0, 2),
+        )
     print("cost", round(sum(v.get("cost") or 0 for v in out.values()), 2))
 
 
@@ -232,10 +280,18 @@ def export() -> None:
             body = got[tail]["text"]
             if body.startswith("# "):
                 body = body.split("\n", 1)[1]
-            brief_md.write_text(head + "\n\n" + body.strip() + "\n" + (keep.group(0) if keep else ""))
+            brief_md.write_text(
+                head
+                + "\n\n"
+                + body.strip()
+                + "\n"
+                + (keep.group(0) if keep else "")
+            )
             n += 1
     print("replaced", n, "export", EXPORT)
 
 
 if __name__ == "__main__":
-    {"index": index, "brief": lambda: brief(sys.argv[2]), "export": export}[sys.argv[1]]()
+    {"index": index, "brief": lambda: brief(sys.argv[2]), "export": export}[
+        sys.argv[1]
+    ]()

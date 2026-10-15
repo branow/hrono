@@ -68,7 +68,9 @@ def brief() -> None:
         content = labeled([(path, notes(sid)) for sid, path in rows])
         block = exp.linked_block(node, links, condensed, title, conn2, notes)
         if block:
-            content += "\n\n=== LINKED CONDENSATIONS FROM OTHER TOPICS ===\n" + block
+            content += (
+                "\n\n=== LINKED CONDENSATIONS FROM OTHER TOPICS ===\n" + block
+            )
         got = exp.ask(WIDE.replace("{content}", content), exp.SONNET)
         return str(node), got
 
@@ -77,9 +79,18 @@ def brief() -> None:
         out[node] = got
         exp.save("briefs-W.json", out)
     words = [len((v.get("text") or "").split()) for v in out.values()]
-    print("briefs", len(out), "errors", sum("error" in v for v in out.values()),
-          "words", round(sum(words) / len(words)), "max", max(words),
-          "cost", round(sum(v.get("cost") or 0 for v in out.values()), 2))
+    print(
+        "briefs",
+        len(out),
+        "errors",
+        sum("error" in v for v in out.values()),
+        "words",
+        round(sum(words) / len(words)),
+        "max",
+        max(words),
+        "cost",
+        round(sum(v.get("cost") or 0 for v in out.values()), 2),
+    )
 
 
 def export() -> None:

@@ -42,22 +42,29 @@ No word target: a chunk with one simple function needs three lines, a chunk with
 # arrives and how it is parsed, the order of an entry's checks, loops that
 # poll or retry, and the endpoint path a call goes to (written under a base
 # URL variable, so the link to the route's owner was never made).
-LEDGER2 = LEDGER.replace(
-    "- ENTRY: each route",
-    "- IN: what arrives and its exact shape - the fields read, the type or format checked (for example `event.type == 'order.created'`), conversions (camelCase to snake_case), and what happens to input that does not fit.\n- ENTRY: each route",
-).replace(
-    "or \"no check in this chunk\".",
-    "or \"no check in this chunk\". When an entry runs several checks, give them in the order the code runs them, and what a request that stops at each one gets back.",
-).replace(
-    "- ORDER:",
-    "- LOOP: each loop that polls, retries or waits: how many times, the wait, and what ends it.\n- ORDER:",
-).replace(
-    "the target as written,",
-    "the target as written (for an HTTP call, the method and the path after the base URL variable, for example `GET /internal/orders/pending` with base `ORDERS_API_URL`),",
+LEDGER2 = (
+    LEDGER.replace(
+        "- ENTRY: each route",
+        "- IN: what arrives and its exact shape - the fields read, the type or format checked (for example `event.type == 'order.created'`), conversions (camelCase to snake_case), and what happens to input that does not fit.\n- ENTRY: each route",
+    )
+    .replace(
+        'or "no check in this chunk".',
+        'or "no check in this chunk". When an entry runs several checks, give them in the order the code runs them, and what a request that stops at each one gets back.',
+    )
+    .replace(
+        "- ORDER:",
+        "- LOOP: each loop that polls, retries or waits: how many times, the wait, and what ends it.\n- ORDER:",
+    )
+    .replace(
+        "the target as written,",
+        "the target as written (for an HTTP call, the method and the path after the base URL variable, for example `GET /internal/orders/pending` with base `ORDERS_API_URL`),",
+    )
 )
 
 
-def condense(everything: bool = False, prompt: str = LEDGER, name: str = "ledger.json") -> None:
+def condense(
+    everything: bool = False, prompt: str = LEDGER, name: str = "ledger.json"
+) -> None:
     conn = c.connect()
     sids = (
         exp.members(conn, exp.slice_leaves(conn))

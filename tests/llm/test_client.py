@@ -125,7 +125,7 @@ def test_max_tokens_from_params_then_default(
     client.complete(CompletionRequest(text_model(512), system="", content="c"))
     assert captured["max_tokens"] == 512
     client.complete(CompletionRequest(text_model(None), system="", content="c"))
-    assert captured["max_tokens"] == 4096  # documented default
+    assert captured["max_tokens"] == 16_000  # documented default
 
 
 def test_missing_connection_raises_llmerror(db: Database, ciph: Cipher) -> None:

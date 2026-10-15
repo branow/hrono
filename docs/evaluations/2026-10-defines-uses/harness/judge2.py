@@ -190,7 +190,9 @@ if __name__ == "__main__":
         qids = sys.argv[3].split(",")
         split = exp.load("claims.json")
         only = [
-            (q, f["fact"]) for q in qids for f in split[q]["structured"]["facts"]
+            (q, f["fact"])
+            for q in qids
+            for f in split[q]["structured"]["facts"]
         ]
         run(sys.argv[2].split(","), "judge2-main.json", only)
     elif cmd == "run":

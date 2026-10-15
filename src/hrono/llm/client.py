@@ -25,7 +25,10 @@ from hrono.db.database import Database
 from hrono.errors import DomainError
 from hrono.registry import store
 
-_DEFAULT_MAX_TOKENS = 4096
+# Neither condensations nor briefs have a word target, and a pack carries up
+# to eight condensations in one reply: 4096 tokens cut long ones short. Billing
+# is by the tokens written, so a higher ceiling costs nothing when unused.
+_DEFAULT_MAX_TOKENS = 16_000
 
 
 class LLMError(DomainError):

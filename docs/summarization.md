@@ -9,35 +9,47 @@ How hrono writes briefs and decides when a change climbs the tree. Code:
 
 Two layers, gotcha-aware, content-addressed.
 
-1. **Condense, per section** (`summarize/condense.py`, cheap model). Each
-   section opens with one sentence on what it is for, in the system's own
-   terms (or that it is a test, config, migration or document, and what it
-   serves). Then what comes in and goes out, the main flow, and every
-   decision with the function, constant, list or field that holds it.
-   Mechanism comes after purpose; boilerplate collapses to a line. 60 to 120
-   words, up to 250 for dense logic. Identifiers and values are copied
-   verbatim, and `GOTCHA:` lines flag only what the code shows (a swallowed
-   exception, a partial update), never a guess. Results are cached by
-   content hash, so an unchanged section is never condensed twice. Up to 8
-   sections share one call (`summarize/packed.py`), because a `claude-code`
-   call carries a large fixed overhead; a section whose packed result is
-   missing is retried alone.
+1. **Condense, per section** (`summarize/condense.py`, cheap model). The
+   condensation is only the input of its topic's brief: it is never shown to
+   an agent, in recall or in the export. Each opens with one sentence on what
+   the section is for, in the system's own terms (or that it is a test,
+   config, migration or document, and what it serves). Then, for code, one
+   line for each of: what arrives and its shape (IN), each entry point's
+   checks in the order they run (ENTRY), every branch with its exact
+   condition and every member of a list it tests (RULE), loops that poll or
+   retry (LOOP), what is committed before a call that can fail (ORDER), each
+   error handler (ON ERROR), each call to another service, queue, table or
+   file with its path or configuration key (CALLS OUT), the states it sets
+   (STATES), and what it plainly lacks (ABSENT). Documents and configuration
+   keep every decision, value, step and reference. No word target.
+   Identifiers and values are copied verbatim; secrets become `<secret>`.
+   Results are cached by content hash, so an unchanged section is never
+   condensed twice. Up to 8 sections share one call (`summarize/packed.py`),
+   because a `claude-code` call carries a large fixed overhead; a section
+   whose packed result is missing is retried alone.
 2. **Brief, per leaf topic** (`summarize/brief.py`, stronger model). Over the
-   condensations, what a reader needs to understand the part's role and find
-   where to change it, in order: what it does and whom it hands work to; its
-   contract (what comes in and goes out, with the message or record shapes);
-   its decisions one line each with where they live, including every state
-   change and every check that refuses a caller; at most three hazards that
-   lose or corrupt work; two to four sources to open first. Setup,
-   configuration, field lists, health checks and test plumbing are left to
-   the condensations below. 250 to 500 words, up to 800 for several jobs.
-   It writes about the part, never about its input ("this group").
+   condensations, everything a reader needs to answer exact questions about
+   the topic, because nothing below the brief is shown: what it does and
+   whom it hands work to; its contract with message and record shapes; each
+   entry point's checks in order; every decision with its condition, lists
+   verbatim; what is committed before a step that can fail and each error
+   handler; its connections to other parts; hazards; the sources to open
+   first. It says what the code does, never what a name suggests: behaviour
+   that lives in another topic is marked "(behaviour not in this topic)". No
+   word target. It writes about the topic, never about its input ("this
+   group").
 3. **Brief, per upper topic** (`summarize/brief_upper.py`, stronger model).
    Over the child briefs, with no condense stage: what the area does, then
-   its end-to-end flows as numbered steps naming the part, the function and
-   the state at each step, one line per part not in a flow, and at most
-   three hazards from how the parts interact. 300 to 600 words however many
-   children there are. The model is never told it is in a tree.
+   its end-to-end flows as numbered steps naming the part, the function, the
+   state at each step and what a failed step leaves behind and what repairs
+   it, one line per part not in a flow, and the hazards from how the parts
+   interact. No word target. The model is never told it is in a tree.
+
+Why no word targets (docs/evaluations/2026-10-defines-uses/, round 8): with
+the 60-120 word condensation and the 250-500 word brief, the leaf briefs
+stated 56 of 104 answer claims the cited sources state 75 of; the brief
+prompt told the writer the condensations "stay available" when nothing
+below a brief is shown, and to leave out lists and keep three hazards.
 
 **References are mechanical.** Member lists and links are rendered by code
 from topic metadata, never written by the LLM: no tokens, no hallucinated
@@ -93,9 +105,10 @@ words; the upper prompt keeps about 1.6 times as many at the same length.
 
 ## Rejected (do not retry blindly)
 
-- Hard size budgets in prompts: ignored (~2× overruns). A range with an
-  escape for dense content ("aim for 60 to 120 words; dense logic may use
-  up to 250") holds roughly, and a tight one costs facts.
+- Size budgets in prompts: a hard one is ignored (~2x overruns), and a
+  range ("aim for 60 to 120 words") holds roughly but costs the facts that
+  hard questions need (round 8 of 2026-10-defines-uses). The prompts now
+  have none.
 - Hard token caps on condensation: they starve dense sections and cause
   fabrication.
 - LLM-written reference lists.

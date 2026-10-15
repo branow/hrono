@@ -1,4 +1,4 @@
-# ruff: noqa: E501 - experiment harness
+# ruff: noqa: E501, SIM115 - experiment harness
 """Round 6: recall that follows links, one question at a time.
 
 Recall ranks leaf topics by the cosine of their brief passages to the
