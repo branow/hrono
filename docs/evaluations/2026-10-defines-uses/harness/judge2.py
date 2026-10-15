@@ -37,6 +37,7 @@ async def _ask(prompt: str) -> dict:
         tools=[],
         max_turns=3,
         setting_sources=[],
+        extra_args={"safe-mode": None},  # no MCP servers or their notes
         cwd=str(c.WORKDIR),
         cli_path=shutil.which("claude"),
         thinking={"type": "enabled", "budget_tokens": 4000},
