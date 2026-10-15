@@ -48,22 +48,33 @@ over the files of the whole system: `source/<source>/<path>` is the text of \
 each source file and `condensed/<source>/<path>.md` its condensation. Use \
 `Grep` (a regular expression, optionally limited to a path glob) and `Glob` \
 to find files, and `Read` to read one. This topic's own files are given \
-above under their paths: spend the lookups on the other parts. First list \
-every connection the topic's files show - each message, queue, endpoint, \
-call, table, document or configuration key that names another part - then, \
-for each, find the file on the other side and read what it does there: who \
-receives what this topic sends and what it does with it, who sends what it \
-receives, what an endpoint or function it calls really does. When a target \
-is named through a configuration key, look the key up to find the name it \
-holds, then search for that name. Mark something "(behaviour not in this \
-topic)" only after you looked for it and did not find it.
+above under their paths: spend the lookups on the other parts.
 
-After the brief, add a section `## Used`: one line for each looked-up file \
-that a statement in the brief comes from - `- <path>: <the statement>`, with \
-the path exactly as the tools print it - and nothing for files you opened but \
-did not use, nor for this topic's own files. A statement about another part \
-must come from a file listed there. Then a section `## Lookups`: one line per \
-connection you listed - `- <connection>: <the path found>`, or \
+First list every connection the topic's files show - each message, queue, \
+endpoint, call, table, document or configuration key that names another \
+part. Then, for each, find the other side and read what it does there:
+- What it sends: the handler that receives it, and what that handler checks, \
+saves and does when it fails. A configuration file only tells you a name; \
+search for that name until you reach the code that acts on it.
+- What it receives: who sends it, and when.
+- What it calls: what the called endpoint or function really selects, \
+returns or changes - never what its name suggests.
+- Records it shares with another part (a table, file or document): the other \
+owner's definition, and which of its rules - validations, listeners, \
+defaults - apply when this topic writes, and which this topic bypasses.
+Mark something "(behaviour not in this topic)" only after you searched for \
+it and did not find it.
+
+In the brief, write a file as its repository path (`<source>/<path>`), never \
+with the tools' `source/` or `condensed/` prefix.
+
+After the brief, add a section `## Used`: one line for each looked-up file on \
+the other side of a connection or shared record that a statement in the \
+brief comes from - `- <path>: <the statement>`, with the path exactly as the \
+tools print it - and nothing for files you opened but did not use, for \
+helpers read only for background, or for this topic's own files. Then a \
+section `## Lookups`: one line per connection you listed - \
+`- <connection>: <the path found>`, or \
 `- <connection>: not found (searched: <patterns>)`."""
 
 TOOLS = (
@@ -280,6 +291,7 @@ def split(
     ``MOST_USES``: a looked-up file is a relation, a member already is one.
     """
     head, _, tail = text.partition("\n## Used")
+    head = _repository_paths(head)
     used_part = tail.split("\n## Lookups", 1)[0]
     mine = set(own)
     uses: list[Use] = []
@@ -293,6 +305,17 @@ def split(
             continue
         uses.append(Use(name, match.group(2).strip()))
     return head.rstrip(), tuple(uses[:MOST_USES])
+
+
+_END = r"(?=[`'\")\s,;]|[.:](?:\s|$)|$)"
+_CONDENSED_PATH = re.compile(r"\bcondensed/([\w.\-/]+?)\.md" + _END)
+_SOURCE_PATH = re.compile(r"\bsource/([\w.\-/]+?)" + _END)
+
+
+def _repository_paths(text: str) -> str:
+    """The tools' virtual paths, as the repository paths an agent can open."""
+    text = _CONDENSED_PATH.sub(lambda m: m.group(1), text)
+    return _SOURCE_PATH.sub(lambda m: m.group(1), text)
 
 
 def signature(conn: sqlite3.Connection, file: str) -> str:

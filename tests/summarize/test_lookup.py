@@ -279,3 +279,13 @@ def test_a_changed_used_file_judged_none_is_not_judged_again(
     assert again.calls == 0
     with db.connect() as conn:
         assert briefs.get(conn, node)["stale"] == 0
+
+
+def test_the_tools_virtual_paths_become_repository_paths() -> None:
+    text = (
+        "See `condensed/repo/filer/config.py.md` and source/repo/README.md.\n"
+        "\n## Used\n- source/repo/filer/worker.py: the consumer\n"
+    )
+    body, uses = lookup.split(text, set(), _files().texts)
+    assert body == "See `repo/filer/config.py` and repo/README.md."
+    assert uses == (lookup.Use("repo/filer/worker.py", "the consumer"),)

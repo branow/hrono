@@ -65,7 +65,10 @@ runs the same tool loop (`llm/tools.py`). The writer lists each connection
 its topic shows, finds the other side, and ends with `## Used`: the files a
 statement came from. Those, less the topic's own members and at most 12, are
 stored in `brief_uses` with each file's content signature; the `Used` and
-`Lookups` sections are cut from the stored text. They are the brief's
+`Lookups` sections are cut from the stored text, and any `source/` or
+`condensed/` path that slipped into the text is rewritten to the repository
+path an agent can open. These calls run with thinking on (budget 4,000):
+without it the writer made 2-5 shallow lookups, with it 8-11. They are the brief's
 dependencies across branches: `propagate` judges a leaf whose used file
 changed against that change, and a minor or major verdict marks the leaf and
 its ancestors stale; a `none` verdict records the file's new signature, so it

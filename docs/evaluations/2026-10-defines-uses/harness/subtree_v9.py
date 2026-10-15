@@ -151,7 +151,11 @@ def uppers() -> None:
     context = JobContext(database, cache_root=CACHE)
     for row in rows:
         scope = {"level": int(row["level"]), "node": int(row["node"])}
-        print(row["node"], brief_upper(_job("brief-upper", scope), context), flush=True)
+        print(
+            row["node"],
+            brief_upper(_job("brief-upper", scope), context),
+            flush=True,
+        )
     database.close()
 
 
