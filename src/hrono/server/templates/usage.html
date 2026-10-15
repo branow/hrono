@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_parts.html" import money %}
-{% block title %}hrono — {{ tree }} usage{% endblock %}
+{% block title %}hrono — {{ tree }} {{ _("usage") }}{% endblock %}
 {# Token counts read as their size (4.79M); the exact figure is the title. #}
 {% macro count(n) -%}
 <span title="{{ '{:,}'.format(n) }}">{{ n|compact }}</span>
@@ -8,37 +8,38 @@
 {% set many_people = people|length > 1 %}
 {% block main %}
 <div class="page-head">
-  <h1>Usage<span class="tip" tabindex="0" role="note" data-tip="Every model call is recorded when it is made. Money billed per token is shown as spend; a model billed through a subscription is shown as an estimate and is never added to it">?</span></h1>
+  <h1>{{ _("Usage") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Every model call is recorded when it is made. Money billed per token is shown as spend; a model billed through a subscription is shown as an estimate and is never added to it") }}">?</span></h1>
 </div>
 
 <div class="stack">
 {% if not total %}
 <div class="card">
   <div class="card-body stack" data-empty>
-    <h2>Nothing has been spent yet</h2>
-    <p class="hint">Model calls appear here as runs make them. A sync that finds nothing changed makes none.</p>
-    <div><a class="btn" href="/ui/jobs?tree={{ tree }}">Runs</a></div>
+    <h2>{{ _("Nothing has been spent yet") }}</h2>
+    <p class="hint">{{ _("Model calls appear here as runs make them. A sync that finds nothing changed makes none.") }}</p>
+    <div><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("Runs") }}</a></div>
   </div>
 </div>
 {% else %}
   <dl class="totals" id="totals">
-    <div><dt>Cost</dt><dd>{{ money(total, true) }}</dd></div>
-    <div><dt>Calls</dt><dd class="num">{{ "{:,}".format(total.calls) }}</dd></div>
-    <div><dt>Tokens in</dt><dd class="num">{{ count(total.tokens_in) }}</dd></div>
-    <div><dt>Tokens out</dt><dd class="num">{{ count(total.tokens_out) }}</dd></div>
-    {% if total.tokens_cached %}<div><dt>Cached</dt><dd class="num">{{ count(total.tokens_cached) }}</dd></div>{% endif %}
-    <div><dt>Model time</dt><dd class="num">{{ total.time }}</dd></div>
+    <div><dt>{{ _("Cost") }}</dt><dd>{{ money(total, true) }}</dd></div>
+    <div><dt>{{ _("Calls") }}</dt><dd class="num">{{ "{:,}".format(total.calls) }}</dd></div>
+    <div><dt>{{ _("Tokens in") }}</dt><dd class="num">{{ count(total.tokens_in) }}</dd></div>
+    <div><dt>{{ _("Tokens out") }}</dt><dd class="num">{{ count(total.tokens_out) }}</dd></div>
+    {% if total.tokens_cached %}<div><dt>{{ _("Cached") }}</dt><dd class="num">{{ count(total.tokens_cached) }}</dd></div>{% endif %}
+    <div><dt>{{ _("Model time") }}</dt><dd class="num">{{ total.time }}</dd></div>
   </dl>
 
   <section class="card" id="over-time">
-    <div class="card-head"><h2>By day<span class="tip" tabindex="0" role="note" data-tip="Each bar is that day's tokens against the busiest day's">?</span></h2></div>
+    <div class="card-head"><h2>{{ _("By day") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Each bar is that day's tokens against the busiest day's") }}">?</span></h2></div>
     <div class="card-body">
       <ul class="daily">
         {% for day in days %}
         <li data-day="{{ day.key }}">
           <span class="num">{{ day.key }}</span>
           <span class="bar wide"><span style="width:{{ day.share }}%"></span></span>
-          <span class="num faint">{{ count(day.tokens_in + day.tokens_out) }} tokens</span>
+          {% set volume = day.tokens_in + day.tokens_out %}
+          <span class="num faint">{{ (n_(volume, "{shown} token", "{shown} tokens", shown="{shown}")|e).format(shown=count(volume)) }}</span>
           <span>{{ money(day, true) }}</span>
         </li>
         {% endfor %}
@@ -47,15 +48,15 @@
   </section>
 
   <section class="card" id="by-model">
-    <div class="card-head"><h2>By model</h2></div>
+    <div class="card-head"><h2>{{ _("By model") }}</h2></div>
     <div class="card-body table-wrap">
       <table class="usage">
-        <thead><tr><th>Role</th><th>Model</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Cached</th><th class="count">Time</th><th>Cost</th></tr></thead>
+        <thead><tr><th>{{ _("Role") }}</th><th>{{ _("Model") }}</th><th class="count">{{ _("Calls") }}</th><th class="count">{{ _("In") }}</th><th class="count">{{ _("Out") }}</th><th class="count">{{ _("Cached") }}</th><th class="count">{{ _("Time") }}</th><th>{{ _("Cost") }}</th></tr></thead>
         <tbody>
           {% for row in models %}
           <tr data-model="{{ row.key }}">
             <td><code>{{ row.key }}</code></td>
-            <td class="faint small" title="via {{ row.providers }}">{{ row.upstream }}</td>
+            <td class="faint small" title="{{ _("via {providers}", providers=row.providers) }}">{{ row.upstream }}</td>
             <td class="count">{{ "{:,}".format(row.calls) }}</td>
             <td class="count">{{ count(row.tokens_in) }}</td>
             <td class="count">{{ count(row.tokens_out) }}</td>
@@ -70,16 +71,16 @@
   </section>
 
   <section class="card" id="costliest">
-    <div class="card-head"><h2>Costliest runs</h2><a class="small" href="/ui/jobs?tree={{ tree }}">All runs</a></div>
+    <div class="card-head"><h2>{{ _("Costliest runs") }}</h2><a class="small" href="/ui/jobs?tree={{ tree }}">{{ _("All runs") }}</a></div>
     <div class="card-body table-wrap">
       <table class="usage">
-        <thead><tr><th>Run</th><th>Started</th>{% if many_people %}<th>By</th>{% endif %}<th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th>Cost</th></tr></thead>
+        <thead><tr><th>{{ _("Run") }}</th><th>{{ _("Started") }}</th>{% if many_people %}<th>{{ _("By") }}</th>{% endif %}<th class="count">{{ _("Calls") }}</th><th class="count">{{ _("In") }}</th><th class="count">{{ _("Out") }}</th><th class="count">{{ _("Time") }}</th><th>{{ _("Cost") }}</th></tr></thead>
         <tbody>
           {% for row in runs %}
           <tr data-run="{{ row.key }}">
-            <td>{% if row.key %}<a href="/ui/jobs/{{ row.key }}?tree={{ tree }}"><code>{{ row.run.op or "run" }}</code></a>{% else %}<span class="faint">outside a run</span>{% endif %}</td>
+            <td>{% if row.key %}<a href="/ui/jobs/{{ row.key }}?tree={{ tree }}"><code>{{ row.run.op or _("run") }}</code></a>{% else %}<span class="faint">{{ _("outside a run") }}</span>{% endif %}</td>
             <td class="faint num nowrap">{{ row.run.created_at[:16]|replace("T", " ") if row.key and row.run.created_at else "" }}</td>
-            {% if many_people %}<td>{{ row.run.started_by or "not recorded" }}</td>{% endif %}
+            {% if many_people %}<td>{{ row.run.started_by or _("not recorded") }}</td>{% endif %}
             <td class="count">{{ "{:,}".format(row.calls) }}</td>
             <td class="count">{{ count(row.tokens_in) }}</td>
             <td class="count">{{ count(row.tokens_out) }}</td>
@@ -89,20 +90,20 @@
           {% endfor %}
         </tbody>
       </table>
-      {% if not many_people and people %}<p class="hint mt-2">Every run was started by {{ people[0].key or "someone not recorded" }}.</p>{% endif %}
+      {% if not many_people and people %}<p class="hint mt-2">{{ _("Every run was started by {who}.", who=people[0].key or _("someone not recorded")) }}</p>{% endif %}
     </div>
   </section>
 
   {% if many_people %}
   <section class="card" id="by-person">
-    <div class="card-head"><h2>By person</h2></div>
+    <div class="card-head"><h2>{{ _("By person") }}</h2></div>
     <div class="card-body table-wrap">
       <table class="usage">
-        <thead><tr><th>Person</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th>Cost</th></tr></thead>
+        <thead><tr><th>{{ _("Person") }}</th><th class="count">{{ _("Calls") }}</th><th class="count">{{ _("In") }}</th><th class="count">{{ _("Out") }}</th><th class="count">{{ _("Time") }}</th><th>{{ _("Cost") }}</th></tr></thead>
         <tbody>
           {% for row in people %}
           <tr data-person="{{ row.key or '' }}">
-            <td>{{ row.key or "not recorded" }}</td>
+            <td>{{ row.key or _("not recorded") }}</td>
             <td class="count">{{ "{:,}".format(row.calls) }}</td>
             <td class="count">{{ count(row.tokens_in) }}</td>
             <td class="count">{{ count(row.tokens_out) }}</td>
@@ -118,31 +119,31 @@
 {% endif %}
   {% if asked is not none %}
   <section class="card" id="asked">
-    <div class="card-head"><h2>Agent questions<span class="tip" tabindex="0" role="note" data-tip="Every recall an agent makes through the API, over the last {{ window }} days. Asking on the Ask page is not counted">?</span></h2>
-      {% if asked.calls %}<span class="small faint">{{ asked.calls }} call{{ "" if asked.calls == 1 else "s" }} in the last {{ window }} days, {{ asked.unsure_share }}% not confident</span>{% endif %}
+    <div class="card-head"><h2>{{ _("Agent questions") }}<span class="tip" tabindex="0" role="note" data-tip="{{ n_(window, "Every recall an agent makes through the API, over the last {n} day. Asking on the Ask page is not counted", "Every recall an agent makes through the API, over the last {n} days. Asking on the Ask page is not counted") }}">?</span></h2>
+      {% if asked.calls %}<span class="small faint">{{ n_(asked.calls, "{n} call in the last {days} days, {share}% not confident", "{n} calls in the last {days} days, {share}% not confident", days=window, share=asked.unsure_share) }}</span>{% endif %}
     </div>
     <div class="card-body stack">
       {% if not asked.calls %}
-      <p class="hint" data-empty>No agent has asked this tree anything yet.</p>
+      <p class="hint" data-empty>{{ _("No agent has asked this tree anything yet.") }}</p>
       {% else %}
       {% if asked.days|length > 1 %}
       <ul class="daily">
         {% for day in asked.days %}
         <li data-asked-day="{{ day.day }}">
           <span class="num">{{ day.day }}</span>
-          <span class="num">{{ day.calls }} asked</span>
-          <span class="num faint">{{ day.unsure }} not confident</span>
+          <span class="num">{{ n_(day.calls, "{n} asked", "{n} asked") }}</span>
+          <span class="num faint">{{ n_(day.unsure, "{n} not confident", "{n} not confident") }}</span>
         </li>
         {% endfor %}
       </ul>
       {% endif %}
       <div class="table-wrap">
         <table class="usage">
-          <thead><tr><th>Question</th><th>By</th><th class="count">Hits</th><th>When</th></tr></thead>
+          <thead><tr><th>{{ _("Question") }}</th><th>{{ _("By") }}</th><th class="count">{{ _("Hits") }}</th><th>{{ _("When") }}</th></tr></thead>
           <tbody>
             {% for row in asked.questions %}
             <tr data-question>
-              <td>{% if not row.confident %}<a href="{{ row.link }}" title="Not confident: open it to see why">{{ row.question }}</a>{% else %}{{ row.question }}{% endif %}</td>
+              <td>{% if not row.confident %}<a href="{{ row.link }}" title="{{ _("Not confident: open it to see why") }}">{{ row.question }}</a>{% else %}{{ row.question }}{% endif %}</td>
               <td>{{ row.user }}</td>
               <td class="count">{{ row.hits }}</td>
               <td class="faint num nowrap">{{ row.asked_at[:16]|replace("T", " ") }}</td>

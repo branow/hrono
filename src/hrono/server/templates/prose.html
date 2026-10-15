@@ -21,9 +21,9 @@
   <input type="checkbox" class="prose-switch" id="raw-{{ id }}">
   <div class="prose-head">
     {% if caller is defined %}<div class="prose-title">{{ caller() }}</div>{% endif %}
-    <label for="raw-{{ id }}" class="prose-toggle" title="Switch between the formatted text and the exact characters stored">
-      <span class="when-off">Plain text</span>
-      <span class="when-on">Formatted</span>
+    <label for="raw-{{ id }}" class="prose-toggle" title="{{ _("Switch between the formatted text and the exact characters stored") }}">
+      <span class="when-off">{{ _("Plain text") }}</span>
+      <span class="when-on">{{ _("Formatted") }}</span>
     </label>
   </div>
   {% if folds %}<input type="checkbox" class="prose-more" id="more-{{ id }}">{% endif %}
@@ -31,8 +31,8 @@
   <pre class="prose raw">{{ body }}</pre>
   {% if folds %}
   <label for="more-{{ id }}" class="prose-more-toggle">
-    <span class="when-shut">Read the whole {{ label }}</span>
-    <span class="when-open">Show less</span>
+    <span class="when-shut">{% if label == "brief" %}{{ _("Read the whole brief") }}{% else %}{{ _("Read the whole text") }}{% endif %}</span>
+    <span class="when-open">{{ _("Show less") }}</span>
   </label>
   {% endif %}
 </div>

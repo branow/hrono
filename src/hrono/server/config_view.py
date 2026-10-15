@@ -24,6 +24,8 @@ from hrono.registry import store
 from hrono.registry.collections import COLLECTIONS
 from hrono.registry.descriptor import Descriptor
 from hrono.registry.write import mask
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 
 # How much of one value a table cell may carry before it stops being
 # scannable: one of the columns is a prompt template.
@@ -110,11 +112,14 @@ def _at(data: Mapping[str, object], path: str) -> object:
 
 
 def _text(path: str, absent: str = "") -> Callable[[Mapping[str, object]], str]:
-    """A column that is one field's value, or ``absent`` when it is unset."""
+    """A column that is one field's value, or ``absent`` when it is unset.
+
+    ``absent`` is English, said in the page's language when it is shown.
+    """
 
     def read(data: Mapping[str, object]) -> str:
         value = _at(data, path)
-        return absent if value in (None, "") else str(value)
+        return _(absent) if value in (None, "") else str(value)
 
     return read
 
@@ -127,7 +132,7 @@ def _role(data: Mapping[str, object]) -> str:
     """A text model with no role serves any role; an embedding model none."""
     if data.get("role"):
         return str(data["role"])
-    return "any" if data.get("kind") == "text" else "\u2014"
+    return _("any") if data.get("kind") == "text" else "\u2014"
 
 
 def _location(data: Mapping[str, object]) -> str:
@@ -135,7 +140,7 @@ def _location(data: Mapping[str, object]) -> str:
     for key in ("url", "owner", "base_url"):
         if data.get(key):
             return str(data[key])
-    return "everything shared with the integration"
+    return _("everything shared with the integration")
 
 
 def _which_files(data: Mapping[str, object]) -> str:
@@ -143,18 +148,31 @@ def _which_files(data: Mapping[str, object]) -> str:
     said = []
     layers = data.get("filter")
     if isinstance(layers, Mapping):
+        words = {
+            "only": _("only {globs}"),
+            "exclude": _("exclude {globs}"),
+            "include": _("include {globs}"),
+        }
         for key in ("only", "exclude", "include"):
             globs = layers.get(key)
             if globs:
-                said.append(f"{key} {', '.join(map(str, globs))}")  # type: ignore[call-overload]
+                said.append(words[key].format(globs=", ".join(map(str, globs))))  # type: ignore[call-overload]
+    repo_words = {
+        "include": _("repos include {names}"),
+        "exclude": _("repos exclude {names}"),
+    }
     for key in ("include", "exclude"):
         repos = data.get(key)
         if repos:
-            said.append(f"repos {key} {', '.join(map(str, repos))}")  # type: ignore[call-overload]
+            said.append(
+                repo_words[key].format(names=", ".join(map(str, repos)))  # type: ignore[call-overload]
+            )
     scope = data.get("scope")
     if scope:
-        said.append(f"{len(scope)} selector(s)")  # type: ignore[arg-type]
-    return "; ".join(said) or "every file"
+        said.append(
+            n_(len(scope), "{n} selector(s)", "{n} selector(s)")  # type: ignore[arg-type]
+        )
+    return "; ".join(said) or _("every file")
 
 
 COLUMNS: dict[str, tuple[Column, ...]] = {

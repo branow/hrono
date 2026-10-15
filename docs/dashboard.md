@@ -30,6 +30,17 @@ The Guide is the `?` beside your name. The sections and their pages are one
 table in `server/ui/__init__.py` (`SECTIONS`), which draws the bar, the strip
 and the current-page mark.
 
+## Language
+
+The dashboard reads in English or Ukrainian; the EN/UA button in the bar
+switches it and a cookie remembers the choice. Every string a page shows is
+written in English and wrapped for translation, and the Ukrainian is in
+`src/hrono/server/locales/uk/`, one file per area, using the terms in
+[GLOSSARY.md](../GLOSSARY.md#in-ukrainian). A test fails on English left
+unwrapped in a template and on a wrapped string with no Ukrainian.
+Model-written text (names, briefs) and identifiers stay as they are, and the
+API and the CLI stay English.
+
 ## Keyboard access
 
 Everything is reachable from the keyboard. The first Tab stops on a "Skip to

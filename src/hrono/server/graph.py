@@ -33,6 +33,7 @@ from dataclasses import dataclass
 
 from hrono import naming
 from hrono.server import where as where_module
+from hrono.server.i18n import gettext as _
 from hrono.summarize import briefs
 
 # A topic's own footprint: one cell wide, with its circle at the top and its
@@ -265,7 +266,7 @@ def _lay_out(
             id=node,
             level=int(rows[node]["level"]),
             depth=depth[node],
-            name=called.get(node, f"topic {node}"),
+            name=called.get(node, _("topic {id}", id=node)),
             label=shown_as[node],
             where=wheres.get(node, blank).label,
             place=_fitted_where(wheres.get(node, blank).label),
@@ -525,7 +526,7 @@ def _title(row: sqlite3.Row, node: int) -> str:
         return _fitted(str(row["title"]), TITLE_CHARS)
     if row["brief"]:
         return _fitted(str(row["brief"]).strip().splitlines()[0], TITLE_CHARS)
-    return f"topic {node}"
+    return _("topic {id}", id=node)
 
 
 def _labels(
@@ -547,7 +548,9 @@ def _labels(
     families.append([node for node in visible if node not in hung])
     labels: dict[int, str] = {}
     for family in families:
-        names = {node: called.get(node, f"topic {node}") for node in family}
+        names = {
+            node: called.get(node, _("topic {id}", id=node)) for node in family
+        }
         cut = {
             node: _cut_among(
                 names[node], list(names.values()), _budget(room[node])

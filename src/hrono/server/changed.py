@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
 
 from hrono.db import journal
 from hrono.naming import names
+from hrono.server.i18n import gettext as _
 from hrono.summarize import briefs
 
 # What a topic went through, strongest first: a topic both made and
@@ -156,7 +158,7 @@ def changed(conn: sqlite3.Connection, run: str, tree: str) -> Changed | None:
         outline=() if reverted else _outline(conn, tree, topics),
         rows=len(entries),
         reverted=str(reverted[0]) if reverted else None,
-        blocker=None if reverted else journal.blocker(conn, run),
+        blocker=None if reverted else _why(journal.blocker(conn, run)),
         names=names(conn, alive),
     )
 
@@ -257,7 +259,7 @@ def diff(old: str, new: str) -> tuple[Line, ...]:
         kind = "@" if said.startswith("@@") else said[:1] or " "
         lines.append(Line(kind, said if kind == "@" else said[1:]))
         if len(lines) >= DIFF_LINES:
-            lines.append(Line("@", "… cut"))
+            lines.append(Line("@", _("… cut")))
             break
     return tuple(lines)
 
@@ -330,13 +332,21 @@ def _said(row: sqlite3.Row) -> str:
     verdict, action = str(row["verdict"]), str(row["action"])
     known = _DECIDED.get((verdict, action))
     if known:
-        return known
+        return _(known)
     if action == "skipped":
-        return "the judge read the change and found its brief still holds"
+        return _("the judge read the change and found its brief still holds")
     if action == "propagated":
-        return (
-            f"the judge found the change {verdict} for its brief, so it and "
-            "the topics above it were marked for a rewrite"
+        if verdict == "minor":
+            return _(
+                "the judge found the change minor for its brief, so it and the topics above it were marked for a rewrite"  # noqa: E501
+            )
+        if verdict == "major":
+            return _(
+                "the judge found the change major for its brief, so it and the topics above it were marked for a rewrite"  # noqa: E501
+            )
+        return _(
+            "the judge found the change {verdict} for its brief, so it and the topics above it were marked for a rewrite",  # noqa: E501
+            verdict=verdict,
         )
     return f"{verdict}: {action}"
 
@@ -404,7 +414,7 @@ def _outline(
         rows.append(
             Shown(
                 node,
-                called.get(node, f"topic {node}"),
+                called.get(node, _("topic {id}", id=node)),
                 depth,
                 topics.get(node),
                 len(kids) - len(drawn),
@@ -439,3 +449,18 @@ def _plain(literal: str) -> object:
             return float(literal)
         except ValueError:
             return literal
+
+
+def _why(reason: str | None) -> str | None:
+    """The journal's reason a run cannot be reverted, in the page's language."""
+    if reason is None:
+        return None
+    later = re.fullmatch(
+        r"a later run changed the tree since: revert (\S+) first", reason
+    )
+    if later:
+        return _(
+            "a later run changed the tree since: revert {run} first",
+            run=later.group(1),
+        )
+    return _(reason)

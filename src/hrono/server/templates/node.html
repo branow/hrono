@@ -1,35 +1,35 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ node.name }}{% endblock %}
 {% set pin_says = {
-  "brief": "Its brief was written by hand and will not be regenerated",
-  "membership": "A section was filed here by hand and will not be moved",
-  "parenting": "It was hung under this parent by hand and will not be re-attached"
+  "brief": _("Its brief was written by hand and will not be regenerated"),
+  "membership": _("A section was filed here by hand and will not be moved"),
+  "parenting": _("It was hung under this parent by hand and will not be re-attached")
 } %}
 {% set pin_words = {
-  "brief": "brief written by hand",
-  "membership": "section filed by hand",
-  "parenting": "parent set by hand"
+  "brief": _("brief written by hand"),
+  "membership": _("section filed by hand"),
+  "parenting": _("parent set by hand")
 } %}
 {% set held = node.members.total or node.children|length %}
 {% set held_what = "topics" if node.children else "sections" %}
 
 {% macro topic_name(item) -%}
-{{ item.name or item.where or "topic %s"|format(item.id) }}
+{{ item.name or item.where or _("topic {id}", id=item.id) }}
 {%- endmacro %}
 
 {% macro picker(field, options, chosen) %}
 <div class="picker" data-picker>
-  {% if options|length > 6 %}<input class="picker-filter" type="search" placeholder="Filter {{ options|length }} topics" aria-label="filter the topics below" hidden>{% endif %}
+  {% if options|length > 6 %}<input class="picker-filter" type="search" placeholder="{{ n_(options|length, "Filter {n} topic", "Filter {n} topics") }}" aria-label="{{ _("filter the topics below") }}" hidden>{% endif %}
   <div class="picker-list">
   {% for option in options %}
-  <label class="candidate" title="{{ topic_name(option) }}{% if option.where %} — in {{ option.where }}{% endif %}">
+  <label class="candidate" title="{{ topic_name(option) }}{% if option.where %} — {{ _("in {where}", where=option.where) }}{% endif %}">
     <input type="radio" name="{{ field }}" value="{{ option.id }}"{% if option.id == chosen %} checked{% endif %}>
     <span class="who-holds">{{ topic_name(option) }}</span>
     <span class="holds num">{{ option.holds|counted(option.holds_what) }}</span>
     <a class="peek" href="/ui/trees/{{ tree }}/nodes/{{ option.id }}?tree={{ tree }}"
        target="_blank" rel="noopener"
-       aria-label="Open topic {{ option.id }} in a new tab"
-       title="Open topic {{ option.id }} in a new tab">#{{ option.id }}</a>
+       aria-label="{{ _("Open topic {id} in a new tab", id=option.id) }}"
+       title="{{ _("Open topic {id} in a new tab", id=option.id) }}">#{{ option.id }}</a>
   </label>
   {% endfor %}
   </div>
@@ -37,14 +37,14 @@
 {% endmacro %}
 
 {% macro topic_option(option) -%}
-{{ topic_name(option) }} ({{ option.holds|counted(option.holds_what) }}, topic {{ option.id }})
+{{ _("{name} ({holds}, topic {id})", name=topic_name(option), holds=option.holds|counted(option.holds_what), id=option.id) }}
 {%- endmacro %}
 
 {% import "prose.html" as prose %}
 {% block main %}
 <div class="page-head">
-  <nav class="crumbs" aria-label="Where this topic sits">
-    <a href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Map</a>
+  <nav class="crumbs" aria-label="{{ _("Where this topic sits") }}">
+    <a href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">{{ _("Map") }}</a>
     {% for above in node.trail %}
     <span class="sep">/</span>
     <a href="/ui/trees/{{ tree }}/nodes/{{ above.id }}?tree={{ tree }}" title="{{ topic_name(above) }}">{{ topic_name(above) }}</a>
@@ -53,13 +53,13 @@
     <span aria-current="page">{{ node.name }}</span>
   </nav>
   <h1>{{ node.name }}</h1>
-  {% if node.where %}<p class="said mono">in {{ node.where }}</p>{% endif %}
+  {% if node.where %}<p class="said mono">{{ _("in {where}", where=node.where) }}</p>{% endif %}
   <p class="topic-meta">
     <span class="num">{{ held|counted(held_what) }}</span>
-    <span class="num">level {{ node.level }}</span>
+    <span class="num">{{ _("level {n}", n=node.level) }}</span>
     <span class="num">#{{ node.id }}</span>
-    {% if node.pin_kinds %}<span class="held-note" data-tip="{% for kind in node.pin_kinds %}{{ pin_says.get(kind, kind) }}. {% endfor %}">held by hand</span>{% endif %}
-    {% if can_edit %}<a class="manage-link" href="#manage">Manage</a>{% endif %}
+    {% if node.pin_kinds %}<span class="held-note" data-tip="{% for kind in node.pin_kinds %}{{ pin_says.get(kind, kind) }}. {% endfor %}">{{ _("held by hand") }}</span>{% endif %}
+    {% if can_edit %}<a class="manage-link" href="#manage">{{ _("Manage") }}</a>{% endif %}
   </p>
 </div>
 
@@ -67,22 +67,22 @@
 <div class="topic-layout">
 <div class="topic-main stack">
   <section class="card brief-card">
-    {% if can_edit %}<input type="checkbox" class="edit-switch" id="edit-brief" aria-label="edit the brief">{% endif %}
+    {% if can_edit %}<input type="checkbox" class="edit-switch" id="edit-brief" aria-label="{{ _("edit the brief") }}">{% endif %}
     <div class="card-head">
-      <h2>Brief<span class="tip" tabindex="0" role="note" data-tip="The summary an agent reads to decide whether to come in here">?</span></h2>
+      <h2>{{ _("Brief") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The summary an agent reads to decide whether to come in here") }}">?</span></h2>
       <div class="row">
-        {% if node.stale %}<span class="chip warn" title="Its contents changed after it was written; the next run rewrites it">needs rewriting</span>
-        {% elif "brief" in node.pin_kinds %}<span class="chip accent">by hand</span>{% endif %}
-        {% if can_edit %}<label for="edit-brief" class="btn small edit-toggle"><span class="when-shut">Edit</span><span class="when-open">Cancel</span></label>{% endif %}
+        {% if node.stale %}<span class="chip warn" title="{{ _("Its contents changed after it was written; the next run rewrites it") }}">{{ _("needs rewriting") }}</span>
+        {% elif "brief" in node.pin_kinds %}<span class="chip accent">{{ _("by hand") }}</span>{% endif %}
+        {% if can_edit %}<label for="edit-brief" class="btn small edit-toggle"><span class="when-shut">{{ _("Edit") }}</span><span class="when-open">{{ _("Cancel") }}</span></label>{% endif %}
       </div>
     </div>
     {% if can_edit %}
     <form class="card-body stack brief-edit" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/brief">
-      <label class="visually-hidden" for="brief-text">Brief</label>
+      <label class="visually-hidden" for="brief-text">{{ _("Brief") }}</label>
       <textarea id="brief-text" name="text" rows="14">{{ node.brief or "" }}</textarea>
       <div class="row">
-        <button class="btn primary" type="submit">Save brief</button>
-        <span class="hint">Markdown. A brief you save is kept: runs stop rewriting it until you release it below.</span>
+        <button class="btn primary" type="submit">{{ _("Save brief") }}</button>
+        <span class="hint">{{ _("Markdown. A brief you save is kept: runs stop rewriting it until you release it below.") }}</span>
       </div>
     </form>
     {% endif %}
@@ -91,15 +91,15 @@
       {{ prose.text(node.brief, "brief", "brief", fold=true) }}
       {% else %}
       <div class="empty">
-        <div class="title">No brief</div>
-        <p class="hint">Until one is written, recall cannot answer from this topic.</p>
-        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">Write briefs from Runs</a></div>
+        <div class="title">{{ _("No brief") }}</div>
+        <p class="hint">{{ _("Until one is written, recall cannot answer from this topic.") }}</p>
+        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("Write briefs from Runs") }}</a></div>
       </div>
       {% endif %}
       {% for note in node.notes %}
       <div class="callout">
         <div class="body">
-          <div class="title">Note <span class="faint small nowrap">{{ note.when }}</span></div>
+          <div class="title">{{ _("Note") }} <span class="faint small nowrap">{{ note.when }}</span></div>
           <p class="hint">{{ note.text }}</p>
         </div>
       </div>
@@ -111,7 +111,7 @@
   {% if node.children %}
   <section class="card">
     <div class="card-head">
-      <h2>Beneath <span class="faint num">{{ node.children|length }}</span></h2>
+      <h2>{{ _("Beneath") }} <span class="faint num">{{ node.children|length }}</span></h2>
     </div>
     <div class="card-body">
       <ul class="kids">
@@ -131,28 +131,28 @@
   {% if node.members.total or not node.children %}
   <section class="card">
     <div class="card-head">
-      <h2>Sections <span class="faint num">{{ node.members.total }}</span><span class="tip" tabindex="0" role="note" data-tip="A section is about {{ limits.section|size }} of one file. Worst fit first: the number is how close it sits to this topic's centre">?</span></h2>
+      <h2>{{ _("Sections") }} <span class="faint num">{{ node.members.total }}</span><span class="tip" tabindex="0" role="note" data-tip="{{ _("A section is about {size} of one file. Worst fit first: the number is how close it sits to this topic's centre", size=limits.section|size) }}">?</span></h2>
     </div>
     <div class="card-body">
       {% if node.members.total %}
       <form class="section-filter" role="search" method="get" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}">
         <input type="hidden" name="tree" value="{{ tree }}">
-        <label class="visually-hidden" for="section-q">Filter sections by path</label>
-        <input class="line" type="search" id="section-q" name="q" value="{{ node.members.q }}" placeholder="Filter by path" autocomplete="off" spellcheck="false">
+        <label class="visually-hidden" for="section-q">{{ _("Filter sections by path") }}</label>
+        <input class="line" type="search" id="section-q" name="q" value="{{ node.members.q }}" placeholder="{{ _("Filter by path") }}" autocomplete="off" spellcheck="false">
       </form>
       {% endif %}
       <div id="section-list">
       {% if node.members.q %}
-      <p class="filter-count faint small" role="status">{{ node.members.matched }} of {{ node.members.total }} <a class="gap" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">Clear</a></p>
+      <p class="filter-count faint small" role="status">{{ _("{matched} of {total}", matched=node.members.matched, total=node.members.total) }} <a class="gap" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}">{{ _("Clear") }}</a></p>
       {% endif %}
       {% if not node.members.total %}
       <div class="empty">
-        <div class="title">Empty</div>
-        <p class="hint">No section is filed here.</p>
-        <div class="mt-3"><a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">Back to the map</a></div>
+        <div class="title">{{ _("Empty") }}</div>
+        <p class="hint">{{ _("No section is filed here.") }}</p>
+        <div class="mt-3"><a class="btn" href="/ui/trees/{{ tree }}/graph?tree={{ tree }}">{{ _("Back to the map") }}</a></div>
       </div>
       {% elif not node.members.matched %}
-      <p class="hint">No section here has a path containing "{{ node.members.q }}".</p>
+      <p class="hint">{{ _('No section here has a path containing "{q}".', q=node.members.q) }}</p>
       {% else %}
       <ul class="members">
       {% for member in node.members.rows %}
@@ -160,48 +160,48 @@
           <details>
             <summary class="twisty">
               <span class="path"><span class="dim">{{ member.stem }}</span>{{ member.tail }}</span>
-              <span class="where-in">{% if member.heading %}<span class="heading">{{ member.heading }}</span>{% endif %}<span class="faint num nowrap">lines {{ member.lines }}</span><span class="faint num nowrap">{{ member.bytes|size }}</span></span>
-              {% if member.forced %}<span class="fit warn-text" data-tip="Placed by rule rather than by similarity">forced</span>
-              {% elif member.similarity is not none %}<span class="fit num" data-tip="How close this section sits to the topic's centre, from 0 to 1">fit {{ "%.2f"|format(member.similarity) }}</span>
-              {% else %}<span class="fit" data-tip="A confident placement at the topic's centre, so it carries no fit score">core</span>{% endif %}
+              <span class="where-in">{% if member.heading %}<span class="heading">{{ member.heading }}</span>{% endif %}<span class="faint num nowrap">{{ _("lines {lines}", lines=member.lines) }}</span><span class="faint num nowrap">{{ member.bytes|size }}</span></span>
+              {% if member.forced %}<span class="fit warn-text" data-tip="{{ _("Placed by rule rather than by similarity") }}">{{ _("forced") }}</span>
+              {% elif member.similarity is not none %}<span class="fit num" data-tip="{{ _("How close this section sits to the topic's centre, from 0 to 1") }}">{{ _("fit {score}", score="%.2f"|format(member.similarity)) }}</span>
+              {% else %}<span class="fit" data-tip="{{ _("A confident placement at the topic's centre, so it carries no fit score") }}">{{ _("core") }}</span>{% endif %}
             </summary>
             <div class="detail">
               <p class="section-meta faint small">
-                <span class="num" title="{{ member.uri }}">section {{ member.id }}</span>
-                {% if not member.content.missing %}<span class="num">{{ "{:,}".format(member.content.total) }} characters</span>{% endif %}
-                {% if member.link %}<a href="{{ member.link }}" target="_blank" rel="noopener noreferrer">Open the file <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.4 1h5.6v5.6M9 1 1 9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>{% endif %}
+                <span class="num" title="{{ member.uri }}">{{ _("section {id}", id=member.id) }}</span>
+                {% if not member.content.missing %}<span class="num">{{ n_(member.content.total, "{count} character", "{count} characters", count="{:,}".format(member.content.total)) }}</span>{% endif %}
+                {% if member.link %}<a href="{{ member.link }}" target="_blank" rel="noopener noreferrer">{{ _("Open the file") }} <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.4 1h5.6v5.6M9 1 1 9" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></a>{% endif %}
               </p>
               {% if member.content.missing %}
-              <p class="hint">Its content is not stored here, only the section's address and where it sits.</p>
+              <p class="hint">{{ _("Its content is not stored here, only the section's address and where it sits.") }}</p>
               {% else %}
               <div class="section-part">
                 {% if member.condensed %}
                 {% call prose.text(member.condensed.text, "cond-%s"|format(member.id), "text") %}
-                <h3 class="part-title">Summary<span class="tip" tabindex="0" role="note" data-tip="The condensation: what a model wrote about this section. The topic's brief is reduced from these, not from the raw files">?</span></h3>
-                <span class="faint small">by {{ member.condensed.by }}</span>
+                <h3 class="part-title">{{ _("Summary") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The condensation: what a model wrote about this section. The topic's brief is reduced from these, not from the raw files") }}">?</span></h3>
+                <span class="faint small">{{ _("by {who}", who=member.condensed.by) }}</span>
                 {% endcall %}
                 {% else %}
-                <h3 class="part-title">Summary</h3>
-                <p class="hint">Not condensed yet, so the brief above was written without it.</p>
+                <h3 class="part-title">{{ _("Summary") }}</h3>
+                <p class="hint">{{ _("Not condensed yet, so the brief above was written without it.") }}</p>
                 {% endif %}
               </div>
               <details class="section-more">
-                <summary class="twisty">Source<span class="tip" tabindex="0" role="note" data-tip="The section as it is on disk, whole">?</span></summary>
+                <summary class="twisty">{{ _("Source") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The section as it is on disk, whole") }}">?</span></summary>
                 <pre class="preview body">{{ member.content.text }}</pre>
               </details>
               {% endif %}
               {% if can_edit and candidates.siblings %}
               <details class="section-more">
-                <summary class="twisty">Move</summary>
+                <summary class="twisty">{{ _("Move") }}</summary>
                 <form method="post" action="/ui/trees/{{ tree }}/sections/{{ member.id }}/move" class="move">
                   <input type="hidden" name="from_node" value="{{ node.id }}">
-                  <label for="move-{{ member.id }}">To<span class="tip" tabindex="0" role="note" data-tip="Files this section under another topic, pinned there so no run moves it back">?</span></label>
+                  <label for="move-{{ member.id }}">{{ _("To") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Files this section under another topic, pinned there so no run moves it back") }}">?</span></label>
                   <select id="move-{{ member.id }}" name="to_node">
                     {% for sibling in candidates.siblings %}
                     <option value="{{ sibling.id }}">{{ topic_option(sibling) }}</option>
                     {% endfor %}
                   </select>
-                  <button class="btn small" type="submit">Move</button>
+                  <button class="btn small" type="submit">{{ _("Move") }}</button>
                 </form>
               </details>
               {% endif %}
@@ -211,10 +211,10 @@
       {% endfor %}
       </ul>
       {% if node.members.pages > 1 %}
-      <nav class="pager row" aria-label="Sections pages">
-        {% if node.members.page > 1 %}<a class="btn small" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}&q={{ node.members.q|urlencode }}&page={{ node.members.page - 1 }}">Previous</a>{% endif %}
-        <span class="faint small">page {{ node.members.page }} of {{ node.members.pages }}</span>
-        {% if node.members.page < node.members.pages %}<a class="btn small" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}&q={{ node.members.q|urlencode }}&page={{ node.members.page + 1 }}">Next</a>{% endif %}
+      <nav class="pager row" aria-label="{{ _("Sections pages") }}">
+        {% if node.members.page > 1 %}<a class="btn small" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}&q={{ node.members.q|urlencode }}&page={{ node.members.page - 1 }}">{{ _("Previous") }}</a>{% endif %}
+        <span class="faint small">{{ _("page {page} of {pages}", page=node.members.page, pages=node.members.pages) }}</span>
+        {% if node.members.page < node.members.pages %}<a class="btn small" href="/ui/trees/{{ tree }}/nodes/{{ node.id }}?tree={{ tree }}&q={{ node.members.q|urlencode }}&page={{ node.members.page + 1 }}">{{ _("Next") }}</a>{% endif %}
       </nav>
       {% endif %}
       {% endif %}
@@ -225,67 +225,67 @@
 
   {% if can_edit %}
   <section class="card" id="manage">
-    <div class="card-head"><h2>Manage<span class="tip" tabindex="0" role="note" data-tip="A change made here stays: the next run leaves it alone">?</span></h2></div>
+    <div class="card-head"><h2>{{ _("Manage") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("A change made here stays: the next run leaves it alone") }}">?</span></h2></div>
     <div class="card-body">
       <div class="manage">
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/rename">
-          <label class="mlabel" for="topic-name">Name</label>
+          <label class="mlabel" for="topic-name">{{ _("Name") }}</label>
           <div class="mfield"><input type="text" id="topic-name" name="title" value="{{ node.title }}" maxlength="200" placeholder="{{ node.name }}"></div>
-          <div class="mact"><button class="btn" type="submit">Rename</button></div>
+          <div class="mact"><button class="btn" type="submit">{{ _("Rename") }}</button></div>
         </form>
 
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/note">
-          <label class="mlabel" for="note-text">Note<span class="tip" tabindex="0" role="note" data-tip="Shown beside the brief, never instead of it, and never overwritten">?</span></label>
-          <div class="mfield"><textarea id="note-text" name="text" rows="2" maxlength="4000" placeholder="Something a reader should know"></textarea></div>
-          <div class="mact"><button class="btn" type="submit">Add note</button></div>
+          <label class="mlabel" for="note-text">{{ _("Note") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Shown beside the brief, never instead of it, and never overwritten") }}">?</span></label>
+          <div class="mfield"><textarea id="note-text" name="text" rows="2" maxlength="4000" placeholder="{{ _("Something a reader should know") }}"></textarea></div>
+          <div class="mact"><button class="btn" type="submit">{{ _("Add note") }}</button></div>
         </form>
 
         {% if candidates.parents %}
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/reparent">
-          <span class="mlabel">Parent<span class="tip" tabindex="0" role="note" data-tip="Changes which topic this one sits beneath; nothing inside it changes">?</span></span>
+          <span class="mlabel">{{ _("Parent") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Changes which topic this one sits beneath; nothing inside it changes") }}">?</span></span>
           <div class="mfield">{{ picker("to", candidates.parents, node.parent.id if node.parent else 0) }}</div>
-          <div class="mact"><button class="btn" type="submit">Move</button></div>
+          <div class="mact"><button class="btn" type="submit">{{ _("Move") }}</button></div>
         </form>
         {% endif %}
 
         {% if node.pin_kinds %}
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/release">
-          <span class="mlabel">Held<span class="tip" tabindex="0" role="note" data-tip="Hands it back to automation: the next run may rename, rewrite and move it again">?</span></span>
+          <span class="mlabel">{{ _("Held") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Hands it back to automation: the next run may rename, rewrite and move it again") }}">?</span></span>
           <div class="mfield"><p class="mtext">{% for kind in node.pin_kinds %}{{ pin_words.get(kind, kind) }}{{ ", " if not loop.last }}{% endfor %}</p></div>
-          <div class="mact"><button class="btn" type="submit">Release</button></div>
+          <div class="mact"><button class="btn" type="submit">{{ _("Release") }}</button></div>
         </form>
         {% endif %}
 
         {% if node.undo %}
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/undo">
           <input type="hidden" name="edit" value="{{ node.undo.id }}">
-          <span class="mlabel">Undo<span class="tip" tabindex="0" role="note" data-tip="Puts back what the last edit by hand replaced. Only the latest edit can be undone, and only once">?</span></span>
-          <div class="mfield"><p class="mtext">Undo {{ node.undo.label }}: {{ node.undo.will }} By {{ node.undo.who }}, {{ node.undo.when }}.</p></div>
-          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Undo</button></div>
+          <span class="mlabel">{{ _("Undo") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Puts back what the last edit by hand replaced. Only the latest edit can be undone, and only once") }}">?</span></span>
+          <div class="mfield"><p class="mtext">{{ _("Undo {label}: {will} By {who}, {when}.", label=node.undo.label, will=node.undo.will, who=node.undo.who, when=node.undo.when) }}</p></div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> {{ _("Confirm") }}</label><button class="btn risky" type="submit">{{ _("Undo") }}</button></div>
         </form>
         {% endif %}
       </div>
 
-      <h3 class="manage-sub">Reshape<span class="tip" tabindex="0" role="note" data-tip="These change the tree and cannot be undone here. Source files are never touched">?</span></h3>
+      <h3 class="manage-sub">{{ _("Reshape") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("These change the tree and cannot be undone here. Source files are never touched") }}">?</span></h3>
       <div class="manage">
         {% if candidates.siblings %}
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/merge">
-          <span class="mlabel">Merge<span class="tip" tabindex="0" role="note" data-tip="This topic and the one you pick become one; the lower-numbered one survives">?</span></span>
-          <div class="mfield"><p class="mtext mb">Folds this topic and the one you pick into one; the lower-numbered one survives.</p>{{ picker("with", candidates.siblings, 0) }}</div>
-          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Merge</button></div>
+          <span class="mlabel">{{ _("Merge") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("This topic and the one you pick become one; the lower-numbered one survives") }}">?</span></span>
+          <div class="mfield"><p class="mtext mb">{{ _("Folds this topic and the one you pick into one; the lower-numbered one survives.") }}</p>{{ picker("with", candidates.siblings, 0) }}</div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> {{ _("Confirm") }}</label><button class="btn risky" type="submit">{{ _("Merge") }}</button></div>
         </form>
         {% endif %}
 
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/split">
-          <span class="mlabel">Split</span>
-          <div class="mfield"><p class="mtext">Replaced by narrower topics that regroup its {{ held|counted(held_what) }}.</p></div>
-          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Split</button></div>
+          <span class="mlabel">{{ _("Split") }}</span>
+          <div class="mfield"><p class="mtext">{{ _("Replaced by narrower topics that regroup its {held}.", held=held|counted(held_what)) }}</p></div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> {{ _("Confirm") }}</label><button class="btn risky" type="submit">{{ _("Split") }}</button></div>
         </form>
 
         <form class="mrow" method="post" action="/ui/trees/{{ tree }}/nodes/{{ node.id }}/dissolve">
-          <span class="mlabel">Remove<span class="tip" tabindex="0" role="note" data-tip="The CLI calls this a dissolve">?</span></span>
-          <div class="mfield"><p class="mtext">This topic goes; its {{ held|counted(held_what) }} are re-filed under the nearest remaining topic.</p></div>
-          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> Confirm</label><button class="btn risky" type="submit">Remove</button></div>
+          <span class="mlabel">{{ _("Remove") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The CLI calls this a dissolve") }}">?</span></span>
+          <div class="mfield"><p class="mtext">{{ _("This topic goes; its {held} are re-filed under the nearest remaining topic.", held=held|counted(held_what)) }}</p></div>
+          <div class="mact"><label class="confirm"><input type="checkbox" name="confirm" value="yes" required> {{ _("Confirm") }}</label><button class="btn risky" type="submit">{{ _("Remove") }}</button></div>
         </form>
       </div>
     </div>
@@ -310,14 +310,14 @@
 <aside class="topic-aside stack">
   <section class="card">
     <div class="card-head">
-      <h2>Place<span class="tip" tabindex="0" role="note" data-tip="Where this topic hangs in the tree, what a hand edit holds in place, and when it was built">?</span></h2>
+      <h2>{{ _("Place") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Where this topic hangs in the tree, what a hand edit holds in place, and when it was built") }}">?</span></h2>
     </div>
     <div class="card-body">
       <dl class="facts">
-        <dt>Parent</dt>
-        <dd>{% if node.parent %}<a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a>{% elif node.root %}none, this is the root{% else %}<span class="warn-text">none: nothing points at this topic</span>{% endif %}</dd>
+        <dt>{{ _("Parent") }}</dt>
+        <dd>{% if node.parent %}<a href="/ui/trees/{{ tree }}/nodes/{{ node.parent.id }}?tree={{ tree }}">{{ topic_name(node.parent) }}</a>{% elif node.root %}{{ _("none, this is the root") }}{% else %}<span class="warn-text">{{ _("none: nothing points at this topic") }}</span>{% endif %}</dd>
         {% if node.pins %}
-        <dt>Pinned<span class="tip" tabindex="0" role="note" data-tip="Held by hand: the next run leaves these alone. Release them from Edit">?</span></dt>
+        <dt>{{ _("Pinned") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Held by hand: the next run leaves these alone. Release them from Edit") }}">?</span></dt>
         <dd>
           <ul class="held">
             {% for pin in node.pins %}
@@ -326,7 +326,7 @@
           </ul>
         </dd>
         {% endif %}
-        <dt>Built</dt><dd class="mono">{{ node.born }}</dd>
+        <dt>{{ _("Built") }}</dt><dd class="mono">{{ node.born }}</dd>
       </dl>
     </div>
   </section>
@@ -334,15 +334,15 @@
   {% if node.edits.rows %}
   <section class="card">
     <div class="card-head">
-      <h2>Edits<span class="tip" tabindex="0" role="note" data-tip="Changes made by hand on this topic, newest first. Only the latest can be undone">?</span></h2>
+      <h2>{{ _("Edits") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Changes made by hand on this topic, newest first. Only the latest can be undone") }}">?</span></h2>
     </div>
     <div class="card-body stack">
       <ul class="edit-list">
         {% for e in node.edits.rows %}
-        <li>{{ e.label|capitalize }} by {{ e.who }}, <span class="faint">{{ e.when }}</span>{% if e.closed == "undone" %} <span class="chip">undone</span>{% endif %}</li>
+        <li>{{ _("{what} by {who},", what=e.label|capitalize, who=e.who) }} <span class="faint">{{ e.when }}</span>{% if e.closed == "undone" %} <span class="chip">{{ _("undone") }}</span>{% endif %}</li>
         {% endfor %}
       </ul>
-      {% if node.edits.older %}<p class="faint small">and {{ node.edits.older }} older</p>{% endif %}
+      {% if node.edits.older %}<p class="faint small">{{ n_(node.edits.older, "and {n} older", "and {n} older") }}</p>{% endif %}
     </div>
   </section>
   {% endif %}
@@ -350,17 +350,17 @@
   {% if node.versions %}
   <section class="card">
     <div class="card-head">
-      <h2>Previous versions<span class="tip" tabindex="0" role="note" data-tip="What the brief said before it was replaced. The diff shows what changed from that version to the brief above">?</span></h2>
+      <h2>{{ _("Previous versions") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What the brief said before it was replaced. The diff shows what changed from that version to the brief above") }}">?</span></h2>
     </div>
     <div class="card-body stack">
       <details>
-        <summary class="twisty">{{ node.versions|length }} kept</summary>
+        <summary class="twisty">{{ n_(node.versions|length, "{n} kept", "{n} kept") }}</summary>
         {% for v in node.versions %}
         <div class="stack mt-3">
           <div class="title">{{ v.line }}</div>
           <pre class="mono small">{% for line in v.diff %}<span class="diff-{{ line.kind }}" data-mark="{{ line.mark }}">{{ line.text }}</span>{% endfor %}</pre>
           <details>
-            <summary class="faint small">Full text of this version</summary>
+            <summary class="faint small">{{ _("Full text of this version") }}</summary>
             <pre class="mono small">{{ v.old }}</pre>
           </details>
         </div>
@@ -372,48 +372,48 @@
 
   <section class="card">
     <div class="card-head">
-      <h2>Writer<span class="tip" tabindex="0" role="note" data-tip="Who wrote the brief, and the provenance a re-run compares against to decide whether it still stands">?</span></h2>
+      <h2>{{ _("Writer") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Who wrote the brief, and the provenance a re-run compares against to decide whether it still stands") }}">?</span></h2>
     </div>
     <div class="card-body">
       {% if not node.wrote %}
       <div class="empty">
-        <div class="title">Never written</div>
-        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">Write briefs from Runs</a></div>
+        <div class="title">{{ _("Never written") }}</div>
+        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("Write briefs from Runs") }}</a></div>
       </div>
       {% else %}
       <dl class="facts">
-        <dt>Model</dt><dd>{{ node.wrote.model }}</dd>
-        <dt>Written</dt><dd class="mono">{{ node.wrote.written }}</dd>
-        <dt>Tokens<span class="tip" tabindex="0" role="note" data-tip="What the model read and wrote for this brief. A model on a subscription also reads cached text, which is not counted here">?</span></dt>
-        <dd class="num">{{ "{:,}".format(node.wrote.tokens_in) }} in, {{ "{:,}".format(node.wrote.tokens_out) }} out</dd>
-        <dt>Cites</dt><dd>{{ node.wrote.cites }} source{{ "" if node.wrote.cites == 1 else "s" }}</dd>
-        <dt>State</dt>
+        <dt>{{ _("Model") }}</dt><dd>{{ node.wrote.model }}</dd>
+        <dt>{{ _("Written") }}</dt><dd class="mono">{{ node.wrote.written }}</dd>
+        <dt>{{ _("Tokens") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What the model read and wrote for this brief. A model on a subscription also reads cached text, which is not counted here") }}">?</span></dt>
+        <dd class="num">{{ _("{tokens_in} in, {tokens_out} out", tokens_in="{:,}".format(node.wrote.tokens_in), tokens_out="{:,}".format(node.wrote.tokens_out)) }}</dd>
+        <dt>{{ _("Cites") }}</dt><dd>{{ n_(node.wrote.cites, "{n} source", "{n} sources") }}</dd>
+        <dt>{{ _("State") }}</dt>
         <dd>
-          {% if node.wrote.flagged %}<span class="chip warn" data-tip="The reply is not a brief; the next run rewrites it">not a brief</span>
-          {% elif node.wrote.marked %}<span class="chip warn">marked for rewrite</span>
-          {% else %}<span class="chip ok">stands</span>{% endif %}
-          {% if node.wrote.moved %}<span class="chip warn" data-tip="Its sections changed after it was written">sections changed</span>{% endif %}
+          {% if node.wrote.flagged %}<span class="chip warn" data-tip="{{ _("The reply is not a brief; the next run rewrites it") }}">{{ _("not a brief") }}</span>
+          {% elif node.wrote.marked %}<span class="chip warn">{{ _("marked for rewrite") }}</span>
+          {% else %}<span class="chip ok">{{ _("stands") }}</span>{% endif %}
+          {% if node.wrote.moved %}<span class="chip warn" data-tip="{{ _("Its sections changed after it was written") }}">{{ _("sections changed") }}</span>{% endif %}
         </dd>
         {% if node.wrote.flagged %}
-        <dt>Flagged<span class="tip" tabindex="0" role="note" data-tip="Why the reply is not a brief. It is kept so the topic stays on the map, and every run tries it again">?</span></dt>
+        <dt>{{ _("Flagged") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Why the reply is not a brief. It is kept so the topic stays on the map, and every run tries it again") }}">?</span></dt>
         <dd>{{ node.wrote.flagged }}</dd>
         {% endif %}
         {% if node.wrote.unsupported %}
-        <dt>Unsupported<span class="tip" tabindex="0" role="note" data-tip="Identifiers the brief used that its sources do not contain">?</span></dt>
+        <dt>{{ _("Unsupported") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Identifiers the brief used that its sources do not contain") }}">?</span></dt>
         <dd class="mono">{{ node.wrote.unsupported|join(", ") }}</dd>
         {% endif %}
       </dl>
       <details class="hashes">
-        <summary class="twisty">Details</summary>
+        <summary class="twisty">{{ _("Details") }}</summary>
         <dl class="facts">
-          <dt>Build<span class="tip" tabindex="0" role="note" data-tip="A fingerprint of what that model name pointed at; repointing it changes every word">?</span></dt>
-          <dd class="mono">{{ node.wrote.fingerprint or "not recorded" }}</dd>
-          <dt>Prompt</dt><dd>{{ node.wrote.prompt }} <span class="faint mono">{{ node.wrote.prompt_hash }}</span></dd>
-          <dt>Members<span class="tip" tabindex="0" role="note" data-tip="The signature over the content it was written from. When it no longer matches what this topic holds, the brief describes something else">?</span></dt>
+          <dt>{{ _("Build") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("A fingerprint of what that model name pointed at; repointing it changes every word") }}">?</span></dt>
+          <dd class="mono">{{ node.wrote.fingerprint or _("not recorded") }}</dd>
+          <dt>{{ _("Prompt") }}</dt><dd>{{ node.wrote.prompt }} <span class="faint mono">{{ node.wrote.prompt_hash }}</span></dd>
+          <dt>{{ _("Members") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The signature over the content it was written from. When it no longer matches what this topic holds, the brief describes something else") }}">?</span></dt>
           <dd>
-            <span class="mono">{{ node.wrote.signature or "not recorded" }}</span>
-            {% if node.wrote.moved %}<span class="chip warn">changed since</span>
-            {% else %}<span class="chip ok">unchanged</span>{% endif %}
+            <span class="mono">{{ node.wrote.signature or _("not recorded") }}</span>
+            {% if node.wrote.moved %}<span class="chip warn">{{ _("changed since") }}</span>
+            {% else %}<span class="chip ok">{{ _("unchanged") }}</span>{% endif %}
           </dd>
         </dl>
       </details>

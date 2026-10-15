@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -21,6 +22,8 @@ from hrono.errors import AppError, DomainError, NotFound
 from hrono.ingest.blob_link import blob_url
 from hrono.server import where
 from hrono.server.edits import BriefText, NoteText, Rename
+from hrono.server.i18n import gettext as _
+from hrono.server.i18n import ngettext as n_
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -102,7 +105,74 @@ async def _edit(
 def _first_problem(exc: ValidationError) -> str:
     problem = exc.errors()[0]
     field = ".".join(str(part) for part in problem["loc"]) or "input"
-    return f"{field}: {problem['msg']}"
+    return f"{field}: {_said_problem(problem)}"
+
+
+def _said_problem(problem: dict) -> str:
+    """Pydantic's message in the page's language, for the rules these forms
+    carry (blank, too long, missing); any other one stays as it is."""
+    kind, ctx = problem["type"], problem.get("ctx") or {}
+    if kind == "string_too_short" and ctx.get("min_length") == 1:
+        return _("String should have at least 1 character")
+    if kind == "string_too_long" and "max_length" in ctx:
+        return _(
+            "String should have at most {max_length} characters",
+            max_length=ctx["max_length"],
+        )
+    if kind == "missing":
+        return _("Field required")
+    return str(problem["msg"])
+
+
+# What `hrono.edits` refuses with, said in the page's language. Its messages
+# are the API's and stay English there; each is matched by its English
+# shape, slots and all, and said again from the catalog with the same slots.
+_REFUSALS = (
+    "topic not found in tree {tree}: {id}",
+    "section not found: {id}",
+    "a merge folds topics of ONE level: these are at levels {levels}",
+    "only a leaf topic holds sections, and topic {id} is at level {level}: "
+    "an upper topic's content is the topics beneath it, not sections",
+    "that edit is no longer the topic's latest: reload",
+    "a topic cannot be its own parent",
+    "that parent is below this topic",
+    "a parent sits exactly one level up: topic {id} is at level {level}, so "
+    "its parent must be at level {up}, and topic {parent} is at level {above}",
+    "a merge needs at least two distinct topics",
+    "topic {id} is the only topic at its level, so its children have nowhere "
+    "to go: dissolving it would detach them from the root",
+    "tree {tree} holds no section {id}: it is in no topic here and not in "
+    "the pending pool",
+    "too few members to divide this topic: the grouping recipe needs at "
+    "least {n}",
+    "this topic does not divide: its members form a single dense group, so "
+    "a split would invent a boundary that is not there",
+)
+
+
+def _shape(english: str) -> re.Pattern[str]:
+    """A refusal's English as a pattern, each ``{slot}`` a named group."""
+    parts = re.split(r"\{(\w+)\}", english)
+    return re.compile(
+        "".join(
+            f"(?P<{part}>.+?)" if odd else re.escape(part)
+            for odd, part in ((i % 2, p) for i, p in enumerate(parts))
+        ),
+        re.S,
+    )
+
+
+_SHAPES = tuple((english, _shape(english)) for english in _REFUSALS)
+
+
+def refusal(exc: Exception) -> str:
+    """Why an edit was refused, as the page says it."""
+    text = str(exc)
+    for english, shape in _SHAPES:
+        found = shape.fullmatch(text)
+        if found:
+            return _(english, **found.groupdict())
+    return text
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/rename")
@@ -117,7 +187,7 @@ async def rename_from_the_page(
         request.app.state.db,
         lambda conn: edits.rename(conn, tree, node_id, body.title, user.name),  # type: ignore[attr-defined]
     )
-    return _back(tree, node_id, done="renamed")
+    return _back(tree, node_id, done=_("renamed"))
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/brief")
@@ -134,7 +204,7 @@ async def brief_from_the_page(
             conn, tree, node_id, body.text, user.name
         ),
     )
-    return _back(tree, node_id, done="brief written")
+    return _back(tree, node_id, done=_("brief written"))
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/note")
@@ -149,7 +219,7 @@ async def note_from_the_page(
         request.app.state.db,
         lambda conn: edits.note(conn, tree, node_id, body.text, user.name),  # type: ignore[attr-defined]
     )
-    return _back(tree, node_id, done="note added")
+    return _back(tree, node_id, done=_("note added"))
 
 
 def _candidates(
@@ -207,7 +277,9 @@ def _candidates(
 def _holds_what(members: object, kids: object) -> str:
     """What a topic is made of: sections at the bottom, topics above."""
     held = int(members) or int(kids)  # type: ignore[call-overload]
-    noun = "section" if int(members) else "topic"  # type: ignore[call-overload]
+    noun = (
+        "section" if int(members) else "topic"
+    )  # a key for `counted`  # type: ignore[call-overload]
     return noun if held == 1 else f"{noun}s"
 
 
@@ -229,15 +301,15 @@ async def reparent_from_the_page(
     fields = await _fields(request)
     parent = fields.get("to", "")
     if not parent.isdigit():
-        return _back(tree, node_id, error="choose a parent")
+        return _back(tree, node_id, error=_("choose a parent"))
     try:
         await write_off_loop(
             request.app.state.db,
             lambda conn: edits.reparent(conn, tree, node_id, int(parent)),
         )
     except AppError as exc:
-        return _back(tree, node_id, error=str(exc))
-    return _back(tree, node_id, done=f"moved under topic {parent}")
+        return _back(tree, node_id, error=refusal(exc))
+    return _back(tree, node_id, done=_("moved under topic {id}", id=parent))
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/merge")
@@ -253,17 +325,17 @@ async def merge_from_the_page(
     fields = await _fields(request)
     partner = fields.get("with", "")
     if not partner.isdigit():
-        return _back(tree, node_id, error="choose a topic to merge with")
+        return _back(tree, node_id, error=_("choose a topic to merge with"))
     if not _confirmed(fields):
-        return _back(tree, node_id, error="tick the box to confirm a merge")
+        return _back(tree, node_id, error=_("tick the box to confirm a merge"))
     try:
         survivor = await write_off_loop(
             request.app.state.db,
             lambda conn: edits.merge(conn, tree, [node_id, int(partner)]),
         )
     except AppError as exc:
-        return _back(tree, node_id, error=str(exc))
-    return _back(tree, survivor, done=f"merged with topic {partner}")
+        return _back(tree, node_id, error=refusal(exc))
+    return _back(tree, survivor, done=_("merged with topic {id}", id=partner))
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/dissolve")
@@ -272,7 +344,9 @@ async def dissolve_from_the_page(
 ) -> Response:
     """Retire a topic; its contents re-enter the placement rule."""
     if not _confirmed(await _fields(request)):
-        return _back(tree, node_id, error="tick the box to confirm a dissolve")
+        return _back(
+            tree, node_id, error=_("tick the box to confirm a dissolve")
+        )
 
     def _dissolve(conn: object) -> int:
         edits.require_node(conn, tree, node_id)
@@ -282,9 +356,10 @@ async def dissolve_from_the_page(
     try:
         moved = await write_off_loop(request.app.state.db, _dissolve)
     except (AppError, DomainError) as exc:
-        return _back(tree, node_id, error=str(exc))
+        return _back(tree, node_id, error=refusal(exc))
+    said = _("dissolved: {moved}", moved=moved)
     return RedirectResponse(
-        f"/ui/trees/{tree}/graph?tree={tree}&done=dissolved: {moved}",
+        f"/ui/trees/{tree}/graph?tree={tree}&done={said}",
         status_code=303,
     )
 
@@ -295,7 +370,7 @@ async def split_from_the_page(
 ) -> Response:
     """Divide a topic through the same mini-pipeline repair uses."""
     if not _confirmed(await _fields(request)):
-        return _back(tree, node_id, error="tick the box to confirm a split")
+        return _back(tree, node_id, error=_("tick the box to confirm a split"))
 
     def _split(conn: object) -> tuple[int, ...]:
         edits.require_node(conn, tree, node_id)
@@ -305,9 +380,13 @@ async def split_from_the_page(
     try:
         children = await write_off_loop(request.app.state.db, _split)
     except (AppError, DomainError) as exc:
-        return _back(tree, node_id, error=str(exc))
+        return _back(tree, node_id, error=refusal(exc))
     # the topic they were on has retired; its children took over
-    return _back(tree, children[0], done=f"split into {len(children)} topics")
+    return _back(
+        tree,
+        children[0],
+        done=n_(len(children), "split into {n} topic", "split into {n} topics"),
+    )
 
 
 @router.post("/ui/trees/{tree}/sections/{section_id}/move")
@@ -319,7 +398,7 @@ async def move_section_from_the_page(
     target, origin = fields.get("to_node", ""), fields.get("from_node", "")
     back = int(origin) if origin.isdigit() else 0
     if not target.isdigit():
-        return _back(tree, back, error="choose a topic")
+        return _back(tree, back, error=_("choose a topic"))
     try:
         move = await write_off_loop(
             request.app.state.db,
@@ -328,11 +407,13 @@ async def move_section_from_the_page(
             ),
         )
     except AppError as exc:
-        return _back(tree, back, error=str(exc))
-    emptied = " — that topic is now empty" if move.emptied else ""
-    return _back(
-        tree, int(target), done=f"section {section_id} moved here{emptied}"
+        return _back(tree, back, error=refusal(exc))
+    done = (
+        _("section {id} moved here — that topic is now empty", id=section_id)
+        if move.emptied
+        else _("section {id} moved here", id=section_id)
     )
+    return _back(tree, int(target), done=done)
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/undo")
@@ -342,18 +423,22 @@ async def undo_from_the_page(
     """Put back what the topic's latest edit replaced, once confirmed."""
     fields = await _fields(request)
     if not _confirmed(fields):
-        return _back(tree, node_id, error="tick the box to confirm an undo")
+        return _back(tree, node_id, error=_("tick the box to confirm an undo"))
     edit = fields.get("edit", "")
     if not edit.isdigit():
-        return _back(tree, node_id, error="that edit is no longer the latest")
+        return _back(
+            tree, node_id, error=_("that edit is no longer the latest")
+        )
     try:
         kind = await write_off_loop(
             request.app.state.db,
             lambda conn: edits.undo(conn, tree, node_id, int(edit)),
         )
     except AppError as exc:
-        return _back(tree, node_id, error=str(exc))
-    return _back(tree, node_id, done=f"undone: {_UNDO[kind]}")
+        return _back(tree, node_id, error=refusal(exc))
+    return _back(
+        tree, node_id, done=_("undone: {what}", what=_edit_label(kind))
+    )
 
 
 @router.post("/ui/trees/{tree}/nodes/{node_id}/release")
@@ -363,10 +448,24 @@ def release_from_the_page(
     """Hand the topic back to automation: release every pin on it."""
     with request.app.state.db.write() as conn:
         released = edits.release(conn, tree, node_id)
-    return _back(tree, node_id, done=f"handed back, {released} pins released")
+    return _back(
+        tree,
+        node_id,
+        done=n_(
+            released,
+            "handed back, {n} pins released",
+            "handed back, {n} pins released",
+        ),
+    )
 
 
-_UNDO = {"rename": "rename", "brief": "brief rewrite", "note": "note"}
+def _edit_label(kind: str) -> str:
+    """What a kind of hand edit is called on the page."""
+    if kind == "rename":
+        return _("rename")
+    if kind == "brief":
+        return _("brief rewrite")
+    return _("note")
 
 
 def _undo(conn: object, node_id: int) -> dict[str, object] | None:
@@ -378,17 +477,19 @@ def _undo(conn: object, node_id: int) -> dict[str, object] | None:
     if kind == "rename":
         before = row["before"]
         will = (
-            f'The name goes back to "{before}".'
+            _('The name goes back to "{before}".', before=before)
             if before
-            else "The name is removed; the topic takes its name from its brief."
+            else _(
+                "The name is removed; the topic takes its name from its brief."
+            )
         )
     elif kind == "brief":
-        will = "The brief goes back to the text it had before your rewrite."
+        will = _("The brief goes back to the text it had before your rewrite.")
     else:
-        will = "The note is deleted."
+        will = _("The note is deleted.")
     return {
         "id": int(row["id"]),
-        "label": _UNDO[kind],
+        "label": _edit_label(kind),
         "will": will,
         "when": _when(row["made_at"]),
         "who": str(row["who"]),
@@ -404,7 +505,7 @@ def _edits(conn: object, node_id: int) -> dict[str, object]:
     return {
         "rows": [
             {
-                "label": _UNDO[str(r["kind"])],
+                "label": _edit_label(str(r["kind"])),
                 "who": str(r["who"]),
                 "when": _when(r["made_at"]),
                 "closed": r["closed"],
@@ -519,13 +620,18 @@ def _versions(
 def _version_line(row: object) -> str:
     """Who wrote a kept brief, and what replaced it, each with its minute."""
     hand = row["model_name"] == "hand-edited"  # type: ignore[index]
-    by = "hand" if hand else str(row["model_name"])  # type: ignore[index]
+    by = _("hand") if hand else str(row["model_name"])  # type: ignore[index]
     replaced = (
-        "a hand rewrite" if row["reason"] == "rewrite" else "a regeneration"  # type: ignore[index]
+        _("a hand rewrite")
+        if row["reason"] == "rewrite"  # type: ignore[index]
+        else _("a regeneration")
     )
-    return (
-        f"by {by} ({_when(row['written_at'])}), "  # type: ignore[index]
-        f"replaced by {replaced} ({_when(row['replaced_at'])})"  # type: ignore[index]
+    return _(
+        "by {by} ({written}), replaced by {replaced} ({at})",
+        by=by,
+        written=_when(row["written_at"]),  # type: ignore[index]
+        replaced=replaced,
+        at=_when(row["replaced_at"]),  # type: ignore[index]
     )
 
 
@@ -683,9 +789,9 @@ TITLE_CHARS = 80
 def _titled(brief: object, node_id: int) -> str:
     """A topic's name: its own, else its brief's first line (0032)."""
     if brief is None:
-        return f"topic {node_id}"
+        return _("topic {id}", id=node_id)
     first = str(brief["text"]).strip().splitlines()[0]  # type: ignore[index]
-    return _clipped(first) or f"topic {node_id}"
+    return _clipped(first) or _("topic {id}", id=node_id)
 
 
 def _titled_row(row: object, node_id: int) -> str:
@@ -693,7 +799,7 @@ def _titled_row(row: object, node_id: int) -> str:
     own = row["title"]  # type: ignore[index]
     if own:
         return str(own)
-    return _first_line(row["brief"]) or f"topic {node_id}"  # type: ignore[index]
+    return _first_line(row["brief"]) or _("topic {id}", id=node_id)  # type: ignore[index]
 
 
 def _first_line(brief: object) -> str:

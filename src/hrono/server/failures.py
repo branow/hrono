@@ -13,6 +13,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from hrono.server.i18n import gettext as _
+
 # code -> (what happened, what to do next)
 SAID: dict[str, tuple[str, str]] = {
     "llm-error": (
@@ -169,8 +171,8 @@ def explain(
         stage=str(stage) if stage else None,
         item=short(str(item)) if item else None,
         whole=str(item) if item else None,
-        says=says,
-        next=then,
+        says=_(says),
+        next=_(then),
         code=known,
         raw=message or "",
     )
@@ -182,8 +184,13 @@ def short(item: str) -> str:
     A condense batch fails on a dozen sections at once; naming every path in a
     heading pushes the page sideways, and the first is enough to know where.
     """
-    kind, _, rest = item.partition(" ")
+    kind, _gap, rest = item.partition(" ")
     names = rest.split(", ") if rest else []
     if len(names) < 2:
         return item
-    return f"{kind} {names[0]} and {len(names) - 1} more"
+    return _(
+        "{kind} {first} and {n} more",
+        kind=kind,
+        first=names[0],
+        n=len(names) - 1,
+    )

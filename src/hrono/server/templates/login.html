@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}hrono — sign in{% endblock %}
+{% block title %}hrono — {{ _("sign in") }}{% endblock %}
 {% block chrome %}{% endblock %}
 {% block main %}
 <div class="gate">
@@ -14,14 +14,14 @@
   </div>
   <form class="card gate-form" method="post" action="/ui/login">
     {% if rejected %}
-    <p class="gate-error" role="alert">That token was not accepted.</p>
+    <p class="gate-error" role="alert">{{ _("That token was not accepted.") }}</p>
     {% endif %}
     <div class="field">
-      <label for="token">Token<span class="tip" tabindex="0" role="note" data-tip="The API token the hrono CLI uses">?</span></label>
-      <input type="password" id="token" name="token" aria-label="api token"
-             autofocus autocomplete="off" placeholder="paste your token">
+      <label for="token">{{ _("Token") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The API token the hrono CLI uses") }}">?</span></label>
+      <input type="password" id="token" name="token" aria-label="{{ _("api token") }}"
+             autofocus autocomplete="off" placeholder="{{ _("paste your token") }}">
     </div>
-    <button class="btn primary gate-go" type="submit">Sign in</button>
+    <button class="btn primary gate-go" type="submit">{{ _("Sign in") }}</button>
   </form>
 </div>
 {% endblock %}

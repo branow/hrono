@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}hrono — access{% endblock %}
+{% block title %}hrono — {{ _("access") }}{% endblock %}
 {% block main %}
 <div class="page-head">
-  <h1>Access<span class="tip" tabindex="0" role="note" data-tip="Who can sign in to this server, and what each may do. Readers look, writers also run work, admins also change who has access">?</span></h1>
+  <h1>{{ _("Access") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Who can sign in to this server, and what each may do. Readers look, writers also run work, admins also change who has access") }}">?</span></h1>
 </div>
 
 <div class="stack access">
   {% if issued %}
   <div class="callout ok" role="status">
     <div class="body stack">
-      <div class="title">Token for {{ issued.name }} ({{ issued.role }})</div>
-      <p class="hint">Copy it now: it is shown once and stored only as a hash, so nobody can read it back.</p>
+      <div class="title">{{ _("Token for {name} ({role})", name=issued.name, role=_(issued.role)) }}</div>
+      <p class="hint">{{ _("Copy it now: it is shown once and stored only as a hash, so nobody can read it back.") }}</p>
       <div class="token-row">
-        <input id="issued-token" class="mono" type="text" readonly value="{{ issued.token }}" aria-label="token for {{ issued.name }}" onfocus="this.select()">
-        <button class="btn" type="button" id="copy-token">Copy</button>
+        <input id="issued-token" class="mono" type="text" readonly value="{{ issued.token }}" aria-label="{{ _("token for {name}", name=issued.name) }}" onfocus="this.select()">
+        <button class="btn" type="button" id="copy-token">{{ _("Copy") }}</button>
       </div>
     </div>
   </div>
@@ -21,8 +21,8 @@
     document.getElementById("copy-token").addEventListener("click", async (e) => {
       const box = document.getElementById("issued-token");
       box.select();
-      try { await navigator.clipboard.writeText(box.value); e.target.textContent = "Copied"; }
-      catch { e.target.textContent = "Press Ctrl+C"; }
+      try { await navigator.clipboard.writeText(box.value); e.target.textContent = {{ _("Copied")|tojson }}; }
+      catch { e.target.textContent = {{ _("Press Ctrl+C")|tojson }}; }
     });
   </script>
   {% endif %}
@@ -30,37 +30,37 @@
   {% if rotated %}
   <div class="callout warn" role="status">
     <div class="body">
-      <div class="title">Master key rotated: {{ rotated.rows }} secret{{ "" if rotated.rows == 1 else "s" }} re-encrypted</div>
-      <p class="hint">This server already runs on the new key. Update the key file and restart it on the new key; it will refuse to start on the old one.</p>
+      <div class="title">{{ n_(rotated.rows, "Master key rotated: {n} secret re-encrypted", "Master key rotated: {n} secrets re-encrypted") }}</div>
+      <p class="hint">{{ _("This server already runs on the new key. Update the key file and restart it on the new key; it will refuse to start on the old one.") }}</p>
     </div>
   </div>
   {% endif %}
 
   <section class="card" aria-labelledby="people-head">
-    <div class="card-head"><h2 id="people-head">People <span class="faint num">{{ people|length }}</span></h2></div>
+    <div class="card-head"><h2 id="people-head">{{ _("People") }} <span class="faint num">{{ people|length }}</span></h2></div>
     <div class="card-body">
       <div class="table-wrap"><table class="people">
         <thead>
-          <tr><th>Name</th><th>Role</th><th>Added</th><th class="acts"><span class="visually-hidden">Actions</span></th></tr>
+          <tr><th>{{ _("Name", context="person") }}</th><th>{{ _("Role") }}</th><th>{{ _("Added") }}</th><th class="acts"><span class="visually-hidden">{{ _("Actions") }}</span></th></tr>
         </thead>
         <tbody>
           {% for person in people %}
           {% set asking = delete == person.name or reissue == person.name %}
-          <tr{% if asking %} class="asking"{% endif %}>
-            <td class="name"><strong>{{ person.name }}</strong>{% if person.name == user.name %}<span class="you">you</span>{% endif %}</td>
+          {% if asking %}<tr class="asking">{% else %}<tr>{% endif %}
+            <td class="name"><strong>{{ person.name }}</strong>{% if person.name == user.name %}<span class="you">{{ _("you") }}</span>{% endif %}</td>
             <td>
               <form class="role-form" method="post" action="/ui/access/{{ person.name|urlencode }}/role" data-live>
                 <input type="hidden" name="tree" value="{{ tree }}">
-                <select name="role" aria-label="role of {{ person.name }}">
-                  {% for role in roles %}<option value="{{ role }}"{% if role == person.role %} selected{% endif %}>{{ role }}</option>{% endfor %}
+                <select name="role" aria-label="{{ _("role of {name}", name=person.name) }}">
+                  {% for role in roles %}<option value="{{ role }}"{% if role == person.role %} selected{% endif %}>{{ _(role) }}</option>{% endfor %}
                 </select>
-                <button class="btn small" type="submit" data-static>Set role</button>
+                <button class="btn small" type="submit" data-static>{{ _("Set role") }}</button>
               </form>
             </td>
             <td class="faint num">{{ person.created_at[:10] }}</td>
             <td class="acts">
-              <a class="btn small" href="/ui/access?tree={{ tree }}&amp;reissue={{ person.name|urlencode }}">Reissue token</a>
-              <a class="btn small risky" href="/ui/access?tree={{ tree }}&amp;delete={{ person.name|urlencode }}">Delete</a>
+              <a class="btn small" href="/ui/access?tree={{ tree }}&amp;reissue={{ person.name|urlencode }}">{{ _("Reissue token") }}</a>
+              <a class="btn small risky" href="/ui/access?tree={{ tree }}&amp;delete={{ person.name|urlencode }}">{{ _("Delete") }}</a>
             </td>
           </tr>
           {% if asking %}
@@ -70,17 +70,17 @@
               <form class="ask" method="post" action="/ui/access/{{ delete|urlencode }}/delete">
                 <input type="hidden" name="tree" value="{{ tree }}">
                 <input type="hidden" name="confirm" value="1">
-                <span class="ask-says"><strong>Delete {{ delete }}?</strong> They can no longer sign in, and their token stops working at once.</span>
-                <button class="btn small risky" type="submit">Delete {{ delete }}</button>
-                <a class="btn small quiet" href="/ui/access?tree={{ tree }}">Cancel</a>
+                <span class="ask-says"><strong>{{ _("Delete {name}?", name=delete) }}</strong> {{ _("They can no longer sign in, and their token stops working at once.") }}</span>
+                <button class="btn small risky" type="submit">{{ _("Delete {name}", name=delete) }}</button>
+                <a class="btn small quiet" href="/ui/access?tree={{ tree }}">{{ _("Cancel") }}</a>
               </form>
               {% else %}
               <form class="ask" method="post" action="/ui/access/{{ reissue|urlencode }}/reissue">
                 <input type="hidden" name="tree" value="{{ tree }}">
                 <input type="hidden" name="confirm" value="1">
-                <span class="ask-says"><strong>New token for {{ reissue }}?</strong> The old one stops working at once; the new one is shown once, to pass on.</span>
-                <button class="btn small primary" type="submit">Reissue the token for {{ reissue }}</button>
-                <a class="btn small quiet" href="/ui/access?tree={{ tree }}">Cancel</a>
+                <span class="ask-says"><strong>{{ _("New token for {name}?", name=reissue) }}</strong> {{ _("The old one stops working at once; the new one is shown once, to pass on.") }}</span>
+                <button class="btn small primary" type="submit">{{ _("Reissue the token for {name}", name=reissue) }}</button>
+                <a class="btn small quiet" href="/ui/access?tree={{ tree }}">{{ _("Cancel") }}</a>
               </form>
               {% endif %}
             </td>
@@ -93,31 +93,31 @@
   </section>
 
   <section class="card" aria-labelledby="add-head">
-    <div class="card-head"><h2 id="add-head">Add a person</h2></div>
+    <div class="card-head"><h2 id="add-head">{{ _("Add a person") }}</h2></div>
     <div class="card-body">
       <form class="add-row" method="post" action="/ui/access/create">
         <input type="hidden" name="tree" value="{{ tree }}">
-        <label class="field"><span>Name</span>
-          <input type="text" name="name" value="{{ typed }}" required maxlength="64" autocomplete="off" placeholder="e.g. ana"></label>
-        <label class="field"><span>Role<span class="tip" tabindex="0" role="note" data-tip="reader: looks at everything. writer: also changes settings and starts runs. admin: also edits topics by hand and manages people">?</span></span>
+        <label class="field"><span>{{ _("Name", context="person") }}</span>
+          <input type="text" name="name" value="{{ typed }}" required maxlength="64" autocomplete="off" placeholder="{{ _("e.g. ana") }}"></label>
+        <label class="field"><span>{{ _("Role") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("reader: looks at everything. writer: also changes settings and starts runs. admin: also edits topics by hand and manages people") }}">?</span></span>
           <select name="role">
-            {% for role in roles %}<option value="{{ role }}"{% if role == "reader" %} selected{% endif %}>{{ role }}</option>{% endfor %}
+            {% for role in roles %}<option value="{{ role }}"{% if role == "reader" %} selected{% endif %}>{{ _(role) }}</option>{% endfor %}
           </select></label>
-        <button class="btn primary" type="submit">Create and show token</button>
+        <button class="btn primary" type="submit">{{ _("Create and show token") }}</button>
       </form>
     </div>
   </section>
 
   <section class="card" aria-labelledby="rotate-head">
-    <div class="card-head"><h2 id="rotate-head">Master key<span class="tip" tabindex="0" role="note" data-tip="Re-encrypts every stored provider and source credential under a new key. Neither key is stored or logged. The server must be restarted on the new key afterwards">?</span></h2></div>
+    <div class="card-head"><h2 id="rotate-head">{{ _("Master key") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Re-encrypts every stored provider and source credential under a new key. Neither key is stored or logged. The server must be restarted on the new key afterwards") }}">?</span></h2></div>
     <div class="card-body">
       <form class="key-form" method="post" action="/ui/access/rotate-key" autocomplete="off">
         <input type="hidden" name="tree" value="{{ tree }}">
-        <label class="field"><span>Current key</span><input type="password" name="old_key" required autocomplete="off"></label>
-        <label class="field"><span>New key</span><input type="password" name="new_key" required autocomplete="off"></label>
+        <label class="field"><span>{{ _("Current key") }}</span><input type="password" name="old_key" required autocomplete="off"></label>
+        <label class="field"><span>{{ _("New key") }}</span><input type="password" name="new_key" required autocomplete="off"></label>
         <div class="key-act">
-          <label class="confirm"><input type="checkbox" name="confirm" value="1" required> I will restart the server on the new key</label>
-          <button class="btn risky" type="submit">Rotate key</button>
+          <label class="confirm"><input type="checkbox" name="confirm" value="1" required> {{ _("I will restart the server on the new key") }}</label>
+          <button class="btn risky" type="submit">{{ _("Rotate key") }}</button>
         </div>
       </form>
     </div>

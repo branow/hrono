@@ -22,6 +22,7 @@ from hrono.health import report, triage
 from hrono.jobs import store as job_store
 from hrono.jobs.worker import enqueue
 from hrono.server import freshness
+from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.jobs import clock, render_job
 from hrono.server.ui.setup import progress
@@ -68,7 +69,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "read": clock(one.read_at or ""),
             "commit": (one.commit or "")[:8],
             "state": one.state,
-            "said": STATES[one.state][0],
+            "said": _(STATES[one.state][0]),
             "tone": STATES[one.state][1],
         }
         for one in freshness.survey(
@@ -153,7 +154,7 @@ def sync_from_the_page(tree: str, request: Request, user: Writer) -> Response:
         request.app.state.db, "sync-tree", {}, tree=tree, started_by=user.name
     )
     said = quote(
-        "Started a sync. It reads every source and files what changed."
+        _("Started a sync. It reads every source and files what changed.")
     )
     return RedirectResponse(
         f"/ui?tree={tree}&done={said}&run={started}", status_code=303

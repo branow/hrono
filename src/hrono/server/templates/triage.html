@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% macro picker(section, near, topics) %}
-<select name="to_node" aria-label="topic for {{ section }}">
+<select name="to_node" aria-label="{{ _("topic for {section}", section=section) }}">
   {% for id, name in topics %}<option value="{{ id }}"{% if id == near %} selected{% endif %}>{{ name }}</option>{% endfor %}
 </select>
 {% endmacro %}
@@ -8,20 +8,20 @@
 <form class="place-form" method="post" action="/ui/trees/{{ tree }}/triage/place">
   <input type="hidden" name="section" value="{{ row.id }}">
   {{ picker(row.path, row.nearest, topics) }}
-  <button class="btn small" type="submit">Place here</button>
+  <button class="btn small" type="submit">{{ _("Place here") }}</button>
 </form>
 {% endmacro %}
-{% block title %}hrono — {{ tree }} triage{% endblock %}
+{% block title %}hrono — {{ _("{tree} triage", tree=tree) }}{% endblock %}
 {% block main %}
 <div class="page-head">
   <div class="spread">
-    <h1>Needs attention<span class="tip" tabindex="0" role="note" data-tip="Five checks over this tree, run at the end of every sync, maintain and settle. A zero is reported too, so you can tell nothing-wrong from not-checked">?</span></h1>
+    <h1>{{ _("Needs attention") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Five checks over this tree, run at the end of every sync, maintain and settle. A zero is reported too, so you can tell nothing-wrong from not-checked") }}">?</span></h1>
     <div class="check-state" id="check-state"{% if checking %} data-job="{{ checking }}"{% endif %}>
       {% if checking %}
-      <span class="checking"><span class="spinner" aria-hidden="true"></span>Checking…</span>
+      <span class="checking"><span class="spinner" aria-hidden="true"></span>{{ _("Checking…") }}</span>
       {% elif checked %}
-      <span class="faint small">Checked {{ checked_at }}</span>
-      {% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn small" type="submit">Recheck</button></form>{% endif %}
+      <span class="faint small">{{ _("Checked {when}", when=checked_at) }}</span>
+      {% if can_write %}<form method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn small" type="submit">{{ _("Recheck") }}</button></form>{% endif %}
       {% endif %}
     </div>
   </div>
@@ -31,12 +31,12 @@
 <section class="card" id="not-checked">
   <div class="card-body empty">
     {% if checking %}
-    <div class="title">Checking this tree</div>
-    <p class="hint">This page fills in by itself when the checks finish.</p>
+    <div class="title">{{ _("Checking this tree") }}</div>
+    <p class="hint">{{ _("This page fills in by itself when the checks finish.") }}</p>
     {% else %}
-    <div class="title">Not checked yet</div>
-    <p class="hint">The checks run after every sync{% if can_write %}, or run them now{% endif %}.</p>
-    {% if can_write %}<form class="mt-3" method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn primary" type="submit">Check now</button></form>{% endif %}
+    <div class="title">{{ _("Not checked yet") }}</div>
+    <p class="hint">{% if can_write %}{{ _("The checks run after every sync, or run them now.") }}{% else %}{{ _("The checks run after every sync.") }}{% endif %}</p>
+    {% if can_write %}<form class="mt-3" method="post" action="/ui/trees/{{ tree }}/triage/recheck"><button class="btn primary" type="submit">{{ _("Check now") }}</button></form>{% endif %}
     {% endif %}
   </div>
 </section>
@@ -44,8 +44,8 @@
 {% if clean %}
 <div class="callout ok mb-4">
   <div class="body">
-    <div class="title">All clear</div>
-    <p class="hint">Every check passes — nothing needs attention.</p>
+    <div class="title">{{ _("All clear") }}</div>
+    <p class="hint">{{ _("Every check passes — nothing needs attention.") }}</p>
   </div>
 </div>
 {% endif %}
@@ -70,67 +70,67 @@
 
 <section class="card mt-3" id="waiting">
   <div class="card-body">
-    <h2>Waiting for a topic<span class="tip" tabindex="0" role="note" data-tip="Read, but in no topic: a sync files every section it can place, so only one it cannot place yet waits here, such as one with no vector or a tree with no topics. Place one by hand; a section you place stays where you put it">?</span></h2>
+    <h2>{{ _("Waiting for a topic") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Read, but in no topic: a sync files every section it can place, so only one it cannot place yet waits here, such as one with no vector or a tree with no topics. Place one by hand; a section you place stays where you put it") }}">?</span></h2>
     {% if parked_total == 0 %}
-    <p class="hint">No sections are waiting for a topic.</p>
+    <p class="hint">{{ _("No sections are waiting for a topic.") }}</p>
     {% else %}
     <div class="table-wrap"><table class="settings-table">
-      <thead><tr><th>Section</th><th>{{ "Place in" if can_write else "Nearest topic" }}<span class="tip" tabindex="0" role="note" data-tip="The topic it fits best comes first, with how closely it fits (1.00 is a perfect fit)">?</span></th><th class="count">Fit</th></tr></thead>
+      <thead><tr><th>{{ _("Section") }}</th><th>{{ _("Place in") if can_write else _("Nearest topic") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("The topic it fits best comes first, with how closely it fits (1.00 is a perfect fit)") }}">?</span></th><th class="count">{{ _("Fit") }}</th></tr></thead>
       <tbody>
       {% for row in parked %}
         <tr>
           <td class="mono path">{{ row.path }}</td>
-          <td>{% if can_write %}{{ place(tree, row, topics) }}{% elif row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a>{% else %}<span class="hint">no score yet</span>{% endif %}</td>
-          <td class="count faint">{% if row.nearest %}<span title="nearest: {{ row.nearest_name }}">{{ "%.2f"|format(row.score) }}</span>{% else %}—{% endif %}</td>
+          <td>{% if can_write %}{{ place(tree, row, topics) }}{% elif row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a>{% else %}<span class="hint">{{ _("no score yet") }}</span>{% endif %}</td>
+          <td class="count faint">{% if row.nearest %}<span title="{{ _("nearest: {name}", name=row.nearest_name) }}">{{ "%.2f"|format(row.score) }}</span>{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table></div>
-    {% if parked_total > shown %}<p class="hint">The oldest {{ shown }} of {{ parked_total }}.</p>{% endif %}
+    {% if parked_total > shown %}<p class="hint">{{ _("The oldest {shown} of {total}.", shown=shown, total=parked_total) }}</p>{% endif %}
     {% endif %}
   </div>
 </section>
 
 <section class="card mt-3" id="placed">
   <div class="card-body">
-    <h2>Placed without a score<span class="tip" tabindex="0" role="note" data-tip="Filed in the nearest topic by rule, not matched to it. A few are normal">?</span></h2>
+    <h2>{{ _("Placed without a score") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Filed in the nearest topic by rule, not matched to it. A few are normal") }}">?</span></h2>
     {% if misfit_total == 0 %}
-    <p class="hint">Every section was placed by a score.</p>
+    <p class="hint">{{ _("Every section was placed by a score.") }}</p>
     {% else %}
-    <p class="hint">A few of these are normal. The next sync checks them again and moves any that fit better elsewhere, unless you move one by hand: then it stays.</p>
+    <p class="hint">{{ _("A few of these are normal. The next sync checks them again and moves any that fit better elsewhere, unless you move one by hand: then it stays.") }}</p>
     <div class="table-wrap"><table class="settings-table">
-      <thead><tr><th>Section</th><th>In topic</th><th>Nearer topic</th>{% if can_write %}<th>Place in</th>{% endif %}</tr></thead>
+      <thead><tr><th>{{ _("Section") }}</th><th>{{ _("In topic") }}</th><th>{{ _("Nearer topic") }}</th>{% if can_write %}<th>{{ _("Place in") }}</th>{% endif %}</tr></thead>
       <tbody>
       {% for row in misfits %}
         <tr>
           <td class="mono path">{{ row.path }}</td>
           <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.topic }}?tree={{ tree }}">{{ row.topic_name }}</a></td>
-          <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">none</span>{% endif %}</td>
+          <td>{% if row.nearest %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.nearest }}?tree={{ tree }}">{{ row.nearest_name }}</a> <span class="num">{{ "%.2f"|format(row.score) }}</span>{% else %}<span class="hint">{{ _("none") }}</span>{% endif %}</td>
           {% if can_write %}<td>{{ place(tree, row, topics) }}</td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>
     </table></div>
-    {% if misfit_total > shown %}<p class="hint">The first {{ shown }} of {{ misfit_total }}.</p>{% endif %}
+    {% if misfit_total > shown %}<p class="hint">{{ _("The first {shown} of {total}.", shown=shown, total=misfit_total) }}</p>{% endif %}
     {% endif %}
   </div>
 </section>
 
 <section class="card mt-3" id="briefs">
   <div class="card-body">
-    <h2>Briefs to rewrite</h2>
+    <h2>{{ _("Briefs to rewrite") }}</h2>
     {% if not stale %}
-    <p class="hint">Every topic has a brief that holds.</p>
+    <p class="hint">{{ _("Every topic has a brief that holds.") }}</p>
     {% else %}
-    <p class="hint">The next sync rewrites each of these except a brief marked as needing a person. Rewrite one now to fix only that topic.</p>
+    <p class="hint">{{ _("The next sync rewrites each of these except a brief marked as needing a person. Rewrite one now to fix only that topic.") }}</p>
     <div class="table-wrap"><table class="settings-table">
-      <thead><tr><th>Topic</th><th>Why</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
+      <thead><tr><th>{{ _("Topic") }}</th><th>{{ _("Why") }}</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
       <tbody>
       {% for row in stale %}
         <tr>
           <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">{{ row.name }}</a></td>
-          <td>{{ row.why }}{% if row.settled %}. A sync will not rewrite it: a person must write this brief by hand, or change the topic's members, prompt or model.{% endif %}</td>
-          {% if can_write %}<td>{% if not row.settled %}<form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/regenerate"><input type="hidden" name="node" value="{{ row.node_id }}"><button class="btn" type="submit">Rewrite this brief</button></form>{% endif %}</td>{% endif %}
+          <td>{{ row.why }}{% if row.settled %}. {{ _("A sync will not rewrite it: a person must write this brief by hand, or change the topic's members, prompt or model.") }}{% endif %}</td>
+          {% if can_write %}<td>{% if not row.settled %}<form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/regenerate"><input type="hidden" name="node" value="{{ row.node_id }}"><button class="btn" type="submit">{{ _("Rewrite this brief") }}</button></form>{% endif %}</td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>
@@ -141,20 +141,20 @@
 
 <section class="card mt-3" id="held">
   <div class="card-body">
-    <h2>Held by hand<span class="tip" tabindex="0" role="note" data-tip="A hand edit is held so a sync does not undo it. It stays until you hand it back">?</span></h2>
+    <h2>{{ _("Held by hand") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("A hand edit is held so a sync does not undo it. It stays until you hand it back") }}">?</span></h2>
     {% if not held %}
-    <p class="hint">Nothing is held by hand.</p>
+    <p class="hint">{{ _("Nothing is held by hand.") }}</p>
     {% else %}
-    <p class="hint">A sync never changes these. Each one waits for a person to hand it back.</p>
+    <p class="hint">{{ _("A sync never changes these. Each one waits for a person to hand it back.") }}</p>
     <div class="table-wrap"><table class="settings-table">
-      <thead><tr><th>Held</th><th>What</th><th>Since</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
+      <thead><tr><th>{{ _("Held") }}</th><th>{{ _("What") }}</th><th>{{ _("Since") }}</th>{% if can_write %}<th></th>{% endif %}</tr></thead>
       <tbody>
       {% for row in held %}
         <tr>
-          <td class="nowrap">{{ {"brief": "brief", "membership": "placement", "parenting": "parent"}[row.kind] }}</td>
-          <td>{% if row.kind == "membership" %}<span class="mono">{{ row.label }}</span> in {{ row.where }}{% else %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.target_id }}?tree={{ tree }}">{{ row.label }}</a>{% endif %}{% if row.reason %} <span class="hint">{{ row.reason }}</span>{% endif %}</td>
+          <td class="nowrap">{{ {"brief": _("brief"), "membership": _("placement"), "parenting": _("parent")}[row.kind] }}</td>
+          <td>{% if row.kind == "membership" %}<span class="mono">{{ row.label }}</span> {{ _("in {where}", where=row.where) }}{% else %}<a href="/ui/trees/{{ tree }}/nodes/{{ row.target_id }}?tree={{ tree }}">{{ row.label }}</a>{% endif %}{% if row.reason %} <span class="hint">{{ row.reason }}</span>{% endif %}</td>
           <td class="num nowrap">{{ row.since }}</td>
-          {% if can_write %}<td><form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/release"><input type="hidden" name="kind" value="{{ row.kind }}"><input type="hidden" name="target" value="{{ row.target_id }}"><button class="btn" type="submit">Hand back</button></form></td>{% endif %}
+          {% if can_write %}<td><form class="inline" method="post" action="/ui/trees/{{ tree }}/triage/release"><input type="hidden" name="kind" value="{{ row.kind }}"><input type="hidden" name="target" value="{{ row.target_id }}"><button class="btn" type="submit">{{ _("Hand back") }}</button></form></td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>

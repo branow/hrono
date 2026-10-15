@@ -1,6 +1,6 @@
 <!doctype html>
 {% set theme = chosen_theme(request) %}
-<html lang="en"{% if theme %} data-theme="{{ theme }}"{% endif %}>
+<html lang="{{ lang() }}"{% if theme %} data-theme="{{ theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1856,7 +1856,7 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 </style>
 </head>
 <body>
-<a class="skip" href="#content">Skip to content</a>
+<a class="skip" href="#content">{{ _("Skip to content") }}</a>
 {% block skips %}{% endblock %}
 {% set here = request.url.path %}
 {% block chrome %}
@@ -1871,8 +1871,8 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
     <span>hrono</span>
   </a>
   <details class="treepick"{% if trees|length < 2 %} data-only="1"{% endif %}>
-    <summary title="Switch tree" aria-haspopup="listbox">
-      <span class="key">tree</span>
+    <summary title="{{ _("Switch tree") }}" aria-haspopup="listbox">
+      <span class="key">{{ _("tree") }}</span>
       <span class="now">{{ tree }}</span>
       <svg class="caret" width="9" height="6" viewBox="0 0 9 6" aria-hidden="true">
         <path d="M1 1.2 4.5 4.8 8 1.2" fill="none" stroke="currentColor"
@@ -1891,27 +1891,28 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
       {% endfor %}
     </ul>
   </details>
-  <nav class="tabs" aria-label="sections">
+  <nav class="tabs" aria-label="{{ _("sections") }}">
     {% for item in tabs(here, tree, user.role) %}
     <a class="tab" href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>
     {% endfor %}
   </nav>
   <form class="finder" method="get" action="/ui/trees/{{ tree }}/find" role="search">
     <input type="hidden" name="tree" value="{{ tree }}">
-    <input type="search" name="q" placeholder="Search (/)" aria-label="Search topics, files and text" aria-keyshortcuts="/">
+    <input type="search" name="q" placeholder="{{ _("Search (/)") }}" aria-label="{{ _("Search topics, files and text") }}" aria-keyshortcuts="/">
   </form>
   <div class="who">
     <span class="name">{{ user.name }}</span>
-    <span class="chip" title="{{ user.role }} — what this account may do">{{ user.role }}</span>
-    <a class="btn small quiet helper" href="/ui/guide?tree={{ tree }}" aria-label="Guide: how hrono works" data-tip="Guide: how hrono works"{% if here.startswith("/ui/guide") %} aria-current="page"{% endif %}>
+    {% set role = {"reader": _("reader"), "writer": _("writer"), "admin": _("admin")}.get(user.role, user.role) %}
+    <span class="chip" title="{{ _("{role} — what this account may do", role=role) }}">{{ role }}</span>
+    <a class="btn small quiet helper" href="/ui/guide?tree={{ tree }}" aria-label="{{ _("Guide: how hrono works") }}" data-tip="{{ _("Guide: how hrono works") }}"{% if here.startswith("/ui/guide") %} aria-current="page"{% endif %}>
       <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".85" fill="currentColor"/></svg>
     </a>
     <form class="inline" method="post" action="/ui/theme">
       <input type="hidden" name="theme" value="{{ next_theme(theme) }}">
       <input type="hidden" name="back" value="{{ request.url.path }}?tree={{ tree }}">
       <button class="btn small quiet themer" type="submit"
-              data-tip="{% if theme == 'light' %}Light. Click for dark{% elif theme == 'dark' %}Dark. Click to follow your system{% else %}Following your system. Click for light{% endif %}"
-              aria-label="Change theme">
+              data-tip="{% if theme == 'light' %}{{ _("Light. Click for dark") }}{% elif theme == 'dark' %}{{ _("Dark. Click to follow your system") }}{% else %}{{ _("Following your system. Click for light") }}{% endif %}"
+              aria-label="{{ _("Change theme") }}">
         {% if theme == "light" %}
         <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.2 3.2l1.1 1.1M11.7 11.7l1.1 1.1M12.8 3.2l-1.1 1.1M4.3 11.7l-1.1 1.1"/></g></svg>
         {% elif theme == "dark" %}
@@ -1921,14 +1922,22 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
         {% endif %}
       </button>
     </form>
+    {% set to_lang = other_lang(lang()) %}
+    <form class="inline" method="post" action="/ui/lang">
+      <input type="hidden" name="lang" value="{{ to_lang }}">
+      <input type="hidden" name="back" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+      <button class="btn small quiet langer" type="submit" lang="{{ to_lang }}"
+              data-tip="{{ 'Українською' if to_lang == 'uk' else 'In English' }}"
+              aria-label="{{ 'Українською' if to_lang == 'uk' else 'In English' }}">{{ langs[to_lang] }}</button>
+    </form>
     <form class="inline" method="post" action="/ui/logout">
-      <button class="btn small quiet" type="submit">Sign out</button>
+      <button class="btn small quiet" type="submit">{{ _("Sign out") }}</button>
     </form>
   </div>
 </header>
 {% set subs = subtabs(here, tree, user.role) %}
 {% if subs %}
-<nav class="subbar" aria-label="pages in this section">
+<nav class="subbar" aria-label="{{ _("pages in this section") }}">
   <div class="subbar-in">
     {% for item in subs %}<a href="{{ item.href }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
   </div>
@@ -1940,6 +1949,9 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 // The one place the page's JS says what a run's status reads as; the Python
 // side is ui/__init__.py status_word, and both take the derived word from it.
 window.statusWord = (s) => (s === {{ partial_status|tojson }} ? 'running' : s);
+// What the page shows for it, in the reader's language; statusWord stays the
+// value data-state keys on. The Python side is ui/__init__.py status_label.
+window.statusLabel = (s) => ({{ status_labels()|tojson }})[window.statusWord(s)] || window.statusWord(s);
 </script>
 {% set wrong = error or request.query_params.get("error") %}
 {% set said = done or request.query_params.get("done") %}
@@ -1951,7 +1963,7 @@ window.statusWord = (s) => (s === {{ partial_status|tojson }} ? 'running' : s);
 {% endif %}
 {% if started %}
 {% from "_parts.html" import follow %}
-{{ follow(started, said or "Running") }}
+{{ follow(started, said or _("Running")) }}
 {% elif said %}
 <div class="callout ok mb-3" id="done" role="status">
   <div class="body"><p class="hint">{{ said }}</p></div>
@@ -1977,7 +1989,9 @@ document.querySelectorAll("[data-follow]").forEach((box) => {
   source.addEventListener("state", (event) => {
     const state = JSON.parse(event.data);
     if (state.progress && state.progress.total) {
-      progress.textContent = state.progress.done + " of " + state.progress.total;
+      progress.textContent = {{ _("{done} of {total}")|tojson }}
+        .replace("{done}", state.progress.done)
+        .replace("{total}", state.progress.total);
     }
     if (state.status === "succeeded") { source.close(); settle(); }
     else if (state.status === "failed" || state.status === "canceled") {
@@ -1985,8 +1999,8 @@ document.querySelectorAll("[data-follow]").forEach((box) => {
       box.classList.add("bad");
       box.querySelector(".spinner").remove();
       box.querySelector(".title").textContent =
-        state.status === "failed" ? "It failed" : "It was stopped";
-      box.querySelector("a").textContent = "See why";
+        state.status === "failed" ? {{ _("It failed")|tojson }} : {{ _("It was stopped")|tojson }};
+      box.querySelector("a").textContent = {{ _("See why")|tojson }};
     }
   });
   source.onerror = () => { source.close(); setTimeout(settle, 1500); };

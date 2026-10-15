@@ -31,6 +31,8 @@ import sqlite3
 from collections import Counter
 from dataclasses import dataclass
 
+from hrono.server.i18n import ngettext as n_
+
 # How much of a topic a directory must hold to name it. Below this the topic
 # really is spread, and claiming one directory would be a label that lies.
 SHARE = 0.6
@@ -120,7 +122,7 @@ def _sources(conn: sqlite3.Connection, tree: str) -> str:
     if not names:
         return ""
     if len(names) > NAMED_SOURCES:
-        return f"{len(names)} sources"
+        return n_(len(names), "{n} source", "{n} sources")
     return STRADDLE.join(names)
 
 

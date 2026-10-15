@@ -1,18 +1,25 @@
 {% extends "base.html" %}
 {% from "_parts.html" import money, unrecorded %}
-{% block title %}hrono — {{ job.op }} run{% endblock %}
+{% block title %}hrono — {{ _("{op} run", op=job.op) }}{% endblock %}
 {% block main %}
+{# What happened to a topic and to a file, as stored, said in the reader's language.
+   A topic's "new" goes through n_ for its one-topic form: Ukrainian agrees it
+   with тема, where a bare "new" is already taken by a masculine noun. #}
+{% set topic_word = {"new": n_(1, "new", "new"), "rewritten": _("rewritten"), "regrouped": _("regrouped"), "retired": _("retired")} %}
+{% set topics_word = {"new": _("New"), "rewritten": _("Rewritten"), "regrouped": _("Regrouped"), "retired": _("Retired")} %}
+{% set file_word = {"added": _("added"), "changed": _("changed"), "removed": _("removed")} %}
+{% macro file_link(path) %}<a href="#{{ changes.anchor(path) }}"><code>{{ path }}</code></a>{% endmacro %}
 <div class="page-head">
   <div class="crumbs">
-    <a href="/ui/jobs?tree={{ tree }}">Runs</a>
+    <a href="/ui/jobs?tree={{ tree }}">{{ _("Runs") }}</a>
   </div>
   <h1>{{ job.op }}</h1>
   <p class="said">{{ job.means }}</p>
   <p class="run-meta">
-    <span class="state bare status" data-state="{{ job.status|status_word }}">{{ job.status|status_word }}</span>
-    <span>started {{ job.started }}</span>
+    <span class="state bare status" data-state="{{ job.status|status_word }}">{{ job.status|status_label }}</span>
+    <span>{{ _("started {when}", when=job.started) }}</span>
     <span class="num" {% if job.live %}data-since="{{ job.since }}"{% endif %}>{{ job.took }}</span>
-    {% if job.scope.name %}<span>over {{ job.scope.name }}</span>{% endif %}
+    {% if job.scope.name %}<span>{{ _("over {source}", source=job.scope.name) }}</span>{% endif %}
     {% if not job.spend and job.cost %}<span>{{ unrecorded(job.before_ledger, job.cost) }}</span>{% endif %}
     <span class="mono faint" title="{{ job.id }}">{{ job.short_id }}</span>
   </p>
@@ -26,12 +33,12 @@
     <div class="card-body">
       <div class="live-line">
         <span class="spinner" aria-hidden="true"></span>
-        <span class="title">Running{% if job.current %} <code>{{ job.current.op }}</code>{% if job.current.over %} <span class="mono faint">{{ job.current.over }}</span>{% endif %}{% endif %}</span>
-        <span class="progress faint num">{% if job.progress %}{{ job.progress.done }} of {{ job.progress.total }} done{% endif %}</span>
+        <span class="title">{{ _("Running") }}{% if job.current %} <code>{{ job.current.op }}</code>{% if job.current.over %} <span class="mono faint">{{ job.current.over }}</span>{% endif %}{% endif %}</span>
+        <span class="progress faint num">{% if job.progress %}{{ _("{done} of {total} done", done=job.progress.done, total=job.progress.total) }}{% endif %}</span>
         <span class="grow"></span>
         {% if can_write %}
         <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/cancel?tree={{ tree }}">
-          <button class="btn small" type="submit">Stop</button>
+          <button class="btn small" type="submit">{{ _("Stop") }}</button>
         </form>
         {% endif %}
       </div>
@@ -43,17 +50,17 @@
   {% if job.failure %}
   <div class="callout bad" id="failure">
     <div class="body">
-      <div class="title">Failed{% if job.failure.stage %} at {{ job.failure.stage }}{% endif %}{% if job.failure.item %}, on <span title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</div>
+      <div class="title">{{ _("Failed") }}{% if job.failure.stage %} {{ _("at {stage}", stage=job.failure.stage) }}{% endif %}{% if job.failure.item %}{{ _(", on") }} <span title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</div>
       <p>{{ job.failure.says }}</p>
       <p class="hint">{{ job.failure.next }}</p>
       {% if job.retry and can_write %}
       <form class="inline mt-2" method="post" action="/ui/jobs/{{ job.id }}/retry?tree={{ tree }}">
-        <button class="btn primary small" type="submit">Run it again</button>
-        <span class="tip" tabindex="0" role="note" data-tip="Same {{ job.op }}{% if job.scope.name %} over {{ job.scope.name }}{% endif %}. Sections already condensed and embedded are reused, so only what failed or was never reached costs anything">?</span>
+        <button class="btn primary small" type="submit">{{ _("Run it again") }}</button>
+        <span class="tip" tabindex="0" role="note" data-tip="{{ _("Same {op}", op=job.op) }}{% if job.scope.name %} {{ _("over {source}", source=job.scope.name) }}{% endif %}. {{ _("Sections already condensed and embedded are reused, so only what failed or was never reached costs anything") }}">?</span>
       </form>
       {% endif %}
       <details class="reveal mt-2">
-        <summary class="twisty">The error as reported</summary>
+        <summary class="twisty">{{ _("The error as reported") }}</summary>
         <pre class="preview">{{ job.failure.code }}: {{ job.failure.raw }}</pre>
       </details>
     </div>
@@ -71,29 +78,29 @@
   <section class="card" id="retry">
     <div class="card-body row">
       <form class="inline" method="post" action="/ui/jobs/{{ job.id }}/retry?tree={{ tree }}">
-        <button class="btn primary small" type="submit">Run it again</button>
+        <button class="btn primary small" type="submit">{{ _("Run it again") }}</button>
       </form>
-      <span class="hint">Same {{ job.op }}{% if job.scope.name %} over {{ job.scope.name }}{% endif %}. Sections already condensed and embedded are reused, so only what failed or was never reached costs anything.</span>
+      <span class="hint">{{ _("Same {op}", op=job.op) }}{% if job.scope.name %} {{ _("over {source}", source=job.scope.name) }}{% endif %}. {{ _("Sections already condensed and embedded are reused, so only what failed or was never reached costs anything") }}.</span>
     </div>
   </section>
   {% endif %}
 
   <section class="card" id="spend">
-    <div class="card-head"><h2>What it spent<span class="tip" tabindex="0" role="note" data-tip="Every model call this run made, including those that failed. Embedding with a model run in this process spends no tokens">?</span></h2><a class="small" href="/ui/usage?tree={{ tree }}">Usage</a></div>
+    <div class="card-head"><h2>{{ _("What it spent") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Every model call this run made, including those that failed. Embedding with a model run in this process spends no tokens") }}">?</span></h2><a class="small" href="/ui/usage?tree={{ tree }}">{{ _("Usage") }}</a></div>
     <div class="card-body">
       {% if job.spend %}
       <dl class="totals">
-        <div><dt>Cost</dt><dd>{{ money(job.spend, true) }}</dd></div>
-        <div><dt>Calls</dt><dd class="num">{{ "{:,}".format(job.spend.calls) }}</dd></div>
-        <div><dt>Tokens in</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_in) }}">{{ job.spend.tokens_in|compact }}</dd></div>
-        <div><dt>Tokens out</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_out) }}">{{ job.spend.tokens_out|compact }}</dd></div>
-        {% if job.spend.tokens_cached %}<div><dt>Cached</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_cached) }}">{{ job.spend.tokens_cached|compact }}</dd></div>{% endif %}
-        <div><dt>Model time</dt><dd class="num">{{ job.spend.time }}</dd></div>
+        <div><dt>{{ _("Cost") }}</dt><dd>{{ money(job.spend, true) }}</dd></div>
+        <div><dt>{{ _("Calls") }}</dt><dd class="num">{{ "{:,}".format(job.spend.calls) }}</dd></div>
+        <div><dt>{{ _("Tokens in") }}</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_in) }}">{{ job.spend.tokens_in|compact }}</dd></div>
+        <div><dt>{{ _("Tokens out") }}</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_out) }}">{{ job.spend.tokens_out|compact }}</dd></div>
+        {% if job.spend.tokens_cached %}<div><dt>{{ _("Cached") }}</dt><dd class="num" title="{{ '{:,}'.format(job.spend.tokens_cached) }}">{{ job.spend.tokens_cached|compact }}</dd></div>{% endif %}
+        <div><dt>{{ _("Model time") }}</dt><dd class="num">{{ job.spend.time }}</dd></div>
       </dl>
       {% if job.spend_by_stage|length > 1 %}
       <div class="table-wrap mt-3">
         <table class="usage">
-          <thead><tr><th>Stage</th><th class="count">Calls</th><th class="count">In</th><th class="count">Out</th><th class="count">Time</th><th class="count">Cost</th></tr></thead>
+          <thead><tr><th>{{ _("Stage") }}</th><th class="count">{{ _("Calls") }}</th><th class="count">{{ _("In") }}</th><th class="count">{{ _("Out") }}</th><th class="count">{{ _("Time") }}</th><th class="count">{{ _("Cost") }}</th></tr></thead>
           <tbody>
             {% for row in job.spend_by_stage %}
             <tr data-stage="{{ row.stage }}">
@@ -110,7 +117,7 @@
       </div>
       {% endif %}
       {% elif job.live %}
-      <p class="hint">Nothing spent yet.</p>
+      <p class="hint">{{ _("Nothing spent yet.") }}</p>
       {% else %}
       <p class="hint">{{ unrecorded(job.before_ledger, job.cost) }}</p>
       {% endif %}
@@ -120,27 +127,27 @@
   {% if job.stages or job.current %}
   <section class="card" id="stages">
     {% set failed_here = job.failure and job.failure.stage %}
-    <div class="card-head"><h2>Stages <span class="faint num">{% if failed_here %}{{ job.stages|length }} of {{ job.stages|length + 1 }} done{% elif job.current %}{{ job.stages|length }} done{% else %}{{ job.stages|length }}{% endif %}</span></h2></div>
+    <div class="card-head"><h2>{{ _("Stages") }} <span class="faint num">{% if failed_here %}{{ _("{done} of {total} done", done=job.stages|length, total=job.stages|length + 1) }}{% elif job.current %}{{ _("{n} done", n=job.stages|length) }}{% else %}{{ job.stages|length }}{% endif %}</span></h2></div>
     <div class="card-body">
       <ol class="stages">
         {% for stage in job.stages %}
         <li>
           <span class="st-op"><code>{{ stage.op }}</code>{% if stage.over %} <span class="mono faint">{{ stage.over }}</span>{% endif %}</span>
-          {% if stage.did %}<span class="st-did">{{ stage.did|join(", ") }}</span>{% else %}<span class="st-did faint">nothing to do</span>{% endif %}
+          {% if stage.did %}<span class="st-did">{{ stage.did|join(", ") }}</span>{% else %}<span class="st-did faint">{{ _("nothing to do") }}</span>{% endif %}
           <span class="st-took num faint">{{ stage.took }}</span>
         </li>
         {% endfor %}
         {% if job.current %}
         <li>
           <span class="st-op"><code>{{ job.current.op }}</code>{% if job.current.over %} <span class="mono faint">{{ job.current.over }}</span>{% endif %}</span>
-          <span class="st-did st-now"><span class="spinner" aria-hidden="true"></span>running</span>
+          <span class="st-did st-now"><span class="spinner" aria-hidden="true"></span>{{ _("running") }}</span>
           <span class="st-took"></span>
         </li>
         {% endif %}
         {% if job.failure and job.failure.stage %}
         <li>
           <span class="st-op"><code>{{ job.failure.stage }}</code>{% if job.failure.item %} <span class="mono" title="{{ job.failure.whole }}">{{ job.failure.item }}</span>{% endif %}</span>
-          <span class="st-did st-failed">failed</span>
+          <span class="st-did st-failed">{{ _("failed") }}</span>
           <span class="st-took"></span>
         </li>
         {% endif %}
@@ -152,32 +159,32 @@
   {% if changes %}
   <section class="card" id="changed">
     <div class="card-head">
-      <h2>What it changed<span class="tip" tabindex="0" role="note" data-tip="Read from the change journal: every row this run wrote, kept with what it replaced. Reverting undoes exactly these">?</span></h2>
+      <h2>{{ _("What it changed") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("Read from the change journal: every row this run wrote, kept with what it replaced. Reverting undoes exactly these") }}">?</span></h2>
       {% if can_run and not changes.reverted and not changes.blocker %}
       <form method="post" action="/ui/jobs/{{ job.id }}/revert?tree={{ tree }}" class="inline">
-        <button class="btn small" type="submit">Revert</button>
+        <button class="btn small" type="submit">{{ _("Revert") }}</button>
       </form>
       {% endif %}
     </div>
     <div class="card-body stack">
       {% if changes.reverted %}
-      <p class="hint">Reverted {{ changes.reverted[:16]|replace("T", " ") }}. The tree is back as it was before this run; sync again to replay it.</p>
+      <p class="hint">{{ _("Reverted {when}. The tree is back as it was before this run; sync again to replay it.", when=changes.reverted[:16]|replace("T", " ")) }}</p>
       {% else %}
       <dl class="totals">
-        {% if changes.total %}<div><dt>Topics touched</dt><dd><span class="num">{{ changes.topics|length }}</span> <span class="faint of">of {{ changes.total }}</span></dd></div>{% endif %}
-        {% for what in ("new", "rewritten", "regrouped", "retired") %}{% set n = changes.count(what) %}{% if n %}<div class="touched-{{ what }}"><dt>{{ what|capitalize }}</dt><dd class="num">{{ n }}</dd></div>{% endif %}{% endfor %}
-        <div><dt>Files changed</dt><dd class="num">{{ changes.files|length }}</dd></div>
+        {% if changes.total %}<div><dt>{{ _("Topics touched") }}</dt><dd><span class="num">{{ changes.topics|length }}</span> <span class="faint of">{{ _("of {total}", total=changes.total) }}</span></dd></div>{% endif %}
+        {% for what in ("new", "rewritten", "regrouped", "retired") %}{% set n = changes.count(what) %}{% if n %}<div class="touched-{{ what }}"><dt>{{ topics_word[what] }}</dt><dd class="num">{{ n }}</dd></div>{% endif %}{% endfor %}
+        <div><dt>{{ _("Files changed") }}</dt><dd class="num">{{ changes.files|length }}</dd></div>
       </dl>
 
       {% if changes.files %}
       <div>
-        <h3 class="changed-h">Files</h3>
+        <h3 class="changed-h">{{ _("Files") }}</h3>
         <ul class="changed-files">
           {% for f in changes.files %}
           <li id="{{ f.anchor }}">
             <details>
               <summary>
-                <span class="chip file-{{ f.status }}">{{ f.status }}</span>
+                <span class="chip file-{{ f.status }}">{{ file_word.get(f.status, f.status) }}</span>
                 <code>{{ f.path }}</code> <span class="faint small">{{ f.source }}</span>
                 <span class="num plus">+{{ f.plus }}</span> <span class="num minus">-{{ f.minus }}</span>
               </summary>
@@ -190,7 +197,7 @@
       {% endif %}
 
       <details class="changed-tree"{% if changes.outline|length <= 40 %} open{% endif %}>
-        <summary><h3 class="changed-h">Topics</h3> <span class="hint">only the branches it touched; each topic opens to say why</span></summary>
+        <summary><h3 class="changed-h">{{ _("Topics") }}</h3> <span class="hint">{{ _("only the branches it touched; each topic opens to say why") }}</span></summary>
         <ul class="changed-outline">
           {% for row in changes.outline %}{% set t = row.change %}
           <li style="--depth: {{ row.depth }}" class="{{ 'is-' ~ t.what if t else 'is-same' }}">
@@ -198,36 +205,36 @@
             <details>
               <summary>
                 <span class="name">{{ row.name }}</span>
-                <span class="chip what-{{ t.what }}">{{ t.what }}</span>
-                {% if row.unchanged %}<span class="faint small">+{{ row.unchanged }} unchanged</span>{% endif %}
+                <span class="chip what-{{ t.what }}">{{ topic_word.get(t.what, t.what) }}</span>
+                {% if row.unchanged %}<span class="faint small">{{ _("+{n} unchanged", n=row.unchanged) }}</span>{% endif %}
               </summary>
               <div class="why">
                 <ul>
-                  {% for path in t.entered %}<li>Sections of <a href="#{{ changes.anchor(path) }}"><code>{{ path }}</code></a> {{ 'changed' if path in t.left else 'came in' }}</li>{% endfor %}
-                  {% for path in t.left if path not in t.entered %}<li>Sections of <a href="#{{ changes.anchor(path) }}"><code>{{ path }}</code></a> left</li>{% endfor %}
-                  {% if t.below %}<li>Topics beneath it changed: {% for b in t.below %}{{ changes.names.get(b, 'topic %d'|format(b)) }}{{ ', ' if not loop.last }}{% endfor %}</li>{% endif %}
+                  {% for path in t.entered %}<li>{{ ((_("Sections of {path} changed") if path in t.left else _("Sections of {path} came in"))|e)|replace("{path}", file_link(path)) }}</li>{% endfor %}
+                  {% for path in t.left if path not in t.entered %}<li>{{ (_("Sections of {path} left")|e)|replace("{path}", file_link(path)) }}</li>{% endfor %}
+                  {% if t.below %}{% set beneath = namespace(names=[]) %}{% for b in t.below %}{% set beneath.names = beneath.names + [changes.names.get(b, _("topic {id}", id=b))] %}{% endfor %}<li>{{ _("Topics beneath it changed: {names}", names=beneath.names|join(", ")) }}</li>{% endif %}
                   {% for said in t.decided %}<li>{{ said[:1]|upper }}{{ said[1:] }}</li>{% endfor %}
-                  {% if t.what == "new" %}<li>A new topic, made by this run</li>{% endif %}
-                  {% if t.what == "regrouped" and not t.entered and not t.left and not t.below %}<li>Its place in the tree changed; its brief was kept</li>{% endif %}
+                  {% if t.what == "new" %}<li>{{ _("A new topic, made by this run") }}</li>{% endif %}
+                  {% if t.what == "regrouped" and not t.entered and not t.left and not t.below %}<li>{{ _("Its place in the tree changed; its brief was kept") }}</li>{% endif %}
                 </ul>
                 {% if t.brief %}
                 <details class="brief-diff">
-                  <summary>Its brief, before and after</summary>
+                  <summary>{{ _("Its brief, before and after") }}</summary>
                   <pre class="diff">{% for l in t.brief %}<span class="d-{{ {'+': 'add', '-': 'del', '@': 'gap'}.get(l.kind, 'ctx') }}">{{ l.kind if l.kind in '+-' else ' ' }} {{ l.text }}</span>{% endfor %}</pre>
                 </details>
                 {% elif t.what == "new" and t.after %}
-                <details class="brief-diff"><summary>Its brief</summary><div class="prose">{{ t.after|markdown|safe }}</div></details>
+                <details class="brief-diff"><summary>{{ _("Its brief") }}</summary><div class="prose">{{ t.after|markdown|safe }}</div></details>
                 {% endif %}
               </div>
             </details>
             {% else %}
-            <div class="same"><span class="name">{{ row.name }}</span>{% if row.unchanged %} <span class="faint small">+{{ row.unchanged }} unchanged</span>{% endif %}</div>
+            <div class="same"><span class="name">{{ row.name }}</span>{% if row.unchanged %} <span class="faint small">{{ _("+{n} unchanged", n=row.unchanged) }}</span>{% endif %}</div>
             {% endif %}
           </li>
           {% endfor %}
         </ul>
       </details>
-      {% if can_run and changes.blocker and not job.live %}<p class="hint">Revert is not available: {{ changes.blocker }}.</p>{% endif %}
+      {% if can_run and changes.blocker and not job.live %}<p class="hint">{{ _("Revert is not available: {why}.", why=changes.blocker) }}</p>{% endif %}
       {% endif %}
     </div>
   </section>
@@ -261,7 +268,7 @@
   {% set nothing_yet = not (job.outcome.did or job.outcome.found) %}
   {% if not (nothing_yet and job.live) %}
   <section class="card">
-    <div class="card-head"><h2>What it did</h2>{% if job.outcome.did or job.outcome.found %}<a class="small" href="/ui/trees/{{ tree }}/activity?tree={{ tree }}">Changes</a>{% endif %}</div>
+    <div class="card-head"><h2>{{ _("What it did") }}</h2>{% if job.outcome.did or job.outcome.found %}<a class="small" href="/ui/trees/{{ tree }}/activity?tree={{ tree }}">{{ _("Changes") }}</a>{% endif %}</div>
     <div class="card-body">
       {% if job.outcome.did or job.outcome.found %}
       <ul class="didwhat big">
@@ -270,18 +277,18 @@
       </ul>
       {% elif job.status in ("failed", "canceled") %}
       <div class="empty">
-        <div class="title">It stopped before it finished</div>
-        {% if job.stages %}<p class="hint mt-2">What finished first is in the stages above. Anything after them was not done.</p>{% endif %}
-        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">All runs</a></div>
+        <div class="title">{{ _("It stopped before it finished") }}</div>
+        {% if job.stages %}<p class="hint mt-2">{{ _("What finished first is in the stages above. Anything after them was not done.") }}</p>{% endif %}
+        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("All runs") }}</a></div>
       </div>
       {% elif job.outcome.quiet %}
       <div class="empty">
-        <div class="title">Nothing to change</div>
-        <p class="hint mt-2">Everything this run looked at was already up to date. A re-run over unchanged sources makes no model calls at all.</p>
-        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">All runs</a></div>
+        <div class="title">{{ _("Nothing to change") }}</div>
+        <p class="hint mt-2">{{ _("Everything this run looked at was already up to date. A re-run over unchanged sources makes no model calls at all.") }}</p>
+        <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("All runs") }}</a></div>
       </div>
       {% else %}
-      <div class="empty"><div class="title">It reported nothing</div><div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">All runs</a></div></div>
+      <div class="empty"><div class="title">{{ _("It reported nothing") }}</div><div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("All runs") }}</a></div></div>
       {% endif %}
     </div>
   </section>
@@ -291,12 +298,12 @@
   {% for todo in job.outcome.next %}
   <div class="callout warn">
     <div class="body">
-      <div class="title">Still to do</div>
+      <div class="title">{{ _("Still to do") }}</div>
       <p class="hint">{{ todo.says }}</p>
       {% if todo.op and can_run %}
       <form class="inline mt-2" method="post" action="/ui/jobs/run?tree={{ tree }}">
         <input type="hidden" name="op" value="{{ todo.op }}">
-        <button class="btn small" type="submit">Run {{ todo.op }}</button>
+        <button class="btn small" type="submit">{{ _("Run {op}", op=todo.op) }}</button>
       </form>
       {% endif %}
     </div>
@@ -306,8 +313,8 @@
   {% if job.children %}
   <section class="card">
     <div class="card-head">
-      <h2>Pieces <span class="faint num">{{ job.children|length }}</span></h2>
-      {% if job.progress %}<span class="chip">{{ job.progress.done }}/{{ job.progress.total }} done</span>{% endif %}
+      <h2>{{ _("Pieces") }} <span class="faint num">{{ job.children|length }}</span></h2>
+      {% if job.progress %}<span class="chip">{{ _("{done}/{total} done", done=job.progress.done, total=job.progress.total) }}</span>{% endif %}
     </div>
     <div class="card-body">
       <ul class="pieces">
@@ -317,7 +324,7 @@
             <code>{{ child.op }}</code>
             {% if child.scope.name %}<span class="chip plain">{{ child.scope.name }}</span>{% endif %}
             <span class="grow"></span>
-            <span class="state" data-state="{{ child.status|status_word }}">{{ child.status|status_word }}</span>
+            <span class="state" data-state="{{ child.status|status_word }}">{{ child.status|status_label }}</span>
           </div>
           {% if child.means %}<p class="hint">{{ child.means }}</p>{% endif %}
           {% if child.outcome.did or child.outcome.found %}
@@ -335,7 +342,7 @@
   {% endif %}
   {% if job.raw and not job.live %}
   <details class="reveal" id="raw">
-    <summary>Raw result<span class="tip" tabindex="0" role="note" data-tip="What the run returned, as stored. The sections above are read from it">?</span></summary>
+    <summary>{{ _("Raw result") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What the run returned, as stored. The sections above are read from it") }}">?</span></summary>
     <pre class="preview">{{ job.raw|tojson(indent=2) }}</pre>
   </details>
   {% endif %}
@@ -355,10 +362,19 @@
   // the time it has been going, counted here between fetches
   var since = document.querySelector("[data-since]");
   var began = since ? Date.parse(since.dataset.since) : NaN;
+  // the same words as ui/jobs.py _elapsed, in the reader's language
+  var units = {
+    s: {{ _("{s}s")|tojson }},
+    ms: {{ _("{m}m {s}s")|tojson }},
+    hm: {{ _("{h}h {m}m")|tojson }}
+  };
+  function fill(text, slots) {
+    return text.replace(/\{(\w)\}/g, function (_, k) { return slots[k]; });
+  }
   function took(s) {
-    if (s < 60) return s + "s";
-    if (s < 3600) return Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s";
-    return Math.floor(s / 3600) + "h " + String(Math.floor(s % 3600 / 60)).padStart(2, "0") + "m";
+    if (s < 60) return fill(units.s, { s: s });
+    if (s < 3600) return fill(units.ms, { m: Math.floor(s / 60), s: String(s % 60).padStart(2, "0") });
+    return fill(units.hm, { h: Math.floor(s / 3600), m: String(Math.floor(s % 3600 / 60)).padStart(2, "0") });
   }
   var ticker = isNaN(began) ? null : setInterval(function () {
     var el = document.querySelector("[data-since]");

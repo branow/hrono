@@ -40,7 +40,12 @@ from hrono.ingest.sync import fetch_source as fill_cache
 from hrono.jobs.ops import JobContext
 from hrono.jobs.worker import enqueue
 from hrono.onboarding import defaults
-from hrono.onboarding.estimate import Estimate, cut, estimate
+from hrono.onboarding.estimate import (
+    SECTIONS_PER_TOPIC,
+    Estimate,
+    cut,
+    estimate,
+)
 from hrono.onboarding.preview import Preview, preview
 from hrono.registry import completeness, engine, store
 from hrono.registry.collections.connections import CONNECTIONS
@@ -49,6 +54,7 @@ from hrono.registry.collections.sources import SOURCES
 from hrono.registry.collections.trees import is_known, scoped_sources
 from hrono.server import forms
 from hrono.server.auth import allows
+from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
 from hrono.server.ui.settings import (
     existing,
@@ -164,7 +170,7 @@ async def save_connection(request: Request, user: Writer) -> Response:
             typed=body,
             problems=field_errors(exc),
         )
-    return _next(tree, "models", f"Connected: {name} answered.")
+    return _next(tree, "models", _("Connected: {name} answered.", name=name))
 
 
 @router.post("/ui/setup/models")
@@ -188,7 +194,7 @@ async def save_models(request: Request, user: Writer) -> Response:
                 for message in field_errors(exc)
             ],
         )
-    return _next(tree, "source", "Models registered and each one answered.")
+    return _next(tree, "source", _("Models registered and each one answered."))
 
 
 @router.post("/ui/setup/source")
@@ -254,7 +260,7 @@ async def start_build(request: Request, user: Writer) -> Response:
             user,
             tree,
             step="build",
-            problems=[problem(f"tree not registered: {tree}")],
+            problems=[problem(_("tree not registered: {tree}", tree=tree))],
         )
     if busy is not None:
         return RedirectResponse(
@@ -297,7 +303,7 @@ def _render(
             "tree": chosen_tree,
             "can_write": allows(user.role, "writer"),
             "steps": [
-                {"key": key, "label": label, "done": state.done[key]}
+                {"key": key, "label": _(label), "done": state.done[key]}
                 for key, label in STEPS
             ],
             "step": current,
@@ -474,7 +480,34 @@ def _build(
     found: Estimate | None = (
         estimate(conn, cut(caches), pool.width()) if caches else None
     )
-    return {"estimate": found, "unread": unread, "elsewhere": elsewhere}
+    return {
+        "estimate": found,
+        "basis": "" if found is None else _basis(found),
+        "unread": unread,
+        "elsewhere": elsewhere,
+    }
+
+
+BASIS = (
+    "{sections} sections counted from {files} files; calls and tokens sized "
+    "from a measured build of a similar repository (about {per_topic} "
+    "sections per topic); the number of topics, and so of briefs, is the "
+    "loosest part"
+)
+
+
+def _basis(found: Estimate) -> str:
+    """What the estimate rests on, in the page's words.
+
+    `Estimate.basis` says the same in English for the API; the page says it
+    from the same figures so it can say it in the reader's language.
+    """
+    return _(
+        BASIS,
+        sections=found.cut.sections,
+        files=found.cut.files,
+        per_topic=SECTIONS_PER_TOPIC,
+    )
 
 
 def _wanted(
@@ -542,7 +575,11 @@ async def _fetched(
             tree,
             step="source",
             source=name,
-            problems=[problem(f"saved, but it could not be read: {exc}")],
+            problems=[
+                problem(
+                    _("saved, but it could not be read: {error}", error=exc)
+                )
+            ],
         )
     query = urlencode({"tree": tree, "step": "source", "source": name})
     return RedirectResponse(f"/ui/setup?{query}", status_code=303)
@@ -558,9 +595,28 @@ def _next(tree: str, step: str, said: str) -> Response:
 def dollars(amount: float | None) -> str:
     """A cost as a person reads it; unknown stays unknown, never zero."""
     if amount is None:
-        return "unknown"
+        return _("unknown")
     return f"${amount:,.2f}" if amount >= 1 else f"${amount:.4f}"
 
 
+# Why a file is left out, as `ingest.filter` says it: a fixed few reasons, and
+# one that names the built-in ignore group that caught the file.
+_IGNORED = "ignored by default: "
+
+
+def reason(why: str) -> str:
+    """A reason a file is not read, in the page's words."""
+    if why.startswith(_IGNORED):
+        return _("ignored by default: {group}", group=why[len(_IGNORED) :])
+    return {
+        "outside filter.only": _("outside filter.only"),
+        "matched filter.exclude": _("matched filter.exclude"),
+        "empty": _("empty"),
+        "over the size limit": _("over the size limit"),
+        "binary": _("binary"),
+    }.get(why, why)
+
+
 templates.env.filters["dollars"] = dollars
+templates.env.filters["reason"] = reason
 templates.env.filters["taken"] = duration

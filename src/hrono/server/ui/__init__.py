@@ -35,7 +35,7 @@ from hrono.errors import AppError
 from hrono.ingest.split.constants import PASSAGE_BYTES, SECTION_BYTES
 from hrono.jobs.aggregate import PARTIAL
 from hrono.registry import store as registry_store
-from hrono.server import prose
+from hrono.server import i18n, prose
 from hrono.server.auth import allows, require_role
 from hrono.server.words import compact, counted, size, weight
 
@@ -60,6 +60,34 @@ def status_word(status: str) -> str:
 
 
 templates.env.filters["status_word"] = status_word
+
+
+def status_labels() -> dict[str, str]:
+    """Each run status as the page shows it, in the reader's language.
+
+    Built per call, not at import, so it follows the request's language.
+    """
+    return {
+        "pending": i18n.gettext("pending"),
+        "running": i18n.gettext("running"),
+        "succeeded": i18n.gettext("succeeded"),
+        "failed": i18n.gettext("failed"),
+        "canceled": i18n.gettext("canceled"),
+    }
+
+
+def status_label(status: str) -> str:
+    """``status_word`` for reading: the same word, translated.
+
+    ``status_word`` stays the value ``data-state`` keys its colour on; this
+    is the text beside it.
+    """
+    word = status_word(status)
+    return status_labels().get(word, word)
+
+
+templates.env.filters["status_label"] = status_label
+templates.env.globals["status_labels"] = status_labels
 
 
 def idents(text: str) -> Markup:
@@ -223,7 +251,8 @@ def switch(here: str, tree: str, to: str) -> str:
 # more than one page shows them as sub-tabs under the bar, so a page is never
 # more than two clicks away and the bar never grows a tab per page. Data, so
 # the bar, the sub-tabs and the current-page mark cannot disagree.
-# (key, label, href, inside, admin only)
+# (key, label, href, inside, admin only). The labels are English and are
+# translated where `tabs()` and `subtabs()` hand them to the page.
 Page = tuple[str, str, str, str, bool]
 SECTIONS: tuple[tuple[str, str, tuple[Page, ...]], ...] = (
     ("home", "Home", (("home", "Overview", "/ui", r"/ui", False),)),
@@ -350,7 +379,7 @@ def tabs(here: str, tree: str, role: str = "reader") -> list[dict[str, object]]:
         shown = _visible(pages, role)
         rows.append(
             {
-                "label": label,
+                "label": i18n.gettext(label),
                 "href": _link(shown[0][2], tree),
                 "current": any(re.fullmatch(page[3], path) for page in shown),
             }
@@ -358,7 +387,11 @@ def tabs(here: str, tree: str, role: str = "reader") -> list[dict[str, object]]:
     if re.fullmatch(TOPIC_PAGE, path):
         rows.insert(
             2,
-            {"label": "Topic", "href": here + f"?tree={tree}", "current": True},
+            {
+                "label": i18n.gettext("Topic"),
+                "href": here + f"?tree={tree}",
+                "current": True,
+            },
         )
     return rows
 
@@ -373,7 +406,7 @@ def subtabs(
         if len(shown) > 1 and any(re.fullmatch(p[3], path) for p in shown):
             return [
                 {
-                    "label": label,
+                    "label": i18n.gettext(label),
                     "href": _link(href, tree),
                     "current": re.fullmatch(inside, path) is not None,
                 }
@@ -392,6 +425,12 @@ templates.env.globals["subtabs"] = subtabs
 # route context dicts: the theme is chrome, and every page has the same answer.
 templates.env.globals["chosen_theme"] = chosen_theme
 templates.env.globals["next_theme"] = next_theme
+# Every string a page shows goes through these (`server/i18n.py`).
+templates.env.globals["_"] = i18n.gettext
+templates.env.globals["n_"] = i18n.ngettext
+templates.env.globals["lang"] = i18n.current
+templates.env.globals["other_lang"] = i18n.other
+templates.env.globals["langs"] = i18n.LANGS
 
 
 def _trees(conn: object) -> list[str]:

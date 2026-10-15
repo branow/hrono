@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from hrono.auth.users import authenticate
+from hrono.server import i18n
 from hrono.server.auth import COOKIE
 from hrono.server.ui import (
     COOKIE_MAX_AGE,
@@ -118,3 +119,29 @@ def favicon() -> Response:
         media_type="image/svg+xml",
         headers={"cache-control": "max-age=86400"},
     )
+
+
+@router.post("/ui/lang")
+async def set_lang(request: Request) -> Response:
+    """Remember the reader's language, and come back to the same page.
+
+    A form and a cookie, like the theme, so the server writes the page in
+    that language from the first byte and no script is needed to switch.
+    """
+    fields = await _fields(request)
+    picked = fields.get("lang", "")
+    back = fields.get("back", "/ui")
+    answer = RedirectResponse(
+        back if back.startswith("/ui") else "/ui", status_code=303
+    )
+    if picked in i18n.LANGS and picked != i18n.DEFAULT:
+        answer.set_cookie(
+            i18n.COOKIE,
+            picked,
+            max_age=60 * 60 * 24 * 365,
+            httponly=False,  # it decides the wording, not an identity
+            samesite="lax",
+        )
+    else:
+        answer.delete_cookie(i18n.COOKIE)
+    return answer
