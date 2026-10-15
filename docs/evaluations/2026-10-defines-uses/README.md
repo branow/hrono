@@ -594,3 +594,51 @@ Three topics, $1.16.
 
 So far: what is declared is accurate; what is looked up is too little for
 two of three topics.
+
+## Round 9, steps 1-4 (2026-10-15): lookups in hrono, a sub-tree rebuilt by hrono's own code
+
+**Step 1, end.** With the connections it found listed in a `## Lookups`
+section and thinking on, the writer made 8-11 lookups on business-pay and
+entity-pay (it had made 2-5), found the entity-filer consumer and legal-api's
+Filing model, and said which ones it could not find. Declarations stayed
+accurate. Step 1 in all: $1.70.
+
+**Steps 2-3, in hrono** (commits `509f683`, `b468a0c`): a tree setting
+"Look into other topics" (off by default); tool use in every provider
+(`llm/tools.py`); virtual `source/` and `condensed/` files with read-only
+`Grep`, `Glob`, `Read` (`summarize/lookup.py`); the `brief_uses` table; and
+`propagate` judging a leaf whose used file changed. See docs/summarization.md.
+
+**Step 4: the two questions' sub-tree, rebuilt by hrono's own ops**
+(`harness/subtree_v9.py`, a copy of the v3 tree, `hrono-v9.db`): the new
+seeded prompts, the setting on, the 380 sections of the 16 leaf topics
+re-condensed by the `condense` op (every other section keeps its stored
+condensation), the 16 leaf briefs by the `brief` op with lookups (26 stored
+relations, `data/brief-uses-v9.json`), the 9 upper briefs above them by the
+`brief-upper` op, the export by hrono's renderer (`export-bcreg-v9-L3`). The
+agents get what the plugin now says (its session note and the hrono skill,
+`MAP=plugin` in `agent_v2.py`), no recall block.
+
+- **Upper briefs with no word target ran away**: the root reached 13,600
+  words, a level-2 brief 10,600. The upper prompt got back a 400-900 word
+  range (its children's briefs are below it in the map); rewritten, they are
+  1,200-2,700 words. Leaf briefs are 750-5,700 words.
+- In this run the future-effective job's brief did not find the query behind
+  the endpoint; it says "what that endpoint queries and returns is not shown
+  in the lookup" instead of guessing.
+
+| arm | legacy-0 | failure-1 |
+|---|---|---|
+| code only (`code-w9a/b`) | 0.62, 0.62 | 0.29, 0.43 |
+| round 8 best (I briefs + links, `MAP_V3`) | 0.69, 0.69 | 0.43, 0.50 |
+| **hrono v9: own code, new prompts, lookups, plugin text** | 0.75, 0.62 | 0.64, 0.57 |
+
+failure-1 averages 0.61 against 0.36 for code only, close to the round 8
+ceiling (0.71 with every needed brief inline); legacy-0, the question that
+does not separate the arms, 0.69 against 0.62. The agents read 4-12 briefs
+and cost the same as code only ($0.26-0.48 a run).
+
+Spent in step 4: about $13 at API prices (billed to the subscription through
+the `claude-code` provider): condense $1.70, leaf briefs $3.40, upper briefs
+$4.00 and their rewrite $1.60, four agent runs and their scoring $2.40. Over
+the $5-8 estimate, because of the runaway upper briefs.

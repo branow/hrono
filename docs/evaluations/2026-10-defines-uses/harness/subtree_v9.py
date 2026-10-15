@@ -134,6 +134,27 @@ def build() -> None:
     database.close()
 
 
+def uppers() -> None:
+    """Rewrite the sub-tree's upper briefs with the current seeded prompt."""
+    database = Database.at(DST)
+    with database.connect() as conn:
+        default = next(d for d in _DEFAULTS if d["role"] == "brief-upper")
+        body = json.dumps(default)
+        store.replace(
+            conn, "prompts", "brief-upper", body, None, "t", content_hash(body)
+        )
+        rows = conn.execute(
+            "SELECT b.node_id AS node, n.level AS level FROM briefs b "
+            "JOIN nodes n ON n.id = b.node_id WHERE n.level > 0 "
+            "AND b.created_at > '2026-10-15T14' ORDER BY n.level, b.node_id"
+        ).fetchall()
+    context = JobContext(database, cache_root=CACHE)
+    for row in rows:
+        scope = {"level": int(row["level"]), "node": int(row["node"])}
+        print(row["node"], brief_upper(_job("brief-upper", scope), context), flush=True)
+    database.close()
+
+
 EXPORT = Path.home() / "hrono-eval" / "export-bcreg-v9-L3"
 
 
@@ -160,4 +181,4 @@ def export() -> None:
 
 
 if __name__ == "__main__":
-    {"build": build, "export": export}[sys.argv[1]]()
+    {"build": build, "uppers": uppers, "export": export}[sys.argv[1]]()
