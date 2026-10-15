@@ -1,0 +1,132 @@
+[
+ {
+  "node": 523,
+  "file": "lear/devops/openshift/_entity-filer.dc.json",
+  "statement": "`NATS_FILER_SUBJECT=\"entity.filing.filer\"` is set in the entity-filer deployment template."
+ },
+ {
+  "node": 523,
+  "file": "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+  "statement": "the endpoint `GET /api/v2/internal/filings/future_effective` requires the role `UserRoles.system`."
+ },
+ {
+  "node": 577,
+  "file": "lear/legal-api/src/legal_api/services/authz.py",
+  "statement": "`authorized` returns False for empty action, identifier or jwt, and True for STAFF_ROLE, SYSTEM_ROLE or COLIN_SVC_ROLE; `is_allowed` signature and the `Filing.find_by_id` status check with DRAFT and CHANGE_REQUESTED."
+ },
+ {
+  "node": 577,
+  "file": "lear/legal-api/src/legal_api/services/queue.py",
+  "statement": "`publish_json(payload, subject)` publishes to `subject` or `self.subject`, logs and re-raises on error."
+ },
+ {
+  "node": 579,
+  "file": "lear/queue_services/entity-emailer/tracker/services/message_processing_service.py",
+  "statement": "create/update/find behaviour, fields saved, seen-count increment, last_error only set when truthy."
+ },
+ {
+  "node": 606,
+  "file": "lear/queue_services/common/src/entity_queue_common/messages.py",
+  "statement": "`publish_email_message(qsm, subject, filing, option)` publishes `{'email': {'filingId','type','option'}}` via `qsm.service.publish(subject, payload)`."
+ },
+ {
+  "node": 607,
+  "file": "lear/legal-api/src/legal_api/services/involuntary_dissolution.py",
+  "statement": "`check_business_eligibility` returns `(eligible, details)` from the eligible-business query filtered by identifier. `get_in_dissolution_batch_processing` returns the one BatchProcessing joined with Batch, with status, batch-status and batch-type conditions as listed."
+ },
+ {
+  "node": 607,
+  "file": "lear/queue_services/common/src/entity_queue_common/service_utils/exceptions.py",
+  "statement": "`QueueException` is the base exception for the queue services."
+ },
+ {
+  "node": 607,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/utils.py",
+  "statement": "`replace_file_with_certified_copy` reads the PDF, builds a registrar's stamp with PdfService, and stamps only the first page."
+ },
+ {
+  "node": 619,
+  "file": "sbc-pay/pay-api/src/pay_api/services/code.py",
+  "statement": "`build_all_codes_cache` iterates the `Code` values and catches only `SQLAlchemyError` (logged at info). `find_code_values_by_type` fills the cache by type. `find_code_value_by_type_and_code` filters cached entries on `type` or `code` and returns the first match, or `{}`."
+ },
+ {
+  "node": 635,
+  "file": "sbc-pay/jobs/payment-jobs/utils/auth_event.py",
+  "statement": "`AuthEvent` lock and unlock event messages, payloads and topic, with exceptions swallowed. The comment says the message is passed on to account-mailer."
+ },
+ {
+  "node": 644,
+  "file": "lear/legal-api/src/legal_api/config.py",
+  "statement": "NATS_FILER_SUBJECT default 'entity.filing.filer'; NATS_ENTITY_EVENT_SUBJECT default 'entity.events'; NATS_EMAILER_SUBJECT default 'entity.email'."
+ },
+ {
+  "node": 694,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
+  "statement": "entity-filer consumes the filer subject from `NATS_FILER_SUBJECT` (default 'error') and uses `NATS_EMAILER_SUBJECT` default 'entity.email' for its own email publishing."
+ },
+ {
+  "node": 728,
+  "file": "sbc-pay/pay-api/src/pay_api/models/base_model.py",
+  "statement": "BaseModel `commit`, `save`, `delete`, `flush`, `rollback`, `find_by_id`, and `to_dict` coercing values to strings."
+ },
+ {
+  "node": 744,
+  "file": "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py",
+  "statement": "the job reads the stage schedule keys and NUM_DISSOLUTIONS_ALLOWED, creates the DISSOLUTION/INVOLUNTARY filing, and publishes {'filing': {'id'}} to NATS_FILER_SUBJECT."
+ },
+ {
+  "node": 744,
+  "file": "lear/legal-api/src/legal_api/models/colin_event_id.py",
+  "statement": "table columns, `get_by_filing_id` returns a list of ints, `get_by_colin_id` returns one_or_none, `save()` commits immediately."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/common/example_service_runner.py",
+  "statement": "launch script runs `run_until_complete(run(...))`, then `run_forever()`, and closes the loop in `finally`."
+ },
+ {
+  "node": 796,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
+  "statement": "entity-filer has a config with the same named-config structure, the same NATS subject settings and the same database settings."
+ },
+ {
+  "node": 796,
+  "file": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "statement": "handler logic, checks, retry loop, publishes, error handling and Sentry reporting."
+ },
+ {
+  "node": 797,
+  "file": "lear/legal-api/src/legal_api/models/filing.py",
+  "statement": "`get_filing_by_payment_token` filters on `payment_token` with `one_or_none()`."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/common/src/entity_queue_common/messages.py",
+  "statement": "the filing and email payload shapes and `publish_email_message`."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-pay/src/entity_pay/config.py",
+  "statement": "subjects, env defaults and the NATS/STAN options."
+ },
+ {
+  "node": 833,
+  "file": "sbc-pay/pay-api/src/pay_api/config.py",
+  "statement": "`ACCOUNT_MAILER_TOPIC` default `account-mailer-dev`, `AUTH_EVENT_TOPIC` default `auth-event-dev`."
+ },
+ {
+  "node": 833,
+  "file": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "statement": "`get_topic_for_corp_type` routing (NRO\u2192`NAMEX_PAY_TOPIC`, BUSINESS/BUSINESS_SEARCH\u2192`BUSINESS_PAY_TOPIC`, STRR\u2192`STRR_PAY_TOPIC`, else None; uses `CodeService.find_code_value_by_type_and_code`)."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/models/distribution_code.py",
+  "statement": "the `DistributionCodeLink` `find_fee_schedules_by_distribution_id` join and `bulk_save_links`, which runs `bulk_save_objects` and then `BaseModel.commit()`."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/models/invoice.py",
+  "statement": "`update_invoices_for_revenue_updates` finds invoices by `PaymentLineItem.fee_distribution_id`, moves `PAID` to `UPDATE_REVENUE_ACCOUNT` and `REFUNDED` to `UPDATE_REVENUE_ACCOUNT_REFUND`, and calls `bulk_save_objects`."
+ }
+]
