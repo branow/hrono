@@ -139,6 +139,37 @@ def test_leaf_lists_its_sources_and_carries_caution(
     assert " ".join(sources) == "repo @ v1: - `a.py`"
 
 
+def test_a_looked_up_relation_links_both_topics(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    with database.connect() as conn, conn:
+        conn.execute(
+            "INSERT INTO brief_uses(node_id, file, signature, statement) "
+            "VALUES (?, 'repo/b.py', 's', 'beta applies the filing')",
+            (ids["n0"],),
+        )
+    files = _files(database)
+    alpha = files[f"alpha-topic-{ids['n0']}/brief.md"]
+    beta = files[f"beta-topic-{ids['n1']}/brief.md"]
+    assert alpha.index("## Connected topics") < alpha.index("## Sources")
+    assert f"[Beta topic](beta-topic-{ids['n1']}/brief.md)" in alpha
+    assert "this topic took from `repo/b.py`: beta applies the filing" in alpha
+    assert f"[Alpha topic](alpha-topic-{ids['n0']}/brief.md)" in beta
+    assert "it took from this topic's `repo/b.py`" in beta
+    assert "## Connected topics" not in files["root.md"]
+
+
+def test_a_leaf_with_no_relation_has_no_connected_topics(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    assert (
+        "## Connected topics"
+        not in _files(database)[f"alpha-topic-{ids['n0']}/brief.md"]
+    )
+
+
 def test_no_section_copy_is_written(
     db: tuple[Database, dict[str, int]],
 ) -> None:

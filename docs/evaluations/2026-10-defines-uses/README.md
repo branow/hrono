@@ -755,3 +755,40 @@ service-layer brief, outside this sub-tree's lookups.
    (`lookup.UNLOOKED`); the instruction now says the brief comes after the
    lookups, never instead of them.
 2. `agent_v2.py` honours `MAP=plugin`.
+
+### Round 10, fact by fact (no new calls)
+
+Every fact either answer missed or half-stated, traced to the step that lost
+it (`v10c/d`, plugin text):
+
+| fact | in the tree? | where it was lost | fix |
+|---|---|---|---|
+| failure-1 #2 (BCOL/PAD/EFT/EJV release at invoice creation) | yes, spread over 833 | 833 is one leaf of 54 sections, a 440-line brief; the agent read lines 30-130 | cold build splits leaves over `MAX_CAP` |
+| failure-1 #4, legacy-0 #6 (legacy consumer's duplicate rule) | yes, 797 Hazards word for word | read by both agents; one wrote "does the same job" | skill: give each parallel part its own behaviour |
+| failure-1 #5 (emailer tracker skips other filing types) | yes, 579 | 459's flow kept "unseen or FAILED" but dropped the silent skip; nobody opened 579 | upper prompt: a flow says where a step drops work without an error |
+| failure-1 #6 (future-effective job re-drives lost PAID filings) | yes, 523 (its lookups found the query) | 523 is in another area; 459 never names it; 694 made no lookup; 523's relations were dropped | export `## Connected topics`; `Used` repository paths kept; lookup retry |
+| failure-1 #7 (an uncaught error in consume_nr skips the later steps) | partly: 606 did not look into business_profile / name_request | 459 wrote "failures in these steps are logged and swallowed" for all steps | upper prompt: failure per step, never one rule; lookup retry |
+| legacy-0 #7, hazard (`verify_gcp_jwt` "may be inverted") | wrong in the tree | Haiku condensed `if msg := verify_gcp_jwt(...)` -> 403 as "returns truthy (fails -> 403)"; 694 flagged the contradiction; 459 made it a hazard | condense and brief prompts: a check as the code tests it |
+| legacy-0 #5 (business-pay's own Filing model bypasses legal-api's listener) | no | 694 made no lookup, so the shared-record rule never ran | lookup retry |
+
+**Faults found in hrono itself:**
+1. `lookup.split` dropped every `Used` line written as a repository path
+   (which round 9's instruction asked for in the brief text): 16 of 26
+   relations lost, 523's three among them. Now a bare path that names a
+   tree file is kept.
+2. The export never rendered `brief_uses`. A leaf page now has `## Connected
+   topics`: the topics on the other side of a looked-up relation, in both
+   directions, with what was taken. On v10 it links 796, 797, 775, 606, 607,
+   555, 619, 834, 833 and 635.
+3. The cold `cluster` op never enforced `MAX_CAP`: 62 of 432 bcreg leaves held
+   31-65 sections (30% of the corpus). It now splits them with repair's
+   split; 52 of the 62 split (833 into three), 10 have no two density cores.
+4. A brief that made no lookup, or whose own `Lookups` account says a
+   connection was not searched, is asked once more with a fresh budget and
+   the list of what it skipped. On v10 that is all 16 briefs, so the
+   instruction now says the first replies are lookups and an unsearched
+   connection sends the brief back.
+5. Prompts: checks as the code tests them; upper flows give failure handling
+   per step, name silent drops, and say what no part of the area repairs.
+6. The plugin points at `Connected topics` and asks for each parallel part's
+   own behaviour.

@@ -22,7 +22,7 @@ All baked in code, not config.
 | UMAP | cosine, seed 42, warm `init` from stored coords | `cluster/build.py` | Build and settle only; never during an update. |
 | HDBSCAN | `leaf`, euclidean | `cluster/build.py` | Leaf selection gives the many small topics a summarization tree wants. |
 | `TAU` | 0.70 | `cluster/placement.py` | Similarity a section needs to join an existing topic. Set for the old content-and-path-string space; to recalibrate on the new clustering vector. |
-| `MAX_CAP` | 30 members | `cluster/repair.py` | The edge of one faithful brief (~500 tokens × 30 ≈ 15k input tokens). It sits above the organic leaf sizes (5–28, median ~10), so it only catches pathological growth. |
+| `MAX_CAP` | 30 members | `cluster/repair.py` | The edge of one faithful brief (~500 tokens × 30 ≈ 15k input tokens). Small corpora's organic leaves sit below it (5–28, median ~10); on bcreg (8,459 sections) 62 of 432 cold-built leaves held 31–65. A cold build splits them before any brief (`cluster/op.py`); 52 of the 62 split, the rest have no two density cores and stay whole. |
 | `MISFIT_THRESHOLD` | 0.25 | `cluster/repair.py` | Per-topic misfit share that triggers a migrate. |
 | `SAMPLE_SIZE` | 32 topics | `cluster/monitor.py` | Bounded re-check per batch beyond the dirty topics. |
 | `CHURN_THRESHOLD` | 50 drift points | `tree/settle.py` | When a settle is due. |
@@ -123,7 +123,9 @@ is relative to it.
 `cluster/repair.py`, one topic at a time; only that topic's brief regenerates.
 
 - **Split**: over `MAX_CAP` → scoped mini-pipeline over its members into
-  density-core children; residual noise attaches to the nearest child.
+  density-core children; residual noise attaches to the nearest child. The
+  cold `cluster` op applies the same split to every leaf it built, until
+  none is over the cap or none splits further.
 - **Migrate**: misfit share over `MISFIT_THRESHOLD`, or any forced member →
   each misfit moves to the topic that fits it and is recorded unforced. Upper
   levels migrate children in brief space.

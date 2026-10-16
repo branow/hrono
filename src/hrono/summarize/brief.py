@@ -153,21 +153,26 @@ def brief(
             ),
             brief_gate(template, source),
         )
-        if not tools.calls:
-            # half the bcreg v10 leaf briefs looked nothing up and named
-            # every connection "not searched": asked again, once, to look
+        calls = list(tools.calls)
+        missing = lookup.unsearched(result.text)
+        if not calls or missing:
+            # half the bcreg v10 leaf briefs looked nothing up, and most of
+            # the rest named connections they never searched: each is asked
+            # again, once, with a fresh budget, to look first
             first = result
+            retry = lookup.toolbox(found)
             result, flagged = answer(
                 completion,
                 CompletionRequest(
                     model=model,
                     system="",
-                    content=rendered + lookup.UNLOOKED,
-                    tools=tools,
+                    content=rendered + lookup.again(missing, bool(calls)),
+                    tools=retry,
                 ),
                 brief_gate(template, source),
             )
             result = summed([first, result])
+            calls += retry.calls
         text, uses = lookup.split(result.text, own[node_id], found.texts)
         # what it looked up is material too: a name it read in another
         # topic's file is not an invention
@@ -185,7 +190,7 @@ def brief(
             uses,
             json.dumps(
                 {
-                    "calls": tools.calls,
+                    "calls": calls,
                     "account": lookup.accounting(result.text),
                 }
             ),
