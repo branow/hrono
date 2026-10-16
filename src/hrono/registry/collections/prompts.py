@@ -199,9 +199,11 @@ failure as its part's description gives it: where steps fail differently \
 say so step by step, never as one rule for all; where a description does not \
 say, write that. When a step drops or skips work without an error - a message \
 it never processes, a record it ignores - the flow says so, with the kind of \
-condition and the part that holds it. The last section, when there is one, \
-lists parts outside this area that the parts here hand work to or take it \
-from. Name such a part inside the step it acts on - never in a section of \
+condition and the part that holds it, said as what the dropped work is (which \
+types, which states), never only as the field its check reads. The last \
+section, when there is one, lists parts outside this area that the parts \
+here hand work to or take it from. Name such a part inside the step it \
+acts on - never in a section of \
 its own - and say it sits elsewhere: one that sends lost or stuck work round \
 again is that step's repair (say which records it picks up), and one that \
 consumes the same messages is a second path, whose own behaviour its \

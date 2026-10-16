@@ -68,6 +68,10 @@ def render(
             stems,
             directory,
         )
+        if node_id in parent:
+            files[path] = _with_area(
+                files[path], parent[node_id], tree.root, pages, conn
+            )
         if links.get(node_id):
             files[path] = _with_connections(
                 files[path], links[node_id], pages, conn
@@ -149,6 +153,32 @@ def _connections(
             (user, f"it took from this topic's `{file}`: {statement}")
         )
     return links
+
+
+def _with_area(
+    page: str,
+    above: int,
+    root: int,
+    pages: Mapping[int, str],
+    conn: sqlite3.Connection,
+) -> str:
+    """A page with a line under its title naming the area it is part of.
+
+    Agents reach a topic by searching, never by walking down: with no link
+    up, none of round 11's four bcreg runs opened the area brief that says
+    how work moves between the topics they read and what repairs it.
+    """
+    if above == root:
+        line = "Part of the map whose overview is root.md."
+    else:
+        called = names(conn, [above])[above]
+        line = (
+            f"Part of [{called}]({pages[above]}) (path from the export's "
+            "root): its brief says how work moves through the area and what "
+            "repairs a failed step."
+        )
+    title, cut, rest = page.partition("\n\n")
+    return title + "\n\n" + line + cut + rest if cut else page + "\n\n" + line
 
 
 def _with_connections(

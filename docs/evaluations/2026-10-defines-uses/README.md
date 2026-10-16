@@ -792,3 +792,63 @@ it (`v10c/d`, plugin text):
    per step, name silent drops, and say what no part of the area repairs.
 6. The plugin points at `Connected topics` and asks for each parallel part's
    own behaviour.
+
+## Round 11, the round 10 fixes rebuilt and run (2026-10-16)
+
+`subtree_v9.py build` (now splitting leaves over `MAX_CAP` first: 5
+oversized leaves became 14, 25 leaf briefs), then `uppers` and `export`.
+v10's db and export kept as `hrono-v10.db`, `export-bcreg-v10`; the leaves
+before the upper changes as `hrono-v11-leaves.db`.
+
+**What the fixes did, checked in the briefs before any agent ran.**
+- Every leaf brief looked things up: 6-18 calls each (v10: 8 of 16 made
+  none). 121 relations stored (v10: 10). What leaves still call "not
+  searched" is budget, not refusal (a model file, a helper's body).
+- `verify_gcp_jwt` is right everywhere (694: a non-empty string -> 403).
+- 694 states business-pay's own filing model bypasses legal-api's listeners.
+- 606 links the future-effective job (523) under `Connected topics`.
+- 833 split three ways; `complete_post_invoice` -> `_release_payment` per
+  method is in 870.
+
+**Faults found in the rebuilt tree, fixed before the agent runs.**
+1. 459 still wrote "no part retries" a lost filer message: the
+   future-effective job that does sits in another area, and an upper brief
+   reads only its children. Upper input now ends with `Outside this area`:
+   each topic elsewhere a leaf here exchanged a statement with, its opening
+   line, what passed and its hazards (`briefs.outside`).
+2. The first rebuild put those parts in a section of their own; the prompt
+   now asks for them inside the step they repair or duplicate.
+3. Given business-pay's opening line alone, 454 wrote that neither consumer
+   has a duplicate guard: outside topics now carry their hazards.
+4. A changed outside section never made an upper brief stale (a rebuild
+   wrote nothing): it is now part of the upper's member signature.
+
+After them 459's flow says: "Nothing in this area retries it, but the
+future-effective-filings job (elsewhere) republishes ids of PAID or APPROVED
+filings whose effective date has arrived", and names entity-pay as a second
+path.
+
+| arm | legacy-0 | failure-1 |
+|---|---|---|
+| code only (`code-w9a/b`) | 0.62, 0.62 | 0.29, 0.43 |
+| hrono v10c/d (plugin text) | 0.75, 0.69 | 0.64, 0.57 |
+| hrono v11a/b (plugin text) | 0.50, 0.63 | 0.50, 0.57 |
+
+**Why it did not show: the agents never read the area brief.** Briefs opened
+per run: v10c/d failure-1 opened 459 (found by chance in a grep); no v11 run
+did. v11a failure-1 opened no brief at all and worked from the code with 19
+Bash calls; the others opened 694 and 797 and went to the code. A leaf page
+had no link up to its area, so an agent that lands on a leaf by search never
+learns the area brief exists. Every fact v11 lost against v10 (failure-1 #5
+the tracker's filing types, #7 the per-step failure after commit; legacy-0
+#5 the listener bypass) is either in 459 or in a leaf no run opened, and one
+run's swing on a fact (0.5 -> 0) is the whole difference between rounds: two
+runs per arm cannot separate a 0.1 change from noise.
+
+**Fixed after the runs** (no new agent calls):
+1. Every page below the root now opens with `Part of [area](path)`: the
+   area brief that says how work moves and what repairs a failed step.
+2. The upper prompt asks a silent drop to be said as what the dropped work
+   is (which types, which states), never only as the field its check reads.
+   459 still writes "without a usable id" for the tracker's filing-type
+   rule; the rule stays in the emailer leaf (579).

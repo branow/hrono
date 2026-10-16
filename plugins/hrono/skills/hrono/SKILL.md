@@ -15,7 +15,8 @@ and which other parts it connects to. One brief replaces many file reads.
 
 1. Grep the export's `brief.md` files for the components, names, statuses
    and terms in the question, and read in full the leaf briefs that match.
-2. Read the `brief.md` of the folder above each leaf you read. Its `Flows`
+2. Read the area brief of each leaf you read, before any code: the
+   `Part of` line under the leaf's title links it. Its `Flows`
    name every part a piece of work passes through, step by step, and what
    each does when a step fails.
 3. Follow the work to its end before reading code: every part that
