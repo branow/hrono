@@ -31,7 +31,8 @@ def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
     the signature survives a re-split that re-mints section ids for unchanged
     content — this is what lets the fresh-brief skip actually fire through a
     rebuild. Upper members sign over their child node ids (stable once the level
-    below is). Tokens are prefixed so a content hash and node id never collide.
+    below is) and over what ``outside`` gives them. Tokens are prefixed so a
+    content hash and node id never collide.
     """
     content_hashes = [
         row["content_hash"]
@@ -54,6 +55,10 @@ def member_signature(conn: sqlite3.Connection, node_id: int) -> str:
             ).fetchall()
         ]
         tokens = [f"n{i}" for i in children]
+        # what the parts elsewhere say is input too: a changed relation or
+        # outside brief rewrites the area that reads it
+        if beyond := outside(conn, node_id):
+            tokens.append("o" + hashlib.sha256(beyond.encode()).hexdigest())
     return hashlib.sha256(",".join(tokens).encode("utf-8")).hexdigest()
 
 
@@ -487,7 +492,8 @@ def outside(conn: sqlite3.Connection, node_id: int) -> str:
     lost work, or consumes the same messages, was invisible to it: bcreg's
     filing area wrote "no part retries" a paid filing the future-effective
     job, in another area, publishes again. Each outside topic comes with its
-    opening line and what passed between it and which part here.
+    opening line, what passed between it and which part here, and its
+    hazards.
     """
     tree = conn.execute(
         "SELECT tree FROM nodes WHERE id = ?", (node_id,)
@@ -523,9 +529,16 @@ def outside(conn: sqlite3.Connection, node_id: int) -> str:
     blocks = []
     for there, taken in lines.items():
         brief = get(conn, there)
-        lede = _lede(brief["text"]) if brief is not None else ""
+        text = brief["text"] if brief is not None else ""
+        hazards = _hazards(text)
         blocks.append(
-            "\n".join([f"- {_title(conn, there)}: {lede}".rstrip(": "), *taken])
+            "\n".join(
+                [
+                    f"- {_title(conn, there)}: {_lede(text)}".rstrip(": "),
+                    *taken,
+                    *([f"  Its hazards: {hazards}"] if hazards else []),
+                ]
+            )
         )
     return "\n".join(blocks)
 
@@ -551,6 +564,20 @@ def _title(conn: sqlite3.Connection, node_id: int) -> str:
     if row is None:
         return "untitled"
     return row["title"] or _first_line(row["text"] or "")
+
+
+def _hazards(text: str) -> str:
+    """A brief's Hazards section on one line, cut short.
+
+    The opening line says what a part does, never how it fails: the bcreg
+    payments area, shown business-pay's opening alone, wrote that it had no
+    duplicate guard.
+    """
+    _, found, rest = text.partition("## Hazards")
+    if not found:
+        return ""
+    body = rest.split("\n## ", 1)[0]
+    return " ".join(body.split())[:1200]
 
 
 def _lede(text: str) -> str:

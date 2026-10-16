@@ -113,7 +113,11 @@ def db(tmp_path: object) -> Iterator[tuple[Database, list[int]]]:
         register(conn)
         a = leaf_node(conn, 0, "child brief A about widgets")
         b = leaf_node(conn, 0, "child brief B about gadgets")
-        c = leaf_node(conn, 1, "child brief C about pipelines")
+        c = leaf_node(
+            conn,
+            1,
+            "child brief C about pipelines\n\n## Hazards\n- lost on restart",
+        )
         d = leaf_node(conn, 1, "child brief D about queues")
         # two level-1 parents: {a,b} and {c,d}
         cluster_store.replace_level(
@@ -350,6 +354,7 @@ def test_a_relation_across_areas_reaches_both_upper_briefs(
         "child brief A about widgets took from it (`repo/c.py`): "
         "c publishes lost filings again"
     ) in widgets
+    assert "Its hazards: - lost on restart" in widgets
     assert "b is in the same area" not in widgets
     assert "- child brief A about widgets" in pipelines
     assert (
@@ -362,3 +367,26 @@ def test_no_relation_means_no_outside_section(db: Database) -> None:
     client = FakeCompletion()
     brief_upper(job(), JobContext(database), client=client)
     assert all("Outside this area" not in c for c in client.contents)
+
+
+def test_a_new_relation_makes_the_area_brief_stale(
+    db: tuple[Database, list[int]],
+) -> None:
+    database, (a, _, c, _) = db
+    brief_upper(job(), JobContext(database), client=FakeCompletion())
+    with database.connect() as conn, conn:
+        for node, path in ((a, "a.py"), (c, "c.py")):
+            section = add_section(conn, path, f"code of {path}".encode())
+            conn.execute(
+                "INSERT INTO node_members(node_id, section_id, attached, "
+                "created_at) VALUES (?, ?, 0, 't')",
+                (node, section),
+            )
+        conn.execute(
+            "INSERT INTO brief_uses(node_id, file, signature, statement) "
+            "VALUES (?, 'repo/c.py', 's', 'c sends it again')",
+            (a,),
+        )
+    again = FakeCompletion()
+    brief_upper(job(), JobContext(database), client=again)
+    assert again.calls == 2
