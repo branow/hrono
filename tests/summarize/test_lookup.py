@@ -142,6 +142,16 @@ def test_split_keeps_only_declared_files_of_other_topics() -> None:
     assert uses == (lookup.Use("repo/filer/worker.py", "the filer applies it"),)
 
 
+def test_split_keeps_a_used_file_written_as_its_repository_path() -> None:
+    text = (
+        "The brief.\n\n## Used\n"
+        "- `repo/filer/worker.py`: the filer applies it\n"
+        "- repo/nowhere.py: not in the tree\n"
+    )
+    _, uses = lookup.split(text, set(), _files().texts)
+    assert uses == (lookup.Use("repo/filer/worker.py", "the filer applies it"),)
+
+
 class LookingWriter:
     """Looks one file up, then writes a brief that declares it."""
 
@@ -233,7 +243,7 @@ def test_a_brief_written_without_lookups_is_asked_again_to_look(
     brief(job({"node": _pay_node(db)}), JobContext(db), client=writer)
 
     assert len(writer.requests) == 2
-    assert writer.requests[1].content.endswith(lookup.UNLOOKED)
+    assert "without a single lookup" in writer.requests[1].content
     with db.connect() as conn:
         row = briefs.get(conn, _pay_node(db))
         uses = conn.execute(
@@ -242,6 +252,53 @@ def test_a_brief_written_without_lookups_is_asked_again_to_look(
     assert "consumer applies the filing" in row["text"]
     assert [u["file"] for u in uses] == ["repo/filer/worker.py"]
     assert (row["input_tokens"], row["output_tokens"]) == (70, 21)
+
+
+def test_a_connection_said_unsearched_is_asked_for_again(
+    db: Database,
+) -> None:
+    class Partial(LookingWriter):
+        """Looks once, but owns up to a connection it did not search."""
+
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            reply = super().complete(request)
+            if len(self.requests) > 1:
+                return reply
+            return CompletionResult(
+                reply.text + "- EMAIL_SUBJECT: not searched\n", reply.usage
+            )
+
+    with db.connect() as conn, conn:
+        _looking_tree(conn)
+    writer = Partial()
+    brief(job({"node": _pay_node(db)}), JobContext(db), client=writer)
+
+    assert len(writer.requests) == 2
+    assert "- EMAIL_SUBJECT: not searched" in writer.requests[1].content
+    with db.connect() as conn:
+        audit = json.loads(
+            conn.execute(
+                "SELECT lookups FROM briefs WHERE node_id = ?", (_pay_node(db),)
+            ).fetchone()[0]
+        )
+    assert len(audit["calls"]) == 2  # both asks' lookups are kept
+
+
+def test_unsearched_reads_only_admissions_from_the_account() -> None:
+    text = (
+        "Brief.\n\n## Lookups\n"
+        "- A: source/repo/a.py\n"
+        "- B: not found (searched: `B_SUBJECT`)\n"
+        "- C: not searched\n"
+        "- D: listed by grep, not read\n"
+        "- E: not looked up (no lookups were run)\n"
+    )
+    assert lookup.unsearched(text) == (
+        "- C: not searched",
+        "- D: listed by grep, not read",
+        "- E: not looked up (no lookups were run)",
+    )
+    assert lookup.unsearched("Brief. Not searched here.") == ()
 
 
 def test_a_brief_that_looked_is_not_asked_again(db: Database) -> None:

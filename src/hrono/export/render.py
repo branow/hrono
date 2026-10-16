@@ -44,6 +44,12 @@ def render(
     }
     files: dict[str, str] = {}
     stems = _stems(conn, tree)
+    pages = {
+        node_id: _directory(node_id, parent, tree.root, stems) + "/brief.md"
+        for node_id in tree.nodes
+        if node_id != tree.root
+    }
+    links = _connections(conn, tree)
     for node_id in sorted(tree.nodes):
         node = tree.nodes[node_id]
         directory = _directory(node_id, parent, tree.root, stems)
@@ -62,6 +68,10 @@ def render(
             stems,
             directory,
         )
+        if links.get(node_id):
+            files[path] = _with_connections(
+                files[path], links[node_id], pages, conn
+            )
     return files
 
 
@@ -101,6 +111,73 @@ def _node_markdown(
     if note:
         parts.append(f"## Notes\n\n{note}")
     return "\n\n".join(parts) + "\n"
+
+
+def _connections(
+    conn: sqlite3.Connection, tree: ExportTree
+) -> dict[int, list[tuple[int, str]]]:
+    """Each leaf's topics on the other side of a looked-up relation.
+
+    A leaf brief written with lookups stores the files of other topics it
+    took a statement from (``brief_uses``). The tree's shape does not hold
+    such a link - the message's consumer can sit in another area - so an
+    agent reading one side never learned the other existed (round 10 of
+    2026-10-defines-uses: the job that re-drives lost filings was in a
+    different area from the consumer that loses them). Both sides list it:
+    the user with what it took, the owner with what was taken.
+    """
+    owner: dict[str, int] = {}
+    for node in tree.nodes.values():
+        for sid in node.sections:
+            row = conn.execute(
+                "SELECT source, path FROM sections WHERE id = ?", (sid,)
+            ).fetchone()
+            if row is not None:
+                owner.setdefault(f"{row['source']}/{row['path']}", node.node_id)
+    links: dict[int, list[tuple[int, str]]] = {}
+    for row in conn.execute(
+        "SELECT node_id, file, statement FROM brief_uses ORDER BY node_id, file"
+    ):
+        user, other = int(row["node_id"]), owner.get(str(row["file"]))
+        if user not in tree.nodes or other is None or other == user:
+            continue
+        file, statement = row["file"], row["statement"]
+        links.setdefault(user, []).append(
+            (other, f"this topic took from `{file}`: {statement}")
+        )
+        links.setdefault(other, []).append(
+            (user, f"it took from this topic's `{file}`: {statement}")
+        )
+    return links
+
+
+def _with_connections(
+    page: str,
+    linked: list[tuple[int, str]],
+    pages: Mapping[int, str],
+    conn: sqlite3.Connection,
+) -> str:
+    """A leaf page with ``## Connected topics`` before its sources."""
+    by_topic: dict[int, list[str]] = {}
+    for other, said in linked:
+        if said not in by_topic.setdefault(other, []):
+            by_topic[other].append(said)
+    called = names(conn, list(by_topic))
+    lines = [
+        "## Connected topics",
+        "",
+        "Topics this one exchanges work or records with, wherever they sit "
+        "in the map (paths from the export's root):",
+        "",
+    ]
+    for other, said in by_topic.items():
+        lines.append(f"- [{called[other]}]({pages[other]})")
+        lines.extend(f"  - {s}" for s in said)
+    block = "\n".join(lines)
+    head, cut, tail = page.partition("\n\n## Sources")
+    if not cut:
+        return page.rstrip() + "\n\n" + block + "\n"
+    return head + "\n\n" + block + cut + tail
 
 
 def _routing(brief: str) -> str:

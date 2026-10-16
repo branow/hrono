@@ -206,8 +206,12 @@ children, each with a
 one-sentence summary and, below the root, a `Sources:` line naming up to three
 repo-relative files beneath it and how many more there are, as many as keep
 the page within one section's size. A leaf ends with `## Sources`: each of its
-files once, with the source name and the 7-character version. Export output is
-deterministic.
+files once, with the source name and the 7-character version. Before it, a
+leaf whose brief looked up another topic's files (`brief_uses`), or whose
+files another brief looked up, lists those topics under `## Connected
+topics`, with their paths and what was taken: a message's consumer or the job
+that repairs it often sits in another area, where neither the tree's shape
+nor the area flows lead. Export output is deterministic.
 
 ## Lifecycle
 

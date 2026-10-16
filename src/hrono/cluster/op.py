@@ -28,9 +28,10 @@ op registry so the worker dispatches ``cluster``.
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 
-from hrono.cluster import ClusterError, TooFewPoints, incubator, store
+from hrono.cluster import ClusterError, TooFewPoints, incubator, repair, store
 from hrono.cluster.build import ClusterResult
 from hrono.embed.model import resolve_embedding_model
 from hrono.jobs.model import Job
@@ -47,6 +48,7 @@ def cluster(
     context: JobContext,
     *,
     build: Builder | None = None,
+    core_labeler: repair.CoreLabeler | None = None,
 ) -> Mapping[str, object]:
     """Cluster the tree's embedded sections into bottom-level topics."""
     builder = build if build is not None else _load_builder()
@@ -83,12 +85,40 @@ def cluster(
     with context.database.write() as conn:
         store.replace_tree(conn, tree, _LEVEL, members, coords)
         incubator.sweep(conn, tree)
+        split = _split_oversized(conn, tree, str(config["name"]), core_labeler)
     return {
         "sections": len(vectors),
-        "topics": len(set(result.labels)),
+        "topics": len(set(result.labels)) + split,
+        "split": split,
         "attached": sum(1 for flag in result.attached if flag),
         "collected": collected,
     }
+
+
+def _split_oversized(
+    conn: sqlite3.Connection,
+    tree: str,
+    model_name: str,
+    core_labeler: repair.CoreLabeler | None,
+) -> int:
+    """Split every topic over the summarization budget; the topics it added.
+
+    The repair that enforces ``MAX_CAP`` runs only in the incremental chain,
+    after the briefs, so a cold build kept every density cluster whole: on
+    bcreg 62 of 432 topics held 31-65 sections, 30% of the corpus, and wrote
+    the longest briefs, which agents read in slices. A topic whose members
+    show fewer than two density cores stays whole, as in repair.
+    """
+    added = 0
+    pending = list(repair.leaves(conn, tree))
+    while pending:
+        node_id = pending.pop()
+        children = repair.split(
+            conn, tree, node_id, model_name, core_labeler=core_labeler
+        )
+        added += max(0, len(children) - 1)
+        pending.extend(children)
+    return added
 
 
 def _one_topic(count: int) -> ClusterResult:

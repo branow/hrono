@@ -34,7 +34,8 @@ function note(config) {
         "its Flows name every part a piece of work passes through and what " +
         "each does when a step fails. Follow the work to its end - every part " +
         "that receives it, and what retries or repairs a failed step - and " +
-        "read those parts' briefs too. Then open the source files to confirm " +
+        "read those parts' briefs too, and those under a leaf's Connected " +
+        "topics. Then open the source files to confirm " +
         "the claims you " +
         `make. The hrono skill has the details; for an overview, start at ${root}.`,
     );

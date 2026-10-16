@@ -90,8 +90,11 @@ line:
 - IN: what arrives and its exact shape: the fields read, the type or format \
 checked, conversions, and what happens to input that does not fit.
 - ENTRY: each route, handler, listener, job or public function: who may call \
-it and the checks that guard it, in the order they run, each with its exact \
-condition (what it compares with what), or "no check in this chunk".
+it and the checks that guard it, in the order they run, each as the code \
+tests it - `if <condition as written> -> <result>` - never turned round into \
+the condition that lets a call through, or "no check in this chunk". When the \
+condition is a call's result, say what that result is (for example an error \
+message, empty on success).
 - RULE: each branch that changes the outcome: `if <exact condition> -> \
 <outcome>`, with the function that holds it. When a condition tests \
 membership in a list, set, map or group, copy every member verbatim; never \
@@ -145,8 +148,8 @@ takes work from.
 2. Contract: what reaches it and from where, what it sends or writes and to \
 where, with the exact shape of messages or records that cross the boundary.
 3. Entry points: for each route, handler, listener, job or public function, \
-the checks that guard it in the order they run, each with its exact \
-condition, or that none is shown.
+the checks that guard it in the order they run, each as the code tests it \
+(`if <condition> -> <result>`), or that none is shown.
 4. Decisions: every branch that changes an outcome, one line each - the \
 exact condition, the outcome, and the function that holds it. Copy every \
 member of a list, set or group verbatim. Include every state a record moves \
@@ -190,9 +193,16 @@ things a user or another system asks of it - each as numbered steps from what \
 starts it to what it ends with, naming at each step the part and the function \
 that does it and the state the record moves to, and what happens when that \
 step fails: what is left behind, and which part retries or repairs it, or \
-that no part of this area does (a part elsewhere may). Then one line per part \
+that no part of this area does (a part elsewhere may). Give each step's \
+failure as its part's description gives it: where steps fail differently \
+(one catches its errors, the next lets them through and skips what follows), \
+say so step by step, never as one rule for all; where a description does not \
+say, write that. When a step drops or skips work without an error - a message \
+it never processes, a record it ignores - the flow says so, with the kind of \
+condition and the part that holds it. Then one line per part \
 not already named in a flow, saying its job. End with the hazards that come \
-from how the parts interact.
+from how the parts interact, in the same terms: what no part of this area \
+repairs, never that nothing does.
 
 Aim for 400 to 900 words, however many parts there are: every part's brief is \
 in the map below this one, so a step names the part, what it does and what \

@@ -21,10 +21,16 @@ and which other parts it connects to. One brief replaces many file reads.
 3. Follow the work to its end before reading code: every part that
    receives it after the one you found, what each does when it fails, and
    what retries or repairs it - or that nothing does. Read those parts'
-   briefs too, from the flows and from each leaf's connections.
+   briefs too, from the flows and from each leaf's `## Connected topics`:
+   the topics it exchanges work or records with, wherever they sit in the
+   map. A repair job often lives in another area than what it repairs.
 4. A leaf ends with `## Sources`: the files it was written from. Open them
    to confirm the claims you will make; where the code and a brief
    disagree, the code wins.
+5. In the answer, give every part you found on the path its own behaviour.
+   Where two parts do the same job - an old and a new consumer, two paths
+   for one piece of work - say how each one behaves; they rarely match, and
+   "it does the same" loses what the question is about.
 
 For an overview, read `root.md` and the `## Children` it lists. Passages
 that match the prompt also arrive attached automatically as "hrono recall".

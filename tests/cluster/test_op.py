@@ -124,6 +124,65 @@ def test_builds_and_persists_a_bottom_level(db: Database) -> None:
     assert all(row["c"] == 1 for row in per_section)
 
 
+def _one_cluster(vectors: object, *, init: object = None) -> ClusterResult:
+    n = len(vectors)  # type: ignore[arg-type]
+    return ClusterResult(
+        labels=tuple(0 for _ in range(n)),
+        attached=tuple(False for _ in range(n)),
+        assignment_similarity=tuple(None for _ in range(n)),
+        coords=tuple((float(i),) * 3 for i in range(n)),
+    )
+
+
+def _leaf_sizes(db: Database) -> list[int]:
+    with db.connect() as conn:
+        return sorted(
+            int(r["n"])
+            for r in conn.execute(
+                "SELECT COUNT(*) n FROM node_members m JOIN nodes n "
+                "ON n.id = m.node_id WHERE n.level = 0 GROUP BY m.node_id"
+            )
+        )
+
+
+@pytest.fixture
+def big(tmp_path: object) -> Iterator[Database]:
+    database = Database.at(tmp_path / "hrono.db")
+    with database.connect() as conn, conn:
+        register_model(conn)
+        for i in range(40):
+            add_embedded_section(
+                conn, f"src/f{i}.py", f"body {i}\n".encode(), i
+            )
+    yield database
+    database.close()
+
+
+def test_a_topic_over_the_budget_is_split_before_any_brief(
+    big: Database,
+) -> None:
+    def halves(vectors: object) -> list[int]:
+        n = len(vectors)  # type: ignore[arg-type]
+        return [0 if i < n // 2 else 1 for i in range(n)]
+
+    done = cluster_op.cluster(
+        cluster_job(), JobContext(big), build=_one_cluster, core_labeler=halves
+    )
+    assert _leaf_sizes(big) == [20, 20]
+    assert done["topics"] == 2 and done["split"] == 1
+
+
+def test_a_topic_with_one_density_core_stays_whole(big: Database) -> None:
+    done = cluster_op.cluster(
+        cluster_job(),
+        JobContext(big),
+        build=_one_cluster,
+        core_labeler=lambda vectors: [0] * len(vectors),
+    )
+    assert _leaf_sizes(big) == [40]
+    assert done["split"] == 0
+
+
 def test_warm_init_uses_stored_coords_on_rebuild(db: Database) -> None:
     first: dict[str, object] = {}
     cluster_op.cluster(cluster_job(), JobContext(db), build=fake_build(first))

@@ -72,7 +72,7 @@ def repair(
         # every LEAF, not every centroid: a node whose members all lack a
         # vector has no centroid, so iterating `node_centroids` made an
         # emptied leaf invisible to the one repair (dissolve) it needs.
-        for node_id in _leaves(conn, tree):
+        for node_id in leaves(conn, tree):
             size = store.member_count(conn, node_id)
             forced = len(store.forced_members(conn, node_id))
             if size < 2:
@@ -96,7 +96,7 @@ def repair(
     return done
 
 
-def _leaves(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
+def leaves(conn: sqlite3.Connection, tree: str) -> tuple[int, ...]:
     rows = conn.execute(
         "SELECT id FROM nodes WHERE tree = ? AND level = 0 ORDER BY id",
         (tree,),

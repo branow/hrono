@@ -43,8 +43,10 @@ GREP_LINES = 20  # matching lines shown per file
 
 INSTRUCTION = """
 
-Before writing, look up what this topic connects to: the brief is written \
-after the lookups, never instead of them. You have read-only tools \
+Before writing, look up what this topic connects to: your first replies are \
+lookups, and the brief is your last reply, written after them, never instead \
+of them. A connection your Lookups section calls not searched sends the \
+brief back to be written again. You have read-only tools \
 over the files of the whole system: `source/<source>/<path>` is the text of \
 each source file and `condensed/<source>/<path>.md` its condensation. Use \
 `Grep` (a regular expression, optionally limited to a path glob) and `Glob` \
@@ -78,12 +80,37 @@ section `## Lookups`: one line per connection you listed - \
 `- <connection>: <the path found>`, or \
 `- <connection>: not found (searched: <patterns>)`."""
 
-# said when a brief came back with no lookup at all, and it is asked again
-UNLOOKED = """
+# a connection the writer's own account says it never searched: "not
+# searched", "not looked up", "not read", "no lookup" - but not "not found
+# (searched: ...)", which is a search that came back empty
+_UNSEARCHED = re.compile(
+    r"\bnot (?:searched|looked up|read|opened|pursued)\b"
+    r"|\bno (?:lookups?|searches)\b",
+    re.IGNORECASE,
+)
 
-Your last reply wrote the brief without a single lookup, and named its \
-connections as not searched. Look them up first: for each connection, \
-search for the other side and read what it does, then write the brief."""
+
+def unsearched(text: str) -> tuple[str, ...]:
+    """The lines of a brief's ``## Lookups`` that admit no search was made."""
+    return tuple(
+        line.strip()
+        for line in accounting(text).splitlines()
+        if line.strip() and _UNSEARCHED.search(line)
+    )
+
+
+def again(missing: Iterable[str], looked: bool) -> str:
+    """What a brief is told when it is asked to look once more."""
+    if not looked:
+        said = "wrote the brief without a single lookup"
+    else:
+        said = "left these connections unsearched:\n" + "\n".join(missing)
+    return (
+        f"\n\nYour last reply {said}\n\nLook them up first: for each "
+        "connection, search for the other side and read what it does, then "
+        "write the whole brief, with its Used and Lookups sections."
+    )
+
 
 TOOLS = (
     Tool(
@@ -312,8 +339,10 @@ def split(
     for match in re.finditer(
         r"^\s*-\s*`?([^`\s:]+)`?\s*:\s*(.+)$", used_part, re.M
     ):
-        name = file_of(match.group(1))
-        if name is None or name in mine or SOURCE + name not in known:
+        # the brief writes repository paths, and writers carry that into
+        # Used: v10 lost 16 of 26 relations to the missing prefix
+        name = file_of(match.group(1)) or match.group(1)
+        if name in mine or SOURCE + name not in known:
             continue
         if any(use.file == name for use in uses):
             continue

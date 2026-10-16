@@ -70,7 +70,8 @@ stored in `brief_uses` with each file's content signature; the `Used` and
 path an agent can open. These calls run with thinking on (budget 4,000):
 without it the writer made 2-5 shallow lookups, with it 8-11. A brief that
 comes back with no lookup at all is asked once more to look first (half the
-leaf briefs of round 10 skipped them). They are the brief's
+leaf briefs of round 10 skipped them). A `Used` line may name a file by its
+repository path or by the tools' path. They are the brief's
 dependencies across branches: `propagate` judges a leaf whose used file
 changed against that change, and a minor or major verdict marks the leaf and
 its ancestors stale; a `none` verdict records the file's new signature, so it
