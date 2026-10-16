@@ -16,6 +16,7 @@ from hrono.llm.client import (
 from hrono.registry import store as registry_store
 from hrono.summarize import briefs
 from hrono.summarize.brief_upper import brief_upper
+from tests.export.test_render import add_section
 from tests.summarize.concurrent_client import Paired
 from tests.summarize.test_shape import ECHOED, _default
 
@@ -318,3 +319,46 @@ def _provenance(conn: object, node_id: int) -> tuple[str, str, str | None]:
     row = briefs.get(conn, node_id)  # type: ignore[arg-type]
     assert row is not None
     return row["prompt_hash"], row["model_name"], row["model_fingerprint"]
+
+
+def test_a_relation_across_areas_reaches_both_upper_briefs(
+    db: tuple[Database, list[int]],
+) -> None:
+    database, (a, b, c, _) = db
+    with database.connect() as conn, conn:
+        for node, path in ((a, "a.py"), (b, "b.py"), (c, "c.py")):
+            section = add_section(conn, path, f"code of {path}".encode())
+            conn.execute(
+                "INSERT INTO node_members(node_id, section_id, attached, "
+                "created_at) VALUES (?, ?, 0, 't')",
+                (node, section),
+            )
+        conn.executemany(
+            "INSERT INTO brief_uses(node_id, file, signature, statement) "
+            "VALUES (?, ?, 's', ?)",
+            [
+                (a, "repo/c.py", "c publishes lost filings again"),
+                (a, "repo/b.py", "b is in the same area"),
+            ],
+        )
+    client = FakeCompletion()
+    brief_upper(job(), JobContext(database), client=client)
+    widgets, pipelines = client.contents
+    assert "=== Outside this area ===" in widgets
+    assert "- child brief C about pipelines" in widgets
+    assert (
+        "child brief A about widgets took from it (`repo/c.py`): "
+        "c publishes lost filings again"
+    ) in widgets
+    assert "b is in the same area" not in widgets
+    assert "- child brief A about widgets" in pipelines
+    assert (
+        "it took from child brief C about pipelines (`repo/c.py`)" in pipelines
+    )
+
+
+def test_no_relation_means_no_outside_section(db: Database) -> None:
+    database, _ = db
+    client = FakeCompletion()
+    brief_upper(job(), JobContext(database), client=client)
+    assert all("Outside this area" not in c for c in client.contents)

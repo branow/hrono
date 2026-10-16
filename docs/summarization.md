@@ -46,7 +46,15 @@ Two layers, gotcha-aware, content-addressed.
    interact. 400 to 900 words: the children's briefs are below it in the
    map, so a step names the part and what passes on, never its own checks
    or lists (without a range the bcreg root ran to 13,600 words). The model
-   is never told it is in a tree.
+   is never told it is in a tree. When the leaves below were written with
+   lookups, the input ends with `=== Outside this area ===`: each topic
+   elsewhere that a leaf here took a statement from, or that took one from
+   a leaf here (`brief_uses`), with its opening line and what passed
+   (`briefs.outside`). A step names such a part and says it sits elsewhere:
+   without it the bcreg filing area wrote "no part retries" a lost filer
+   message that the future-effective job, in another area, sends again.
+   The section is not in the member signature: a relation that changes
+   alone does not make the upper brief stale.
 
 Why no word targets (docs/evaluations/2026-10-defines-uses/, round 8): with
 the 60-120 word condensation and the 250-500 word brief, the leaf briefs

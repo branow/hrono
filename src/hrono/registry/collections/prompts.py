@@ -199,7 +199,12 @@ failure as its part's description gives it: where steps fail differently \
 say so step by step, never as one rule for all; where a description does not \
 say, write that. When a step drops or skips work without an error - a message \
 it never processes, a record it ignores - the flow says so, with the kind of \
-condition and the part that holds it. Then one line per part \
+condition and the part that holds it. The last section, when there is one, \
+lists parts outside this area that the parts here hand work to or take it \
+from: name such a part in the step it acts on, and say it sits elsewhere - \
+one that sends lost or stuck work round again repairs that step, and one that \
+consumes the same messages is a second path whose own behaviour its \
+description gives. Then one line per part \
 not already named in a flow, saying its job. End with the hazards that come \
 from how the parts interact, in the same terms: what no part of this area \
 repairs, never that nothing does.

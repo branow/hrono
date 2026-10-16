@@ -11,7 +11,7 @@ the run costs dollars rather than a whole build:
 3. hrono's `brief-upper` op rewrites each of their ancestors, lowest first;
 4. the export is written by hrono's export renderer.
 
-Usage: uv run --extra claude-code python subtree_v9.py build
+Usage: uv run --extra claude-code --extra cluster python subtree_v9.py build
        uv run python subtree_v9.py export
 """
 
@@ -26,6 +26,7 @@ import exp
 import investigate
 
 sys.path.insert(0, str(exp.HERE.parents[3] / "src"))
+from hrono.cluster import repair  # noqa: E402
 from hrono.db.database import Database  # noqa: E402
 from hrono.export import saved  # noqa: E402
 from hrono.jobs.model import Job  # noqa: E402
@@ -86,6 +87,23 @@ def build() -> None:
         tree = json.loads(store.get(conn, "trees", TREE)["config"])
         body = json.dumps({**tree, "lookups": True})
         store.replace(conn, "trees", TREE, body, None, "t", content_hash(body))
+        # what a cold build now does (`cluster/op.py`): a leaf over MAX_CAP
+        # is split before any brief, and its children replace it
+        model = conn.execute(
+            "SELECT model_name FROM embeddings GROUP BY model_name "
+            "ORDER BY COUNT(*) DESC LIMIT 1"
+        ).fetchone()[0]
+        kept: list[int] = []
+        pending = list(leaves)
+        while pending:
+            node = pending.pop(0)
+            children = repair.split(conn, TREE, node, model)
+            if children:
+                print("split", node, "->", children, flush=True)
+                pending.extend(children)
+            else:
+                kept.append(node)
+        leaves = kept
         marks = ",".join("?" * len(leaves))
         gone = conn.execute(
             "DELETE FROM condensations WHERE model_name = 'condense-contracts' "
