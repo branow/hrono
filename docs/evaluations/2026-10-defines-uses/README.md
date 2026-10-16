@@ -703,3 +703,55 @@ the pay API no longer sends). Both answers ran past the 900-word cap.
    work to its end.
 8. Each lookup brief stores its tool calls and its own account of every
    connection, so a later run can be audited without paying again.
+
+## Round 10, the sub-tree rebuilt with the round 9 fixes (2026-10-16)
+
+`subtree_v9.py build` then `export` on a fresh copy of the v3 tree (round 9's
+db and export kept as `hrono-v9-round9.db`, `export-bcreg-v9-round9`): 380
+condensations, 16 leaf and 9 upper briefs, 10 stored relations (26 in v9).
+
+**What the fixes did.**
+- No condensation turns a status name into a number any more (0 against 1).
+- No brief cites the tools' virtual paths.
+- The area brief over business-pay, filer and emailer (459) reaches the
+  export with its `Flows` and `Hazards`: the filer's commit-then-side-effects
+  failure, the emailer tracker, and "no part retries" are all on the page.
+
+**What they did not do.** Half the leaf briefs (8 of 16: 577, 579, 606, 644,
+694, 728, 744, 834) made no lookup at all; their audits name every connection
+"not searched". Neither input size (12k-67k chars) nor topic explains which
+ones. The other 8 made 1-7 calls. business-pay's legacy worker (797) still
+says the filer consumer's "behaviour is not in this topic" and did not search
+for it.
+
+**A harness bug.** `MAP=plugin` was never wired in `agent_v2.py`:
+`map_plugin()` existed but `run` fell back to the round 8 `MAP_V2` text. The
+v9 runs and the first v10 pair (`v10a/b`) never saw the plugin's "read the
+area brief, follow the work" note. Fixed; `v10c/d` are the runs with it.
+
+| arm | legacy-0 | failure-1 |
+|---|---|---|
+| code only (`code-w9a/b`) | 0.62, 0.62 | 0.29, 0.43 |
+| hrono v9 (round 8 text) | 0.75, 0.62 | 0.64, 0.57 |
+| hrono v10a/b (round 8 text) | 0.69, 0.62 | 0.57, 0.50 |
+| **hrono v10c/d (plugin text)** | 0.75, 0.69 | 0.64, 0.57 |
+
+With the round 8 text the agents read 2-4 leaf briefs and never the area
+brief. With the plugin text both failure-1 runs read 459, and failure-1
+averages 0.61 against 0.36 for code only, as in v9.
+
+**Where the facts are lost now: in the answer, not the tree.** Fact 4 (the
+legacy consumer re-sends the email and the filer message on a second delivery
+unless the filing is COMPLETED) is in 797's `Hazards` word for word, and both
+failure-1 agents read 797; they scored 0 and 0.5 on it. The emailer
+tracker's filing-type rule (fact 5) is only in the emailer leaf (579), which
+no agent opened; 459's flow names the tracker but not the rule. Fact 2
+(when BCOL, PAD, EFT and EJV release the payment event) sits in sbc-pay's
+service-layer brief, outside this sub-tree's lookups.
+
+**Fixed** (this commit):
+1. A leaf brief written with lookups that made no tool call is asked once
+   more, with a note that it named its connections without searching
+   (`lookup.UNLOOKED`); the instruction now says the brief comes after the
+   lookups, never instead of them.
+2. `agent_v2.py` honours `MAP=plugin`.

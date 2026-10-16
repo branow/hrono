@@ -189,9 +189,12 @@ def run(qid: str, name: str, words: int = 900) -> None:
     prompt = run_arms.ARCH.format(question=q["question"]).replace(
         "at most 400 words", f"at most {words} words"
     )
-    prompt += (MAP_V3 if os.environ.get("MAP") == "3" else MAP_V2).format(
-        export=EXPORT
-    )
+    if os.environ.get("MAP") == "plugin":
+        prompt += map_plugin(EXPORT)
+    else:
+        prompt += (MAP_V3 if os.environ.get("MAP") == "3" else MAP_V2).format(
+            export=EXPORT
+        )
     if os.environ.get("ORACLE"):
         prompt += "\n\n" + oracle(qid)
     r = common.run_agent(
