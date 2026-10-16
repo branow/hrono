@@ -43,6 +43,7 @@ from hrono.llm.client import (
     Completion,
     CompletionRequest,
     CompletionResult,
+    summed,
 )
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
@@ -152,6 +153,21 @@ def brief(
             ),
             brief_gate(template, source),
         )
+        if not tools.calls:
+            # half the bcreg v10 leaf briefs looked nothing up and named
+            # every connection "not searched": asked again, once, to look
+            first = result
+            result, flagged = answer(
+                completion,
+                CompletionRequest(
+                    model=model,
+                    system="",
+                    content=rendered + lookup.UNLOOKED,
+                    tools=tools,
+                ),
+                brief_gate(template, source),
+            )
+            result = summed([first, result])
         text, uses = lookup.split(result.text, own[node_id], found.texts)
         # what it looked up is material too: a name it read in another
         # topic's file is not an invention

@@ -43,7 +43,8 @@ GREP_LINES = 20  # matching lines shown per file
 
 INSTRUCTION = """
 
-Before writing, look up what this topic connects to. You have read-only tools \
+Before writing, look up what this topic connects to: the brief is written \
+after the lookups, never instead of them. You have read-only tools \
 over the files of the whole system: `source/<source>/<path>` is the text of \
 each source file and `condensed/<source>/<path>.md` its condensation. Use \
 `Grep` (a regular expression, optionally limited to a path glob) and `Glob` \
@@ -76,6 +77,13 @@ helpers read only for background, or for this topic's own files. Then a \
 section `## Lookups`: one line per connection you listed - \
 `- <connection>: <the path found>`, or \
 `- <connection>: not found (searched: <patterns>)`."""
+
+# said when a brief came back with no lookup at all, and it is asked again
+UNLOOKED = """
+
+Your last reply wrote the brief without a single lookup, and named its \
+connections as not searched. Look them up first: for each connection, \
+search for the other side and read what it does, then write the brief."""
 
 TOOLS = (
     Tool(

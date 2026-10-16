@@ -211,6 +211,47 @@ def test_a_looking_tree_stores_the_brief_and_its_relations(
     assert audit["account"] == "- FILER_SUBJECT: source/repo/filer/worker.py"
 
 
+def test_a_brief_written_without_lookups_is_asked_again_to_look(
+    db: Database,
+) -> None:
+    class Hasty(LookingWriter):
+        """Writes straight away the first time, as v10's briefs did."""
+
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            if not self.requests:
+                self.requests.append(request)
+                return CompletionResult(
+                    "The topic publishes to FILER_SUBJECT.\n\n## Lookups\n"
+                    "- FILER_SUBJECT: not searched\n",
+                    Usage(30, 9),
+                )
+            return super().complete(request)
+
+    with db.connect() as conn, conn:
+        _looking_tree(conn)
+    writer = Hasty()
+    brief(job({"node": _pay_node(db)}), JobContext(db), client=writer)
+
+    assert len(writer.requests) == 2
+    assert writer.requests[1].content.endswith(lookup.UNLOOKED)
+    with db.connect() as conn:
+        row = briefs.get(conn, _pay_node(db))
+        uses = conn.execute(
+            "SELECT file FROM brief_uses WHERE node_id = ?", (_pay_node(db),)
+        ).fetchall()
+    assert "consumer applies the filing" in row["text"]
+    assert [u["file"] for u in uses] == ["repo/filer/worker.py"]
+    assert (row["input_tokens"], row["output_tokens"]) == (70, 21)
+
+
+def test_a_brief_that_looked_is_not_asked_again(db: Database) -> None:
+    with db.connect() as conn, conn:
+        _looking_tree(conn)
+    writer = LookingWriter()
+    brief(job({"node": _pay_node(db)}), JobContext(db), client=writer)
+    assert len(writer.requests) == 1
+
+
 def test_turning_lookups_on_rewrites_the_briefs(db: Database) -> None:
     class Plain:
         def complete(self, request: CompletionRequest) -> CompletionResult:
