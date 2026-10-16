@@ -44,6 +44,7 @@ from hrono.summarize.resolve import (
 from hrono.summarize.shape import answer, brief_gate
 
 _CONTENT_PLACEHOLDER = "{content}"
+OUTSIDE = "Outside this area"
 _DEFAULT_LEVEL = 1
 # node, its children's briefs, those children's ids, member signature
 Pending = tuple[int, tuple[tuple[str, str], ...], tuple[int, ...], str]
@@ -76,7 +77,10 @@ def brief_upper(
         pending = [
             (
                 node_id,
-                briefs.child_inputs(conn, node_id),
+                _with_outside(
+                    briefs.child_inputs(conn, node_id),
+                    briefs.outside(conn, node_id),
+                ),
                 briefs.child_ids(conn, node_id),
                 briefs.member_signature(conn, node_id),
             )
@@ -150,6 +154,15 @@ def brief_upper(
     if tokens is not None:
         outcome["tokens"] = tokens
     return outcome
+
+
+def _with_outside(
+    children: tuple[tuple[str, str], ...], outside: str
+) -> tuple[tuple[str, str], ...]:
+    """The child briefs, then the parts elsewhere they exchange work with."""
+    if not children or not outside:
+        return children
+    return (*children, (OUTSIDE, outside))
 
 
 def _level(scope: dict[str, object]) -> int:

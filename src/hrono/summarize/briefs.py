@@ -478,6 +478,90 @@ def child_inputs(
     )
 
 
+def outside(conn: sqlite3.Connection, node_id: int) -> str:
+    """The topics outside an upper node that its leaves exchange work with.
+
+    A leaf brief written with lookups records the other topics' files it took
+    a statement from (``brief_uses``), in either direction. An upper brief
+    reads only its children, so a part elsewhere that re-drives this area's
+    lost work, or consumes the same messages, was invisible to it: bcreg's
+    filing area wrote "no part retries" a paid filing the future-effective
+    job, in another area, publishes again. Each outside topic comes with its
+    opening line and what passed between it and which part here.
+    """
+    tree = conn.execute(
+        "SELECT tree FROM nodes WHERE id = ?", (node_id,)
+    ).fetchone()
+    if tree is None:
+        return ""
+    inside = set(_leaves_under(conn, node_id))
+    owner: dict[str, int] = {}
+    for row in conn.execute(
+        "SELECT m.node_id AS node, s.source AS source, s.path AS path "
+        "FROM node_members m JOIN sections s ON s.id = m.section_id "
+        "JOIN nodes n ON n.id = m.node_id WHERE n.tree = ? AND n.level = 0 "
+        "ORDER BY m.node_id",
+        (tree["tree"],),
+    ):
+        owner.setdefault(f"{row['source']}/{row['path']}", int(row["node"]))
+    lines: dict[int, list[str]] = {}
+    for row in conn.execute(
+        "SELECT node_id, file, statement FROM brief_uses ORDER BY node_id, file"
+    ):
+        user, other = int(row["node_id"]), owner.get(str(row["file"]))
+        if other is None or (user in inside) == (other in inside):
+            continue
+        here, there = (user, other) if user in inside else (other, user)
+        took = (
+            f"{_title(conn, here)} took from it"
+            if user == here
+            else f"it took from {_title(conn, here)}"
+        )
+        lines.setdefault(there, []).append(
+            f"  - {took} (`{row['file']}`): {row['statement']}"
+        )
+    blocks = []
+    for there, taken in lines.items():
+        brief = get(conn, there)
+        lede = _lede(brief["text"]) if brief is not None else ""
+        blocks.append(
+            "\n".join([f"- {_title(conn, there)}: {lede}".rstrip(": "), *taken])
+        )
+    return "\n".join(blocks)
+
+
+def _leaves_under(conn: sqlite3.Connection, node_id: int) -> list[int]:
+    found, frontier = [], [node_id]
+    while frontier:
+        node = frontier.pop()
+        children = child_ids(conn, node)
+        if children:
+            frontier.extend(children)
+        else:
+            found.append(node)
+    return found
+
+
+def _title(conn: sqlite3.Connection, node_id: int) -> str:
+    row = conn.execute(
+        "SELECT n.title AS title, b.text AS text FROM nodes n "
+        "LEFT JOIN briefs b ON b.node_id = n.id WHERE n.id = ?",
+        (node_id,),
+    ).fetchone()
+    if row is None:
+        return "untitled"
+    return row["title"] or _first_line(row["text"] or "")
+
+
+def _lede(text: str) -> str:
+    """A brief's first paragraph under its title, cut to a few lines."""
+    for block in text.split("\n\n"):
+        stripped = block.strip()
+        if stripped and not stripped.startswith("#"):
+            return " ".join(stripped.split())[:400]
+    return ""
+
+
 def _first_line(text: str) -> str:
     for line in text.splitlines():
         stripped = line.strip().strip("#*").strip()
