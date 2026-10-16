@@ -1,52 +1,607 @@
 [
  {
-  "node": 607,
-  "file": "lear/legal-api/src/legal_api/services/involuntary_dissolution.py",
-  "statement": "`check_business_eligibility` signature and result, and the `EligibilityFilters` defaults."
+  "node": 523,
+  "file": "lear/legal-api/src/legal_api/models/filing.py",
+  "statement": "status and effective_date filter of `get_future_effective_filing_ids`."
  },
  {
-  "node": 607,
-  "file": "lear/queue_services/common/src/entity_queue_common/service_utils/exceptions.py",
-  "statement": "`QueueException` is defined there (class found by search; not read)."
+  "node": 523,
+  "file": "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+  "statement": "route, guards (`jwt.has_one_of_roles([UserRoles.system])`), and the list of ids returned with 200."
  },
  {
-  "node": 607,
-  "file": "lear/queue_services/entity-filer/src/entity_filer/utils.py",
-  "statement": "`replace_file_with_certified_copy` stamps the first page and overwrites the Minio key with `MinioService.put_file`."
+  "node": 523,
+  "file": "lear/queue_services/entity-filer/q_cli.py",
+  "statement": "`NATS_FILER_SUBJECT` default `'error'`."
  },
  {
-  "node": 607,
+  "node": 523,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
+  "statement": "`NATS_FILER_SUBJECT` default `'error'`."
+ },
+ {
+  "node": 523,
   "file": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
-  "statement": "`alteration.process(business, filing_submission, filing, filing_meta, is_correction)` and `admin_freeze.process(business, filing, filing_submission, filing_meta)` are called there, and the processor package is imported there."
+  "statement": "`process_filing` checks and the use of `filing_msg['filing']['id']`."
+ },
+ {
+  "node": 579,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/involuntary_dissolution_stage_1_notification.py",
+  "statement": "`PROCESSABLE_FURNISHING_NAMES` list, `post_process` Furnishing updates, PDF fetch guard."
+ },
+ {
+  "node": 579,
+  "file": "lear/queue_services/entity-emailer/tracker/models/message_processing.py",
+  "statement": "table columns, status enum, `one_or_none` finders, commit on save, unique `message_id`."
+ },
+ {
+  "node": 579,
+  "file": "lear/queue_services/entity-emailer/tracker/services/message_processing_service.py",
+  "statement": "create/update semantics, seen-count increments, `last_error` only when truthy, UTC timestamps."
+ },
+ {
+  "node": 606,
+  "file": "lear/queue_services/entity-bn/q_cli.py",
+  "statement": "publishes the same CloudEvent shape to `NATS_ENTITY_EVENT_SUBJECT`."
+ },
+ {
+  "node": 606,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/config.py",
+  "statement": "subscribes on `'entity.events'`."
+ },
+ {
+  "node": 606,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/config.py",
+  "statement": "the emailer subscribes on `NATS_EMAILER_SUBJECT` (default `'error'`) and also defines `ENTITY_EVENT_PUBLISH_OPTIONS` on `entity.events`."
+ },
+ {
+  "node": 606,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py",
+  "statement": "`consume_nr` behaviour (namex PATCH, flag branch, affiliation removal, error handling)."
  },
  {
   "node": 619,
-  "file": "sbc-pay/pay-api/src/pay_api/services/code.py",
-  "statement": "`CodeService` lookup and cache build behaviour (cache lookup by `type` or `code`, `SQLAlchemyError` handling, per-code-type model loading)."
+  "file": "lear/queue_services/business-pay/src/business_pay/config.py",
+  "statement": "consumer-side config (`SUB_AUDIENCE`, `SUB_SERVICE_ACCOUNT`, `NATS_SUBJECT` default `entity.filings`, `PAYMENT_SVC_URL`); no handler logic."
  },
  {
-  "node": 635,
-  "file": "sbc-pay/pay-api/src/pay_api/services/cfs_service.py",
-  "statement": "CFS URLs and call shapes for `create_cfs_receipt`, `get_invoice`, `reverse_rs_receipt_in_cfs` (reversal reason by operation), `create_account_invoice` and `adjust_receipt_to_zero`; the FAS token use."
+  "node": 619,
+  "file": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+  "statement": "`_release_payment` skips `[CSO, RPT, PPR, VS]`, swallows errors with Sentry `capture_message`; the mailer message uses `REFUND_DRAWDOWN_REQUEST` and `ACCOUNT_MAILER_TOPIC`."
  },
  {
-  "node": 775,
+  "node": 619,
+  "file": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "statement": "`publish_status` publishes `QueueMessage` with `PAY_API` source and `PAYMENT` type, topic from `get_topic_for_corp_type`; on failure sets `EVENT_FAILED`; `create_event_payload` shape; `update_transaction` republishes for `EVENT_FAILED`."
+ },
+ {
+  "node": 644,
+  "file": "lear/legal-api/src/legal_api/models/review.py",
+  "statement": "ReviewStatus values, the filtering, sorting and pagination rules, the result shape and the `json` fields."
+ },
+ {
+  "node": 644,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/continuation_in_notification.py",
+  "statement": "templates and subjects by APPROVED, REJECTED and CHANGE_REQUESTED status."
+ },
+ {
+  "node": 644,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "statement": "consumer handling of the email message, the error handling and how messages are dropped or re-raised."
+ },
+ {
+  "node": 644,
   "file": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
-  "statement": "`publish_mras_email`, its filing-type list and its error handling."
+  "statement": "the filer message handler, the COMPLETED skip and the error handling."
+ },
+ {
+  "node": 694,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "statement": "`process_email` reads `email_msg['email']['type']` and `['option']` in the else branch."
+ },
+ {
+  "node": 694,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "statement": "`process_filing` looks the filing up with `filing_msg['filing']['id']`, raises `QueueException` if not found, and skips a filing that is already COMPLETED."
+ },
+ {
+  "node": 694,
+  "file": "sbc-pay/pay-api/tests/unit/services/test_gcp_queue.py",
+  "statement": "publishes a `bc.registry.payment` message."
+ },
+ {
+  "node": 694,
+  "file": "sbc-pay/pay-queue/src/pay_queue/resources/worker.py",
+  "statement": "references `bc.registry.payment`, so the payment service is the sender."
+ },
+ {
+  "node": 744,
+  "file": "lear/legal-api/src/legal_api/models/colin_event_id.py",
+  "statement": "table colin_event_ids columns, `get_by_filing_id`, `get_by_colin_id`, `save`."
+ },
+ {
+  "node": 744,
+  "file": "lear/legal-api/src/legal_api/schemas.py",
+  "statement": "`rsbc_schemas` is a `registry_schemas.flask.SchemaServices` instance."
+ },
+ {
+  "node": 744,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/admin_revoke.py",
+  "statement": "revokes the first issued credential with ADMINISTRATIVE_REVOCATION, warns and returns None if none."
+ },
+ {
+  "node": 744,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/business_number.py",
+  "statement": "uses UPDATED_INFORMATION."
+ },
+ {
+  "node": 744,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/change_of_registration.py",
+  "statement": "uses UPDATED_INFORMATION."
+ },
+ {
+  "node": 744,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/dissolution.py",
+  "statement": "voluntary \u2192 replace, administrative \u2192 revoke, otherwise raises."
+ },
+ {
+  "node": 744,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/digital_credentials_processors/put_back_on.py",
+  "statement": "uses PUT_BACK_ON."
+ },
+ {
+  "node": 744,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/helpers.py",
+  "statement": "revoke and replace logic and their errors."
  },
  {
   "node": 775,
-  "file": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
-  "statement": "the payment-token flow, the 5 retries to find the filing, the status branches, and the email and filing publish error handling."
+  "file": "lear/queue_services/business-pay/src/business_pay/config.py",
+  "statement": "the connection-option dict contents and defaults; `NATS_SUBJECT` (`entity.filings`), `NATS_QUEUE` (`filing-worker`), and the publish subjects `entity.filing.filer` and `entity.email`."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/common/tests/config.py",
+  "statement": "test config with the same connection-option key shapes."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/entity-bn/src/entity_bn/config.py",
+  "statement": "queue default `error`; emailer subject `entity.email`."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/config.py",
+  "statement": "queue default `error`; `ENTITY_EVENT_PUBLISH_OPTIONS`."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/config.py",
+  "statement": "subject `NATS_EMAILER_SUBJECT` default `error`, queue default `error`; `ENTITY_EVENT_PUBLISH_OPTIONS`."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "statement": "the email consumer's handler, error handling, routing and `send_email` checks."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
+  "statement": "subject `NATS_FILER_SUBJECT` default `error`, queue default `error`; emailer subject `entity.email`; `ENTITY_EVENT_PUBLISH_OPTIONS`."
+ },
+ {
+  "node": 775,
+  "file": "lear/queue_services/entity-pay/src/entity_pay/config.py",
+  "statement": "subscription subject, queue and durable_name defaults; filer and emailer subject defaults."
  },
  {
   "node": 796,
   "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
-  "statement": "its config shares `PAYMENT_SVC_URL` and the same NATS option structure, and its `get_named_config` uses the same rules."
+  "statement": "entity-filer subscribes on `NATS_FILER_SUBJECT`."
  },
  {
   "node": 796,
   "file": "lear/queue_services/entity-pay/q_cli.py",
-  "statement": "the CLI payload shape, the subject, queue and durable name, and the swallow-and-log error handling."
+  "statement": "the CLI behaviour and the message it publishes."
+ },
+ {
+  "node": 796,
+  "file": "lear/queue_services/entity-pay/src/entity_pay/worker.py",
+  "statement": "the handler flow, payload, retry loop, state changes, publishes and error handling."
+ },
+ {
+  "node": 797,
+  "file": "lear/legal-api/src/legal_api/models/corp_type.py",
+  "statement": "`CorpType.find_by_id` query on `corp_types`."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/config.py",
+  "statement": "emailer subject default `'error'`."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-emailer/src/entity_emailer/worker.py",
+  "statement": "emailer consumer handler, `email['option']` and error handling."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
+  "statement": "filer `NATS_FILER_SUBJECT` default `'error'` and email subject `entity.email`."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+  "statement": "filer consumer `process_filing` and `cb_subscription_handler` behaviour."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-pay/requirements/prod.txt",
+  "statement": "Sentry dependency."
+ },
+ {
+  "node": 797,
+  "file": "lear/queue_services/entity-pay/src/entity_pay/config.py",
+  "statement": "subjects and defaults for subscribe, filer and email, and the `SENTRY_DSN` handling."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/models/account_fee.py",
+  "statement": "`account_fees` columns, `apply_filing_fees` default, the `service_fee` relationship and the lookup methods."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/models/code_table.py",
+  "statement": "`find_by_code` runs `filter_by(code=code).one_or_none()`; `find_all` returns `query.all()`."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/models/fee_code.py",
+  "statement": "`fee_codes` table with `code` and `amount`; `FeeCodeSchema` dumps `amount` as a float; the model inherits `CodeTable`."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/models/fee_schedule.py",
+  "statement": "`fee_schedules` columns, relationships, date-window queries, the description filter and `FeeScheduleSchema`."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/services/__init__.py",
+  "statement": "`from .gcp_queue import GcpQueue`."
+ },
+ {
+  "node": 834,
+  "file": "sbc-pay/pay-api/src/pay_api/services/gcp_queue_publisher.py",
+  "statement": "`QueueMessage` shape, `SimpleCloudEvent` construction, the topic-`None` skip and `queue.publish`."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/decorators.py",
+  "statement": "`can_access_digital_credentials` checks."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+  "statement": "`complete_filing` behaviour."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/services/__init__.py",
+  "statement": "`publish_event` payload and error swallowing."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/services/authz.py",
+  "statement": "`authorized` rules."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/services/bootstrap.py",
+  "statement": "`create_bootstrap` retries, `register_bootstrap`, `delete_bootstrap`, and `get_account_by_affiliated_identifier`."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/services/digital_credentials.py",
+  "statement": "Traction calls, endpoints, None-on-failure behaviour, init definition check, credential data helper."
+ },
+ {
+  "node": 859,
+  "file": "lear/legal-api/src/legal_api/services/namex.py",
+  "statement": "`query_nr_number` and `validate_nr` behaviour."
+ },
+ {
+  "node": 860,
+  "file": "lear/legal-api/src/legal_api/config.py",
+  "statement": "`PAYMENT_SVC_URL` default, the NATS subject and queue config."
+ },
+ {
+  "node": 860,
+  "file": "lear/legal-api/src/legal_api/services/authz.py",
+  "statement": "`authorized` rules, role constants, the auth-service call with retries, the `is_allowed` filing-status checks."
+ },
+ {
+  "node": 860,
+  "file": "lear/legal-api/src/legal_api/services/bootstrap.py",
+  "statement": "`RegistrationBootstrapService` delete and deregister behaviour, and `AccountService` auth calls."
+ },
+ {
+  "node": 860,
+  "file": "lear/legal-api/src/legal_api/services/document_meta.py",
+  "statement": "`DocumentMetaService.get_documents` conditions."
+ },
+ {
+  "node": 860,
+  "file": "lear/legal-api/src/legal_api/services/namex.py",
+  "statement": "`NameXService` `query_nr_number` and `update_nr` calls and config keys."
+ },
+ {
+  "node": 860,
+  "file": "lear/legal-api/src/legal_api/services/queue.py",
+  "statement": "the queue publish methods."
+ },
+ {
+  "node": 861,
+  "file": "lear/legal-api/src/legal_api/services/involuntary_dissolution.py",
+  "statement": "`check_business_eligibility`, `EligibilityFilters`, and `get_in_dissolution_batch_processing`."
+ },
+ {
+  "node": 861,
+  "file": "lear/legal-api/src/legal_api/services/minio.py",
+  "statement": "`MinioService.get_file` returns the stream from `get_object` on the `MINIO_BUCKET_BUSINESSES` bucket."
+ },
+ {
+  "node": 861,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/__init__.py",
+  "statement": "the `create_office`, `create_party` and `create_role` behaviour."
+ },
+ {
+  "node": 861,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/correction.py",
+  "statement": "the `correct_business_data` steps, the meta keys, and the party and address helpers."
+ },
+ {
+  "node": 861,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/rules_and_memorandum.py",
+  "statement": "the `update_rules` and `update_memorandum` behaviour (Minio fetch, stamp, replace, `Document` append, early return)."
+ },
+ {
+  "node": 861,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/utils.py",
+  "statement": "`replace_file_with_certified_copy` stamps the first page and overwrites the same key via `MinioService.put_file`."
+ },
+ {
+  "node": 862,
+  "file": "lear/legal-api/src/legal_api/services/minio.py",
+  "statement": "`MinioService.get_file`, `put_file` and `_get_client`, with the `MINIO_BUCKET_BUSINESSES` bucket and the config keys."
+ },
+ {
+  "node": 862,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/config.py",
+  "statement": "`NAMEX_API` is read from the environment."
+ },
+ {
+  "node": 862,
+  "file": "lear/queue_services/entity-filer/src/entity_filer/utils.py",
+  "statement": "`replace_file_with_certified_copy` re-writes the PDF with PyPDF2, builds the registrar stamp with `PdfService`, stamps the first page only, and calls `MinioService.put_file` on the same key."
+ },
+ {
+  "node": 862,
+  "file": "sbc-auth/auth-api/src/auth_api/resources/v1/entity.py",
+  "statement": "the contacts POST and PUT routes, with their validation, statuses and 404."
+ },
+ {
+  "node": 863,
+  "file": "lear/legal-api/src/legal_api/models/consent_continuation_out.py",
+  "statement": "columns, FKs, table name, `save`, `get_active_cco` and `get_by_filing_id`."
+ },
+ {
+  "node": 863,
+  "file": "lear/legal-api/src/legal_api/models/document.py",
+  "statement": "`DocumentType` values, columns and constraints, versioning, and the finders."
+ },
+ {
+  "node": 864,
+  "file": "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+  "statement": "`GET /<org_id>/contacts` required roles (SYSTEM, STAFF_VIEW_ACCOUNTS, PUBLIC_USER); 404 on not found; exceptions caught as BusinessException and ServiceUnavailableException."
+ },
+ {
+  "node": 864,
+  "file": "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+  "statement": "PayBC token URL and credentials, the order-status GET URL, and the `OrderStatus` / `RevenueLine` / `RefundData` fields."
+ },
+ {
+  "node": 865,
+  "file": "sbc-auth/queue_services/account-mailer/src/account_mailer/resources/worker.py",
+  "statement": "mailer consumer behaviour (dedupe, early return on message type, 200 on exceptions)."
+ },
+ {
+  "node": 865,
+  "file": "sbc-pay/pay-api/src/pay_api/models/payment.py",
+  "statement": "`get_invoices_and_payment_accounts_for_statements` columns, filters and `matchPaymentMethods`."
+ },
+ {
+  "node": 865,
+  "file": "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+  "statement": "`query_order_status` URL, reference selection and return type."
+ },
+ {
+  "node": 865,
+  "file": "sbc-pay/pay-api/src/pay_api/services/payment_service.py",
+  "statement": "`delete_invoice` steps and the statuses it sets."
+ },
+ {
+  "node": 865,
+  "file": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+  "statement": "`update_transaction` checks (INVALID_TRANSACTION_ID, COMPLETED) and its note that it is not for PAD or online banking."
+ },
+ {
+  "node": 865,
+  "file": "sbc-pay/pay-api/src/pay_api/services/statement_settings.py",
+  "statement": "`find_accounts_settings_by_frequency` query and its from_date/to_date interim exclusion."
+ },
+ {
+  "node": 866,
+  "file": "sbc-pay/pay-api/src/pay_api/models/ejv_file.py",
+  "statement": "`ejv_files` columns and the `created_on` default."
+ },
+ {
+  "node": 866,
+  "file": "sbc-pay/pay-api/src/pay_api/models/ejv_header.py",
+  "statement": "`ejv_headers` columns and foreign keys."
+ },
+ {
+  "node": 866,
+  "file": "sbc-pay/pay-api/src/pay_api/models/ejv_link.py",
+  "statement": "`ejv_links` columns."
+ },
+ {
+  "node": 866,
+  "file": "sbc-pay/pay-api/src/pay_api/utils/util.py",
+  "statement": "`get_nearest_business_day`, `is_holiday` and `get_next_day` behaviour."
+ },
+ {
+  "node": 867,
+  "file": "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py",
+  "statement": "the calls to `find_effective_by_payment_method` and `find_effective_or_latest_by_payment_method`, the joins on `CfsAccountModel`, the status filters, and the `CFSService` calls."
+ },
+ {
+  "node": 867,
+  "file": "sbc-pay/pay-api/src/pay_api/utils/user_context.py",
+  "statement": "the `user_context` decorator sets `kwargs['user']`. The `user_name` upper-case rule, the `name` property, the role checks and the empty token info outside a request."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/migrations/versions/2024_08_06_e64c153e63ae_eft_short_names_historical.py",
+  "statement": "`eft_group_link_seq` is created as an Integer sequence on upgrade and dropped on downgrade."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/services/distribution_code.py",
+  "statement": "lines 393-398 call `update_invoices_for_revenue_updates` when code details change, before `save()`."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/services/eft_refund.py",
+  "statement": "line 94 gets the next link group sequence value."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+  "statement": "gets `link_group_id` at lines 204 and 427, and joins StatementInvoices."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/services/eft_short_names.py",
+  "statement": "joins StatementInvoices."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/services/non_sufficient_funds.py",
+  "statement": "selects distinct statement_ids from StatementInvoices."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/services/statement.py",
+  "statement": "joins StatementInvoices and creates StatementInvoices rows (line 516)."
+ },
+ {
+  "node": 868,
+  "file": "sbc-pay/pay-api/src/pay_api/utils/enums.py",
+  "statement": "the InvoiceStatus, TransactionStatus, LineItemStatus, InvoiceReferenceStatus, PaymentSystem and PaymentMethod values."
+ },
+ {
+  "node": 869,
+  "file": "sbc-pay/pay-api/src/pay_api/resources/v1/distributions.py",
+  "statement": "`get_fee_distribution_schedules` with `Role.MANAGE_GL_CODES`."
+ },
+ {
+  "node": 869,
+  "file": "sbc-pay/pay-api/src/pay_api/resources/v1/fas/routing_slip.py",
+  "statement": "the GET and POST comments endpoints, with their roles, validation, status codes and exception handling."
+ },
+ {
+  "node": 869,
+  "file": "sbc-pay/pay-api/src/pay_api/services/distribution_code.py",
+  "statement": "`save_or_update`, `create_link`, `find_all`, `find_fee_schedules_by_distribution_id`, the `_dao` setter and the `_has_code_changes` fields."
+ },
+ {
+  "node": 869,
+  "file": "sbc-pay/pay-api/src/pay_api/services/fas/comment.py",
+  "statement": "Comment service `find_all_comments_for_a_routingslip` and `create` (the routing-slip check, the flush then commit, and the output shape)."
+ },
+ {
+  "node": 870,
+  "file": "sbc-auth/queue_services/account-mailer/src/account_mailer/email_processors/refund_requested.py",
+  "statement": "refund email template, recipients, subject and refundDate format."
+ },
+ {
+  "node": 870,
+  "file": "sbc-auth/queue_services/account-mailer/src/account_mailer/resources/worker.py",
+  "statement": "`handle_drawdown_request` consumes REFUND_DRAWDOWN_REQUEST."
+ },
+ {
+  "node": 870,
+  "file": "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+  "statement": "Direct Pay URL, receipt and refund behaviour."
+ },
+ {
+  "node": 870,
+  "file": "sbc-pay/pay-api/src/pay_api/services/eft_service.py",
+  "statement": "EFT behaviour."
+ },
+ {
+  "node": 870,
+  "file": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py",
+  "statement": "fee-calculation rules and service-fee rules."
+ },
+ {
+  "node": 870,
+  "file": "sbc-pay/pay-api/src/pay_api/services/oauth_service.py",
+  "statement": "OAuthService error mapping, retry adapter, timeout."
+ },
+ {
+  "node": 870,
+  "file": "sbc-pay/pay-api/src/pay_api/services/pad_service.py",
+  "statement": "PAD account and invoice behaviour."
+ },
+ {
+  "node": 870,
+  "file": "sbc-pay/pay-api/src/pay_api/services/paybc_service.py",
+  "statement": "CC/PayBC account, invoice and receipt behaviour."
+ },
+ {
+  "node": 871,
+  "file": "sbc-auth/queue_services/account-mailer/src/account_mailer/enums.py",
+  "statement": "the EFT-available subject and template names."
+ },
+ {
+  "node": 871,
+  "file": "sbc-auth/queue_services/account-mailer/src/account_mailer/resources/worker.py",
+  "statement": "handlers for `PAD_ACCOUNT_CREATE`, `EFT_AVAILABLE_NOTIFICATION`, `REFUND_DRAWDOWN_REQUEST` and `NSF_UNLOCK_ACCOUNT`."
+ },
+ {
+  "node": 871,
+  "file": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py",
+  "statement": "auth-queue consumes `AUTH_EVENT_TOPIC`, de-duplicates through `PubSubMessageProcessing`, handles `NSF_UNLOCK_ACCOUNT` by setting the org to `OrgStatus.ACTIVE`, and always returns 200."
+ },
+ {
+  "node": 871,
+  "file": "sbc-pay/jobs/payment-jobs/utils/auth_event.py",
+  "statement": "payment-jobs publishes `NSF_UNLOCK_ACCOUNT` to `AUTH_EVENT_TOPIC` with `{accountId, skipNotification: True}`."
+ },
+ {
+  "node": 871,
+  "file": "sbc-pay/pay-api/src/pay_api/config.py",
+  "statement": "defaults for `ACCOUNT_MAILER_TOPIC` and `AUTH_EVENT_TOPIC`."
+ },
+ {
+  "node": 872,
+  "file": "sbc-pay/pay-api/src/pay_api/services/eft_refund.py",
+  "statement": "calls `get_emails_with_keycloak_role` with `Role.EFT_REFUND.value` and `Role.EFT_REFUND_APPROVER.value`, then `send_email`."
+ },
+ {
+  "node": 872,
+  "file": "sbc-pay/pay-api/src/pay_api/services/flags.py",
+  "statement": "`is_on` returns `default` with no client, else `bool(client.variation(...))`; LaunchDarkly config from `PAY_LD_SDK_KEY`; testing env uses `flags.json`."
  }
 ]

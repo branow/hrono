@@ -869,3 +869,39 @@ def test_a_middle_page_drops_the_part_list_its_children_repeat() -> None:
     kept = _index(text)
     assert "1. A sends to B." in kept and "B drops it." in kept
     assert "C does c." not in kept
+
+
+def test_a_page_names_the_area_it_is_part_of(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    alpha = _files(database)[f"alpha-topic-{ids['n0']}/brief.md"]
+    title, line = alpha.split("\n\n")[:2]
+    assert title.startswith("# ")
+    assert line == "Part of the map whose overview is root.md."
+
+
+def test_a_leaf_under_an_area_links_the_area_brief(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    with database.connect() as conn, conn:
+        cluster_store.replace_level(
+            conn, TREE, 2, [(0, ids["root"], False, None)]
+        )
+        top = int(
+            conn.execute("SELECT id FROM nodes WHERE level = 2").fetchone()[
+                "id"
+            ]
+        )
+        brief(conn, top, "# Top overview\n\nAll of it.")
+    files = _files(database)
+    leaf = next(
+        text
+        for path, text in files.items()
+        if path.endswith(f"alpha-topic-{ids['n0']}/brief.md")
+    )
+    area = next(
+        path for path in files if path.endswith(f"-{ids['root']}/brief.md")
+    )
+    assert leaf.split("\n\n")[1].startswith(f"Part of [Root overview]({area})")
