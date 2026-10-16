@@ -201,10 +201,12 @@ say, write that. When a step drops or skips work without an error - a message \
 it never processes, a record it ignores - the flow says so, with the kind of \
 condition and the part that holds it. The last section, when there is one, \
 lists parts outside this area that the parts here hand work to or take it \
-from: name such a part in the step it acts on, and say it sits elsewhere - \
-one that sends lost or stuck work round again repairs that step, and one that \
-consumes the same messages is a second path whose own behaviour its \
-description gives. Then one line per part \
+from. Name such a part inside the step it acts on - never in a section of \
+its own - and say it sits elsewhere: one that sends lost or stuck work round \
+again is that step's repair (say which records it picks up), and one that \
+consumes the same messages is a second path, whose own behaviour its \
+description gives. A failure such a part repairs is never written as left \
+for good. Then one line per part \
 not already named in a flow, saying its job. End with the hazards that come \
 from how the parts interact, in the same terms: what no part of this area \
 repairs, never that nothing does.

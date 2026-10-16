@@ -53,8 +53,10 @@ Two layers, gotcha-aware, content-addressed.
    (`briefs.outside`). A step names such a part and says it sits elsewhere:
    without it the bcreg filing area wrote "no part retries" a lost filer
    message that the future-effective job, in another area, sends again.
-   The section is not in the member signature: a relation that changes
-   alone does not make the upper brief stale.
+   Its outside topics come with their hazards too: shown business-pay's
+   opening line alone, the payments area wrote it had no duplicate guard.
+   The section is part of the upper's member signature, so a changed
+   relation or outside brief makes the area brief stale.
 
 Why no word targets (docs/evaluations/2026-10-defines-uses/, round 8): with
 the 60-120 word condensation and the 250-500 word brief, the leaf briefs
