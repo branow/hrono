@@ -891,3 +891,38 @@ $0.45 to $0.65.
    a wrong merge of two paths from the payments leaf (870).
 5. legacy-0's payload-shape mismatch and the listener bypass are read but
    never drawn as consequences.
+
+## Round 13, leaves rebuilt with the lookup fixes (2026-10-18)
+
+`subtree_v9.py leaves` (25 leaf briefs, 9 uppers, condensations kept), after
+four one-leaf pilots on the old listener (797) that ended in the save-hook
+note (`d007453`): a read or grep that touches a file with save hooks shows
+them. 797 now states that committing `payment_completion_date` makes legal-api's
+`receive_before_change` set PAID. A re-run of business-pay (694) looked up
+nothing on legal-api's model this time and states the listener bypass only
+vaguely. Four runs per question.
+
+| arm | failure-1 | legacy-0 |
+|---|---|---|
+| code only | 0.36 | 0.59 |
+| v12 (top-down skill) | 0.64 | 0.70 |
+| **v13** | 0.71, 0.86, 0.57, 0.71 (0.71) | 0.69, 0.62, 0.62, 0.75 (0.67) |
+
+Agents read 14-17 briefs per failure-1 run ($0.65-0.99, one hit the 30-turn
+cap). The PAID rule now reaches the answers ("the legal-api listener derives
+PAID").
+
+**Still lost:**
+1. failure-1 fact 7 is partly wrong in the reference: `consume_nr` and
+   `publish_mras_email` catch every exception (checked in the code); only
+   `update_business_profile` and `update_entity` have no handler. The
+   briefs never say those two have none, so every answer generalises "the
+   post-commit steps go to Sentry". Next: the brief must say where nothing
+   catches an error.
+2. The emailer's filing-type list (fact 5) is in the emailer leaf; the one
+   run that read it still left it out.
+3. legacy-0: the payload-shape mismatch is read but never concluded ("would
+   skip every event"); the empty-body 200 before the JWT check is missed;
+   business-pay's own model is vaguer than in v12.
+4. More wrong statements on the pay side (PAD and EFT release timing):
+   failure-1 errors 1-3 per run against 1-2 in v12.
