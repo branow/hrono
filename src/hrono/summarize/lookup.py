@@ -55,16 +55,18 @@ above under their paths: spend the lookups on the other parts.
 
 First list every connection the topic's files show - each message, queue, \
 endpoint, call, table, document or configuration key that names another \
-part. Then, for each, find the other side and read what it does there:
+part. Then, for each, find the other side and read what it does there, in \
+this order, because the lookups run out:
+- Records it saves through another part's model or shares with another part \
+(a table, file or document): the other owner's definition, and which of its \
+rules - validations, listeners, defaults - run when this topic writes, and \
+which this topic bypasses. What a save sets on its own belongs to this topic.
 - What it sends: the handler that receives it, and what that handler checks, \
 saves and does when it fails. A configuration file only tells you a name; \
 search for that name until you reach the code that acts on it.
 - What it receives: who sends it, and when.
 - What it calls: what the called endpoint or function really selects, \
 returns or changes - never what its name suggests.
-- Records it shares with another part (a table, file or document): the other \
-owner's definition, and which of its rules - validations, listeners, \
-defaults - apply when this topic writes, and which this topic bypasses.
 Mark something "(behaviour not in this topic)" only after you searched for \
 it and did not find it.
 
