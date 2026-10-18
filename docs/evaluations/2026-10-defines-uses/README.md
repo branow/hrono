@@ -852,3 +852,42 @@ runs per arm cannot separate a 0.1 change from noise.
    is (which types, which states), never only as the field its check reads.
    459 still writes "without a usable id" for the tracker's filing-type
    rule; the rule stays in the emailer leaf (579).
+
+## Round 12, agents told to read the map top down (2026-10-18)
+
+Same export as round 11 plus the `Part of` links (leaves not rebuilt: the
+lookup-order change in `a885f85` is not in these briefs). Skill and session
+note now: start at `root.md`, read the area briefs, list every part on the
+path, read each part's brief, then confirm in code. Four runs per question.
+The judge now says why each fact fell short and quotes each wrong
+statement; every earlier arm was re-scored with it (old scores in
+`~/hrono-deep/runs/judge-v1/`).
+
+| arm | failure-1 | legacy-0 |
+|---|---|---|
+| code only (w9a/b) | 0.29, 0.43 (avg 0.36) | 0.56, 0.62 (0.59) |
+| hrono v10c/d | 0.64, 0.57 (0.61) | 0.75, 0.69 (0.72) |
+| hrono v11a/b | 0.50, 0.57 (0.54) | 0.56, 0.56 (0.56) |
+| **hrono v12a-d** | 0.71, 0.71, 0.64, 0.50 (0.64) | 0.75, 0.75, 0.75, 0.56 (0.70) |
+
+**What changed in behaviour.** Every v12 run opened `root.md`, then the
+filing area (459) and the payments areas, then 5-10 leaves: 8-14 briefs per
+failure-1 run against 0-3 in round 11. Cost per failure-1 run rose from
+$0.45 to $0.65.
+
+**What is still lost, from the judge's reasons:**
+1. legal-api's filing model sets PAID on save when a payment date is set:
+   missed in 6 of 8 runs, and 3 runs say the opposite ("entity-pay never sets
+   PAID"). The old consumer's leaf (797) never looked that model up; the
+   lookup-order fix targets it, but these leaves predate it.
+2. The emailer drops messages of filing types outside its list: missed in
+   all 4. No run opened the emailer leaf (579) or the filer leaf (606): the
+   agents read the payment side leaf by leaf, then took the filer and
+   emailer from the area brief alone, which says only "skips messages
+   without a usable id" and "post-commit errors go to Sentry".
+3. The filer's per-step failure (fact 7) is 0.5 in every run, for the same
+   reason: the area brief's one rule, copied.
+4. Online banking is listed among `complete_post_invoice` callers (2 runs):
+   a wrong merge of two paths from the payments leaf (870).
+5. legacy-0's payload-shape mismatch and the listener bypass are read but
+   never drawn as consequences.
