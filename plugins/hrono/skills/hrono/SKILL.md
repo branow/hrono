@@ -24,7 +24,10 @@ overview names each area in one line.
 2. Write down the path: every part the work passes through, from what
    starts it to its last effect (the record applied, the email sent), and
    every part named as a repair or a second path, wherever it sits.
-3. Read the leaf brief of every part on that list. The area's `## Children`
+3. Read the leaf brief of every part on that list - the last parts as much
+   as the first: the area brief gives each part a line or two and its
+   failure handling as one rule, while the leaf gives the exact conditions,
+   what it skips and how each step fails. The area's `## Children`
    links them; grep the briefs for a part's name only when it is not
    there. Each leaf's `Part of` line links its area, and its
    `## Connected topics` the parts it exchanges work or records with:
@@ -36,7 +39,8 @@ overview names each area in one line.
    brief, and can you say what it does when the work arrives, when it
    fails partway, and when the same work arrives twice? A part you have not
    read is one you would guess about, and guesses are where answers go
-   wrong: read it. Having an answer for the first parts is not a reason to
+   wrong: read it. What the area brief says about a part does not count as
+   reading it. Having an answer for the first parts is not a reason to
    stop.
 6. In the answer, give every part on the path its own behaviour. Where two
    parts do the same job - an old and a new consumer, two paths for one
