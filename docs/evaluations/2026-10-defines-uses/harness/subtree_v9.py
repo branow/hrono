@@ -181,11 +181,13 @@ def leaves() -> None:
                 "ORDER BY b.node_id"
             )
         ]
+    only = [int(a) for a in sys.argv[2:]]  # a pilot: these leaves, no uppers
     context = JobContext(database, cache_root=CACHE)
-    for node in nodes:
+    for node in only or nodes:
         print(node, brief(_job("brief", {"node": node}), context), flush=True)
     database.close()
-    uppers()
+    if not only:
+        uppers()
 
 
 def uppers() -> None:
@@ -239,4 +241,6 @@ def export() -> None:
 
 
 if __name__ == "__main__":
-    {"build": build, "leaves": leaves, "uppers": uppers, "export": export}[sys.argv[1]]()
+    {"build": build, "leaves": leaves, "uppers": uppers, "export": export}[
+        sys.argv[1]
+    ]()

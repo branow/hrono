@@ -123,7 +123,7 @@ def test_glob_and_read() -> None:
 def test_a_toolbox_stops_answering_past_its_budget() -> None:
     box = Toolbox(tools=lookup.TOOLS, answer=lambda n, a: "ok", most=1)
     assert box.call("Glob", {"pattern": "*"}) == "ok"
-    assert box.call("Glob", {"pattern": "*"}) == SPENT
+    assert box.call("Glob", {"pattern": "*.py"}) == SPENT
     assert len(box.calls) == 1
 
 
@@ -397,3 +397,75 @@ def test_the_tools_virtual_paths_become_repository_paths() -> None:
     body, uses = lookup.split(text, set(), _files().texts)
     assert body == "See `repo/filer/config.py` and repo/README.md."
     assert uses == (lookup.Use("repo/filer/worker.py", "the consumer"),)
+
+
+FILES = lookup.Files(
+    {
+        "source/repo/model.py": "\n".join(f"line {i}" for i in range(50)),
+        "condensed/repo/model.py.md": "RULE: before_update sets PAID",
+        "source/repo/own.py": "mine",
+        "condensed/repo/own.py.md": "own condensed",
+    }
+)
+
+
+def test_a_repeated_call_is_not_counted() -> None:
+    tools = lookup.toolbox(FILES)
+    first = tools.call("Read", {"path": "source/repo/model.py"})
+    again = tools.call("Read", {"path": "source/repo/model.py"})
+    assert "line 0" in first
+    assert "before" in again and "line 0" not in again
+    assert len(tools.calls) == 1
+
+
+def test_reading_an_own_file_is_free() -> None:
+    tools = lookup.toolbox(FILES, {"repo/own.py"})
+    assert tools.call("Read", {"path": "source/repo/own.py"}) == lookup.OWN
+    assert (
+        tools.call("Read", {"path": "condensed/repo/own.py.md"}) == lookup.OWN
+    )
+    assert tools.calls == []
+
+
+def test_a_slice_of_a_source_points_to_the_whole_file() -> None:
+    sliced = FILES.read("source/repo/model.py", 10, 5)
+    assert (
+        "(lines 11-15 of 50; condensed/repo/model.py.md covers the whole file)"
+    ) in sliced
+    assert "covers the whole file" not in FILES.read("source/repo/model.py")
+
+
+def test_a_slice_of_a_model_shows_what_runs_on_save() -> None:
+    files = lookup.Files(
+        {
+            "source/repo/filing.py": "\n".join(f"line {i}" for i in range(50)),
+            "condensed/repo/filing.py.md": (
+                "ENTRY: `find_by_token` returns a filing.\n"
+                "ENTRY: `on_change` listens on before_update for Filing.\n"
+                "RULE: in on_change, if paid_at -> sets status PAID.\n"
+                "STATES: DRAFT, PAID."
+            ),
+        }
+    )
+    sliced = files.read("source/repo/filing.py", 10, 5)
+    assert "This file also runs on save:" in sliced
+    assert "`on_change` listens on before_update" in sliced
+    assert "RULE: in on_change, if paid_at -> sets status PAID." in sliced
+    assert "find_by_token" not in sliced
+    assert "STATES" not in sliced
+
+
+def test_a_grep_into_a_model_shows_what_runs_on_save() -> None:
+    files = lookup.Files(
+        {
+            "source/repo/filing.py": "def find_by_token():\n    pass",
+            "condensed/repo/filing.py.md": (
+                "ENTRY: `on_change` listens on before_update for Filing.\n"
+                "RULE: in on_change, if paid_at -> sets status PAID."
+            ),
+        }
+    )
+    hit = files.grep("def find_by_token", "source/repo/**", "content")
+    assert "source/repo/filing.py also runs on save:" in hit
+    assert "sets status PAID" in hit
+    assert "runs on save" not in files.grep("def find", "source/repo/**")

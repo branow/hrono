@@ -145,7 +145,7 @@ def brief(
         rendered = asked.replace(
             _CONTENT_PLACEHOLDER, _with_paths(inputs, own[node_id])
         )
-        tools = lookup.toolbox(found)
+        tools = lookup.toolbox(found, own[node_id])
         result, flagged = answer(
             completion,
             CompletionRequest(
@@ -160,7 +160,7 @@ def brief(
             # the rest named connections they never searched: each is asked
             # again, once, with a fresh budget, to look first
             first = result
-            retry = lookup.toolbox(found)
+            retry = lookup.toolbox(found, own[node_id])
             result, flagged = answer(
                 completion,
                 CompletionRequest(

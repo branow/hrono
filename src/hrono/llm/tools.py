@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 SPENT = "No lookups left. Write the answer now with what you found."
+REPEATED = "You made this exact call before; its answer is above. Not counted."
 # Thinking is off for every other call (it dominated condense's cost for
 # nothing). Deciding what to look up next is real reasoning: measured on the
 # bcreg slice, the same brief writer made 2-5 shallow lookups without it and
@@ -47,9 +48,20 @@ class Toolbox:
     answer: Callable[[str, Mapping[str, object]], str]
     most: int = 15
     calls: list[tuple[str, dict[str, object]]] = field(default_factory=list)
+    # answers a call without spending the budget, or None to answer it as usual
+    free: Callable[[str, Mapping[str, object]], str | None] | None = None
 
     def call(self, name: str, arguments: Mapping[str, object]) -> str:
-        """Answer one call, or say the budget is spent."""
+        """Answer one call, or say the budget is spent.
+
+        A call made before, word for word, is not answered or counted again:
+        a bcreg brief writer spent 5 of its 13 lookups re-reading files it
+        had read, and ran out before the one that mattered.
+        """
+        if (name, dict(arguments)) in self.calls:
+            return REPEATED
+        if self.free is not None and (said := self.free(name, arguments)):
+            return said
         if len(self.calls) >= self.most:
             return SPENT
         self.calls.append((name, dict(arguments)))
