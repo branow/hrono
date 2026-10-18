@@ -220,8 +220,12 @@ class Files:
             # a matched line shows one function; what runs on every save of
             # the same record is shown with it, as a slice's read does
             for name in sorted({line.split(":", 1)[0] for line in out}):
-                whole = CONDENSED + name.removeprefix(SOURCE) + ".md"
-                if name.startswith(SOURCE) and whole in self.texts:
+                whole = (
+                    name
+                    if name.startswith(CONDENSED)
+                    else CONDENSED + name.removeprefix(SOURCE) + ".md"
+                )
+                if whole in self.texts:
                     hooks = _on_save(self.texts[whole])
                     if hooks:
                         found_text += f"\n{name} also runs on save:\n{hooks}"

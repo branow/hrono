@@ -469,3 +469,5 @@ def test_a_grep_into_a_model_shows_what_runs_on_save() -> None:
     assert "source/repo/filing.py also runs on save:" in hit
     assert "sets status PAID" in hit
     assert "runs on save" not in files.grep("def find", "source/repo/**")
+    in_condensed = files.grep("listens", "condensed/repo/**", "content")
+    assert "condensed/repo/filing.py.md also runs on save:" in in_condensed
