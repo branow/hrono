@@ -12,6 +12,7 @@ the run costs dollars rather than a whole build:
 4. the export is written by hrono's export renderer.
 
 Usage: uv run --extra claude-code --extra cluster python subtree_v9.py build
+       uv run --extra claude-code python subtree_v9.py leaves
        uv run python subtree_v9.py export
 """
 
@@ -152,6 +153,41 @@ def build() -> None:
     database.close()
 
 
+def leaves() -> None:
+    """Rewrite the sub-tree's leaf briefs, then their uppers, on the built db.
+
+    The condensations stay: only the brief prompt changed (round 12's lookup
+    order), so condense would write the same text again.
+    """
+    database = Database.at(DST)
+    with database.connect() as conn:
+        for default in _DEFAULTS:
+            if default["role"] in ("brief", "brief-upper"):
+                body = json.dumps(default)
+                store.replace(
+                    conn,
+                    "prompts",
+                    str(default["name"]),
+                    body,
+                    None,
+                    "t",
+                    content_hash(body),
+                )
+        nodes = [
+            int(r[0])
+            for r in conn.execute(
+                "SELECT b.node_id FROM briefs b JOIN nodes n ON n.id = b.node_id "
+                "WHERE n.level = 0 AND b.lookups LIKE '%\"calls\"%' "
+                "ORDER BY b.node_id"
+            )
+        ]
+    context = JobContext(database, cache_root=CACHE)
+    for node in nodes:
+        print(node, brief(_job("brief", {"node": node}), context), flush=True)
+    database.close()
+    uppers()
+
+
 def uppers() -> None:
     """Rewrite the sub-tree's upper briefs with the current seeded prompt."""
     database = Database.at(DST)
@@ -203,4 +239,4 @@ def export() -> None:
 
 
 if __name__ == "__main__":
-    {"build": build, "uppers": uppers, "export": export}[sys.argv[1]]()
+    {"build": build, "leaves": leaves, "uppers": uppers, "export": export}[sys.argv[1]]()

@@ -32,7 +32,8 @@ function note(config) {
         `down: start at ${root}, read the brief.md of every area whose line ` +
         "touches the question - its Flows name every part a piece of work " +
         "passes through, what each does when a step fails and what repairs " +
-        "it - then the leaf brief of every part on that path, to its end. " +
+        "it - then the leaf brief of every part on that path, to its last " +
+        "part: the area brief only summarises them. " +
         "Only then open the source files, to confirm the claims you " +
         "make; a part whose brief you have not read is one you would guess " +
         "about. The hrono skill has the details.",
