@@ -13,27 +13,37 @@ checks that guard each entry point with their conditions, every branch and
 the state it sets, what happens on each error, what it sends and receives,
 and which other parts it connects to. One brief replaces many file reads.
 
-1. Grep the export's `brief.md` files for the components, names, statuses
-   and terms in the question, and read in full the leaf briefs that match.
-2. Read the area brief of each leaf you read, before any code: the
-   `Part of` line under the leaf's title links it. Its `Flows`
-   name every part a piece of work passes through, step by step, and what
-   each does when a step fails.
-3. Follow the work to its end before reading code: every part that
-   receives it after the one you found, what each does when it fails, and
-   what retries or repairs it - or that nothing does. Read those parts'
-   briefs too, from the flows and from each leaf's `## Connected topics`:
-   the topics it exchanges work or records with, wherever they sit in the
-   map. A repair job often lives in another area than what it repairs.
-4. A leaf ends with `## Sources`: the files it was written from. Open them
-   to confirm the claims you will make; where the code and a brief
-   disagree, the code wins.
-5. In the answer, give every part you found on the path its own behaviour.
-   Where two parts do the same job - an old and a new consumer, two paths
-   for one piece of work - say how each one behaves; they rarely match, and
-   "it does the same" loses what the question is about.
+Read the map from the top down, and read it before any code: a search
+over the briefs returns dozens of pages in no useful order, while the
+overview names each area in one line.
 
-For an overview, read `root.md` and the `## Children` it lists. Passages
+1. Read `root.md`. Pick every area whose line touches the question, and
+   read each one's `brief.md` in full. Its `Flows` name every part a piece
+   of work passes through, step by step, what each does when a step fails,
+   and the parts elsewhere that repair a step or take the same work.
+2. Write down the path: every part the work passes through, from what
+   starts it to its last effect (the record applied, the email sent), and
+   every part named as a repair or a second path, wherever it sits.
+3. Read the leaf brief of every part on that list. The area's `## Children`
+   links them; grep the briefs for a part's name only when it is not
+   there. Each leaf's `Part of` line links its area, and its
+   `## Connected topics` the parts it exchanges work or records with:
+   follow them to the parts your list is missing.
+4. Only then open code, to confirm the claims you will make - the files are
+   under each leaf's `## Sources` - not to explore. Where the code and a
+   brief disagree, the code wins.
+5. Before you answer, go down the list: for every part, have you read its
+   brief, and can you say what it does when the work arrives, when it
+   fails partway, and when the same work arrives twice? A part you have not
+   read is one you would guess about, and guesses are where answers go
+   wrong: read it. Having an answer for the first parts is not a reason to
+   stop.
+6. In the answer, give every part on the path its own behaviour. Where two
+   parts do the same job - an old and a new consumer, two paths for one
+   piece of work - say how each one behaves; they rarely match, and "it
+   does the same" loses what the question is about.
+
+Passages
 that match the prompt also arrive attached automatically as "hrono recall".
 
 If no export exists, use hrono-export.

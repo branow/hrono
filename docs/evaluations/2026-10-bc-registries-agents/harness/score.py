@@ -28,7 +28,9 @@ Candidate answer:
 
 For each key fact, give 1 if the answer states it (same components or clearly equivalent ones; exact wording and paths need not match), 0.5 if it is partly stated or vague (the right area but a key component missing), 0 if it is missing or contradicted. Then count "errors": statements in the answer that contradict a key fact. Do not reward length.
 
-Reply with only JSON: {{"facts": [<score per fact in order>], "errors": <int>}}"""
+For every fact scored below 1, say in one sentence what the answer said about it or left out ("why"). For every error, quote the answer's statement and name the fact it contradicts.
+
+Reply with only JSON: {{"facts": [<score per fact in order>], "errors": <int>, "why": {{"<fact number>": "<sentence>"}}, "wrong": [{{"said": "<quote from the answer>", "fact": <fact number>}}]}}"""
 
 
 def paths(text):
@@ -74,6 +76,8 @@ def arch(row, q):
         "coverage": sum(s) / len(q["facts"]),
         "fact_scores": s,
         "errors": int(j.get("errors", 0)),
+        "why": j.get("why", {}),
+        "wrong": j.get("wrong", []),
     }
 
 

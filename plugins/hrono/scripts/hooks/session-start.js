@@ -28,16 +28,14 @@ function note(config) {
         "point, every branch and the state it sets, what happens on errors, " +
         "what it sends and receives and from which other parts - so one " +
         "brief replaces many file reads. For a question about how something " +
-        "works or how parts fit, before reading code: grep the export's " +
-        "brief.md files for the names in the question and read the leaf " +
-        "briefs that match. Then read the brief.md of the folder above each: " +
-        "its Flows name every part a piece of work passes through and what " +
-        "each does when a step fails. Follow the work to its end - every part " +
-        "that receives it, and what retries or repairs a failed step - and " +
-        "read those parts' briefs too, and those under a leaf's Connected " +
-        "topics. Then open the source files to confirm " +
-        "the claims you " +
-        `make. The hrono skill has the details; for an overview, start at ${root}.`,
+        "works or how parts fit, read the map before any code, from the top " +
+        `down: start at ${root}, read the brief.md of every area whose line ` +
+        "touches the question - its Flows name every part a piece of work " +
+        "passes through, what each does when a step fails and what repairs " +
+        "it - then the leaf brief of every part on that path, to its end. " +
+        "Only then open the source files, to confirm the claims you " +
+        "make; a part whose brief you have not read is one you would guess " +
+        "about. The hrono skill has the details.",
     );
   } else {
     lines.push(`It is not exported yet; the hrono-export skill writes it.`);
