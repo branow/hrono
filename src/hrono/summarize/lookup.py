@@ -39,6 +39,10 @@ CONDENSED = "condensed/"
 MOST_CALLS = 15
 MOST_USES = 12  # relations kept per brief: a popular file must not fan out
 ANSWER_CHARS = 12_000  # one tool answer at most
+OWN = (
+    "This is one of this topic's own files: its condensation is given above. "
+    "Not counted; spend the lookups on the other parts."
+)
 GREP_LINES = 20  # matching lines shown per file
 
 INSTRUCTION = """
@@ -50,8 +54,11 @@ brief back to be written again. You have read-only tools \
 over the files of the whole system: `source/<source>/<path>` is the text of \
 each source file and `condensed/<source>/<path>.md` its condensation. Use \
 `Grep` (a regular expression, optionally limited to a path glob) and `Glob` \
-to find files, and `Read` to read one. This topic's own files are given \
-above under their paths: spend the lookups on the other parts.
+to find files, and `Read` to read one. To learn what another file does, \
+read its condensation first: the whole file - its checks, listeners and \
+defaults - in one lookup; open its source for an exact line. This topic's \
+own files are given above under their paths: spend the lookups on the other \
+parts.
 
 First list every connection the topic's files show - each message, queue, \
 endpoint, call, table, document or configuration key that names another \
@@ -60,7 +67,10 @@ this order, because the lookups run out:
 - Records it saves through another part's model or shares with another part \
 (a table, file or document): the other owner's definition, and which of its \
 rules - validations, listeners, defaults - run when this topic writes, and \
-which this topic bypasses. What a save sets on its own belongs to this topic.
+which this topic bypasses. What a save sets on its own - a status a listener \
+derives, a default - is this topic's effect: write it in the step that \
+saves (`save() -> <model>'s <listener> sets <field> to <value>`), never as \
+"behaviour not in this topic".
 - What it sends: the handler that receives it, and what that handler checks, \
 saves and does when it fails. A configuration file only tells you a name; \
 search for that name until you reach the code that acts on it.
@@ -205,7 +215,17 @@ class Files:
             if size > ANSWER_CHARS:
                 out.append("... more: narrow the pattern or the path.")
                 break
-        return "\n".join(out)[: ANSWER_CHARS + 60] or "No match. " + self.hint()
+        found_text = "\n".join(out)[: ANSWER_CHARS + 60]
+        if mode == "content":
+            # a matched line shows one function; what runs on every save of
+            # the same record is shown with it, as a slice's read does
+            for name in sorted({line.split(":", 1)[0] for line in out}):
+                whole = CONDENSED + name.removeprefix(SOURCE) + ".md"
+                if name.startswith(SOURCE) and whole in self.texts:
+                    hooks = _on_save(self.texts[whole])
+                    if hooks:
+                        found_text += f"\n{name} also runs on save:\n{hooks}"
+        return found_text or "No match. " + self.hint()
 
     def glob(self, pattern: str) -> str:
         names = [name for name in sorted(self.texts) if _within(name, pattern)]
@@ -218,11 +238,29 @@ class Files:
         text = self.texts.get(path)
         if text is None:
             return "No such file. " + self.hint()
-        lines = text.splitlines()[max(0, offset) : max(0, offset) + limit]
+        every = text.splitlines()
+        lines = every[max(0, offset) : max(0, offset) + limit]
         body = "\n".join(
             f"{max(0, offset) + i + 1}\t{line}" for i, line in enumerate(lines)
+        )[:ANSWER_CHARS]
+        whole = CONDENSED + path.removeprefix(SOURCE) + ".md"
+        partial = (
+            offset > 0 or len(lines) < len(every) or len(body) >= ANSWER_CHARS
         )
-        return body[:ANSWER_CHARS] or "(empty)"
+        if partial and path.startswith(SOURCE) and whole in self.texts:
+            # a slice shows one function; what else the file does on the
+            # same record - a listener, a default - sits outside it
+            first, last = max(0, offset) + 1, max(0, offset) + len(lines)
+            body += (
+                f"\n(lines {first}-{last} of {len(every)}; {whole} covers "
+                "the whole file)"
+            )
+            # and what runs on every save is shown whatever the slice: the
+            # bcreg writer read a model's query twice and never its listener
+            hooks = _on_save(self.texts[whole])
+            if hooks:
+                body += "\nThis file also runs on save:\n" + hooks
+        return body or "(empty)"
 
     def hint(self) -> str:
         roots = sorted({name.split("/")[1] for name in self.texts})
@@ -251,6 +289,37 @@ class Files:
             )
         except ValueError as exc:
             return f"Bad argument: {exc}."
+
+
+_HOOK = re.compile(
+    r"\blisten|\bbefore_(?:insert|update|save|delete|flush)\b"
+    r"|\bafter_(?:insert|update|save|delete|commit)\b|\bpre_save\b"
+    r"|\bpost_save\b|@validates\b|\bsignal",
+    re.IGNORECASE,
+)
+
+
+def _on_save(condensation: str) -> str:
+    """The lines of a file's condensation about what runs when it is saved.
+
+    A save hook's rules sit on lines naming the hook (``receive_before_change``
+    after the line that says it listens on before_update), so a line naming a
+    hooked function is kept too.
+    """
+    lines = condensation.splitlines()
+    hooked = {
+        name
+        for line in lines
+        if _HOOK.search(line)
+        for name in re.findall(r"`(\w+)`", line)
+    }
+    kept = [
+        line
+        for line in lines
+        if _HOOK.search(line)
+        or any(re.search(rf"\b{re.escape(n)}\b", line) for n in hooked)
+    ]
+    return "\n".join(kept)[:3000]
 
 
 def _within(name: str, pattern: str) -> bool:
@@ -295,8 +364,18 @@ def files(conn: sqlite3.Connection, tree: str, condense_model: str) -> Files:
     return Files(out)
 
 
-def toolbox(found: Files) -> Toolbox:
-    return Toolbox(tools=TOOLS, answer=found.answer, most=MOST_CALLS)
+def toolbox(found: Files, own: Iterable[str] = ()) -> Toolbox:
+    """The lookup tools over ``found``; reading ``own`` files is free."""
+    mine = {SOURCE + name for name in own} | {
+        CONDENSED + name + ".md" for name in own
+    }
+
+    def free(name: str, arguments: Mapping[str, object]) -> str | None:
+        if name == "Read" and str(arguments.get("path", "")) in mine:
+            return OWN
+        return None
+
+    return Toolbox(tools=TOOLS, answer=found.answer, most=MOST_CALLS, free=free)
 
 
 def file_of(path: str) -> str | None:
