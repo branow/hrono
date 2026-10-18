@@ -120,6 +120,15 @@ For documentation, configuration or other text, keep every decision, rule, \
 value, step, name and reference to another document or system that a reader \
 would look up, in the same spirit.
 
+Absence is a fact too, in any kind of content: for each step that can fail, \
+each case a rule might meet and each question a reader of this content would \
+ask of it, when the chunk shows nothing that answers it - no handler around a \
+call that can fail, no rule for a case, no owner of a step, no decision \
+where one is due - write that on its own line, naming the step or case (for \
+example "ABSENT: no handler around the profile update; an error goes to the \
+caller", "ABSENT: no owner named for the approval step"). Silence is never \
+left for a reader to read as "handled".
+
 No word target: a chunk with one simple function needs three lines, a chunk \
 with many branches needs all of them. Boilerplate (licence headers, imports, \
 logging and server setup) collapses to one short line, or to nothing. Copy \
@@ -155,14 +164,24 @@ exact condition, the outcome, and the function that holds it. Copy every \
 member of a list, set or group verbatim. Include every state a record moves \
 to and every check that refuses a caller.
 5. Order and failure: what is saved or committed before a step that can \
-fail; for each error handler, what it catches, what happens, and which later \
-steps still run; each loop that polls or retries.
+fail; for each step, how its failure is handled - what a handler catches, \
+what happens, and which later steps still run - or that nothing handles it; \
+each loop that polls or retries.
 6. Connections: each other part of the system it calls, publishes to, \
 consumes from, or shares a record or configuration key with - named as the \
 condensations name it - and what crosses, in which direction.
-7. Hazards: where work can be lost, duplicated, corrupted or let through \
+7. Conclusions: what follows from the facts above that a reader would \
+otherwise have to work out, each with the facts it rests on - what work a \
+condition that drops or skips work drops, in concrete terms (which types, \
+states or senders); whether what each side of a connection sends matches \
+what the other side accepts, and what happens to what does not (for example \
+"it reads only a top-level `paymentToken`, which the current sender does not \
+send, so it would skip every message that sender sends"); for a step nothing \
+handles, which later steps a failure skips; what changing one part would and \
+would not change elsewhere. Draw only what the facts support.
+8. Hazards: where work can be lost, duplicated, corrupted or let through \
 unchecked, as the condensations show it.
-8. The sources to open first, and what each holds.
+9. The sources to open first, and what each holds.
 For documentation or other text, keep its decisions, rules, steps and \
 references in the same spirit, under headings that fit it.
 
@@ -208,7 +227,9 @@ its own - and say it sits elsewhere: one that sends lost or stuck work round \
 again is that step's repair (say which records it picks up), and one that \
 consumes the same messages is a second path, whose own behaviour its \
 description gives. A failure such a part repairs is never written as left \
-for good. Then one line per part \
+for good. Where a part's description draws a conclusion that bears on a \
+step - what a check drops, a mismatch with the part it talks to, which steps \
+a failure skips - the step carries it. Then one line per part \
 not already named in a flow, saying its job. End with the hazards that come \
 from how the parts interact, in the same terms: what no part of this area \
 repairs, never that nothing does.

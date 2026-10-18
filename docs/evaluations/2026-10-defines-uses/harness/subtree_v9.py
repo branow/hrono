@@ -181,8 +181,32 @@ def leaves() -> None:
                 "ORDER BY b.node_id"
             )
         ]
-    only = [int(a) for a in sys.argv[2:]]  # a pilot: these leaves, no uppers
+    fresh = "--condense" in sys.argv  # condense the leaves' sections again
+    only = [int(a) for a in sys.argv[2:] if a.isdigit()]  # a pilot, no uppers
     context = JobContext(database, cache_root=CACHE)
+    if fresh:
+        with database.connect() as conn:
+            chosen = only or nodes
+            marks = ",".join("?" * len(chosen))
+            gone = conn.execute(
+                "DELETE FROM condensations WHERE model_name = 'condense-contracts' "
+                "AND content_hash IN (SELECT s.content_hash FROM node_members m "
+                f"JOIN sections s ON s.id = m.section_id WHERE m.node_id IN ({marks}))",
+                chosen,
+            ).rowcount
+            default = next(d for d in _DEFAULTS if d["role"] == "condense")
+            body = json.dumps(default)
+            store.replace(
+                conn,
+                "prompts",
+                str(default["name"]),
+                body,
+                None,
+                "t",
+                content_hash(body),
+            )
+        print("condensations dropped", gone, flush=True)
+        print("condense", condense(_job("condense", {}), context), flush=True)
     for node in only or nodes:
         print(node, brief(_job("brief", {"node": node}), context), flush=True)
     database.close()
