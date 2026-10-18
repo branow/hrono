@@ -926,3 +926,46 @@ PAID").
    business-pay's own model is vaguer than in v12.
 4. More wrong statements on the pay side (PAD and EFT release timing):
    failure-1 errors 1-3 per run against 1-2 in v12.
+
+## Round 14, absences stated and conclusions drawn (2026-10-19)
+
+`611d2db`: the condense prompt writes what content lacks (a step nothing
+handles, a case no rule covers), for any kind of content; the brief gains a
+Conclusions section (what a dropping check drops, whether two sides of a
+connection match, which steps an unhandled failure skips, what a change
+would and would not reach); upper flows carry those conclusions.
+`subtree_v9.py leaves --condense`: 380 condensations rewritten (267 carry an
+ABSENT line), 25 leaf briefs, the uppers. Two network failures midway; the
+re-runs skipped the fresh briefs. Four runs per question.
+
+| arm | failure-1 | legacy-0 |
+|---|---|---|
+| code only | 0.36 | 0.59 |
+| v13 | 0.71 | 0.67 |
+| **v14** | 0.79, 0.64, 0.79, 0.64 (0.72) | 0.81, 0.69, 0.75, 0.69 (0.73) |
+
+legacy-0's shape mismatch went from 0.38 to 1.0 in every run: the old
+listener's brief now concludes it would skip every message the pay API
+sends. Errors fell (failure-1 1-2 per run, legacy-0 none).
+
+**Still lost, by cause:**
+1. The condenser loses or reorders rules in dense code. The emailer
+   tracker's `if message_id is None -> not processable` is gone (all rules
+   packed on one line), so the brief concludes such messages are "not
+   deduplicated" when they are never processed (failure-1 fact 5).
+   business-pay's checks come out with the JWT check before the empty-body
+   check, the reverse of the code, so no answer says an empty body gets 200
+   unauthenticated (legacy-0 fact 7).
+2. A conclusion drawn in the narrow direction. The future-effective job's
+   brief says "filings still in the future are not returned"; nothing says
+   its `effective_date <= now` also picks up a lost immediate filing, so
+   three of four answers trust the job's name and write "nothing repairs an
+   immediate filing" (failure-1 fact 6, the main wrong statement).
+3. Conclusions not drawn: what a second delivery does to the old listener
+   (a PAID filing is re-applied, re-emailed, re-filed; fact 4), and that a
+   status-rule change in legal-api does not reach business-pay's own model
+   (legacy-0 fact 5).
+4. failure-1 fact 7 is wrong in the reference: `consume_nr` catches every
+   exception and `update_business_profile` reports error statuses to
+   Sentry (only an exception from the request escapes). Answers saying so
+   are scored as wrong.
