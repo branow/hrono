@@ -46,6 +46,12 @@ overview names each area in one line.
    parts do the same job - an old and a new consumer, two paths for one
    piece of work - say how each one behaves; they rarely match, and "it
    does the same" loses what the question is about.
+7. Before you finish, go through the briefs you read once more and carry
+   into the answer every drop, skip and conclusion they state about the
+   parts on the path - which work a check silently drops, a sender and
+   receiver that do not match, what a second delivery does, a failure
+   nothing repairs - even where the question did not ask for it by name.
+   A fact you read and left out scores as a fact you never found.
 
 Passages
 that match the prompt also arrive attached automatically as "hrono recall".
