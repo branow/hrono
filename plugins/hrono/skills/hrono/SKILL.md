@@ -23,7 +23,10 @@ overview names each area in one line.
    and the parts elsewhere that repair a step or take the same work.
 2. Write down the path: every part the work passes through, from what
    starts it to its last effect (the record applied, the email sent), and
-   every part named as a repair or a second path, wherever it sits.
+   every part named as a repair or a second path, wherever it sits. A
+   part the work is handed to - the one that applies it, the one that sends
+   a notice or email about it - is on the path even when the question names
+   only the first part.
 3. Read the leaf brief of every part on that list - the last parts as much
    as the first: the area brief gives each part a line or two and its
    failure handling as one rule, while the leaf gives the exact conditions,

@@ -103,6 +103,10 @@ handler chosen per type, product or status by a function, map or \
 configuration - read that choice and copy the whole mapping into the brief \
 (`ORDER -> orders-topic, REFUND -> refunds-topic, else -> default-topic`), \
 never only the function's name.
+- Another part that does the same job (an old and a new path, two consumers \
+of the same work): read it, and the sender it gets the work from, and \
+compare them step by step - which checks, reviews and duplicate guards each \
+has, and whether this topic would accept what the other's sender sends.
 The other side often lives in another source than this topic's: search \
 every source (`condensed/**`), never only this topic's own. Mark something \
 "(behaviour not in this topic)" only after you searched for it and did not \
