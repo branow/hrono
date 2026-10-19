@@ -174,6 +174,7 @@ class LookingWriter:
             "- source/repo/filer/worker.py: the consumer subscribes\n"
             "- source/repo/pay/worker.py: own file\n"
             "\n## Lookups\n- FILER_SUBJECT: source/repo/filer/worker.py\n"
+            "- sender: none (it receives nothing)\n"
         )
         return CompletionResult(text, Usage(40, 12))
 
@@ -219,7 +220,10 @@ def test_a_looking_tree_stores_the_brief_and_its_relations(
     assert audit["calls"] == [
         ["Grep", {"pattern": "subscribe", "path": "source/"}]
     ]
-    assert audit["account"] == "- FILER_SUBJECT: source/repo/filer/worker.py"
+    assert audit["account"] == (
+        "- FILER_SUBJECT: source/repo/filer/worker.py\n"
+        "- sender: none (it receives nothing)"
+    )
 
 
 def test_a_brief_written_without_lookups_is_asked_again_to_look(
@@ -288,6 +292,7 @@ def test_a_connection_said_unsearched_is_asked_for_again(
 def test_unsearched_reads_only_admissions_from_the_account() -> None:
     text = (
         "Brief.\n\n## Lookups\n"
+        "- sender: source/repo/s.py\n"
         "- A: source/repo/a.py\n"
         "- B: not found (searched: `B_SUBJECT`)\n"
         "- C: not searched\n"
@@ -299,7 +304,7 @@ def test_unsearched_reads_only_admissions_from_the_account() -> None:
         "- D: listed by grep, not read",
         "- E: not looked up (no lookups were run)",
     )
-    assert lookup.unsearched("Brief. Not searched here.") == ()
+    assert lookup.unsearched("Brief. Not searched here.") == (lookup.NO_SENDER,)
 
 
 def test_a_brief_that_looked_is_not_asked_again(db: Database) -> None:
@@ -505,3 +510,25 @@ def test_search_is_offered_only_with_embeddings() -> None:
     assert "Search" in {t.name for t in with_search.tools}
     said = lookup.Files({}).answer("Search", {"query": "payment"})
     assert said.startswith("Search by meaning is not available")
+
+
+def test_a_brief_without_its_sender_line_is_asked_again() -> None:
+    text = "Brief.\n\n## Lookups\n- A: source/repo/a.py\n"
+    assert lookup.unsearched(text) == (lookup.NO_SENDER,)
+    named = text + "- **sender**: not found (searched: `X`, Search `y`)\n"
+    assert lookup.unsearched(named) == ()
+
+
+def test_a_grep_also_shows_the_files_close_in_meaning() -> None:
+    found = lookup.Files(
+        {
+            "source/pay/api/events.py": "publish(topic)",
+            "source/lear/filer/worker.py": "read paymentToken",
+            "condensed/pay/api/events.py.md": "Publishes payment events.",
+        },
+        meanings=_meanings(),
+    )
+    said = found.answer("Grep", {"pattern": "paymentToken"})
+    hits, _, close = said.partition("Close in meaning, in other words:\n")
+    assert hits.startswith("source/lear/filer/worker.py")
+    assert close == "source/pay/api/events.py - Publishes payment events."
