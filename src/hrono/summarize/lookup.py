@@ -98,6 +98,11 @@ saves and does when it fails. A configuration file only tells you a name; \
 search for that name until you reach the code that acts on it.
 - What it calls: what the called endpoint or function really selects, \
 returns or changes - never what its name suggests.
+Where either side picks where the work goes - a topic, queue, route or \
+handler chosen per type, product or status by a function, map or \
+configuration - read that choice and copy the whole mapping into the brief \
+(`ORDER -> orders-topic, REFUND -> refunds-topic, else -> default-topic`), \
+never only the function's name.
 The other side often lives in another source than this topic's: search \
 every source (`condensed/**`), never only this topic's own. Mark something \
 "(behaviour not in this topic)" only after you searched for it and did not \

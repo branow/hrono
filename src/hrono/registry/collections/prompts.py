@@ -165,7 +165,10 @@ the checks that guard it in the order they run, each as the code tests it \
 4. Decisions: every branch that changes an outcome, one line each - the \
 exact condition, the outcome, and the function that holds it. Copy every \
 member of a list, set or group verbatim. Include every state a record moves \
-to and every check that refuses a caller.
+to and every check that refuses a caller. Where a condition names what it \
+excludes (`not in`, `except`, `!=`), also name, from the states this topic \
+or its connections use, which ones it lets through (`status not in \
+[DONE, CANCELLED]` -> "so NEW and SEND_FAILED are picked up").
 5. Order and failure: what is saved or committed before a step that can \
 fail; for each step, how its failure is handled - what a handler catches, \
 what happens, and which later steps still run - or that nothing handles it; \
