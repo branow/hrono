@@ -90,13 +90,16 @@ line:
 - IN: what arrives and its exact shape: the fields read, the type or format \
 checked, conversions, and what happens to input that does not fit.
 - ENTRY: each route, handler, listener, job or public function: who may call \
-it and the checks that guard it, in the order they run, each as the code \
-tests it - `if <condition as written> -> <result>` - never turned round into \
+it and the checks that guard it, numbered in the order they run in the \
+content (1., 2., ...), each as the code tests it - `if <condition as \
+written> -> <result>` - never turned round into \
 the condition that lets a call through, or "no check in this chunk". When the \
 condition is a call's result, say what that result is (for example an error \
 message, empty on success).
-- RULE: each branch that changes the outcome: `if <exact condition> -> \
-<outcome>`, with the function that holds it. When a condition tests \
+- RULE: each branch that changes the outcome, one per line - never several \
+joined on one line: `if <exact condition> -> <outcome>`, with the function \
+that holds it. Every early exit - a return, skip or raise that ends the work \
+for some input - is a rule of its own. When a condition tests \
 membership in a list, set, map or group, copy every member verbatim; never \
 write "certain types" or "some statuses".
 - LOOP: each loop that polls, retries or waits: how many times, the wait, and \
@@ -173,12 +176,22 @@ condensations name it - and what crosses, in which direction.
 7. Conclusions: what follows from the facts above that a reader would \
 otherwise have to work out, each with the facts it rests on - what work a \
 condition that drops or skips work drops, in concrete terms (which types, \
-states or senders); whether what each side of a connection sends matches \
+states or senders); where a part's name or stated purpose suggests a \
+narrower or wider scope than its conditions, what it actually covers - both \
+what it leaves out and what else it picks up; for a sweep, poll or \
+scheduled re-send, which lost or stuck work of other parts it picks up - \
+every case its condition matches, not only the one it is named for; what the \
+same input arriving twice does; whether what each side of a connection \
+sends - the live sender, never a test, fixture or script - matches \
 what the other side accepts, and what happens to what does not (for example \
 "it reads only a top-level `paymentToken`, which the current sender does not \
-send, so it would skip every message that sender sends"); for a step nothing \
+send, so it would skip every message that sender sends"); where no live \
+sender or receiver was found, what that means for the work (nothing reaches \
+this part today, or what it sends goes nowhere); for a step nothing \
 handles, which later steps a failure skips; what changing one part would and \
-would not change elsewhere. Draw only what the facts support.
+would not change elsewhere, including where another part keeps its own copy \
+of a rule or record that a change to this one does not reach. Draw only what \
+the facts support.
 8. Hazards: where work can be lost, duplicated, corrupted or let through \
 unchecked, as the condensations show it.
 9. The sources to open first, and what each holds.

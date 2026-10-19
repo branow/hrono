@@ -969,3 +969,34 @@ sends. Errors fell (failure-1 1-2 per run, legacy-0 none).
    exception and `update_business_profile` reports error statuses to
    Sentry (only an exception from the request escapes). Answers saying so
    are scored as wrong.
+
+### Round 14 follow-up: haiku vs sonnet condense, prompt fixes (2026-10-19)
+
+`harness/condense_ab.py`: the same three dense files (business-pay's
+`pay_filer.py`, the emailer's `tracker.py`, entity-pay's `worker.py`)
+condensed by haiku and sonnet through the claude CLI, twice (old and new
+condense prompt).
+
+| | haiku | sonnet |
+|---|---|---|
+| cost per file (CLI, incl. overhead) | $0.02-0.05 | $0.05-0.10 |
+| time per file | 20-54 s | 17-24 s |
+| empty-body check before the JWT check | right once, dropped once | right both times |
+| `message_id is None -> not processable` | lost once, kept once | kept both times |
+| second delivery of a PAID filing | wrong once ("no duplicate guard") | drawn both times |
+
+Sonnet is about 2-2.5x the cost per file and no slower; for the whole tree
+(7,594 condensations, 3.4M output tokens) that is roughly $35-40 against
+$100-110 at API prices. Haiku's losses vary run to run; sonnet's did not.
+
+Prompt changes: the condense prompt numbers entry checks in the order they
+run, puts one rule per line and makes every early exit a rule; the brief's
+Conclusions add what a part really covers when its name says less, which
+lost work a sweep picks up, what a second delivery does, the live sender
+(never a test), what no live sender means, and copies of a rule a change
+does not reach; lookups search every source for the other side. Pilots:
+the future-effective job's brief now says a filing left PAID is re-sent
+every hour ("the effective retry mechanism"); the old listener's brief now
+says a second token re-stamps and re-publishes a PAID filing, but whether it
+finds the live pay API sender varies run to run (found in round 14, not in
+three pilots).
