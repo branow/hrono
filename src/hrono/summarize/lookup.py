@@ -16,6 +16,14 @@ shaped like Claude Code's ``Grep``, ``Glob`` and ``Read``. They are answered
 from the database: no path outside the tree exists, nothing is written, and
 there is no shell.
 
+Grep finds only the words a writer guesses, and the other side of a
+connection often uses other ones: bcreg's old payment listener reads
+`entity.filings`, while the pay API sends to `BUSINESS_PAY_TOPIC`, so the
+writer found only a test sender and concluded the shapes match (round 15).
+``Search`` ranks the files by what they do - their condensations, embedded
+with the tree's embedding model: a plain-words question finds a sender
+named differently.
+
 A lookup into another branch is a dependency the tree's shape does not hold.
 The writer ends its brief with ``## Used`` - each looked-up file a statement
 came from - and only those, less the topic's own files, are kept: as
@@ -28,10 +36,14 @@ import fnmatch
 import hashlib
 import re
 import sqlite3
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
+import numpy
+
 from hrono.llm.tools import Tool, Toolbox
+from hrono.recall import query
+from hrono.recall.engine import TEST_PATH
 from hrono.registry.collections.trees import sources_of
 
 SOURCE = "source/"
@@ -44,6 +56,10 @@ OWN = (
     "Not counted; spend the lookups on the other parts."
 )
 GREP_LINES = 20  # matching lines shown per file
+SEARCH_FILES = 10  # files a Search answers with
+MEANING_CHARS = 2000  # of a condensation, embedded for Search
+_VECTORS: dict[tuple[str, str], numpy.ndarray] = {}  # (model, text hash)
+Encode = Callable[[list[str]], Sequence[Sequence[float]]]
 
 INSTRUCTION = """
 
@@ -64,6 +80,11 @@ First list every connection the topic's files show - each message, queue, \
 endpoint, call, table, document or configuration key that names another \
 part. Then, for each, find the other side and read what it does there, in \
 this order, because the lookups run out:
+- What it receives: who sends it in the running system - never a test, \
+fixture or script - and when, and whether what that sender sends is what \
+this topic reads. The sender often names things differently: use `Search`, \
+when it is offered, with plain words for what the sender does (for example \
+`publishes payment completed events`).
 - Records it saves through another part's model or shares with another part \
 (a table, file or document): the other owner's definition, and which of its \
 rules - validations, listeners, defaults - run when this topic writes, and \
@@ -74,8 +95,6 @@ saves (`save() -> <model>'s <listener> sets <field> to <value>`), never as \
 - What it sends: the handler that receives it, and what that handler checks, \
 saves and does when it fails. A configuration file only tells you a name; \
 search for that name until you reach the code that acts on it.
-- What it receives: who sends it in the running system - never a test, \
-fixture or script - and when.
 - What it calls: what the called endpoint or function really selects, \
 returns or changes - never what its name suggests.
 The other side often lives in another source than this topic's: search \
@@ -174,11 +193,90 @@ TOOLS = (
 )
 
 
+SEARCH = Tool(
+    "Search",
+    "Find files by what they do, when you do not know the words they use - "
+    "a sender, receiver or caller that names things differently from this "
+    "topic. `query`: plain words (for example `publishes payment completed "
+    "events`). Returns the closest files, best first, tests left out, each "
+    "with the first line of its condensation.",
+    {
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+        "required": ["query"],
+    },
+)
+
+
+@dataclass(frozen=True)
+class Meanings:
+    """The tree's source passages as unit vectors, each with its file."""
+
+    names: tuple[str, ...]  # the file of each row, as ``<source>/<path>``
+    matrix: numpy.ndarray
+    encode: Encode
+
+    def near(self, question: str) -> list[str]:
+        """The files closest to ``question``, best first, each once."""
+        if not self.names:
+            return []
+        asked = numpy.atleast_2d(
+            numpy.asarray(
+                self.encode(query.sentences(question)), dtype=numpy.float64
+            )
+        )
+        norms = numpy.linalg.norm(asked, axis=1)
+        asked = asked[norms > 0.0] / norms[norms > 0.0, None]
+        if len(asked) == 0:
+            return []
+        cosine = (self.matrix @ asked.T).max(axis=1)
+        out: list[str] = []
+        for row in numpy.argsort(-cosine, kind="stable"):
+            if self.names[row] not in out:
+                out.append(self.names[row])
+            if len(out) == SEARCH_FILES:
+                break
+        return out
+
+
+def meanings(texts: Mapping[str, str], encode: Encode, model: str) -> Meanings:
+    """The tree's condensations, ready to rank by what each file does.
+
+    A question in plain words is matched against the condensations, not the
+    code: on bcreg, the code's own embeddings never put the pay API's sender
+    in the top ten for "publishes payment completed events", and its
+    condensations put both of its senders there. Each vector is kept for the
+    process, so the next brief embeds only what changed.
+    """
+    names = sorted(
+        name.removeprefix(CONDENSED).removesuffix(".md")
+        for name in texts
+        if name.startswith(CONDENSED) and not TEST_PATH.search(name)
+    )
+    bodies = [texts[CONDENSED + name + ".md"][:MEANING_CHARS] for name in names]
+    keys = [
+        (model, hashlib.sha256(body.encode()).hexdigest()) for body in bodies
+    ]
+    todo = sorted({k for k in keys if k not in _VECTORS})
+    if todo:
+        new = {k: body for k, body in zip(keys, bodies, strict=True)}
+        for k, vector in zip(todo, encode([new[k] for k in todo]), strict=True):
+            _VECTORS[k] = numpy.asarray(vector, dtype=numpy.float64)
+    if not names:
+        return Meanings((), numpy.zeros((0, 0)), encode)
+    matrix = numpy.vstack([_VECTORS[k] for k in keys])
+    norms = numpy.linalg.norm(matrix, axis=1, keepdims=True)
+    return Meanings(
+        tuple(names), matrix / numpy.where(norms == 0.0, 1.0, norms), encode
+    )
+
+
 @dataclass(frozen=True)
 class Files:
     """Every file a leaf brief writer may look at, by its virtual path."""
 
     texts: Mapping[str, str]
+    meanings: Meanings | None = None  # Search by meaning, when embedded
 
     def grep(
         self,
@@ -269,6 +367,19 @@ class Files:
                 body += "\nThis file also runs on save:\n" + hooks
         return body or "(empty)"
 
+    def search(self, question: str) -> str:
+        if self.meanings is None:
+            return "Search by meaning is not available here; use Grep."
+        lines = []
+        for name in self.meanings.near(question):
+            condensed = self.texts.get(CONDENSED + name + ".md", "")
+            first = next(
+                (line.strip() for line in condensed.splitlines() if line),
+                "",
+            )
+            lines.append(SOURCE + name + (f" - {first[:200]}" if first else ""))
+        return "\n".join(lines) or "No file found. " + self.hint()
+
     def hint(self) -> str:
         roots = sorted({name.split("/")[1] for name in self.texts})
         return (
@@ -289,6 +400,8 @@ class Files:
                 )
             if name == "Glob":
                 return self.glob(str(arguments.get("pattern", "")))
+            if name == "Search":
+                return self.search(str(arguments.get("query", "")))
             return self.read(
                 str(arguments.get("path", "")),
                 int(str(arguments.get("offset") or 0)),
@@ -382,7 +495,8 @@ def toolbox(found: Files, own: Iterable[str] = ()) -> Toolbox:
             return OWN
         return None
 
-    return Toolbox(tools=TOOLS, answer=found.answer, most=MOST_CALLS, free=free)
+    tools = TOOLS if found.meanings is None else (*TOOLS, SEARCH)
+    return Toolbox(tools=tools, answer=found.answer, most=MOST_CALLS, free=free)
 
 
 def file_of(path: str) -> str | None:

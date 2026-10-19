@@ -102,7 +102,7 @@ def _documents(
     return {int(row["id"]): str(row["uri"]) for row in rows}
 
 
-_TEST = re.compile(
+TEST_PATH = re.compile(
     r"(^|/)(tests?|__tests__)/|(^|/)test_[^/]*$|_test\.\w+$|\.(spec|test)\.\w+$"
 )
 
@@ -136,7 +136,7 @@ def _pages(
             leaf = node if level is not None and level["level"] == 0 else None
         else:
             path = str(row["path"] or "")
-            leaf = None if _TEST.search(path) else row["leaf"]
+            leaf = None if TEST_PATH.search(path) else row["leaf"]
         out[int(row["id"])] = None if leaf is None else f"topic:{leaf}"
     return out
 
