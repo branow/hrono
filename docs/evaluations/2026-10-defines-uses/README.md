@@ -1039,3 +1039,24 @@ re-sent every hour. Errors fell to one per failure-1 run.
    answer-writing loss, not a tree one.
 4. business-pay's checks are now in code order (empty body -> 200 first),
    but answers still leave out the unauthenticated 200.
+
+### Search by meaning for the brief writer (2026-10-19)
+
+Grep finds only the words a writer guesses: the old listener reads
+`entity.filings` and `paymentToken`, while the pay API sends to
+`BUSINESS_PAY_TOPIC`, so no grep from the listener's side reaches it. A
+`Search` tool now ranks the tree's condensations by meaning against a
+plain-words question (the tree's embedding model, vectors kept in the
+process; tests left out).
+
+Offline, no model calls: "publishes payment completed events" against the
+code's own embeddings put neither pay API sender in the top ten; against the
+condensations it put `base_payment_system.py` 5th and
+`payment_transaction.py` 6th (5,545 condensations embedded in 108 s).
+
+Two one-call pilots on the old listener (797): the writer used `Search` once,
+to find the emailer (found), and never for its own sender. It greps
+`paymentToken`, finds the CLI and test senders, calls them "not live", and
+moves on, even with "who sends it" moved first in the lookup order. A search
+run by hrono with the topic's own summary as the question finds similar
+parts (business-pay, pay-queue), not the sender.

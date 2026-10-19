@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterator
 from pathlib import Path
 
+import numpy
 import pytest
 
 from hrono.cluster import store as cluster_store
@@ -471,3 +472,36 @@ def test_a_grep_into_a_model_shows_what_runs_on_save() -> None:
     assert "runs on save" not in files.grep("def find", "source/repo/**")
     in_condensed = files.grep("listens", "condensed/repo/**", "content")
     assert "condensed/repo/filing.py.md also runs on save:" in in_condensed
+
+
+def _meanings() -> lookup.Meanings:
+    """Two files on two axes; a question's words pick its axis."""
+
+    def encode(texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] if "payment" in t else [0.0, 1.0] for t in texts]
+
+    return lookup.Meanings(
+        ("pay/api/events.py", "lear/filer/worker.py"),
+        numpy.array([[1.0, 0.0], [0.0, 1.0]]),
+        encode,
+    )
+
+
+def test_search_ranks_files_by_meaning() -> None:
+    found = lookup.Files(
+        {"condensed/pay/api/events.py.md": "Publishes payment events.\nIN: x"},
+        meanings=_meanings(),
+    )
+    said = found.answer("Search", {"query": "who sends payment messages"})
+    first = said.splitlines()[0]
+    assert first == "source/pay/api/events.py - Publishes payment events."
+    assert said.splitlines()[1] == "source/lear/filer/worker.py"
+
+
+def test_search_is_offered_only_with_embeddings() -> None:
+    names = {t.name for t in lookup.toolbox(lookup.Files({})).tools}
+    assert "Search" not in names
+    with_search = lookup.toolbox(lookup.Files({}, meanings=_meanings()))
+    assert "Search" in {t.name for t in with_search.tools}
+    said = lookup.Files({}).answer("Search", {"query": "payment"})
+    assert said.startswith("Search by meaning is not available")

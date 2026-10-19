@@ -31,12 +31,16 @@ persist is serial.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sqlite3
 from collections.abc import Mapping
 from typing import NamedTuple
 
 from hrono import pins
+from hrono.embed.encoders import encoder_for_model
+from hrono.embed.model import resolve_embedding_model
+from hrono.embed.runner import EmbedError, encoder_for
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import (
@@ -123,6 +127,12 @@ def brief(
         with context.database.connect() as conn:
             found = lookup.files(conn, tree, source_model)
             own = {node: _own_files(conn, node) for node, _, _ in pending}
+            embedding = _embedding_model(conn)
+        # embedding the condensations takes minutes on a large tree: off the
+        # lock, as every model call here is
+        found = dataclasses.replace(
+            found, meanings=_meanings(context, embedding, found)
+        )
 
     completion = client_for(context, model, "brief", client=client)
 
@@ -249,6 +259,27 @@ def brief(
     if tokens is not None:
         outcome["tokens"] = tokens
     return outcome
+
+
+def _embedding_model(conn: sqlite3.Connection) -> dict[str, object] | None:
+    try:
+        return resolve_embedding_model(conn, {})
+    except (EmbedError, LookupError):
+        return None
+
+
+def _meanings(
+    context: JobContext, config: dict[str, object] | None, found: lookup.Files
+) -> lookup.Meanings | None:
+    """Search by meaning over the condensations, or None with no encoder."""
+    if config is None:
+        return None
+    try:
+        encode = encoder_for_model(context, config, encoder_for)
+    except (EmbedError, ImportError):
+        return None
+    meant = lookup.meanings(found.texts, encode, str(config["name"]))
+    return meant if meant.names else None
 
 
 def _own_files(conn: sqlite3.Connection, node_id: int) -> set[str]:
