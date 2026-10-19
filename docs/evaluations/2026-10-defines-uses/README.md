@@ -1000,3 +1000,11 @@ every hour ("the effective retry mechanism"); the old listener's brief now
 says a second token re-stamps and re-publishes a PAID filing, but whether it
 finds the live pay API sender varies run to run (found in round 14, not in
 three pilots).
+
+Haiku again with the new condense prompt, twice on the same three files
+($0.01-0.05 per file, 20-27 s): the empty-body check comes before the JWT
+check both times, `message_id is None -> (False, None)` is kept both times,
+and the COMPLETED duplicate check is kept both times (each also writes a
+loose "no de-duplication guard" ABSENT line). It also keeps that an unknown
+`statusCode` raises `QueueException`, which the code confirms. On these
+files the prompt closes the gap; haiku stays the condense model.
