@@ -74,11 +74,14 @@ saves (`save() -> <model>'s <listener> sets <field> to <value>`), never as \
 - What it sends: the handler that receives it, and what that handler checks, \
 saves and does when it fails. A configuration file only tells you a name; \
 search for that name until you reach the code that acts on it.
-- What it receives: who sends it, and when.
+- What it receives: who sends it in the running system - never a test, \
+fixture or script - and when.
 - What it calls: what the called endpoint or function really selects, \
 returns or changes - never what its name suggests.
-Mark something "(behaviour not in this topic)" only after you searched for \
-it and did not find it.
+The other side often lives in another source than this topic's: search \
+every source (`condensed/**`), never only this topic's own. Mark something \
+"(behaviour not in this topic)" only after you searched for it and did not \
+find it.
 
 In the brief, write a file as its repository path (`<source>/<path>`), never \
 with the tools' `source/` or `condensed/` prefix.
