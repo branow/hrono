@@ -57,6 +57,7 @@ OWN = (
 )
 GREP_LINES = 20  # matching lines shown per file
 SEARCH_FILES = 10  # files a Search answers with
+GREP_ALSO = 5  # files close in meaning, shown under a grep's hits
 MEANING_CHARS = 2000  # of a condensation, embedded for Search
 _VECTORS: dict[tuple[str, str], numpy.ndarray] = {}  # (model, text hash)
 Encode = Callable[[list[str]], Sequence[Sequence[float]]]
@@ -112,7 +113,11 @@ tools print it - and nothing for files you opened but did not use, for \
 helpers read only for background, or for this topic's own files. Then a \
 section `## Lookups`: one line per connection you listed - \
 `- <connection>: <the path found>`, or \
-`- <connection>: not found (searched: <patterns>)`."""
+`- <connection>: not found (searched: <patterns>)` - and always one line \
+`- sender: <the live sender's path, for each thing this topic receives>`, \
+or `- sender: not found (searched: <patterns and Search queries>)`, or \
+`- sender: none (<why: it receives nothing>)`. A brief without the sender \
+line is sent back."""
 
 # a connection the writer's own account says it never searched: "not
 # searched", "not looked up", "not read", "no lookup" - but not "not found
@@ -124,13 +129,25 @@ _UNSEARCHED = re.compile(
 )
 
 
+_SENDER = re.compile(r"-\s*\**`?sender\b", re.IGNORECASE)
+NO_SENDER = (
+    "- sender: missing (who sends this topic what it receives, in the "
+    "running system: search by words and by meaning)"
+)
+
+
 def unsearched(text: str) -> tuple[str, ...]:
-    """The lines of a brief's ``## Lookups`` that admit no search was made."""
-    return tuple(
-        line.strip()
-        for line in accounting(text).splitlines()
-        if line.strip() and _UNSEARCHED.search(line)
-    )
+    """The lines of a brief's ``## Lookups`` that admit no search was made.
+
+    A missing ``sender`` line is one: on bcreg the old payment listener's
+    writer found only a test sender by grep and never looked for the live
+    one, so its brief said the shapes match (round 15).
+    """
+    lines = [line.strip() for line in accounting(text).splitlines()]
+    missing = [line for line in lines if line and _UNSEARCHED.search(line)]
+    if not any(_SENDER.match(line) for line in lines):
+        missing.append(NO_SENDER)
+    return tuple(missing)
 
 
 def again(missing: Iterable[str], looked: bool) -> str:
@@ -330,7 +347,38 @@ class Files:
                     hooks = _on_save(self.texts[whole])
                     if hooks:
                         found_text += f"\n{name} also runs on save:\n{hooks}"
-        return found_text or "No match. " + self.hint()
+        return (found_text or "No match. " + self.hint()) + self._also(
+            pattern, {line.split(":", 1)[0] for line in out}
+        )
+
+    def _also(self, pattern: str, shown: set[str]) -> str:
+        """The files closest in meaning to a grep's words, not among its hits.
+
+        Words and meaning are one search: the other side of a connection
+        often uses other words, and a grep alone never shows it.
+        """
+        words = " ".join(re.findall(r"[A-Za-z][A-Za-z0-9]+", pattern))
+        if self.meanings is None or not words:
+            return ""
+        hits = {file_of(name) for name in shown}
+        close = [n for n in self.meanings.near(words) if n not in hits]
+        if not close:
+            return ""
+        return "\n\nClose in meaning, in other words:\n" + self._listed(
+            close[:GREP_ALSO]
+        )
+
+    def _listed(self, names: Iterable[str]) -> str:
+        """Each file with the first line of its condensation."""
+        lines = []
+        for name in names:
+            condensed = self.texts.get(CONDENSED + name + ".md", "")
+            first = next(
+                (line.strip() for line in condensed.splitlines() if line),
+                "",
+            )
+            lines.append(SOURCE + name + (f" - {first[:200]}" if first else ""))
+        return "\n".join(lines)
 
     def glob(self, pattern: str) -> str:
         names = [name for name in sorted(self.texts) if _within(name, pattern)]
@@ -370,15 +418,8 @@ class Files:
     def search(self, question: str) -> str:
         if self.meanings is None:
             return "Search by meaning is not available here; use Grep."
-        lines = []
-        for name in self.meanings.near(question):
-            condensed = self.texts.get(CONDENSED + name + ".md", "")
-            first = next(
-                (line.strip() for line in condensed.splitlines() if line),
-                "",
-            )
-            lines.append(SOURCE + name + (f" - {first[:200]}" if first else ""))
-        return "\n".join(lines) or "No file found. " + self.hint()
+        listed = self._listed(self.meanings.near(question))
+        return listed or "No file found. " + self.hint()
 
     def hint(self) -> str:
         roots = sorted({name.split("/")[1] for name in self.texts})

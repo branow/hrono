@@ -1060,3 +1060,14 @@ to find the emailer (found), and never for its own sender. It greps
 moves on, even with "who sends it" moved first in the lookup order. A search
 run by hrono with the topic's own summary as the question finds similar
 parts (business-pay, pay-queue), not the sender.
+
+Words and meaning as one search, and the sender line required: every Grep
+answer ends with up to five files close in meaning to its words that it did
+not match ("Close in meaning, in other words"), and a brief's Lookups must
+carry a `sender:` line (the live sender, `not found (searched: ...)` or
+`none (...)`); without one it is sent back once. Pilot on 797 (one call): it
+ran two plain-words Searches and a grep in sbc-pay, wrote "sender: not
+found", and concluded "no live NATS publisher of `paymentToken` to
+`entity.filings` ... business-pay handles GCP Pub/Sub payment-completion
+events, ... the likely replacement. The entity-pay worker is probably idle"
+- the round 14 conclusion, reached by search rather than luck.
