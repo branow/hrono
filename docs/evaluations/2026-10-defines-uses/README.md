@@ -1071,3 +1071,30 @@ found", and concluded "no live NATS publisher of `paymentToken` to
 `entity.filings` ... business-pay handles GCP Pub/Sub payment-completion
 events, ... the likely replacement. The entity-pay worker is probably idle"
 - the round 14 conclusion, reached by search rather than luck.
+
+## Round 16: search by words and meaning, sender line, answer check
+
+All 25 leaf briefs and their uppers rewritten with the combined search and the
+required sender line (condensations kept); the agent skill gained step 7 (carry
+every drop and conclusion read into the answer). Four runs per question.
+
+| question | v14 | v15 | v16 |
+|---|---|---|---|
+| hard-failure-1 | 0.71 | 0.77 | 0.66 |
+| hard-legacy-0 | 0.73 | 0.70 | 0.69 |
+
+Per fact, failure-1 `[0.75, 0.75, 1.0, 0.5, 0.38, 0.75, 0.5]`, legacy-0
+`[0.5, 0.5, 1.0, 0.5, 1.0, 0.88, 0.5, 0.62]`.
+
+The losses are in the answers, not the briefs: the facts are in the export.
+- legacy-0 fact 1 (0.88 -> 0.5): the topic map (NRO -> `NAMEX_PAY_TOPIC`,
+  STRR defaulting to `BUSINESS_PAY_TOPIC`) is in the pay-api configuration
+  briefs; no run read them.
+- failure-1 fact 1: the transactions brief says `find_stale_records` takes
+  every status but COMPLETED, CANCELLED and FAILED (so EVENT_FAILED), but a
+  tests brief says "returns only CREATED"; two runs doubted the repair.
+- legacy-0 fact 2 stays 0.5: the old listener brief now finds no live sender
+  and names business-pay the replacement, but does not say the pay API's flat
+  token would be dropped by it.
+- legacy-0 fact 5 rose 0.62 -> 1.0.
+- failure-1 fact 7 is the reference fact in doubt (`consume_nr` catches).
