@@ -1008,3 +1008,34 @@ and the COMPLETED duplicate check is kept both times (each also writes a
 loose "no de-duplication guard" ABSENT line). It also keeps that an unknown
 `statusCode` raises `QueueException`, which the code confirms. On these
 files the prompt closes the gap; haiku stays the condense model.
+
+## Round 15, haiku condense with the round 14 follow-up prompts (2026-10-19)
+
+`subtree_v9.py leaves --condense` with the new condense, brief and lookup
+prompts (haiku condense, 380 condensations; 797 kept its last pilot brief,
+already on these prompts). Four runs per question.
+
+| arm | failure-1 | legacy-0 |
+|---|---|---|
+| code only | 0.36 | 0.59 |
+| v14 | 0.71 | 0.73 |
+| **v15** | 0.64, 0.79, 0.79, 0.86 (0.77) | 0.69, 0.75, 0.75, 0.62 (0.70) |
+
+failure-1 fact 6 (the future-effective job re-drives any lost PAID filing)
+went from 0.62 to 0.88: the job's brief now says a filing left PAID is
+re-sent every hour. Errors fell to one per failure-1 run.
+
+**Lost:**
+1. legacy-0 fact 2 fell from 1.0 to 0.5: the old listener's brief (797)
+   compares the shape only with test senders and never found the pay API
+   (the lookup's search for the live sender varies run to run), so no
+   answer says it would skip every live event.
+2. The emailer brief opened with "Still researching: I've finished the
+   lookups..." above its `# ` title, and the export named the topic by that
+   line. No run opened it. Fixed: a brief keeps only its text from the
+   title on (`brief._titled`).
+3. The area brief states the emailer's drop rule (no message id -> dropped
+   with no email) and every run read it, yet no answer carried it: an
+   answer-writing loss, not a tree one.
+4. business-pay's checks are now in code order (empty body -> 200 first),
+   but answers still leave out the unauthenticated 200.

@@ -495,3 +495,16 @@ def test_the_nodes_are_briefed_concurrently(db: Database) -> None:
         assert all(
             briefs.get(conn, node_id) is not None for node_id in _node_ids(db)
         )
+
+
+def test_text_above_the_title_is_dropped(db: Database) -> None:
+    client = FakeCompletion(
+        "Still researching: the lookups are done.\n\n"
+        "# entity-emailer: queue worker\n\nThe brief body describes it."
+    )
+    brief(job(), JobContext(db), client=client)
+    with db.connect() as conn:
+        for node_id in _node_ids(db):
+            row = briefs.get(conn, node_id)
+            assert row is not None
+            assert row["text"].startswith("# entity-emailer: queue worker")

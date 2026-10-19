@@ -140,7 +140,7 @@ def brief(
                 result,
                 flagged or _uncondensed(inputs.dropped),
                 json.dumps(faithfulness(result.text, source)),
-                result.text,
+                _titled(result.text),
             )
         rendered = asked.replace(
             _CONTENT_PLACEHOLDER, _with_paths(inputs, own[node_id])
@@ -173,7 +173,9 @@ def brief(
             )
             result = summed([first, result])
             calls += retry.calls
-        text, uses = lookup.split(result.text, own[node_id], found.texts)
+        text, uses = lookup.split(
+            _titled(result.text), own[node_id], found.texts
+        )
         # what it looked up is material too: a name it read in another
         # topic's file is not an invention
         read = "\n\n".join(
@@ -272,6 +274,19 @@ def _with_paths(inputs: briefs.ReduceInput, own: set[str]) -> str:
         (lookup.SOURCE + full.get(label, label), text)
         for label, text in zip(inputs.labels, inputs.texts, strict=True)
     )
+
+
+def _titled(text: str) -> str:
+    """The brief from its `# ` title on, when it has one.
+
+    Measured: a writer that used its tools once opened with "Still
+    researching: ..." above the title, and the export named the topic by it.
+    """
+    lines = text.splitlines(keepends=True)
+    for at, line in enumerate(lines):
+        if line.startswith("# "):
+            return "".join(lines[at:])
+    return text
 
 
 def _uncondensed(dropped: int) -> str:
