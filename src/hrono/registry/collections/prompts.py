@@ -190,7 +190,13 @@ what the other side accepts, and what happens to what does not (for example \
 "it reads only a top-level `paymentToken`, which the current sender does not \
 send, so it would skip every message that sender sends"); where no live \
 sender or receiver was found, what that means for the work (nothing reaches \
-this part today, or what it sends goes nowhere); for a step nothing \
+this part today, or what it sends goes nowhere) and, when another part \
+takes the same work, whether this part would accept what that part's sender \
+sends; where another part does the same job (an old and a new path), each \
+step one of them takes that the other lacks - a review, an authentication, \
+a duplicate check - and what reaches the end without it; where a check that \
+ends the work runs before an authentication or validation check, what gets \
+through without that check; for a step nothing \
 handles, which later steps a failure skips; what changing one part would and \
 would not change elsewhere, including where another part keeps its own copy \
 of a rule or record that a change to this one does not reach. Draw only what \
