@@ -1098,3 +1098,23 @@ The losses are in the answers, not the briefs: the facts are in the export.
   token would be dropped by it.
 - legacy-0 fact 5 rose 0.62 -> 1.0.
 - failure-1 fact 7 is the reference fact in doubt (`consume_nr` catches).
+
+## Round 17: routing maps and exclusions, two briefs only
+
+From the round 16 agent logs: no legacy-0 run opened a pay-api brief (the topic
+map sits in one named "app factory, configuration, enums"), and runs that read
+"status not in [COMPLETED, CANCELLED, FAILED]" doubted EVENT_FAILED is picked
+up. Rewriting all 25 briefs also moves facts by chance (business-pay lost its
+PENDING -> PAID line), so only business-pay (694) and the pay records brief
+(868) were rewritten, with two new rules: copy a routing map in full, and name
+what an exclusion lets through (f0a1a51).
+
+| question | v15 | v16 | v17 |
+|---|---|---|---|
+| hard-failure-1 | 0.77 | 0.66 | 0.71 |
+| hard-legacy-0 | 0.70 | 0.69 | 0.72 |
+
+Both targeted facts recovered: legacy-0 fact 1 0.5 -> 1.0 (4 of 4), failure-1
+fact 1 0.75 -> 0.88. Still stuck at 0.5 or below: legacy-0 facts 2 (the flat
+token the old listener would drop), 4, 7 (empty body 200 before the JWT check)
+and 8; failure-1 facts 4, 5 and 7 (reference in doubt).
