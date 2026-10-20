@@ -189,7 +189,9 @@ def run(qid: str, name: str, words: int = 900) -> None:
     prompt = run_arms.ARCH.format(question=q["question"]).replace(
         "at most 400 words", f"at most {words} words"
     )
-    if os.environ.get("MAP") == "plugin":
+    if os.environ.get("MAP") == "none":
+        pass  # code only: the same task, limits and system, no tree
+    elif os.environ.get("MAP") == "plugin":
         prompt += map_plugin(EXPORT)
     else:
         prompt += (MAP_V3 if os.environ.get("MAP") == "3" else MAP_V2).format(
@@ -207,7 +209,7 @@ def run(qid: str, name: str, words: int = 900) -> None:
         system=run_arms.SYSTEM_CODE_R2.format(
             corpus=common.CORPUS, export=EXPORT
         ),
-        add_dirs=[EXPORT],
+        add_dirs=[] if os.environ.get("MAP") == "none" else [EXPORT],
         disallow_bash=False,
         cwd=None,
         plugin_dir=None,
