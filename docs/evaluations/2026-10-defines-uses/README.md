@@ -1118,3 +1118,27 @@ Both targeted facts recovered: legacy-0 fact 1 0.5 -> 1.0 (4 of 4), failure-1
 fact 1 0.75 -> 0.88. Still stuck at 0.5 or below: legacy-0 facts 2 (the flat
 token the old listener would drop), 4, 7 (empty body 200 before the JWT check)
 and 8; failure-1 facts 4, 5 and 7 (reference in doubt).
+
+## Round 18: compare parts doing the same job; checks before authentication
+
+Traced from the round 17 logs: the old listener brief never compared itself
+with business-pay (shape, review, authentication), business-pay listed the
+empty-body exit before the JWT check without saying what it lets through, and
+no failure-1 run opened the emailer brief. New rules (9b969fd): a lookup step
+that reads the part doing the same job and its sender and compares them; a
+conclusion for an exit before an authentication check; the skill puts the
+parts work is handed to (filer, emailer) on the path. Only 797 and 694
+rewritten.
+
+| question | v15 | v17 | v18 |
+|---|---|---|---|
+| hard-failure-1 | 0.77 | 0.71 | 0.79 |
+| hard-legacy-0 | 0.70 | 0.72 | 0.73 |
+
+Up: failure-1 fact 4 (no review branch) 0.5 -> 0.88, legacy-0 fact 2 (the old
+listener would skip today's messages) 0.38 -> 0.75. Not moved: still no
+failure-1 run opens the emailer brief (fact 5 at 0.5); legacy-0 fact 7 - the
+"empty body gets 200 without authentication" line is in the business-pay
+brief, every run read it, none carried it; failure-1 fact 7 - all four runs
+say `consume_nr` swallows its failures, which the code supports and the
+reference denies.
