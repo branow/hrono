@@ -239,6 +239,48 @@ def uppers() -> None:
     database.close()
 
 
+def full() -> None:
+    """The whole tree on the current prompts, on its existing topics.
+
+    Every section condensed again, every leaf briefed with lookups, then every
+    upper brief, lowest first, through hrono's own ops (their worker pools;
+    fresh briefs skipped). A failed run is restarted with the same command,
+    `--condense` only on the first one.
+    """
+    database = Database.at(DST)
+    with database.connect() as conn:
+        for default in _DEFAULTS:
+            if default["role"] in ("condense", "brief", "brief-upper"):
+                body = json.dumps(default)
+                store.replace(
+                    conn,
+                    "prompts",
+                    str(default["name"]),
+                    body,
+                    None,
+                    "t",
+                    content_hash(body),
+                )
+        if "--condense" in sys.argv:
+            gone = conn.execute(
+                "DELETE FROM condensations WHERE model_name = 'condense-contracts'"
+            ).rowcount
+            print("condensations dropped", gone, flush=True)
+    context = JobContext(database, cache_root=CACHE)
+    print("condense", condense(_job("condense", {}), context), flush=True)
+    print("brief", brief(_job("brief", {}), context), flush=True)
+    with database.connect() as conn:
+        top = conn.execute(
+            "SELECT MAX(level) FROM nodes WHERE tree = ?", (TREE,)
+        ).fetchone()[0]
+    for level in range(1, int(top) + 1):
+        scope = {"level": level}
+        print(
+            level, brief_upper(_job("brief-upper", scope), context), flush=True
+        )
+    database.close()
+
+
 EXPORT = Path.home() / "hrono-eval" / "export-bcreg-v9-L3"
 
 
@@ -265,6 +307,10 @@ def export() -> None:
 
 
 if __name__ == "__main__":
-    {"build": build, "leaves": leaves, "uppers": uppers, "export": export}[
-        sys.argv[1]
-    ]()
+    {
+        "build": build,
+        "leaves": leaves,
+        "uppers": uppers,
+        "full": full,
+        "export": export,
+    }[sys.argv[1]]()
