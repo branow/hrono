@@ -1142,3 +1142,41 @@ failure-1 run opens the emailer brief (fact 5 at 0.5); legacy-0 fact 7 - the
 brief, every run read it, none carried it; failure-1 fact 7 - all four runs
 say `consume_nr` swallows its failures, which the code supports and the
 reference denies.
+
+## Full rebuild and the untuned test (2026-10-21)
+
+The whole tree rebuilt on the current prompts and its existing topics
+(`subtree_v9.py full`): 7,592 sections condensed again (Haiku, 2 refused), all
+441 leaf briefs with lookups and every upper brief (Sonnet). Six level-1 nodes
+had no children left (the harness's own splits in `build()` skipped hrono's
+`_drop_childless`), and their 2026-10-12 briefs were still exported and read
+first by every agent; they were dropped and their parents rewritten.
+
+All 15 hard15 questions, 2 tries per arm, Sonnet agents, 900 words, 30 turns;
+the code-only arm is `agent_v2.py` with `MAP=none` (same task, limits and
+system, no tree).
+
+| question | hrono | code | diff |
+|---|---|---|---|
+| inconsistency-1 | 0.64 | 0.61 | +0.04 |
+| authorization-1 | 0.72 | 0.62 | +0.09 |
+| impact-1 | 0.71 | 0.54 | +0.18 |
+| failure-1 (tuned) | 0.64 | 0.50 | +0.14 |
+| legacy-0 (tuned) | 0.81 | 0.69 | +0.12 |
+| inconsistency-0 | 0.75 | 0.71 | +0.04 |
+| authorization-0 | 0.29 | 0.57 | -0.29 |
+| impact-0 | 0.57 | 0.54 | +0.04 |
+| failure-0 | 0.79 | 0.71 | +0.07 |
+| legacy-1 | 0.78 | 0.66 | +0.12 |
+| inconsistency-b0 | 0.53 | 0.50 | +0.03 |
+| authorization-b0 | 0.66 | 0.72 | -0.06 |
+| impact-b0 | 0.61 | 0.75 | -0.14 |
+| failure-b0 | 0.79 | 0.71 | +0.07 |
+| legacy-b0 | 0.75 | 0.62 | +0.12 |
+| **mean** | **0.67** | **0.63** | **+0.04** |
+
+One hrono try of authorization-0 used all 30 turns and returned no answer (0);
+without it that question ties (0.57). hrono won 11 of 15, lost 3, and cost
+about twice as much ($18.1 vs $8.2 for 30 answers) with more turns (675 vs
+505). The two tuned questions fell from round 18 (0.79 -> 0.64, 0.73 -> 0.81
+on legacy-0 rose): a full rewrite moves facts by chance.
