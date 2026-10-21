@@ -1178,5 +1178,5 @@ system, no tree).
 One hrono try of authorization-0 used all 30 turns and returned no answer (0);
 without it that question ties (0.57). hrono won 11 of 15, lost 3, and cost
 about twice as much ($18.1 vs $8.2 for 30 answers) with more turns (675 vs
-505). The two tuned questions fell from round 18 (0.79 -> 0.64, 0.73 -> 0.81
-on legacy-0 rose): a full rewrite moves facts by chance.
+505). Against round 18, failure-1 fell (0.79 -> 0.64) and legacy-0 rose
+(0.73 -> 0.81): a full rewrite moves facts by chance.
