@@ -1180,3 +1180,26 @@ without it that question ties (0.57). hrono won 11 of 15, lost 3, and cost
 about twice as much ($18.1 vs $8.2 for 30 answers) with more turns (675 vs
 505). Against round 18, failure-1 fell (0.79 -> 0.64) and legacy-0 rose
 (0.73 -> 0.81): a full rewrite moves facts by chance.
+
+### Where hrono loses (from the logs, no new runs)
+
+Per fact over the 15 questions: hrono better on 28, worse on 19, the same on
+64; hrono's answers carry fewer statements the judge calls wrong (26 against
+37).
+
+- **The reference is wrong in places, against hrono.** authorization-b0 fact
+  5 says the invoice path passes `waiveFees` with no role check; the code
+  (`fee_schedule.py` sets `waived_fee_amount` when the fee is zeroed,
+  `payment_line_item.py:300` raises `FEE_OVERRIDE_NOT_ALLOWED` for non-staff)
+  blocks it. The hrono try that said so was marked wrong; the code-only tries
+  repeated the reference and scored 1.0. With failure-1 fact 7, two reference
+  facts now penalise answers the code supports.
+- **A try that runs out of turns scores 0.** authorization-0, try b: it read
+  a 54 KB brief (556, a topic mixing services, decorators, MRAS, NAICS and
+  auth) in pieces, then made 35 code calls and hit the 30-turn limit with no
+  answer. 31 briefs are over 30 KB (median 14 KB).
+- **Agents re-read the same upper briefs** (failure-0 try a read four of them
+  three times each) and skip the leaf that holds a fact: impact-b0's
+  auth-web status path is in the auth-web stores brief (617), which neither
+  try opened; failure-0's entity-pay retries are in 797, which try b never
+  opened.
