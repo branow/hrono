@@ -81,6 +81,37 @@ def map_plugin(export: Path) -> str:
     return "\n\n" + head + note + "\n\nThe hrono skill:\n" + skill.strip()
 
 
+def recalled(question: str) -> str:
+    """What the plugin's prompt hook attaches: its own code, run on the
+    recall reply saved for this question (`recall_cache.py`)."""
+    import subprocess
+
+    hook = exp.HERE.parents[3] / "plugins" / "hrono" / "scripts" / "hooks"
+    config = {
+        "recall": True,
+        "bin": str(exp.HERE / "recall_bin.py"),
+        "tree": "bcreg",
+        "limit": 5,
+        "shortest": 20,
+        "longest": 10000,
+        "folder": str(EXPORT),
+    }
+    script = (
+        f"const r=require({json.dumps(str(hook / 'recall.js'))});"
+        "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{"
+        "const a=JSON.parse(s);"
+        "process.stdout.write(r.attachment(a.config,a.question)||'')})"
+    )
+    out = subprocess.run(
+        ["node", "-e", script],
+        input=json.dumps({"config": config, "question": question}),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return out.stdout
+
+
 def folders() -> dict[int, Path]:
     out = {}
     for brief in EXPORT.rglob("brief.md"):
@@ -197,6 +228,8 @@ def run(qid: str, name: str, words: int = 900) -> None:
         prompt += (MAP_V3 if os.environ.get("MAP") == "3" else MAP_V2).format(
             export=EXPORT
         )
+    if os.environ.get("RECALL"):
+        prompt += "\n\n" + recalled(q["question"])
     if os.environ.get("ORACLE"):
         prompt += "\n\n" + oracle(qid)
     r = common.run_agent(

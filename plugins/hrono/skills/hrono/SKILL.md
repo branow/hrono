@@ -49,14 +49,23 @@ overview names each area in one line.
    parts do the same job - an old and a new consumer, two paths for one
    piece of work - say how each one behaves; they rarely match, and "it
    does the same" loses what the question is about.
-7. Before you finish, go through the briefs you read once more and carry
-   into the answer every drop, skip and conclusion they state about the
-   parts on the path - which work a check silently drops, a sender and
-   receiver that do not match, what a second delivery does, a failure
-   nothing repairs - even where the question did not ask for it by name.
-   A fact you read and left out scores as a fact you never found.
+7. Before you finish, go over the briefs you read - from what you already
+   have, without opening them again - and carry into the answer every
+   drop, skip and conclusion they state about the parts on the path -
+   which work a check silently drops, a sender and receiver that do not
+   match, what a second delivery does, a failure nothing repairs - even
+   where the question did not ask for it by name. A fact you read and
+   left out scores as a fact you never found.
 
-Passages
-that match the prompt also arrive attached automatically as "hrono recall".
+How to spend your turns:
+- When "hrono recall" is attached to the prompt, its pages are the leaves
+  most likely to hold the answer: read them along with the overview, and
+  read the rest of a page it cut short.
+- Read each brief once. What you read stays in front of you; reading it
+  again only spends a turn.
+- A brief over about 20 KB: grep it for the question's terms and read
+  those parts instead of reading it whole.
+- Keep turns for the answer: after about 20 tool calls, stop exploring and
+  write it. An answer with what you found beats no answer.
 
 If no export exists, use hrono-export.

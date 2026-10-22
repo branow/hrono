@@ -183,3 +183,21 @@ test("the session opens with where the map is and how to read it", () => {
   assert.ok(note.includes(`start at ${path.join(folder, "root.md")}`));
   assert.match(note, /attached to prompts automatically/);
 });
+
+test("the best page too long to attach whole is attached from its start", () => {
+  const w = world([7, 8].map((topic) => ({ ...LOGIN, topic })));
+  const page = (id) => path.join(w.dir, "export", `part-${id}`, "brief.md");
+  for (const id of [7, 8]) {
+    fs.mkdirSync(path.dirname(page(id)), { recursive: true });
+    fs.writeFileSync(
+      page(id),
+      `# Part ${id}\n\nPart of [Area](area/brief.md).\n\nDoes ${id}.\n${"line\n".repeat(3000)}`,
+    );
+  }
+  w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
+  const text = attached(w.run("recall.js", { prompt: ASK }));
+  assert.ok(text.length <= 10000);
+  assert.ok(text.includes(`### ${page(7)}\n\n# Part 7`));
+  assert.ok(text.includes(`(the rest of this page is in ${page(7)})`));
+  assert.ok(text.includes(`- ${page(8)} : Part 8. Does 8.`));
+});

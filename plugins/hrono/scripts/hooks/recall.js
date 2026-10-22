@@ -16,6 +16,8 @@ const settings = require("../lib/settings");
 // attach more than this.
 const INLINE = 10000;
 const MORE = "\n\nMore pages:";
+// room kept for the other pages' lines when the best page is cut to fit
+const POINTERS = 2500;
 
 /**
  * The recalled passages for ``prompt`` as one block of text, or null when
@@ -60,6 +62,7 @@ function render(config, hits) {
     const full = `\n\n### ${page}\n\n${read(page)}`;
     const line = `\n- ${page} : ${summary(page)}`;
     if (!pointers && whole.length + full.length <= longest) whole += full;
+    else if (whole === head) whole += cut(full, longest - head.length - POINTERS, page);
     else if (whole.length + MORE.length + pointers.length + line.length <= longest)
       pointers += line;
   }
@@ -97,6 +100,21 @@ function pageIndex(folder) {
   return pages;
 }
 
+/**
+ * The best page when it is too long to attach whole: its opening up to
+ * ``room`` characters, cut at a line, and where the rest is. A leaf brief is
+ * often over the inline limit, and a page only pointed at is rarely opened.
+ * @param {string} full
+ * @param {number} room
+ * @param {string} page
+ */
+function cut(full, room, page) {
+  const rest = `\n\n(the rest of this page is in ${page})`;
+  const head = full.slice(0, Math.max(0, room - rest.length));
+  const end = head.lastIndexOf("\n");
+  return (end > 0 ? head.slice(0, end) : head) + rest;
+}
+
 /** @param {string} page */
 function read(page) {
   try {
@@ -113,7 +131,10 @@ function read(page) {
 function summary(page) {
   const lines = read(page).split("\n").map((line) => line.trim());
   const heading = (lines.find((line) => line.startsWith("# ")) ?? "").slice(2);
-  const first = lines.find((line) => line && !line.startsWith("#")) ?? "";
+  // the line under the title says what the topic does; "Part of" only
+  // links its area
+  const first =
+    lines.find((line) => line && !line.startsWith("#") && !line.startsWith("Part of ")) ?? "";
   const sentence = (first.match(/^.*?[.!?](\s|$)/) ?? [first])[0].trim();
   return heading ? `${heading}. ${sentence}` : sentence;
 }
