@@ -1,4 +1,4 @@
-# ruff: noqa: E501 - experiment harness
+# ruff: noqa: E501, SIM115 - experiment harness
 """What the hrono plugin's prompt hook attaches, for each hard15 question.
 
 The plugin runs `hrono recall <tree> <prompt> --json --pages --limit 5` on
