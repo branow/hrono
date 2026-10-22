@@ -1,0 +1,182 @@
+[
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "hrono-fulla",
+  "fact": 7,
+  "said": "For staff the two match. Both use the same `FeeSchedule` logic",
+  "verdict": "both_partly",
+  "evidence": "Both call FeeSchedule.find_by_corp_type_and_filing_type, but quote passes futureEffective from query for any type (fee.py: is_future_effective=convert_to_bool(request.args.get('futureEffective'))) while legal-api v2 get_filing_types sets 'futureEffective' only for incorporationApplication/amalgamationApplication/continuationIn/alteration/voluntary dissolution. Same logic, different inputs, so they can disagree even for staff.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "hrono-fullb",
+  "fact": 1,
+  "said": "`AmalgamationOut.vue` and `ContinuationOut.vue` set `waiveFees` from the same payment option.",
+  "verdict": "claim_wrong",
+  "evidence": "AmalgamationOut.vue:807 and ContinuationOut.vue:737: `header.header['waiveFees'] = true` unconditionally; both screens throw 'This is a Staff only Filing.' for non-staff (AmalgamationOut.vue:495-497, ContinuationOut.vue:433-435). No payment option involved.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "hrono-fullb",
+  "fact": 2,
+  "said": "copies header.waiveFees into every filingTypes entry",
+  "verdict": "claim_wrong",
+  "evidence": "v2 business_filings.py get_filing_types: the branch for courtOrder/registrarsNotation/registrarsOrder/putBackOn/adminFreeze appends entries with no 'waiveFees' key; v1 incorporation line likewise.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "code-fullb",
+  "fact": 2,
+  "said": "copies header.waiveFees into every filingTypes entry",
+  "verdict": "claim_wrong",
+  "evidence": "v2 business_filings.py get_filing_types: the branch for courtOrder/registrarsNotation/registrarsOrder/putBackOn/adminFreeze appends entries with no 'waiveFees' key; v1 incorporation line likewise.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "code-fulla",
+  "fact": 2,
+  "said": "copies filing.header.waiveFees into every fee-code entry",
+  "verdict": "claim_wrong",
+  "evidence": "v2 business_filings.py: `elif filing_type in ['courtOrder','registrarsNotation','registrarsOrder','putBackOn','adminFreeze']` appends {filingTypeCode, filingDescription} only, no waiveFees.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "code-fulla",
+  "fact": 6,
+  "said": "Variable-fee filings are not a bypass. `_calculate_fees()` resets fee.fee_amount from filingType.fee when fee.variable, so the waiver has no effect there.",
+  "verdict": "both_partly",
+  "evidence": "payment_service.py:317-318 `if fee.variable: fee.fee_amount = Decimal(str(filing_type_info.get('fee', 0)))` is real, so the variable amount is not waived; but fee_schedule.py:166 skips setting waived_fee_amount for variable, so payment_line_item.py:300-304 never raises FEE_OVERRIDE_NOT_ALLOWED (it is not refused), and waive still zeroes priority/future/service fees (fee_schedule.py:319-324). Amount charged is whatever 'fee' the request carries.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "code-fullb",
+  "fact": 6,
+  "said": "`_calculate_fees()` then zeroes every fee, including the service fee, and creates a $0 invoice.",
+  "verdict": "claim_wrong",
+  "evidence": "Zeroing of fee/priority/future/service is true (fee_schedule.py:319-324), but fee_amount setter records waived_fee_amount and PaymentLineItem.create (payment_line_item.py:300-304) `if fee.waived_fee_amount > 0: if staff ... else raise BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED)`, so a non-staff fixed-fee invoice is refused, not created at $0.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-1",
+  "arm": "code-fullb",
+  "fact": 6,
+  "said": "**Result:** The quote is the full fee, and the charge is $0.",
+  "verdict": "claim_wrong",
+  "evidence": "Quote is full (fee.py: waive honoured only for STAFF), but the charge is refused for non-staff by payment_line_item.py:300-304 FEE_OVERRIDE_NOT_ALLOWED (except variable-fee filings).",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-0",
+  "arm": "hrono-fullb",
+  "fact": 4,
+  "said": "PENDING_STAFF_REVIEW, and NSF_SUSPENDED for non-admins: a view-only user loads normally.",
+  "verdict": "claim_wrong",
+  "evidence": "Seeded rows: PENDING_STAFF_REVIEW ADMIN 'view' (5397c5a5b0ca) and NSF_SUSPENDED ADMIN edit/view only (b72d4946fb3c). Non-admin NSF members get empty roles; App.vue:565-572 storeAuthorizations `if (authRoles && authRoles.length > 0) ... else throw new Error('Invalid auth roles')`, so they do not load. Only the PENDING_STAFF_REVIEW admin is view-only and loads.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-0",
+  "arm": "code-fulla",
+  "fact": 1,
+  "said": "Filing reads, documents, addresses and directors require `view`.",
+  "verdict": "both_partly",
+  "evidence": "True for v1 filing reads (v1 business_filings.py:72) and v2 documents/addresses/directors (business_address.py:43, business_directors.py:40, business_documents.py:39). False for v2 filing reads: v2 business_filings.py has authorized() only at lines 187, 231, 472 (all 'edit'); v2 business.py:56 is commented out.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-0",
+  "arm": "code-fulla",
+  "fact": 3,
+  "said": "So affidavit-pending accounts follow the pending-staff-review row above.",
+  "verdict": "claim_right",
+  "evidence": "No PENDING_AFFIDAVIT_REVIEW status exists any more: migration 2d71e7d7cc18 `update orgs set status_code = 'PENDING_STAFF_REVIEW' where status_code='PENDING_AFFIDAVIT_REVIEW'` and deletes the org_status; OrgStatus enum (utils/enums.py:170-180) lacks it; org.py:161-166 _create_staff_review_task sets PENDING_STAFF_REVIEW and uses TaskAction.AFFIDAVIT_REVIEW for BCeID users. So affidavit-pending accounts are PENDING_STAFF_REVIEW (admin gets 'view' only), not the full active set.",
+  "reference_fix": "In sbc-auth the PENDING_AFFIDAVIT_REVIEW status was removed (migration 2d71e7d7cc18) and affidavit-review accounts are PENDING_STAFF_REVIEW (ADMIN gets 'view' only). The seeded PENDING_AFFIDAVIT_REVIEW permission rows are dead data and the permissions.py whitelist is therefore not what limits affidavit accounts."
+ },
+ {
+  "qid": "hard-inconsistency-0",
+  "arm": "code-fullb",
+  "fact": 3,
+  "said": "So it behaves exactly like the staff-review case.",
+  "verdict": "claim_right",
+  "evidence": "Same evidence: affidavit review accounts carry status PENDING_STAFF_REVIEW (org.py:162, migration 2d71e7d7cc18), and permissions.py whitelist includes PENDING_STAFF_REVIEW.",
+  "reference_fix": "Affidavit-review accounts are stored as PENDING_STAFF_REVIEW (status PENDING_AFFIDAVIT_REVIEW was removed), so they get the staff-review permissions: ADMIN 'view' only."
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "hrono-fulla",
+  "fact": 4,
+  "said": "If it fails with anything other than 404, the dialog assumes hasBusinessAuthentication = true and shows the passcode option.",
+  "verdict": "both_partly",
+  "evidence": "ManageBusinessDialog.vue:783-791: `hasBusinessAuthentication.value = authentication?.data?.hasValidPassCode } catch (err) { hasBusinessAuthentication.value = true; if (err.response?.status !== NOT_FOUND) console.error(err)`. Any failure incl. 404 sets true; status only affects logging. Statement true but implies 404 differs; 404 (entity missing or no contact, entity.py:142-150) also gives true.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "hrono-fullb",
+  "fact": 2,
+  "said": "if getAuthentication fails with anything other than a 404, the store sets it true",
+  "verdict": "both_partly",
+  "evidence": "ManageBusinessDialog.vue:783-791: `hasBusinessAuthentication.value = authentication?.data?.hasValidPassCode } catch (err) { hasBusinessAuthentication.value = true; if (err.response?.status !== NOT_FOUND) console.error(err)`. Any failure incl. 404 sets true; status only affects logging. It is the dialog component, not a store, and 404 also sets true.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "code-fullb",
+  "fact": 4,
+  "said": "If the authentication lookup fails with anything other than a 404, the dialog assumes hasBusinessAuthentication = true.",
+  "verdict": "both_partly",
+  "evidence": "ManageBusinessDialog.vue:783-791: `hasBusinessAuthentication.value = authentication?.data?.hasValidPassCode } catch (err) { hasBusinessAuthentication.value = true; if (err.response?.status !== NOT_FOUND) console.error(err)`. Any failure incl. 404 sets true; status only affects logging. 404 also yields true.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "hrono-fulla",
+  "fact": 3,
+  "said": "Resetting the passcode is the only thing that clears the flag.",
+  "verdict": "claim_wrong",
+  "evidence": "affiliation.py:345-348 delete_affiliation: `if reset_passcode: entity.reset_passcode(...)`; `affiliation.delete(); entity.set_pass_code_claimed(False)` runs unconditionally.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "code-fulla",
+  "fact": 3,
+  "said": "resets it in `delete_affiliation` when `reset_passcode` is set",
+  "verdict": "both_partly",
+  "evidence": "True (affiliation.py:345-346 calls entity.reset_passcode, which sets pass_code_claimed False, entity.py:189), but line 348 clears the flag on every delete even without reset, so the condition is not needed.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "hrono-fulla",
+  "fact": 5,
+  "said": "Passcodes exist only for legacy-loaded corporations and co-ops, because they were imported from COLIN by the passcode importer.",
+  "verdict": "claim_wrong",
+  "evidence": "No passcode importer in auth/lear source. entity.py:179-189 reset_passcode generates a random 9-digit code for any entity (PATCH resetPasscode, resources/v1/entity.py:92-97) and org.py:478-481 deleting an account resets passcode for every affiliation, so new-system companies can acquire one; firms use a party name via get_firm_affiliation_passcode.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "code-fulla",
+  "fact": 4,
+  "said": "So no passcode exists for these companies. `hasValidPassCode` is false, and the dialog hides the passcode option.",
+  "verdict": "both_partly",
+  "evidence": "Entity has no passcode at creation (bootstrap.py:146-178 sends passCode ''); with contact, entity.py:142 gives false and option hidden for corps. But without a contact the endpoint 404s and the dialog sets true (ManageBusinessDialog.vue:787) showing the option for BC/SP/GP; and after a reset a passcode exists. Firms (SP/GP) always report true.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-inconsistency-b0",
+  "arm": "code-fullb",
+  "fact": 5,
+  "said": "No passcode or password is ever generated.",
+  "verdict": "claim_wrong",
+  "evidence": "entity.py:186-189 `new_pass_code = ''.join(secrets.choice(string.digits) for i in range(9)); entity.pass_code = passcode_hash(...)` via PATCH resetPasscode and account deletion (org.py:478-481); also staff-generated passcodes. At creation none is generated.",
+  "reference_fix": ""
+ }
+]
