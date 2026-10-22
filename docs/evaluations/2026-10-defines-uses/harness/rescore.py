@@ -1,4 +1,4 @@
-# ruff: noqa: E501, SIM115
+# ruff: noqa: E501, SIM115, E741, B905
 """Re-judge only the questions whose reference facts changed; keep the rest."""
 
 import json
