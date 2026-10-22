@@ -1,5 +1,5 @@
-# ruff: noqa: SIM115 - experiment harness
 #!/usr/bin/env python3
+# ruff: noqa: SIM115 - experiment harness
 """A stand-in `hrono` binary for the plugin's recall hook: replays the
 recall reply `recall_cache.py` saved for the question it is asked."""
 
