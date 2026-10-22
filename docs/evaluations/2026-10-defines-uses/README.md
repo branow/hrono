@@ -1203,3 +1203,25 @@ Per fact over the 15 questions: hrono better on 28, worse on 19, the same on
   auth-web status path is in the auth-web stores brief (617), which neither
   try opened; failure-0's entity-pay retries are in 797, which try b never
   opened.
+
+### The disputed statements, checked against the code
+
+Every statement the judge called wrong in the 60 answers (63) was checked
+against the code by four agents (`claims/verdicts*.json`, with file:line
+evidence):
+
+| arm | the answer was right | partly right | wrong |
+|---|---|---|---|
+| hrono | 3 | 13 | 10 |
+| code only | 3 | 17 | 17 |
+
+Reference facts the code contradicts: inconsistency-0 fact 3
+(PENDING_AFFIDAVIT_REVIEW was removed; those accounts are
+PENDING_STAFF_REVIEW), authorization-b0 fact 5 (the invoice path refuses a
+non-staff waiver of a fixed non-zero fee) and fact 7 (true only for zero-fee
+and variable-fee schedules), failure-1 fact 7 (`consume_nr`,
+`update_affiliation` and `publish_mras_email` catch their own errors; only
+`update_business_profile` and `update_entity` skip later steps), impact-b0
+fact 3 (the PATCH is validated, by a schema that accepts any state). The
+reference errors cost both arms about equally, so they do not explain the
+small gap: hrono's wrong statements are fewer, its misses are not.

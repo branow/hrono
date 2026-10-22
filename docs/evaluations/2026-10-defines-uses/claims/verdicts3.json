@@ -1,0 +1,200 @@
+[
+ {
+  "qid": "hard-failure-1",
+  "arm": "hrono-fulla",
+  "fact": 7,
+  "said": "Each of these swallows its errors.",
+  "verdict": "both_partly",
+  "evidence": "name_request.py:57 'except Exception: ... capture_message(...don't fail the call)' (consume_nr swallows; reference wrong for it). business_profile.py:30-37 update_business_profile has no try/except and _update_business_profile does requests.post unguarded (lines ~58) so request exceptions propagate; only HTTP-status errors are returned and reported. update_entity (business_profile.py:150-160) also unguarded. publish_mras_email worker.py:189-192 swallows.",
+  "reference_fix": "The filer skips filings already COMPLETED and commits transaction_id (status COMPLETED) before the side effects run. update_affiliation, consume_nr and publish_mras_email catch every error themselves (broad except -> sentry capture_message), and the completed email, publish_event and GCP event each have their own try/except. update_business_profile only reports non-2xx replies as Sentry messages; a raised error (requests exception, missing key) inside it, and any error in update_entity, is uncaught and skips the steps after it. The generic handler then absorbs it and drops the message. Replaying is a no-op and the future-effective job selects only PAID/APPROVED filings, so nothing repairs a missing affiliation, profile, email or event."
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "hrono-fullb",
+  "fact": 7,
+  "said": "Their errors go to Sentry and are swallowed.",
+  "verdict": "both_partly",
+  "evidence": "Same as above: consume_nr/update_affiliation/publish_mras_email swallow (name_request.py:57, business_profile.py:~137 'except Exception ... capture_message'); update_business_profile and update_entity do not catch raised exceptions. cb_subscription_handler worker.py:446 'except (QueueException, Exception)' absorbs those.",
+  "reference_fix": "The filer skips filings already COMPLETED and commits transaction_id (status COMPLETED) before the side effects run. update_affiliation, consume_nr and publish_mras_email catch every error themselves (broad except -> sentry capture_message), and the completed email, publish_event and GCP event each have their own try/except. update_business_profile only reports non-2xx replies as Sentry messages; a raised error (requests exception, missing key) inside it, and any error in update_entity, is uncaught and skips the steps after it. The generic handler then absorbs it and drops the message. Replaying is a no-op and the future-effective job selects only PAID/APPROVED filings, so nothing repairs a missing affiliation, profile, email or event."
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "hrono-fullb",
+  "fact": 2,
+  "said": "No automatic retry for PAD, EFT, EJV, internal, BCOL drawdown or online banking. Their only event path is _release_payment, which has no repair.",
+  "verdict": "both_partly",
+  "evidence": "No-retry is right: base_payment_system.py:155-176 _release_payment only logs + capture_message; find_stale_records (models/payment_transaction.py:146) limits to CC/DIRECT_PAY. But online banking's normal path is pay-queue payment_reconciliations.py:459-461 _publish_payment_event, not _release_payment (only apply_credit, online_banking_service.py:64).",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fulla",
+  "fact": 1,
+  "said": "It does not query EVENT_FAILED transactions, so a failed publish is not reliably retried. I found no job that does.",
+  "verdict": "claim_wrong",
+  "evidence": "models/payment_transaction.py:141-146 find_stale_records filters status_code.notin_([COMPLETED,CANCELLED,FAILED]) so EVENT_FAILED is included (CC/DIRECT_PAY). stale_payment_task.py:_update_stale_payments calls TransactionService.update_transaction; payment_transaction.py:368-376 'if transaction_dao.status_code == EVENT_FAILED: ... publish_status(...)' republishes.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fulla",
+  "fact": 2,
+  "said": "Only PAD and EFT have an automatic retry, and even that is partial.",
+  "verdict": "claim_wrong",
+  "evidence": "No code retries PAD/EFT events: eft_service.py:87 and pad_service.py:122 call _release_payment (log-only on failure, base_payment_system.py:170-176); _update_receipt_details skips PAD/EFT (payment_transaction.py:~452 'if invoice.payment_method_code not in [PAD, EFT]'); find_stale_records excludes them; no job in payment-jobs/pay-queue republishes. The opposite of the claim holds: PAD/EFT are the ones with no retry.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fulla",
+  "fact": 2,
+  "said": "CC, Direct Pay, BCOL and internal payments ... _update_receipt_details, which calls publish_status",
+  "verdict": "both_partly",
+  "evidence": "Right for CC/Direct Pay (payment_transaction.py:429-455). Wrong for BCOL and internal: bcol_service.py:168 and internal_pay_service.py:89 publish through _release_payment from complete_post_invoice, not _update_receipt_details/publish_status, and have no EVENT_FAILED status.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fulla",
+  "fact": 4,
+  "said": "Duplicates are handled by the payment_completion_date and COMPLETED checks in the consumers.",
+  "verdict": "both_partly",
+  "evidence": "business-pay pay_filer.py:139 'if filing.payment_completion_date' dedupes (right). entity-pay worker.py:99 checks only status == COMPLETED (a PAID unapplied filing is reprocessed, line 115 resets payment_completion_date, publishes email and filer again). So the claim lumps both consumers and is right only for business-pay.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fullb",
+  "fact": 2,
+  "said": "Each method's own payment service (pad_service.py, eft_service.py, online_banking_service.py, ...) calls BasePaymentSystem._release_payment()",
+  "verdict": "both_partly",
+  "evidence": "pad_service.py:122, eft_service.py:87, bcol_service.py:168, ejv_pay_service.py:69, internal_pay_service.py:89 call it from complete_post_invoice. online_banking_service.py:64 calls it only inside apply_credit; the normal online-banking path is pay-queue _publish_payment_event (payment_reconciliations.py:459-461), as the reference says.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fullb",
+  "fact": 6,
+  "said": "This job would also pick up a stuck PAID future-effective filing, but it does not repair non-future-effective ones.",
+  "verdict": "claim_wrong",
+  "evidence": "filing.py:1029-1035 get_future_effective_filing_ids: status in (PAID, APPROVED) and effective_date <= now; no future-effective test. filing.py:735-740 set_processed sets effective_date = payment_completion_date for most types, so stuck non-future filings qualify and are re-driven via internal_services.py:30-36.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-1",
+  "arm": "code-fullb",
+  "fact": 7,
+  "said": "Post-commit steps are each wrapped separately and only logged to Sentry on failure: update_affiliation, consume_nr, ...",
+  "verdict": "both_partly",
+  "evidence": "True for update_affiliation (business_profile.py:~137 broad except), consume_nr (name_request.py:57) and publish_mras_email (worker.py:189). Not true for update_business_profile / update_entity, which are unwrapped in worker.py:368,381,395 and can raise.",
+  "reference_fix": "The filer skips filings already COMPLETED and commits transaction_id (status COMPLETED) before the side effects run. update_affiliation, consume_nr and publish_mras_email catch every error themselves (broad except -> sentry capture_message), and the completed email, publish_event and GCP event each have their own try/except. update_business_profile only reports non-2xx replies as Sentry messages; a raised error (requests exception, missing key) inside it, and any error in update_entity, is uncaught and skips the steps after it. The generic handler then absorbs it and drops the message. Replaying is a no-op and the future-effective job selects only PAID/APPROVED filings, so nothing repairs a missing affiliation, profile, email or event."
+ },
+ {
+  "qid": "hard-failure-0",
+  "arm": "code-fulla",
+  "fact": 5,
+  "said": "_delete_marked_payments() re-runs delete_invoice for DELETE_ACCEPTED invoices (find_invoices_marked_for_delete). This finishes interrupted deletes.",
+  "verdict": "claim_wrong",
+  "evidence": "payment_service.py:281 'invoice.payment_status_code = InvoiceStatus.DELETE_ACCEPTED.value' sets a non-column attribute (Invoice columns use invoice_status_code, models/invoice.py:103) so it is never persisted; invoice.py:189 find_invoices_marked_for_delete filters invoice_status_code == DELETE_ACCEPTED, so the job finds nothing.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-b0",
+  "arm": "hrono-fulla",
+  "fact": 1,
+  "said": "The PAYMENT event was published when the debit was first settled, and nothing publishes a reversal.",
+  "verdict": "both_partly",
+  "evidence": "'Nothing publishes a reversal' is right. 'When first settled' is wrong: pad_service.py:122 complete_post_invoice -> _release_payment publishes at invoice creation; payment_reconciliations.py:459 publishes from pay-queue only for ONLINE_BANKING.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-failure-b0",
+  "arm": "hrono-fullb",
+  "fact": 3,
+  "said": "The FAILED payment row from _create_payment_records is still written for it, so unlock later waits on it too.",
+  "verdict": "claim_wrong",
+  "evidence": "payment_reconciliations.py:84 and _save_payment do write the FAILED payment row (first half true). But unlock waits only on Payment.get_failed_payments -> find_payments_to_consolidate (models/payment.py:187), which requires InvoiceReference.status_code == ACTIVE; the dropped invoice's reference stays COMPLETED (return False at payment_reconciliations.py:521-523 before the reset), so unlock (payment_transaction.py:415-419) does not wait on it.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-0",
+  "arm": "hrono-fullb",
+  "fact": 2,
+  "said": "because it has no top-level paymentToken and uses snake_case",
+  "verdict": "both_partly",
+  "evidence": "No wrapper is right: create_event_payload payment_transaction.py:527 is a flat humps.camelize dict while entity-pay worker.py:85-113 reads payment_token['paymentToken']. But the pay-api payload is camelCase, not snake_case; only the business-pay worker converts keys to snake_case.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-0",
+  "arm": "code-fulla",
+  "fact": 4,
+  "said": "Status never moved to PAID. entity-pay never sets status = PAID or payment_status_code, so the filing state would be inconsistent with what business-pay writes.",
+  "verdict": "claim_wrong",
+  "evidence": "entity-pay worker.py:115 sets payment_completion_date on legal_api.models.Filing (import line 39), whose before_insert/before_update listener (filing.py:1175-1176) derives PAID, so status does move to PAID. Literal point that entity-pay does not assign status or payment_status_code is true, but the conclusion is wrong; business-pay sets them itself only because it lacks the listener (pay_filer.py:147-149).",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-1",
+  "arm": "code-fulla",
+  "fact": 4,
+  "said": "Against v1 the response is a bare list with no .get, so run() would crash.",
+  "verdict": "both_partly",
+  "evidence": "v1 business_filings.py:888 'return jsonify(filings)' is a bare list; update_colin_filings.py:155-157 calls results.get('total'). But run() wraps the loop in try/except Exception (line 187-190) that only logs, so it does not crash; an empty list ends the while quietly (falsy walrus).",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-1",
+  "arm": "code-fullb",
+  "fact": 2,
+  "said": "InternalFilings.get, the filings dump, also has no check. It returns every completed filing's full JSON",
+  "verdict": "both_partly",
+  "evidence": "No auth decorator on get (v1 business_filings.py:861-863), true. But the default branch returns only get_completed_filings_for_colin() page 1 limit 20 (filing.py:1004) with exclusions (lear_epoch, COOP corrections, SP/GP, etc.), not every completed filing; only /internal/filings/<status> returns all filings of a status.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-b0",
+  "arm": "hrono-fulla",
+  "fact": 7,
+  "said": "The UI calls revoke with reissue=true, may then call DELETE /<id>/digitalCredentials/<credential_id>, and then calls POST /<id>/digitalCredentials/<credential_type> to issue.",
+  "verdict": "both_partly",
+  "evidence": "CredentialsDashboard.vue:168-186 replaceCredential: revokeCredential(...,true), removeCredential, then removeActiveCredentialConnection, then router push to ISSUE_CREDENTIAL; the new POST (CredentialsStepper.vue:234 sendCredentialOffer) happens only after the holder reconnects. Claim omits the connection deletion, the point of the reference.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-b0",
+  "arm": "hrono-fulla",
+  "fact": 4,
+  "said": "Every producer except q_cli.py and the entity-filer publisher runs on NATS_ENTITY_EVENT_SUBJECT (or NATS_ENTITY_EVENTS_SUBJECT in update-legal-filings) with default entity.events.",
+  "verdict": "both_partly",
+  "evidence": "internal_services.py:60-67 bnmove publishes the bnmove event to NATS_EMAILER_SUBJECT and only business.bn to NATS_ENTITY_EVENT_SUBJECT; entity-bn registration.py:149 uses SUBSCRIPTION_OPTIONS['subject'] and entity-bn/q_cli.py:67 shows os.getenv('NATS_ENTITY_EVENT_SUBJECT','error'), so default is not entity.events. update-legal-filings uses NATS_ENTITY_EVENTS_SUBJECT (update_legal_filings.py:291) but its config default could not be read (blocked). The 'default entity.events for all' claim is overstated.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-b0",
+  "arm": "hrono-fullb",
+  "fact": 7,
+  "said": "A separate POST .../<credential_type> then issues a new one.",
+  "verdict": "claim_right",
+  "evidence": "CredentialsStepper.vue:234 sendCredentialOffer -> POST (business_digital_credentials.py:155-159 send_credential); the UI replace (CredentialsDashboard.vue:168-186) revokes, deletes and drops the connection then routes to the issue stepper, i.e. issuance is a separate later call after reconnect; it is not the worker-style automatic reissue. Consistent with the reference.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-b0",
+  "arm": "code-fulla",
+  "fact": 7,
+  "said": "revoke_credential needs an active DCConnection and an issued, non-revoked credential found by credential_id.",
+  "verdict": "claim_wrong",
+  "evidence": "business_digital_credentials.py:211-216: requires active connection and 'if not issued_credential or issued_credential.is_revoked' only; no is_issued check (the UI checks it, CredentialsDashboard.vue:154). Only the worker's helpers.py:90 checks 'not is_issued or is_revoked'.",
+  "reference_fix": ""
+ },
+ {
+  "qid": "hard-legacy-b0",
+  "arm": "code-fullb",
+  "fact": 7,
+  "said": "The UI then deletes the old record with DELETE .../<credential_id> and issues a new one with POST .../<credential_type>.",
+  "verdict": "both_partly",
+  "evidence": "Same as hrono-fulla: CredentialsDashboard.vue:175-178 also calls removeActiveCredentialConnection before routing to the issue stepper; claim omits it and implies direct reissue.",
+  "reference_fix": ""
+ }
+]
