@@ -1225,3 +1225,23 @@ and variable-fee schedules), failure-1 fact 7 (`consume_nr`,
 fact 3 (the PATCH is validated, by a schema that accepts any state). The
 reference errors cost both arms about equally, so they do not explain the
 small gap: hrono's wrong statements are fewer, its misses are not.
+
+### Reference corrected, recall wired into the harness (2026-10-22)
+
+Five reference facts corrected in `hard15.json` (marked `"audited"`; the old
+file kept as `hard15.before-audit.json`): inconsistency-0 #3,
+authorization-b0 #5 and #7, failure-1 #7, impact-b0 #3. Only those four
+questions re-judged (`harness/rescore.py`): hrono 0.674, code only 0.626
+(+0.047, was +0.039). The corrections were never the gap.
+
+The harness never gave agents what the plugin's prompt hook attaches: hrono
+recall's best pages. `recall_cache.py` saves each question's recall reply
+from hrono's own `ask`; `agent_v2.py` with `RECALL=1` runs the plugin's own
+hook code (`recall.js`) on it through `recall_bin.py`. Doing so showed two
+faults in the hook, now fixed: a page over the 10,000-character inline limit
+was never attached (only a one-line pointer, and the median leaf brief is
+14 KB), so the best page is now attached from its start with where the rest
+is; and a pointer's line was the "Part of [area]" link instead of what the
+topic does. The skill gained turn rules: read the recalled pages, read each
+brief once, grep a brief over about 20 KB, and write the answer after about
+20 tool calls.
