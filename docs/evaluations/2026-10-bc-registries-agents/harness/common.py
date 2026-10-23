@@ -256,6 +256,13 @@ def run_agent(
             time.sleep(waits[attempt])
             continue
         break
+    # the whole stream, tool results included, for reading a run step by step
+    # (`steps.py` renders it)
+    traces = RUNS / "traces"
+    traces.mkdir(parents=True, exist_ok=True)
+    name = f"{role}-{key}".replace(":", "-").replace("/", "-")
+    start = {"type": "prompt", "system": system, "text": prompt}
+    (traces / f"{name}.jsonl").write_text(json.dumps(start) + "\n" + out)
     usage = payload.get("usage") or {}
     rec = {
         "role": role,
