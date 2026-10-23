@@ -1245,3 +1245,21 @@ is; and a pointer's line was the "Part of [area]" link instead of what the
 topic does. The skill gained turn rules: read the recalled pages, read each
 brief once, grep a brief over about 20 KB, and write the answer after about
 20 tool calls.
+
+### Recall attached and turn rules (2026-10-23)
+
+The same tree, hrono arm only, 15 questions x 2 tries, with the plugin's
+recall attachment (`RECALL=1`) and the new turn rules; scored on the audited
+reference.
+
+| | recall + rules | before | code only |
+|---|---|---|---|
+| mean | 0.654 | 0.674 | 0.626 |
+| cost (30 answers) | $14.1 | $18.1 | $8.2 |
+| turns | 583 | 675 | 505 |
+| answers missing | 0 | 1 | 0 |
+
+No answer ran out of turns and the runs cost less, but the mean did not rise:
+inconsistency-0, failure-1 and authorization-0 went up, legacy-0, legacy-b0,
+failure-b0 and authorization-1 down. With two tries a question, a 0.02 shift
+is noise; hrono stays about +0.03 to +0.05 over code only on these questions.
