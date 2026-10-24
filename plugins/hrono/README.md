@@ -5,9 +5,9 @@ project's sources hold (repositories, documentation, wikis), from one overview
 down to the files.
 
 - **Recall, automatically.** A `UserPromptSubmit` hook asks hrono for the
-  map pages that match each prompt and attaches them, marked "hrono recall":
-  each page's path, title and first sentence, best first (a page not yet
-  exported is attached as its passage).
+  passages that match each prompt and attaches them, marked "hrono recall":
+  one per topic, best first, each with the file it comes from or, for a
+  brief, the page of the map that holds it.
   Short prompts and slash commands are skipped, and a slow or unreachable
   server never blocks a prompt.
 - **The map in every session.** A `SessionStart` hook says the project has a

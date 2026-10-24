@@ -85,7 +85,7 @@ test("a project with no tree set gets no hrono at all", () => {
   assert.deepEqual(w.calls(), []);
 });
 
-test("a prompt with no export gets its recalled passages, named by file and topic", () => {
+test("a prompt gets its recalled passages, named by file and topic", () => {
   const w = world();
   w.configure({ tree: "demo" });
   const text = attached(w.run("recall.js", { prompt: ASK }));
@@ -93,32 +93,18 @@ test("a prompt with no export gets its recalled passages, named by file and topi
   assert.match(text, /### src\/auth\.py \(repo\)\n\ndef login\(\): \.\.\./);
   assert.match(text, /### brief of topic 7\n\nAuth handles sign-in\./);
   assert.doesNotMatch(text, /git:\/\//);
-  assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--pages", "--limit", "5"]);
+  assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--limit", "15"]);
 });
 
-test("a hit whose topic is in the export is attached as that map page", () => {
-  const w = world([{ ...LOGIN, topic: 7 }]);
+test("a brief whose page is in the export is named by that page", () => {
+  const w = world([{ ...LOGIN, topic: 7 }, BRIEF]);
   const page = path.join(w.dir, "export", "auth-area-3", "sign-in-7", "brief.md");
   fs.mkdirSync(path.dirname(page), { recursive: true });
-  fs.writeFileSync(page, "# Sign-in\n\nChecks a password. Then more.\n");
+  fs.writeFileSync(page, "# Sign-in\n\nChecks a password.\n");
   w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
   const text = attached(w.run("recall.js", { prompt: ASK }));
-  assert.match(text, /the map pages most likely to cover this prompt/);
-  assert.ok(text.includes(`### ${page}\n\n# Sign-in\n\nChecks a password. Then more.`));
-  assert.doesNotMatch(text, /def login/);
-});
-
-test("pages past the budget are listed by title", () => {
-  const w = world([7, 8].map((topic) => ({ ...LOGIN, topic })));
-  const page = (id) => path.join(w.dir, "export", `part-${id}`, "brief.md");
-  for (const id of [7, 8]) {
-    fs.mkdirSync(path.dirname(page(id)), { recursive: true });
-    fs.writeFileSync(page(id), `# Part ${id}\n\nDoes ${id}. ${"x".repeat(300)}\n`);
-  }
-  w.configure({ tree: "demo", folder: path.join(w.dir, "export"), longest: 1000 });
-  const text = attached(w.run("recall.js", { prompt: ASK }));
-  assert.ok(text.includes(`### ${page(7)}`));
-  assert.ok(text.includes(`More pages:\n- ${page(8)} : Part 8. Does 8.`));
+  assert.ok(text.includes(`### brief of topic 7: ${page}\n\nAuth handles sign-in.`));
+  assert.ok(text.includes(`### src/auth.py (repo), in page ${page}\n\ndef login(): ...`));
 });
 
 test("recall off, a short prompt or a slash command attach nothing", () => {
@@ -167,7 +153,7 @@ test("a setting of the wrong kind keeps its default", () => {
   const w = world();
   w.configure({ tree: "demo", limit: "lots", recall: "yes" });
   assert.notEqual(attached(w.run("recall.js", { prompt: ASK })), null);
-  assert.deepEqual(w.calls()[0].slice(-2), ["--limit", "5"]);
+  assert.deepEqual(w.calls()[0].slice(-2), ["--limit", "15"]);
 });
 
 test("the session opens with where the map is and how to read it", () => {
@@ -182,22 +168,4 @@ test("the session opens with where the map is and how to read it", () => {
   assert.match(note, /hrono map \(tree "demo"\)/);
   assert.ok(note.includes(`start at ${path.join(folder, "root.md")}`));
   assert.match(note, /attached to prompts automatically/);
-});
-
-test("the best page too long to attach whole is attached from its start", () => {
-  const w = world([7, 8].map((topic) => ({ ...LOGIN, topic })));
-  const page = (id) => path.join(w.dir, "export", `part-${id}`, "brief.md");
-  for (const id of [7, 8]) {
-    fs.mkdirSync(path.dirname(page(id)), { recursive: true });
-    fs.writeFileSync(
-      page(id),
-      `# Part ${id}\n\nPart of [Area](area/brief.md).\n\nDoes ${id}.\n${"line\n".repeat(3000)}`,
-    );
-  }
-  w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
-  const text = attached(w.run("recall.js", { prompt: ASK }));
-  assert.ok(text.length <= 10000);
-  assert.ok(text.includes(`### ${page(7)}\n\n# Part 7`));
-  assert.ok(text.includes(`(the rest of this page is in ${page(7)})`));
-  assert.ok(text.includes(`- ${page(8)} : Part 8. Does 8.`));
 });

@@ -23,8 +23,7 @@ const RECALL_TIMEOUT_MS = 15000;
  */
 
 /**
- * The map pages that answer ``question``, from ``tree``: one hit per leaf
- * topic, each the passage that put the page there.
+ * The passages that answer ``question``, from ``tree``.
  * @param {string} bin
  * @param {string} tree
  * @param {string} question
@@ -34,7 +33,7 @@ const RECALL_TIMEOUT_MS = 15000;
 function recall(bin, tree, question, limit) {
   const run = spawnSync(
     bin,
-    ["recall", tree, question, "--json", "--pages", "--limit", String(limit)],
+    ["recall", tree, question, "--json", "--limit", String(limit)],
     { encoding: "utf8", timeout: RECALL_TIMEOUT_MS },
   );
   if (run.status !== 0) return { ok: false, reason: failure(run) };
