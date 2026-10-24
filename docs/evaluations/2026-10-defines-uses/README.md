@@ -1263,3 +1263,54 @@ No answer ran out of turns and the runs cost less, but the mean did not rise:
 inconsistency-0, failure-1 and authorization-0 went up, legacy-0, legacy-b0,
 failure-b0 and authorization-1 down. With two tries a question, a 0.02 shift
 is noise; hrono stays about +0.03 to +0.05 over code only on these questions.
+
+### Why recall did not help, and the recall rebuilt (2026-10-24, no new runs)
+
+Three faults, found from the 30 recall runs' artifacts and fixed before any
+further run.
+
+1. **The hook was not attaching passages.** Since 2026-10-13 (`ff04bbc`,
+   `f69f65e`, `47ea019`) the plugin's prompt hook mapped the best hit to the
+   brief of its topic and pasted that page's first 7.4 KB, the other four
+   hits as one-line pointers. All 15 attached pages were cut (briefs are 11
+   to 54 KB, Conclusions and Hazards at the end); the page was a fact leaf
+   in 7 of 15 questions. The hook attaches the passages again, each named by
+   its file or by its brief's page in the export (`plugins/hrono`).
+2. **The eval tree's briefs were never embedded.** `subtree_v9.py` rebuilt
+   the briefs without the embed stage a `maintain` run ends with: 11,000 of
+   11,006 brief passages had no vector, so recall's cosine leg could not
+   return a brief in any run. `embed_v9.py` backfilled them (19,876
+   vectors). `maintain` already embeds after brief; `sync` did not and now
+   does.
+3. **Ranking by one passage, one lane.** With the briefs embedded, the
+   formulas in `recall_formulas.py` were scored against each question's
+   fact leaves (a level-0 topic holding a section of a file a fact cites).
+   Facts with a leaf among the hits, out of 111:
+
+   | formula | K=5 | K=10 | K=15 |
+   |---|---|---|---|
+   | today: cosine, one per file | 26 | 44 | 49 |
+   | pages: what the runs got | 33 | 52 | 62 |
+   | briefs only, cosine + BM25 | 36 | 55 | 78 |
+   | leafpair: best brief + best source per leaf, RRF | 42 | 64 | 75 |
+   | leafsum: all of a leaf's passages | 42 | 60 | 79 |
+   | the engine as it ships now | 42 | 64 | 74 |
+
+   `recall_ranks.py`: in every leg (cosine or BM25, briefs or sources) the
+   first fact leaf sits at median rank 2 to 3, so the legs find the leaves
+   and the fusion is what lifts them. Nothing is excluded by path: tests
+   and generated documents lose because a leaf needs a brief that reads
+   like the question and a source that carries its words.
+
+What ships (`src/hrono/recall`): both legs, fused by reciprocal rank per
+lane, a topic scored by its best brief plus its best source passage, one
+hit per topic spoken for by whichever of the two reads most like the
+question; cap 20, the plugin asks for 15 (10 to 12 fit the 10 KB inline
+limit, measured on these questions). The harness cache
+(`harness/recall/*.json`) is regenerated from it.
+
+Still open: facts sit in 8 to 18 leaves a question, so 15 hits cover 74 of
+111; authorization-0 and authorization-b0 get no fact leaf at K=5 in any
+formula, their words (Account-Id, orgs, affiliation) are not in the briefs;
+and nothing here changes what the agents do after the attachment (2-3 brief
+reads, then shell on the corpus) or the upper levels they cannot walk.
