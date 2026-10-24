@@ -29,7 +29,7 @@ const path = require("node:path");
 /** @type {Omit<Settings, "root" | "tree" | "folder">} */
 const DEFAULTS = Object.freeze({
   recall: true,
-  limit: 5,
+  limit: 15,
   levels: 4,
   shortest: 20,
   longest: 10000,

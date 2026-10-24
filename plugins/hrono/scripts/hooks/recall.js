@@ -15,9 +15,6 @@ const settings = require("../lib/settings");
 // which agents rarely open (measured: 1 of 15 runs). So no setting can
 // attach more than this.
 const INLINE = 10000;
-const MORE = "\n\nMore pages:";
-// room kept for the other pages' lines when the best page is cut to fit
-const POINTERS = 2500;
 
 /**
  * The recalled passages for ``prompt`` as one block of text, or null when
@@ -32,42 +29,45 @@ function attachment(config, prompt) {
   if (question.length < config.shortest || question.startsWith("/")) return null;
   const recalled = hrono.recall(config.bin, config.tree, question, config.limit);
   if (!recalled.ok || recalled.hits.length === 0) return null;
-  return render(config, recalled.hits);
+  return render(config, recalled.hits, pageIndex(config.folder));
 }
 
 /**
- * The hits as map pages to read, best first; a hit whose page is not in the
- * export (none written yet) is attached as its passage instead.
+ * The passages best first, each named by where it is, while they fit.
  * @param {settings.Settings} config
  * @param {import("../lib/hrono").Hit[]} hits
+ * @param {Map<number, string>} pages
  */
-function render(config, hits) {
+function render(config, hits, pages) {
   const head =
-    `hrono recall from tree "${config.tree}": the map pages most likely to ` +
-    "cover this prompt, best first. Each says what its part does, its checks " +
-    "and failure handling, and which files hold it.";
-  const pages = pageIndex(config.folder);
+    `hrono recall from tree "${config.tree}": the passages most likely to ` +
+    "answer this prompt, one per topic, from its sources and from the " +
+    "map's briefs. A brief names its page in the map; read the page for " +
+    "the whole part.";
   const longest = Math.min(config.longest, INLINE);
-  // the best pages whole while they fit, then the rest as one line each: a
-  // page only pointed at is rarely opened (2026-10-bc-registries-v2/)
-  let whole = head;
-  let pointers = "";
+  let text = head;
   for (const hit of hits) {
-    const page = hit.topic === undefined ? undefined : pages.get(hit.topic);
-    if (!page) {
-      const block = `\n\n### ${title(hit)}\n\n${hit.body}`;
-      if (whole.length + pointers.length + block.length <= longest) whole += block;
-      continue;
-    }
-    const full = `\n\n### ${page}\n\n${read(page)}`;
-    const line = `\n- ${page} : ${summary(page)}`;
-    if (!pointers && whole.length + full.length <= longest) whole += full;
-    else if (whole === head) whole += cut(full, longest - head.length - POINTERS, page);
-    else if (whole.length + MORE.length + pointers.length + line.length <= longest)
-      pointers += line;
+    const block = `\n\n### ${title(hit, pages)}\n\n${hit.body}`;
+    if (text.length + block.length > longest) break;
+    text += block;
   }
-  const text = pointers ? `${whole}${MORE}${pointers}` : whole;
   return text === head ? null : text;
+}
+
+/**
+ * A passage is named by what a reader can open: its file, or its brief's
+ * page in the export (its topic, when the page is not written yet). A source
+ * passage also names the page of the topic holding it, when there is one.
+ * @param {import("../lib/hrono").Hit} hit
+ * @param {Map<number, string>} pages
+ */
+function title(hit, pages) {
+  const page = hit.topic === undefined || hit.topic === null ? undefined : pages.get(hit.topic);
+  if (hit.kind === "summary") {
+    return page ? `brief of topic ${hit.topic}: ${page}` : `brief of topic ${hit.topic}`;
+  }
+  const file = hit.path ? (hit.source ? `${hit.path} (${hit.source})` : hit.path) : (hit.header ?? "passage");
+  return page ? `${file}, in page ${page}` : file;
 }
 
 /**
@@ -98,55 +98,6 @@ function pageIndex(folder) {
   };
   walk(folder);
   return pages;
-}
-
-/**
- * The best page when it is too long to attach whole: its opening up to
- * ``room`` characters, cut at a line, and where the rest is. A leaf brief is
- * often over the inline limit, and a page only pointed at is rarely opened.
- * @param {string} full
- * @param {number} room
- * @param {string} page
- */
-function cut(full, room, page) {
-  const rest = `\n\n(the rest of this page is in ${page})`;
-  const head = full.slice(0, Math.max(0, room - rest.length));
-  const end = head.lastIndexOf("\n");
-  return (end > 0 ? head.slice(0, end) : head) + rest;
-}
-
-/** @param {string} page */
-function read(page) {
-  try {
-    return fs.readFileSync(page, "utf8").trim();
-  } catch {
-    return "";
-  }
-}
-
-/**
- * A page's title and its first sentence.
- * @param {string} page
- */
-function summary(page) {
-  const lines = read(page).split("\n").map((line) => line.trim());
-  const heading = (lines.find((line) => line.startsWith("# ")) ?? "").slice(2);
-  // the line under the title says what the topic does; "Part of" only
-  // links its area
-  const first =
-    lines.find((line) => line && !line.startsWith("#") && !line.startsWith("Part of ")) ?? "";
-  const sentence = (first.match(/^.*?[.!?](\s|$)/) ?? [first])[0].trim();
-  return heading ? `${heading}. ${sentence}` : sentence;
-}
-
-/**
- * A passage is named by what a reader can open: its file, or its brief's topic.
- * @param {import("../lib/hrono").Hit} hit
- */
-function title(hit) {
-  if (hit.kind === "summary") return `brief of topic ${hit.topic}`;
-  if (hit.path) return hit.source ? `${hit.path} (${hit.source})` : hit.path;
-  return hit.header ?? "passage";
 }
 
 if (require.main === module) {
