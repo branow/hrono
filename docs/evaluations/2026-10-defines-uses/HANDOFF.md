@@ -70,3 +70,18 @@ Run one agent:
   opened the emailer brief (fact 5).
 - hrono's answers carry fewer wrong statements than code only (26 vs 37), not
   more facts. Brief sizes: median 14 KB, 31 over 30 KB (topic 556 is 54 KB).
+
+## Done 2026-10-24 (no new runs)
+
+- The plugin hook attaches passages again (it had pasted one cut page since
+  2026-10-13), 15 by default, each named by its file or its page.
+- Recall ranks by cosine and BM25 fused per lane, one hit per topic
+  (`src/hrono/recall/window.py`); `sync` embeds after brief as `maintain`
+  does. Measured in `harness/recall_formulas.py`: 42 of 111 facts have a
+  leaf among 5 hits, against 26 before.
+- The v9 eval tree's brief passages are embedded now (`harness/embed_v9.py`);
+  before, 11,000 of 11,006 had no vector and recall never saw a brief.
+- `harness/recall/*.json` regenerated; `attach` renders 10-12 hits in ~9.5 KB.
+
+Not done: the agent behaviour after the attachment and the upper levels
+(README, "Why recall did not help"). No paid run since 2026-10-23.

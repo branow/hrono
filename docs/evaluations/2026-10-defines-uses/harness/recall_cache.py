@@ -1,9 +1,8 @@
 # ruff: noqa: E501, SIM115 - experiment harness
 """What the hrono plugin's prompt hook attaches, for each hard15 question.
 
-The plugin runs `hrono recall <tree> <prompt> --json --pages --limit 5` on
-every prompt and attaches the best pages (`plugins/hrono/scripts/hooks/
-recall.js`). The agent harness never did, so its agents walked down from the
+The plugin runs `hrono recall <tree> <prompt> --json --limit 15` on every
+prompt and attaches the passages (`plugins/hrono/scripts/hooks/recall.js`). The agent harness never did, so its agents walked down from the
 root without the pages recall points at. This writes each question's recall
 reply, from hrono's own `ask` on the eval db, to `recall/<qid>.json`;
 `recall_bin.py` replays them to the plugin's own hook code.
@@ -29,7 +28,7 @@ from hrono.errors import Unavailable  # noqa: E402
 from hrono.recall.ask import ask  # noqa: E402
 
 OUT = exp.HERE / "recall"
-LIMIT = 5  # the plugin's default
+LIMIT = 15  # the plugin's default
 
 
 def main() -> None:
@@ -39,9 +38,7 @@ def main() -> None:
     for q in questions:
         while True:
             try:
-                result = ask(
-                    database, subtree_v9.TREE, q["question"], LIMIT, pages=True
-                )
+                result = ask(database, subtree_v9.TREE, q["question"], LIMIT)
                 break
             except Unavailable:
                 time.sleep(2)
