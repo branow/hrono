@@ -432,10 +432,8 @@ def test_a_question_that_is_now_refused_lists_what_dropped(
     panel: Panel, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     panel.ask(ANSWERABLE)
-    monkeypatch.setattr(
-        "hrono.recall.ask._query_encode",
-        lambda model_id: lambda texts: [[0.0] * 8] * len(texts),
-    )
+    # the tree no longer has the words for the question: the gate refuses
+    monkeypatch.setattr("hrono.recall.gate.COVERAGE", 2.0)
 
     html = panel.ask(ANSWERABLE)
 

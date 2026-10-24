@@ -7,12 +7,13 @@ answer format, how to use the map) pulls it to licence headers and tests
 (docs/evaluations/2026-10-recall-queries/: prompts.py).
 
 Source passages and brief passages are ranked in one list by the cosine of
-the question's embedding against the passage content's. Nothing else: the
-earlier recipe blended in the embedded path string and kept only passages
-whose z-score cleared a fixed floor, and on a granite tree both lost answers
-plain cosine had at the top (docs/evaluations/2026-10-recall-queries/: an
-answer file in the top 5 for 12 of 20 prompts with cosine, 8 with the old
-recipe). Whether to answer at all is ``gate``'s question, not a score floor's.
+the question's embedding against the passage content's, and nothing else is
+blended into the score: the earlier recipe mixed in the embedded path string
+and kept only passages whose z-score cleared a fixed floor, and on a granite
+tree both lost answers plain cosine had at the top
+(docs/evaluations/2026-10-recall-queries/). Whether to answer at all is
+``gate``'s question, not a score floor's; the words of the question are a
+second ranking (``keywords``) fused by rank, not a floor (``window``).
 
 The arithmetic is numpy: one matrix-vector product over the tree's passages.
 """

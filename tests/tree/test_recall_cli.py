@@ -46,7 +46,7 @@ def test_recall_posts_and_prints_hits(monkeypatch: pytest.MonkeyPatch) -> None:
     assert fake.calls == [
         (
             "/trees/acme/recall",
-            {"question": "how does auth work?", "limit": 10, "pages": False},
+            {"question": "how does auth work?", "limit": 10},
         )
     ]
     assert "the answer body" in result.output

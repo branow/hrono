@@ -43,9 +43,13 @@ import numpy
 
 from hrono.llm.tools import Tool, Toolbox
 from hrono.recall import query
-from hrono.recall.engine import TEST_PATH
 from hrono.registry.collections.trees import sources_of
 
+# a test file is left out of a lookup by meaning: it reads like a question
+# about its code and would take the slots the code should have
+TEST_PATH = re.compile(
+    r"(^|/)(tests?|__tests__)/|(^|/)test_[^/]*$|_test\.\w+$|\.(spec|test)\.\w+$"
+)
 SOURCE = "source/"
 CONDENSED = "condensed/"
 MOST_CALLS = 15
