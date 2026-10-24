@@ -85,13 +85,6 @@ def recall(
         bool,
         typer.Option("--json", help="Print the raw hits as JSON."),
     ] = False,
-    pages: Annotated[
-        bool,
-        typer.Option(
-            "--pages",
-            help="One hit per map page: the leaf topics to read first.",
-        ),
-    ] = False,
 ) -> None:
     """Recall passages from a tree for a question (the fast read door).
 
@@ -108,7 +101,7 @@ def recall(
         tree, asked = tree_or_question, question
     result = from_profile().post(
         f"/trees/{tree}/recall",
-        {"question": asked, "limit": limit, "pages": pages},
+        {"question": asked, "limit": limit},
         timeout=RECALL_TIMEOUT,
     )
     if as_json:

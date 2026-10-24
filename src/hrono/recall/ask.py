@@ -20,8 +20,6 @@ def ask(
     tree: str,
     question: str,
     limit: int,
-    *,
-    pages: bool = False,
 ) -> engine.Recall:
     """Recall for ``question`` in ``tree``; Unavailable while the model loads.
 
@@ -39,7 +37,6 @@ def ask(
             encode,
             limit=limit,
             tree=tree,
-            pages=pages,
         )
 
 

@@ -1,6 +1,6 @@
-"""The document key is the URI, because the URI carries no position.
+"""A passage no leaf holds is grouped by its URI, which carries no position.
 
-`_documents` must not `split("#")` the URI on the belief that a passage is
+`_lanes` must not `split("#")` the URI on the belief that a passage is
 addressed `...#chunk-3@v1`. Nothing emits that fragment: hrono has no named
 fragments, since `@version` already changes every URI on any edit, and where a
 passage sits lives in `ordinal` and `sp_paths`. Such a strip would be a no-op
@@ -19,7 +19,7 @@ import pytest
 from hrono.db.database import Database
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.store import insert_passage, insert_section, upsert_content
-from hrono.recall.engine import _documents
+from hrono.recall.engine import _lanes
 
 VERSION = "v1"
 
@@ -64,11 +64,11 @@ def test_passages_of_one_file_share_a_document(db: Database) -> None:
         other = _passage(conn, "src/y.py", b"a different file\n", 0)
 
     with db.connect() as conn:
-        keys = _documents(conn, [first, second, other])
+        keys = _lanes(conn, [first, second, other], None)
 
     assert keys[first] == keys[second]  # the file, not the slice
     assert keys[other] != keys[first]
-    assert keys[first] == f"git://ex/repo/src/x.py@{VERSION}"
+    assert keys[first] == ("source", f"git://ex/repo/src/x.py@{VERSION}")
 
 
 def test_the_key_is_the_stored_uri_untouched(db: Database) -> None:
@@ -82,6 +82,6 @@ def test_the_key_is_the_stored_uri_untouched(db: Database) -> None:
         stored = conn.execute(
             "SELECT uri FROM passages WHERE id = ?", (passage,)
         ).fetchone()["uri"]
-        keys = _documents(conn, [passage])
+        keys = _lanes(conn, [passage], None)
 
-    assert keys[passage] == stored
+    assert keys[passage] == ("source", stored)

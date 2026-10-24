@@ -45,7 +45,6 @@ Reader = Annotated[User, Depends(require_role("reader"))]
 class RecallRequest(BaseModel):
     question: str
     limit: int = 10
-    pages: bool = False  # one hit per leaf topic: the map pages to read
 
 
 @router.post("/trees/{name}/maintain")
@@ -114,7 +113,7 @@ def recall_tree(
     Each answered call is logged; a call that raises is not.
     """
     database = request.app.state.db
-    result = ask(database, name, body.question, body.limit, pages=body.pages)
+    result = ask(database, name, body.question, body.limit)
     with database.write() as conn:
         recall_log.record(conn, name, user.name, result, body.question)
     return {

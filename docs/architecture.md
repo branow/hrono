@@ -152,8 +152,11 @@ markdown, so they go through the same splitter into the same store under
 surface briefs, detail questions surface sources.
 
 In one sentence: if at least 90% of the question's content words occur in the
-tree, return the 5 passages (up to 10) closest to it by cosine, one per file;
-otherwise send the agent to the map.
+tree, rank every passage by cosine and by BM25, fuse the two by rank in each
+lane (briefs, sources), score a topic by its best brief plus its best source
+passage, and return the top topics (10 by default, up to 20) each as the
+passage of its two that reads most like the question; otherwise send the
+agent to the map.
 
 - **Gate** (`gate.py`): a question's content words are its tokens of three
   letters or more that are not function words, matched by stem (less a plural
@@ -161,17 +164,27 @@ otherwise send the agent to the map.
   occur in the tree's FTS index, the tree does not cover the question and
   recall returns no hits. Vocabulary separates on- from off-topic questions;
   similarity does not (every question has a nearest passage).
-- **Ranking** (`similarity.py`): plain cosine against each passage's content
-  embedding, sources and briefs in one list. A question of several sentences
-  is embedded a sentence at a time (`query.py`) and a passage scores its best
-  sentence: one embedding of a long prompt averages its parts, and the
-  framing around a question pulled it to licence headers and tests.
-- **Window** (`window.py`): the best passages in order, the first of each
-  document (a file or a brief), up to the requested limit (cap 10). Never
-  padded. With `pages`, the first of each leaf topic instead, skipping tests
-  and upper briefs: the map pages to read first. A question spanning several
-  services needs more facts than five passages hold, and the leaf briefs
-  state them (`evaluations/2026-10-bc-registries-v2/`).
+- **Two legs** (`similarity.py`, `keywords.py`): cosine against each
+  passage's content embedding, and BM25 over the FTS index for the OR of the
+  question's content words as stems (the gate's own words). A question of
+  several sentences is embedded a sentence at a time (`query.py`) and a
+  passage scores its best sentence: one embedding of a long prompt averages
+  its parts, and the framing around a question pulled it to licence headers
+  and tests. A name the question quotes is weak to an embedding and strong
+  to BM25.
+- **Window** (`window.py`): two lanes, brief passages and source passages;
+  in each, the two legs fuse by reciprocal rank (1 / (60 + rank)), so no
+  floor needs calibrating. A topic scores its best brief passage plus its
+  best source passage, and the top topics are returned, each spoken for by
+  whichever of those two reads most like the question. A test file or a
+  generated document peaks in one lane and has no brief that reads like
+  the question, so it loses without being named. Never padded. Measured on
+  the bcreg tree against 15 hard questions' fact leaves: with 5 hits, 42 of
+  111 facts have a leaf among them against 26 for plain cosine one per
+  file; with 15 hits, 75 against 49
+  (`evaluations/2026-10-defines-uses/harness/recall_formulas.py`). The same
+  measurement found the eval tree's briefs had never been embedded, which
+  is why `sync` now ends with an embed stage as `maintain` does.
 
 An empty result returns one line, *no confident matches - explore the map*:
 misses fail safe to exploring, never to silence. The recipe replaced a

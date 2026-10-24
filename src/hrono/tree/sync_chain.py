@@ -8,7 +8,8 @@ cold rebuild.
 
     update -> propagate -> brief (stale leaves) -> brief-upper (every upper
            level, stale nodes only) -> monitor -> repair -> adopt (brief ->
-           attach orphans at every level -> brief-upper again), always
+           attach orphans at every level -> brief-upper again), always ->
+           embed (the briefs just written, so recall sees them)
 
 PROPAGATE COMES BEFORE BRIEF, not the other way round. ``propagate`` judges a
 leaf's NEW content against its STORED brief — the old one — and marks the
@@ -41,6 +42,7 @@ from collections.abc import Mapping
 from hrono.cluster.levels import attach_orphans
 from hrono.cluster.monitor import monitor
 from hrono.cluster.repair import repair
+from hrono.embed.op import embed
 from hrono.health import report
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
@@ -103,6 +105,13 @@ def sync(
     adopted = run.run(
         "adopt",
         lambda: _adopt(tree, context, encoder_for=encoder_for, client=client),
+    )
+    # brief, brief-upper and adopt wrote node:// brief passages; vectorise
+    # them, as maintain does, or recall's cosine leg never sees a brief
+    # written by a sync (the v9 eval tree had 11,000 of 11,006 unembedded)
+    run.run(
+        "embed",
+        lambda: embed(_stage(tree, "embed"), context, encoder_for=encoder_for),
     )
     run.run("health", lambda: report.refresh(context.database, tree))
     with context.database.connect() as conn:

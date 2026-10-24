@@ -1,7 +1,7 @@
-"""The recall recipe end to end: gate, cosine order, one passage per document.
+"""The recall recipe end to end: gate, two legs, one passage per topic.
 
 Vectors are planted, so a test says exactly which passage is closest to the
-question; the words of the question decide the gate.
+question; the words of the question decide the gate and the keyword leg.
 """
 
 from collections.abc import Iterator
@@ -132,7 +132,7 @@ def test_the_closest_passage_comes_first(corpus: Database) -> None:
         "src/auth.py",
         "src/refresh.py",
     ]
-    assert result.hits[0].score == pytest.approx(1.0)
+    assert result.hits[0].score >= result.hits[1].score > 0.0
     assert result.hits[0].kind == "source"
 
 
@@ -235,26 +235,65 @@ def _leaf(conn: object, section_paths: list[str], level: int = 0) -> int:
     return node
 
 
-def test_pages_give_one_hit_per_leaf_and_skip_tests(tmp_path: object) -> None:
+def test_one_hit_per_leaf_spoken_for_by_its_brief(tmp_path: object) -> None:
     database = Database.at(tmp_path / "hrono.db")
     try:
         with database.connect() as conn, conn:
-            add_passage(conn, b"bearer token tests\n", unit(0), "tests/a.py")
             add_passage(conn, b"bearer token issue\n", unit(0, 1, 0.1), "a.py")
             add_passage(conn, b"bearer token keep\n", unit(0, 1, 0.2), "b.py")
             add_passage(conn, b"bearer token other\n", unit(0, 1, 0.3), "c.py")
-            auth = _leaf(conn, ["tests/a.py", "a.py", "b.py"])
+            auth = _leaf(conn, ["a.py", "b.py"])
             other = _leaf(conn, ["c.py"])
+            add_passage(
+                conn,
+                b"the token part issues and keeps bearer tokens\n",
+                unit(0, 1, 0.05),
+                f"nodes/{auth}/brief",
+                source=f"node-{auth}",
+                kind="node",
+            )
 
         with database.connect() as conn:
             result = recall(
-                conn, "bearer tokens?", MODEL, const_encode(unit(0)), pages=True
+                conn, "bearer tokens?", MODEL, const_encode(unit(0))
             )
 
-        assert [(hit.topic, hit.path) for hit in result.hits] == [
-            (auth, "a.py"),
-            (other, "c.py"),
+        # the leaf with a brief and two matching sources outranks the leaf
+        # with one source, and its brief is the hit, not its best slice
+        assert [(hit.topic, hit.kind) for hit in result.hits] == [
+            (auth, "summary"),
+            (other, "source"),
         ]
+    finally:
+        database.close()
+
+
+def test_a_name_the_question_quotes_lifts_the_passage_that_carries_it(
+    tmp_path: object,
+) -> None:
+    database = Database.at(tmp_path / "hrono.db")
+    try:
+        with database.connect() as conn, conn:
+            add_passage(
+                conn, b"how bearer tokens are issued\n", unit(0), "a.py"
+            )
+            add_passage(
+                conn,
+                b"MSG_RETRY_NUM bounds the redeliveries\n",
+                unit(1),
+                "b.py",
+            )
+
+        with database.connect() as conn:
+            # the embedding leans to a.py; the words name b.py
+            result = recall(
+                conn,
+                "What does MSG_RETRY_NUM bound?",
+                MODEL,
+                const_encode(unit(0)),
+            )
+
+        assert [hit.path for hit in result.hits] == ["b.py", "a.py"]
     finally:
         database.close()
 
@@ -272,6 +311,10 @@ def test_a_passage_scores_its_best_sentence(tmp_path: object) -> None:
                 unit(1),
                 "fmt.py",
             )
+            for i in range(3):
+                add_passage(
+                    conn, f"ledger entry {i}\n".encode(), unit(2), f"l{i}.py"
+                )
         vectors = {
             "How are bearer tokens issued?": unit(0, 2, 0.1),
             "Reply in at most four hundred words.": unit(1),
@@ -286,6 +329,5 @@ def test_a_passage_scores_its_best_sentence(tmp_path: object) -> None:
         # both sentences find their passage at full strength; a single
         # vector for the whole prompt would have found neither
         assert {hit.path for hit in result.hits} == {"auth.py", "fmt.py"}
-        assert all(hit.score > 0.99 for hit in result.hits)
     finally:
         database.close()
