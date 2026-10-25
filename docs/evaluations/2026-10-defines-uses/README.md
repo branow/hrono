@@ -1314,3 +1314,26 @@ Still open: facts sit in 8 to 18 leaves a question, so 15 hits cover 74 of
 formula, their words (Account-Id, orgs, affiliation) are not in the briefs;
 and nothing here changes what the agents do after the attachment (2-3 brief
 reads, then shell on the corpus) or the upper levels they cannot walk.
+
+### The rebuilt recall, run (2026-10-25)
+
+Same tree and export, hrono arm only, 15 questions x 2 tries, Sonnet, with
+the rebuilt recall attached (`launch/recall2-test.sh`, arms `hrono-rec2a/b`);
+the code-only tries are the 2026-10-21 ones, all on the audited reference.
+
+| | recall rebuilt | recall (10-23) | no recall (10-21) | code only |
+|---|---|---|---|---|
+| mean | 0.657 | 0.654 | 0.674 | 0.626 |
+| cost (30 answers) | $11.9 | $14.1 | $18.1 | $8.2 |
+| turns | 496 | 583 | 675 | 505 |
+
+The mean did not move. The attachment now names a fact leaf for 148 of the
+222 fact-tries (the 10-23 one named fewer), but the agents opened the page of
+a recalled topic 62 times in 450 attached hits, and opened a leaf holding the
+fact for 139 facts against 136 before. A fact whose leaf was opened still
+scores 0.71 against 0.57 when it was not. So the better recall reaches the
+prompt and stops there: the agent reads the attached passage, does not follow
+it to the brief, and the passage alone is not enough for the judge. Per
+question: inconsistency-b0 and impact-b0 up (0.53 -> 0.62, 0.57 -> 0.71),
+authorization-1, inconsistency-1 and legacy-1 down (0.62 -> 0.53, 0.64 ->
+0.57, 0.72 -> 0.62); all within two-try noise.
