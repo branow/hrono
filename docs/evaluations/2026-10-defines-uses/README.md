@@ -1390,3 +1390,33 @@ system operations), two questions each:
 with the user's OK: `launch/hard2-calibrate.sh` runs code only twice per
 question and keeps the questions it scores under about 0.3 on; then one
 two-arm test, hrono against code only, on the kept questions.
+
+### hard2 calibrated: code only answers it (2026-10-25)
+
+Code only (`agent_v2.py` with `MAP=none`, Sonnet, same limits), 12 questions
+x 2 tries, `launch/hard2-calibrate.sh`: mean 0.77, cost $7.3 for 24 answers.
+
+| question | try a | try b |
+|---|---|---|
+| access-0 | 0.78 | 0.83 |
+| access-1 | 0.61 | 0.22 |
+| identity-0 | 0.56 | 0.72 |
+| identity-1 | 0.72 | 0.61 |
+| lifecycle-0 | 1.00 | 1.00 |
+| lifecycle-1 | 0.56 | 0.78 |
+| money-0 | 0.83 | 0.89 |
+| money-1 | 0.78 | 0.72 |
+| staff-0 | 0.83 | 0.83 |
+| staff-1 | 0.89 | 0.89 |
+| standing-0 | 0.83 | 0.89 |
+| standing-1 | 0.83 | 0.83 |
+
+No question scores under 0.4, so none is kept by the rule, and the two-arm
+test was not run. The atomic facts did what they were meant to for the judge
+(146 of 216 fact scores are 1, 40 are 0.5), but the premise failed: a Sonnet
+agent with grep over these four repositories (126 MB) finds the other side of
+a message or a check in 15 to 25 turns, cross-repository or not. Only 10 of
+108 facts were missed in both tries, most of them single lines in pay-api.
+On this corpus, at this budget, a bare agent is not the weak baseline the
+product claim needs; a question it fails has to come from a corpus too large
+to grep in 30 turns, or the comparison has to hold the budget equal.
