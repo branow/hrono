@@ -1,0 +1,4 @@
+#!/bin/sh
+# hrono CLI against the xgboost eval server, with its own profile home.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+HRONO_HOME="$root/home" exec uv run -q --project /Users/orest/repos/hrono hrono "$@"
