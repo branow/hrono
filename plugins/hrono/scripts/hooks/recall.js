@@ -33,7 +33,11 @@ function attachment(config, prompt) {
 }
 
 /**
- * The passages best first, each named by where it is, while they fit.
+ * A read list of the pages the passages come from, best first, then the
+ * passages themselves, numbered to match, while they fit. The list comes
+ * first because it is what the model acts on: a passage is a slice, and the
+ * page it names states the whole part (measured without the list: the page
+ * of the best hit opened in 11 of 30 runs, the rest almost never).
  * @param {settings.Settings} config
  * @param {import("../lib/hrono").Hit[]} hits
  * @param {Map<number, string>} pages
@@ -41,33 +45,64 @@ function attachment(config, prompt) {
 function render(config, hits, pages) {
   const head =
     `hrono recall from tree "${config.tree}": the passages most likely to ` +
-    "answer this prompt, one per topic, from its sources and from the " +
-    "map's briefs. A brief names its page in the map; read the page for " +
-    "the whole part.";
+    "answer this prompt, one per topic, best first. Each is a slice of a " +
+    "page of the map; the page states the whole part. Read the pages " +
+    "listed here before anything else in the map, best first, and the " +
+    "overview only for the parts they leave out.";
+  const heading = "\n\nPages, best first:";
   const longest = Math.min(config.longest, INLINE);
-  let text = head;
+  /** @type {string[]} */
+  const list = [];
+  /** @type {string[]} */
+  const blocks = [];
+  let size = head.length + heading.length;
   for (const hit of hits) {
-    const block = `\n\n### ${title(hit, pages)}\n\n${hit.body}`;
-    if (text.length + block.length > longest) break;
-    text += block;
+    const n = blocks.length + 1;
+    const page = pageOf(hit, pages);
+    const line = page ? `\n${n}. ${page}  (${role(hit)})` : "";
+    const block = `\n\n### ${n}. ${name(hit)}\n\n${hit.body}`;
+    if (size + line.length + block.length > longest) break;
+    size += line.length + block.length;
+    if (line) list.push(line);
+    blocks.push(block);
   }
-  return text === head ? null : text;
+  if (blocks.length === 0) return null;
+  const pagesText = list.length ? heading + list.join("") : "";
+  return head + pagesText + blocks.join("");
 }
 
 /**
- * A passage is named by what a reader can open: its file, or its brief's
- * page in the export (its topic, when the page is not written yet). A source
- * passage also names the page of the topic holding it, when there is one.
+ * The page a passage belongs to: its brief's page in the export, or the
+ * page of the topic holding its file; undefined when the export has none.
  * @param {import("../lib/hrono").Hit} hit
  * @param {Map<number, string>} pages
  */
-function title(hit, pages) {
-  const page = hit.topic === undefined || hit.topic === null ? undefined : pages.get(hit.topic);
-  if (hit.kind === "summary") {
-    return page ? `brief of topic ${hit.topic}: ${page}` : `brief of topic ${hit.topic}`;
-  }
-  const file = hit.path ? (hit.source ? `${hit.path} (${hit.source})` : hit.path) : (hit.header ?? "passage");
-  return page ? `${file}, in page ${page}` : file;
+function pageOf(hit, pages) {
+  if (hit.topic === undefined || hit.topic === null) return undefined;
+  return pages.get(hit.topic);
+}
+
+/**
+ * What a page is to its passage, for the read list: the brief itself, or
+ * the page holding the passage's file.
+ * @param {import("../lib/hrono").Hit} hit
+ */
+function role(hit) {
+  return hit.kind === "summary" ? `brief of topic ${hit.topic}` : `holds ${file(hit)}`;
+}
+
+/**
+ * A passage's own name: its file, or its brief's topic.
+ * @param {import("../lib/hrono").Hit} hit
+ */
+function name(hit) {
+  return hit.kind === "summary" ? `brief of topic ${hit.topic}` : file(hit);
+}
+
+/** @param {import("../lib/hrono").Hit} hit */
+function file(hit) {
+  if (!hit.path) return hit.header ?? "passage";
+  return hit.source ? `${hit.path} (${hit.source})` : hit.path;
 }
 
 /**
