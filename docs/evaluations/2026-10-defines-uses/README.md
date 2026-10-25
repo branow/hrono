@@ -1495,3 +1495,19 @@ as it reads briefs, so a brief of 20 to 40 KB buys about what one file read
 buys, and the arms end level; the map pays when the answer is spread over
 the system (the lists) or the budget is short. The honest claim this
 corpus supports is the list result, and it needs more tries to be a number.
+
+### Lists, more tries (2026-10-25, `launch/lists-test.sh`)
+
+| budget | hrono | code only | tries per arm |
+|---|---|---|---|
+| 12 turns | 0.55 | 0.46 | 3 |
+| 30 turns | 0.64 | 0.69 | 1 |
+
+At 12 turns hrono is ahead on all five tasks by mean (accounts 0.41 vs 0.30,
+jobs 0.61 vs 0.49, messages 0.59 vs 0.59, statuses 0.53 vs 0.48, undo 0.62
+vs 0.46) and higher in 12 of the 15 paired tries, differences from -0.08 to
++0.28. At 30 turns the code agent catches up (0.69 against hrono's 0.64, one
+try each). So the map's advantage on breadth is a short-budget one: it gets
+the agent to an area brief that already lists the parts, and grep gets
+there too, given twice the turns. The lists are still unaudited. A chart
+page of every result: https://claude.ai/artifact/FQyVJphjUNdkmCQisrsUoh
