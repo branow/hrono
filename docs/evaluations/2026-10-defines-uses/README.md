@@ -1459,3 +1459,39 @@ Over the three kinds on this corpus, a Sonnet agent with grep and 30 turns
 scores 0.63 (hard15), 0.77 (hard2), 0.69 (lists). The lever that remains
 is the budget: the same tasks with both arms capped at 10 or 15 turns,
 which costs nothing to set up and less to run.
+
+### Budget test and the per-fact trace (2026-10-25, `launch/budget-test.sh`)
+
+hrono (map + recall, Sonnet) on hard2 at the full 30 turns, one try, against
+the two code-only tries; then hard2 and the five list tasks with BOTH arms
+capped at 12 turns and told so (`TURNS`, `NOTE` envs), one try each.
+
+| set, budget | hrono | code only |
+|---|---|---|
+| hard2, 30 turns | 0.74 (0.81 without the one try that ran out of turns) | 0.77 |
+| hard2, 12 turns | 0.56 | 0.55 |
+| lists, 12 turns | 0.54 | 0.43 |
+
+On the lists hrono was ahead on all five (accounts 0.30 vs 0.14, jobs 0.65
+vs 0.46, undo 0.56 vs 0.45, messages 0.63 vs 0.57, statuses 0.53 vs 0.51),
+reading area briefs and grepping the export where the code arm walked the
+jobs folders; one try each, so indicative only. On chains the arms are
+level at either budget.
+
+`harness/trace_facts.py` classified every hard2 fact of the 30-turn hrono
+try. Its identifier test called 39 facts "absent" from the briefs; checked by
+hand, the briefs state them (brief 620 line 131 has the `make_payment`
+check, 870 line 129 the `CREATED and DIRECT_PAY/CC/ONLINE_BANKING` rule,
+639 line 133 `Invalid auth roles`): the test wanted the fact's spelling,
+the brief uses the code's. So the briefs are not the gap. A fact whose leaf
+brief the agent opened scored 0.79 (75 facts; the same whether the brief
+was read whole or through `sed`/`grep`, 50 whole and 49 partial reads);
+one whose leaf was never opened scored 0.61 (33 facts), and of those 33
+the recall list had named the leaf for 8. The one empty answer (money-1,
+a seven-part question) read 15 briefs and 20 code slices and hit the cap.
+
+What this says: on chain questions a Sonnet agent reads code about as well
+as it reads briefs, so a brief of 20 to 40 KB buys about what one file read
+buys, and the arms end level; the map pays when the answer is spread over
+the system (the lists) or the budget is short. The honest claim this
+corpus supports is the list result, and it needs more tries to be a number.

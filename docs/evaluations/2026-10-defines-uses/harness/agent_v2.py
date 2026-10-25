@@ -241,7 +241,7 @@ def run(qid: str, name: str, words: int | None = None) -> None:
         model=name.partition("@")[2] or "sonnet",
         role=f"{SET}:{name}",
         key=qid,
-        max_turns=run_arms.TURNS_H,
+        max_turns=int(os.environ.get("TURNS", run_arms.TURNS_H)),
         tools=["Read", "Grep", "Glob"],
         system=run_arms.SYSTEM_CODE_R2.format(
             corpus=common.CORPUS, export=EXPORT
