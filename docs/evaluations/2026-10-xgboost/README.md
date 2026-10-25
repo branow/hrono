@@ -68,12 +68,26 @@ The same model split as the BC Registries build
 ## Notes
 
 - **The root brief is wrong.** The root (node 162, level 2) has seven
-  children and its `brief-upper` call got all seven (23k input tokens), yet
+  children, and its `brief-upper` call got all seven (23k input tokens), yet
   the brief it wrote is a near-copy of its first child's, node 155, the
-  static demo data ("Static demo and test data with data-preparation
-  scripts"). `export/root.md` therefore opens with the wrong subject. No
-  gate caught it. Not fixed: there is no route to rewrite one brief except a
-  manual override, which pins it.
+  static demo data: 74% of its 6-word runs and 97% of its vocabulary come
+  from that one child. Every level-1 brief is a real synthesis (at most 1%
+  overlap with any child).
+
+  Not a code bug. Rebuilding the prompt from the database with hrono's own
+  functions gives the right template and all seven children (57k chars, which
+  matches the logged tokens), and every claude-code call is a fresh,
+  isolated `query()` with no shared session. Replaying that exact prompt
+  twice through the same provider (sonnet): one reply was a proper
+  whole-repository brief, the other copied node 155 again. The model takes
+  this shortcut on its own, here about half the time: the request for flows
+  that name functions fits one child's brief and none of the repository-wide
+  areas.
+
+  It recurs: the same check over the other local databases finds BC
+  Registries `hrono-v9.db` node 467 (level 2, nine children) copying its
+  first child 446 (97%) and node 468 copying 466 (55%). Nothing gates it;
+  `brief_gate` checks only for refusals and prompt echoes.
 - Level-1 briefs 155 and 161 have no `#` heading line; the other five do.
 
 - README's quickstart shows `hrono connections set <name> -f -`; the CLI
