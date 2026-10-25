@@ -1337,3 +1337,30 @@ it to the brief, and the passage alone is not enough for the judge. Per
 question: inconsistency-b0 and impact-b0 up (0.53 -> 0.62, 0.57 -> 0.71),
 authorization-1, inconsistency-1 and legacy-1 down (0.62 -> 0.53, 0.64 ->
 0.57, 0.72 -> 0.62); all within two-try noise.
+
+### A read list on the attachment (2026-10-25, second run)
+
+The hook now opens the attachment with a numbered list of the pages its
+passages come from, best first, and the skill reads those pages before
+`root.md`, the first five at least (`d0960ac`; arms `hrono-rec3a/b`,
+`launch/recall3-test.sh`).
+
+| | read list | recall rebuilt | recall (10-23) | no recall | code only |
+|---|---|---|---|---|---|
+| mean | 0.638 | 0.657 | 0.654 | 0.674 | 0.626 |
+| cost | $12.5 | $11.9 | $14.1 | $18.1 | $8.2 |
+| turns | 458 | 496 | 583 | 675 | 505 |
+
+The agents did change course: 24 of 30 tries opened a listed page first
+(3 before), listed pages opened 78 of 330 (59), a fact's leaf opened for 150
+of 222 facts (139). The score did not follow. Each try still opened only
+about two of the five pages the skill asks for, and a fact whose leaf was
+opened scores 0.70 whether or not the list led there; one not opened, 0.51.
+
+Four hrono arms on this tree now sit between 0.64 and 0.67 with code only
+at 0.63, whatever the agent is told to read first. Navigation is not the
+limit any more: the facts an agent reads the right leaf for still score
+0.70, so what the leaf brief says about them, or what the judge wants said,
+is where the next 0.3 is. That is the next question to answer from the
+artifacts: for the facts whose leaf was opened and still scored under 1,
+what the brief says against what the reference says.
