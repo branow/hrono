@@ -13,6 +13,7 @@ Usage: uv run --extra embed python recall_cache.py
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from dataclasses import asdict
@@ -28,13 +29,14 @@ from hrono.errors import Unavailable  # noqa: E402
 from hrono.recall.ask import ask  # noqa: E402
 
 OUT = exp.HERE / "recall"
-LIMIT = 15  # the plugin's default
+LIMIT = 15
+SET = os.environ.get("SET", "hard15")  # the question set in ~/hrono-deep/data
 
 
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     database = Database.at(subtree_v9.DST)
-    questions = json.load(open(Path.home() / "hrono-deep/data/hard15.json"))
+    questions = json.load(open(Path.home() / "hrono-deep/data" / f"{SET}.json"))
     for q in questions:
         while True:
             try:

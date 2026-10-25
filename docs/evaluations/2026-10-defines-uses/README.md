@@ -1364,3 +1364,29 @@ limit any more: the facts an agent reads the right leaf for still score
 is where the next 0.3 is. That is the next question to answer from the
 artifacts: for the facts whose leaf was opened and still scored under 1,
 what the brief says against what the reference says.
+
+### A harder question set: hard2 (2026-10-25, no runs)
+
+Code only scores 0.50 to 0.75 on every hard15 question, and more than half of
+all fact scores in both arms are the judge's 0.5 ("right area, key component
+missing"): 120 of 222 code-only fact scores, 113 of 222 hrono's. A set where a
+bare agent gets 0.6 cannot show what the map adds. So a second set,
+`data/hard2.json` (also `~/hrono-deep/data/hard2.json`), written from the code
+by six explorers, one per cross-repository flow (money to record, who may
+act, account standing, a business's life, names and identities, staff and
+system operations), two questions each:
+
+- every question needs facts from at least three of the four repositories
+  (10 of 12 need all four), and the facts are the connections the question's
+  words do not lead to: who consumes a message, which check is missing on
+  the other side, which of two implementations differs;
+- every fact is one claim of at most 30 words with its files and a
+  `path:line` quote, so the judge has little room for 0.5;
+- three fresh auditors checked all 108 facts against the cited lines: 90
+  correct, 18 corrected (`data/hard2-audit.json`), none wrong.
+
+`harness/hard2_assemble.py` builds the set from the drafts and the audit;
+`agent_v2.py`, `recall_cache.py` and `recall_bin.py` take `SET=hard2`. Next,
+with the user's OK: `launch/hard2-calibrate.sh` runs code only twice per
+question and keeps the questions it scores under about 0.3 on; then one
+two-arm test, hrono against code only, on the kept questions.

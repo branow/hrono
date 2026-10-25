@@ -1,0 +1,566 @@
+{
+ "h2-access-0": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business-filings-ui/src/axios-auth.ts:12-13 sets only Authorization; no Account-Id header anywhere in src/"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_filings.py:128 reads account-id/accountId; :857-862 posts with Authorization+Content-Type only; :871 stores payment_account"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "pay-api services/auth.py:36,68-70; utils/user_context.py:42 _account_id = get_auth_account_id(), :153-156 claim, g.account_id, header"
+  },
+  "3": {
+   "verdict": "partly",
+   "fix": "pay-api looks the pay account up by auth-api's account.id (PaymentAccount.find_account) and PaymentService._find_payment_account creates one if none exists.",
+   "note": "payment_account.py:440-444 find_account only finds; creation is in payment_service.py:151-165 (_find_payment_account), not find_account"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "auth-api services/authorization.py:123-128 (API_GW branch uses account_id_claim instead); utils/user_context.py:116-118; views/authorization.py:61-63"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "sbc-auth/auth-api/src/auth_api/models/views/authorization.py:61-63 .first() on keycloak_guid+business_identifier"
+  },
+  "6": {
+   "verdict": "partly",
+   "fix": "pay-api's POST payment-requests calls check_auth with contains_role=make_payment, so a non-system token must have make_payment in auth-api's roles list.",
+   "note": "invoice.py:67-68 and constants.py:44 hold, but auth.py:40-49,98-99 authorize system tokens with the edit role regardless of auth-api's roles, so 'only if' is overstated"
+  },
+  "7": {
+   "verdict": "partly",
+   "fix": "In auth-api's permissions table make_payment is granted to ADMIN, COORDINATOR and USER with null org status, but under NSF_SUSPENDED only to ADMIN and SYSTEM.",
+   "note": "migration 1c958b749a20:112-113,121-122,130-131,148-149 as cited, but :152-153 id 49 also grants SYSTEM make_payment under NSF_SUSPENDED; permissions.py:67-71 and models/permissions.py:37-39 confirm lookup"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "base_payment_system.py:145-150 raises PAD_CURRENTLY_NSF on has_nsf_invoices; pad_service.py:106 calls ensure_no_payment_blockers"
+  }
+ },
+ "h2-access-1": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "lear/legal-api/.../business.py:45-46 @jwt.requires_auth; :55-59 authorized() check commented out"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "lear/legal-api/src/legal_api/services/authz.py:102-105"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "authz.py:108-110 view-only: ACCOUNT_IDENTITY role or has_product('CA_SEARCH')"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "authz.py:892-894 get_account_id from Account-Id header; :897 cache 600s keyed by it; :901 orgs/{id}/products?include_hidden=true; :913 ACTIVE check"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "org_products.py:37-38; products.py:338-339; roles.py:58-59; authorization.py:243-251 resolves membership for org_id via keycloak guid"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "sbc-auth/auth-api/src/auth_api/services/authorization.py:222-227"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "authorization.py:104-110; views/authorization.py:75-79 ADMIN>COORDINATOR>USER order; migration 1c958b749a20:158-165 ids 51-54 SYSTEM/null = make_payment, generate_invoice, view, edit"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business-filings-ui/src/App.vue:426-429 fetch+store; :432 businessAuthErrorDialog = true; :567-571 throws 'Invalid auth roles'"
+  },
+  "8": {
+   "verdict": "partly",
+   "fix": "pay-api check_auth authorizes a BUSINESS-product system token holding the edit role regardless of auth-api's roles answer.",
+   "note": "auth.py:40-42: for non-BUSINESS products is_authorized also requires product_code to match the corp type's product, so 'any system token with edit' is overstated; :46-49 and :98-99 as cited"
+  }
+ },
+ "h2-identity-0": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "sbc-auth/auth-api/src/auth_api/services/affiliation.py:238-239 comment; :500-506 NAMEX_API_URL/requests/{nr} with ENTITY_SVC_CLIENT_ID token"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "affiliation.py:244-245 states; :252-258 DRAFT -> get_nr_payment_details, invoices[0].statusCode == 'COMPLETED'; :310 pay-api URL"
+  },
+  "2": {
+   "verdict": "partly",
+   "fix": "pay-api GET /payment-requests (get_invoices) requires the SYSTEM realm role.",
+   "note": "two bundled claims; both hold: invoice.py:37-38 requires_roles SYSTEM; models/invoice.py:273-274 PAID -> COMPLETED"
+  },
+  "3": {
+   "verdict": "partly",
+   "fix": "auth-api compares the applicant contact after stripping non-digits from the phone and casefolding the email, skipping the check for staff.",
+   "note": "two bundled claims; both hold: affiliation.py:265-266 (guarded by not user_is_staff, :227); namerequest.py:55 raw equality"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "lear/legal-api/.../namerequest.py:42-50; bootstrap.py:268 /orgs?affiliation={identifier}"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "App.vue:478 fetchNameRequest(this.localNrNumber); legal-services.ts:105-106 defaults phone='' email='' -> validate?phone=&email=; namerequest.py:49-50 403 unless affiliated"
+  },
+  "6": {
+   "verdict": "partly",
+   "fix": "entity-filer consume_nr PATCHes namex with the ACCOUNT_SVC token; a non-OK response or any exception is only reported to Sentry, except a KeyError, which is silently ignored.",
+   "note": "name_request.py:35-43 as cited; bootstrap.py:119-131 token from ACCOUNT_SVC_CLIENT_ID; :55-56 'except KeyError: pass' is not sent to Sentry, so 'any exception' is overstated"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "name_request.py:53-54 return discarded; bootstrap.py:244-252 DELETE affiliation then DELETE /entities/{id}; auth entity.py:271-272 ENTITY_DELETE_FAILED; resources/v1/entity.py:111-121 DELETE calls entity.delete()"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "auth-queue worker.py:173-195 DRAFT + no affiliation -> pay-api invoices[0].paymentAccount.accountId (numeric) -> org not GOVM -> AffiliationModel"
+  }
+ },
+ "h2-identity-1": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_profile.py:109-134 details + create_affiliation then update_entity(business_name=business.identifier); bootstrap.py:180-181 entityDetails; :219 requests.patch"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "sbc-auth org.py:413-415; affiliation.py:381-382 system only, :394-395 skip calling org, :398 re-point entity_id"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_info.py:146-157 party_roles[0] -> 'LAST, FIRST MI' or organization_name; business_profile.py:101-102; affiliation.py:204-209, 517-537 upper() compare"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_info.py:125-137 POST COLIN_API/{BC|C} with AccountService token; colin-api business.py:98-116 requires COLIN_SVC_ROLE, get_next_corp_num, {'corpNum': ...}"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "lear/queue_services/entity-bn/src/entity_bn/worker.py:60-68 type whitelist, incorporationApplication absent -> return None"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "update_legal_filings.py:318,337,350 GET/colin/POST; :283-294 bn email then bc.registry.business.bn; colin_sync.py:246-247; business.py:662-668 excludes COOP, SP, GP"
+  },
+  "6": {
+   "verdict": "partly",
+   "fix": "The bc.registry.business.bn event is consumed by entity-digital-credentials, which looks the business up by identifier and runs business_number.process.",
+   "note": "two bundled claims; both hold: entity-digital-credentials worker.py:75,104-112; auth-queue worker.py:53-58 only names/activity-log/NSF lock-unlock"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "sbc-pay/pay-api/src/pay_api/models/invoice.py:268-270 pops T-identifier; :322-323 from_row nulls it"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "EntityDefinitions.vue:145-147 'Not Available' fallback; businessStore.ts:66 taxId; business.py:541-542 taxId only when tax_id set"
+  }
+ },
+ "h2-lifecycle-0": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "involuntary_dissolution.py:174-189 greatest(founding_date, max COMPLETED restoration effective_date, last_ar_date) + INTERVAL '26 MONTHS', compared < now at :126"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business.py:407-415 last_ar_date or founding_date + datedelta(years=1, months=2, days=1); businessStore.ts:268-269,328 reads businessInfo.goodStanding which legal-api sets at business.py:533; 26 vs 14 months = ~a year"
+  },
+  "2": {
+   "verdict": "partly",
+   "fix": "Stage 3 of the involuntary-dissolutions job creates a 'dissolution' Filing with dissolutionType 'involuntary' and publishes {'filing': {'id': ...}} to NATS_FILER_SUBJECT.",
+   "note": "involuntary_dissolutions.py:81-131,324-332 verified; 'same queue paid filings use' not verifiable: business-pay publishes to config FILER_PUBLISH_OPTIONS['subject'] (pay_filer.py:221), config.py unreadable"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "stage_one.py:190 calls _get_email_address_from_auth; :366 GET AUTH_URL/entities/{identifier}; :381-383 contacts[0]['email']; no LEAR table read"
+  },
+  "4": {
+   "verdict": "partly",
+   "fix": "StageOneProcessor._send_email publishes a 'bc.registry.dissolution' message on NATS_EMAILER_SUBJECT.",
+   "note": "two bundled claims; both verified: stage_one.py:320-325; entity-emailer worker.py:149-163 (PROCESSABLE_FURNISHING_NAMES, post_process PROCESSED/FAILED)"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "businessStore.ts:167,313; business_checks/involuntary_dissolution.py:62-67 code DISSOLUTION_IN_PROGRESS, warningType INVOLUNTARY_DISSOLUTION"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "AffiliatedEntityTable.vue:276-277,292-293 push DISSOLUTION; business.py:461-470 in_dissolution from open INVOLUNTARY_DISSOLUTION batch_processing, :535 slim json; org.py:362-367 new=true -> get_affiliation_details; affiliation.py:405-422 POSTs identifiers to LEAR_AFFILIATION_DETAILS_URL (config; legal-api search_businesses at business.py:155)"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "worker.py:372-381 update_entity on DISSOLUTION; business_profile.py:150-160 state=business.state.name; bootstrap.py:216-217 entity_data['state'], PATCH /entities/{id}; auth entity.py:166-169 state->status; models/entity.py:42 status column"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business.ts:81-92,111 status: determineStatus(resp) = resp.state || resp.draftStatus; affiliation.py:413-430,475-491 combined list built only from legal-api/namex responses (auth entity.status never included); affiliations-factory.ts:104-106; constants.ts:415; org.services.ts:104 params new: true"
+  }
+ },
+ "h2-lifecycle-1": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business.py:138-143 temporaryCorpTypeCode + corp_sub_type_code=legal_type; bootstrap.py:61 'T' + 9 chars; :76-86 register_bootstrap -> AccountService.create_affiliation"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "pad_service.py:45-47 returns InvoiceStatus.APPROVED; :118-122 complete_post_invoice -> _release_payment (decorated skip_complete_post_invoice_for_sandbox)"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "base_payment_system.py:162-171; payment_transaction.py:525-527 PaymentToken(invoice.id, status_code, filing_id, corp_type_code); util.py:289-294 BUSINESS_PAY_TOPIC for BUSINESS or BUSINESS_SEARCH"
+  },
+  "3": {
+   "verdict": "partly",
+   "fix": "lear's business-pay push worker consumes 'bc.registry.payment' events and acks and drops any whose statusCode is not 'COMPLETED' or whose corpTypeCode is MHR or BTR.",
+   "note": "pay_filer.py:108-119,250 verified; 404 overstated: :126-133 a token with no filing_identifier and corp type BC is acked with 200 instead of 404"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "pay_filer.py:147-159 PAID; :152-156 continuationIn -> create_staff_review (AWAITING_REVIEW, :165-181); :220-227 publish only if effective_date <= payment_completion_date"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "TodoList.vue:249-256"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "affiliations-factory.ts:84-87 BusinessState[business.status] for temp; business.ts:81-92 PAID_FE when draftStatus PAID/APPROVED and future effectiveDate, else state||draftStatus; legal-api business.py:177-189 draftStatus/effectiveDate in draftEntities (:210); constants.ts:417-418"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_profile.py:114-135 create_affiliation then update_entity(bootstrap.identifier, name=business.identifier, corp_type=temporaryCorpTypeCode); only the new business's affiliation is deleted on failure (:124), bootstrap never deleted"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "entity-filer worker.py:351-361 business_id set; legal-api business.py:168-169 drafts need business_id NULL; affiliation.py:475-491 combined list is only legal-api/namex results; org.py:366-367"
+  }
+ },
+ "h2-money-0": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "pad_service.py:45-47,118-122"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "base_payment_system.py:162-171; util.py:289-294 (BUSINESS or BUSINESS_SEARCH product)"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "pay_filer.py:108-114 non-COMPLETED acked and dropped; :147-159 payment_completion_date, PAID, publish_to_filer"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "cfs_create_invoice_task.py:225-233 APPROVED PAD invoices, status != FREEZE; :254-258 skip unless ACTIVE/INACTIVE"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_reconciliations.py:322-328 (publish only when _process_failed_payments returns True, i.e. not duplicate); :744-753 AUTH_EVENT_TOPIC"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_reconciliations.py:516-520,545-546"
+  },
+  "6": {
+   "verdict": "partly",
+   "fix": "sbc-auth auth-queue process_pay_lock_unlock_event sets the org status to OrgStatus.NSF_SUSPENDED and, unless skipNotification, forwards NSF_LOCK_ACCOUNT to the mailer.",
+   "note": "two bundled claims; both verified: auth-queue worker.py:115-121; account-mailer worker.py:127-132 get_member_emails(org_id, (ADMIN, COORDINATOR))"
+  },
+  "7": {
+   "verdict": "partly",
+   "fix": "The pay-queue NSF path publishes NSF_LOCK_ACCOUNT only to AUTH_EVENT_TOPIC, never to BUSINESS_PAY_TOPIC, so the filing lear already marked PAID is not reverted.",
+   "note": "payment_reconciliations.py:326-328 only _publish_account_events (AUTH_EVENT_TOPIC :753); _publish_mailer_events (:677-688, ACCOUNT_MAILER_TOPIC) has no caller; mailer is reached via auth-queue worker.py:121; BUSINESS_PAY_TOPIC only in _publish_payment_event for paid rows (:461,657-667)"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "base_payment_system.py:145-150 (called from pad_service.py:104); business_filings.py:877-882 400 -> rv.json()['type'] stored (exceptions/__init__.py:74 'type'); TodoList.vue:549-550,1215-1216; pay-services.ts:16"
+  }
+ },
+ "h2-money-1": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_filings.py:859-875"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "invoice.py:507-518 _add_dynamic_fields"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "AnnualReport.vue:981-989; router.ts:584-586; PaymentView.vue:231-238; payment.services.ts:25-30 POST payment-requests/{id}/transactions"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "PaymentReturnView.vue:66; payment.services.ts:69-71 axios.patch; payment_transaction.py:399,448-455 PAID and publish_status unless PAD/EFT; :497-511 get_topic_for_corp_type"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "stale_payment_task.py:50,65 (also SERVICE_UNAVAILABLE transactions :52-56); :102-115; models/invoice.py:220-222"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "TodoList.vue:2246-2249 axios.patch; business_filings.py:220-223 PATCH route patch_filings; :251-255 DELETE pay invoice, reset on OK/ACCEPTED"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "resources/v1/invoice.py:89-97 DELETE -> accept_delete; payment_service.py:275-280,335-339"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "resources/v1/refund.py:31-33; direct_pay_service.py:205-233 posts to PayBC, process_cfs_refund returns None; services/refund.py:288 REFUND_REQUESTED; direct_pay_automated_refund_task.py:166-169 REFUNDED; no publish in refund.py/direct_pay_service.py"
+  },
+  "8": {
+   "verdict": "partly",
+   "fix": "business-pay publishes to the filer only when the filing's effective_date is not after payment_completion_date, withholding future-effective filings.",
+   "note": "two bundled claims (business-pay withholding; future-effective-filings job); both verified: pay_filer.py:220-227; file_future_effective.py:51,101,128-129; internal_services.py:30-36; filing.py:1029-1034"
+  }
+ },
+ "h2-staff-0": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "AnnualReport.vue:939 isRoleStaff && !fromStaffPayment opens staffPaymentDialog; rootStore.ts:100 keycloakRoles.includes('staff') (getter bound at :472)"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_filings.py:834-852 special_role only for STAFF_ROLE/SYSTEM_ROLE; accountInfo built only under if special_role"
+  },
+  "2": {
+   "verdict": "partly",
+   "fix": "legal-api get_filing_types copies the header's waiveFees flag into the fee-bearing filing types it sends to pay-api with no role check.",
+   "note": "business_filings.py:675,687-763 no role check; but the courtOrder/registrarsNotation/registrarsOrder/putBackOn/adminFreeze branch at :719-724 omits waiveFees, so not 'every'"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "fee_schedule.py:319-323 zeroes four amounts on kwargs.get('waive_fees'), no role check"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_line_item.py:300-304 raises FEE_OVERRIDE_NOT_ALLOWED unless has_role('staff'); errors.py:48 HTTPStatus.UNAUTHORIZED"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_system_factory.py:85-97 total_fees==0 -> InternalPayService first; staff -> Bcol if bcolAccountNumber else Internal; else Bcol only if bcol and system"
+  },
+  "6": {
+   "verdict": "partly",
+   "fix": "pay-api post_invoice calls check_auth with contains_role 'make_payment' and aborts 403 when it is absent from the returned roles, except system tokens holding 'editor'.",
+   "note": "invoice.py:67-68, auth.py:84-85,101-102 hold; but auth.py:98-99 sets is_authorized True for system+editor regardless, and auth.py:77-79 uses token roles for staff with no account/business"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "authorization.py:95-100 staff branch sets auth_response['roles'] = token_roles, never PermissionsService"
+  },
+  "8": {
+   "verdict": "partly",
+   "fix": "InternalPayService defaults the invoice to APPROVED and its _release_payment publishes a PAYMENT message to the BUSINESS_PAY_TOPIC for business corp types.",
+   "note": "two bundled claims (pay-api publish + lear consumer); both hold: internal_pay_service.py:89-93, base_payment_system.py:163-170, util.py:293-294, pay_filer.py:109-111 (COMPLETED gate) and :147-149"
+  }
+ },
+ "h2-staff-1": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "pay_filer.py:109-111 COMPLETED gate, :154-160 continuationIn -> create_staff_review, :178 AWAITING_REVIEW review, :185-186 filing AWAITING_REVIEW"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "email_processors/__init__.py:57-71 contactPoint email + completing party on PAID; auth lookup only in else branch :72-76 when filing type absent; continuation_in_notification.py:205"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "reviews.py:113 save_review; :160-164 unconditional emailer publish with option=filing.status; :166-171 filer publish gated on APPROVED and effective_date <= now"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "entity-filer worker.py:218-221 only COMPLETED check before processing"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "worker.py:351-366 update_affiliation for CONTINUATIONIN; business_profile.py:25 imports legal_api.services.bootstrap.AccountService, :114 create_affiliation; bootstrap.py:122-131 client_credentials"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "org.py:383-387 has_one_of_roles([SYSTEM, STAFF_MANAGE_BUSINESS, PUBLIC_USER]); roles.py:32,35,40"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "refund.py:31-34 has_one_of_roles([SYSTEM, CREATE_CREDITS, FAS_REFUND]); enums.py:117,125,131"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "business_filings.py:293-297"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "rootStore.ts:144-172 (todo also admits DRAFT/PENDING); TodoList.vue:525-531 Make Changes, :618 latestReviewComment"
+  }
+ },
+ "h2-standing-0": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_reconciliations.py:297 _process_consolidated_invoices (called for PAD/PADR/PAYR rows :245-247); :323-328 NOT PAID -> if _process_failed_payments(row): _publish_account_events(NSF_LOCK_ACCOUNT)"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_reconciliations.py:753 and auth_event.py:24 both topic=config AUTH_EVENT_TOPIC; auth-queue worker.py:57-59 handles NSF_LOCK/UNLOCK"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_reconciliations.py:764-771 five keys, no suspensionReasonCode; auth_event.py:58-63 suspensionReasonCode OVERDUE_EFT"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "worker.py:115-118"
+  },
+  "4": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "worker.py:50-52 skip when processed; :67-76 row added and committed before handler runs"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "worker.py:107-110 'Unknown org' and return; :62-63 return 200"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "b72d4946fb3c:33-36 edit/view; 1c958b749a20:148-149 make_payment (other actions exist too, fact does not claim exclusivity)"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "authz.py:119-121 only checks roles list; no status inspection in legal-api; status used only inside auth-api authorization.py:131-135"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "base_payment_system.py:146-152"
+  }
+ },
+ "h2-standing-1": {
+  "0": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_transaction.py:414-421"
+  },
+  "1": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "payment_account.py:610-639 unlocked flag, :638-639 return if not unlocked, :649-654 publish NSF_UNLOCK_ACCOUNT to AUTH_EVENT_TOPIC"
+  },
+  "2": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "eft_task.py:203-209; auth_event.py:38-41 skipNotification True; worker.py:122-127 mailer only if skip_notification is False"
+  },
+  "3": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "worker.py:117 lock sets suspended_on; :122-124 unlock sets ACTIVE and suspension_reason_code=None, suspended_on untouched"
+  },
+  "4": {
+   "verdict": "partly",
+   "fix": "auth-web's suspendOrganization sends PATCH /orgs/{id} with statusCode ACTIVE whenever the org's current status is not ACTIVE.",
+   "note": "two independent claims bundled; both hold: org.ts:287-295, org.services.ts:142, auth-api org.py:219-222 has_one_of_roles([STAFF_MANAGE_ACCOUNTS, SYSTEM])"
+  },
+  "5": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "org.py:792-798 assigns status unconditionally; suspended_on/suspension_reason_code only touched for SUSPENDED"
+  },
+  "6": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "permissions.py:59-71; models/permissions.py:39 exact filter_by on org_status_code (no None fallback); 8260fac9943d:31 only org_statuses row; grep of migrations finds no permissions row with org_status_code 'SUSPENDED'"
+  },
+  "7": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "App.vue:565-573 throws 'Invalid auth roles'; :429-434 catch opens businessAuthErrorDialog and returns"
+  },
+  "8": {
+   "verdict": "correct",
+   "fix": "",
+   "note": "invoice.py:67-68; constants.py:44; auth.py:59-70 orgs/{id}/authorizations or entities/{id}/authorizations; :84-85 contains_role"
+  }
+ }
+}

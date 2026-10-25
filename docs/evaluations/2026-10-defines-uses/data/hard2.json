@@ -1,0 +1,960 @@
+[
+ {
+  "qid": "h2-access-0",
+  "kind": "access",
+  "question": "A user who belongs to several accounts picks one in the account switcher and then submits a fee-bearing filing from the business dashboard. Which account ends up invoiced, at what point along the path from the dashboard through the filings service to the payments service is that decided, and which membership role or account standing can still block the payment?",
+  "trap": "Reading lear, an agent sees the filing endpoint read an account-id header and pass payment_account_id into complete_filing, and concludes the switcher's account is forwarded to payments. It is not: the dashboard (business-filings-ui) never sends that header, legal-api only stores it on the filing after the fact, and pay-api (sbc-pay) resolves the account by asking auth-api for the user's entity authorization, which sbc-auth answers with the first active affiliated membership row. The make_payment gate is a permissions-table lookup in sbc-auth keyed by membership type and NSF status, not a role carried in the token.",
+  "facts": [
+   {
+    "fact": "business-filings-ui's shared axios instance adds only an Authorization bearer header to API requests; it never sets an Account-Id header.",
+    "files": [
+     "business-filings-ui/src/axios-auth.ts"
+    ],
+    "evidence": "business-filings-ui/src/axios-auth.ts:12-13: const kcToken = sessionStorage.getItem(SessionStorageKeys.KeyCloakToken) / request.headers.common['Authorization'] = `Bearer ${kcToken}`"
+   },
+   {
+    "fact": "legal-api's filing POST reads an account-id/accountId header into payment_account_id, but create_invoice posts to pay-api with only Authorization and Content-Type headers.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py:128: payment_account_id = request.headers.get('account-id', request.headers.get('accountId', None)) ; :857-858: headers = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'} ; :871: filing.payment_account = payment_account_id"
+   },
+   {
+    "fact": "pay-api check_auth takes the account from the token's Account-Id claim, g.account_id or the Account-Id header; with none, it calls auth-api entities/{id}/authorizations?expanded=true.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/auth.py",
+     "sbc-pay/pay-api/src/pay_api/utils/user_context.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/auth.py:36: account_id = account_id or user.account_id ; :68-70: elif business_identifier: auth_url = ... + f'entities/{business_identifier}/authorizations?expanded=true' ; sbc-pay/pay-api/src/pay_api/utils/user_context.py:153-155: account_id = (_get_token_info().get('Account-Id', None)) or (str(g.account_id) ...) / if not account_id: account_id = request.headers['Account-Id'] ..."
+   },
+   {
+    "fact": "pay-api looks the pay account up by auth-api's account.id (PaymentAccount.find_account) and PaymentService._find_payment_account creates one if none exists.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/auth.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_account.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/auth.py:74: g.account_id = auth_response.get('account').get('id') if auth_response.get('account', None) else None ; sbc-pay/pay-api/src/pay_api/services/payment_account.py:443-444: auth_account_id: str = get_str_by_path(authorization, 'account/id') / return PaymentAccount.find_by_auth_account_id(auth_account_id) ; sbc-pay/pay-api/src/pay_api/services/payment_service.py:156-161: if not payment_account: ... PaymentAccount.create({'accountId': get_str_by_path(authorization, 'account/id'), ...",
+    "fixed": true
+   },
+   {
+    "fact": "auth-api get_user_authorizations_for_entity passes org_id=user_from_context.account_id, which is the Account-Id claim or header; when absent the view is filtered by keycloak_guid and business only.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+     "sbc-auth/auth-api/src/auth_api/utils/user_context.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/authorization.py:123-128: elif keycloak_guid := user_from_context.sub: auth = AuthorizationView.find_user_authorization_by_business_number(business_identifier=business_identifier, keycloak_guid=keycloak_guid, org_id=user_from_context.account_id) ; sbc-auth/auth-api/src/auth_api/utils/user_context.py:116-118: account_id = _get_token_info().get('Account-Id', None) / if not account_id: account_id = request.headers['Account-Id'] if request and 'Account-Id' in request.headers else None"
+   },
+   {
+    "fact": "AuthorizationView.find_user_authorization_by_business_number returns .first() of that keycloak_guid+business query, so the first affiliated membership row wins when the user is in several affiliated accounts.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/models/views/authorization.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/models/views/authorization.py:61-63: elif keycloak_guid and business_identifier: auth = cls.query.filter_by(keycloak_guid=keycloak_guid, business_identifier=business_identifier).first()"
+   },
+   {
+    "fact": "pay-api's POST payment-requests calls check_auth with contains_role=make_payment, so a non-system token must have make_payment in auth-api's roles list.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py:67-68: authorization = check_auth(business_identifier=business_identifier, corp_type_code=corp_type_code, contains_role=MAKE_PAYMENT) ; sbc-pay/pay-api/src/pay_api/utils/constants.py:44: MAKE_PAYMENT = 'make_payment'",
+    "fixed": true
+   },
+   {
+    "fact": "In auth-api's permissions table make_payment is granted to ADMIN, COORDINATOR and USER with null org status, but under NSF_SUSPENDED only to ADMIN and SYSTEM.",
+    "files": [
+     "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py",
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py"
+    ],
+    "evidence": "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py:112-113: {'id': 31, 'membership_type_code': 'ADMIN', 'org_status_code': None, 'actions': 'make_payment'} ; :121-122 COORDINATOR ... 'make_payment' ; :130-131 USER ... 'make_payment' ; :148-149: {'id': 47, 'membership_type_code': 'ADMIN', 'org_status_code': 'NSF_SUSPENDED', 'actions': 'make_payment'} ; sbc-auth/auth-api/src/auth_api/services/permissions.py:67-71: permissions = PermissionsModel.get_permissions_by_membership(org_status, membership_type) ... actions.append(permission.actions)",
+    "fixed": true
+   },
+   {
+    "fact": "Independently of auth-api, pay-api's PAD service calls ensure_no_payment_blockers, which rejects invoice creation when the pay account has NSF invoices (PAD_CURRENTLY_NSF).",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py:147-150: if payment_account.has_nsf_invoices: ... raise BusinessException(Error.PAD_CURRENTLY_NSF) ; sbc-pay/pay-api/src/pay_api/services/pad_service.py:106: self.ensure_no_payment_blockers(payment_account)"
+   }
+  ]
+ },
+ {
+  "qid": "h2-access-1",
+  "kind": "access",
+  "question": "Before we tighten who can read a business's record, I need the current picture: which callers get a business back today without being an active member of an account affiliated with it, which of those exceptions rest on a product subscription or a service-client claim rather than a membership, and where is the only place a non-member is actually turned away?",
+  "trap": "An agent that greps legal-api's authorized() concludes a non-member needs an auth-api membership carrying 'view'. In fact the business GET in lear never calls authorized() at all (the call is commented out), so the only refusal a non-member meets is the dashboard's empty-roles check in business-filings-ui. The exceptions (account_identity role, an active CA_SEARCH product looked up through a caller-supplied Account-Id header, system tokens whose product_code is 'ALL') are resolved in sbc-auth, whose products endpoint itself demands org membership, and sbc-pay trusts system+edit tokens without asking auth-api at all.",
+  "facts": [
+   {
+    "fact": "legal-api GET /businesses/<identifier> has its authorized(identifier, jwt, action=['view']) check commented out; any token passing jwt.requires_auth receives the business record.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/resources/v2/business/business.py:45-46: @jwt.requires_auth / def get_businesses(identifier: str): ; :55-56: # check authorization -- need to implement workaround for business search users before using this #22143 / # if not authorized(identifier, jwt, action=['view']):"
+   },
+   {
+    "fact": "legal-api authorized() returns True for tokens carrying the staff, system or colin realm role without contacting auth-api.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/services/authz.py:102-105: if jwt.validate_roles([STAFF_ROLE]) or jwt.validate_roles([SYSTEM_ROLE]) or jwt.validate_roles([COLIN_SVC_ROLE]): return True"
+   },
+   {
+    "fact": "For a view-only action, legal-api authorized() also grants access to a token with the account_identity role, or when has_product('CA_SEARCH') is true.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/services/authz.py:108-110: if len(action) == 1 and action[0] == 'view': if jwt.validate_roles([ACCOUNT_IDENTITY]) or has_product('CA_SEARCH', jwt.get_token_auth_header()): return True"
+   },
+   {
+    "fact": "has_product resolves the account from the request's Account-Id header, calls auth-api orgs/{id}/products?include_hidden=true, and caches the list 600s keyed only by that account id.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/services/authz.py:894: return account_id or request.headers.get('Account-Id', None) ; :897: @cache.cached(timeout=600, make_cache_key=get_account_id, cache_none=True) ; :901: resp = _call_auth_api(f'orgs/{account_id}/products?include_hidden=true', token) ; :913: return any(p['code'] == code and p['subscriptionStatus'] == 'ACTIVE' for p in user_products)"
+   },
+   {
+    "fact": "auth-api GET orgs/<id>/products requires the public_user or view_accounts realm role, then check_auth(one_of_roles=(COORDINATOR, ADMIN, USER, STAFF), org_id=org_id), i.e. membership in that org.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org_products.py",
+     "sbc-auth/auth-api/src/auth_api/services/products.py",
+     "sbc-auth/auth-api/src/auth_api/utils/roles.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/resources/v1/org_products.py:37-38: @_jwt.has_one_of_roles([Role.PUBLIC_USER.value, Role.STAFF_VIEW_ACCOUNTS.value]) / def get_org_product_subscriptions(org_id): ; sbc-auth/auth-api/src/auth_api/services/products.py:338-339: if not skip_auth: check_auth(one_of_roles=(*CLIENT_AUTH_ROLES, STAFF), org_id=org_id) ; sbc-auth/auth-api/src/auth_api/utils/roles.py:58-59: CLIENT_ADMIN_ROLES = (COORDINATOR, ADMIN) / CLIENT_AUTH_ROLES = (*CLIENT_ADMIN_ROLES, USER)"
+   },
+   {
+    "fact": "auth-api check_auth aborts 403 for a system token lacking a product_code claim, and returns without any lookup when product_code equals 'ALL'.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/authorization.py:222-227: product_code_in_jwt = user_from_context.token_info.get('product_code', None) / if product_code_in_jwt is None: abort(403) / if product_code_in_jwt == 'ALL': return"
+   },
+   {
+    "fact": "For a system token, auth-api's entity authorization matches the view by product_code claim and business (ADMIN rows first) and returns the 'SYSTEM' membership permissions: make_payment, generate_invoice, view, edit.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py",
+     "sbc-auth/auth-api/src/auth_api/models/views/authorization.py",
+     "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/authorization.py:104-110: keycloak_product_code = user_from_context.token_info.get('product_code', None) ... find_user_authorization_by_business_number_and_product(business_identifier, keycloak_product_code) ... get_permissions_for_membership(auth.status_code, 'SYSTEM') ; sbc-auth/auth-api/src/auth_api/models/views/authorization.py:75-79: filter_by(product_code=product_code, business_identifier=business_identifier).order_by(expression.case(((Authorization.org_membership == ADMIN, 1), ... .first() ; sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py:158-165: {'id': 51, 'membership_type_code': 'SYSTEM', 'org_status_code': None, 'actions': 'make_payment'} ... 'generate_invoice' ... 'view' ... 'edit'"
+   },
+   {
+    "fact": "business-filings-ui App.vue fetches entities/{id}/authorizations on load and throws 'Invalid auth roles' when the returned roles list is empty, which opens an error dialog instead of the dashboard.",
+    "files": [
+     "business-filings-ui/src/App.vue"
+    ],
+    "evidence": "business-filings-ui/src/App.vue:426-429: const response = await AuthServices.fetchAuthorizations(this.getAuthApiUrl, this.businessId || this.tempRegNumber) / this.storeAuthorizations(response) // throws if no role ; :567-571: const authRoles = response?.data?.roles / if (authRoles && authRoles.length > 0) { this.setAuthRoles(authRoles) } else { throw new Error('Invalid auth roles') }"
+   },
+   {
+    "fact": "pay-api check_auth authorizes a BUSINESS-product system token holding the edit role regardless of auth-api's roles answer.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/auth.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/auth.py:40-41: if user.is_system(): is_authorized = bool(Role.EDITOR.value in user.roles) ; :46-49: if user.product_code != 'BUSINESS': call_auth_svc = False ... auth_response = {'account': {'id': user.account_id or user.user_name}} ; :98-99: if user.is_system() and bool(Role.EDITOR.value in user.roles): is_authorized = True",
+    "fixed": true
+   }
+  ]
+ },
+ {
+  "qid": "h2-identity-0",
+  "kind": "identity",
+  "question": "A client has a paid name request they want to attach to their account and later incorporate with. Before I sign off on the name-request path end to end: who actually verifies the name request when the client adds it, with which credentials, and how is 'paid' decided for a draft? When the dashboard later opens that draft incorporation without asking for the applicant's phone or email, why is the name request still returned? And once the incorporation completes, what exactly happens to the name request and to its account affiliation, including what silently fails?",
+  "trap": "Reading auth's affiliation service, an agent will believe the NR is verified 'by calling legal-api' (the comment says so) and that lear's validate endpoint is the single NR gate; reading lear's filer it will conclude the NR is simply marked consumed and its affiliation removed. The corrections live elsewhere: auth-api calls namex directly with its own entity service-account client (not legal-api); 'paid' is decided by sbc-pay's system-only invoice listing, whose PAID status is rewritten to COMPLETED on output; lear's validate endpoint waives the contact check whenever any account is affiliated (that is why business-filings-ui can call it with empty phone/email), and its raw string compare differs from auth's digit-stripped/casefolded compare; the filer's cleanup also tries to delete the NR entity in auth, which auth refuses while other accounts remain affiliated, and the filer ignores that result; and sbc-auth's queue auto-affiliates draft NRs from the pay invoice's account, which nothing in lear hints at.",
+  "facts": [
+   {
+    "fact": "auth-api Affiliation.create_new_business_affiliation fetches the NR from namex at NAMEX_API_URL/requests/{nr} using the ENTITY_SVC_CLIENT_ID service-account token, not through legal-api as its comment claims.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/affiliation.py:238: # Call the legal-api to verify the NR details; :239: if not (nr_json := Affiliation._get_nr_details(business_identifier)):; :502: nr_api_url = current_app.config.get('NAMEX_API_URL'); :503: get_nr_url = f'{nr_api_url}/requests/{nr_number}'; :506: config_id='ENTITY_SVC_CLIENT_ID', config_secret='ENTITY_SVC_CLIENT_SECRET')"
+   },
+   {
+    "fact": "auth-api accepts NR states APPROVED, CONDITIONAL, DRAFT and INPROGRESS; for a DRAFT NR it calls pay-api GET /payment-requests?businessIdentifier= and requires the first invoice statusCode to be COMPLETED.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/affiliation.py:244-245: if status not in (NRStatus.APPROVED.value, NRStatus.CONDITIONAL.value, NRStatus.DRAFT.value, NRStatus.INPROGRESS.value):; :255: invoices = Affiliation.get_nr_payment_details(business_identifier); :258: if not (invoices and invoices['invoices'] and invoices['invoices'][0].get('statusCode') == 'COMPLETED'):; :310: f'{pay_api_url}/payment-requests?businessIdentifier={business_identifier}',"
+   },
+   {
+    "fact": "pay-api GET /payment-requests (get_invoices) requires the SYSTEM realm role.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/models/invoice.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py:37: @_jwt.requires_roles([Role.SYSTEM.value]); :38: def get_invoices():; :41: business_identifier = request.args.get('businessIdentifier', None); sbc-pay/pay-api/src/pay_api/models/invoice.py:273-274: if data.get('status_code') == InvoiceStatus.PAID.value: data['status_code'] = PaymentStatus.COMPLETED.value",
+    "fixed": true
+   },
+   {
+    "fact": "auth-api compares the applicant contact after stripping non-digits from the phone and casefolding the email, skipping the check for staff.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py",
+     "lear/legal-api/src/legal_api/resources/v2/namerequest.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/affiliation.py:265-266: if not user_is_staff and ((phone and re.sub(r'\\D', '', phone) != re.sub(r'\\D', '', nr_phone)) or (email and email.casefold() != nr_email.casefold())):; lear/legal-api/src/legal_api/resources/v2/namerequest.py:55: if (phone and phone != nr_phone) or (email and email != nr_email):",
+    "fixed": true
+   },
+   {
+    "fact": "legal-api GET /api/v2/nameRequests/{nr}/validate asks auth GET /orgs?affiliation={nr} and returns the NR without any contact check when at least one org is affiliated; otherwise missing phone and email yields 403.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/namerequest.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/resources/v2/namerequest.py:42: orgs_response = AccountService.get_account_by_affiliated_identifier(identifier); :43-44: if len(orgs_response['orgs']): return jsonify(nr_json); :49-50: if not (email or phone): return make_response(jsonify(message='The request must include email or phone number.'), 403); lear/legal-api/src/legal_api/services/bootstrap.py:268: url = f'{auth_url}/orgs?affiliation={identifier}'"
+   },
+   {
+    "fact": "business-filings-ui App.vue calls LegalServices.fetchNameRequest with only the NR number, so the request goes to nameRequests/{nr}/validate with empty phone and email and succeeds only through the affiliation waiver.",
+    "files": [
+     "business-filings-ui/src/App.vue",
+     "business-filings-ui/src/services/legal-services.ts"
+    ],
+    "evidence": "business-filings-ui/src/App.vue:478: const nr = await LegalServices.fetchNameRequest(this.localNrNumber); business-filings-ui/src/services/legal-services.ts:105-106: static async fetchNameRequest (nrNumber: string, phone = '', email = ''): Promise<any> { const url = `nameRequests/${nrNumber}/validate?phone=${phone}&email=${email}`"
+   },
+   {
+    "fact": "entity-filer consume_nr PATCHes namex with the ACCOUNT_SVC token; a non-OK response or any exception is only reported to Sentry, except a KeyError, which is silently ignored.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py"
+    ],
+    "evidence": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py:35: token = AccountService.get_bearer_token(); :36: if flags and (flag_on := flags.is_on('namex-nro-decommissioned')):; :38: data = json.dumps({'state': 'CONSUMED', 'corpNum': business.identifier}); :40: data = json.dumps({'consume': {'corpNum': business.identifier}}); :42-43: rv = requests.patch(url=''.join([namex_svc_url, nr_num]),; :57-58: except Exception: sentry_sdk.capture_message(f'Queue Error: Consume NR error for filing:{filing.id}', level='error')",
+    "fixed": true
+   },
+   {
+    "fact": "After consuming, the filer calls AccountService.delete_affiliation(bootstrap.account, nr_num), which also sends DELETE /entities/{nr}; auth-api Entity.delete raises ENTITY_DELETE_FAILED while any affiliation remains, and the filer discards the return value.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py",
+     "sbc-auth/auth-api/src/auth_api/services/entity.py"
+    ],
+    "evidence": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/name_request.py:53-54: if filing.temp_reg and (bootstrap := RegistrationBootstrap.find_by_identifier(filing.temp_reg)): AccountService.delete_affiliation(bootstrap.account, nr_num); lear/legal-api/src/legal_api/services/bootstrap.py:244-245: affiliate = requests.delete(url=account_svc_affiliate_url + '/' + business_registration,; :251-252: entity_record = requests.delete(url=account_svc_entity_url + '/' + business_registration,; sbc-auth/auth-api/src/auth_api/services/entity.py:271-272: if self._model.affiliations: raise BusinessException(Error.ENTITY_DELETE_FAILED, None)"
+   },
+   {
+    "fact": "auth-queue process_name_events auto-affiliates an unaffiliated DRAFT NR to the org found in the pay-api invoice's paymentAccount.accountId, unless that org's access_type is GOVM.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:173: if nr_status == 'DRAFT' and not AffiliationModel.find_affiliations_by_business_identifier(nr_number, None):; :180: f'{current_app.config.get(\"PAY_API_URL\")}/payment-requests?businessIdentifier={nr_number}',; :186: and (auth_account_id := invoices['invoices'][0].get('paymentAccount').get('accountId')) \\; :192: if org and org.access_type != AccessType.GOVM.value:; :195: affiliation: AffiliationModel = AffiliationModel(entity=nr_entity, org=org)"
+   }
+  ]
+ },
+ {
+  "qid": "h2-identity-1",
+  "kind": "identity",
+  "question": "When a new business filing completes under a temporary registration, I need to trace how the temporary number turns into the business's real identity across the system and how its CRA business number eventually appears. Concretely: what the filer tells the account service and what the account service does with it, including how proof of control is established for a firm versus a corporation; where the new registration number comes from; which path requests the business number from the CRA for firms versus corporations, who hears about the number arriving, and what the payment records and the dashboard show for the temporary number.",
+  "trap": "An agent reading the filer and the entity-bn queue will conclude that every new business gets its business number through entity-bn's CRA hub call, that the account service merely receives a new entity/affiliation, and that the auth queue consumes the business-number event. The corrections: entity-bn ignores incorporation events entirely (corporations get their number via the update-legal-filings job pulling COLIN's tax ids through legal-api, which excludes coops and firms); the 'bc.registry.business.bn' event is consumed by entity-digital-credentials, while auth-queue handles only names, activity-log and NSF events; the filer's affiliation call carries entityDetails that make auth-api re-point other accounts' NR affiliations (system callers only) and the filer then renames the temporary auth entity to the real identifier; for firms the passcode is the first party's name, which auth-api verifies by calling legal-api's party list with a case- and whitespace-insensitive compare; and sbc-pay hides any 'T' identifier from invoice output.",
+  "facts": [
+   {
+    "fact": "entity-filer update_affiliation posts the new business affiliation to auth with entityDetails {bootstrapIdentifier, identifier, nrNumber}, then PATCHes the temporary auth entity, renaming it to the real identifier.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py"
+    ],
+    "evidence": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py:110-112: 'bootstrapIdentifier': bootstrap.identifier, 'identifier': business.identifier, 'nrNumber': nr_number; :120: details=details; :131-134: bootstrap_update = AccountService.update_entity(business_registration=bootstrap.identifier, business_name=business.identifier, corp_type_code=Filing.FILINGS[filing.filing_type]['temporaryCorpTypeCode']; lear/legal-api/src/legal_api/services/bootstrap.py:180-181: if details: affiliate_data['entityDetails'] = details"
+   },
+   {
+    "fact": "auth-api POST /orgs/{id}/affiliations with entityDetails runs fix_stale_affiliations: only for a system caller, it re-points other orgs' NR-entity affiliations to the new business entity, skipping the calling org.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/resources/v1/org.py:413-415: entity_details = request_json.get('entityDetails', None); if entity_details: AffiliationService.fix_stale_affiliations(org_id, entity_details, env); sbc-auth/auth-api/src/auth_api/services/affiliation.py:381-382: if not user_from_context.is_system(): return; :394-395: if affiliation.org_id == org_id: continue; :398: affiliation.entity_id = to_entity.identifier"
+   },
+   {
+    "fact": "For a registration the filer's passCode is the first current party's name ('LAST, FIRST MI' or organization name); auth-api is_authorized verifies SP/GP passcodes against legal-api /businesses/{id}/parties, comparing case-insensitively.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "sbc-auth/auth-api/src/auth_api/services/affiliation.py"
+    ],
+    "evidence": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py:155-157: pass_code = party.organization_name ... pass_code = party.last_name + ', ' + party.first_name; business_profile.py:101-102: if filing.filing_type == 'registration': pass_code = business_info.get_firm_affiliation_passcode(business.id); sbc-auth/auth-api/src/auth_api/services/affiliation.py:204: if entity.corp_type in ['SP', 'GP']:; :207: token = RestService.get_service_account_token(config_id='ENTITY_SVC_CLIENT_ID',; :517: parties_url = f'{ legal_api_url }/businesses/{business_identifier}/parties'; :529: party_name = officer.get('lastName') + ', ' + officer.get('firstName'); :537: if party_name_str.upper() == party_name.upper():"
+   },
+   {
+    "fact": "For legacy corp types the filer gets the new registration number by POSTing to colin-api /{BC|C} with the ACCOUNT_SVC token; colin-api's post requires COLIN_SVC_ROLE and returns {'corpNum': ...} from Business.get_next_corp_num.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py",
+     "lear/colin-api/src/colin_api/resources/business.py"
+    ],
+    "evidence": "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_info.py:125-127: token = AccountService.get_bearer_token(); resp = requests.post(f'{current_app.config[\"COLIN_API\"]}/{business_type}',; :137: return f'{business_type}{new_corpnum:07d}'; lear/colin-api/src/colin_api/resources/business.py:98-99: @jwt.requires_roles([COLIN_SVC_ROLE]) def post(legal_type: str):; :103: if legal_type not in ['BC', 'C']:; :109: corp_num = Business.get_next_corp_num(con=con, corp_type=legal_type); :116: return jsonify({'corpNum': corp_num}), HTTPStatus.OK"
+   },
+   {
+    "fact": "entity-bn process_event only handles registration, changeOfRegistration, correction, dissolution, putBackOn and bc.registry.admin.bn events; an incorporationApplication event is dropped, so corporations never reach the CRA hub through entity-bn.",
+    "files": [
+     "lear/queue_services/entity-bn/src/entity_bn/worker.py"
+    ],
+    "evidence": "lear/queue_services/entity-bn/src/entity_bn/worker.py:60-68: if not msg or msg.get('type') not in ['bc.registry.business.registration', 'bc.registry.business.changeOfRegistration', 'bc.registry.business.correction', 'bc.registry.business.dissolution', 'bc.registry.business.putBackOn', 'bc.registry.admin.bn']: return None"
+   },
+   {
+    "fact": "The update-legal-filings job fills corporate business numbers: GET legal-api /businesses/internal/tax_ids (corps lacking tax_id; COOP, SP, GP excluded), colin-api /internal/tax_ids, POST back, then publish bc.registry.business.bn and a bn email.",
+    "files": [
+     "lear/jobs/update-legal-filings/update_legal_filings.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py",
+     "lear/legal-api/src/legal_api/models/business.py"
+    ],
+    "evidence": "lear/jobs/update-legal-filings/update_legal_filings.py:318: application.config['LEGAL_API_URL'] + '/businesses/internal/tax_ids',; :337: application.config['COLIN_URL'] + '/internal/tax_ids',; :350: application.config['LEGAL_API_URL'] + '/businesses/internal/tax_ids',; :283: payload = {'email': {'filingId': None, 'type': 'businessNumber', 'option': 'bn', 'identifier': identifier}}; :294: 'type': 'bc.registry.business.bn',; lear/legal-api/src/legal_api/resources/v2/business/colin_sync.py:246-247: @jwt.has_one_of_roles([UserRoles.colin]) def get_all_identifiers_without_tax_id():; lear/legal-api/src/legal_api/models/business.py:662-666: no_tax_id_types = [Business.LegalTypes.COOP.value, Business.LegalTypes.SOLE_PROP.value, Business.LegalTypes.PARTNERSHIP.value,]"
+   },
+   {
+    "fact": "The bc.registry.business.bn event is consumed by entity-digital-credentials, which looks the business up by identifier and runs business_number.process.",
+    "files": [
+     "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/worker.py",
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "lear/queue_services/entity-digital-credentials/src/entity_digital_credentials/worker.py:75: BN = 'bc.registry.business.bn'; :111-112: if dc_msg['type'] == BusinessMessage.BN.value: await business_number.process(business); sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:53: if event_message.type == QueueMessageTypes.NAMES_EVENT.value:; :55: elif event_message.type == QueueMessageTypes.ACTIVITY_LOG.value:; :57-58: elif event_message.type in [QueueMessageTypes.NSF_UNLOCK_ACCOUNT.value, QueueMessageTypes.NSF_LOCK_ACCOUNT.value]:",
+    "fixed": true
+   },
+   {
+    "fact": "pay-api drops any business_identifier beginning with 'T' from invoice JSON (InvoiceSchema._clean_up) and nulls it in InvoiceSearchModel.from_row, so temporary registration numbers never appear in invoice output.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/models/invoice.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/models/invoice.py:268-270: # do not include temporary business identifier / if data.get('business_identifier', None) and data.get('business_identifier').startswith('T'): data.pop('business_identifier'); :322-323: business_identifier = None if row.business_identifier and row.business_identifier.startswith('T') else row.business_identifier"
+   },
+   {
+    "fact": "business-filings-ui shows 'Business Number' from the legal-api business JSON taxId (businessStore getBusinessNumber), displaying 'Not Available' when a business has none; legal-api only emits taxId when tax_id is set.",
+    "files": [
+     "business-filings-ui/src/components/EntityInfo/EntityDefinitions.vue",
+     "business-filings-ui/src/stores/businessStore.ts",
+     "lear/legal-api/src/legal_api/models/business.py"
+    ],
+    "evidence": "business-filings-ui/src/components/EntityInfo/EntityDefinitions.vue:145-147: get businessNumber (): string { if (this.businessId) { return (this.getBusinessNumber || 'Not Available'); business-filings-ui/src/stores/businessStore.ts:66: return state.businessInfo.taxId; lear/legal-api/src/legal_api/models/business.py:541-542: if self.tax_id: d['taxId'] = self.tax_id"
+   }
+  ]
+ },
+ {
+  "qid": "h2-lifecycle-0",
+  "kind": "lifecycle",
+  "question": "A company that stopped filing its annual reports is picked up by the registrar's automated dissolution process, warned, and finally struck off. Before we shorten the warning windows I need the whole chain: how 'overdue' is decided and whether the business dashboard's 'not in good standing' banner runs on the same clock; where the first warning email gets its address and which service actually sends it; how the account dashboard and the business dashboard each learn the company is 'in dissolution'; and, once it is struck off, how the account system learns the company is historical and whether its own stored copy is what the account dashboard displays.",
+  "trap": "Grepping 'dissolution' and 'HISTORICAL' in lear finds the filer flipping the business to HISTORICAL and pushing that state to auth, so an agent concludes the account dashboard's 'Historical' label and dissolution alert come from auth's stored entity status, and that the dashboard's 'not in good standing' banner and the dissolution job share one overdue rule. sbc-auth holds the correction: auth-web builds display status and inDissolution from legal-api's business search response (auth-api org.py ?new=true path), and the entities.status column is never read for a real business. lear holds the second correction: good_standing uses 1 year 2 months 1 day, eligibility uses 26 months.",
+  "facts": [
+   {
+    "fact": "legal-api eligibility (_has_specific_filing_overdue in InvoluntaryDissolutionService) treats a business as AR-overdue when the latest of founding date, completed restoration and last AR is older than 26 months.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/involuntary_dissolution.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/services/involuntary_dissolution.py:189: latest_date_cutoff = latest_date + text(\"\"\"INTERVAL '26 MONTHS'\"\"\")"
+   },
+   {
+    "fact": "Business.good_standing in legal-api uses a different clock: last AR (or founding date) plus 1 year, 2 months and 1 day, so business-filings-ui's isNotInGoodStandingAlert fires about a year before dissolution eligibility.",
+    "files": [
+     "lear/legal-api/src/legal_api/models/business.py",
+     "business-filings-ui/src/stores/businessStore.ts"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/models/business.py:414: date_cutoff = last_ar_date + datedelta.datedelta(years=1, months=2, days=1); business-filings-ui/src/stores/businessStore.ts:328: return !this.isGoodStanding"
+   },
+   {
+    "fact": "Stage 3 of the involuntary-dissolutions job creates a 'dissolution' Filing with dissolutionType 'involuntary' and publishes {'filing': {'id': ...}} to NATS_FILER_SUBJECT.",
+    "files": [
+     "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py"
+    ],
+    "evidence": "lear/jobs/involuntary-dissolutions/involuntary_dissolutions.py:104: 'dissolutionType': 'involuntary'; :117: subject = app.config['NATS_FILER_SUBJECT']",
+    "fixed": true
+   },
+   {
+    "fact": "The furnishings job's StageOneProcessor takes the warning email address from auth-api GET /entities/{identifier} (first contact's email), not from any LEAR table.",
+    "files": [
+     "lear/jobs/furnishings/src/furnishings/stage_processors/stage_one.py"
+    ],
+    "evidence": "lear/jobs/furnishings/src/furnishings/stage_processors/stage_one.py:366: url = f'{current_app.config.get(\"AUTH_URL\")}/entities/{identifier}'; :383: return contacts[0]['email']"
+   },
+   {
+    "fact": "StageOneProcessor._send_email publishes a 'bc.registry.dissolution' message on NATS_EMAILER_SUBJECT.",
+    "files": [
+     "lear/jobs/furnishings/src/furnishings/stage_processors/stage_one.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/worker.py"
+    ],
+    "evidence": "stage_one.py:325: 'type': 'bc.registry.dissolution',; lear/queue_services/entity-emailer/src/entity_emailer/worker.py:149: elif etype and etype == 'bc.registry.dissolution':; :153: and furnishing_name in involuntary_dissolution_stage_1_notification.PROCESSABLE_FURNISHING_NAMES:",
+    "fixed": true
+   },
+   {
+    "fact": "business-filings-ui's In Dissolution alert is driven by a business warning with warningType INVOLUNTARY_DISSOLUTION produced by legal-api's involuntary_dissolution business check (code DISSOLUTION_IN_PROGRESS), not by any business state field.",
+    "files": [
+     "business-filings-ui/src/stores/businessStore.ts",
+     "lear/legal-api/src/legal_api/services/warnings/business/business_checks/involuntary_dissolution.py"
+    ],
+    "evidence": "business-filings-ui/src/stores/businessStore.ts:167: return this.getBusinessWarnings.some(item => item.warningType === WarningTypes.INVOLUNTARY_DISSOLUTION); :313: return this.hasInvoluntaryDissolutionWarning; involuntary_dissolution.py:66: 'warningType': WarningType.INVOLUNTARY_DISSOLUTION"
+   },
+   {
+    "fact": "auth-web's AffiliatedEntityTable raises its DISSOLUTION alert from the inDissolution boolean that legal-api's POST /businesses/search slim json computes from an open INVOLUNTARY_DISSOLUTION batch_processing row, fetched through auth-api GET /orgs/{id}/affiliations?new=true.",
+    "files": [
+     "sbc-auth/auth-web/src/components/auth/manage-business/AffiliatedEntityTable.vue",
+     "lear/legal-api/src/legal_api/models/business.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py"
+    ],
+    "evidence": "AffiliatedEntityTable.vue:277: return item.inDissolution; lear/legal-api/src/legal_api/models/business.py:535: 'inDissolution': self.in_dissolution,; sbc-auth/auth-api/src/auth_api/resources/v1/org.py:367: affiliations_details_list = asyncio.run(AffiliationService.get_affiliation_details(affiliations))"
+   },
+   {
+    "fact": "After entity-filer processes a dissolution, business_profile.update_entity sends state=HISTORICAL via PATCH auth /entities/{identifier}, and auth-api EntityService.update_entity renames that 'state' key to 'status' and stores it in the entities.status column.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py",
+     "sbc-auth/auth-api/src/auth_api/services/entity.py",
+     "sbc-auth/auth-api/src/auth_api/models/entity.py"
+    ],
+    "evidence": "business_profile.py:152-153: if filing_type in ['dissolution', 'putBackOn', 'restoration']: state = business.state.name; lear/legal-api/src/legal_api/services/bootstrap.py:217: entity_data['state'] = state; sbc-auth/auth-api/src/auth_api/services/entity.py:168: entity_info['status'] = entity_info['state']; models/entity.py:42: status = Column(String(), nullable=True)"
+   },
+   {
+    "fact": "auth-web never reads that stored auth status for a real business: buildBusinessObject sets status from resp.state (legal-api search) || resp.draftStatus, and affiliations-factory maps it through BusinessState, where HISTORICAL displays as 'Historical'.",
+    "files": [
+     "sbc-auth/auth-web/src/stores/business.ts",
+     "sbc-auth/auth-web/src/composables/affiliations-factory.ts",
+     "sbc-auth/auth-web/src/util/constants.ts"
+    ],
+    "evidence": "sbc-auth/auth-web/src/stores/business.ts:92: return resp.state || resp.draftStatus; affiliations-factory.ts:106: return BusinessState[business.status]; constants.ts:415: HISTORICAL = 'Historical',"
+   }
+  ]
+ },
+ {
+  "qid": "h2-lifecycle-1",
+  "kind": "lifecycle",
+  "question": "An incorporation application is drafted under an account, paid, and becomes a company. Before we change how payment confirmations are routed I need to know: which payment method releases the filing before the money is actually seen; what message the payment system emits, who in the registry consumes it, and what it silently drops versus pushes back; what each dashboard shows while the application is paid but not yet processed; and what becomes of the temporary record the account system holds for the draft once the real company exists, whether it is deleted, renamed or merely hidden.",
+  "trap": "An agent reading the pay-api payment flow and the lear entity-pay worker concludes that every payment publishes a completion when the invoice is PAID and that the temporary affiliation is deleted when the company is created. sbc-pay shows PAD releases the filing at invoice creation while the invoice is still APPROVED; lear's business-pay (the GCP consumer, not entity-pay) is the actual consumer with its own drop and re-queue rules; and the temporary entity is never deleted: the filer renames it in sbc-auth and it vanishes from the account dashboard only because legal-api's search returns drafts whose filing has no business_id.",
+  "facts": [
+   {
+    "fact": "legal-api POST /businesses creates a RegistrationBootstrap temp identifier ('T' plus nine characters) and registers it in auth as an entity whose corp type is Filing.FILINGS[filing_type]['temporaryCorpTypeCode'] with corpSubTypeCode set to the legal type.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/resources/v2/business/business.py:139: corp_type_code = Filing.FILINGS[filing_type]['temporaryCorpTypeCode']; :143: corp_sub_type_code=legal_type); bootstrap.py:61: identifier = 'T' + ''.join(secrets.choice(allowed_encoded) for _ in range(9)); :82: rv = AccountService.create_affiliation(account=bootstrap.account,"
+   },
+   {
+    "fact": "pay-api PadService sets the default invoice status to APPROVED and its complete_post_invoice calls _release_payment immediately, so a PAD-paid filing is released before any money settles.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/pad_service.py:47: return InvoiceStatus.APPROVED.value; :122: self._release_payment(invoice=invoice)"
+   },
+   {
+    "fact": "_release_payment publishes a QueueMessageTypes.PAYMENT message whose payload is PaymentToken(invoice.id, 'COMPLETED', filing_id, corp_type_code), on the topic get_topic_for_corp_type picks (BUSINESS_PAY_TOPIC when the corp type's product is BUSINESS).",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py"
+    ],
+    "evidence": "base_payment_system.py:162: payload = PaymentTransaction.create_event_payload(invoice, TransactionStatus.COMPLETED.value); :168: message_type=QueueMessageTypes.PAYMENT.value,; :170: topic=get_topic_for_corp_type(invoice.corp_type_code),; payment_transaction.py:527: return humps.camelize(asdict(PaymentToken(invoice.id, status_code, invoice.filing_id, invoice.corp_type_code))); util.py:294: return current_app.config.get('BUSINESS_PAY_TOPIC')"
+   },
+   {
+    "fact": "lear's business-pay push worker consumes 'bc.registry.payment' events and acks and drops any whose statusCode is not 'COMPLETED' or whose corpTypeCode is MHR or BTR.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ],
+    "evidence": "pay_filer.py:250: (ce.type == \"bc.registry.payment\"); :110: or payment_token.status_code != \"COMPLETED\"; :116: if payment_token.corp_type_code in [\"MHR\", \"BTR\"]:; :137: return {}, HTTPStatus.NOT_FOUND",
+    "fixed": true
+   },
+   {
+    "fact": "business-pay marks the filing PAID, diverts continuationIn filings to a staff Review instead of the filer, and publishes to the filer queue only when effective_date <= payment_completion_date.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ],
+    "evidence": "pay_filer.py:149: filing.status = Filing.Status.PAID; :152: staff_review_required = [\"continuationIn\"]; :220: if filing.effective_date <= filing.payment_completion_date:"
+   },
+   {
+    "fact": "business-filings-ui's TodoList labels a PAID item 'FILING PENDING | PAID', switching the second word to 'PROCESSING...' only while that filing id is the one being processed.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue"
+    ],
+    "evidence": "business-filings-ui/src/components/Dashboard/TodoList.vue:252: <span>FILING PENDING</span>; :254: <span v-if=\"inProcessFiling === item.filingId\">PROCESSING...</span>; :255: <span v-else>PAID</span>"
+   },
+   {
+    "fact": "auth-web shows a temporary business' status as BusinessState[draftStatus] from legal-api's search draftEntities, so PAID displays 'Filed and Pending' and a paid filing with a future effective date displays 'Future Effective'.",
+    "files": [
+     "sbc-auth/auth-web/src/composables/affiliations-factory.ts",
+     "sbc-auth/auth-web/src/stores/business.ts",
+     "sbc-auth/auth-web/src/util/constants.ts"
+    ],
+    "evidence": "affiliations-factory.ts:86: return BusinessState[business.status]; stores/business.ts:89: return 'PAID_FE'; :92: return resp.state || resp.draftStatus; constants.ts:417: PAID = 'Filed and Pending',; :418: PAID_FE = 'Future Effective'"
+   },
+   {
+    "fact": "After incorporation, entity-filer's update_affiliation creates a new auth affiliation for the real identifier and then PATCHes the bootstrap entity so its name becomes the new identifier (corp type still TMP); it never deletes the bootstrap entity or affiliation.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py"
+    ],
+    "evidence": "business_profile.py:114: rv = AccountService.create_affiliation(; :131: bootstrap_update = AccountService.update_entity(; :133: business_name=business.identifier,; :134: corp_type_code=Filing.FILINGS[filing.filing_type]['temporaryCorpTypeCode']"
+   },
+   {
+    "fact": "The renamed temp entity disappears from the account dashboard because the filer sets the filing's business_id and legal-api's POST /businesses/search returns a draft only when Filing.business_id is NULL, so the ?new=true affiliation details no longer include it.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business.py",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py"
+    ],
+    "evidence": "lear/queue_services/entity-filer/src/entity_filer/worker.py:359: filing_submission.business_id = business.id; lear/legal-api/src/legal_api/resources/v2/business/business.py:169: and_(Filing.temp_reg.in_(identifiers), Filing.business_id.is_(None))); sbc-auth/auth-api/src/auth_api/resources/v1/org.py:367: affiliations_details_list = asyncio.run(AffiliationService.get_affiliation_details(affiliations))"
+   }
+  ]
+ },
+ {
+  "qid": "h2-money-0",
+  "kind": "money",
+  "question": "An account that pays by pre-authorized debit submits a filing. Before I sign off a change to how we lock accounts after a returned debit, I need to know: at what moment the registry actually applies the filing relative to the money being collected, which nightly step bills the bank and which accounts it quietly skips, which services learn about a returned debit and what each of them changes, what the customer sees in the business dashboard when they try to file again while locked, and what, if anything, gets undone in the registry for the filing whose debit bounced.",
+  "trap": "Reading the pay-api PAD service and the CAS reconciliation code suggests the filing is paid when the bank settlement file says PAID, and reading lear's business-pay listener alone suggests a 'COMPLETED' token always means money arrived. In fact pay-api releases the payment token at invoice creation for PAD (invoice status APPROVED), so lear applies the filing days before any debit; the returned-debit path in sbc-pay/pay-queue only publishes to the auth event topic and account mailer (sbc-auth locks the org and emails admins) and never to the business-pay topic, so lear keeps the filing applied. The correction lives in sbc-pay (pay-queue reconciliation) together with lear (business-pay) and sbc-auth (auth-queue).",
+  "facts": [
+   {
+    "fact": "In pay-api, PadService returns InvoiceStatus.APPROVED as the default invoice status and its complete_post_invoice calls _release_payment at invoice creation.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/pad_service.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/pad_service.py:47: return InvoiceStatus.APPROVED.value; sbc-pay/pay-api/src/pay_api/services/pad_service.py:122: self._release_payment(invoice=invoice)"
+   },
+   {
+    "fact": "_release_payment publishes a QueueMessageTypes.PAYMENT message with TransactionStatus.COMPLETED to the topic chosen by get_topic_for_corp_type, which returns BUSINESS_PAY_TOPIC for product BUSINESS.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py:162: payload = PaymentTransaction.create_event_payload(invoice, TransactionStatus.COMPLETED.value); :170: topic=get_topic_for_corp_type(invoice.corp_type_code); sbc-pay/pay-api/src/pay_api/utils/util.py:293-294: if product_code in [Product.BUSINESS.value, Product.BUSINESS_SEARCH.value]: return current_app.config.get('BUSINESS_PAY_TOPIC')"
+   },
+   {
+    "fact": "lear business-pay worker sets filing.payment_completion_date and Filing.Status.PAID for any token whose status_code is \"COMPLETED\", then publishes to the filer; other statuses are dropped.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ],
+    "evidence": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py:110: or payment_token.status_code != \"COMPLETED\"; :147-149: filing.payment_completion_date = datetime.now(timezone.utc) / filing.payment_status_code = \"COMPLETED\" / filing.status = Filing.Status.PAID; :159: publish_to_filer(filing, payment_token)"
+   },
+   {
+    "fact": "The CFS invoice for PAD is only created later by payment-jobs CfsCreateInvoiceTask._create_pad_invoices, which selects APPROVED PAD invoices and skips accounts whose CFS status is not ACTIVE or INACTIVE.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py"
+    ],
+    "evidence": "sbc-pay/jobs/payment-jobs/tasks/cfs_create_invoice_task.py:228: .filter(InvoiceModel.invoice_status_code == InvoiceStatus.APPROVED.value); :232: .filter(CfsAccountModel.status != CfsAccountStatus.FREEZE.value); :255-258: if cfs_account.status not in (CfsAccountStatus.ACTIVE.value, CfsAccountStatus.INACTIVE.value): ... continue"
+   },
+   {
+    "fact": "pay-queue _process_consolidated_invoices treats a settlement row with status NOT PAID or record type PADR/PAYR as NSF and publishes QueueMessageTypes.NSF_LOCK_ACCOUNT to AUTH_EVENT_TOPIC.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py"
+    ],
+    "evidence": "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py:322-323: elif target_txn_status.lower() == Status.NOT_PAID.value.lower() or record_type in (RecordType.PADR.value, RecordType.PAYR.value); :328: _publish_account_events(QueueMessageTypes.NSF_LOCK_ACCOUNT.value, payment_account, row); :753: topic=current_app.config.get('AUTH_EVENT_TOPIC')"
+   },
+   {
+    "fact": "pay-queue _process_failed_payments sets the PAD CfsAccount status to FREEZE, stamps payment_account.has_nsf_invoices, tells CFS RECEIPT_METHOD_PAD_STOP, and creates an NSF invoice.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py"
+    ],
+    "evidence": "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py:517-520: cfs_account.status = CfsAccountStatus.FREEZE.value / payment_account.has_nsf_invoices = datetime.now(tz=timezone.utc) / CFSService.update_site_receipt_method(cfs_account, receipt_method=RECEIPT_METHOD_PAD_STOP); :546: invoice = _create_nsf_invoice(cfs_account, inv_number, payment_account, reason_description)"
+   },
+   {
+    "fact": "sbc-auth auth-queue process_pay_lock_unlock_event sets the org status to OrgStatus.NSF_SUSPENDED and, unless skipNotification, forwards NSF_LOCK_ACCOUNT to the mailer.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py",
+     "sbc-auth/queue_services/account-mailer/src/account_mailer/resources/worker.py"
+    ],
+    "evidence": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:116: org.status_code = OrgStatus.NSF_SUSPENDED.value; :121: publish_to_mailer(QueueMessageTypes.NSF_LOCK_ACCOUNT.value, data, QueueSources.AUTH_QUEUE.value); sbc-auth/queue_services/account-mailer/src/account_mailer/resources/worker.py:132: emails = get_member_emails(org_id, (ADMIN, COORDINATOR))",
+    "fixed": true
+   },
+   {
+    "fact": "The pay-queue NSF path publishes NSF_LOCK_ACCOUNT only to AUTH_EVENT_TOPIC, never to BUSINESS_PAY_TOPIC, so the filing lear already marked PAID is not reverted.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ],
+    "evidence": "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py:328: _publish_account_events(QueueMessageTypes.NSF_LOCK_ACCOUNT.value, payment_account, row); :753: topic=current_app.config.get('AUTH_EVENT_TOPIC'); :688: topic=current_app.config.get('ACCOUNT_MAILER_TOPIC'); lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py:108-114: only status_code == \"COMPLETED\" tokens are processed, everything else is removed from the queue",
+    "fixed": true
+   },
+   {
+    "fact": "While locked, pay-api ensure_no_payment_blockers raises Error.PAD_CURRENTLY_NSF; legal-api stores that error type as the filing's payment_status_code, and the dashboard renders PaymentIncomplete from pay-api codes/errors/<code>.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "business-filings-ui/src/services/pay-services.ts"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py:147-150: if payment_account.has_nsf_invoices: ... raise BusinessException(Error.PAD_CURRENTLY_NSF); lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py:879-880: error_type = rv.json().get('type') / filing.payment_status_code = error_type; business-filings-ui/src/components/Dashboard/TodoList.vue:1216: const payErrorObj = paymentStatusCode && await PayServices.getPayErrorObj(this.getPayApiUrl, paymentStatusCode); :549-550: <template v-if=\"EnumUtilities.isStatusDraft(item) && isPayError(item)\"> <PaymentIncomplete :filing=\"item\" />; business-filings-ui/src/services/pay-services.ts:16: const url = `${payApiUrl}codes/errors/${code}`"
+   }
+  ]
+ },
+ {
+  "qid": "h2-money-1",
+  "kind": "money",
+  "question": "A customer pays for a filing by credit card. Before I change our retry and cleanup around card payments, I need to know: what the registry records before the customer is sent to the card page and what decides whether they are sent at all, how the registry learns the card payment succeeded and who else is told, what repairs a payment the customer completed when the return trip to us failed, what 'cancel payment' on the business dashboard really does on the payment side and for which payment types it is refused, what a staff refund does to the applied filing, and when a paid filing with a future effective date is actually applied.",
+  "trap": "Grepping lear for cancel/refund/payment finds the legal-api PATCH that calls pay-api and the filing status listener, which suggests cancel always resets the filing to draft, that a refund reverts the filing, and that a card payment lost on the return trip stays pending until the customer retries. The corrections are in sbc-pay (accept_delete refuses APPROVED/PAID invoices so PAD filings cannot be cancelled; the refund path only talks to PayBC and the refund job, never to lear; StalePaymentTask re-drives update_transaction and so re-publishes the token to lear) and in lear's own jobs folder (future-effective-filings publishes the filer message that business-pay deliberately withheld). sbc-auth's auth-web owns the card redirect and the transaction PATCH that completes the payment.",
+  "facts": [
+   {
+    "fact": "legal-api ListFilingResource.create_invoice POSTs to PAYMENT_SVC_URL, stores the returned invoice id as filing.payment_token and statusCode as payment_status_code, and returns isPaymentActionRequired.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py:859: rv = requests.post(url=payment_svc_url, ...); :868-870: pid = rv.json().get('id') / filing.payment_token = pid / filing.payment_status_code = rv.json().get('statusCode', ''); :875: return {'isPaymentActionRequired': rv.json().get('isPaymentActionRequired', False)}, HTTPStatus.CREATED"
+   },
+   {
+    "fact": "pay-api sets is_payment_action_required True only when the invoice status is CREATED and the payment method is DIRECT_PAY, CC or ONLINE_BANKING.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/invoice.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/invoice.py:511-518: action_required_types = (PaymentMethod.DIRECT_PAY.value, PaymentMethod.CC.value, PaymentMethod.ONLINE_BANKING.value) / if invoice.get('status_code') == InvoiceStatus.CREATED.value and invoice.get('payment_method') in action_required_types: redirect_for_payment = True"
+   },
+   {
+    "fact": "business-filings-ui navigates to auth-web makepayment/<paymentToken>/<returnUrl>; auth-web PaymentView POSTs /payment-requests/<id>/transactions and redirects the browser to the returned paySystemUrl.",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "sbc-auth/auth-web/src/routes/router.ts",
+     "sbc-auth/auth-web/src/views/pay/PaymentView.vue",
+     "sbc-auth/auth-web/src/services/payment.services.ts"
+    ],
+    "evidence": "business-filings-ui/src/views/AnnualReport.vue:984-987: if (isPaymentActionRequired) { ... const payUrl = this.getAuthWebUrl + 'makepayment/' + paymentToken + '/' + returnUrl; sbc-auth/auth-web/src/routes/router.ts:584-586: path: '/makepayment/:paymentId/:redirectUrl(.*)', name: 'makepayment', component: PaymentView; sbc-auth/auth-web/src/views/pay/PaymentView.vue:237-238: this.returnUrl = transactionDetails?.paySystemUrl / this.goToUrl(this.returnUrl); sbc-auth/auth-web/src/services/payment.services.ts:26: const url = `${ConfigHelper.getPayAPIURL()}/payment-requests/${paymentId}/transactions`"
+   },
+   {
+    "fact": "On the PayBC return, auth-web PaymentReturnView PATCHes the transaction; pay-api _update_receipt_details marks the invoice PAID and publish_status sends the COMPLETED token to the corp-type topic, skipping PAD and EFT.",
+    "files": [
+     "sbc-auth/auth-web/src/views/pay/PaymentReturnView.vue",
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py"
+    ],
+    "evidence": "sbc-auth/auth-web/src/views/pay/PaymentReturnView.vue:66: PaymentServices.updateTransaction(this.paymentId, this.transactionId, this.payResponseUrl); sbc-pay/pay-api/src/pay_api/services/payment_transaction.py:448: invoice.invoice_status_code = InvoiceStatus.PAID.value; :453-455: if invoice.payment_method_code not in [PaymentMethod.PAD.value, PaymentMethod.EFT.value]: ... PaymentTransaction.publish_status(transaction_dao, invoice); :511: topic=get_topic_for_corp_type(invoice.corp_type_code)"
+   },
+   {
+    "fact": "payment-jobs StalePaymentTask re-runs update_transaction for transactions stale for 30 minutes and for CREATED DIRECT_PAY invoices of the last 2 days that PayBC reports paid, so the token reaches lear.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py",
+     "sbc-pay/pay-api/src/pay_api/models/invoice.py"
+    ],
+    "evidence": "sbc-pay/jobs/payment-jobs/tasks/stale_payment_task.py:50: stale_transactions = PaymentTransactionModel.find_stale_records(minutes=30); :65: TransactionService.update_transaction(transaction.id, pay_response_url=None); :102: created_invoices = InvoiceModel.find_created_direct_pay_invoices(days=2); :110-115: if paybc_invoice.paymentstatus in STATUS_PAID: ... TransactionService.update_transaction(transaction.id, pay_response_url=None); sbc-pay/pay-api/src/pay_api/models/invoice.py:221-222: .filter(Invoice.invoice_status_code == InvoiceStatus.CREATED.value).filter(Invoice.payment_method_code.in_([PaymentMethod.DIRECT_PAY.value]))"
+   },
+   {
+    "fact": "Dashboard 'Cancel Payment' PATCHes businesses/<id>/filings/<filingId>; legal-api patch_filings DELETEs the pay-api invoice and calls reset_filing_to_draft only on a 200 or 202 response.",
+    "files": [
+     "business-filings-ui/src/components/Dashboard/TodoList.vue",
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "evidence": "business-filings-ui/src/components/Dashboard/TodoList.vue:2247-2249: const url = `businesses/${this.getIdentifier}/filings/${item.filingId}` / await axios.patch(url, {}); lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py:253-255: rv = requests.delete(url=payment_svc_url, headers=headers, timeout=20.0) / if rv.status_code in (HTTPStatus.OK, HTTPStatus.ACCEPTED): filing.reset_filing_to_draft()"
+   },
+   {
+    "fact": "pay-api accept_delete calls _check_if_invoice_can_be_deleted, which raises Error.COMPLETED_PAYMENT for invoices in PAID, DELETED or APPROVED status, so PAD (APPROVED) invoices cannot be cancelled.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_service.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/payment_service.py:280: _check_if_invoice_can_be_deleted(invoice); :337-339: if invoice.invoice_status_code in (InvoiceStatus.PAID.value, InvoiceStatus.DELETED.value, InvoiceStatus.APPROVED.value): raise BusinessException(Error.COMPLETED_PAYMENT)"
+   },
+   {
+    "fact": "A refund (POST /payment-requests/<id>/refunds, roles SYSTEM, CREATE_CREDITS or FAS_REFUND) posts to PayBC, leaves the invoice REFUND_REQUESTED until DirectPayAutomatedRefundTask sets REFUNDED, and sends no message to lear.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/refund.py",
+     "sbc-pay/pay-api/src/pay_api/services/refund.py",
+     "sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py",
+     "sbc-pay/jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/resources/v1/refund.py:31-33: @bp.route('/refunds', methods=['POST', 'OPTIONS']) ... @_jwt.has_one_of_roles([Role.SYSTEM.value, Role.CREATE_CREDITS.value, Role.FAS_REFUND.value]); sbc-pay/pay-api/src/pay_api/services/direct_pay_service.py:205: refund_url = current_app.config.get('PAYBC_DIRECT_PAY_CC_REFUND_BASE_URL') + '/paybc-service/api/refund'; sbc-pay/pay-api/src/pay_api/services/refund.py:288: invoice.invoice_status_code = invoice_status or InvoiceStatus.REFUND_REQUESTED.value; sbc-pay/jobs/payment-jobs/tasks/direct_pay_automated_refund_task.py:169: invoice.invoice_status_code = InvoiceStatus.REFUNDED.value (neither refund.py nor direct_pay_service.py calls gcp_queue_publisher; only bcol_service.py:156 publishes a refund message, and that goes to ACCOUNT_MAILER_TOPIC)"
+   },
+   {
+    "fact": "business-pay publishes to the filer only when the filing's effective_date is not after payment_completion_date, withholding future-effective filings.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py",
+     "lear/jobs/future-effective-filings/file_future_effective.py",
+     "lear/legal-api/src/legal_api/resources/v2/internal_services.py",
+     "lear/legal-api/src/legal_api/models/filing.py"
+    ],
+    "evidence": "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py:220: if filing.effective_date <= filing.payment_completion_date: ... queue.publish_json(subject=filer_topic, payload=queue_message); lear/jobs/future-effective-filings/file_future_effective.py:51: subject = os.getenv('NATS_FILER_SUBJECT', ''); :101: f'{app.config[\"LEGAL_API_URL\"]}/internal/filings/future_effective'; :128-129: msg = {'filing': {'id': filing_id}} / await queue_service.publish(subject, msg); lear/legal-api/src/legal_api/resources/v2/internal_services.py:30-35: @bp.route('/filings/future_effective', methods=['GET']) ... filing_ids = Filing.get_future_effective_filing_ids(); lear/legal-api/src/legal_api/models/filing.py:1032-1034: filter(Filing._status.in_([Filing.Status.PAID.value, Filing.Status.APPROVED.value])). filter(Filing.effective_date <= datetime.now(timezone.utc))",
+    "fixed": true
+   }
+  ]
+ },
+ {
+  "qid": "h2-staff-0",
+  "kind": "staff",
+  "question": "A registry staff member files an annual report on a business's behalf and picks one of the staff-only payment options: no fee, a routing slip, or a typed BC Online account and DAT number. Before we sign off on hardening this path, I need to know: for each of those three options, which of the filings UI, the filings API and the payments API actually verifies the caller is staff, and which just forwards what it was handed; what a service-account token can and cannot do when it sends the same header fields; what the payments API relies on from the auth service to let a staff token pay at all; and what happens downstream once a zero-dollar staff invoice is accepted.",
+  "trap": "Reading the filings API's invoice-creation code, an agent sees an explicit staff/system role check around the account fields and concludes that the filings API gates the staff payment options. It only gates routing slip, BCOL and DAT; the no-fee flag is copied into every fee line for any caller with no role check, and the filings API also skips the auth service entirely for staff/system tokens. The real waiver gate lives in sbc-pay, at the payment line-item level, and it accepts only the 'staff' role, so a 'system' service token that sends the flag is refused with a 401 even though the same factory lets a system token pay through BCOL. The staff token's right to create the invoice at all rests on sbc-auth echoing the token's own realm roles back as the authorization roles (so 'make_payment' must ride in the Keycloak token), and the zero-dollar path marks the invoice approved and publishes a payment event that lear's business-pay consumer turns into a PAID filing.",
+  "facts": [
+   {
+    "fact": "In the filings UI, clicking File and Pay opens the staff payment dialog only when the Keycloak roles include 'staff' (isRoleStaff); other users skip it.",
+    "files": [
+     "business-filings-ui/src/views/AnnualReport.vue",
+     "business-filings-ui/src/stores/rootStore.ts"
+    ],
+    "evidence": "business-filings-ui/src/views/AnnualReport.vue:939: if (this.isRoleStaff && !fromStaffPayment) { this.staffPaymentDialog = true; return } ; business-filings-ui/src/stores/rootStore.ts:100: return state.keycloakRoles.includes('staff')"
+   },
+   {
+    "fact": "legal-api create_invoice forwards routingSlip, bcolAccountNumber and datNumber to pay-api only when the JWT validates STAFF_ROLE or SYSTEM_ROLE; otherwise no accountInfo is sent.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "evidence": "business_filings.py:834: if user_jwt.validate_roles([STAFF_ROLE]): special_role = UserRoles.staff ; :836: elif user_jwt.validate_roles([SYSTEM_ROLE]): ; :841-851: if special_role: ... account_info['routingSlip'] = routing_slip_number ... account_info['bcolAccountNumber'] ... account_info['datNumber']"
+   },
+   {
+    "fact": "legal-api get_filing_types copies the header's waiveFees flag into the fee-bearing filing types it sends to pay-api with no role check.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "evidence": "business_filings.py:675: waive_fees_flag = filing_json['filing']['header'].get('waiveFees', False) ; :687: 'waiveFees': waive_fees_flag (repeated at 698, 706, 712, 717, 757, 763)",
+    "fixed": true
+   },
+   {
+    "fact": "pay-api FeeSchedule zeroes fee_amount, priority_fee, future_effective_fee and service_fees whenever waive_fees is truthy, without checking any role.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/fee_schedule.py:319-323: if kwargs.get('waive_fees'): fee_schedule.fee_amount = 0; fee_schedule.priority_fee = 0; fee_schedule.future_effective_fee = 0; fee_schedule.service_fees = 0"
+   },
+   {
+    "fact": "pay-api PaymentLineItem.create raises FEE_OVERRIDE_NOT_ALLOWED (HTTP 401) when waived_fee_amount > 0 and the token lacks the 'staff' role; a 'system' token is refused here.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_line_item.py",
+     "sbc-pay/pay-api/src/pay_api/utils/errors.py"
+    ],
+    "evidence": "payment_line_item.py:300-304: if fee.waived_fee_amount > 0: if user.has_role(Role.STAFF.value): p.waived_by = user.user_name else: raise BusinessException(Error.FEE_OVERRIDE_NOT_ALLOWED) ; errors.py:48: FEE_OVERRIDE_NOT_ALLOWED = 'FEE_OVERRIDE_NOT_ALLOWED', HTTPStatus.UNAUTHORIZED"
+   },
+   {
+    "fact": "pay-api PaymentSystemFactory.create picks InternalPayService for a zero total before any role check; 'staff' gets BcolService if bcolAccountNumber else InternalPayService; 'system' gets BcolService only with bcolAccountNumber.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/factory/payment_system_factory.py"
+    ],
+    "evidence": "payment_system_factory.py:85-97: if total_fees == 0: _instance = InternalPayService() elif Role.STAFF.value in user.roles: if has_bcol_account_number: _instance = BcolService() else: _instance = InternalPayService() else: if has_bcol_account_number and Role.SYSTEM.value in user.roles: _instance = BcolService() else: ... create_from_payment_method(payment_method)"
+   },
+   {
+    "fact": "pay-api post_invoice calls check_auth with contains_role 'make_payment' and aborts 403 when it is absent from the returned roles, except system tokens holding 'editor'.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/services/auth.py",
+     "sbc-pay/pay-api/src/pay_api/utils/constants.py"
+    ],
+    "evidence": "invoice.py:67-68: authorization = check_auth(business_identifier=..., corp_type_code=..., contains_role=MAKE_PAYMENT) ; auth.py:84-85: if kwargs.get('contains_role', None): is_authorized = kwargs.get('contains_role') in roles ; auth.py:101-102: if not is_authorized: abort(403) ; constants.py:44: MAKE_PAYMENT = 'make_payment'",
+    "fixed": true
+   },
+   {
+    "fact": "auth-api get_user_authorizations_for_entity returns the staff token's own realm roles as 'roles', never the membership permissions table, so a staff token must itself carry 'make_payment'.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/authorization.py:95-100: if Role.STAFF.value in token_roles: if expanded: auth = AuthorizationView.find_user_authorization_by_business_number(business_identifier, is_staff=True) ... auth_response['roles'] = token_roles"
+   },
+   {
+    "fact": "InternalPayService defaults the invoice to APPROVED and its _release_payment publishes a PAYMENT message to the BUSINESS_PAY_TOPIC for business corp types.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/internal_pay_service.py",
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py",
+     "sbc-pay/pay-api/src/pay_api/utils/util.py",
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ],
+    "evidence": "internal_pay_service.py:93: return InvoiceStatus.APPROVED.value ; :89: self._release_payment(invoice=invoice) ; base_payment_system.py:165-170: gcp_queue_publisher.publish_to_queue(... message_type=QueueMessageTypes.PAYMENT.value, ... topic=get_topic_for_corp_type(invoice.corp_type_code)) ; util.py:293-294: if product_code in [Product.BUSINESS.value, ...]: return current_app.config.get('BUSINESS_PAY_TOPIC') ; pay_filer.py:147-149: filing.payment_completion_date = datetime.now(timezone.utc); filing.payment_status_code = \"COMPLETED\"; filing.status = Filing.Status.PAID",
+    "fixed": true
+   }
+  ]
+ },
+ {
+  "qid": "h2-staff-1",
+  "kind": "staff",
+  "question": "A continuation-in application has been paid and is now held for registrar staff review. For a security and workflow sign-off I need the whole chain: which component actually puts the application on hold and when; what a staff decision publishes and which services consume it; whether the downstream processor that completes the filing re-verifies the decision or trusts the message; who gets emailed about each outcome and where their address comes from; whether a rejected application's fee comes back and who could refund it; what the business dashboard shows the applicant at each stage; and, once approved, what system identity attaches the new business to the customer's account and what the auth service requires of it.",
+  "trap": "An agent reading the filings API's review endpoints concludes that the review is created and gated there, that approval drives the filer, and that rejection is a terminal decision. In fact the hold is created by lear's payment consumer (business-pay) the moment the payment completes, not by the filings API; the filer only skips filings already COMPLETED and never checks that a filing is APPROVED or even PAID before processing whatever message it receives; the applicant's address comes from the filing's own contact point, not from sbc-auth; nothing in the decision path calls sbc-pay, and sbc-pay's refund endpoint does not accept the plain 'staff' role, so a rejected fee stays put; and after approval the affiliation of the new business is created with a client-credentials service token that sbc-auth admits via the 'system' role, not the reviewer's identity. The applicant's view of each state and the reviewer's comment are assembled in business-filings-ui from a header field the filings API injects on read.",
+  "facts": [
+   {
+    "fact": "lear business-pay creates the staff review: on a COMPLETED payment for a continuationIn it saves a Review AWAITING_REVIEW and sets the filing AWAITING_REVIEW instead of publishing to the filer.",
+    "files": [
+     "lear/queue_services/business-pay/src/business_pay/resources/pay_filer.py"
+    ],
+    "evidence": "pay_filer.py:154-160: staff_review_required = [\"continuationIn\"]; if filing.filing_type in staff_review_required: create_staff_review(filing) else: publish_to_filer(filing, payment_token) ; :178: review.status = ReviewStatus.AWAITING_REVIEW ; :185-186: filing.status = Filing.Status.AWAITING_REVIEW.value; filing.save()"
+   },
+   {
+    "fact": "entity-emailer addresses continuation-in emails from the filing's own contactPoint email, adding the completing party's email on PAID; it does not query auth-api for that filing type.",
+    "files": [
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/__init__.py",
+     "lear/queue_services/entity-emailer/src/entity_emailer/email_processors/continuation_in_notification.py"
+    ],
+    "evidence": "email_processors/__init__.py:61-62: if filing_json['filing'].get(filing_type): recipients = filing_json['filing'][filing_type]['contactPoint']['email'] ; :63-71: if option in [Filing.Status.PAID.value, 'bn'] ... recipients = f'{recipients}, {comp_party_email}' ; continuation_in_notification.py:205: recipients = get_recipients(status, filing.filing_json, token, filing_type)"
+   },
+   {
+    "fact": "legal-api save_review always publishes an emailer message carrying the new filing status, and publishes to the filer only when the status is APPROVED and effective_date is not in the future.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/admin/reviews.py"
+    ],
+    "evidence": "reviews.py:161-164: queue.publish_json({'email': {'filingId': filing.id, 'type': filing.filing_type, 'option': filing.status}}, current_app.config.get('NATS_EMAILER_SUBJECT')) ; :166-171: if (filing.status == Filing.Status.APPROVED.value and filing.effective_date <= datetime.now(timezone.utc)): queue.publish_json({'filing': {'id': filing.id}}, current_app.config.get('NATS_FILER_SUBJECT'))"
+   },
+   {
+    "fact": "entity-filer process_filing refuses only filings already COMPLETED; it does not check for APPROVED or PAID before processing a filer message.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py"
+    ],
+    "evidence": "worker.py:218-221: if filing_core_submission.status == Filing.Status.COMPLETED: logger.warning('QueueFiler: Attempting to reprocess ...'); return None, None"
+   },
+   {
+    "fact": "After processing a continuationIn, entity-filer calls business_profile.update_affiliation, which uses legal-api AccountService.create_affiliation with a client-credentials service-account token.",
+    "files": [
+     "lear/queue_services/entity-filer/src/entity_filer/worker.py",
+     "lear/queue_services/entity-filer/src/entity_filer/filing_processors/filing_components/business_profile.py",
+     "lear/legal-api/src/legal_api/services/bootstrap.py"
+    ],
+    "evidence": "worker.py:351-366: if filing_core_submission.filing_type in [... FilingCore.FilingTypes.CONTINUATIONIN ...]: ... business_profile.update_affiliation(business, filing_submission) ; business_profile.py:114: rv = AccountService.create_affiliation(account=bootstrap.account, ...) ; bootstrap.py:122-125: client_id = current_app.config.get('ACCOUNT_SVC_CLIENT_ID') ... data = 'grant_type=client_credentials' ; :151: account_svc_affiliate_url = f'{auth_url}/orgs/{account}/affiliations'"
+   },
+   {
+    "fact": "auth-api's POST orgs/{org_id}/affiliations admits only tokens with one of 'system', 'manage_business' or 'public_user'; the plain 'staff' role is not in that list.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py",
+     "sbc-auth/auth-api/src/auth_api/utils/roles.py"
+    ],
+    "evidence": "org.py:383-387: @bp.route('/<int:org_id>/affiliations', methods=['POST']) ... @_jwt.has_one_of_roles([Role.SYSTEM.value, Role.STAFF_MANAGE_BUSINESS.value, Role.PUBLIC_USER.value]) def post_organization_affiliation(org_id) ; roles.py:32: SYSTEM = 'system' ; :35: STAFF = 'staff' ; :40: STAFF_MANAGE_BUSINESS = 'manage_business'"
+   },
+   {
+    "fact": "pay-api's refund POST on a payment request requires one of 'system', 'create_credits' or 'fas_refund'; a token with only 'staff' cannot refund.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/refund.py",
+     "sbc-pay/pay-api/src/pay_api/utils/enums.py"
+    ],
+    "evidence": "refund.py:31-34: @bp.route('/refunds', methods=['POST', 'OPTIONS']) ... @_jwt.has_one_of_roles([Role.SYSTEM.value, Role.CREATE_CREDITS.value, Role.FAS_REFUND.value]) def post_refund(invoice_id) ; enums.py:117: STAFF = 'staff' ; :125: CREATE_CREDITS = 'create_credits' ; :131: FAS_REFUND = 'fas_refund'"
+   },
+   {
+    "fact": "legal-api's filing GET injects header.latestReviewComment from the last ReviewResult when the filing is CHANGE_REQUESTED, APPROVED or REJECTED.",
+    "files": [
+     "lear/legal-api/src/legal_api/resources/v2/business/business_filings/business_filings.py"
+    ],
+    "evidence": "business_filings.py:293-297: elif (rv.status in [Filing.Status.CHANGE_REQUESTED.value, Filing.Status.APPROVED.value, Filing.Status.REJECTED.value] and (review_result := ReviewResult.get_last_review_result(rv.id))): filing_json['filing']['header']['latestReviewComment'] = review_result.comments"
+   },
+   {
+    "fact": "business-filings-ui routes a continuation-in by status: AWAITING_REVIEW to the pending list, CHANGE_REQUESTED to the todo list with a Make Changes button and the review comment, APPROVED/REJECTED to filing history.",
+    "files": [
+     "business-filings-ui/src/stores/rootStore.ts",
+     "business-filings-ui/src/components/Dashboard/TodoList.vue"
+    ],
+    "evidence": "rootStore.ts:149: this.getBootstrapFilingStatus === FilingStatus.CHANGE_REQUESTED || (isContinuationInTodo) ; :160: this.getBootstrapFilingStatus === FilingStatus.AWAITING_REVIEW (isContinuationInPending) ; :169-172: FilingStatus.APPROVED || ... COMPLETED || ... PAID || ... REJECTED (isContinuationInFiling) ; TodoList.vue:525-531: v-else-if=\"EnumUtilities.isStatusChangeRequested(item)\" ... <span>Make Changes</span> ; :618: :value=\"item.latestReviewComment || '[undefined staff change request message]'\""
+   }
+  ]
+ },
+ {
+  "qid": "h2-standing-0",
+  "kind": "standing",
+  "question": "Two accounts get suspended for money reasons: one because a pre-authorized debit bounced, the other because an EFT-paying account let a monthly statement go overdue. For a security sign-off I need to know, for each case, which service detects it and how the suspension reaches the account, what is recorded on the account about the cause (and whether both cases record the same thing), what happens if the suspension message names an account that does not exist or is delivered twice, and whether an administrator of the suspended account can still submit a business filing and still create a payment for it.",
+  "trap": "Reading only the auth-queue worker and the org status enum, an agent concludes suspension is one status with a reason code and that a suspended account is blocked everywhere. sbc-pay holds the corrections: the PAD bounce payload built in pay-queue carries no reason code at all (only the payment-jobs EFT lock does), the duplicate guard in auth-queue marks a message processed before it is handled, and the only thing that stops invoice creation is pay-api's own has_nsf_invoices/has_overdue_invoices flags. lear holds the other correction: legal-api's authorization only checks the roles list, and auth-api's permissions table still grants 'edit' to admins of an NSF-suspended account, so the filing itself is allowed.",
+  "facts": [
+   {
+    "fact": "pay-queue's _process_consolidated_invoices publishes NSF_LOCK_ACCOUNT through _publish_account_events when a PAD settlement row is NOT PAID and _process_failed_payments returns True.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py"
+    ],
+    "evidence": "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py:324-328: current_app.logger.info('NOT PAID. NSF identified.') ... if _process_failed_payments(row): _publish_account_events(QueueMessageTypes.NSF_LOCK_ACCOUNT.value, payment_account, row)"
+   },
+   {
+    "fact": "Both pay-queue's _publish_account_events and payment-jobs' AuthEvent publish the lock to the topic from config key AUTH_EVENT_TOPIC, which auth-queue consumes.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+     "sbc-pay/jobs/payment-jobs/utils/auth_event.py",
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py:753: topic=current_app.config.get('AUTH_EVENT_TOPIC'); sbc-pay/jobs/payment-jobs/utils/auth_event.py:24: topic=current_app.config.get('AUTH_EVENT_TOPIC'); sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:57-59: elif event_message.type in [QueueMessageTypes.NSF_UNLOCK_ACCOUNT.value, QueueMessageTypes.NSF_LOCK_ACCOUNT.value]: process_pay_lock_unlock_event(event_message)"
+   },
+   {
+    "fact": "The PAD-bounce lock payload built by pay-queue's _create_event_payload has no suspensionReasonCode; the EFT lock payload from payment-jobs' AuthEvent._create_event_payload sets suspensionReasonCode to OVERDUE_EFT.",
+    "files": [
+     "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py",
+     "sbc-pay/jobs/payment-jobs/utils/auth_event.py"
+    ],
+    "evidence": "sbc-pay/pay-queue/src/pay_queue/services/payment_reconciliations.py:764-771: return {'accountId': ..., 'paymentMethod': ..., 'outstandingAmount': ..., 'originalAmount': ..., 'amount': ...}; sbc-pay/jobs/payment-jobs/utils/auth_event.py:62: 'suspensionReasonCode': SuspensionReasonCodes.OVERDUE_EFT.value"
+   },
+   {
+    "fact": "auth-queue's process_pay_lock_unlock_event sets org status_code to NSF_SUSPENDED for every lock message and copies suspensionReasonCode from the payload, defaulting to None.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:115-118: if message_type == QueueMessageTypes.NSF_LOCK_ACCOUNT.value: org.status_code = OrgStatus.NSF_SUSPENDED.value; org.suspended_on = datetime.now(); org.suspension_reason_code = queue_data.get('suspensionReasonCode', None)"
+   },
+   {
+    "fact": "auth-queue's is_message_processed inserts and commits a PubSubMessageProcessing row before the message is handled, so a redelivery after a processing failure is skipped as already processed.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:50-52: if is_message_processed(event_message): ... return {}, HTTPStatus.OK; worker.py:70-76: pubsub_message_processing = PubSubMessageProcessing() ... db.session.commit(); return False"
+   },
+   {
+    "fact": "When the lock names an account OrgModel.find_by_org_id cannot find, auth-queue logs 'Unknown org' and returns, and the worker still answers 200 so the message is dropped.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:107-110: org: OrgModel = OrgModel.find_by_org_id(org_id); if org is None: current_app.logger.error('Unknown org for orgid %s', org_id); return; worker.py:62-63: # Return a 200, so the event is removed from the Queue; return {}, HTTPStatus.OK"
+   },
+   {
+    "fact": "auth-api's permissions table grants ADMIN members of an NSF_SUSPENDED org the actions 'edit', 'view' and 'make_payment'.",
+    "files": [
+     "sbc-auth/auth-api/migrations/versions/b72d4946fb3c_added_view_edit_for_nsf_account.py",
+     "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py"
+    ],
+    "evidence": "sbc-auth/auth-api/migrations/versions/b72d4946fb3c_added_view_edit_for_nsf_account.py:33-36: {'membership_type_code': 'ADMIN', 'org_status_code': 'NSF_SUSPENDED', 'actions': 'edit'}, {... 'org_status_code': 'NSF_SUSPENDED', 'actions': 'view'}; sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py:148-149: {'id': 47, 'membership_type_code': 'ADMIN', 'org_status_code': 'NSF_SUSPENDED', 'actions': 'make_payment'}"
+   },
+   {
+    "fact": "legal-api's authorized() accepts a public user's filing action when the roles list from auth-api's entities/{identifier}/authorizations contains it; it never inspects the account status.",
+    "files": [
+     "lear/legal-api/src/legal_api/services/authz.py",
+     "sbc-auth/auth-api/src/auth_api/services/authorization.py"
+    ],
+    "evidence": "lear/legal-api/src/legal_api/services/authz.py:119-121: rv = _call_auth_api(f'entities/{identifier}/authorizations', ...); if rv and rv.status_code == HTTPStatus.OK and (roles := rv.json().get('roles')): return all(elem.lower() in roles for elem in action); sbc-auth/auth-api/src/auth_api/services/authorization.py:131-135: permissions = PermissionsService.get_permissions_for_membership(auth.status_code, auth.org_membership) ... auth_response['roles'] = permissions"
+   },
+   {
+    "fact": "pay-api's ensure_no_payment_blockers rejects invoice creation with PAD_CURRENTLY_NSF or EFT_INVOICES_OVERDUE based on the pay-side has_nsf_invoices and has_overdue_invoices flags, not on the auth org status.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/base_payment_system.py:147-152: if payment_account.has_nsf_invoices: ... raise BusinessException(Error.PAD_CURRENTLY_NSF); if payment_account.has_overdue_invoices: raise BusinessException(Error.EFT_INVOICES_OVERDUE)"
+   }
+  ]
+ },
+ {
+  "qid": "h2-standing-1",
+  "kind": "standing",
+  "question": "I am changing the way accounts come back from suspension. There are two returns: an account frozen for a bounced debit or overdue EFT pays what it owes, and an account that registry staff suspended by hand is unsuspended by staff. For each, I need to know what actually flips the account back to active and who is allowed to trigger it, what trace of the suspension stays on the account afterwards, whether anything on the payment side can remain blocked after the account shows active, and what a member of a staff-suspended account sees in the filings application and gets back when trying to create a payment.",
+  "trap": "Reading auth-api's change_org_status and the auth-queue unlock branch, an agent treats staff unsuspension and the pay-side unlock as symmetric paths to ACTIVE with a cleaned-up record. sbc-pay corrects this: the unlock message is only published when pay-api itself clears its has_nsf_invoices/has_overdue_invoices flags after a completed payment (or the EFT job finds no overdue invoices), and a staff status change leaves those flags untouched so payments stay rejected. business-filings-ui and auth-api's permissions data correct the rest: there are no permission rows for the staff SUSPENDED status, so the roles list is empty, the filings app throws and shows an authorization error dialog, and pay-api's invoice endpoint, which demands the make_payment role, refuses.",
+  "facts": [
+   {
+    "fact": "pay-api's PaymentTransaction.update_transaction calls PaymentAccount.unlock_frozen_accounts only when the payment is COMPLETED and either no active failed payments remain or has_overdue_invoices is set.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/payment_transaction.py:414-421: if payment.payment_status_code == PaymentStatus.COMPLETED.value: active_failed_payments = Payment.get_failed_payments(...) ... if not active_failed_payments or payment_account.has_overdue_invoices: PaymentAccount.unlock_frozen_accounts(...)"
+   },
+   {
+    "fact": "PaymentAccount.unlock_frozen_accounts publishes NSF_UNLOCK_ACCOUNT to the AUTH_EVENT_TOPIC only after clearing has_nsf_invoices or has_overdue_invoices; if neither flag was set it returns without publishing.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/services/payment_account.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/services/payment_account.py:614-619: if pay_account.has_nsf_invoices: ... pay_account.has_nsf_invoices = None ... unlocked = True; :638-639: if not unlocked: return; :644: QueueMessageTypes.NSF_UNLOCK_ACCOUNT.value; :649-654: gcp_queue_publisher.publish_to_queue(QueueMessage(... message_type=QueueMessageTypes.NSF_UNLOCK_ACCOUNT.value, ... topic=current_app.config.get('AUTH_EVENT_TOPIC')))"
+   },
+   {
+    "fact": "payment-jobs' EFTTask.unlock_overdue_accounts publishes the unlock through AuthEvent.publish_unlock_account_event with skipNotification True, so auth-queue reactivates the org without sending the mailer email.",
+    "files": [
+     "sbc-pay/jobs/payment-jobs/tasks/eft_task.py",
+     "sbc-pay/jobs/payment-jobs/utils/auth_event.py",
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-pay/jobs/payment-jobs/tasks/eft_task.py:205-209: if InvoiceService.has_overdue_invoices(payment_account_id): continue; payment_account.has_overdue_invoices = None ... AuthEvent.publish_unlock_account_event(payment_account); sbc-pay/jobs/payment-jobs/utils/auth_event.py:38-41: unlock_payload = {'accountId': ..., 'skipNotification': True}; sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:125-127: if skip_notification is False: publish_to_mailer(QueueMessageTypes.NSF_UNLOCK_ACCOUNT.value, ...)"
+   },
+   {
+    "fact": "On NSF_UNLOCK_ACCOUNT, auth-queue's process_pay_lock_unlock_event sets status_code to ACTIVE and clears suspension_reason_code, but leaves suspended_on as set by the lock.",
+    "files": [
+     "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py"
+    ],
+    "evidence": "sbc-auth/queue_services/auth-queue/src/auth_queue/resources/worker.py:117: org.suspended_on = datetime.now(); :122-124: elif message_type == QueueMessageTypes.NSF_UNLOCK_ACCOUNT.value: org.status_code = OrgStatus.ACTIVE.value; org.suspension_reason_code = None"
+   },
+   {
+    "fact": "auth-web's suspendOrganization sends PATCH /orgs/{id} with statusCode ACTIVE whenever the org's current status is not ACTIVE.",
+    "files": [
+     "sbc-auth/auth-web/src/stores/org.ts",
+     "sbc-auth/auth-web/src/services/org.services.ts",
+     "sbc-auth/auth-api/src/auth_api/resources/v1/org.py"
+    ],
+    "evidence": "sbc-auth/auth-web/src/stores/org.ts:289: const orgStatus = state.currentOrganization.statusCode === AccountStatus.ACTIVE ? AccountStatus.SUSPENDED : AccountStatus.ACTIVE; org.services.ts:142: axios.patch(`${ConfigHelper.getAuthAPIUrl()}/orgs/${orgId}`, ...); sbc-auth/auth-api/src/auth_api/resources/v1/org.py:219-222: @bp.route('/<int:org_id>', methods=['PATCH']) ... @_jwt.has_one_of_roles([Role.STAFF_MANAGE_ACCOUNTS.value, Role.SYSTEM.value])",
+    "fixed": true
+   },
+   {
+    "fact": "auth-api's Org.change_org_status assigns the new status with no check of the current status, and when setting ACTIVE clears neither suspended_on nor suspension_reason_code.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/org.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/org.py:792-798: org_model = self._model; org_model.status_code = status_code; org_model.decision_made_by = user.username; if status_code == OrgStatus.SUSPENDED.value: org_model.suspended_on = datetime.today(); org_model.suspension_reason_code = suspension_reason_code; org_model.save()"
+   },
+   {
+    "fact": "No migration inserts permissions rows with org_status_code SUSPENDED, so Permissions.get_permissions_for_membership('SUSPENDED', 'ADMIN') returns an empty actions list.",
+    "files": [
+     "sbc-auth/auth-api/src/auth_api/services/permissions.py",
+     "sbc-auth/auth-api/migrations/versions/8260fac9943d_suspended_status.py",
+     "sbc-auth/auth-api/migrations/versions/1c958b749a20_org_status_added_to_authorisation_view.py"
+    ],
+    "evidence": "sbc-auth/auth-api/src/auth_api/services/permissions.py:59-61: if org_status not in (OrgStatus.NSF_SUSPENDED.value, OrgStatus.PENDING_STAFF_REVIEW.value, OrgStatus.SUSPENDED.value): org_status = None; :67-71: permissions = PermissionsModel.get_permissions_by_membership(org_status, membership_type) ... actions.append(permission.actions); 8260fac9943d_suspended_status.py:31 only adds the org_status code 'SUSPENDED'; grep of migrations/versions for org_status_code 'SUSPENDED' permission rows finds none (only NSF_SUSPENDED and PENDING_STAFF_REVIEW rows exist)"
+   },
+   {
+    "fact": "business-filings-ui's App.vue storeAuthorizations throws 'Invalid auth roles' when the roles list from entities/{id}/authorizations is empty, and the catch opens businessAuthErrorDialog and stops loading.",
+    "files": [
+     "business-filings-ui/src/App.vue"
+    ],
+    "evidence": "business-filings-ui/src/App.vue:565-573: const authRoles = response?.data?.roles; if (authRoles && authRoles.length > 0) { this.setAuthRoles(authRoles) } else { throw new Error('Invalid auth roles') }; App.vue:429-434: this.storeAuthorizations(response) // throws if no role } catch (error) { ... if (this.businessId) this.businessAuthErrorDialog = true ... return"
+   },
+   {
+    "fact": "pay-api's post_invoice requires the 'make_payment' role via check_auth(contains_role=MAKE_PAYMENT), where check_auth takes roles from auth-api's orgs/{id}/authorizations or entities/{id}/authorizations.",
+    "files": [
+     "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py",
+     "sbc-pay/pay-api/src/pay_api/utils/constants.py",
+     "sbc-pay/pay-api/src/pay_api/services/auth.py"
+    ],
+    "evidence": "sbc-pay/pay-api/src/pay_api/resources/v1/invoice.py:67-68: authorization = check_auth(business_identifier=business_identifier, corp_type_code=corp_type_code, contains_role=MAKE_PAYMENT); constants.py:44: MAKE_PAYMENT = 'make_payment'; sbc-pay/pay-api/src/pay_api/services/auth.py:59-61: auth_url = ... f'orgs/{account_id}/authorizations?expanded=true' ... roles: list = auth_response.get('roles', []); :84-85: if kwargs.get('contains_role', None): is_authorized = kwargs.get('contains_role') in roles"
+   }
+  ]
+ }
+]
