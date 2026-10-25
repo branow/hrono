@@ -92,3 +92,7 @@ The same model split as the BC Registries build
 
 - README's quickstart shows `hrono connections set <name> -f -`; the CLI
   rejects `-f -` ("File '-' does not exist"). Omit `-f` to read stdin.
+- 2026-10-25: the root brief was replaced through `PUT
+  /trees/xgboost/nodes/162/brief` with replay 0, the good one, and the tree
+  re-exported to `~/hrono-xgboost/export`. The override pins node 162. The
+  prompt fix is backlog epic E051.
