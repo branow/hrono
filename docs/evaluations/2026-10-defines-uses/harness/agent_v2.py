@@ -31,6 +31,7 @@ SRC = Path.home() / "hrono-eval" / "export-bcreg-v3z-L3"
 EXPORT = (
     Path.home() / "hrono-eval" / os.environ.get("EXPORT", "export-bcreg-v3w-L3")
 )
+SET = os.environ.get("SET", "hard15")  # the question set in ~/hrono-deep/data
 LINKED = 12  # linked topics listed per brief at most
 
 MAP_V2 = """
@@ -214,7 +215,7 @@ def run(qid: str, name: str, words: int = 900) -> None:
 
     q = [
         x
-        for x in json.load(open(common.DATA / "hard15.json"))
+        for x in json.load(open(common.DATA / f"{SET}.json"))
         if x["qid"] == qid
     ][0]
     prompt = run_arms.ARCH.format(question=q["question"]).replace(
@@ -235,7 +236,7 @@ def run(qid: str, name: str, words: int = 900) -> None:
     r = common.run_agent(
         prompt,
         model=name.partition("@")[2] or "sonnet",
-        role=f"hard15:{name}",
+        role=f"{SET}:{name}",
         key=qid,
         max_turns=run_arms.TURNS_H,
         tools=["Read", "Grep", "Glob"],
@@ -249,11 +250,9 @@ def run(qid: str, name: str, words: int = 900) -> None:
         env={},
         safe_mode=False,
     )
-    out = common.RUNS / f"hard15-{name}.jsonl"
+    out = common.RUNS / f"{SET}-{name}.jsonl"
     with out.open("a") as f:
-        f.write(
-            json.dumps({"qid": qid, "set": "hard15", "arm": name, **r}) + "\n"
-        )
+        f.write(json.dumps({"qid": qid, "set": SET, "arm": name, **r}) + "\n")
 
 
 if __name__ == "__main__":
