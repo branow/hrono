@@ -1420,3 +1420,42 @@ a message or a check in 15 to 25 turns, cross-repository or not. Only 10 of
 On this corpus, at this budget, a bare agent is not the weak baseline the
 product claim needs; a question it fails has to come from a corpus too large
 to grep in 30 turns, or the comparison has to hold the budget equal.
+
+### List tasks: exhaustive answers (2026-10-25)
+
+A third kind, `data/tasks1.json`: five tasks whose answer is a complete list
+across the system (every cross-service message with its consumer and repeat
+behaviour, 41 items; every entry point taking an account id and whether it
+verifies membership, 98; every filing status and what sets it, 44; every way
+a paid filing is held, dropped or reverted, 39; every scheduled job, 37),
+ground truth by explorers from the code with `path:line` evidence,
+`harness/tasks_assemble.py`; scored by `score_list.py` as recall of the list
+(1, 0.5 for the component without its key detail, 0) plus the answer's extra
+items. `harness/map_check.py`: 186 of 259 items have all their identifiers
+inside one brief of the export, 55 more spread over the export, 18 absent.
+
+Code only, Sonnet, 30 turns, one try per task:
+
+| task | items | no budget note | told the budget |
+|---|---|---|---|
+| messages | 41 | 0 (no answer) | 0.82 |
+| accounts | 98 | 0 (no answer) | 0.57 |
+| statuses | 44 | 0.58 | 0.65 |
+| undo paths | 39 | 0 (no answer) | 0.73 |
+| jobs | 37 | 0 (no answer) | 0.70 |
+| mean | | 0.12 | 0.69 |
+
+Without a note, 4 of 5 tries searched until the 30-turn cap and wrote
+nothing. Told "write the list by your 22nd tool call, a partial list beats
+none" (the `NOTE` env, the same text for every arm), the same agent lists
+57 to 82 percent of each ground truth in 14 to 22 turns. So an exhaustive
+task does not defeat a bare agent either, once it budgets; what defeats it
+is the budget. The audit of the five lists stopped at the session limit
+(two of five auditors done: none); the scores above are against the
+unaudited lists, and the answers' extra items (3, 3, 2, 8, 1) may be
+ground-truth misses.
+
+Over the three kinds on this corpus, a Sonnet agent with grep and 30 turns
+scores 0.63 (hard15), 0.77 (hard2), 0.69 (lists). The lever that remains
+is the budget: the same tasks with both arms capped at 10 or 15 turns,
+which costs nothing to set up and less to run.

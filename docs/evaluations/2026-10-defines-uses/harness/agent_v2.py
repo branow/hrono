@@ -209,7 +209,7 @@ def oracle(qid: str) -> str:
     )
 
 
-def run(qid: str, name: str, words: int = 900) -> None:
+def run(qid: str, name: str, words: int | None = None) -> None:
     import common
     import run_arms
 
@@ -218,9 +218,12 @@ def run(qid: str, name: str, words: int = 900) -> None:
         for x in json.load(open(common.DATA / f"{SET}.json"))
         if x["qid"] == qid
     ][0]
+    words = words or int(os.environ.get("WORDS", "900"))
     prompt = run_arms.ARCH.format(question=q["question"]).replace(
         "at most 400 words", f"at most {words} words"
     )
+    if os.environ.get("NOTE"):
+        prompt += "\n\n" + os.environ["NOTE"]  # the same note to every arm
     if os.environ.get("MAP") == "none":
         pass  # code only: the same task, limits and system, no tree
     elif os.environ.get("MAP") == "plugin":
