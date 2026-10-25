@@ -90,21 +90,25 @@ test("a prompt gets its recalled passages, named by file and topic", () => {
   w.configure({ tree: "demo" });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.match(text, /hrono recall from tree "demo"/);
-  assert.match(text, /### src\/auth\.py \(repo\)\n\ndef login\(\): \.\.\./);
-  assert.match(text, /### brief of topic 7\n\nAuth handles sign-in\./);
+  assert.match(text, /### 1\. src\/auth\.py \(repo\)\n\ndef login\(\): \.\.\./);
+  assert.match(text, /### 2\. brief of topic 7\n\nAuth handles sign-in\./);
+  assert.doesNotMatch(text, /Pages, best first/);
   assert.doesNotMatch(text, /git:\/\//);
   assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--limit", "15"]);
 });
 
-test("a brief whose page is in the export is named by that page", () => {
+test("hits whose page is in the export list it to read, best first", () => {
   const w = world([{ ...LOGIN, topic: 7 }, BRIEF]);
   const page = path.join(w.dir, "export", "auth-area-3", "sign-in-7", "brief.md");
   fs.mkdirSync(path.dirname(page), { recursive: true });
   fs.writeFileSync(page, "# Sign-in\n\nChecks a password.\n");
   w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
   const text = attached(w.run("recall.js", { prompt: ASK }));
-  assert.ok(text.includes(`### brief of topic 7: ${page}\n\nAuth handles sign-in.`));
-  assert.ok(text.includes(`### src/auth.py (repo), in page ${page}\n\ndef login(): ...`));
+  assert.ok(
+    text.includes(`Pages, best first:\n1. ${page}  (holds src/auth.py (repo))\n2. ${page}  (brief of topic 7)\n\n### 1. src/auth.py (repo)`),
+    text,
+  );
+  assert.ok(text.includes(`### 2. brief of topic 7\n\nAuth handles sign-in.`));
 });
 
 test("recall off, a short prompt or a slash command attach nothing", () => {
@@ -135,8 +139,8 @@ test("the attachment stops before the size limit", () => {
   w.configure({ tree: "demo", longest: 1100 });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.ok(text.length <= 1100);
-  assert.match(text, /### f1\.py/);
-  assert.doesNotMatch(text, /### f4\.py/);
+  assert.match(text, /### 1\. f1\.py/);
+  assert.doesNotMatch(text, /### 4\. f4\.py/);
 });
 
 test("no setting attaches more than Claude Code shows inline", () => {
@@ -145,8 +149,8 @@ test("no setting attaches more than Claude Code shows inline", () => {
   w.configure({ tree: "demo", longest: 24000 });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.ok(text.length <= 10000);
-  assert.match(text, /### f3\.py/);
-  assert.doesNotMatch(text, /### f4\.py/);
+  assert.match(text, /### 3\. f3\.py/);
+  assert.doesNotMatch(text, /### 4\. f4\.py/);
 });
 
 test("a setting of the wrong kind keeps its default", () => {

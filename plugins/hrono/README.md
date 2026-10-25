@@ -6,8 +6,8 @@ down to the files.
 
 - **Recall, automatically.** A `UserPromptSubmit` hook asks hrono for the
   passages that match each prompt and attaches them, marked "hrono recall":
-  one per topic, best first, each with the file it comes from or, for a
-  brief, the page of the map that holds it.
+  a read list of the pages of the map they come from, best first, then the
+  passages, numbered to match, each named by its file or its brief's topic.
   Short prompts and slash commands are skipped, and a slow or unreachable
   server never blocks a prompt.
 - **The map in every session.** A `SessionStart` hook says the project has a
