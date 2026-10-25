@@ -13,6 +13,14 @@ tree.
 142, `R-package/` 132, `doc/` 93, `demo/` 88, `ops/` 66, `python-package/`
 62, the rest under 40 each. The `dmlc-core` submodule is not followed.
 
+**The tree the paper uses is `xgboost-9c0efce`**, xgboost at
+`9c0efcee38450e786d349a1ec558ca453c6df927` (2025-07-10, "Add
+`enable_categorical` to the apply method (#11550)"), 1,402 tracked files.
+Its source `xgboost-9c0efce` points at `mirror/xgboost-9c0efce.git`, a bare
+clone whose `master` is pinned to that commit. The first tree, `xgboost` at
+`7f2e1f2` (2026-10-23), was built before the target commit was chosen and
+stays in the same database.
+
 ## Setup
 
 Everything lives outside the repository in `~/hrono-xgboost`:
@@ -64,6 +72,19 @@ The same model split as the BC Registries build
   estimate, not money spent): condense 396 calls, 4.27 h model time, $14.76;
   brief 140 calls, 1.79 h, $16.08; brief-upper 9 calls, 3.9 min, $3.11;
   judge 1 call. About $34 API-equivalent in all.
+
+- 2026-10-25 14:30 to 16:07: `hrono tree maintain xgboost-9c0efce`, job
+  `job_140f39e52fb548cc9e4b1f7b9452cc34`, 1 h 37 min wall clock. Split:
+  1,386 files, 2,160 sections. Condense wrote 1,435 condensations (the rest
+  reused those already stored from the `xgboost` build, keyed by content)
+  in 3,700 s; cluster: 130 leaf topics; brief 1,244 s; build-tree 8 level-1
+  topics and one root. 0 pending, health clean. 944 calls, 6.88 h model
+  time, $28.02 API-equivalent (subscription). Export:
+  `~/hrono-xgboost/export-9c0efce` (138 briefs).
+
+  The root (node 311) is a real synthesis this time: at most 2% of its
+  6-word runs come from any child, and so do the eight level-1 briefs'. No
+  override, nothing pinned in this tree.
 
 ## Notes
 
