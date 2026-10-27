@@ -25,9 +25,18 @@ def structure(path: Path, raw: bytes) -> Node:
     """Parse ``raw`` into a byte-span structure tree rooted at the file."""
     parser = parser_for(path)
     if parser is None:
-        return Node(0, len(raw), "text", None, deepen(raw, 0, len(raw)))
+        return _text(raw)
     root = parser.parse(raw).root_node
-    return _convert(root, raw, 0, len(raw))
+    try:
+        return _convert(root, raw, 0, len(raw))
+    except RecursionError:
+        # A parse nested deeper than the stack (a SQL file of 1,500 chained
+        # UNIONs) is cut as text, so one file cannot fail the whole split.
+        return _text(raw)
+
+
+def _text(raw: bytes) -> Node:
+    return Node(0, len(raw), "text", None, deepen(raw, 0, len(raw)))
 
 
 def _convert(node: TSNode, raw: bytes, start: int, end: int) -> Node:

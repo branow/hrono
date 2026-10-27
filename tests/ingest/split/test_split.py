@@ -137,3 +137,13 @@ def _collect_names(node: Node) -> set[str]:
     for child in node.children:
         found |= _collect_names(child)
     return found
+
+
+def test_a_parse_too_deep_to_walk_falls_back_to_the_cascade() -> None:
+    # 3,000 chained additions nest 3,000 binary expressions, deeper than
+    # the stack; generated data pulls reach that depth.
+    terms = b" + ".join(b"%d" % n for n in range(3000))
+    raw = b"SELECT " + terms + b" AS total\n"
+    root = structure(Path("pull.sql"), raw)
+    assert root.type == "text"
+    _assert_exact_cover(root, raw)
