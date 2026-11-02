@@ -245,3 +245,48 @@ def test_upgrade_replaces_every_earlier_shipped_upper_default(
     row = store.get(conn, "prompts", "brief-upper")
     assert json.loads(row["config"])["template"] == _shipped_upper()
     conn.close()
+
+
+# The condense, brief and judge defaults hrono first shipped (2026-10-09),
+# which the flask bench registry still holds, untouched.
+FIRST_SHIPPED = json.loads(
+    (Path(__file__).parent / "first_shipped_prompts.json").read_text()
+)
+
+
+@pytest.mark.parametrize("role", ["condense", "brief", "judge"])
+def test_upgrade_replaces_the_first_shipped_default(
+    tmp_path: Path, role: str
+) -> None:
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    payload = json.dumps(
+        {"name": role, "role": role, "template": FIRST_SHIPPED[role]}
+    )
+    store.replace(
+        conn, "prompts", role, payload, None, "t", content_hash(payload)
+    )
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    row = store.get(conn, "prompts", role)
+    current = next(d for d in PROMPTS.defaults if d["name"] == role)
+    assert json.loads(row["config"])["template"] == current["template"]
+    conn.close()
+
+
+@pytest.mark.parametrize("role", ["condense", "brief", "judge"])
+def test_upgrade_leaves_an_edited_default_prompt_as_written(
+    tmp_path: Path, role: str
+) -> None:
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    edited = FIRST_SHIPPED[role] + "\nMine."
+    payload = json.dumps({"name": role, "role": role, "template": edited})
+    store.replace(
+        conn, "prompts", role, payload, None, "t", content_hash(payload)
+    )
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    row = store.get(conn, "prompts", role)
+    assert json.loads(row["config"])["template"] == edited
+    conn.close()

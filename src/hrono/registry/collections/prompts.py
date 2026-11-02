@@ -430,9 +430,29 @@ PROMPTS = Descriptor(
     write_role="writer",
     validate=_validate,
     defaults=_DEFAULTS,
-    # every brief-upper default shipped before E055 (abstract parts,
-    # conventions), newest first: an install of any age moves to the new one
+    # every default shipped before the current one (E055 brief-upper, E056
+    # the rest), newest first: an install of any age moves to the new one
     superseded={
+        "condense": (
+            "e4f43ad3356e09ae245970541f2056586ec5a50760ba412deebe3bc71332ebe7",
+            "99f15c3b770e3223f17b6b51a5ede864a68cfe2e7a67d7c0055a3f898cfb5ea1",
+            "014df76b312beef25818f96978fb99f4451fcbe569641863c8a01ce125327a6d",
+            "f941f634072c08c066f9004bd25034bc6c3ebbce26133a623bc473c1ab1c3886",
+            "5faabd27b245086cf4d5cc81381939f0bed26a540d27552f4bb14a0a649d7145",
+            "ed5e62a86e8fc08a1eb39f673b50abad2329321aea395520e67563b80c4dbdaf",
+            "6ca4a96c328736d9daaae855d3476018de247ec2963476f167aae604c2ea6a8b",
+        ),
+        "brief": (
+            "daa9a897c70183bdf479a3cc5c75c15667de2dad9a8123c797f9394cf8294421",
+            "917be15b854a06e078ec6314ed51e4cb76448d98782ab9b29decb6181fb319f5",
+            "7c1dbdd595af4d269e7a854ab3736af32d4459f9ae37330f7ca775c585cadca5",
+            "3a3e16eeec20b47e77f6e54df09f5adbb1d493544e363a6177e23f741c9e9901",
+            "df3816d994edc25f95bb34dfd9f1dd7cfcc30da963da4365041a9f340ee87c12",
+            "0a5742dc5cb6318c4160e283c1aaad24b275183bca978bcffec15e18e3d99252",
+            "b9a3ea4fdf5d71ed06121272d8bf69cb67211afb42b58a8105c4665152de59a2",
+            "a198e2119cc8878b29df40dc5bb7a2f0a07c50526cf77c337495c8321297821a",
+            "b093423f101edb9bd84445f937f28bd631d15c8b1828cf6c2a4c298c0f1e5a32",
+        ),
         "brief-upper": (
             "0896a97d4e36f2bb9c85a7d4706081027e01715d54ac3c99eb1685a1de79b8bd",
             "a17ea032d6235f210786b6f5095edb9a3daa78d9ad1644195bf1e026516c4a8e",
@@ -445,6 +465,11 @@ PROMPTS = Descriptor(
             "39d8a9fc50171acaf780bf395fb7f2b4e71413b6cd907531959a2bffd2902ba5",
             "90dbe33d0371607aa1b83ddf7033862e332aed6f3e89cb57de724cff704c7bcc",
             "9d65061325e0358da6ae79562e45736472ce6b23556f28113b77e5daac26c187",
-        )
+        ),
+        "judge": (
+            "9b92ec608e56117f18f295607cc8c7aa5afecece09fc2400df6aad66418bdfb1",
+            "b43674559020cb633470fa667b46aa558a001e8cb4904c6bd51b234b068f1ddb",
+            "73122fa1c0149841068cc458aa9e4e0078b12f692d2cca63b78621e872a608b6",
+        ),
     },
 )

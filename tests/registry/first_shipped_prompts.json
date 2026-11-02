@@ -1,0 +1,5 @@
+{
+ "condense": "Condense the section below to its essential information. Length follows content density: collapse boilerplate to a line, keep dense logic. Copy identifiers and values VERBATIM — never infer them. Add a line prefixed 'GOTCHA:' for anything non-obvious that could hurt a newcomer.\n\n{content}",
+ "brief": "State what this group of condensations is as a whole, then surface the natural groupings actually present — never force a structure. Use concrete names; compress near-identical items into a pattern plus its variations. End with a 'Caution:' section aggregating any GOTCHA lines, omitted when there are none.\n\n{content}",
+ "judge": "The source below has changed since the summary was written. Judge how much the change alters what a reader must know at this level, ignoring cosmetic edits. Reply with exactly one word: 'none' if the summary still holds, 'minor' if a detail shifted, 'major' if the topic itself changed.\n\nSource:\n{source}\n\nSummary:\n{summary}"
+}
