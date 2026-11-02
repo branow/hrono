@@ -7,12 +7,12 @@ adds 0.15 h and 20k.
 Based on: the no-history figures (no epics since 2026-11-01), plus the
 verify time of real model calls (a pass is 34-45 turns) and one rework
 round on E058 and E060
-Machine now (2026-11-02, plan after E060 merged): on battery, load 21 on
-8 cpus, 4.3 GiB free, so one epic at a time. Done: E055-E060 (E060 merged
-at 70c050a). E061 starts now. E061 added: defects qa found in O6 (a sync
+Machine now (2026-11-02, plan after E061 review): on battery, load 5 on
+8 cpus, 4.1 GiB free, so one epic at a time. Done: E055-E060; E061
+accepted at b121f99 (merging). Acceptance runs next. E061 added: defects qa found in O6 (a sync
 of the default tree places on two vector spaces) and O4 (a pass failing on
 a provider error shows no callout), with E060's small followups; +1.05 h,
-+150k. Left: E061 and acceptance: about 1.8 h and 300k tokens.
++150k. Left: acceptance: about 0.75 h and 150k tokens.
 
 | # | Epic | What the user gets | Outcome | Tickets | Hours (build + verify + merge + rework) | Tokens |
 |---|------|--------------------|---------|---------|------|--------|
@@ -22,7 +22,7 @@ a provider error shows no callout), with E060's small followups; +1.05 h,
 | 4 | E058 (done) | a pass reviews a subtree and extends its brief; pins kept; off = same tree | O1-O3 asked | 3 | 0.75 + 0.6 + 0.1 + 0.6 = 2.05 | 300k |
 | 5 | E059 (done) | a sync re-reviews a rewritten reviewed brief before its parent; root.md carries the root's findings | O3 asked | 3 | 0.65 + 0.65 + 0.1 + 0.5 = 1.9 | 300k |
 | 6 | E060 (done) | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.85 + 0.4 + 0.1 + 0.6 = 1.95 | 290k |
-| 7 | E061 (building) | every tree's sync places by condensations; a failed pass shows on its topic | O6, O4 asked | 2 | 0.6 + 0.35 + 0.1 = 1.05 | 150k |
+| 7 | E061 (accepted) | every tree's sync places by condensations; a failed pass shows on its topic | O6, O4 asked | 2 | 0.6 + 0.35 + 0.1 = 1.05 | 150k |
 Then: acceptance as a new user on the flask copy (about 0.75 h, 150k).
 
 Order (one at a time): E057, E058 (critical path to the insights outcomes),
