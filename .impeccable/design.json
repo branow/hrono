@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-02T00:00:00Z",
+  "title": "Design System: hrono dashboard",
+  "extensions": {
+    "shadows": [
+      {"name": "shadow", "value": "0 1px 0 #16212b08", "purpose": "Flat bottom line under cards and stat tiles."},
+      {"name": "shadow-lift", "value": "undefined", "purpose": "Used by menus and the tip box but not defined in any theme yet."}
+    ],
+    "motion": [
+      {"name": "state", "value": ".12s-.18s ease-out", "purpose": "Carets, folds, segmented controls; off under prefers-reduced-motion."},
+      {"name": "view-transition", "value": "@view-transition { navigation: auto; }", "purpose": "Cross-page map and panel transitions."}
+    ],
+    "breakpoints": [
+      {"name": "tabs-row", "value": "1079px"},
+      {"name": "map-stack", "value": "62rem"},
+      {"name": "narrow-tables", "value": "40rem"}
+    ]
+  },
+  "components": [
+    {"name": "Button", "kind": "button", "refersTo": "button", "description": "Default action.",
+     "html": "<button class=\"ds-btn\">Sync</button>",
+     "css": ".ds-btn{display:inline-flex;align-items:center;min-height:2.25rem;padding:.35rem .7rem;font:560 14px/1.55 system-ui,sans-serif;border-radius:7px;border:1px solid var(--rule-firm,#CFC6B7);background:var(--surface,#FFFDF9);color:var(--ink,#16212B);cursor:pointer}.ds-btn:hover{background:var(--sunken,#EDE8DF)}.ds-btn:focus-visible{outline:2px solid var(--accent,#B4552D);outline-offset:2px}"},
+    {"name": "Primary Button", "kind": "button", "refersTo": "button-primary", "description": "The one main action on a screen.",
+     "html": "<button class=\"ds-btn-primary\">Build tree</button>",
+     "css": ".ds-btn-primary{display:inline-flex;align-items:center;min-height:2.25rem;padding:.35rem .7rem;font:560 14px/1.55 system-ui,sans-serif;border-radius:7px;border:1px solid var(--accent,#B4552D);background:var(--accent,#B4552D);color:var(--accent-ink,#fff);cursor:pointer}.ds-btn-primary:hover{filter:brightness(1.08)}.ds-btn-primary:focus-visible{outline:2px solid var(--accent,#B4552D);outline-offset:2px}"},
+    {"name": "Input", "kind": "input", "refersTo": "input", "description": "Text field.",
+     "html": "<input class=\"ds-input\" placeholder=\"Find\">",
+     "css": ".ds-input{min-height:2.25rem;padding:.3rem .5rem;font:400 14px/1.55 system-ui,sans-serif;border:1px solid var(--rule-firm,#CFC6B7);border-radius:7px;background:var(--surface,#FFFDF9);color:var(--ink,#16212B)}.ds-input:focus-visible{outline:2px solid var(--accent,#B4552D);outline-offset:2px}"},
+    {"name": "Chip", "kind": "chip", "refersTo": "chip", "description": "Mono status or count tag.",
+     "html": "<span class=\"ds-chip\">421 sections</span> <span class=\"ds-chip ds-ok\">up to date</span>",
+     "css": ".ds-chip{display:inline-flex;padding:.1rem .4rem;border-radius:4px;background:var(--sunken,#EDE8DF);color:var(--ink-soft,#56626F);font:560 .75rem/1.5 ui-monospace,monospace}.ds-ok{background:var(--ok-wash,#E3F1EE);color:var(--ok,#0F6B62)}"},
+    {"name": "Card", "kind": "card", "refersTo": "card", "description": "Bordered surface with head, body, foot.",
+     "html": "<div class=\"ds-card\"><h2>Sources</h2><p>3 sources, all synced.</p></div>",
+     "css": ".ds-card{background:var(--surface,#FFFDF9);border:1px solid var(--rule,#E1DACE);border-radius:10px;box-shadow:0 1px 0 #16212b08;padding:1rem;font:400 14px/1.55 system-ui,sans-serif;color:var(--ink,#16212B)}.ds-card h2{margin:0 0 .5rem;font-size:.9375rem;font-weight:640}"},
+    {"name": "Tabs", "kind": "nav", "refersTo": "tab-current", "description": "Top-bar tabs.",
+     "html": "<nav class=\"ds-tabs\"><a aria-current=\"page\">Home</a><a>Map</a><a>Find</a></nav>",
+     "css": ".ds-tabs{display:flex;font:520 14px/1.55 system-ui,sans-serif}.ds-tabs a{padding:.4rem .45rem .35rem;color:var(--ink-soft,#56626F);border-bottom:2px solid transparent;cursor:pointer}.ds-tabs a:hover{color:var(--ink,#16212B);border-bottom-color:var(--rule-firm,#CFC6B7)}.ds-tabs a[aria-current=page]{color:var(--accent,#B4552D);font-weight:640;border-bottom-color:var(--accent,#B4552D)}"}
+  ],
+  "narrative": {
+    "northStar": "",
+    "overview": "A working tool: warm paper, dark ink, one rust accent, mono for every label and figure. Dense and quiet, server-rendered, keyboard-first. The style is documented as built; changes go into DESIGN.md and base.html together.",
+    "keyCharacteristics": ["Warm neutral paper, never pure white or grey.", "One rust accent for location and the next action.", "Status hues each with a wash.", "Mono for data, system sans for prose.", "Flat: rules and tonal steps.", "Light and dark from one token set."],
+    "rules": [
+      {"name": "The One Accent Rule", "body": "Rust marks where you are and what to do next; never decoration, never a status; one primary button per screen.", "section": "colors"},
+      {"name": "The Token-Only Rule", "body": "Colors come from var(--token); a new color is a new token with light and dark values in base.html.", "section": "colors"},
+      {"name": "The Data-Is-Mono Rule", "body": "Tree names, ids, paths, chip counts and figures are mono with tabular numbers; sentences never are.", "section": "typography"},
+      {"name": "The Flat-By-Default Rule", "body": "A surface separates from the page by border and tone, not shadow.", "section": "elevation"}
+    ],
+    "dos": [], "donts": []
+  }
+}
