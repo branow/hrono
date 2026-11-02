@@ -78,7 +78,8 @@ def passes_for(
     Walks up level by level as a build does: a topic that reaches the
     threshold is reviewed, its subtree then counts for nothing above it. The
     root (the top level) is reviewed when it never was or when something
-    under it is unreviewed.
+    under it is unreviewed, and a reviewed topic again when its brief is
+    written again (by a pass on a part of it, too).
     """
     tops = _Tree(conn, tree)
     if not tops.top:
@@ -157,11 +158,27 @@ class _Tree:
         for node in self.at(level):
             counted = self.unreviewed(node)
             first = root and level == self.top
-            if counted >= threshold or (
-                first and (counted > 0 or node not in self.passed)
+            if (
+                counted >= threshold
+                or self._rewritten(node)
+                or (first and (counted > 0 or node not in self.passed))
             ):
                 found.append(Pass(node, level, counted))
         return found
+
+    def _rewritten(self, node: int) -> bool:
+        """A reviewed brief written again since its pass, or about to be.
+
+        A pass below a reviewed topic briefs that topic again from the
+        extended brief, which drops what its own pass wrote in; so it is
+        reviewed again, and the dry run counts it when a part is planned.
+        """
+        if node not in self.passed:
+            return False
+        written = self.brief.get(node, (0, ""))[1]
+        return written > self.passed[node] or any(
+            child in self.planned for child in self.children.get(node, ())
+        )
 
     def unreviewed(self, node: int) -> int:
         return self._below(node, self._passed(node), {node})

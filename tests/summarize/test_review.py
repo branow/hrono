@@ -477,6 +477,53 @@ def test_the_parent_is_briefed_from_the_extended_brief(world) -> None:  # type: 
     assert f"=== {CHEAP} ===" not in cheap.upper[0]
 
 
+def test_a_pass_below_a_reviewed_parent_gives_the_parent_a_new_pass(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    """Briefing the parent again drops its own pass's extension: review it."""
+    database, ids = world
+    cheap = Reviewer()
+    context = JobContext(database)
+
+    def rebrief(level: int) -> None:
+        brief_upper(
+            Job(
+                "u",
+                None,
+                TREE,
+                "brief-upper",
+                {"level": level},
+                "running",
+                None,
+                "t",
+                "t",
+            ),
+            context,
+            client=cheap,
+        )
+
+    with database.write() as conn:  # only the root reaches it at first
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, "
+            "'$.insights_threshold', 1000) WHERE collection = 'trees'"
+        )
+    _run(database, Reviewer(), [1, 2], root=True, rebrief=rebrief)
+    assert _text(database, ids["root"]) == EXTENDED
+    with database.write() as conn:  # the admin lowers the threshold
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, "
+            "'$.insights_threshold', 10) WHERE collection = 'trees'"
+        )
+        planned = [p.node for p in insights.passes_for(conn, TREE, 10)]
+
+    again = Reviewer()
+    done = _run(database, again, [1, 2], root=True, rebrief=rebrief)
+
+    assert planned == [ids["mid"], ids["root"]]
+    assert done["reviews"] == 2 and again.reviews == 2
+    assert _text(database, ids["root"]) == EXTENDED
+
+
 def test_with_the_step_off_a_build_makes_no_insights_call(world) -> None:  # type: ignore[no-untyped-def]
     database, ids = world
     with database.write() as conn:
