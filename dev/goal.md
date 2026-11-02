@@ -12,8 +12,8 @@ and writes what no single section states into that subtree's upper brief.
 An agent reading the tree then finds the unwritten rules, sibling
 differences and wrong statements fixed in the brief it already reads. The
 design is E053 (`dev/archive/E053-insights-step.md`, agreed 2026-11-02),
-now tickets 531-536 of `dev/backlog/E054-tree-explains-the-architecture.md`.
-The minor fixes are E054's small tickets (D1).
+split into epics E057-E060 (E054 is in `dev/archive/`).
+The minor fixes are E054's small tickets, epics E055 and E056 (D1).
 
 ## Outcomes
 Pass/fail, on the real app (the flask bench copy, PROJECT.md "Run the real

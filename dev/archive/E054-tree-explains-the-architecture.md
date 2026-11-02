@@ -91,3 +91,4 @@ passes on a 461-leaf tree.
 
 ## Log
 - 2026-11-02: E050–E053 merged into this epic (Orest).
+- 2026-11-02 po: split into E055 (511, 512, 521), E056 (506), E057 (531, counter of 532), E058 (532-534), E059 (535), E060 (536); 501-505 wait for the bcreg rebuild (D4, Q3), tracked in backlog/bcreg-rebuild-checks.md.

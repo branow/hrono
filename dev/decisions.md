@@ -21,3 +21,18 @@ What the PO decided for you, why, and how to undo it. Newest last.
 - D4 2026-11-02: E054 501-505 (grouping, code in since 56c718e, 1086985)
   are not verified in this run. Why: their check needs the bcreg rebuild,
   which runs only on your go. Undo: answer Q3 b.
+- D5 2026-11-02: E054 is split into six epics of at most three tickets:
+  E055 (511, 512, 521), E056 (506), E057 (531 and the counter), E058 (the
+  pass: 532-534), E059 (535, sync) and E060 (536, dashboard); E054 is in
+  `archive/`, 501-505 in `backlog/bcreg-rebuild-checks.md`. Why: an epic
+  of 18 tickets costs far more per line to build and verify. Undo: none
+  needed; the tickets are the same.
+- D6 2026-11-02: the per-topic count of unreviewed brief characters is
+  derived from stored briefs and pass records, not kept as a stored number.
+  Why: a stored counter drifts on hand edits, reverts and undo. Undo:
+  amend E057 ticket 2.
+- D7 2026-11-02: the dashboard shows insights on the topic page (chip,
+  findings card, the existing versions diff), in tree settings and on
+  Usage; no Insights page or tab. Why: the goal keeps findings inside the
+  brief, and the topic page is where a curator checks a brief. Undo: a new
+  epic for a page.
