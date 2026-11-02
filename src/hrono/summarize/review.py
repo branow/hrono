@@ -111,12 +111,8 @@ def parse(text: str) -> Review:
     still answering; one that wrote no object with a list of findings is
     not, and storing nothing is the answer to that.
     """
-    start, end = text.find("{"), text.rfind("}")
-    try:
-        body = json.loads(text[start : end + 1]) if 0 <= start < end else None
-    except ValueError:
-        body = None
-    if not isinstance(body, dict) or not isinstance(body.get("findings"), list):
+    body = _answer_object(text)
+    if body is None:
         raise Unfinished("the review's answer was not a list of findings")
     found = [
         _finding(one)
@@ -129,6 +125,25 @@ def parse(text: str) -> Review:
         tuple(str(d) for d in dropped) if isinstance(dropped, list) else (),
         str(body.get("looked") or ""),
     )
+
+
+def _answer_object(text: str) -> dict[str, object] | None:
+    """The first JSON object in ``text`` that holds a list of findings.
+
+    Tried at each brace, so a brace in the prose around it (a note on
+    ``{config}``) does not lose a review that was paid for.
+    """
+    decoder = json.JSONDecoder()
+    start = text.find("{")
+    while start >= 0:
+        try:
+            body, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            body = None
+        if isinstance(body, dict) and isinstance(body.get("findings"), list):
+            return body
+        start = text.find("{", start + 1)
+    return None
 
 
 def _finding(one: dict[str, object]) -> Finding:

@@ -594,6 +594,9 @@ def test_a_sync_does_not_spend_on_passes_unasked(world) -> None:  # type: ignore
         ('{"findings": []}', 0),
         ('Here: {"findings": [{"statement": "x"}, {"nope": 1}]} done', 1),
         ('{"findings": [{"statement": "s", "evidence": ["a.py"]}]}', 1),
+        # a brace in the prose around the answer does not lose the review
+        ('I read {app.config}: {"findings": [{"statement": "x"}]}', 1),
+        ('{"findings": [{"statement": "x"}]} (unchecked: {g})', 1),
     ],
 )
 def test_the_answer_is_read_where_the_model_put_it(
