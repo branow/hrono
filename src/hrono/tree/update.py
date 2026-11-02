@@ -29,14 +29,14 @@ somebody ran a full build — and a brief reduces over condensations while its
 reference list does not, so the brief would cite sources it had never read.
 Condensing here costs one call per genuinely NEW section (``condense`` is a
 content-hash cache) and nothing for unchanged content, so it is proportional to
-the change and the incremental promise holds. It runs once per RUN, after every
-source has been reconciled, and only when a source actually reported changes.
-That guard is not an optimization: ``condense`` resolves the text model BEFORE
-it looks at what is pending, so an unguarded call makes `hrono update` fail with
-"no text model available" on a fresh install with no sources and nothing to do —
-an error naming a stage the user never asked for, from a run that should have
-been a no-op. The cost is that a corpus carrying OLD gaps heals them on the next
-run WITH changes rather than on any run at all, which is a wait, not a hole.
+the change and the incremental promise holds. It runs per source that reported
+changes, BEFORE embed and placement: a build clusters on the condensation's
+vector, so placing by the raw vector would read a different space. With no
+condense model it is skipped, the outcome says so, and placement falls back to
+the raw vector. Running only for a changed source is not an optimization:
+``condense`` resolves the text model BEFORE it looks at what is pending, so an
+unguarded call would fail a no-op run on a fresh install. A corpus carrying OLD
+gaps heals them on the next run WITH changes, which is a wait, not a hole.
 
 The one exception is a stored condensation that is the model TALKING BACK:
 ``unusable-condensations`` promises the next sync re-condenses exactly
