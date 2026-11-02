@@ -4,3 +4,5 @@
 - A copy stored before the rule (bcreg `hrono-v9.db` 467, 468) is not listed on Health or in `unusable-briefs` until rewritten: `refusal` reads only the stored flag; `src/hrono/summarize/briefs.py` `refusal`; check `shape.copies` against child briefs there, or note it in docs/summarization.md (the new prompt rewrites such briefs anyway, unless the prompt was edited).
 
 (po 2026-11-02: the older brief, condense and judge defaults went to E056 ticket 3; the replay.py title match is evidence tooling, rejected.)
+
+(po 2026-11-02: both left here: no user of this run's corpora writes without spaces, and the stored copies are rewritten by the new prompt; fold when an epic touches shape.py or Health.)

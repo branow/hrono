@@ -6,3 +6,4 @@
 - dev, tests: when a stage re-runs over an already-processed node (re-brief, re-cluster, settle), test the case where a lower pass changes the input of a node that already holds an extension; E058 qa found a reviewed root lost its extension with no new pass and the dry run miscounted (4ff1226).
 - dev, llm output: parse model JSON by scanning for the first balanced object, never first-brace to last-brace; prose with braces around a paid answer lost a review (E058 b322174).
 - dev, errors: a paid-call stage that is optional when unconfigured must tell "not configured" from "call failed"; a provider error is never reported as the no-model case and never lets the sync succeed on the fallback; test the failing-provider path (E056 qa 6d04627).
+- po, dev: a size or ratio bound in a Done when (x times, N bytes) is measured on a real run before it is written, never guessed; E059 wrote 2.5x for the extended root page, real was 4.35x, cost a round and ruling D10 (5x).

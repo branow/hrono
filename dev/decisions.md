@@ -55,3 +55,9 @@ What the PO decided for you, why, and how to undo it. Newest last.
   capping would drop findings D9 keeps. Replaces: E059's 2.5x bound.
   Undo: amend E059 ticket 3 with a cap (Conventions and Hazards only, or a
   character budget).
+- D11 2026-11-02: with two text models and no `condense` role, a sync
+  fails with the build's message instead of placing by the raw vector.
+  Why: a sync that silently places on another vector space than the build
+  breaks O6, and a paid stage must tell "not configured" from "ambiguous"
+  (lessons). Replaces: the sync's "no condense model: placed by the raw
+  vector" outcome in that setup. Undo: drop E061 ticket 1's third line.
