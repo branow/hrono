@@ -927,3 +927,26 @@ def test_a_run_that_failed_another_topic_is_not_this_ones(
             )
 
     assert "did not finish" not in _body(browser, node)
+
+
+def test_a_reader_sees_the_review_and_no_write_control(
+    browser: Browser,
+) -> None:
+    node = _node_id(browser)
+    pid = _pass(browser, node, dropped=("a guess the code refutes",))
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO brief_versions(node_id, text, model_name, "
+            "written_at, replaced_at, reason, pass_id) VALUES (?, 'older', "
+            "'scribe-9', 't', '2999-01-01T10:15:00', 'insights', ?)",
+            (node, pid),
+        )
+        reader = create_user(browser.conn, "reader", "reader")[1]  # type: ignore[arg-type]
+    browser.client.post("/ui/login", data={"token": reader})
+
+    page = _body(browser, node)
+
+    assert "extended by insights" in page and 'href="#cheaper-brief"' in page
+    assert "Rule 1 holds across signers." in page
+    assert "Checked and dropped (1)" in page
+    assert "Rename" not in page and "Add note" not in page
