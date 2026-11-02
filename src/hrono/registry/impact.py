@@ -649,15 +649,22 @@ def dry_run_body(
     insights passes its settings would run and what they cost."""
     body = as_json(preview(conn, collection, name, proposed))
     if collection == "trees":
-        body["insights"] = _insights_json(
-            insights.plan_for(
-                conn,
-                name,
-                bool(proposed.get("insights")),
-                int(proposed.get("insights_threshold") or INSIGHTS_THRESHOLD),
-            )
-        )
+        body["insights"] = insights_estimate(conn, name, proposed)
     return body
+
+
+def insights_estimate(
+    conn: sqlite3.Connection, tree: str, config: dict[str, object]
+) -> dict[str, object]:
+    """The insights passes a tree's config would run, and what they cost."""
+    return _insights_json(
+        insights.plan_for(
+            conn,
+            tree,
+            bool(config.get("insights")),
+            int(config.get("insights_threshold") or INSIGHTS_THRESHOLD),
+        )
+    )
 
 
 def _insights_json(plan: insights.Plan) -> dict[str, object]:
@@ -674,7 +681,11 @@ def _insights_json(plan: insights.Plan) -> dict[str, object]:
             for one in plan.passes
         ],
         "count": len(plan.passes),
-        "estimated_cost": {"usd": plan.usd, "basis": plan.basis},
+        "estimated_cost": {
+            "usd": plan.usd,
+            "basis": plan.basis,
+            "subscription": plan.subscription,
+        },
         **({} if plan.note is None else {"note": plan.note}),
     }
 

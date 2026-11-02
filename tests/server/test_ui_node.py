@@ -6,6 +6,7 @@ sorting last, which is the opposite of what SQLite does by default.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -14,7 +15,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
-from hrono import notes, pins
+from hrono import naming, notes, pins
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
@@ -762,3 +763,144 @@ def test_a_section_with_no_file_to_open_shows_its_path_and_no_link(
 
     assert "Open the file" not in page
     assert "g.md" in page
+
+
+# ---------------------------------------------------------------- insights
+
+
+def _pass(
+    browser: Browser,
+    node: int,
+    *,
+    skipped: str = "",
+    findings: int = 2,
+    dropped: tuple[str, ...] = (),
+) -> int:
+    conn = browser.conn
+    with conn:  # type: ignore[attr-defined]
+        pid = int(
+            conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO insights_passes(node_id, passed_at, model_name, "
+                "version, skipped, dropped) VALUES (?, '2999-01-01T10:15:00', "
+                "'opus-x', 's', ?, ?)",
+                (node, skipped, json.dumps(list(dropped))),
+            ).lastrowid
+        )
+        for i in range(findings):
+            conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO insights_findings(pass_id, position, statement, "
+                "evidence, placement, confidence) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    pid,
+                    i,
+                    f"Rule {i} holds across signers.",
+                    json.dumps([{"file": "docs/sign/core.md", "lines": "1-2"}]),
+                    "not stated",
+                    "high" if i == 0 else "medium, until the changelog",
+                ),
+            )
+    return pid
+
+
+def _body(browser: Browser, node: int) -> str:
+    return str(browser.node(node).text)  # type: ignore[attr-defined]
+
+
+def test_a_topic_never_reviewed_has_no_findings_card(browser: Browser) -> None:
+    browser.sign_in()
+
+    page = _body(browser, _node_id(browser))
+
+    assert 'id="findings"' not in page and "extended by insights" not in page
+
+
+def test_an_extended_topic_shows_who_extended_it_and_what_it_found(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    pid = _pass(browser, node, dropped=("a guess the code refutes",))
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO brief_versions(node_id, text, model_name, "
+            "written_at, replaced_at, reason, pass_id) VALUES (?, 'older', "
+            "'scribe-9', 't', '2999-01-01T10:15:00', 'insights', ?)",
+            (node, pid),
+        )
+
+    page = _body(browser, node)
+
+    assert "extended by insights" in page and "opus-x" in page
+    assert 'href="#cheaper-brief"' in page and 'id="cheaper-brief"' in page
+    assert "Findings" in page and "Rule 1 holds across signers." in page
+    assert 'class="chip ok">high' in page
+    assert 'class="chip warn">medium' in page
+    assert "docs/sign/core.md:1-2" in page
+    assert "Checked and dropped (1)" in page and "a guess the code" in page
+    assert "<form" not in page.split('id="findings"')[1].split("</section>")[0]
+
+
+def test_a_brief_written_again_after_the_pass_is_no_longer_called_extended(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _pass(browser, node)
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE insights_passes SET passed_at = '2000-01-01T00:00:00'"
+        )
+
+    page = _body(browser, node)
+
+    assert "extended by insights" not in page
+    assert "Rule 0 holds across signers." in page  # the findings still stand
+
+
+def test_a_pinned_topic_keeps_its_findings_and_says_they_were_not_applied(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _pass(browser, node, skipped="pinned")
+
+    page = _body(browser, node)
+
+    assert "Pinned: findings kept, not applied to the brief" in page
+    assert "extended by insights" not in page
+    assert "Rule 0 holds across signers." in page
+
+
+def test_a_review_with_no_findings_says_so(browser: Browser) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _pass(browser, node, skipped="no findings", findings=0)
+
+    page = _body(browser, node)
+
+    assert "The review found nothing to add." in page
+    assert "Findings" in page
+
+
+def test_a_review_that_did_not_finish_links_the_run(browser: Browser) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    name = naming.name(browser.conn, node)  # type: ignore[arg-type]
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO jobs(id, tree, op, scope, status, created_at, "
+            "updated_at, result) VALUES ('j-run', ?, 'build-tree', '{}', "
+            "'succeeded', 't', '2999-01-01T00:00:00', ?)",
+            (
+                TREE,
+                json.dumps({"insights": {"failed": [f"{name}: out of turns"]}}),
+            ),
+        )
+
+    page = _body(browser, node)
+
+    assert "The last review of this topic did not finish" in page
+    assert 'href="/ui/jobs/j-run"' in page
+
+    _pass(browser, node)  # a pass stored after that run: it no longer shows
+    assert "did not finish" not in _body(browser, node)

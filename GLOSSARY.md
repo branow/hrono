@@ -49,6 +49,11 @@ extended in place and the earlier brief stays in its history; a brief edited
 by hand is never overwritten. Each review is billed, so the dry run says how many there would be
 and what they cost.
 
+**finding** — one thing an insights review reports about a topic: a statement,
+how sure the model is, where the briefs state it or should, and the files and
+lines it read. The topic page lists them; a brief extended with them keeps
+the earlier brief in its history.
+
 **tree** — topics all the way up to a single root, over a named set of sources.
 One database can hold several.
 
@@ -119,6 +124,7 @@ them and nothing else for these ideas.
 | bottom topic | нижня тема |
 | brief | опис |
 | insights | інсайти |
+| finding | знахідка |
 | tree | дерево |
 | root | корінь |
 | level | рівень |

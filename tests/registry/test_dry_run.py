@@ -856,7 +856,7 @@ def test_the_insights_settings_are_stored_and_bad_ones_refused(
     assert api.stored("trees", "beta")["insights"] is False
     assert api.stored("trees", "beta")["insights_threshold"] == 500_000
 
-    for bad in (0, -5, "many", 1.5):
+    for bad in (0, -5, "many", 1.5, True):
         refused = api.client.put(
             "/trees/alpha",
             json=_tree_body(insights=True, insights_threshold=bad),

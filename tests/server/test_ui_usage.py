@@ -403,3 +403,20 @@ def test_no_agent_calls_is_an_empty_state(panel: Panel) -> None:
     panel.as_("admin")
 
     assert "No agent has asked" in panel.get("/ui/usage?tree=default")
+
+
+def test_the_insights_model_is_a_row_of_its_own_and_marked_an_estimate(
+    panel: Panel,
+) -> None:
+    panel.as_("reader")
+    panel.build()
+    run = panel.run()
+    panel.call(run, role="brief", model="writer")
+    panel.call(run, role="insights", model="insights", provider="claude-code")
+
+    page = panel.get("/ui/usage?tree=default")
+
+    assert 'data-model="insights"' in page
+    row = page.split('data-model="insights"')[1].split("</tr>")[0]
+    assert "est." in row  # a subscription's price is an estimate, not spend
+    assert 'data-model="writer"' in page

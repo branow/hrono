@@ -407,6 +407,14 @@ input.narrow { width: 6rem; }
 .chip.warn { background: var(--warn-wash); border-color: transparent; color: var(--warn); }
 .chip.danger { background: var(--danger-wash); border-color: var(--danger); color: var(--danger); }
 .chip.plain { background: none; border-color: transparent; padding-left: 0; }
+.extension { margin: 0; gap: var(--s2); }
+.findings { list-style: none; margin: 0; padding: 0; }
+.findings > li { padding: var(--s3) 0; border-top: 1px solid var(--rule); display: grid; gap: var(--s1); }
+.findings > li:first-child { border-top: 0; padding-top: 0; }
+.findings p { margin: 0; }
+.findings .statement { overflow-wrap: anywhere; }
+.evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.dropped { margin: var(--s2) 0 0; padding-left: var(--s4); }
 
 /* --------------------------------------------------------------- buttons */
 .btn {

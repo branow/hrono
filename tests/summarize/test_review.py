@@ -408,9 +408,7 @@ def _write(conn: object, node: int, text: str, reason: str) -> None:
 
 def _kept(database: Database, node: int) -> list[tuple[str, str]]:
     with database.connect() as conn:
-        return [
-            (v["text"], v["reason"]) for v in briefs.versions(conn, node)
-        ]
+        return [(v["text"], v["reason"]) for v in briefs.versions(conn, node)]
 
 
 def test_many_passes_never_push_the_cheaper_brief_out_of_history(

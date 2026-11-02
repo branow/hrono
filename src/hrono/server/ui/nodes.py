@@ -34,6 +34,7 @@ from hrono.server.ui import (
     templates,
     write_off_loop,
 )
+from hrono.server.ui.reviewed import reviewed
 from hrono.summarize import briefs
 
 
@@ -593,6 +594,13 @@ def _node(
             for _, text, when in notes.get(conn, notes.NODE, node_id)  # type: ignore[arg-type]
         ],
         "wrote": _provenance(conn, node_id, brief),
+        "insights": reviewed(
+            conn,  # type: ignore[arg-type]
+            node_id,
+            naming.name(conn, node_id),  # type: ignore[arg-type]
+            _brief_written(conn, node_id),
+            _when,
+        ),
         "versions": _versions(conn, node_id, brief),
         "undo": _undo(conn, node_id),
         "edits": _edits(conn, node_id),
@@ -607,14 +615,30 @@ def _versions(
 ) -> list[dict[str, object]]:
     """The briefs this topic had before, each with a diff to the current one."""
     current = str(brief["text"]) if brief is not None else ""  # type: ignore[index]
+    rows = briefs.versions(conn, node_id)  # type: ignore[arg-type]
+    # the cheaper brief the latest passes extended: the oldest of the newest
+    # run of versions an insights pass replaced
+    cheaper = 0
+    for row in rows:
+        if row["reason"] != "insights":
+            break
+        cheaper = int(row["id"])
     return [
         {
             "line": _version_line(row),
             "diff": _diff(str(row["text"]), current),
             "old": str(row["text"]),
+            "cheaper": int(row["id"]) == cheaper,
         }
-        for row in briefs.versions(conn, node_id)  # type: ignore[arg-type]
+        for row in rows
     ]
+
+
+def _brief_written(conn: object, node_id: int) -> str:
+    row = conn.execute(  # type: ignore[attr-defined]
+        "SELECT created_at FROM briefs WHERE node_id = ?", (node_id,)
+    ).fetchone()
+    return str(row["created_at"]) if row is not None else ""
 
 
 def _version_line(row: object) -> str:

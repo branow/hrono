@@ -96,6 +96,14 @@
         <div class="mt-3"><a class="btn" href="/ui/jobs?tree={{ tree }}">{{ _("Write briefs from Runs") }}</a></div>
       </div>
       {% endif %}
+      {% if node.insights and node.insights.extended %}
+      <p class="extension row" id="extension">
+        <span class="chip accent">{{ _("extended by insights") }}</span>
+        <span class="mono">{{ node.insights.model }}</span>
+        <span class="faint small nowrap">{{ node.insights.when }}</span>
+        {% if node.versions|selectattr("cheaper")|list %}<a href="#cheaper-brief">{{ _("What changed") }}</a>{% endif %}
+      </p>
+      {% endif %}
       {% for note in node.notes %}
       <div class="callout">
         <div class="body">
@@ -107,6 +115,69 @@
     </div>
 
   </section>
+
+  {% if node.insights %}
+  {% set found = node.insights %}
+  <section class="card" id="findings">
+    <div class="card-head">
+      <h2>{{ _("Findings") }} <span class="faint num">{{ found.findings|length }}</span><span class="tip" tabindex="0" role="note" data-tip="{{ _("What a stronger model found when it reviewed this topic and everything under it: rules no single section states and statements the code contradicts. Each carries the files it read") }}">?</span></h2>
+    </div>
+    <div class="card-body stack">
+      {% if found.failed %}
+      <div class="callout bad" role="alert">
+        <div class="body">
+          <div class="title">{{ _("The last review of this topic did not finish") }}</div>
+          <p class="hint">{{ _("Its brief is unchanged.") }} <a href="/ui/jobs/{{ found.failed }}">{{ _("See the run") }}</a></p>
+        </div>
+      </div>
+      {% endif %}
+      {% if found.pinned %}
+      <div class="callout warn">
+        <div class="body"><div class="title">{{ _("Pinned: findings kept, not applied to the brief") }}</div></div>
+      </div>
+      {% elif found.kept %}
+      <div class="callout warn">
+        <div class="body">
+          <div class="title">{{ _("The findings were not written into the brief") }}</div>
+          <p class="hint">{{ found.kept }}</p>
+        </div>
+      </div>
+      {% endif %}
+      {% if found.reviewed and not found.findings %}
+      <p class="hint">{{ _("The review found nothing to add.") }}</p>
+      {% endif %}
+      {% if found.findings %}
+      <ol class="findings">
+        {% for f in found.findings %}
+        <li>
+          <p class="statement">{{ f.statement }}</p>
+          <p class="row">
+            {% if f.level %}<span class="chip {{ f.tone }}">{{ f.level }}</span>{% endif %}
+            {% if f.placement %}<span class="faint small">{{ f.placement }}</span>{% endif %}
+          </p>
+          {% if f.settle %}<p class="hint">{{ f.settle }}</p>{% endif %}
+          {% if f.evidence %}
+          <ul class="evidence mono small">
+            {% for e in f.evidence %}
+            <li>{% if e.link %}<a href="{{ e.link }}" target="_blank" rel="noopener">{{ e.text }}</a>{% else %}{{ e.text }}{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+      {% endif %}
+      {% if found.dropped %}
+      <details>
+        <summary class="twisty">{{ n_(found.dropped|length, "Checked and dropped ({n})", "Checked and dropped ({n})") }}</summary>
+        <ul class="dropped">
+          {% for line in found.dropped %}<li class="hint">{{ line }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
 
   {% if node.children %}
   <section class="card">
@@ -348,16 +419,16 @@
   {% endif %}
 
   {% if node.versions %}
-  <section class="card">
+  <section class="card" id="previous-versions">
     <div class="card-head">
       <h2>{{ _("Previous versions") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What the brief said before it was replaced. The diff shows what changed from that version to the brief above") }}">?</span></h2>
     </div>
     <div class="card-body stack">
-      <details>
+      <details id="versions-list">
         <summary class="twisty">{{ n_(node.versions|length, "{n} kept", "{n} kept") }}</summary>
         {% for v in node.versions %}
-        <div class="stack mt-3">
-          <div class="title">{{ v.line }}</div>
+        <div class="stack mt-3"{% if v.cheaper %} id="cheaper-brief"{% endif %}>
+          <div class="title">{{ v.line }}{% if v.cheaper %} <span class="chip">{{ _("the cheaper brief") }}</span>{% endif %}</div>
           <pre class="mono small">{% for line in v.diff %}<span class="diff-{{ line.kind }}" data-mark="{{ line.mark }}">{{ line.text }}</span>{% endfor %}</pre>
           <details>
             <summary class="faint small">{{ _("Full text of this version") }}</summary>
@@ -384,6 +455,7 @@
       <dl class="facts">
         <dt>{{ _("Model") }}</dt><dd>{{ node.wrote.model }}</dd>
         <dt>{{ _("Written") }}</dt><dd class="mono">{{ node.wrote.written }}</dd>
+        {% if node.insights and node.insights.extended %}<dt>{{ _("Extended") }}</dt><dd><span class="mono">{{ node.insights.model }}</span> <span class="mono faint">{{ node.insights.when }}</span></dd>{% endif %}
         <dt>{{ _("Tokens") }}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What the model read and wrote for this brief. A model on a subscription also reads cached text, which is not counted here") }}">?</span></dt>
         <dd class="num">{{ _("{tokens_in} in, {tokens_out} out", tokens_in="{:,}".format(node.wrote.tokens_in), tokens_out="{:,}".format(node.wrote.tokens_out)) }}</dd>
         <dt>{{ _("Cites") }}</dt><dd>{{ n_(node.wrote.cites, "{n} source", "{n} sources") }}</dd>
@@ -423,6 +495,18 @@
 </aside>
 </div>
 <script>
+/* "What changed" points into the closed list of previous versions: open it, then go there. */
+(() => {
+  const go = () => {
+    const there = location.hash ? document.getElementById(location.hash.slice(1)) : null;
+    const list = document.getElementById("versions-list");
+    if (!there || !list || !list.contains(there)) return;
+    list.open = true;
+    there.scrollIntoView();
+  };
+  addEventListener("hashchange", go);
+  go();
+})();
 /* The sections box filters as you type. Without script it is a GET form that
    Enter submits; with it, the same URL is fetched and its list swapped in, so
    the server's filter and its paging stay the one answer. */

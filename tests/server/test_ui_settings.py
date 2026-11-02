@@ -746,6 +746,117 @@ def test_the_delete_warning_is_shown_before_the_deletion(
     assert browser.stored("trees", "beta") is not None
 
 
+def _two_levels(browser: Browser, tree: str) -> None:
+    """A tree with a leaf and a root above it, both briefed."""
+    leaf = _a_topic_in(browser, tree)
+    with browser.conn:  # type: ignore[attr-defined]
+        root = int(
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES (?, 1, -1, 't')",
+                (tree,),
+            ).lastrowid
+        )
+        cluster_store.add_child(
+            browser.conn,  # type: ignore[arg-type]
+            root,
+            leaf,
+            attached=False,
+            similarity=None,
+        )
+    for node in (leaf, root):
+        _brief_written_by(browser, node, "p", "t")
+
+
+def _insights_form(browser: Browser, **changes: object) -> str:
+    browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
+    _two_levels(browser, "beta")
+    page = browser.item(
+        "trees",
+        name="beta",
+        **{"f.name": "beta", "f.sources": ["gh"], "preview": "1"},
+        **changes,
+    )
+    return page.text
+
+
+def test_the_tree_form_says_what_insights_would_cost(browser: Browser) -> None:
+    browser.sign_in()
+    browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
+    _two_levels(browser, "beta")
+
+    off = browser.config(edit="trees:beta")
+    on = browser.item(
+        "trees",
+        name="beta",
+        **{
+            "f.name": "beta",
+            "f.sources": ["gh"],
+            "f.insights": "1",
+            "preview": "1",
+        },
+    ).text
+
+    assert "Off: no reviews, no cost" in off
+    assert re.search(
+        r"Would review 1 topic, about\s*<strong[^>]*>\$2\.82</strong>"
+        r" \(estimate\)",
+        on,
+    )
+    assert 'data-spend="metered"' in on
+    assert "a pass at API prices" in on  # the tip
+    assert browser.stored("trees", "beta")["insights"] is False  # type: ignore[index]
+
+
+def test_a_subscription_marks_the_insights_cost_as_an_estimate(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    for table, name, config in (
+        ("connections", "sub", {"provider": "claude-code"}),
+        (
+            "models",
+            "opus",
+            {
+                "kind": "text",
+                "role": "insights",
+                "model": "m",
+                "connection": "sub",
+            },
+        ),
+    ):
+        registry_store.insert(
+            browser.conn,  # type: ignore[arg-type]
+            table,
+            name,
+            json.dumps({"name": name, **config}),
+            None,
+            "t",
+        )
+
+    page = _insights_form(browser, **{"f.insights": "1"})
+
+    assert 'data-spend="estimate"' in page
+    assert "A subscription is not billed per call." in page
+
+
+def test_a_cleared_threshold_stays_cleared_when_the_form_is_refused(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
+
+    page = browser.item(
+        "trees",
+        name="beta",
+        **{"f.name": "beta", "f.insights": "1", "f.insights_threshold": ""},
+    ).text  # no source ticked: refused for that, not for the threshold
+
+    assert "at least 1 item" in page
+    assert re.search(r'name="f.insights_threshold" value=""', page)
+    assert "insights-line" not in page
+
+
 # ------------------------------------------------------------------ unions
 
 

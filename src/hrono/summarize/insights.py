@@ -53,6 +53,7 @@ class Plan:
     usd: float
     basis: str
     note: str | None
+    subscription: bool = False  # the cost is an estimate, not spend
 
 
 def plan_for(
@@ -66,8 +67,8 @@ def plan_for(
         return Plan(on, threshold, (), {}, 0.0, "insights are off", None)
     passes = passes_for(conn, tree, threshold)
     names = naming.names(conn, [one.node for one in passes])
-    usd, basis, note = _cost(conn, len(passes))
-    return Plan(on, threshold, passes, names, usd, basis, note)
+    usd, basis, note, subscription = _cost(conn, len(passes))
+    return Plan(on, threshold, passes, names, usd, basis, note, subscription)
 
 
 def passes_for(
@@ -203,8 +204,9 @@ class _Tree:
 
 def _cost(
     conn: sqlite3.Connection, count: int
-) -> tuple[float, str, str | None]:
-    """Dollars, what they rest on, and a note when no pass could run."""
+) -> tuple[float, str, str | None, bool]:
+    """Dollars, what they rest on, a note when no pass could run, and whether
+    the model is on a subscription (so the dollars are an estimate)."""
     usd = round(count * (REVIEW_USD + EXTEND_USD), 2)
     basis = (
         f"${REVIEW_USD} a review and ${EXTEND_USD} to extend the brief, "
@@ -220,14 +222,16 @@ def _cost(
             usd,
             basis,
             NO_INSIGHTS_MODEL,
+            False,
         )
     provider = _provider(conn, str(models[0].get("connection")))
-    if provider == "claude-code":
+    subscription = provider == "claude-code"
+    if subscription:
         basis += (
             "; a subscription is not billed per token, so this is an "
             "estimate of what the API would charge"
         )
-    return usd, basis, None
+    return usd, basis, None, subscription
 
 
 def _config(row: sqlite3.Row) -> dict[str, object]:

@@ -72,6 +72,17 @@ when, and with how many tokens; hashes are behind Details.
 - **Previous versions.** A replaced brief, by a run or by hand, is kept (the
   last 5 per topic), each saying who wrote it and what replaced it, with a line
   diff against the current one. Saving a brief unchanged keeps nothing.
+- **Insights.** A topic an insights review extended shows an "extended by
+  insights" chip under its brief with the model and the date, and "What
+  changed" opens the cheaper brief it extended, diffed against the current
+  one (the cheaper brief of the latest run of reviews is always kept, however
+  many reviews ran). Findings lists what the review found: the statement, how
+  sure the model is, where the briefs state it, and each file with its lines
+  (linked to the file at the synced commit when the source has a git host),
+  with what it checked and dropped folded away. A pinned topic keeps its
+  findings and says they were not applied; a review with nothing to add says
+  so; a run that failed on the topic links the run and says the brief is
+  unchanged. A topic never reviewed shows none of it. Readers see all of it.
 - **Sections.** Each shows where it starts (heading, lines, size), worst fit
   first, filterable by path and paged. A section from a repository on
   github.com, gitlab.com or bitbucket.org links to its file at the synced
@@ -148,7 +159,8 @@ puts the tree back exactly as it was before the run; syncing again replays
 the same change, so a sync can be shown as often as needed. Only the newest
 run that changed anything can be reverted, and only while nothing runs.
 
-Usage, open to every role, adds spend up by day, model, run and person. For a
+Usage, open to every role, adds spend up by day, model, run and person; the
+insights model is a row of its own, with its calls and spend. For a
 writer or admin it also shows the questions agents asked through recall: the
 last 10,000 per tree are kept, with a count per day over the last 30 days, the
 share recall was not confident about, and the latest questions, each unsure one
@@ -189,6 +201,12 @@ Settings shows one collection at a time (trees, sources, connections, models,
 prompts) as a table, with each form field labelled and explained. It says at
 the top whether the registry is complete enough to build, and a delete or a
 reset shows what it would leave stale before you confirm it.
+
+A tree's form carries the insights switch and its threshold. A line beneath
+them says what turning it on would cost, from the same dry run as `PUT
+?dry_run=true`: how many topics would be reviewed and about how much at API
+prices ("Off: no reviews, no cost" when off). It follows the unsaved fields
+and saves nothing; on a subscription it says that nothing is billed per call.
 
 A brief prompt's form can preview the edit on one topic: "Preview on topic"
 runs the unsaved prompt over that topic's inputs with the model a real brief

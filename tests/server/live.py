@@ -23,6 +23,7 @@ from cryptography.fernet import Fernet
 from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
+from hrono.db import journal
 from hrono.db.database import open_database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
@@ -77,6 +78,9 @@ class Live:
     def write(self, sql: str, params: tuple = ()) -> None:
         """A write from outside the server, as another process would make it."""
         conn = sqlite3.connect(self.db_path, timeout=10)
+        journal.register(
+            conn
+        )  # the triggers on briefs and the registry call it
         try:
             with conn:
                 conn.execute(sql, params)

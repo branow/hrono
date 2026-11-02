@@ -321,5 +321,20 @@
   ],
   "{tokens_in} in, {tokens_out} out": "{tokens_in} на вхід, {tokens_out} на вихід",
   "{tree} triage": "{tree}: стан",
-  "{what} by {who},": "{what} ({who}),"
+  "{what} by {who},": "{what} ({who}),",
+  "extended by insights": "розширено інсайтами",
+  "What changed": "Що змінилося",
+  "Extended": "Розширено",
+  "Findings": "Знахідки",
+  "What a stronger model found when it reviewed this topic and everything under it: rules no single section states and statements the code contradicts. Each carries the files it read": "Що знайшла сильніша модель, переглянувши цю тему й усе під нею: правила, яких не стверджує жоден фрагмент, і твердження, яким суперечить код. До кожної додано файли, які вона читала",
+  "The last review of this topic did not finish": "Останній перегляд цієї теми не завершився",
+  "Its brief is unchanged.": "Її опис не змінено.",
+  "See the run": "Дивитися запуск",
+  "Pinned: findings kept, not applied to the brief": "Закріплено: знахідки збережено, до опису не внесено",
+  "The findings were not written into the brief": "Знахідки не вписано в опис",
+  "The review found nothing to add.": "Перегляд не знайшов, що додати.",
+  "Checked and dropped ({n})|Checked and dropped ({n})": [
+    "Перевірено й відкинуто ({n})", "Перевірено й відкинуто ({n})", "Перевірено й відкинуто ({n})"
+  ],
+  "the cheaper brief": "дешевший опис"
 }

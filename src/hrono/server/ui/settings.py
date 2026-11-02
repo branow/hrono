@@ -585,6 +585,7 @@ def _collection(
         else None
     )
     form = None
+    config: dict[str, object] | None = None
     mode = "list"
     if writable and (editing or adding):
         # what the operator TYPED beats what is stored: a refused save must
@@ -602,6 +603,9 @@ def _collection(
     if doomed is not None:
         mode = "delete"
     return {
+        "insights": _insights_line(request, descriptor, form, editing, config)
+        if mode == "form" and not (refused and refused["errors"])
+        else None,
         "name": descriptor.collection,
         "write_role": descriptor.write_role,
         "can_write": writable,
@@ -636,6 +640,24 @@ def _collection(
         "draft": refused,
         "preview": preview if descriptor.collection == "prompts" else None,
     }
+
+
+def _insights_line(
+    request: Request,
+    descriptor: Descriptor,
+    form: object,
+    editing: str,
+    config: dict[str, object] | None,
+) -> dict[str, object] | None:
+    """What the tree being edited would cost with the settings as typed.
+
+    The dry run's own estimate (`impact.insights_estimate`), so the page and
+    `PUT ?dry_run=true` cannot disagree. A tree being added has no topics yet.
+    """
+    if descriptor.collection != "trees" or not editing or form is None:
+        return None
+    with request.app.state.db.connect() as conn:
+        return impact.insights_estimate(conn, editing, config or {})
 
 
 def _removal(

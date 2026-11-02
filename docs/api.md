@@ -86,13 +86,13 @@ Bodies:
 { "name": "backend", "sources": ["api", "wiki"],
   "lookups": false,
   "insights": false,                 // off by default; each review is billed
-  "insights_threshold": 500000 }     // positive integer, characters
+  "insights_threshold": 500000 }     // positive whole number of characters (true is refused)
 ```
 
 The role `insights` is optional: no build role falls back to it and a registry
 without it is still complete. `PUT /trees/{name}?dry_run=true` adds
 `insights` to the impact: `{on, threshold, passes: [{topic, name, level,
-characters}], count, estimated_cost: {usd, basis}, note?}`. The passes are
+characters}], count, estimated_cost: {usd, basis, subscription}, note?}`. The passes are
 what the next build would review, lowest level first (the root is one when
 it never was reviewed or has unreviewed briefs under it, and a reviewed
 topic is one again when a pass below it will brief it again);

@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from hrono.errors import DomainError
 from hrono.registry import store
@@ -61,8 +61,9 @@ class Tree(BaseModel):
         title="Insights",
         description=(
             "Have a strong model review the biggest topics and add what it "
-            "finds to their briefs. Off by default: each review is billed, "
-            "about $2.50 on Opus."
+            "finds to their briefs. Off by default: each pass is billed, "
+            "about $2.50 a pass at API prices (a subscription is not billed "
+            "per token)."
         ),
     )
     insights_threshold: int = Field(
@@ -74,6 +75,14 @@ class Tree(BaseModel):
             "has covered hold this many characters. The root always gets one."
         ),
     )
+
+    @field_validator("insights_threshold", mode="before")
+    @classmethod
+    def _not_a_flag(cls, value: object) -> object:
+        """`true` is 1 to pydantic's lax int; a flag is not a size."""
+        if isinstance(value, bool):
+            raise ValueError("must be a whole number of characters")
+        return value
 
 
 def _validate(config: dict[str, object], context: ValidationContext) -> None:

@@ -451,7 +451,15 @@
   "{width} (the default; {env} changes it)": "{width} (типово; змінюється через {env})",
   "Insights": "Інсайти",
   "Insights threshold": "Поріг інсайтів",
-  "Have a strong model review the biggest topics and add what it finds to their briefs. Off by default: each review is billed, about $2.50 on Opus.": "Сильна модель переглядає найбільші теми й дописує знайдене в їхні описи. Типово вимкнено: кожен перегляд оплачується, близько $2.50 на Opus.",
+  "Have a strong model review the biggest topics and add what it finds to their briefs. Off by default: each pass is billed, about $2.50 a pass at API prices (a subscription is not billed per token).": "Сильна модель переглядає найбільші теми й дописує знайдене в їхні описи. Типово вимкнено: кожен прохід оплачується, близько $2.50 за прохід за цінами API (підписка не оплачується за токени).",
   "A topic gets a review once the briefs under it that no review has covered hold this many characters. The root always gets one.": "Тема отримує перегляд, щойно описи під нею, яких не охопив жоден перегляд, сягають стількох символів. Корінь отримує його завжди.",
-  "Optional. A strong model that reviews the biggest topics, once you turn insights on for a tree. Leave empty to skip it.": "Необов'язково. Сильна модель, що переглядає найбільші теми, коли ви вмикаєте інсайти для дерева. Залиште порожнім, щоб пропустити."
+  "Optional. A strong model that reviews the biggest topics, once you turn insights on for a tree. Leave empty to skip it.": "Необов'язково. Сильна модель, що переглядає найбільші теми, коли ви вмикаєте інсайти для дерева. Залиште порожнім, щоб пропустити.",
+  "Would review {n} topic, about {amount} (estimate)|Would review {n} topics, about {amount} (estimate)": [
+    "Перегляне {n} тему, близько {amount} (оцінка)", "Перегляне {n} теми, близько {amount} (оцінка)", "Перегляне {n} тем, близько {amount} (оцінка)"
+  ],
+  "Would review no topic now, so no cost": "Зараз жодної теми не перегляне, тож без витрат",
+  "A subscription is not billed per call.": "Підписка не оплачується за виклик.",
+  "Off: no reviews, no cost": "Вимкнено: без переглядів і витрат",
+  "Fix the settings above to see the estimate": "Виправте налаштування вище, щоб побачити оцінку",
+  "no model has the role insights: nothing runs until one does": "жодна модель не має ролі insights: нічого не запуститься, доки вона не з'явиться"
 }

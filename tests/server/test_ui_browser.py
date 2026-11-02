@@ -902,3 +902,98 @@ def test_the_section_box_filters_as_you_type_without_a_reload(
     assert "q=" in page.url  # type: ignore[attr-defined]
     count = page.locator(".filter-count").inner_text()  # type: ignore[attr-defined]
     assert count.startswith(f"{wanted} of {len(paths)}")
+
+
+def _review_a_topic(live: Live, findings: int, long: bool) -> int:
+    """A pass on the root topic, with its cheaper brief kept as a version."""
+    root = _query(live, "SELECT MAX(id) FROM nodes")[0][0]
+    live.write(
+        "INSERT INTO insights_passes(id, node_id, passed_at, model_name, "
+        "version, dropped) VALUES (1, ?, '2999-01-01T10:15:00', 'opus-x', "
+        "'s', ?)",
+        (
+            root,
+            json.dumps(["a hypothesis the code refutes " * (4 if long else 1)]),
+        ),
+    )
+    stem = "very_long_directory_name_to_check_wrapping/" * 3 if long else ""
+    for i in range(findings):
+        live.write(
+            "INSERT INTO insights_findings(pass_id, position, statement, "
+            "evidence, placement, confidence) VALUES (1, ?, ?, ?, ?, ?)",
+            (
+                i,
+                f"Rule {i}: "
+                + "teardown runs in reverse order, " * (6 if long else 1),
+                json.dumps([{"file": f"docs/{stem}{i}.md", "lines": "1-9"}]),
+                "misstated in a topic; state it in the area",
+                "medium, until the changelog is read",
+            ),
+        )
+    live.write(
+        "INSERT INTO brief_versions(node_id, text, model_name, written_at, "
+        "replaced_at, reason, pass_id) VALUES (?, 'the cheaper brief', "
+        "'scribe-9', 't', '2999-01-01T10:15:00', 'insights', 1)",
+        (root,),
+    )
+    return int(root)
+
+
+def test_fifteen_long_findings_fit_a_phone_and_what_changed_opens(
+    solo_page: object, solo: Live
+) -> None:
+    root = _review_a_topic(solo, 15, long=True)
+    solo_page.set_viewport_size({"width": 390, "height": 800})  # type: ignore[attr-defined]
+    solo_page.goto(f"{solo.base}/ui/trees/default/nodes/{root}")  # type: ignore[attr-defined]
+    solo_page.wait_for_load_state("load")  # type: ignore[attr-defined]
+
+    wide = solo_page.evaluate(  # type: ignore[attr-defined]
+        "document.documentElement.scrollWidth - innerWidth"
+    )
+    solo_page.click("#extension a")  # type: ignore[attr-defined]
+    solo_page.wait_for_selector("#cheaper-brief", state="visible")  # type: ignore[attr-defined]
+
+    assert wide <= 0
+    assert solo_page.locator("#findings .findings > li").count() == 15  # type: ignore[attr-defined]
+    assert solo_page.is_visible("#cheaper-brief pre")  # type: ignore[attr-defined]
+
+
+def test_turning_insights_on_re_estimates_without_saving(
+    solo_page: object, solo: Live
+) -> None:
+    _review_a_topic(solo, 1, long=False)
+    solo.write(
+        "INSERT INTO registry (collection, name, config, key_id, created_at, "
+        "updated_at, is_default) VALUES ('trees', 'default', ?, NULL, 't', "
+        "'t', 0)",
+        (
+            json.dumps(
+                {"name": "default", "sources": ["docs"], "insights": False}
+            ),
+        ),
+    )
+    solo.write("DELETE FROM insights_passes")  # nothing reviewed yet
+    solo_page.set_viewport_size({"width": 390, "height": 800})  # type: ignore[attr-defined]
+    solo_page.goto(  # type: ignore[attr-defined]
+        f"{solo.base}/ui/config?tree=default&section=trees&edit=trees:default"
+    )
+    line = solo_page.locator("#insights-line")  # type: ignore[attr-defined]
+    assert "Off: no reviews, no cost" in line.inner_text()
+
+    solo_page.check("#f-trees-insights")  # type: ignore[attr-defined]
+
+    solo_page.wait_for_function(  # type: ignore[attr-defined]
+        "document.getElementById('insights-line').textContent"
+        ".includes('Would review')"
+    )
+    assert "estimate" in line.inner_text()
+    assert (
+        solo_page.evaluate("document.documentElement.scrollWidth - innerWidth")  # type: ignore[attr-defined]
+        <= 0
+    )
+    stored = _query(
+        solo,
+        "SELECT config FROM registry "
+        "WHERE name = 'default' AND collection = 'trees'",
+    )
+    assert json.loads(stored[0][0])["insights"] is False
