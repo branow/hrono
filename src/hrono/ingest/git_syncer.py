@@ -1,8 +1,8 @@
 """The git syncer: clone or pull a repo and pin its commit as the version.
 
 First run clones into the cache path the caller chose — that root hangs off the
-database file, never the working directory; later runs fetch and hard-
-reset to the remote's current bytes. The version is the resolved commit SHA —
+database file, never the working directory; later runs point the cache at the
+registry's current url, fetch and hard-reset to the remote's current bytes. The version is the resolved commit SHA —
 content-addressed, so it is the same whether the repo was fetched over SSH or
 HTTPS (fetch-method-independent identity).
 
@@ -31,6 +31,16 @@ def git_sync(config: dict[str, object], cache: Path, timeout: float) -> str:
         config_args,
     ):
         if cache.exists():
+            # the url may have been edited since the clone: the cache follows
+            # the registry, not what it was first cloned from
+            _run(
+                ["remote", "set-url", "origin", clean_url],
+                name,
+                cache,
+                env,
+                config_args,
+                timeout,
+            )
             _run(["fetch", "origin"], name, cache, env, config_args, timeout)
             _run(
                 ["reset", "--hard", "FETCH_HEAD"],

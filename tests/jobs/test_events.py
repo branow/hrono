@@ -6,6 +6,7 @@ so these tests fail if the producer breaks as well as if the stream does.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -96,27 +97,32 @@ def test_a_finished_job_gets_its_state_and_a_closed_stream(
 def test_the_stream_follows_a_job_to_its_end(harness: Harness) -> None:
     """The live case: states arrive as they change, then the stream ends.
 
-    The job is advanced from another thread WHILE the stream is open, which is
-    the only way to prove it is following rather than reporting once.
+    The job is advanced WHILE the stream is open, and only after the stream
+    has shown the state before: a timed thread raced the stream's own poll and
+    lost on a busy machine, skipping a state, so the test waits on the stream
+    instead of on the clock.
     """
-    import threading
-    import time
-
     parent = harness.fan_out()
-    children = [
+    waiting = [
         str(row["id"])
         for row in store.children(harness.conn, parent)  # type: ignore[arg-type]
     ]
 
-    def advance() -> None:
-        for child in children:
-            time.sleep(events.POLL_SECONDS * 1.5)
-            store.set_status(harness.conn, child, "succeeded", None, "t")  # type: ignore[arg-type]
+    async def follow() -> list[dict]:
+        states = []
+        async for chunk in events.stream(harness.client.app.state.db, parent):  # type: ignore[attr-defined]
+            states.append(json.loads(chunk.split("data: ", 1)[1]))
+            if waiting:
+                store.set_status(
+                    harness.conn,  # type: ignore[arg-type]
+                    waiting.pop(0),
+                    "succeeded",
+                    None,
+                    "t",
+                )
+        return states
 
-    mover = threading.Thread(target=advance, daemon=True)
-    mover.start()
-    states = harness.watch(parent)
-    mover.join(timeout=10)
+    states = asyncio.run(follow())
 
     assert [state["status"] for state in states] == [
         "pending",
