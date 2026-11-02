@@ -124,3 +124,42 @@ def test_insights_never_stands_in_for_a_build_role(conn) -> None:  # type: ignor
     assert not [
         g for g in completeness.gaps(conn) if "multiple text models" in g.says
     ]
+
+
+@pytest.mark.parametrize(
+    ("provider", "estimate"), [("claude-code", True), ("anthropic", False)]
+)
+def test_a_subscription_reviewer_marks_the_cost_an_estimate(
+    conn, provider: str, estimate: bool
+) -> None:  # type: ignore[no-untyped-def]
+    _shape(conn)
+    store.insert(
+        conn,
+        "connections",
+        "c",
+        json.dumps({"name": "c", "provider": provider}),
+        None,
+        "t",
+    )
+    store.insert(
+        conn,
+        "models",
+        "opus",
+        json.dumps(
+            {
+                "name": "opus",
+                "kind": "text",
+                "connection": "c",
+                "role": "insights",
+            }
+        ),
+        None,
+        "t",
+    )
+
+    plan = insights.plan_for(conn, "t", True, 10_000)
+
+    assert plan.usd == 2.82 and plan.note is None
+    assert (
+        "an estimate of what the API would charge" in plan.basis
+    ) is estimate
