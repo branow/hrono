@@ -234,8 +234,9 @@ Updates never re-run the build pipeline. Full rules:
 - **`maintain`** (`tree/maintain.py`) builds a tree: sync → split → embed →
   condense → cluster → brief → build to root.
 - **`sync-tree`** (`tree/sync_chain.py`) refreshes one: update → propagate →
-  brief stale leaves → brief stale upper levels → monitor → repair → adopt new
-  leaves. The order is load-bearing, so it is one op.
+  brief stale leaves → brief stale upper levels (with insights on, each level's
+  passes run right after its briefs, before its parent's) → monitor → repair →
+  adopt new leaves. The order is load-bearing, so it is one op.
 - **`update`** (`tree/update.py`) syncs, diffs files by content hash, re-splits
   only changed files, condenses then embeds only new bytes, and places changed
   sections by their condensation's vector, as a build clusters, against the
@@ -251,6 +252,10 @@ Updates never re-run the build pipeline. Full rules:
 - **`settle`** (`tree/settle.py`) is a warm full rebuild that applies only the
   membership diff. `sync-tree` reports when one is due; it runs only when an
   operator enqueues it (`POST /jobs` with `op: settle`).
+- **Insights passes** (optional, [summarization.md](summarization.md#insights))
+  run where a topic's brief is written: on a build and a `settle` after each
+  level is briefed, and on a `sync-tree` after each upper level, for the
+  topics the counter selects and for every reviewed topic the run rewrote.
 - **The change journal** (`db/journal.py`) records every row a run inserts,
   updates or deletes in the tables that make up a tree, with the row as it
   was before, through triggers generated from the schema on every open. It is

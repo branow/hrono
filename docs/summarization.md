@@ -223,8 +223,23 @@ parent of a reviewed topic is clustered (on a first build) or briefed again (on
 
 **Where it runs.** In `build-tree`, right after the briefs of a level are
 written and before the level above is clustered, and after the root is
-collected; so `maintain` and `settle` run it. `sync` does not (it spends
-nothing unasked). The job result counts `reviews`, `extends` and `findings`.
+collected; so `maintain` and `settle` run it.
+
+`sync-tree` runs it too, inside its upper-level briefing (`brief-upper`, and
+again in `adopt`): after each level's briefs, before the level above is
+written. A reviewed topic whose brief the sync rewrote with the cheaper model
+gets a full new pass in that sync, so its parent is written from the extended
+brief; stored findings are never re-applied to the new brief. A topic whose
+count first reaches the threshold on a sync gets its first pass, and a topic
+below the threshold gets none: the root has no rule of its own on a sync, it is
+reviewed when its count reaches the threshold or its brief was rewritten. A
+sync that leaves every count under the threshold and rewrites no reviewed
+brief calls no model. A pinned topic's brief is left alone and the new
+findings are stored, not applied. Each pass adds a version to the topic's
+history (the kept five, besides the first cheaper brief a pass replaced, so a
+run of passes never pushes out the cheaper brief a reader compares against).
+The job result counts `reviews`, `extends` and `findings` (`insights` for a
+sync).
 
 ## Propagation
 

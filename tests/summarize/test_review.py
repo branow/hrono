@@ -415,6 +415,37 @@ def test_a_pass_never_pushes_the_first_cheaper_brief_out_of_history(
     assert len(texts) == briefs.KEEP_VERSIONS + 1
 
 
+def test_six_passes_in_a_row_keep_the_cheaper_brief_a_reader_compares(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    """Each sync rewrites the brief cheaply, then a pass extends it."""
+    database, ids = world
+    _run(database, Reviewer(), [1])
+    for i in range(5):
+        with database.write() as conn:
+            briefs.upsert(
+                conn,
+                ids["mid"],
+                f"{CHEAP} Regenerated {i}.",
+                model_name="cheap",
+                prompt_name="p",
+                prompt_hash="h",
+                member_signature="s",
+                input_tokens=0,
+                output_tokens=0,
+            )
+        done = _run(database, Reviewer(), [1])
+        assert done["reviews"] == 1  # the rewritten brief is reviewed again
+
+    assert _count(database, "SELECT COUNT(*) FROM insights_passes") == 6
+    with database.connect() as conn:
+        kept = briefs.versions(conn, ids["mid"])
+    cheaper = [v["text"] for v in kept if v["reason"] == "insights"]
+    assert CHEAP in cheaper  # the first cheaper brief is still there
+    assert f"{CHEAP} Regenerated 4." in cheaper  # and the newest one
+    assert _text(database, ids["mid"]) == EXTENDED
+
+
 def test_the_root_is_reviewed_once_and_again_only_when_something_changed(
     world,
 ) -> None:  # type: ignore[no-untyped-def]
