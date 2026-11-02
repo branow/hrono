@@ -555,6 +555,20 @@ def test_a_pass_below_a_reviewed_parent_gives_the_parent_a_new_pass(
     assert _text(database, ids["root"]) == EXTENDED
 
 
+def test_a_tree_stored_without_a_threshold_does_not_pass_every_topic(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, _ = world
+    with database.write() as conn:
+        conn.execute(
+            "UPDATE registry SET config = json_remove(config, "
+            "'$.insights_threshold') WHERE collection = 'trees'"
+        )
+    reviewer = Reviewer()
+    done = _run(database, reviewer, [1, 2], root=True)
+    assert done["reviews"] == 1  # the root's own pass, no topic under it
+
+
 def test_with_the_step_off_a_build_makes_no_insights_call(world) -> None:  # type: ignore[no-untyped-def]
     database, ids = world
     with database.write() as conn:

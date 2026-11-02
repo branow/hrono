@@ -920,6 +920,11 @@ def _extend_root(db: Database, root: int, text: str) -> None:
     """Write the cheaper root brief, then a pass that replaces it with text."""
     with db.write() as conn:
         brief(conn, root, CHEAP_ROOT)
+    _pass_on_root(db, root, text)
+
+
+def _pass_on_root(db: Database, root: int, text: str) -> None:
+    with db.write() as conn:
         pass_id = conn.execute(
             "INSERT INTO insights_passes(node_id, passed_at, model_name, "
             "version, skipped, dropped, looked) VALUES (?, ?, 'm', 's', '', "
@@ -973,3 +978,16 @@ def test_a_root_written_again_after_its_pass_is_not_taken_for_extended(
         conn.execute("UPDATE insights_passes SET passed_at = '0'")
     root = _files(database)["root.md"]
     assert "## Conventions" not in root and "## Flows" not in root
+
+
+def test_a_root_extended_twice_states_both_passes_lines(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    _extend_root(database, ids["root"], EXTENDED_ROOT)
+    _pass_on_root(
+        database, ids["root"], EXTENDED_ROOT + " A second pass rule holds."
+    )
+    root = _files(database)["root.md"]
+    assert "A .env value never beats the shell." in root
+    assert "A second pass rule holds." in root

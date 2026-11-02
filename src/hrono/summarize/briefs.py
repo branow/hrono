@@ -733,15 +733,20 @@ def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
 
 
 def cheaper_text(conn: sqlite3.Connection, node_id: int) -> str | None:
-    """The brief the node's latest pass replaced, while its brief is that
-    pass's output; None when it has no pass or was written again since."""
+    """The brief before the node's passes, while its brief is a pass's output.
+
+    A node extended twice with no rewrite between has several pass versions;
+    the cheaper brief is the oldest since the last non-pass version. None
+    when it has no pass or was written again since the latest one.
+    """
     row = conn.execute(
-        "SELECT v.text FROM brief_versions v "
-        "JOIN insights_passes p ON p.id = v.pass_id "
-        "JOIN briefs b ON b.node_id = v.node_id "
-        "WHERE v.node_id = ? AND v.reason = 'insights' "
-        "AND p.passed_at >= b.created_at ORDER BY v.id DESC LIMIT 1",
-        (node_id,),
+        "SELECT v.text FROM brief_versions v WHERE v.node_id = :n "
+        "AND v.reason = 'insights' AND v.id > COALESCE((SELECT MAX(id) "
+        "FROM brief_versions WHERE node_id = :n AND reason != 'insights'), 0) "
+        "AND (SELECT MAX(p.passed_at) FROM insights_passes p "
+        "WHERE p.node_id = :n) >= (SELECT created_at FROM briefs "
+        "WHERE node_id = :n) ORDER BY v.id LIMIT 1",
+        {"n": node_id},
     ).fetchone()
     return None if row is None else str(row["text"])
 

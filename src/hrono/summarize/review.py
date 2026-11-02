@@ -44,6 +44,7 @@ from hrono.llm.client import (
 from hrono.llm.providers import client_for
 from hrono.recall.brief_passages import store_brief
 from hrono.registry import store
+from hrono.registry.collections.trees import INSIGHTS_THRESHOLD
 from hrono.summarize import briefs, insights, lookup, pool, spend
 from hrono.summarize.resolve import (
     INSIGHTS_ROLE,
@@ -319,7 +320,7 @@ def run(
         config = json.loads(row["config"]) if row is not None else {}
     if not config.get("insights"):
         return {}
-    threshold = int(config.get("insights_threshold") or 0)
+    threshold = int(config.get("insights_threshold") or INSIGHTS_THRESHOLD)
     with context.database.connect() as conn:
         try:
             model = resolve_text_model(conn, {}, INSIGHTS_ROLE)
