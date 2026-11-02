@@ -18,6 +18,7 @@ _CONFIDENCE = {"high": "ok", "medium": "warn"}
 
 def reviewed(
     conn: sqlite3.Connection,
+    tree: str,
     node_id: int,
     name: str,
     brief_written: str,
@@ -35,7 +36,7 @@ def reviewed(
         "LIMIT 1",
         (node_id,),
     ).fetchone()
-    failed = _failed_run(conn, name, str(one["passed_at"]) if one else "")
+    failed = _failed_run(conn, tree, name, str(one["passed_at"]) if one else "")
     if one is None and failed is None:
         return None
     skipped = str(one["skipped"]) if one else ""
@@ -123,17 +124,23 @@ def _loaded(column: object) -> list[object]:
     return found if isinstance(found, list) else []
 
 
-def _failed_run(conn: sqlite3.Connection, name: str, since: str) -> str | None:
-    """The newest run that tried to review this topic and did not finish, if
-    no pass has been stored on it since."""
-    needle = json.dumps(f"{name}: ")[1:-1]
+def _failed_run(
+    conn: sqlite3.Connection, tree: str, name: str, since: str
+) -> str | None:
+    """The newest run of the tree that tried to review this topic and did not
+    finish, if no pass has been stored on it since.
+
+    A failure is the entry "<name>: <why>", so the needle starts at the
+    entry's opening quote: a longer name ending in this one is another topic.
+    """
+    needle = json.dumps(f"{name}: ")[:-1]
     escaped = (
         needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     )
     row = conn.execute(
-        "SELECT id, updated_at FROM jobs WHERE result LIKE ? ESCAPE '\\' "
-        "AND result LIKE '%\"failed\"%' AND updated_at > ? "
+        "SELECT id, updated_at FROM jobs WHERE tree = ? AND result LIKE ? "
+        "ESCAPE '\\' AND result LIKE '%\"failed\"%' AND updated_at > ? "
         "ORDER BY updated_at DESC LIMIT 1",
-        (f"%{escaped}%", since),
+        (tree, f"%{escaped}%", since),
     ).fetchone()
     return str(row["id"]) if row is not None else None

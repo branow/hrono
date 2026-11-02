@@ -596,6 +596,7 @@ def _node(
         "wrote": _provenance(conn, node_id, brief),
         "insights": reviewed(
             conn,  # type: ignore[arg-type]
+            tree,
             node_id,
             naming.name(conn, node_id),  # type: ignore[arg-type]
             _brief_written(conn, node_id),

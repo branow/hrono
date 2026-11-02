@@ -904,3 +904,26 @@ def test_a_review_that_did_not_finish_links_the_run(browser: Browser) -> None:
 
     _pass(browser, node)  # a pass stored after that run: it no longer shows
     assert "did not finish" not in _body(browser, node)
+
+
+def test_a_run_that_failed_another_topic_is_not_this_ones(
+    browser: Browser,
+) -> None:
+    """The same name in another tree, or a longer name ending in this one, is
+    another topic's failure."""
+    browser.sign_in()
+    node = _node_id(browser)
+    name = naming.name(browser.conn, node)  # type: ignore[arg-type]
+    with browser.conn:  # type: ignore[attr-defined]
+        for job, tree, failed in (
+            ("j-other-tree", "elsewhere", f"{name}: out of turns"),
+            ("j-longer-name", TREE, f"Not {name}: out of turns"),
+        ):
+            browser.conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO jobs(id, tree, op, scope, status, created_at, "
+                "updated_at, result) VALUES (?, ?, 'build-tree', '{}', "
+                "'succeeded', 't', '2999-01-01T00:00:00', ?)",
+                (job, tree, json.dumps({"insights": {"failed": [failed]}})),
+            )
+
+    assert "did not finish" not in _body(browser, node)
