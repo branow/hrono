@@ -221,9 +221,10 @@ def _routing(brief: str, cheaper: str | None = None) -> str:
     keeps only what comes before the first heading that follows prose.
 
     A root whose brief an insights pass extended (``cheaper`` is the brief it
-    replaced) also keeps the parts the pass wrote: the sections that are new
-    or differ from the cheaper brief's, which hold the tree-wide rules an
-    agent reads this page for.
+    replaced) also keeps what the pass wrote: the lines of its sections that
+    the cheaper brief does not have, under their headings. Those are the
+    tree-wide rules an agent reads this page for; the lines the pass left
+    alone stay on the pages below.
     """
     kept: list[str] = []
     prose = False
@@ -239,22 +240,24 @@ def _routing(brief: str, cheaper: str | None = None) -> str:
     opening = "".join(kept).rstrip("\n")
     if cheaper is None:
         return opening
-    old = dict(_sections(cheaper))
-    wrote = [
-        body for head, body in _sections(brief[cut:]) if old.get(head) != body
-    ]
+    old = {line.strip() for line in cheaper.splitlines()}
+    wrote: list[str] = []
+    for heading, lines in _sections(brief[cut:]):
+        new = [line for line in lines if line.strip() not in old]
+        if new:
+            wrote.append("\n\n".join([heading, *new]))
     return "\n\n".join([opening, *wrote])
 
 
-def _sections(brief: str) -> list[tuple[str, str]]:
-    """A brief's ``## `` sections as (heading line, whole section) pairs."""
-    found: list[list[str]] = []
+def _sections(brief: str) -> list[tuple[str, list[str]]]:
+    """A brief's ``## `` sections as (heading line, its non-blank lines)."""
+    found: list[tuple[str, list[str]]] = []
     for line in brief.splitlines():
         if line.startswith("## "):
-            found.append([])
-        if found:
-            found[-1].append(line)
-    return [(one[0].strip(), "\n".join(one).strip()) for one in found]
+            found.append((line.strip(), []))
+        elif found and line.strip():
+            found[-1][1].append(line)
+    return found
 
 
 # An upper brief's one-line-per-part list says what ## Children already says.
