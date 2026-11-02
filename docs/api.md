@@ -174,7 +174,9 @@ The registered ops (`OPS` in `src/hrono/jobs/ops.py`, filled by each stage
 module) are `maintain`, `sync-tree`, `sync`, `split`, `embed`, `cluster`,
 `cluster-briefs`, `condense`, `brief`, `brief-upper`, `brief-preview`,
 `build-tree`, `update`, `propagate`, `monitor`, `repair`, `settle` and `noop`.
-Scope is `{"type": "all"}` (the default) or `{"type": "source", "name": ...}`.
+`settle` also runs the insights reviews that are due when nothing drifted (see
+`docs/summarization.md`, "Where it runs"): `settled: false` and an `insights`
+count, or no call when none is due. Scope is `{"type": "all"}` (the default) or `{"type": "source", "name": ...}`.
 A source-scoped op over all sources fans out into one child job per source.
 
 ## Users, usage, admin

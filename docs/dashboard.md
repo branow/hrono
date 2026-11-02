@@ -207,6 +207,11 @@ them says what turning it on would cost, from the same dry run as `PUT
 ?dry_run=true`: how many topics would be reviewed and about how much at API
 prices ("Off: no reviews, no cost" when off). It follows the unsaved fields
 and saves nothing; on a subscription it says that nothing is billed per call.
+When the saved settings have a review due and a model has the role, a "Review
+now" button beside the line queues `settle` and opens the Runs page on it;
+with nothing due the line says every topic over the threshold is reviewed. A
+finding's evidence links the file at the version the review read, "version
+not recorded" on older findings.
 
 A brief prompt's form can preview the edit on one topic: "Preview on topic"
 runs the unsaved prompt over that topic's inputs with the model a real brief

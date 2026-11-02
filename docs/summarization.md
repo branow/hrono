@@ -223,7 +223,21 @@ overwritten: its findings are stored and the pass is marked skipped. The
 parent of a reviewed topic is clustered (on a first build) or briefed again (on
 `settle`) from the extended brief.
 
-**Where it runs.** In `build-tree`, right after the briefs of a level are
+**Where it runs.** `settle` runs the passes that are due even when nothing
+drifted (no churn, no misfit): it reads the tree's saved settings, runs the
+passes `insights.passes_for` names bottom-up with the root last, and briefs
+again only the parents of the topics it extended, never a re-cluster. This is
+the "Review now" action on the tree's settings line and `POST /jobs
+{"op":"settle"}`; its result is `settled: false` with `insights` counts. With
+insights off, no model with the role, or nothing due, an untripped `settle`
+is `settled: false` and calls no model. A tripped (or forced) `settle` reviews
+inside its rebuild, as below. Each finding's evidence items carry `version`:
+the synced version of the file's sections when the review read them (the
+reviewer's own is dropped; a file outside the area has none), and the topic
+page links that version; findings stored before this show today's link and
+"version not recorded".
+
+In `build-tree`, right after the briefs of a level are
 written and before the level above is clustered, and after the root is
 collected; so `maintain` and `settle` run it.
 

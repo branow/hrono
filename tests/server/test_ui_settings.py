@@ -809,6 +809,77 @@ def test_the_tree_form_says_what_insights_would_cost(browser: Browser) -> None:
     assert browser.stored("trees", "beta")["insights"] is False  # type: ignore[index]
 
 
+def _insights_model(browser: Browser) -> None:
+    for table, name, config in (
+        ("connections", "sub", {"provider": "claude-code"}),
+        (
+            "models",
+            "opus",
+            {
+                "kind": "text",
+                "role": "insights",
+                "model": "m",
+                "connection": "sub",
+            },
+        ),
+    ):
+        registry_store.insert(
+            browser.conn,  # type: ignore[arg-type]
+            table,
+            name,
+            json.dumps({"name": name, **config}),
+            None,
+            "t",
+        )
+
+
+def test_review_now_is_offered_only_when_settle_would_run_a_review(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
+    _two_levels(browser, "beta")
+    save = {"f.name": "beta", "f.sources": ["gh"], "f.insights": "1"}
+
+    # saved off, typed on: the saved settings run nothing
+    typed = browser.item("trees", name="beta", **save, preview="1").text
+    assert 'id="review-now"' not in typed
+
+    browser.item(
+        "trees", name="beta", **save
+    )  # saved on, no model has the role
+    assert 'id="review-now"' not in browser.config(edit="trees:beta")
+
+    _insights_model(browser)
+    page = browser.config(edit="trees:beta")
+    assert 'id="review-now"' in page
+    assert 'formaction="/ui/jobs/run?tree=beta"' in page
+    assert 'name="op" value="settle"' in page
+    assert "Review now runs them" in page
+    # the button submits the form's fields beside op=settle: it queues the run
+    queued = browser.client.post(  # type: ignore[attr-defined]
+        "/ui/jobs/run?tree=beta",
+        data={"f.name": "beta", "f.sources": ["gh"], "op": "settle"},
+        follow_redirects=False,
+    )
+    assert queued.status_code == 303 and "run=" in queued.headers["location"]
+    row = browser.conn.execute(  # type: ignore[attr-defined]
+        "SELECT op, tree FROM jobs WHERE op = 'settle'"
+    ).fetchone()
+    assert tuple(row) == ("settle", "beta")
+
+    # everything over the threshold is reviewed: nothing to offer
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO insights_passes(node_id, passed_at, model_name, "
+            "version, skipped, dropped) SELECT id, '9999-01-01', 'm', 's', "
+            "'', '[]' FROM nodes WHERE tree = 'beta'"
+        )
+    done = browser.config(edit="trees:beta")
+    assert 'id="review-now"' not in done
+    assert "Every topic over the threshold is reviewed." in done
+
+
 def test_a_subscription_marks_the_insights_cost_as_an_estimate(
     browser: Browser,
 ) -> None:

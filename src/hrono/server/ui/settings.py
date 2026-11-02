@@ -62,7 +62,7 @@ from hrono.server import preview as preview_view
 from hrono.server.auth import allows, require_role
 from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, _trees, router, templates
-from hrono.summarize import pool
+from hrono.summarize import insights, pool
 
 FROZEN = (
     "a shipped default cannot be edited — reset it, or add your own beside it"
@@ -656,7 +656,11 @@ def _insights_line(
     if descriptor.collection != "trees" or not editing:
         return None
     with request.app.state.db.connect() as conn:
-        return impact.insights_estimate(conn, editing, config or {})
+        estimate = impact.insights_estimate(conn, editing, config or {})
+        # "Review now" runs the SAVED settings, so it is offered only when
+        # settle would run a pass on them
+        estimate["runnable"] = bool(insights.pending(conn, editing))
+        return estimate
 
 
 def _removal(

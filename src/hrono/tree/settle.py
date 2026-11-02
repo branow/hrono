@@ -50,8 +50,10 @@ from hrono.health import report
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry.collections.trees import DEFAULT_TREE
+from hrono.summarize import insights, review
 from hrono.summarize.brief import brief
-from hrono.summarize.build_tree import build_tree
+from hrono.summarize.brief_upper import brief_upper
+from hrono.summarize.build_tree import build_tree, total_insights
 
 CHURN_THRESHOLD = 50  # accumulated drift points since the last settle
 MISFIT_FACTOR = 2.0  # global misfit above 2x baseline forces a reconcile
@@ -69,8 +71,13 @@ def settle(
     """Warm-reconcile the tree when churn/misfit crosses the trigger."""
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
-        if not (force or should_settle(conn, tree)):
-            return {"settled": False, "held": 0, "released": 0}
+        tripped = force or should_settle(conn, tree)
+        owed = () if tripped else insights.pending(conn, tree)
+    if not tripped:
+        # not drifted, but the tree's insights step may still owe reviews:
+        # run just those, never a re-cluster
+        done = _review_due(tree, owed, context, client) if owed else {}
+        return {"settled": False, "held": 0, "released": 0, **done}
 
     # WHERE a pinned chunk belongs has to be read before the rebuild, because
     # the rebuild is what erases it.
@@ -112,6 +119,32 @@ def settle(
         "released": released,
         **(reviewed or {}),
     }
+
+
+def _review_due(
+    tree: str,
+    owed: Sequence[insights.Pass],
+    context: JobContext,
+    client: object | None,
+) -> Mapping[str, object]:
+    """The due insights passes, bottom-up, the root last.
+
+    After a level's passes only the parents of the topics they extended are
+    briefed again (``review.run``'s ``rebrief``), as a sync does.
+    """
+    done = review.run(
+        context,
+        tree,
+        levels=range(1, max(one.level for one in owed) + 1),
+        root=True,
+        client=client,  # type: ignore[arg-type]
+        rebrief=lambda at: brief_upper(
+            _stage(tree, "brief-upper", level=at),
+            context,
+            client=client,  # type: ignore[arg-type]
+        ),
+    )
+    return {"insights": total_insights([done])} if done else {}
 
 
 def anchor_members(
@@ -249,13 +282,13 @@ def _reset_drift(conn: sqlite3.Connection, tree: str) -> None:
     )
 
 
-def _stage(tree: str, op: str) -> Job:
+def _stage(tree: str, op: str, level: int | None = None) -> Job:
     return Job(
         id=f"settle-{op}",
         parent_id=None,
         tree=tree,
         op=op,
-        scope={},
+        scope={} if level is None else {"level": level},
         status="running",
         error=None,
         created_at="t",

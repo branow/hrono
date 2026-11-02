@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 from hrono import naming
 from hrono.registry import store
+from hrono.registry.collections.trees import INSIGHTS_THRESHOLD
 from hrono.summarize.resolve import INSIGHTS_ROLE, NO_INSIGHTS_MODEL
 
 # Measured on Opus at API prices on a 36-topic unit: $2.43 a review (the
@@ -91,6 +92,20 @@ def passes_for(
             found.append(one)
             tops.planned.add(one.node)
     return tuple(found)
+
+
+def pending(conn: sqlite3.Connection, tree: str) -> tuple[Pass, ...]:
+    """The passes ``settle`` would run now: the tree's SAVED settings.
+
+    None when insights is off for the tree, when no model has the role (a
+    review could not run), or when nothing is due.
+    """
+    row = store.get(conn, "trees", tree)
+    config = _config(row) if row is not None else {}
+    if not config.get("insights") or not _models(conn):
+        return ()
+    threshold = int(config.get("insights_threshold") or INSIGHTS_THRESHOLD)
+    return passes_for(conn, tree, threshold)
 
 
 def due(
@@ -212,11 +227,7 @@ def _cost(
         f"${REVIEW_USD} a review and ${EXTEND_USD} to extend the brief, "
         "measured on Opus at API prices"
     )
-    models = [
-        _config(row)
-        for row in store.list_all(conn, "models")
-        if _config(row).get("role") == INSIGHTS_ROLE
-    ]
+    models = _models(conn)
     if not models:
         return (
             usd,
@@ -232,6 +243,14 @@ def _cost(
             "estimate of what the API would charge"
         )
     return usd, basis, None, subscription
+
+
+def _models(conn: sqlite3.Connection) -> list[dict[str, object]]:
+    return [
+        _config(row)
+        for row in store.list_all(conn, "models")
+        if _config(row).get("role") == INSIGHTS_ROLE
+    ]
 
 
 def _config(row: sqlite3.Row) -> dict[str, object]:

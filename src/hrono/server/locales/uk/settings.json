@@ -457,7 +457,10 @@
   "Would review {n} topic, about {amount} (estimate)|Would review {n} topics, about {amount} (estimate)": [
     "Перегляне {n} тему, близько {amount} (оцінка)", "Перегляне {n} теми, близько {amount} (оцінка)", "Перегляне {n} тем, близько {amount} (оцінка)"
   ],
-  "Would review no topic now, so no cost": "Зараз жодної теми не перегляне, тож без витрат",
+  "Every topic over the threshold is reviewed.": "Кожну тему понад порогом уже переглянуто.",
+  "Review now runs them; a sync reviews a topic whose brief it rewrites.": "«Переглянути зараз» запускає їх; синхронізація переглядає тему, чий опис переписує.",
+  "Review now": "Переглянути зараз",
+  "Runs the reviews for the saved settings, then shows the run": "Запускає перегляди за збереженими налаштуваннями й показує запуск",
   "A subscription is not billed per call.": "Підписка не оплачується за виклик.",
   "Off: no reviews, no cost": "Вимкнено: без переглядів і витрат",
   "Fix the settings above to see the estimate": "Виправте налаштування вище, щоб побачити оцінку",
