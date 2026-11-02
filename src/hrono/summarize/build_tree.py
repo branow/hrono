@@ -121,10 +121,10 @@ def build_tree(
     with context.database.connect() as conn:
         top = _top_level(conn, tree)
     review_levels(list(range(1, top + 1)), root=True)
-    return {"insights": _total(insights)} if insights else {}
+    return {"insights": total_insights(insights)} if insights else {}
 
 
-def _total(runs: list[dict[str, object]]) -> dict[str, object]:
+def total_insights(runs: list[dict[str, object]]) -> dict[str, object]:
     """The insights outcomes of one build, added up."""
     out: dict[str, object] = {"reviews": 0, "extends": 0, "findings": 0}
     for one in runs:

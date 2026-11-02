@@ -1,17 +1,20 @@
 """One op brings a tree up to date, in the order the stages require."""
 
+import itertools
 import json
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+from hrono import pins
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.stages import StageFailed
 from hrono.llm.client import CompletionRequest, CompletionResult, Usage
 from hrono.registry import store as registry_store
+from hrono.summarize import review
 from hrono.tree.maintain import maintain
 from hrono.tree.sync_chain import sync
 from tests import world
@@ -527,3 +530,243 @@ def test_sync_adopts_a_leaf_even_when_repair_did_nothing(
         ).fetchone()
     assert briefed is not None  # the sync briefed the new topic itself
     assert parent is not None  # ... and hung it under a parent, reachably
+
+
+# --- insights: a sync keeps the passes (E059) ------------------------------
+
+FINDING = {"findings": [{"statement": "Module 0 is read first"}]}
+EXTENDED = "Extended with a finding: module 0 is read first."
+
+
+_EXTENDS = itertools.count(1)  # each extended brief reads differently
+
+
+class Insighter(Judge):
+    """Judge and briefer, plus the insights review and extend calls.
+
+    Keeps the order of the calls: a brief call is marked ``saw`` when the
+    extended text was in what it was written from.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.log: list[str] = []
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        text = request.content
+        if text.startswith("REVIEW"):
+            self.log.append("review")
+            return CompletionResult(json.dumps(FINDING), Usage(5, 2))
+        if text.startswith("EXTEND"):
+            self.log.append("extend")
+            return CompletionResult(
+                f"{EXTENDED} ({next(_EXTENDS)})", Usage(3, 2)
+            )
+        result = super().complete(request)
+        if not ("S " in text and " M " in text):
+            self.log.append("brief-saw" if "Extended with" in text else "brief")
+        return result
+
+
+def _insights(db: Database, threshold: int) -> None:
+    """Switch insights on for the tree, with the role's model and prompts."""
+    with db.write() as conn:
+        registry_store.insert(
+            conn,
+            "models",
+            "opus",
+            json.dumps(
+                {
+                    "name": "opus",
+                    "kind": "text",
+                    "connection": "c",
+                    "model": "claude",
+                    "role": "insights",
+                    "params": {},
+                }
+            ),
+            None,
+            "t",
+        )
+        for role, template in (
+            ("insights-review", "REVIEW {brief} {index}"),
+            ("insights-extend", "EXTEND {brief} {findings}"),
+        ):
+            registry_store.insert(
+                conn,
+                "prompts",
+                role,
+                json.dumps({"name": role, "role": role, "template": template}),
+                None,
+                "t",
+            )
+        registry_store.insert(
+            conn,
+            "trees",
+            TREE,
+            json.dumps(
+                {
+                    "name": TREE,
+                    "sources": ["repo"],
+                    "insights": True,
+                    "insights_threshold": threshold,
+                }
+            ),
+            None,
+            "t",
+        )
+
+
+def _passes(db: Database) -> list[int]:
+    with db.connect() as conn:
+        return [
+            int(r["node_id"])
+            for r in conn.execute("SELECT node_id FROM insights_passes")
+        ]
+
+
+def _graft(db: Database, tmp_path: Path) -> None:
+    """Give the tree a second upper level: the top gets a parent, briefed."""
+    top_level, old_top = _top(db)
+    with db.write() as conn:
+        grafted = int(
+            conn.execute(
+                "INSERT INTO nodes(tree, level, label, created_at) "
+                "VALUES (?, ?, 0, 't')",
+                (TREE, top_level + 1),
+            ).lastrowid
+        )
+        cluster_store.add_child(
+            conn, grafted, old_top, attached=False, similarity=None
+        )
+    _run(db, tmp_path, Judge())  # writes the new top's brief
+
+
+def _briefed_first(db: Database, tmp_path: Path) -> list[int]:
+    """Review the tree once, as a build would, and name the topics passed."""
+    _graft(db, tmp_path)
+    _insights(db, 1)
+    review.run(
+        job_context(db, tmp_path),
+        TREE,
+        levels=[1, 2],
+        root=True,
+        client=Insighter(),
+    )
+    return sorted(set(_passes(db)))
+
+
+def test_a_sync_reviews_again_a_reviewed_topic_it_rewrote_before_its_parent(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    reviewed = _briefed_first(db, tmp_path)
+    assert reviewed
+    with db.write() as conn:  # only the rewrite rule, never the counter
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, "
+            "'$.insights_threshold', 1000000000) WHERE collection = 'trees'"
+        )
+    before = len(_passes(db))
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    client = Insighter()
+
+    outcome = _run(db, tmp_path, client)
+
+    assert len(_passes(db)) > before  # the rewritten topic was reviewed again
+    assert outcome["insights"]["reviews"] >= 1  # type: ignore[index]
+    # its rewrite, then its pass, then the parent written from the result
+    log = client.log
+    first = log.index("review")
+    assert log[first + 1] == "extend"
+    assert "brief-saw" in log[first + 2 :]
+    assert "brief" in log[:first]
+
+
+def test_a_sync_runs_no_pass_on_a_topic_under_the_threshold(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    _insights(db, 10**9)
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    client = Insighter()
+
+    outcome = _run(db, tmp_path, client)
+
+    assert "review" not in client.log and _passes(db) == []
+    assert outcome["insights"]["reviews"] == 0  # type: ignore[index]
+
+
+def test_a_topic_reaching_the_threshold_on_a_sync_gets_its_first_pass(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, _origin = built
+    _graft(db, tmp_path)
+    _insights(db, 1)
+    assert _passes(db) == []
+    # nothing changed in the source: only the counter selects a pass here
+    client = Insighter()
+
+    outcome = _run(db, tmp_path, client)
+
+    assert _passes(db) and outcome["insights"]["reviews"] >= 1  # type: ignore[index]
+    assert client.log.count("review") == client.log.count("extend")
+    # the level above is written from the extended brief, not the cheaper one
+    assert "brief-saw" in client.log
+
+
+def test_a_sync_stores_findings_for_a_pinned_reviewed_topic_and_keeps_its_brief(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    reviewed = _briefed_first(db, tmp_path)
+    with db.write() as conn:
+        for node in reviewed:
+            pins.pin(conn, pins.BRIEF, node, reason="by hand")
+        stored = {
+            r["node_id"]: r["text"]
+            for r in conn.execute("SELECT node_id, text FROM briefs")
+            if r["node_id"] in reviewed
+        }
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, "
+            "'$.insights_threshold', 1) WHERE collection = 'trees'"
+        )
+        before = conn.execute(
+            "SELECT COUNT(*) FROM insights_findings"
+        ).fetchone()[0]
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+
+    _run(db, tmp_path, Insighter())
+
+    with db.connect() as conn:
+        after = conn.execute(
+            "SELECT COUNT(*) FROM insights_findings"
+        ).fetchone()[0]
+        kept = {
+            r["node_id"]: r["text"]
+            for r in conn.execute("SELECT node_id, text FROM briefs")
+            if r["node_id"] in reviewed
+        }
+    assert kept == stored  # byte for byte
+    assert after > before  # a new pass ran and stored its findings
+    with db.connect() as conn:
+        skipped = {
+            r["skipped"]
+            for r in conn.execute(
+                "SELECT skipped FROM insights_passes ORDER BY id DESC LIMIT 1"
+            )
+        }
+    assert skipped == {"pinned"}  # ... and was not applied
+
+
+def test_a_sync_with_insights_off_calls_no_insights_model(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+    client = Insighter()
+
+    outcome = _run(db, tmp_path, client)
+
+    assert "insights" not in outcome and "review" not in client.log

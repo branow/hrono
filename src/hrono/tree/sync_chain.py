@@ -48,9 +48,10 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages, recorder
 from hrono.registry.collections.trees import DEFAULT_TREE
+from hrono.summarize import review
 from hrono.summarize.brief import brief
 from hrono.summarize.brief_upper import brief_upper
-from hrono.summarize.build_tree import build_tree
+from hrono.summarize.build_tree import build_tree, total_insights
 from hrono.summarize.propagate import propagate
 from hrono.tree import changes
 from hrono.tree.settle import should_settle
@@ -89,10 +90,12 @@ def sync(
     run.run(
         "brief", lambda: brief(_stage(tree, "brief"), context, client=client)
     )
-    run.run(
-        "brief-upper",
-        lambda: _brief_upper_levels(tree, context, client=client),
-    )
+    reviewed = [
+        run.run(
+            "brief-upper",
+            lambda: _brief_upper_levels(tree, context, client=client),
+        )
+    ]
     measured = run.run(
         "monitor", lambda: monitor(_stage(tree, "monitor"), context)
     )
@@ -102,10 +105,11 @@ def sync(
             _stage(tree, "repair"), context, core_labeler=core_labeler
         ),
     )
-    adopted = run.run(
+    adopted, late = run.run(
         "adopt",
         lambda: _adopt(tree, context, encoder_for=encoder_for, client=client),
     )
+    reviewed.append(late)
     # brief, brief-upper and adopt wrote node:// brief passages; vectorise
     # them, as maintain does, or recall's cosine leg never sees a brief
     # written by a sync (the v9 eval tree had 11,000 of 11,006 unembedded)
@@ -127,6 +131,7 @@ def sync(
                 adopted=adopted,
                 settle_due=settle_due,
             ),
+            **_insights(reviewed),
             "tree": changed,
         }
     )
@@ -138,7 +143,7 @@ def _adopt(
     *,
     encoder_for: object | None,
     client: object | None,
-) -> int:
+) -> tuple[int, dict[str, object]]:
     """Brief, attach and re-brief whatever this run left loose. ALWAYS.
 
     **This is why a tree could come out of a sync with two roots.**
@@ -166,7 +171,7 @@ def _adopt(
                 encoder_for=encoder_for,
             )
         )
-    _brief_upper_levels(tree, context, client=client)
+    reviewed = [_brief_upper_levels(tree, context, client=client)]
     if _forest(context, tree):
         # a drain on a one-topic tree leaves two tops and no level above to
         # attach to; only `build_tree` may mint the root that collects them,
@@ -176,10 +181,12 @@ def _adopt(
             context,
             client=client,
             encoder_for=encoder_for,
-            # a sync spends nothing unasked; its passes are E059's
+            # the passes below are the sync's own: a topic below its
+            # threshold gets none, which the build's root rule would not say
             reviewing=False,
         )
-    return attached
+        reviewed.append(_brief_upper_levels(tree, context, client=client))
+    return attached, _sum(reviewed)
 
 
 def _forest(context: JobContext, tree: str) -> bool:
@@ -193,9 +200,21 @@ def _forest(context: JobContext, tree: str) -> bool:
     return row is not None and int(row["n"]) > 1
 
 
+def _sum(runs: list[dict[str, object]]) -> dict[str, object]:
+    """The insights outcomes of the runs in one stage, added up (or none)."""
+    ran = [one for one in runs if one]
+    return total_insights(ran) if ran else {}
+
+
+def _insights(runs: list[dict[str, object]]) -> dict[str, object]:
+    """The ``insights`` key of the sync's outcome, when a pass was looked at."""
+    total = _sum(runs)
+    return {"insights": total} if total else {}
+
+
 def _brief_upper_levels(
     tree: str, context: JobContext, *, client: object | None
-) -> None:
+) -> dict[str, object]:
     """Run ``brief_upper`` at EVERY upper level, lowest first.
 
     The op briefs one level (scope ``level``, default 1), so calling it bare
@@ -203,11 +222,34 @@ def _brief_upper_levels(
     ``propagate`` and then never rewritten by any sync. Lowest first, because a
     level's brief is written over its CHILDREN's briefs, so level N must be
     current before level N+1 reads it.
+
+    With the tree's insights on, a level's passes run right after its briefs,
+    before the level above is written: a stale brief that had a pass was just
+    rewritten by the cheaper model and is reviewed again, a topic whose count
+    first reaches the threshold gets its first pass, and the parent is briefed
+    from the extended brief. The counter decides, so a topic under the
+    threshold gets none and a sync that changed nothing calls no model.
     """
+    runs: list[dict[str, object]] = []
     for level in _levels(context, tree, floor=1):
         brief_upper(
             _stage(tree, "brief-upper", level=level), context, client=client
         )
+        runs.append(
+            review.run(
+                context,
+                tree,
+                levels=[level],
+                root=False,
+                client=client,  # type: ignore[arg-type]
+                rebrief=lambda at: brief_upper(
+                    _stage(tree, "brief-upper", level=at),
+                    context,
+                    client=client,  # type: ignore[arg-type]
+                ),
+            )
+        )
+    return _sum(runs)
 
 
 def _levels(context: JobContext, tree: str, *, floor: int) -> tuple[int, ...]:
