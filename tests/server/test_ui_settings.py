@@ -804,7 +804,8 @@ def test_the_tree_form_says_what_insights_would_cost(browser: Browser) -> None:
         on,
     )
     assert 'data-spend="metered"' in on
-    assert "a pass at API prices" in on  # the tip
+    assert "each pass is billed, about $2.50 at API prices" in on  # the tip
+    assert 'placeholder="500,000"' in off  # the empty threshold's default
     assert browser.stored("trees", "beta")["insights"] is False  # type: ignore[index]
 
 

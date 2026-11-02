@@ -12,6 +12,7 @@ import sqlite3
 from collections.abc import Callable
 
 from hrono.ingest.blob_link import blob_url
+from hrono.summarize.review import review_item
 
 _CONFIDENCE = {"high": "ok", "medium": "warn"}
 
@@ -36,7 +37,9 @@ def reviewed(
         "LIMIT 1",
         (node_id,),
     ).fetchone()
-    failed = _failed_run(conn, tree, name, str(one["passed_at"]) if one else "")
+    failed = _failed_run(
+        conn, tree, node_id, name, str(one["passed_at"]) if one else ""
+    )
     if one is None and failed is None:
         return None
     skipped = str(one["skipped"]) if one else ""
@@ -125,22 +128,31 @@ def _loaded(column: object) -> list[object]:
 
 
 def _failed_run(
-    conn: sqlite3.Connection, tree: str, name: str, since: str
+    conn: sqlite3.Connection,
+    tree: str,
+    node_id: int,
+    name: str,
+    since: str,
 ) -> str | None:
     """The newest run of the tree that tried to review this topic and did not
     finish, if no pass has been stored on it since.
 
-    A failure is the entry "<name>: <why>", so the needle starts at the
-    entry's opening quote: a longer name ending in this one is another topic.
+    Two ways a pass fails. A reply that was no review ends the pass but not
+    the run: the entry "<name>: <why>" is in its result, so the needle starts
+    at the entry's opening quote (a longer name ending in this one is another
+    topic). A provider error fails the run itself, and the failed run's
+    details name the item it was on.
     """
     needle = json.dumps(f"{name}: ")[:-1]
     escaped = (
         needle.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     )
     row = conn.execute(
-        "SELECT id, updated_at FROM jobs WHERE tree = ? AND result LIKE ? "
-        "ESCAPE '\\' AND result LIKE '%\"failed\"%' AND updated_at > ? "
+        "SELECT id, updated_at FROM jobs WHERE tree = ? AND updated_at > ? "
+        "AND ((result LIKE ? ESCAPE '\\' AND result LIKE '%\"failed\"%') "
+        "OR (status = 'failed' AND "
+        "json_extract(error_details, '$.item') = ?)) "
         "ORDER BY updated_at DESC LIMIT 1",
-        (tree, f"%{escaped}%", since),
+        (tree, since, f"%{escaped}%", review_item(node_id)),
     ).fetchone()
     return str(row["id"]) if row is not None else None

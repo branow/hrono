@@ -357,12 +357,18 @@ def run(
             lambda node, made: _keep(context, node, made, model_name, outcome),
             workers=pool.width(),
             proceed=lambda: True,
-            named=lambda node: f"topic {node}",
+            named=lambda node: review_item(node),
         )
         applied = [m.node for m in done if m.extended]
         if applied and rebrief is not None:
             _rebrief_parents(context, applied, rebrief)
     return outcome.as_dict()
+
+
+def review_item(node: int) -> str:
+    """What a failed run says it was on when a topic's pass died: not the
+    topic's brief, which the same stages write under "topic <id>"."""
+    return f"review of topic {node}"
 
 
 def _review(

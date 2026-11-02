@@ -62,7 +62,7 @@ class Tree(BaseModel):
         description=(
             "Have a strong model review the biggest topics and add what it "
             "finds to their briefs. Off by default: each pass is billed, "
-            "about $2.50 a pass at API prices (a subscription is not billed "
+            "about $2.50 at API prices (a subscription is not billed "
             "per token)."
         ),
     )
@@ -70,6 +70,7 @@ class Tree(BaseModel):
         default=INSIGHTS_THRESHOLD,
         gt=0,
         title="Insights threshold",
+        examples=["500,000"],
         description=(
             "A topic gets a review once the briefs under it that no review "
             "has covered hold this many characters. The root always gets one."

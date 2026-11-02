@@ -25,7 +25,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.ingest.split_op import store_unit
 from hrono.server.app import create_app
-from hrono.summarize import briefs
+from hrono.summarize import briefs, review
 from hrono.summarize import store as condensations
 
 KEY = Fernet.generate_key()
@@ -925,6 +925,50 @@ def test_a_run_that_failed_another_topic_is_not_this_ones(
                 "'succeeded', 't', '2999-01-01T00:00:00', ?)",
                 (job, tree, json.dumps({"insights": {"failed": [failed]}})),
             )
+
+    assert "did not finish" not in _body(browser, node)
+
+
+def _failed_job(
+    browser: Browser, job: str, tree: str, item: str, op: str = "sync"
+) -> None:
+    """A run that a provider error failed, as the worker records it."""
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO jobs(id, tree, op, scope, status, created_at, "
+            "updated_at, error_code, error_details) VALUES (?, ?, ?, '{}', "
+            "'failed', 't', '2999-01-01T00:00:00', 'llm-error', ?)",
+            (
+                job,
+                tree,
+                op,
+                json.dumps({"stage": "brief-upper", "item": item}),
+            ),
+        )
+
+
+def test_a_pass_the_provider_failed_shows_on_its_topic(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _failed_job(browser, "j-down", TREE, review.review_item(node))
+
+    page = _body(browser, node)
+
+    assert "The last review of this topic did not finish" in page
+    assert 'href="/ui/jobs/j-down"' in page
+
+
+def test_a_failed_run_on_another_topic_or_tree_is_not_this_ones(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _failed_job(browser, "j-elsewhere", "elsewhere", review.review_item(node))
+    # the same topic's brief failing is not its review failing
+    _failed_job(browser, "j-brief", TREE, f"topic {node}")
+    _failed_job(browser, "j-next", TREE, review.review_item(node + 1000))
 
     assert "did not finish" not in _body(browser, node)
 

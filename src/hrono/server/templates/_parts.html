@@ -68,7 +68,7 @@
 {% elif field.kind == "roomy" %}
 <textarea class="code" id="{{ id }}" name="{{ field.input_name }}" rows="6" spellcheck="false">{{ field.value }}</textarea>
 {% elif field.kind == "number" %}
-<input class="line" type="number" step="any" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}">
+<input class="line" type="number" step="any" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}"{% if field.example %} placeholder="{{ field.example }}"{% endif %}>
 {% elif field.kind == "secret" %}
 <input class="line" type="text" id="{{ id }}" name="{{ field.input_name }}" value="{{ field.value }}" autocomplete="off" spellcheck="false">
 {% else %}

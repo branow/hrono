@@ -33,7 +33,7 @@ NO_INSIGHTS_MODEL = (
 
 
 class AmbiguousModel(LLMError):
-    """More than one text model fits a role: a setup fault, not a missing model."""
+    """Several text models fit a role: a setup fault, not a missing one."""
 
 
 def resolve_text_model(

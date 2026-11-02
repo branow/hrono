@@ -65,7 +65,10 @@ diff (`ingest/diff.py`) classifies by content hash. New and changed sections
 are condensed and embedded first, so placement
 (`cluster/placement.py`) reads the same blended condensation vector a build
 clusters on (the raw vector only when no condense model is registered; the
-run's outcome says so). Placement is a dot product against the **pre-batch**
+run's outcome says so). Every tree's sync embeds the current condense model's
+condensations, the default (unscoped) tree's too, so old and new sections sit in
+one vector space; with two text models and no `condense` role the sync fails
+like the build, before it changes the tree. Placement is a dot product against the **pre-batch**
 centroids:
 
 - **Unchanged hash**: nothing.

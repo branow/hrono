@@ -369,7 +369,7 @@ def test_a_provider_error_stops_the_run_naming_the_topic(world) -> None:  # type
     database, ids = world
     with pytest.raises(LLMError) as raised:
         _run(database, Reviewer(fail=LLMError("rate limited")), [1])
-    assert f"topic {ids['mid']}" in "".join(raised.value.__notes__)
+    assert review.review_item(ids["mid"]) in "".join(raised.value.__notes__)
     assert _count(database, "SELECT COUNT(*) FROM insights_passes") == 0
 
 
