@@ -1,18 +1,17 @@
 # Plan: the insights step, and the small E054 fixes
 Approved: 2026-11-02 (/autodev:run go)
-Estimate: 6 epics, about 8.85 h of agent time (8.1 h of epics + 0.75 h
-acceptance) and 1.39M output tokens; E055 is done (about 0.4 h), so 7.85 h
-and 1.24M are left. Ticket 3 of E056 (older prompt defaults, from E055 qa)
-adds 0.15 h and 20k.
-Based on: the no-history figures (no epics since 2026-11-01), plus the
-verify time of real model calls (a pass is 34-45 turns) and one rework
-round on E058 and E060
-Machine now (2026-11-02, plan after E061 merge): on battery, load 19 on
-8 cpus, 4.5 GiB free, so one epic at a time. Done: E055-E061 (E061
-merged at b7b15dc). Acceptance runs next. E061 added: defects qa found in O6 (a sync
-of the default tree places on two vector spaces) and O4 (a pass failing on
-a provider error shows no callout), with E060's small followups; +1.05 h,
-+150k. Left: acceptance: about 0.75 h and 150k tokens.
+Estimate (left): 3 epics and a second acceptance, about 3.45 h and 600k
+output tokens, 1 at a time (E062 0.85 + E063 0.55 + E064 1.3 + acceptance
+0.75; 160k + 110k + 180k + 150k).
+First approved: 6 epics, 8.85 h, 1.39M; spent so far 806k on E055-E061 and
+acceptance 1. Acceptance 1 failed O2 and the 390 bar and found 5 more gaps;
+E062-E064 fix them (D14), adding 2.7 h and 450k plus 0.75 h and 150k for
+acceptance 2.
+Based on: this run's epics, 20-45 min each from start to merge (median 37,
+board log) and 115k tokens per merged epic; E062 adds real passes to verify,
+E064 a likely rework round (the cause of the second sync's moves is unknown).
+Machine now (plan after acceptance 1): on battery, load 5 on 8 cpus, 4.4 GiB
+free, so one epic at a time.
 
 | # | Epic | What the user gets | Outcome | Tickets | Hours (build + verify + merge + rework) | Tokens |
 |---|------|--------------------|---------|---------|------|--------|
@@ -23,10 +22,13 @@ a provider error shows no callout), with E060's small followups; +1.05 h,
 | 5 | E059 (done) | a sync re-reviews a rewritten reviewed brief before its parent; root.md carries the root's findings | O3 asked | 3 | 0.65 + 0.65 + 0.1 + 0.5 = 1.9 | 300k |
 | 6 | E060 (done) | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.85 + 0.4 + 0.1 + 0.6 = 1.95 | 290k |
 | 7 | E061 (done) | every tree's sync places by condensations; a failed pass shows on its topic | O6, O4 asked | 2 | 0.6 + 0.35 + 0.1 = 1.05 | 150k |
-Then: acceptance as a new user on the flask copy (about 0.75 h, 150k).
+| 8 | E062 | turning insights on and pressing Review now runs the named reviews, root included; findings link the version read; README | O2, O1, O4 asked | 3 | 0.45 + 0.35 + 0.05 = 0.85 | 160k |
+| 9 | E063 | a reviewed topic fits a phone; bad thresholds get a field error | O4 asked | 2 | 0.3 + 0.2 + 0.05 = 0.55 | 110k |
+| 10 | E064 | an upgrade's first sync is announced with its cost, the next is free; a changed source url is fetched; steady events test | O5, O6 asked | 3 | 0.5 + 0.35 + 0.05 + 0.4 = 1.3 | 180k |
+Then: acceptance 2 as a new user on the flask copy (about 0.75 h, 150k).
 
-Order (one at a time): E057, E058 (critical path to the insights outcomes),
-then E056 (needs nothing, starts while E058 merges), E059, E060, E061.
+Order (one at a time): E057, E058, E056, E059, E060, E061 (done), then
+E062 (O2 fails without it), E064, E063.
 
 Model calls: qa spends at most 10 real claude-code subscription calls per
 epic (D2), on the flask copy and the stored xgboost/bcreg trees; no rebuild.

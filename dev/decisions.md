@@ -61,3 +61,20 @@ What the PO decided for you, why, and how to undo it. Newest last.
   breaks O6, and a paid stage must tell "not configured" from "ambiguous"
   (lessons). Replaces: the sync's "no condense model: placed by the raw
   vector" outcome in that setup. Undo: drop E061 ticket 1's third line.
+- D12 2026-11-02: `settle` with insights on runs the due reviews (the
+  topics the dry run names, root last) even when churn does not trip, and
+  re-briefs only their parents; tree settings get "Review now", which queues
+  it, and the estimate line says what runs the reviews. Why: acceptance 1
+  found no action that runs the reviews the estimate names (O2 says settle
+  does). Replaces: settle doing nothing below its churn trigger. Undo: drop
+  E062 ticket 1; a full `maintain` remains the only path.
+- D13 2026-11-02: the one-time rewrite after an upgrade (briefs of an
+  older default prompt, members moving to condensation vectors) is
+  announced on Home and Health with its estimated calls, not suppressed;
+  a second unchanged sync must cost nothing. Why: the new prompts and the
+  single vector space are what this run delivered (O5, O6); the fault was
+  paying 62 calls unwarned. Replaces: nothing. Undo: amend E064 ticket 1.
+- D14 2026-11-02: acceptance 1's gaps are fixed in this run as E062-E064
+  (about 2.7 h and 450k tokens, then a second acceptance), not proposals: gaps 1-3, 5 and 6 sit in
+  O2, O4, O5 and O6, and gaps 4 (source url ignored) and 7 (a flaky test)
+  are defects a user hits. Undo: archive E064 ticket 3.

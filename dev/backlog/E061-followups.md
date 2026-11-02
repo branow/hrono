@@ -7,3 +7,5 @@
 - The card holding the failed-review callout is headed "Findings 0"; next to "did not finish" the 0 reads as "nothing found". Hide the count when the last review failed (critique.md).
 
 (po 2026-11-02: all left here for the acceptance pass; a gap acceptance finds in O4 or O6 folds these into one epic with it. The unscoped other-model condensation needs a run stopped between condense and embed and a condense model change; the 500 is a raw POST the browser blocks.)
+
+(po 2026-11-02, after acceptance 1: items 2, 3, 4 and 6 folded into E063; the unscoped other-model embed stays here.)
