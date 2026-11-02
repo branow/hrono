@@ -621,11 +621,16 @@ def _version_line(row: object) -> str:
     """Who wrote a kept brief, and what replaced it, each with its minute."""
     hand = row["model_name"] == "hand-edited"  # type: ignore[index]
     by = _("hand") if hand else str(row["model_name"])  # type: ignore[index]
-    replaced = (
-        _("a hand rewrite")
-        if row["reason"] == "rewrite"  # type: ignore[index]
-        else _("a regeneration")
-    )
+    reason = row["reason"]  # type: ignore[index]
+    if reason == "insights":
+        replaced = _(
+            "an insights review ({model})",
+            model=row["reviewer"] or "?",  # type: ignore[index]
+        )
+    elif reason == "rewrite":
+        replaced = _("a hand rewrite")
+    else:
+        replaced = _("a regeneration")
     return _(
         "by {by} ({written}), replaced by {replaced} ({at})",
         by=by,

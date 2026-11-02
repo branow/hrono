@@ -176,6 +176,7 @@
   "a merge needs at least two distinct topics": "для об'єднання потрібні щонайменше дві різні теми",
   "a parent sits exactly one level up: topic {id} is at level {level}, so its parent must be at level {up}, and topic {parent} is at level {above}": "батьківська тема стоїть рівно на рівень вище: тема {id} на рівні {level}, тож її батьківська має бути на рівні {up}, а тема {parent} — на рівні {above}",
   "a regeneration": "нову генерацію",
+  "an insights review ({model})": "огляд інсайтів ({model})",
   "a topic cannot be its own parent": "тема не може стояти сама під собою",
   "and {n} older|and {n} older": [
     "і ще {n} давніша",

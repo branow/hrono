@@ -626,13 +626,15 @@ def upsert(
     members: str = "[]",
     source_model: str = "",
     reason: str = "regen",
+    pass_id: int | None = None,
 ) -> None:
     """Store one node's brief with its provenance and member signature.
 
     A brief this replaces is first copied to ``brief_versions`` with ``reason``
-    ('regen', or 'rewrite' for a hand edit), and only the newest
-    ``KEEP_VERSIONS`` are kept; a first write, or one that leaves the
-    text unchanged, copies nothing.
+    ('regen', 'rewrite' for a hand edit, or 'insights' for the pass named by
+    ``pass_id``), and only the newest ``KEEP_VERSIONS`` are kept, besides the
+    brief the first insights pass replaced; a first write, or one that leaves
+    the text unchanged, copies nothing.
 
     ``unfaithful`` is the faithfulness gate's JSON verdict; default '[]'
     keeps callers that do not run the gate unchanged. ``flagged`` is the shape
@@ -643,7 +645,7 @@ def upsert(
     ``source_model`` is the condense model whose condensations it was written
     from, so the echo gate reads the same material later.
     """
-    _keep_replaced(conn, node_id, text, reason)
+    _keep_replaced(conn, node_id, text, reason, pass_id)
     conn.execute(
         "INSERT OR REPLACE INTO briefs(node_id, text, model_name, prompt_name, "
         "prompt_hash, member_signature, input_tokens, output_tokens, "
@@ -670,7 +672,11 @@ def upsert(
 
 
 def _keep_replaced(
-    conn: sqlite3.Connection, node_id: int, text: str, reason: str
+    conn: sqlite3.Connection,
+    node_id: int,
+    text: str,
+    reason: str,
+    pass_id: int | None,
 ) -> None:
     """Copy the stored brief aside, unless the new text is the same text."""
     stored = conn.execute(
@@ -682,18 +688,19 @@ def _keep_replaced(
         "INSERT INTO brief_versions(node_id, text, model_name, written_at, "
         "replaced_at, reason, prompt_name, prompt_hash, input_tokens, "
         "output_tokens, member_signature, members, source_model, "
-        "model_fingerprint, unfaithful, flagged) SELECT node_id, text, "
-        "model_name, created_at, ?, ?, prompt_name, prompt_hash, input_tokens, "
-        "output_tokens, member_signature, members, source_model, "
-        "model_fingerprint, unfaithful, flagged "
+        "model_fingerprint, unfaithful, flagged, pass_id) SELECT node_id, "
+        "text, model_name, created_at, ?, ?, prompt_name, prompt_hash, "
+        "input_tokens, output_tokens, member_signature, members, "
+        "source_model, model_fingerprint, unfaithful, flagged, ? "
         "FROM briefs WHERE node_id = ?",
-        (_now(), reason, node_id),
+        (_now(), reason, pass_id, node_id),
     )
     conn.execute(
         "DELETE FROM brief_versions WHERE node_id = ? AND id NOT IN ("
         "SELECT id FROM brief_versions WHERE node_id = ? "
-        "ORDER BY id DESC LIMIT ?)",
-        (node_id, node_id, KEEP_VERSIONS),
+        "ORDER BY id DESC LIMIT ?) AND id != COALESCE((SELECT MIN(id) "
+        "FROM brief_versions WHERE node_id = ? AND reason = 'insights'), 0)",
+        (node_id, node_id, KEEP_VERSIONS, node_id),
     )
 
 
@@ -717,8 +724,10 @@ def kept_version(
 def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
     """Return a node's kept previous briefs, newest first."""
     return conn.execute(
-        "SELECT text, model_name, written_at, replaced_at, reason "
-        "FROM brief_versions WHERE node_id = ? ORDER BY id DESC",
+        "SELECT v.text, v.model_name, v.written_at, v.replaced_at, v.reason, "
+        "v.pass_id, p.model_name AS reviewer FROM brief_versions v "
+        "LEFT JOIN insights_passes p ON p.id = v.pass_id "
+        "WHERE v.node_id = ? ORDER BY v.id DESC",
         (node_id,),
     ).fetchall()
 
