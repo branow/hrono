@@ -448,5 +448,8 @@
   "{role} model": "Модель {role}",
   "{sections} sections counted from {files} files; calls and tokens sized from a measured build of a similar repository (about {per_topic} sections per topic); the number of topics, and so of briefs, is the loosest part": "фрагментів: {sections}, з файлів: {files}; виклики й токени оцінено за виміряною побудовою схожого репозиторію (близько {per_topic} фрагментів на тему); найменш точна частина — кількість тем, а отже й описів",
   "{width} (from {env})": "{width} (з {env})",
-  "{width} (the default; {env} changes it)": "{width} (типово; змінюється через {env})"
+  "{width} (the default; {env} changes it)": "{width} (типово; змінюється через {env})",
+  "Insights": "Інсайти",
+  "Insights threshold": "Поріг інсайтів",
+  "Optional. A strong model that reviews the biggest topics, once you turn insights on for a tree. Leave empty to skip it.": "Необов'язково. Сильна модель, що переглядає найбільші теми, коли ви вмикаєте інсайти для дерева. Залиште порожнім, щоб пропустити."
 }

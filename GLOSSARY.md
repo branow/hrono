@@ -39,6 +39,14 @@ present rather than an imposed structure, and ends with a `Caution:` section
 aggregating the gotchas. Reference lists are appended mechanically by code and
 are never written by the model.
 
+**insights** — an optional step, off by default and set per tree: a strong
+model reviews a big area of the tree and writes what it finds, the rules no
+single section states and the statements the code contradicts, into that
+area's brief. A topic gets a review once the briefs under it that no review
+has covered hold enough characters (the tree's threshold); the root always
+gets one. Each review is billed, so the dry run says how many there would be
+and what they cost.
+
 **tree** — topics all the way up to a single root, over a named set of sources.
 One database can hold several.
 
@@ -108,6 +116,7 @@ them and nothing else for these ideas.
 | topic | тема |
 | bottom topic | нижня тема |
 | brief | опис |
+| insights | інсайти |
 | tree | дерево |
 | root | корінь |
 | level | рівень |

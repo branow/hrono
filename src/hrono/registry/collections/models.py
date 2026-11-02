@@ -7,8 +7,9 @@ validation hook checks the model actually answers (``validate_model``).
 ``role`` maps a text model to the summarisation stage that should call it —
 condense cheap, brief smart, judge cheap. It is OPTIONAL and the
 sole-text-model fallback is unchanged, so a one-model install needs no role at
-all; the field exists so a two-model install is expressible without inventing a
-second configuration mechanism beside the registry.
+all; the field exists so a two-model install is expressible without
+inventing a second configuration mechanism beside the registry. The role
+`insights` is the optional reviewer: no build role ever falls back to it.
 """
 
 from __future__ import annotations
@@ -20,7 +21,9 @@ from pydantic import BaseModel, Field
 from hrono.registry.descriptor import Descriptor, RegistryName
 from hrono.registry.validation.model_validation import validate_model
 
-SummarisationRole = Literal["condense", "brief", "brief-upper", "judge"]
+SummarisationRole = Literal[
+    "condense", "brief", "brief-upper", "judge", "insights"
+]
 
 
 class ModelPrice(BaseModel):

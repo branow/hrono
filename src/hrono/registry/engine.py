@@ -149,9 +149,7 @@ def replace_item(
         # One implementation, in the engine, so every collection
         # has the safety rather than the ones someone remembered.
         with request.app.state.db.connect() as conn:
-            return impact.as_json(
-                impact.preview(conn, collection, name, config)
-            )
+            return impact.dry_run_body(conn, collection, name, config)
     now = _now()
     with request.app.state.db.write() as conn:
         stored, key_id = encrypt(config, descriptor, _cipher(request))

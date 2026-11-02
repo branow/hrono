@@ -108,6 +108,7 @@
         <div class="field">
           <label for="m-{{ one.role }}">{{ _("{role} model", role=one.role) }}</label>
           <input class="line" type="text" id="m-{{ one.role }}" name="{{ one.role }}" value="{{ one.model }}" autocomplete="off" spellcheck="false">
+          {% if one.role == "insights" %}<p class="hint">{{ _("Optional. A strong model that reviews the biggest topics, once you turn insights on for a tree. Leave empty to skip it.") }}</p>{% endif %}
         </div>
         {% endfor %}
       </fieldset>

@@ -379,7 +379,7 @@ def _models(
                 or shipped.get(role, {}).get("model", "")
             ),
         }
-        for role in defaults.ROLES
+        for role in (*defaults.ROLES, defaults.INSIGHTS_ROLE)
     ]
     return {
         "connection_names": names,
@@ -401,7 +401,7 @@ def _foreign(conn: sqlite3.Connection) -> bool:
     is finished by the same form. A model someone else added is theirs to fix,
     and adding the shipped rows beside it would claim a role twice.
     """
-    ours = {defaults.EMBEDDING_NAME, *defaults.ROLES}
+    ours = {defaults.EMBEDDING_NAME, *defaults.ROLES, defaults.INSIGHTS_ROLE}
     return any(
         row["name"] not in ours for row in store.list_all(conn, "models")
     )
@@ -520,7 +520,12 @@ def _wanted(
     rows = defaults.models_for(kind, connection)
     for one in rows:
         one["model"] = first(form, _field(one)).strip()
-    return rows
+    # insights is optional: an empty field skips it
+    return [
+        one
+        for one in rows
+        if one["name"] != defaults.INSIGHTS_ROLE or one["model"]
+    ]
 
 
 def _field(row: dict[str, object]) -> str:

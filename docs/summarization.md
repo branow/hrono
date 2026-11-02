@@ -174,6 +174,20 @@ words; the upper prompt keeps about 1.6 times as many at the same length.
 - Refine and outline pipelines: 2× cost, no visible win over one adaptive
   call.
 
+## Insights
+
+Optional and off by default (`insights` on the tree, role `insights` on a
+model). A strong model reviews a big area of the tree and its findings are
+written into the area's brief. This part of the step decides where and what it
+costs (`summarize/insights.py`); running a pass comes later. A topic is
+reviewed when the characters of brief below it that no pass has covered reach
+the tree's `insights_threshold` (default 500 000); the root always is. The
+count is derived from stored briefs and the `insights_passes` rows: a brief is
+covered when it was written no later than a pass on its topic or on one
+between it and the topic, so a pass takes its subtree out of the count above
+and a brief rewritten afterwards counts again. The dry run states the passes
+and the cost from the measured $2.43 a review plus $0.39 to extend the brief.
+
 ## Propagation
 
 `summarize/propagate.py`, run by `sync-tree` before any re-brief. Whether a

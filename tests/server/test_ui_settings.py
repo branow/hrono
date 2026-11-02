@@ -674,6 +674,8 @@ def test_a_tree_is_created_from_the_page(browser: Browser) -> None:
         "name": "beta",
         "sources": ["gh"],
         "lookups": False,
+        "insights": False,
+        "insights_threshold": 500_000,
     }
     assert "/ui/config?tree=beta" in answer.text  # in the switcher
 

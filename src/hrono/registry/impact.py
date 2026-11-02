@@ -24,8 +24,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from hrono.registry import completeness, store
-from hrono.registry.collections.trees import sources_of
-from hrono.summarize import briefs
+from hrono.registry.collections.trees import INSIGHTS_THRESHOLD, sources_of
+from hrono.summarize import briefs, insights
 from hrono.summarize.resolve import model_fingerprint, template_hash
 
 # Which levels a prompt role governs: `brief` writes level 0, `brief-upper`
@@ -637,6 +637,46 @@ def _connection_impact(
             ),
         ),
     )
+
+
+def dry_run_body(
+    conn: sqlite3.Connection,
+    collection: str,
+    name: str,
+    proposed: dict[str, object],
+) -> dict[str, object]:
+    """The body of `PUT ?dry_run=true`: the impact, and for a tree the
+    insights passes its settings would run and what they cost."""
+    body = as_json(preview(conn, collection, name, proposed))
+    if collection == "trees":
+        body["insights"] = _insights_json(
+            insights.plan_for(
+                conn,
+                name,
+                bool(proposed.get("insights")),
+                int(proposed.get("insights_threshold") or INSIGHTS_THRESHOLD),
+            )
+        )
+    return body
+
+
+def _insights_json(plan: insights.Plan) -> dict[str, object]:
+    return {
+        "on": plan.on,
+        "threshold": plan.threshold,
+        "passes": [
+            {
+                "topic": one.node,
+                "name": plan.names.get(one.node, ""),
+                "level": one.level,
+                "characters": one.characters,
+            }
+            for one in plan.passes
+        ],
+        "count": len(plan.passes),
+        "estimated_cost": {"usd": plan.usd, "basis": plan.basis},
+        **({} if plan.note is None else {"note": plan.note}),
+    }
 
 
 def as_json(impacts: Sequence[TreeImpact]) -> dict[str, object]:

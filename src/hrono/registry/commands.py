@@ -56,6 +56,42 @@ def _read(source: Path | None) -> dict[str, object]:
     return body
 
 
+def _impact_text(said: object) -> str:
+    """A dry run's answer in words; nothing was written."""
+    body = said if isinstance(said, dict) else {}
+    lines = ["Nothing was written."]
+    for hit in body.get("affected_trees", ()):
+        stale = hit["stale"]
+        lines.append(
+            f"{hit['tree']}: {stale['nodes']} topic(s) to rewrite. "
+            f"{hit['reason']}"
+        )
+    reviews = body.get("insights")
+    if isinstance(reviews, dict):
+        lines.extend(_insights_text(reviews))
+    elif len(lines) == 1:
+        lines.append("No tree is affected.")
+    return "\n".join(lines)
+
+
+def _insights_text(reviews: dict[str, object]) -> list[str]:
+    cost = reviews["estimated_cost"]
+    if not reviews["on"]:
+        return ["Insights are off: no passes, $0."]
+    lines = [
+        f"Insights: {reviews['count']} pass(es) at {reviews['threshold']} "
+        f"characters, about ${cost['usd']:.2f} ({cost['basis']})."
+    ]
+    lines.extend(
+        f"  topic {one['topic']} {one['name']!r}, level {one['level']}, "
+        f"{one['characters']} characters unreviewed"
+        for one in reviews["passes"]
+    )
+    if "note" in reviews:
+        lines.append(str(reviews["note"]).capitalize() + ".")
+    return lines
+
+
 def build_app(collection: str) -> typer.Typer:
     """The command group for one registry collection."""
     group = typer.Typer(
@@ -102,11 +138,26 @@ def build_app(collection: str) -> typer.Typer:
                 readable=True,
             ),
         ] = None,
+        dry_run: Annotated[
+            bool,
+            typer.Option(
+                "--dry-run",
+                help="Write nothing; say what saving would do.",
+            ),
+        ] = False,
     ) -> None:
         """Create or replace an item from a JSON config (file or stdin)."""
 
         body = _read(file)
         body.setdefault("name", name)
+        if dry_run:
+            said = from_profile().put(
+                f"/{collection}/{name}?dry_run=true",
+                body,
+                timeout=WRITE_TIMEOUT,
+            )
+            typer.echo(_impact_text(said))
+            return
         from_profile().put(
             f"/{collection}/{name}",
             body,

@@ -75,15 +75,30 @@ Bodies:
 
 // models: kind text | embedding; connection null = run in-process
 { "name": "cheap", "kind": "text", "connection": "anthropic-main",
-  "model": "claude-haiku-4-5", "role": "condense",   // condense | brief | brief-upper | judge
+  "model": "claude-haiku-4-5", "role": "condense",   // condense | brief | brief-upper | judge | insights (optional)
   "params": { "max_tokens": 4096 }, "price": null }
 
 // prompts: defaults are seeded on first start
 { "name": "condense-default", "role": "condense", "template": "..." }
 
 // trees
-{ "name": "backend", "sources": ["api", "wiki"] }
+{ "name": "backend", "sources": ["api", "wiki"],
+  "lookups": false,
+  "insights": false,                 // off by default; each review is billed
+  "insights_threshold": 500000 }     // positive integer, characters
 ```
+
+The role `insights` is optional: no build role falls back to it and a registry
+without it is still complete. `PUT /trees/{name}?dry_run=true` adds
+`insights` to the impact: `{on, threshold, passes: [{topic, name, level,
+characters}], count, estimated_cost: {usd, basis}, note?}`. The passes are
+what the next build would review, lowest level first (the root is always one);
+off, there are none and `usd` is 0. The cost is a figure measured on Opus at
+API prices (about $2.43 a review and $0.39 to extend the brief), an estimate
+on a subscription; `note` says when no model has the role yet. The count of
+unreviewed brief characters under a topic is derived from the stored briefs
+and the `insights_passes` rows, never stored. `hrono tree config set <name>
+-f <file> --dry-run` prints the same in words and writes nothing.
 
 The clustering, recall and summarization constants are fixed in code, not
 config. See [clustering.md](clustering.md) and
@@ -190,7 +205,7 @@ hrono profile add <name> --server URL --token T [--default-tree T]
 hrono profile set-token <name> --token T | list | use <name> | current | rm <name>
 
 hrono sources|connections|models|prompts list [--json] | get <name>
-                                         | set <name> [-f file.json] | rm <name>
+                                         | set <name> [-f file.json] [--dry-run] | rm <name>
 hrono tree config list | get | set | rm        the trees collection
 
 hrono tree maintain <tree>                     cold build

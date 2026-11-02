@@ -508,3 +508,35 @@ def test_registry_rm_without_force_asks_first(
     assert refused.exit_code == 1
     assert agreed.exit_code == 0
     assert client.calls == [("DELETE", "/connections/prod", None)]
+
+
+def test_a_dry_run_set_writes_nothing_and_says_the_insights_passes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    said = {
+        "affected_trees": [],
+        "insights": {
+            "on": True,
+            "threshold": 60000,
+            "passes": [
+                {"topic": 17, "name": "Flask docs", "level": 1, "characters": 9}
+            ],
+            "count": 1,
+            "estimated_cost": {"usd": 2.82, "basis": "measured on Opus"},
+            "note": "no model has the role insights",
+        },
+    }
+    client = _patch(monkeypatch, "hrono.registry.commands", FakeClient(said))
+    config = tmp_path / "t.json"
+    config.write_text(json.dumps({"name": "flask", "sources": ["flask"]}))
+
+    result = runner.invoke(
+        app, ["tree", "config", "set", "flask", "-f", str(config), "--dry-run"]
+    )
+
+    assert result.exit_code == 0
+    assert [c[1] for c in client.calls] == ["/trees/flask?dry_run=true"]
+    assert "Nothing was written." in result.stdout
+    assert "1 pass(es)" in result.stdout and "$2.82" in result.stdout
+    assert "topic 17 'Flask docs', level 1" in result.stdout
+    assert "No model has the role insights" in result.stdout

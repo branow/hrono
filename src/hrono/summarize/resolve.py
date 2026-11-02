@@ -26,6 +26,8 @@ from collections.abc import Mapping
 from hrono.llm.client import LLMError
 from hrono.registry import store as registry_store
 
+INSIGHTS_ROLE = "insights"
+
 
 def resolve_text_model(
     conn: sqlite3.Connection,
@@ -50,6 +52,10 @@ def resolve_text_model(
         rows = list(registry_store.list_all(conn, "models"))
     configs = [json.loads(r["config"]) for r in rows if r is not None]
     text = [c for c in configs if c.get("kind") == "text"]
+    if role != INSIGHTS_ROLE:
+        # the optional reviewer is never what a build role falls back to,
+        # and registering it must not turn a one-model install into two
+        text = [c for c in text if c.get("role") != INSIGHTS_ROLE]
     if not text:
         raise LLMError("no text model available")
     if role is not None:

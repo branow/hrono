@@ -247,6 +247,29 @@ def test_models_step_with_the_embed_backend_offers_the_form(
     assert "hrono[embed]" not in page
 
 
+def test_the_models_step_offers_insights_and_a_blank_field_skips_it(
+    setup: Setup,
+) -> None:
+    setup.connect_claude_code()
+    assert 'name="insights" value="opus"' in setup.page("models")
+
+    setup.register_models()  # the field left out: skipped
+    assert "insights" not in setup.rows("models")
+
+    setup.post(
+        "/ui/setup/models",
+        connection="cc",
+        embedding="some/embedder",
+        condense="haiku",
+        brief="sonnet",
+        insights="opus",
+        **{"brief-upper": "sonnet", "judge": "haiku"},
+    )
+    assert "insights" in setup.rows("models")
+    # the only thing still missing is a source, never the reviewer
+    assert [g.section for g in setup.gaps()] == ["sources"]
+
+
 def test_a_wrong_key_is_refused_with_the_providers_reason_and_saves_nothing(
     setup: Setup,
 ) -> None:

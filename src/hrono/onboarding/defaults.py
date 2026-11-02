@@ -21,6 +21,10 @@ ROLES: dict[str, str] = {
     "judge": "cheap",
 }
 
+# The optional reviewer (insights): the provider's strongest model. Setup
+# offers it, and a blank field skips it.
+INSIGHTS_ROLE = "insights"
+
 
 @dataclass(frozen=True)
 class Provider:
@@ -44,7 +48,7 @@ PROVIDERS: tuple[Provider, ...] = (
             "large repository is slow and is better run on an API key."
         ),
         needs_key=False,
-        tiers={"cheap": "haiku", "smart": "sonnet"},
+        tiers={"cheap": "haiku", "smart": "sonnet", "strongest": "opus"},
     ),
     Provider(
         name="anthropic",
@@ -55,7 +59,11 @@ PROVIDERS: tuple[Provider, ...] = (
             "build over a large repository."
         ),
         needs_key=True,
-        tiers={"cheap": "claude-haiku-4-5", "smart": "claude-sonnet-5-5"},
+        tiers={
+            "cheap": "claude-haiku-4-5",
+            "smart": "claude-sonnet-5-5",
+            "strongest": "claude-opus-5-5",
+        },
     ),
 )
 
@@ -86,6 +94,6 @@ def models_for(provider_name: str, connection: str) -> list[dict[str, object]]:
                 "model": tiers.get(tier, ""),
                 "role": role,
             }
-            for role, tier in ROLES.items()
+            for role, tier in {**ROLES, INSIGHTS_ROLE: "strongest"}.items()
         ),
     ]

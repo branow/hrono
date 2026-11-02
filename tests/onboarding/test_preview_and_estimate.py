@@ -313,10 +313,21 @@ def test_the_shipped_defaults_make_a_registry_a_build_accepts(
         assert completeness.gaps(conn) == (), chosen.name
 
 
+def test_setup_offers_the_strongest_model_for_insights() -> None:
+    offered = {
+        chosen.name: {
+            r["name"]: r["model"] for r in defaults.models_for(chosen.name, "c")
+        }["insights"]
+        for chosen in defaults.PROVIDERS
+    }
+
+    assert offered == {"claude-code": "opus", "anthropic": "claude-opus-5-5"}
+
+
 def test_a_provider_setup_does_not_know_gets_rows_with_no_model_id() -> None:
     rows = defaults.models_for("openai", "c")
 
-    assert [r["model"] for r in rows if r["kind"] == "text"] == [""] * 4
+    assert [r["model"] for r in rows if r["kind"] == "text"] == [""] * 5
 
 
 def test_the_estimate_agrees_with_a_measured_build_within_a_quarter(

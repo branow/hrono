@@ -751,3 +751,142 @@ def test_there_is_no_money_in_the_answer(api: Api) -> None:
     answer = api.dry_run("prompts", "brief", _edit())
 
     assert "usd" not in json.dumps(answer.json())  # type: ignore[attr-defined]
+
+
+def _above(api: Api, tree: str) -> tuple[int, int]:
+    """Two levels over the tree's two leaves: a middle topic, then the root."""
+    conn = api.conn
+    with conn:  # type: ignore[union-attr]
+        middle, root = (
+            int(
+                conn.execute(  # type: ignore[attr-defined]
+                    "INSERT INTO nodes(tree, level, label, created_at) "
+                    "VALUES (?, ?, -1, 't')",
+                    (tree, level),
+                ).lastrowid
+            )
+            for level in (1, 2)
+        )
+        for parent, children in ((middle, api.nodes[tree]), (root, [middle])):
+            for child in children:
+                cluster_store.add_child(
+                    conn,  # type: ignore[arg-type]
+                    parent,
+                    child,
+                    attached=False,
+                    similarity=None,
+                )
+            _brief(conn, parent, template_hash(TEMPLATE))
+    return middle, root
+
+
+def _chars(api: Api, *nodes: int) -> int:
+    marks = ", ".join("?" * len(nodes))
+    return int(
+        api.conn.execute(  # type: ignore[attr-defined]
+            f"SELECT SUM(length(text)) FROM briefs WHERE node_id IN ({marks})",  # noqa: S608
+            nodes,
+        ).fetchone()[0]
+    )
+
+
+def _tree_body(**more: object) -> dict[str, object]:
+    return {"name": "alpha", "sources": ["docs"], **more}
+
+
+def test_insights_dry_run_lists_the_topics_and_the_cost(api: Api) -> None:
+    middle, root = _above(api, "alpha")
+    answer = api.dry_run(
+        "trees", "alpha", _tree_body(insights=True, insights_threshold=100)
+    ).json()["insights"]  # type: ignore[attr-defined]
+
+    assert [p["topic"] for p in answer["passes"]] == [middle, root]
+    assert answer["passes"][0]["characters"] == _chars(api, *api.nodes["alpha"])
+    # the root is reviewed over what its child's pass leaves: nothing
+    assert answer["passes"][1]["characters"] == 0
+    assert answer["count"] == 2
+    assert answer["estimated_cost"]["usd"] == 5.64
+    assert "Opus" in answer["estimated_cost"]["basis"]
+    # the registry has no model with the role insights yet
+    assert "no model has the role insights" in answer["note"]
+
+
+def test_insights_below_the_threshold_still_reviews_the_root(api: Api) -> None:
+    middle, root = _above(api, "alpha")
+
+    answer = api.dry_run("trees", "alpha", _tree_body(insights=True)).json()[
+        "insights"
+    ]  # type: ignore[attr-defined]
+
+    assert [p["topic"] for p in answer["passes"]] == [root]
+    assert answer["passes"][0]["characters"] == _chars(
+        api, middle, *api.nodes["alpha"]
+    )
+
+
+def test_insights_off_means_no_passes_and_no_cost(api: Api) -> None:
+    _above(api, "alpha")
+
+    answer = api.dry_run("trees", "alpha", _tree_body()).json()["insights"]  # type: ignore[attr-defined]
+
+    assert answer["passes"] == [] and answer["count"] == 0
+    assert answer["estimated_cost"]["usd"] == 0
+
+
+def test_the_insights_settings_are_stored_and_bad_ones_refused(
+    api: Api,
+) -> None:
+    put = api.client.put(
+        "/trees/alpha",
+        json=_tree_body(insights=True, insights_threshold=250_000),
+        headers=api.head(),
+    )
+    assert put.status_code == 200
+    kept = api.stored("trees", "alpha")
+    assert kept["insights"] is True and kept["insights_threshold"] == 250_000
+    # off, and the documented threshold, when nothing is said
+    assert (
+        api.client.put(
+            "/trees/beta",
+            json={"name": "beta", "sources": ["code"]},
+            headers=api.head(),
+        ).status_code
+        == 200
+    )
+    assert api.stored("trees", "beta")["insights"] is False
+    assert api.stored("trees", "beta")["insights_threshold"] == 500_000
+
+    for bad in (0, -5, "many", 1.5):
+        refused = api.client.put(
+            "/trees/alpha",
+            json=_tree_body(insights=True, insights_threshold=bad),
+            headers=api.head(),
+        )
+        assert refused.status_code == 422, bad
+        assert "insights_threshold" in json.dumps(refused.json())
+
+
+def test_the_insights_role_is_accepted_and_needed_by_no_build(
+    api: Api,
+) -> None:
+    from hrono.registry import completeness
+
+    before = completeness.gaps(api.conn)  # type: ignore[arg-type]
+    put = api.client.put(
+        "/models/opus",
+        json={
+            "name": "opus",
+            "kind": "text",
+            "connection": "anthropic",
+            "model": "claude-opus-5-5",
+            "role": "insights",
+        },
+        headers=api.head(),
+    )
+    assert put.status_code == 200
+
+    assert completeness.gaps(api.conn) == before  # type: ignore[arg-type]
+    answer = api.dry_run("trees", "alpha", _tree_body(insights=True)).json()[
+        "insights"
+    ]  # type: ignore[attr-defined]
+    assert "note" not in answer

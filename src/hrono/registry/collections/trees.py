@@ -31,6 +31,7 @@ from hrono.registry.descriptor import (
 )
 
 DEFAULT_TREE = "default"
+INSIGHTS_THRESHOLD = 500_000
 
 
 class Tree(BaseModel):
@@ -52,6 +53,25 @@ class Tree(BaseModel):
             "While writing a brief, read the files of the other topics it "
             "sends to or takes from. Briefs say more about how parts fit, at "
             "a few more model calls each."
+        ),
+    )
+
+    insights: bool = Field(
+        default=False,
+        title="Insights",
+        description=(
+            "Have a strong model review the biggest topics and add what it "
+            "finds to their briefs. Off by default: each review is billed, "
+            "about $2.50 on Opus."
+        ),
+    )
+    insights_threshold: int = Field(
+        default=INSIGHTS_THRESHOLD,
+        gt=0,
+        title="Insights threshold",
+        description=(
+            "A topic gets a review once the briefs under it that no review "
+            "has covered hold this many characters. The root always gets one."
         ),
     )
 
@@ -161,6 +181,16 @@ def looks_up(conn: sqlite3.Connection, tree: str) -> bool:
     """Whether a tree's leaf briefs are written with lookups."""
     row = store.get(conn, "trees", tree)
     return bool(row is not None and json.loads(row["config"]).get("lookups"))
+
+
+def insights_of(conn: sqlite3.Connection, tree: str) -> tuple[bool, int]:
+    """Whether a tree has insights on, and its threshold in characters."""
+    row = store.get(conn, "trees", tree)
+    config = {} if row is None else json.loads(row["config"])
+    return (
+        bool(config.get("insights")),
+        int(config.get("insights_threshold") or INSIGHTS_THRESHOLD),
+    )
 
 
 class SharedCorpus(DomainError):
