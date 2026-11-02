@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
-from hrono.cluster.blend import path_body
+from hrono.cluster.blend import condense_model, path_body
 from hrono.embed import store
 from hrono.embed.encoders import encoder_for_model
 from hrono.embed.model import resolve_embedding_model
@@ -78,16 +78,35 @@ def _register_condensations(conn: object, tree: str) -> None:
     while new ones are placed on the condensation's.
     """
     scope = sources_of(conn, tree)  # type: ignore[arg-type]
-    if scope is None:
-        return
-    for row in conn.execute(  # type: ignore[attr-defined]
-        "SELECT DISTINCT d.text AS text FROM condensations d "
-        "JOIN sections s ON s.content_hash = d.content_hash "
-        "WHERE s.source IN (SELECT value FROM json_each(?))",
-        (json.dumps(list(scope)),),
-    ).fetchall():
-        body = str(row["text"]).encode("utf-8")
+    for text in _condensations(conn, scope):
+        body = text.encode("utf-8")
         upsert_content(conn, content_hash(body), body)
+
+
+def _condensations(
+    conn: object, scope: tuple[str, ...] | None
+) -> tuple[str, ...]:
+    """The current condense model's condensations of the scope's sections.
+
+    Only that model's: placement reads no other, so embedding another's would
+    be paid for and never used. An unscoped tree (None) is every section.
+    """
+    model = condense_model(conn)  # type: ignore[arg-type]
+    if model is None:
+        return ()
+    where, args = "", ()
+    if scope is not None:
+        where = " AND s.source IN (SELECT value FROM json_each(?))"
+        args = (json.dumps(list(scope)),)
+    return tuple(
+        str(row["text"])
+        for row in conn.execute(  # type: ignore[attr-defined]
+            "SELECT DISTINCT d.text AS text FROM condensations d "
+            "JOIN sections s ON s.content_hash = d.content_hash "
+            f"WHERE d.model_name = ?{where}",  # noqa: S608
+            (model, *args),
+        ).fetchall()
+    )
 
 
 def _allowed(conn: object, tree: str) -> frozenset[str] | None:
@@ -129,13 +148,8 @@ def _allowed(conn: object, tree: str) -> frozenset[str] | None:
         (tree,),
     ).fetchall():
         hashes.add(content_hash(str(row["text"]).encode("utf-8")))
-    for row in conn.execute(  # type: ignore[attr-defined]
-        "SELECT DISTINCT d.text AS text FROM condensations d "
-        "JOIN sections s ON s.content_hash = d.content_hash "
-        "WHERE s.source IN (SELECT value FROM json_each(?))",
-        (named,),
-    ).fetchall():
-        hashes.add(content_hash(str(row["text"]).encode("utf-8")))
+    for text in _condensations(conn, scope):
+        hashes.add(content_hash(text.encode("utf-8")))
     hashes.update(content_hash(path_body(path)) for path in paths)
     return frozenset(hashes)
 

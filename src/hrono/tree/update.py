@@ -89,7 +89,11 @@ from hrono.llm.client import LLMError
 from hrono.registry.collections.trees import DEFAULT_TREE, ingest_sources
 from hrono.summarize import store as condensations
 from hrono.summarize.condense import condense
-from hrono.summarize.resolve import resolve_prompt, resolve_text_model
+from hrono.summarize.resolve import (
+    AmbiguousModel,
+    resolve_prompt,
+    resolve_text_model,
+)
 
 NO_MODEL = "no condense model: placed by the raw vector"
 
@@ -106,6 +110,12 @@ def update(
     with context.database.connect() as conn:
         sources = ingest_sources(conn, tree)
         model_name = str(resolve_embedding_model(conn, job.scope)["name"])
+        try:  # an ambiguous setup fails like the build, before any change
+            resolve_text_model(conn, {}, "condense")
+        except AmbiguousModel:
+            raise
+        except LLMError:
+            pass  # none: placed by the raw vector, the outcome says so
 
     batch: int | None = None
     deferred = 0

@@ -413,6 +413,53 @@ def test_update_without_a_condense_model_places_by_the_raw_vector(
     assert _forced_node(db, "alien/zz.txt") is not None  # raw "alien" body
 
 
+def test_update_with_two_text_models_and_no_condense_role_fails_unchanged(
+    built: tuple[Database, Path],
+    tmp_path: Path,
+) -> None:
+    # like the build: an ambiguous setup stops the sync before it changes the
+    # tree, instead of placing by the raw vector
+    db, origin = built
+    with db.connect() as conn, conn:
+        registry_store.insert(
+            conn,  # type: ignore[arg-type]
+            "models",
+            "haiku",
+            json.dumps(
+                {
+                    "name": "haiku",
+                    "kind": "text",
+                    "connection": "c",
+                    "model": "claude",
+                    "params": {},
+                }
+            ),
+            None,
+            "t",
+        )
+        conn.execute(
+            "UPDATE registry SET config = json_remove(config, '$.role') "
+            "WHERE collection = 'models' AND name = 'sonnet'"
+        )
+    add_alien(origin, "zz.txt")
+    with db.connect() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM sections").fetchone()[0]
+
+    with pytest.raises(LLMError, match="multiple text models"):
+        update(
+            _job("update"),
+            job_context(db, tmp_path),
+            encoder_for=alien_encoder,
+            client=FakeCompletion(),
+        )
+
+    with db.connect() as conn:
+        assert (
+            conn.execute("SELECT COUNT(*) FROM sections").fetchone()[0]
+            == before
+        )
+
+
 def test_update_fails_when_the_condense_model_fails(
     built: tuple[Database, Path],
     tmp_path: Path,

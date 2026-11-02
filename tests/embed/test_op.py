@@ -246,6 +246,22 @@ def test_embed_vectorises_a_condensation_stored_without_a_body(
         )
         registry_store.insert(
             conn,
+            "models",
+            "condense",
+            json.dumps(
+                {
+                    "name": "condense",
+                    "kind": "text",
+                    "connection": None,
+                    "model": "m",
+                    "params": {},
+                }
+            ),
+            None,
+            "t",
+        )
+        registry_store.insert(
+            conn,
             "trees",
             "old",
             json.dumps({"name": "old", "sources": ["src"]}),
@@ -259,3 +275,67 @@ def test_embed_vectorises_a_condensation_stored_without_a_body(
     with db.connect() as conn:
         digest = content_hash(text.encode())
         assert vstore.get_vector(conn, digest, "emb") is not None
+
+
+def _condensed_section(db: Database, models: tuple[str, ...]) -> list[str]:
+    """One section condensed once per model; the texts, in model order."""
+    from hrono.ingest.identity import Address
+
+    body = b"def old(): pass\n"
+    texts = [f"{model} says this defines one old function." for model in models]
+    with db.connect() as conn, conn:
+        istore.upsert_content(conn, content_hash(body), body)
+        istore.insert_section(
+            conn,
+            source="src",
+            address=Address("git", "x", "src/f.py", "v"),
+            start=0,
+            end=len(body),
+            content_hash=content_hash(body),
+            ordinal=0,
+        )
+        for model, text in zip(models, texts, strict=True):
+            conn.execute(
+                "INSERT INTO condensations(content_hash, model_name, text, "
+                "input_tokens, output_tokens, created_at) "
+                "VALUES (?, ?, ?, 1, 1, 't')",
+                (content_hash(body), model, text),
+            )
+        for model in models:
+            registry_store.insert(
+                conn,
+                "models",
+                model,
+                json.dumps(
+                    {
+                        "name": model,
+                        "kind": "text",
+                        "connection": None,
+                        "model": "m",
+                        "params": {},
+                        "role": "condense" if model == models[0] else "brief",
+                    }
+                ),
+                None,
+                "t",
+            )
+    return texts
+
+
+def test_embed_of_an_unscoped_tree_vectorises_only_the_current_condense_model(
+    db: Database,
+) -> None:
+    """The default tree declares no sources: its old sections' condensations
+    still become bodies, and another model's condensation is never embedded."""
+    current, other = _condensed_section(db, ("cur", "old"))
+
+    embed(job("emb", "e-un"), JobContext(db), encoder_for=fake_encoder(4))
+
+    with db.connect() as conn:
+        assert (
+            vstore.get_vector(conn, content_hash(current.encode()), "emb")
+            is not None
+        )
+        assert (
+            vstore.get_vector(conn, content_hash(other.encode()), "emb") is None
+        )

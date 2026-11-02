@@ -32,6 +32,10 @@ NO_INSIGHTS_MODEL = (
 )
 
 
+class AmbiguousModel(LLMError):
+    """More than one text model fits a role: a setup fault, not a missing model."""
+
+
 def resolve_text_model(
     conn: sqlite3.Connection,
     scope: dict[str, object],
@@ -64,7 +68,7 @@ def resolve_text_model(
     if role is not None:
         for_role = [c for c in text if c.get("role") == role]
         if len(for_role) > 1:
-            raise LLMError(f"multiple text models for role: {role}")
+            raise AmbiguousModel(f"multiple text models for role: {role}")
         if for_role:
             return for_role[0]
         if role == INSIGHTS_ROLE:
@@ -72,7 +76,7 @@ def resolve_text_model(
             # model's price, and only an admin who named one agreed to that
             raise LLMError(NO_INSIGHTS_MODEL)
     if len(text) > 1:
-        raise LLMError(
+        raise AmbiguousModel(
             f"multiple text models — give one a role ({role})"
             if role
             else "multiple text models — name one in the scope"
