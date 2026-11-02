@@ -1,14 +1,14 @@
 # Plan: the insights step, and the small E054 fixes
-Approved: (not yet; /autodev:run go)
+Approved: 2026-11-02 (/autodev:run go)
 Estimate: 6 epics, about 8.7 h of agent time (7.95 h of epics + 0.75 h
 acceptance) and 1.37M output tokens; about 5.7 h on the clock, up to 3 at
 once, because E057 -> E058 -> E060 run in turn
 Based on: the no-history figures (no epics since 2026-11-01), plus the
 verify time of real model calls (a pass is 34-45 turns) and one rework
 round on E058 and E060
-Machine now: 3.4 GiB free memory leaves room for 0 more agents
-(a Playwright `adminchat.py` left running holds some); 2-3 at once once it
-is freed
+Machine now (2026-11-02, at go): on battery with 3.5 GiB free memory,
+so one epic at a time; at that pace the clock time is the 8.7 h of agent
+time. Building: E055. Left: E056-E060.
 
 | # | Epic | What the user gets | Outcome | Tickets | Hours (build + verify + merge + rework) | Tokens |
 |---|------|--------------------|---------|---------|------|--------|

@@ -65,3 +65,4 @@ Done when:
 
 ## Log
 - 2026-11-02 po: created from E054 511, 512, 521 (O5, D1).
+- 2026-11-02 po: plan approved (go); started, one at a time (battery, 3.5 GiB free).
