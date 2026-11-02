@@ -237,8 +237,9 @@ Updates never re-run the build pipeline. Full rules:
   brief stale leaves → brief stale upper levels → monitor → repair → adopt new
   leaves. The order is load-bearing, so it is one op.
 - **`update`** (`tree/update.py`) syncs, diffs files by content hash, re-splits
-  only changed files, embeds and condenses only new bytes, and places changed
-  sections against the pre-batch centroids. Untouched sections never move.
+  only changed files, condenses then embeds only new bytes, and places changed
+  sections by their condensation's vector, as a build clusters, against the
+  pre-batch centroids. Untouched sections never move.
   Sections too novel for any topic are parked for the rest of the run; at its
   end they form new topics if there are enough of them, and the rest join
   their nearest topic, flagged `forced` for the monitor to re-check.
