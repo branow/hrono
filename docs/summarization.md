@@ -54,7 +54,7 @@ Two layers, gotcha-aware, content-addressed.
    condition, and each area doing a sibling's job differently), then the
    hazards. Without that, a root copied its first child (xgboost node 162).
    The default is replaced in an existing registry only where the row is
-   still the earlier shipped version; an edited prompt is left as written
+   still an earlier shipped version; an edited prompt is left as written
    (`Descriptor.superseded`). When the leaves below were written with
    lookups, the input ends with `=== Outside this area ===`: each topic
    elsewhere that a leaf here took a statement from, or that took one from

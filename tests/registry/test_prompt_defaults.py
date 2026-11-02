@@ -216,3 +216,25 @@ def test_upgrade_leaves_an_edited_upper_prompt_as_written(
     row = store.get(conn, "prompts", "brief-upper")
     assert json.loads(row["config"])["template"] == "MINE {content}"
     conn.close()
+
+
+# The brief-upper default hrono first shipped (2026-10-09); the flask bench
+# registry still holds it, untouched.
+FIRST_UPPER = (
+    "Summarize the child briefs below into one higher-level brief for a "
+    "parent node. Keep concrete names and routing signal; drop detail that "
+    "only matters within a single child.\n\n{content}"
+)
+
+
+def test_upgrade_replaces_every_earlier_shipped_upper_default(
+    tmp_path: Path,
+) -> None:
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    _hold_upper(conn, FIRST_UPPER, hash_of_old=False)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    row = store.get(conn, "prompts", "brief-upper")
+    assert json.loads(row["config"])["template"] == _shipped_upper()
+    conn.close()

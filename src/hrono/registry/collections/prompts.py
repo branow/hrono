@@ -326,10 +326,21 @@ PROMPTS = Descriptor(
     write_role="writer",
     validate=_validate,
     defaults=_DEFAULTS,
-    # the brief-upper default before E055 (abstract parts, conventions)
+    # every brief-upper default shipped before E055 (abstract parts,
+    # conventions), newest first: an install of any age moves to the new one
     superseded={
         "brief-upper": (
             "0896a97d4e36f2bb9c85a7d4706081027e01715d54ac3c99eb1685a1de79b8bd",
+            "a17ea032d6235f210786b6f5095edb9a3daa78d9ad1644195bf1e026516c4a8e",
+            "bb38250fa0fe54ffe9a0363c2f8210e0745595ad8441c26b46dbae37cc3238c0",
+            "971ad24dbd7246bfedadf5a10c571de41dcc70d584a793a8d32608999266e3d9",
+            "ce4bf42dede9a6d72e9834b28354027f1f297993bb6fab400ad6a3a515161788",
+            "bdebfc4da0f85021678300a5404c7f88267e02f64b302da82714044485b5a796",
+            "a22b3d9aaa1c8ea23a9edd4a07cbbe0f61c32cf1b6678cd91eed57141a13cb25",
+            "439dd4d003f38f8e2b2994b7303bab83a37c9f2467844b521cc5d8d6646afdf2",
+            "39d8a9fc50171acaf780bf395fb7f2b4e71413b6cd907531959a2bffd2902ba5",
+            "90dbe33d0371607aa1b83ddf7033862e332aed6f3e89cb57de724cff704c7bcc",
+            "9d65061325e0358da6ae79562e45736472ce6b23556f28113b77e5daac26c187",
         )
     },
 )
