@@ -188,7 +188,11 @@ async def save_models(request: Request, user: Writer) -> Response:
             user,
             tree,
             step="models",
-            typed={"connection": connection, **_upstreams(wanted)},
+            typed={
+                "connection": connection,
+                defaults.INSIGHTS_ROLE: first(form, "insights").strip(),
+                **_upstreams(wanted),
+            },
             problems=[
                 problem(f"{name}: {message['msg']}", field=message["field"])
                 for message in field_errors(exc)
@@ -379,8 +383,20 @@ def _models(
                 or shipped.get(role, {}).get("model", "")
             ),
         }
-        for role in (*defaults.ROLES, defaults.INSIGHTS_ROLE)
+        for role in defaults.ROLES
     ]
+    # insights is optional: a field the person cleared stays clear on a retry
+    skipped = typed is not None and defaults.INSIGHTS_ROLE in typed
+    roles.append(
+        {
+            "role": defaults.INSIGHTS_ROLE,
+            "model": str(
+                typed[defaults.INSIGHTS_ROLE]
+                if skipped
+                else shipped.get(defaults.INSIGHTS_ROLE, {}).get("model", "")
+            ),
+        }
+    )
     return {
         "connection_names": names,
         "chosen_connection": chosen,

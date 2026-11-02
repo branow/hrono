@@ -270,6 +270,32 @@ def test_the_models_step_offers_insights_and_a_blank_field_skips_it(
     assert [g.section for g in setup.gaps()] == ["sources"]
 
 
+def test_a_skipped_insights_field_stays_empty_when_the_step_is_refused(
+    setup: Setup, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    setup.connect_claude_code()
+
+    def refuse(config: dict, context: object, timeout: float) -> str:
+        raise model_validation.ValidationFailed("overloaded")
+
+    monkeypatch.setattr(model_validation, "_generate_with_cli", refuse)
+
+    answer = setup.post(
+        "/ui/setup/models",
+        connection="cc",
+        embedding="some/embedder",
+        condense="haiku",
+        brief="sonnet",
+        insights="",
+        **{"brief-upper": "sonnet", "judge": "haiku"},
+    )
+
+    assert "overloaded" in text(answer.text)
+    # the person cleared it to skip the reviewer; the retry must not bring
+    # the strongest model back unasked
+    assert 'name="insights" value=""' in answer.text
+
+
 def test_a_wrong_key_is_refused_with_the_providers_reason_and_saves_nothing(
     setup: Setup,
 ) -> None:
