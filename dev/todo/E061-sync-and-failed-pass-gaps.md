@@ -60,3 +60,4 @@ Done when:
 
 ## Log
 - 2026-11-02 po: created from E056 qa followups (O6) and E060 qa followups (O4).
+- 2026-11-02 po: started (E056 and E060 on main).
