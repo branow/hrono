@@ -439,3 +439,22 @@ def test_the_parts_line_tells_topics_from_areas(
     client = FakeCompletion()
     brief_upper(job(1), JobContext(database), client=client)
     assert all("THE PARTS BELOW ARE TOPICS." in c for c in client.contents)
+
+
+def test_the_parts_line_says_areas_above_level_one(
+    db: tuple[Database, list[int]],
+) -> None:
+    database, _ = db
+    brief_upper(job(1), JobContext(database), client=FakeCompletion())
+    first, second = _parents(database)
+    with database.connect() as conn, conn:
+        cluster_store.replace_level(
+            conn, TREE, 2, [(0, first, False, None), (0, second, False, None)]
+        )
+    client = FakeCompletion()
+    brief_upper(job(2), JobContext(database), client=client)
+    assert client.contents
+    assert all(
+        "THE PARTS BELOW ARE AREAS, each made of topics." in c
+        for c in client.contents
+    )
