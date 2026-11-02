@@ -228,6 +228,12 @@ Below are descriptions of the parts of one area of a larger system, each \
 under its title. Write what a reader (human or AI agent) must know about the \
 whole area: what it does, and how work moves through its parts.
 
+The first line below says what the parts are. If the parts are TOPICS, follow \
+"When the parts are topics". If they are AREAS, each made of topics, follow \
+"When the parts are areas".
+
+When the parts are topics:
+
 Open with one or two sentences: what this area does and what it hands work to \
 or takes work from outside it. Then the end-to-end flows of the area - the \
 things a user or another system asks of it - each as numbered steps from what \
@@ -256,15 +262,33 @@ not already named in a flow, saying its job. End with the hazards that come \
 from how the parts interact, in the same terms: what no part of this area \
 repairs, never that nothing does.
 
-Aim for 400 to 900 words, however many parts there are: every part's brief is \
-in the map below this one, so a step names the part, what it does and what \
-passes on, never the part's own checks, lists or fields - a reader opens the \
-part for those. Leave out setup, configuration and style hazards. Name a part \
-by its title so a reader can open it. Mention only what the descriptions say \
-- do not invent anything. Write about the area itself. Never describe the \
-text you were given: no "this group", "this set", "these chunks", "the \
-summaries", "condensed" or "the files above". Output only the description in \
-markdown, nothing else.
+When the parts are areas:
+
+Open with one or two sentences: what the whole is, and what it \
+hands work to or takes work from outside it. Then one short paragraph or \
+list item for EVERY area, none left out and none given more than a fifth of \
+the text: what the area is for, in its own terms, and which other areas it \
+hands work to or takes work from, and what crosses. Where areas are \
+independent of one another, say so. Then the flows that cross areas, each as \
+a few numbered steps naming the area at each step - never a function inside \
+one area, a reader opens the area for those. Then a part headed \
+"Conventions": each rule most of the areas follow, with the condition it \
+holds under (a time rule, a status or type filter, how history is read, how \
+errors are handled), and each area that does the same job as a sibling \
+differently, named, with how it differs. Name only conventions the \
+descriptions show; where they show none, write that. End with the hazards \
+that come from how the areas interact: what no area repairs.
+
+In both cases: aim for 400 to 900 words, however many parts there are: every \
+part's brief is in the map below this one, so a step names the part, what it \
+does and what passes on, never the part's own checks, lists or fields - a \
+reader opens the part for those. Never reproduce one part's description in \
+place of the whole: cover every part. Leave out setup, configuration and \
+style hazards. Name a part by its title so a reader can open it. Mention \
+only what the descriptions say - do not invent anything. Write about the \
+area itself. Never describe the text you were given: no "this group", "this \
+set", "these chunks", "the summaries", "condensed" or "the files above". \
+Output only the description in markdown, nothing else.
 
 {content}"""
 
@@ -302,4 +326,10 @@ PROMPTS = Descriptor(
     write_role="writer",
     validate=_validate,
     defaults=_DEFAULTS,
+    # the brief-upper default before E055 (abstract parts, conventions)
+    superseded={
+        "brief-upper": (
+            "0896a97d4e36f2bb9c85a7d4706081027e01715d54ac3c99eb1685a1de79b8bd",
+        )
+    },
 )

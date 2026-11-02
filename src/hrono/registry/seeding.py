@@ -2,7 +2,10 @@
 
 Idempotent like the bootstrap-admin flow: a default is inserted only when its
 name is absent, so a restart adds nothing and a user-modified row is never
-overwritten. Seeded rows are marked ``is_default`` so DELETE resets them.
+overwritten. The one exception is a default row that still holds an earlier
+shipped version (``Descriptor.superseded``): it is untouched by the user, so
+it moves to the current default. Seeded rows are marked ``is_default`` so
+DELETE resets them.
 """
 
 from __future__ import annotations
@@ -28,10 +31,23 @@ def seed_defaults(
     for descriptor in descriptors:
         for default in descriptor.defaults:
             name = str(default["name"])
-            if store.get(conn, descriptor.collection, name) is not None:
-                continue
+            held = store.get(conn, descriptor.collection, name)
             stored, key_id = encrypt(dict(default), descriptor, cipher)
             payload = json.dumps(stored)
+            if held is not None:
+                if held["is_default"] and held["content_hash"] in (
+                    descriptor.superseded.get(name, ())
+                ):
+                    store.replace(
+                        conn,
+                        descriptor.collection,
+                        name,
+                        payload,
+                        key_id,
+                        now,
+                        content_hash(payload),
+                    )
+                continue
             store.insert(
                 conn,
                 descriptor.collection,

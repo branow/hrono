@@ -46,7 +46,16 @@ Two layers, gotcha-aware, content-addressed.
    interact. 400 to 900 words: the children's briefs are below it in the
    map, so a step names the part and what passes on, never its own checks
    or lists (without a range the bcreg root ran to 13,600 words). The model
-   is never told it is in a tree. When the leaves below were written with
+   is never told it is in a tree, only whether the parts below are topics
+   (level 1: the flows above) or areas of topics (level 2 and the root).
+   Above level 1 the brief instead says, for every area, what it is for and
+   which areas it hands work to or takes it from, then the flows that cross
+   areas, then a **Conventions** part (each rule most areas follow with its
+   condition, and each area doing a sibling's job differently), then the
+   hazards. Without that, a root copied its first child (xgboost node 162).
+   The default is replaced in an existing registry only where the row is
+   still the earlier shipped version; an edited prompt is left as written
+   (`Descriptor.superseded`). When the leaves below were written with
    lookups, the input ends with `=== Outside this area ===`: each topic
    elsewhere that a leaf here took a statement from, or that took one from
    a leaf here (`brief_uses`), with its opening line and what passed
@@ -100,7 +109,7 @@ hash, token usage and the member signature it was written against
 members changed, or its prompt or model changed. A pinned brief is never
 rewritten.
 
-**Two deterministic gates** run on every brief, with no LLM:
+**Deterministic gates** run on every brief, with no LLM:
 
 - *Faithfulness* (`summarize/faithfulness.py`): identifier-shaped tokens in
   the brief must appear in its source. Slash-joined prose (`CI/CD`, `and/or`)
@@ -108,6 +117,13 @@ rewritten.
 - *Shape* (`summarize/shape.py`): rejects a reply that is empty, that asks or
   addresses the caller, or that talks about the conversation instead of the
   material.
+- *Copy* (`shape.copies`, upper briefs with two or more children): when more
+  than **30%** of the brief's 6-word runs occur in one child's brief, the
+  call is repeated once; if it still copies, the brief is stored flagged
+  `copies-a-child`. It shows on Health and in `unusable-briefs` like the
+  other flags, and a sync leaves it until the topic's members, prompt or
+  model change. Level-1 briefs share under 10% with any one
+  child.
 
 ## Why this shape
 

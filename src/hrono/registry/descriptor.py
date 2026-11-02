@@ -8,7 +8,7 @@ new collection is a descriptor, never a new branch in the engine.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated
 
@@ -81,3 +81,7 @@ class Descriptor:
     # which it means.
     before_delete: Callable[[str, ValidationContext], str | None] | None = None
     defaults: tuple[dict[str, object], ...] = ()
+    # default name -> content hashes of earlier shipped versions of it. A row
+    # still holding one was never edited, so a start replaces it with the
+    # current default; any other content is the user's and is left alone.
+    superseded: dict[str, tuple[str, ...]] = field(default_factory=dict)

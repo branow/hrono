@@ -13,6 +13,7 @@ from hrono.db.database import open_database
 from hrono.registry import store
 from hrono.registry.collections.prompts import PROMPTS
 from hrono.registry.seeding import seed_defaults
+from hrono.registry.write import content_hash
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
@@ -170,3 +171,48 @@ def test_template_hash_updates_on_write(harness: Harness) -> None:
         "SELECT content_hash FROM registry WHERE name = 'h'"
     ).fetchone()["content_hash"]
     assert first and second and first != second
+
+
+def _shipped_upper() -> str:
+    return next(d for d in PROMPTS.defaults if d["name"] == "brief-upper")[
+        "template"
+    ]
+
+
+def _hold_upper(conn, template: str, *, hash_of_old: bool) -> None:
+    payload = json.dumps(
+        {"name": "brief-upper", "role": "brief-upper", "template": template}
+    )
+    digest = (
+        PROMPTS.superseded["brief-upper"][0]
+        if hash_of_old
+        else content_hash(payload)
+    )
+    store.replace(conn, "prompts", "brief-upper", payload, None, "t", digest)
+
+
+def test_upgrade_replaces_an_untouched_old_upper_default(
+    tmp_path: Path,
+) -> None:
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    _hold_upper(conn, "OLD {content}", hash_of_old=True)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    row = store.get(conn, "prompts", "brief-upper")
+    assert json.loads(row["config"])["template"] == _shipped_upper()
+    assert row["is_default"] == 1
+    conn.close()
+
+
+def test_upgrade_leaves_an_edited_upper_prompt_as_written(
+    tmp_path: Path,
+) -> None:
+    conn = open_database(tmp_path / "hrono.db")
+    reconcile(conn, KEY)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    _hold_upper(conn, "MINE {content}", hash_of_old=False)
+    seed_defaults(conn, _cipher(), (PROMPTS,))
+    row = store.get(conn, "prompts", "brief-upper")
+    assert json.loads(row["config"])["template"] == "MINE {content}"
+    conn.close()

@@ -99,7 +99,7 @@ config. See [clustering.md](clustering.md) and
 | `GET /trees/{name}/export?levels=4` | reader | Rendered agent-facing tree as `{files: [{path, content}], shape}`. `levels` is the hop limit, at least 2 |
 | `GET /trees/{name}/export.zip?levels=4` | reader | The same export as a zip archive |
 | `GET /trees/{name}/pending` | reader | Incubator pool: sections in no topic yet |
-| `GET /trees/{name}/unusable-briefs` | reader | Stored briefs that are model refusals or prompt echoes |
+| `GET /trees/{name}/unusable-briefs` | reader | Stored briefs that are model refusals, prompt echoes or copies of one child |
 | `GET /trees/{name}/unusable-condensations` | reader | Condensations that are model refusals |
 
 Both `maintain` and `sync` hand back the id of an already queued job for the
