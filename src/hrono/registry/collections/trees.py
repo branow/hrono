@@ -183,16 +183,6 @@ def looks_up(conn: sqlite3.Connection, tree: str) -> bool:
     return bool(row is not None and json.loads(row["config"]).get("lookups"))
 
 
-def insights_of(conn: sqlite3.Connection, tree: str) -> tuple[bool, int]:
-    """Whether a tree has insights on, and its threshold in characters."""
-    row = store.get(conn, "trees", tree)
-    config = {} if row is None else json.loads(row["config"])
-    return (
-        bool(config.get("insights")),
-        int(config.get("insights_threshold") or INSIGHTS_THRESHOLD),
-    )
-
-
 class SharedCorpus(DomainError):
     """An unscoped tree would ingest sources another tree already maps."""
 

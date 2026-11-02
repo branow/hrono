@@ -23,7 +23,6 @@ from dataclasses import dataclass
 
 from hrono import naming
 from hrono.registry import store
-from hrono.registry.collections.trees import insights_of
 from hrono.summarize.resolve import INSIGHTS_ROLE
 
 # Measured on Opus at API prices on a 36-topic unit: $2.43 a review (the
@@ -69,11 +68,6 @@ def plan_for(
     names = naming.names(conn, [one.node for one in passes])
     usd, basis, note = _cost(conn, len(passes))
     return Plan(on, threshold, passes, names, usd, basis, note)
-
-
-def of_tree(conn: sqlite3.Connection, tree: str) -> Plan:
-    """The plan under the settings the tree has now."""
-    return plan_for(conn, tree, *insights_of(conn, tree))
 
 
 def passes_for(
