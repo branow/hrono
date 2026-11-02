@@ -126,6 +126,20 @@ def test_every_wrapped_string_has_its_ukrainian() -> None:
     assert missing == []
 
 
+def test_every_tree_setting_has_its_ukrainian() -> None:
+    from hrono.registry.collections.trees import Tree
+
+    uk = i18n.catalog("uk")
+    said = [
+        text
+        for field in Tree.model_fields.values()
+        for text in (field.title, field.description)
+        if text
+    ]
+
+    assert [text for text in said if text not in uk] == []
+
+
 def test_a_translation_keeps_the_slots_of_its_english() -> None:
     wrong = []
     for key, entry in i18n.catalog("uk").items():
