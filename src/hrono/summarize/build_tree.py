@@ -32,6 +32,7 @@ declines to reduce is not a failure, and everything else is.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 
 from hrono.cluster import TooFewPoints, store
 from hrono.cluster import store as cluster_store
@@ -40,7 +41,7 @@ from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion
 from hrono.registry.collections.trees import DEFAULT_TREE
-from hrono.summarize import UnreachableTree
+from hrono.summarize import UnreachableTree, review
 from hrono.summarize.brief_upper import brief_upper
 
 D_MAX = 5
@@ -53,13 +54,38 @@ def build_tree(
     client: Completion | None = None,
     encoder_for: object | None = None,
     build: object | None = None,
-) -> None:
-    """Recurse the brief levels of a tree up to a single root node."""
+    reviewing: bool = True,
+) -> Mapping[str, object]:
+    """Recurse the brief levels of a tree up to a single root node.
+
+    With the tree's insights on, the topics its counter selects get a pass
+    (``summarize/review``) as soon as their level is briefed, so the level
+    above is clustered and briefed from the extended briefs; the root gets its
+    pass last. ``reviewing=False`` is for a caller that must not spend money
+    unasked (a sync).
+    """
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         start = _highest_brief_level(conn, tree)
     if start is None:
-        return
+        return {}
+    insights: list[dict[str, object]] = []
+
+    def review_levels(levels: list[int], root: bool) -> None:
+        if not reviewing:
+            return
+        done = review.run(
+            context,
+            tree,
+            levels=levels,
+            root=root,
+            client=client,
+            rebrief=lambda at: brief_upper(
+                _level_job(tree, at), context, client=client
+            ),
+        )
+        if done:
+            insights.append(done)
 
     level = start
     while level < D_MAX:
@@ -86,11 +112,29 @@ def build_tree(
             break
 
         brief_upper(_level_job(tree, level + 1), context, client=client)
+        review_levels([level + 1], root=False)
         level += 1
 
     _collect_root(context, tree, client)
     _adopt_late_leaves(context, tree, client, encoder_for)
     _require_reachable(context, tree)
+    with context.database.connect() as conn:
+        top = _top_level(conn, tree)
+    review_levels(list(range(1, top + 1)), root=True)
+    return {"insights": _total(insights)} if insights else {}
+
+
+def _total(runs: list[dict[str, object]]) -> dict[str, object]:
+    """The insights outcomes of one build, added up."""
+    out: dict[str, object] = {"reviews": 0, "extends": 0, "findings": 0}
+    for one in runs:
+        for key in out:
+            out[key] = int(out[key]) + int(one.get(key, 0))  # type: ignore[call-overload]
+        if one.get("failed"):
+            out["failed"] = [*out.get("failed", []), *one["failed"]]  # type: ignore[misc,list-item]
+        if one.get("note"):
+            out["note"] = one["note"]
+    return out
 
 
 def _require_reachable(context: JobContext, tree: str) -> None:

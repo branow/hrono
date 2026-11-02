@@ -178,15 +178,50 @@ words; the upper prompt keeps about 1.6 times as many at the same length.
 
 Optional and off by default (`insights` on the tree, role `insights` on a
 model). A strong model reviews a big area of the tree and its findings are
-written into the area's brief. This part of the step decides where and what it
-costs (`summarize/insights.py`); running a pass comes later. A topic is
-reviewed when the characters of brief below it that no pass has covered reach
-the tree's `insights_threshold` (default 500 000); the root always is. The
-count is derived from stored briefs and the `insights_passes` rows: a brief is
+written into the area's brief, so an agent reading the brief finds the rules no
+single section states, the siblings that differ and the wrong statements of the
+cheaper brief corrected, with their evidence.
+
+**Which topics.** A topic is reviewed when the characters of brief below it
+that no pass has covered reach the tree's `insights_threshold` (default
+500 000). The root is reviewed when it never was, or when something under it
+is unreviewed; a second `settle` with nothing changed runs no pass. The count
+is derived from stored briefs and the `insights_passes` rows: a brief is
 covered when it was written no later than a pass on its topic or on one
 between it and the topic, so a pass takes its subtree out of the count above
-and a brief rewritten afterwards counts again. The dry run states the passes
-and the cost from the measured $2.43 a review plus $0.39 to extend the brief.
+and a brief rewritten afterwards counts again (`summarize/insights.py`). The
+dry run states the passes and the cost from the measured $2.43 a review plus
+$0.39 to extend the brief.
+
+**A pass** (`summarize/review.py`) is two calls on the model with the role
+`insights`, with no fallback to another text model: with none, no pass runs
+and the job's result and the dry run say so. The review gets the area's brief
+and a one-line index of its topics in the prompt (prompt role
+`insights-review`, the measured recipe in `docs/research/insights-recipe.md`),
+and read-only lookups over the area and nothing else: the briefs of the
+topics under it (`brief/...`), their condensations and their source, with a cap
+of 60 calls. It answers with at most 15 findings: statement, angle, why it
+matters, evidence (file, lines, version), where the briefs state it or should,
+confidence, and the hypotheses it checked and dropped. They are stored
+(`insights_findings`, one `insights_passes` row per pass). The extend call
+(prompt role `insights-extend`, no tools) rewrites the brief in place with the
+findings put where their reader needs them. The cheaper brief stays as the
+previous version (`brief_versions`, reason `insights`, the pass that replaced
+it); the first one is never pushed out of the kept versions. The extended
+brief keeps the cheaper brief's provenance, so a later `brief-upper` leaves it
+alone until the topic's parts change.
+
+A review that does not finish (the cap, an answer that is not findings) stores
+nothing and the job's result lists why under `failed`; the topic is due again.
+A provider error fails the job naming the topic. A pinned brief is never
+overwritten: its findings are stored and the pass is marked skipped. The
+parent of a reviewed topic is clustered (on a first build) or briefed again (on
+`settle`) from the extended brief.
+
+**Where it runs.** In `build-tree`, right after the briefs of a level are
+written and before the level above is clustered, and after the root is
+collected; so `maintain` and `settle` run it. `sync` does not (it spends
+nothing unasked). The job result counts `reviews`, `extends` and `findings`.
 
 ## Propagation
 

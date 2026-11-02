@@ -651,3 +651,82 @@ def test_settle_leaves_another_tree_s_pins_and_membership_alone(
         ).fetchone()
     assert held == {section: (other_node, "hand")}
     assert member is not None and int(member["node_id"]) == other_node
+
+
+class Reviewing(FakeCompletion):
+    """The brief writers' fake, and a reviewer that finds one thing."""
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        if request.content.startswith("REVIEW"):
+            self.calls += 1
+            found = {
+                "findings": [{"statement": "a rule", "confidence": "high"}]
+            }
+            return CompletionResult(json.dumps(found), Usage(5, 2))
+        if request.content.startswith("EXTEND"):
+            self.calls += 1
+            return CompletionResult(
+                "This topic covers the module's API, and a rule.", Usage(5, 2)
+            )
+        return super().complete(request)
+
+
+def test_settle_with_insights_on_reviews_the_root_and_says_so_in_its_result(
+    built: Database, tmp_path: Path
+) -> None:
+    with built.write() as conn:
+        for name, role, template in (
+            ("review", "insights-review", "REVIEW {brief} {index}"),
+            ("extend", "insights-extend", "EXTEND {brief} {findings}"),
+        ):
+            registry_store.insert(
+                conn,
+                "prompts",
+                name,
+                json.dumps({"name": name, "role": role, "template": template}),
+                None,
+                "t",
+            )
+        registry_store.insert(
+            conn,
+            "models",
+            "opus",
+            json.dumps(
+                {
+                    "name": "opus",
+                    "kind": "text",
+                    "role": "insights",
+                    "connection": "c",
+                    "model": "opus",
+                    "params": {},
+                }
+            ),
+            None,
+            "t",
+        )
+        registry_store.insert(
+            conn,
+            "trees",
+            TREE,
+            json.dumps({"name": TREE, "sources": ["repo"], "insights": True}),
+            None,
+            "t",
+        )
+    outcome = settle(
+        _job(),
+        job_context(built, tmp_path),
+        force=True,
+        build=fake_build,
+        encoder_for=fake_encoder,
+        client=Reviewing(),
+    )
+    insights = outcome["insights"]
+    assert insights["reviews"] == 1 and insights["extends"] == 1  # type: ignore[index]
+    assert insights["findings"] == 1  # type: ignore[index]
+    with built.connect() as conn:
+        top = conn.execute(
+            "SELECT p.node_id, "
+            "n.level = (SELECT MAX(level) FROM nodes) AS root "
+            "FROM insights_passes p JOIN nodes n ON n.id = p.node_id"
+        ).fetchall()
+    assert [row["root"] for row in top] == [1]  # the root, and no other topic

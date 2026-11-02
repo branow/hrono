@@ -43,8 +43,10 @@ are never written by the model.
 model reviews a big area of the tree and writes what it finds, the rules no
 single section states and the statements the code contradicts, into that
 area's brief. A topic gets a review once the briefs under it that no review
-has covered hold enough characters (the tree's threshold); the root always
-gets one. Each review is billed, so the dry run says how many there would be
+has covered hold enough characters (the tree's threshold); the root gets one
+when it never had one or something under it is new. The area's brief is
+extended in place and the earlier brief stays in its history; a brief edited
+by hand is never overwritten. Each review is billed, so the dry run says how many there would be
 and what they cost.
 
 **tree** — topics all the way up to a single root, over a named set of sources.

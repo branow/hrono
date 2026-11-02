@@ -78,7 +78,8 @@ Bodies:
   "model": "claude-haiku-4-5", "role": "condense",   // condense | brief | brief-upper | judge | insights (optional)
   "params": { "max_tokens": 4096 }, "price": null }
 
-// prompts: defaults are seeded on first start
+// prompts: defaults are seeded on first start; roles: condense | brief |
+// brief-upper | judge | insights-review | insights-extend
 { "name": "condense-default", "role": "condense", "template": "..." }
 
 // trees
@@ -92,7 +93,8 @@ The role `insights` is optional: no build role falls back to it and a registry
 without it is still complete. `PUT /trees/{name}?dry_run=true` adds
 `insights` to the impact: `{on, threshold, passes: [{topic, name, level,
 characters}], count, estimated_cost: {usd, basis}, note?}`. The passes are
-what the next build would review, lowest level first (the root is always one);
+what the next build would review, lowest level first (the root is one when
+it never was reviewed or has unreviewed briefs under it);
 off, there are none and `usd` is 0. The cost is a figure measured on Opus at
 API prices (about $2.43 a review and $0.39 to extend the brief), an estimate
 on a subscription; `note` says when no model has the role yet. The count of

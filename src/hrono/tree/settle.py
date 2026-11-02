@@ -91,7 +91,7 @@ def settle(
     with context.database.write() as conn:
         incubator.home(conn, tree, model)
     brief(_stage(tree, "brief"), context, client=client)
-    build_tree(
+    reviewed = build_tree(
         _stage(tree, "build-tree"),
         context,
         client=client,
@@ -106,7 +106,12 @@ def settle(
         )
         _reset_drift(conn, tree)
     report.refresh(context.database, tree)
-    return {"settled": True, "held": held, "released": released}
+    return {
+        "settled": True,
+        "held": held,
+        "released": released,
+        **(reviewed or {}),
+    }
 
 
 def anchor_members(

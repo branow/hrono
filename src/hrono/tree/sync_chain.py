@@ -176,6 +176,8 @@ def _adopt(
             context,
             client=client,
             encoder_for=encoder_for,
+            # a sync spends nothing unasked; its passes are E059's
+            reviewing=False,
         )
     return attached
 
