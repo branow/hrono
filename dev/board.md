@@ -5,10 +5,7 @@ one-ticket history: `done/` (001-221) and `archive/board-pre-epics-2026-10-03.md
 
 | id   | title                                                   | status    | priority | depends_on |
 |------|---------------------------------------------------------|-----------|----------|------------|
-| E053 | insights — a strong model reviews each large subtree and extends its upper brief | backlog | medium | - |
-| E052 | upper briefs state the conventions their children share, and where siblings differ | backlog | medium | - |
-| E051 | upper briefs abstract over their children instead of copying one | backlog | high | - |
-| E050 | the tree carries the architecture — code grouped by what it does, briefs that explain it | backlog | high | - |
+| E054 | the tree explains the architecture (merged E050–E053) | backlog | high | - |
 | E049 | polish — the Usage README line says what is windowed; one json import | done (580ed26) | low | E047 |
 | E044 | the map and the main actions work from the keyboard | done (4fb4cfd) | low | - |
 | E047 | polish — the agent-questions card says "last 30 days" and sits in the page | done (ad37949) | medium | E042 |
