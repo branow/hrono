@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import time
 from collections.abc import Iterator
@@ -212,3 +213,49 @@ def test_embed_of_a_scoped_tree_skips_other_trees_content(
     with db.connect() as conn:
         assert vstore.get_vector(conn, content_hash(mine), "emb") is not None
         assert vstore.get_vector(conn, content_hash(foreign), "emb") is None
+
+
+def test_embed_vectorises_a_condensation_stored_without_a_body(
+    db: Database,
+) -> None:
+    """An old tree's condensations were stored before they became bodies.
+
+    Without one they never embed: the tree's old sections stay on their raw
+    vectors while a sync places new ones by the condensation's.
+    """
+    from hrono.ingest.identity import Address
+
+    body = b"def old(): pass\n"
+    text = "This file defines one old function."
+    with db.connect() as conn, conn:
+        istore.upsert_content(conn, content_hash(body), body)
+        istore.insert_section(
+            conn,
+            source="src",
+            address=Address("git", "x", "src/f.py", "v"),
+            start=0,
+            end=len(body),
+            content_hash=content_hash(body),
+            ordinal=0,
+        )
+        conn.execute(
+            "INSERT INTO condensations(content_hash, model_name, text, "
+            "input_tokens, output_tokens, created_at) "
+            "VALUES (?, 'condense', ?, 1, 1, 't')",
+            (content_hash(body), text),
+        )
+        registry_store.insert(
+            conn,
+            "trees",
+            "old",
+            json.dumps({"name": "old", "sources": ["src"]}),
+            None,
+            "t",
+        )
+    scoped = dataclasses.replace(job("emb", "e-old"), tree="old")
+
+    embed(scoped, JobContext(db), encoder_for=fake_encoder(4))
+
+    with db.connect() as conn:
+        digest = content_hash(text.encode())
+        assert vstore.get_vector(conn, digest, "emb") is not None

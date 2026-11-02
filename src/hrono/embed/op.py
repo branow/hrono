@@ -23,7 +23,7 @@ from hrono.embed.model import resolve_embedding_model
 from hrono.embed.runner import EmbedError, Encoder, batch_size, embed_texts
 from hrono.embed.runner import encoder_for as _default_encoder_for
 from hrono.ingest.identity import content_hash
-from hrono.ingest.store import get_content
+from hrono.ingest.store import get_content, upsert_content
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.registry.collections.trees import DEFAULT_TREE, sources_of
@@ -40,6 +40,9 @@ def embed(
     with context.database.connect() as conn:
         config = resolve_embedding_model(conn, job.scope)
     model_name = str(config["name"])
+    tree = job.tree or DEFAULT_TREE
+    with context.database.write() as conn:
+        _register_condensations(conn, tree)
     with context.database.connect() as conn:
         allowed = _allowed(conn, job.tree or DEFAULT_TREE)
         hashes = tuple(
@@ -65,6 +68,26 @@ def embed(
                 )
             store.upsert_vector(conn, digest, model_name, vector)
     return {"embedded": len(hashes)}
+
+
+def _register_condensations(conn: object, tree: str) -> None:
+    """Store each condensation's text as a body, so it can be embedded.
+
+    A condensation stored before clustering read them by vector has no body;
+    without one the tree's old sections would stay on their raw vectors
+    while new ones are placed on the condensation's.
+    """
+    scope = sources_of(conn, tree)  # type: ignore[arg-type]
+    if scope is None:
+        return
+    for row in conn.execute(  # type: ignore[attr-defined]
+        "SELECT DISTINCT d.text AS text FROM condensations d "
+        "JOIN sections s ON s.content_hash = d.content_hash "
+        "WHERE s.source IN (SELECT value FROM json_each(?))",
+        (json.dumps(list(scope)),),
+    ).fetchall():
+        body = str(row["text"]).encode("utf-8")
+        upsert_content(conn, content_hash(body), body)
 
 
 def _allowed(conn: object, tree: str) -> frozenset[str] | None:
