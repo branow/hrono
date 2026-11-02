@@ -73,6 +73,7 @@ the automated gate; production passes none.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from hrono.cluster import ClusterError, TooFewPoints, incubator, placement
 from hrono.cluster import store as cluster_store
@@ -108,7 +109,7 @@ def update(
 
     batch: int | None = None
     deferred = 0
-    spent: dict[str, object] = {}
+    spent: dict[str, Any] = {}
     for name in sources:
         sync(_stage(tree, "sync", {"type": "source", "name": name}), context)
         batch, held = _update_source(
@@ -120,14 +121,8 @@ def update(
     )
     if _talked_back(context):
         _condense(context, tree, client, spent)
-    condensed = spent.get("condense")
     return _outcome(
-        context,
-        tree,
-        batch,
-        condensed,
-        rescued,
-        deferred,  # type: ignore[arg-type]
+        context, tree, batch, spent.get("condense"), rescued, deferred
     )
 
 
@@ -135,7 +130,7 @@ def _condense(
     context: JobContext,
     tree: str,
     client: object | None,
-    spent: dict[str, object],
+    spent: dict[str, Any],
 ) -> None:
     """Condense what is stored without one, adding what it spent to ``spent``.
 
@@ -196,7 +191,7 @@ def _outcome(
     ``changed: false`` and nothing else, its calls showing only in the run's
     usage.
     """
-    spent: dict[str, object] = (
+    spent: dict[str, Any] = (
         {} if condensed is None else {"condense": dict(condensed)}
     )
     if rescued:
@@ -236,7 +231,7 @@ def _update_source(
     encoder_for: object | None,
     batch: int | None,
     client: object | None,
-    spent: dict[str, object],
+    spent: dict[str, Any],
 ) -> tuple[int | None, int]:
     """Apply one source's delta; return (run batch, drains deferred).
 
@@ -306,7 +301,7 @@ def _rescue(
     encoder_for: object | None,
     batch: int | None,
     client: object | None,
-    spent: dict[str, object],
+    spent: dict[str, Any],
 ) -> tuple[int, int | None]:
     """Park any section of this tree's sources that is in NO node and NOT
     pending; return (how many, the run batch).
