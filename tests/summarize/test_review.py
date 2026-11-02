@@ -471,8 +471,11 @@ def test_six_passes_in_a_row_keep_the_cheaper_brief_a_reader_compares(
     with database.connect() as conn:
         kept = briefs.versions(conn, ids["mid"])
     cheaper = [v["text"] for v in kept if v["reason"] == "insights"]
-    assert CHEAP in cheaper  # the first cheaper brief is still there
-    assert f"{CHEAP} Regenerated 4." in cheaper  # and the newest one
+    # a brief written again between passes starts a new run: only the
+    # newest cheaper briefs are kept, the oldest cycle's is not kept for ever
+    assert f"{CHEAP} Regenerated 4." in cheaper
+    assert CHEAP not in cheaper
+    assert len(kept) <= briefs.KEEP_VERSIONS + 1
     assert _text(database, ids["mid"]) == EXTENDED
 
 
