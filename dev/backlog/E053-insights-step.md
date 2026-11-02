@@ -43,7 +43,7 @@ How it works (agreed 2026-11-02):
    counter goes to 0. Building continues upward; a higher node that reaches
    the threshold again gets its own pass, which reads the extended briefs
    below it. The root always gets a pass over what is left.
-3. A pass has two calls. **Review**: an agent with the brief lookups (Read,
+3. A pass runs once per unit and has two calls. **Review**: an agent with the brief lookups (Read,
    Grep, Glob, Search over briefs, condensations and the source at its
    version), given the node's brief and a one-line index of its subtree up
    front, finds unwritten rules, siblings that disagree, rules older members
@@ -132,12 +132,6 @@ Done when:
   folded
 - [ ] the usage page counts the `insights` role like the others
 
-## Open question
-- How many review agents a pass runs on the same subtree. Two review agents
-  run on the same subtree found mostly different problems (3 shared of 17),
-  so running two and handing both lists to the extend call finds more, for
-  twice the review cost. One is the default until decided.
-
 ## Relation to E052
 E052 asks the upper brief prompt to state shared conventions and sibling
 differences. The insights step finds those with the code in hand; E052 is
@@ -145,6 +139,7 @@ the cheap version for every upper brief. Decide both in the same prompt
 batch.
 
 ## Log
+- 2026-11-02: one review per pass (Orest).
 - 2026-11-02: counter over all briefs below a node; a rewritten brief is
   reviewed again (Orest).
 - 2026-11-02: proposed from the private-corpus experiment (seven review
