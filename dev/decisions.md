@@ -47,3 +47,11 @@ What the PO decided for you, why, and how to undo it. Newest last.
   tree-wide rules the step exists for; today they reach only recall and the
   node page. Replaces: `_routing` keeping only the opening for every root.
   Undo: drop E059 ticket 3. The page's size is measured and logged.
+- D10 2026-11-02: the export's extended root page may be up to 5 times the
+  unextended one (flask: 4834 vs 1111 bytes, 4.35x), and it keeps every
+  line the root pass wrote; no cap on the findings. Why: the findings are
+  the tree-wide rules an agent reads root.md for, and 4.8 KB is far below
+  the 24 KB root that once made the export cost more than the repository;
+  capping would drop findings D9 keeps. Replaces: E059's 2.5x bound.
+  Undo: amend E059 ticket 3 with a cap (Conventions and Hazards only, or a
+  character budget).

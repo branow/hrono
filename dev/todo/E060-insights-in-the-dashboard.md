@@ -88,6 +88,9 @@ Done when:
 - [ ] Usage on the flask copy after the passes lists `insights` with its
       calls and spend (subscription marked estimate); screenshots at 390
       and 1440, light and dark
+- [ ] a sync's and a build's `insights` result carries the passes' tokens,
+      added up like reviews (`summarize/build_tree.py:125` `total_insights`
+      drops them; E059 qa)
 - [ ] docs/dashboard.md describes the three surfaces
 
 ## Out of scope
@@ -99,3 +102,4 @@ Done when:
 - 2026-11-02 po: created from E054 536 (O4) with the shape brief.
 - 2026-11-02 po: folded E057 qa followups (tip copy, bool threshold).
 - 2026-11-02 po: folded E058 qa followup: the topic's date is the extension's.
+- 2026-11-02 po: folded E059 qa followup: the insights result's token count (ticket 3).
