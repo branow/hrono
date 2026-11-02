@@ -855,7 +855,20 @@ def test_review_now_is_offered_only_when_settle_would_run_a_review(
     assert 'id="review-now"' in page
     assert 'formaction="/ui/jobs/run?tree=beta"' in page
     assert 'name="op" value="settle"' in page
-    assert "Review now runs them" in page
+    assert re.search(r"\.\s+Review now runs them", page)
+    # metered: no subscription sentence between, the line still reads
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE registry SET config = ? WHERE collection = 'connections' "
+            "AND name = 'sub'",
+            (json.dumps({"name": "sub", "provider": "anthropic"}),),
+        )
+    metered = browser.config(edit="trees:beta")
+    assert re.search(r"\(estimate\)\.\s+Review now runs them", metered)
+    # the button reviews the tree being edited, not the one the page is on
+    browser.item("trees", **{"f.name": "gamma", "f.sources": ["gh"]})
+    other = browser.config(edit="trees:beta", tree="gamma")
+    assert 'formaction="/ui/jobs/run?tree=beta"' in other
     # the button submits the form's fields beside op=settle: it queues the run
     queued = browser.client.post(  # type: ignore[attr-defined]
         "/ui/jobs/run?tree=beta",

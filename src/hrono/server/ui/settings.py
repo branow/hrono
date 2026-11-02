@@ -660,6 +660,7 @@ def _insights_line(
         # "Review now" runs the SAVED settings, so it is offered only when
         # settle would run a pass on them
         estimate["runnable"] = bool(insights.pending(conn, editing))
+        estimate["tree"] = editing  # the tree it reviews, not the page's
         return estimate
 
 
