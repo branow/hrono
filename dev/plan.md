@@ -7,12 +7,12 @@ adds 0.15 h and 20k.
 Based on: the no-history figures (no epics since 2026-11-01), plus the
 verify time of real model calls (a pass is 34-45 turns) and one rework
 round on E058 and E060
-Machine now (2026-11-02, plan after E059 round 1): on battery, load 17.5
-on 8 cpus, 3.7 GiB free, so one epic at a time; the clock time is the
-agent time. Done: E055, E056, E057, E058. E059 back to dev for round 2
-(D10: the root page bound is 5x, not 2.5x; folded qa followups: both
-passes on root.md, the threshold fallback; +0.5 h, +80k).
-Left: E059 round 2, E060 and acceptance: about 3.1 h and 510k tokens.
+Machine now (2026-11-02, plan after E059 round 2): on battery, load 29 on
+8 cpus, 4.7 GiB free, so one epic at a time; the clock time is the agent
+time. Done: E055, E056, E057, E058; E059 accepted at 2cb59c4 (merging).
+E060 starts, with E059's last followup folded in (the cheaper brief kept
+after many passes; +0.1 h, +10k).
+Left: E060 and acceptance: about 2.7 h and 440k tokens.
 
 | # | Epic | What the user gets | Outcome | Tickets | Hours (build + verify + merge + rework) | Tokens |
 |---|------|--------------------|---------|---------|------|--------|
@@ -20,8 +20,8 @@ Left: E059 round 2, E060 and acceptance: about 3.1 h and 510k tokens.
 | 2 | E056 (done) | a sync places new sections where a build would; older installs get current prompt defaults | O6 asked | 3 | 0.6 + 0.4 + 0.1 = 1.1 | 170k |
 | 3 | E057 (done) | insights role and tree settings; the dry run says which topics and what cost | O1 asked | 2 | 0.6 + 0.3 + 0.1 = 1.0 | 170k |
 | 4 | E058 (done) | a pass reviews a subtree and extends its brief; pins kept; off = same tree | O1-O3 asked | 3 | 0.75 + 0.6 + 0.1 + 0.6 = 2.05 | 300k |
-| 5 | E059 (round 2) | a sync re-reviews a rewritten reviewed brief before its parent; root.md carries the root's findings | O3 asked | 3 | 0.65 + 0.65 + 0.1 + 0.5 = 1.9 | 300k |
-| 6 | E060 | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.75 + 0.4 + 0.1 + 0.6 = 1.85 | 280k |
+| 5 | E059 (accepted) | a sync re-reviews a rewritten reviewed brief before its parent; root.md carries the root's findings | O3 asked | 3 | 0.65 + 0.65 + 0.1 + 0.5 = 1.9 | 300k |
+| 6 | E060 | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.85 + 0.4 + 0.1 + 0.6 = 1.95 | 290k |
 Then: acceptance as a new user on the flask copy (about 0.75 h, 150k).
 
 Order (one at a time): E057, E058 (critical path to the insights outcomes),

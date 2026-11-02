@@ -82,6 +82,11 @@ Done when:
 - [ ] a reader sees all of it and no write control
 - [ ] an extended topic's page dates the brief by the extension (today
       "Built" shows the node's creation, 2026-10-10 on flask node 17)
+- [ ] a topic passed six times with no rewrite between, after an earlier
+      rewrite and pass: "What changed" still diffs against the cheaper
+      brief (test; `summarize/briefs.py` `_keep_replaced` keeps the first
+      pass version ever, not the oldest since the last non-pass one;
+      E059 qa)
 
 ### 3 Usage counts the insights role
 Done when:
@@ -103,3 +108,4 @@ Done when:
 - 2026-11-02 po: folded E057 qa followups (tip copy, bool threshold).
 - 2026-11-02 po: folded E058 qa followup: the topic's date is the extension's.
 - 2026-11-02 po: folded E059 qa followup: the insights result's token count (ticket 3).
+- 2026-11-02 po: folded E059 qa followup: the cheaper brief kept after many passes (ticket 2).
