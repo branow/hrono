@@ -16,7 +16,12 @@ from hrono.export import store as export_store
 from hrono.export.collapse import collapse
 from hrono.export.render import render
 from hrono.jobs.model import Job
-from hrono.llm.client import CompletionRequest, CompletionResult, Usage
+from hrono.llm.client import (
+    CompletionRequest,
+    CompletionResult,
+    LLMError,
+    Usage,
+)
 from hrono.registry import store as registry_store
 from hrono.summarize import store as condensations
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
@@ -406,6 +411,28 @@ def test_update_without_a_condense_model_places_by_the_raw_vector(
 
     assert outcome["condense"]["skipped"].startswith("no condense model")  # type: ignore[index]
     assert _forced_node(db, "alien/zz.txt") is not None  # raw "alien" body
+
+
+def test_update_fails_when_the_condense_model_fails(
+    built: tuple[Database, Path],
+    tmp_path: Path,
+) -> None:
+    # a registered model whose call fails is not "no condense model": the
+    # run must stop and say why, not place by the raw vector and succeed
+    class Down(FakeCompletion):
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            raise LLMError("the model server returned 503")
+
+    db, origin = built
+    add_alien(origin, "zz.txt")
+
+    with pytest.raises(LLMError, match="503"):
+        update(
+            _job("update"),
+            job_context(db, tmp_path),
+            encoder_for=alien_encoder,
+            client=Down(),
+        )
 
 
 def test_update_drains_a_full_pool_in_the_same_run(

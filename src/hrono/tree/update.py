@@ -138,11 +138,16 @@ def _condense(
     With no condense model nothing is condensed and ``spent`` says so; the
     sections are then placed by their raw vector.
     """
-    try:
-        done = condense(_stage(tree, "condense", {}), context, client=client)
-    except LLMError:
-        spent.setdefault("condense", {"condensed": 0, "skipped": NO_MODEL})
-        return
+    # only a missing model is skipped: a model that fails its call stops the
+    # run, or a provider outage would place by the raw vector unnoticed
+    with context.database.connect() as conn:
+        try:
+            resolve_text_model(conn, {}, "condense")
+        except LLMError as exc:
+            skipped = f"{NO_MODEL} ({exc})"
+            spent.setdefault("condense", {"condensed": 0, "skipped": skipped})
+            return
+    done = condense(_stage(tree, "condense", {}), context, client=client)
     total = spent.get("condense")
     if not isinstance(total, dict) or "skipped" in total:
         spent["condense"] = dict(done)
