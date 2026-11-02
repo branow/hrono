@@ -10,6 +10,7 @@ from hrono.registry.collections.prompts import PROMPTS
 from hrono.summarize.shape import (
     answer,
     brief_gate,
+    copies,
     echoes,
     talks_back,
     unusable,
@@ -446,3 +447,45 @@ def test_a_word_the_prompt_quotes_is_not_the_prompts_vocabulary() -> None:
     template = "Write " + " ".join(f'"{w}"' for w in quoted)
 
     assert echoes(" ".join(quoted), template) == ""
+
+
+CHILD = (
+    "The signing module serialises a payload, signs it with the current key "
+    "and rotates keys on a schedule so older signatures keep validating."
+)
+OTHER = "The queue module retries failed jobs with exponential backoff."
+
+
+def test_a_brief_that_is_one_childs_text_copies_it() -> None:
+    reply = f"# Area\n\n{CHILD} It also schedules jobs."
+    assert copies(reply, [CHILD, OTHER]) == "copies-a-child"
+
+
+def test_a_brief_covering_every_child_in_its_own_words_does_not_copy() -> None:
+    reply = (
+        "# Area\n\nSigning serialises and signs payloads under a rotating "
+        "key, while the queue module retries failed jobs. Each part hands "
+        "its result to the next and the two never share state."
+    )
+    assert copies(reply, [CHILD, OTHER]) == ""
+
+
+def test_one_child_is_not_a_copy() -> None:
+    assert copies(CHILD, [CHILD]) == ""
+
+
+def test_the_copy_threshold_is_thirty_percent_of_the_runs() -> None:
+    words = CHILD.split()
+    filler = " ".join(f"filler{i}" for i in range(40))
+    # k words of CHILD then 40 new ones: (k - 5) shared of (k + 35) runs
+    over = " ".join(words[:23]) + " " + filler  # 18 of 58: 31%
+    under = " ".join(words[:21]) + " " + filler  # 16 of 56: 29%
+    assert copies(over, [CHILD, OTHER]) == "copies-a-child"
+    assert copies(under, [CHILD, OTHER]) == ""
+
+
+def test_the_gate_runs_the_copy_check_and_retries_once() -> None:
+    gate = brief_gate("T {content}", CHILD, [CHILD, OTHER])
+    assert (
+        gate(f"# Area\n\n{CHILD} It also schedules jobs.") == "copies-a-child"
+    )

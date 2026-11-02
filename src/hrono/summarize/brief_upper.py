@@ -102,11 +102,14 @@ def brief_upper(
 
     def call(entry: Pending) -> Written:
         source = briefs.labeled(entry[1])
-        rendered = template.replace(_CONTENT_PLACEHOLDER, source)
+        rendered = template.replace(
+            _CONTENT_PLACEHOLDER, f"{_parts_line(level)}\n\n{source}"
+        )
+        kids = [text for label, text in entry[1] if label != OUTSIDE]
         result, flagged = answer(
             completion,
             CompletionRequest(model=model, system="", content=rendered),
-            brief_gate(template, source),
+            brief_gate(template, source, kids),
         )
         return Written(
             result, flagged, json.dumps(faithfulness(result.text, source))
@@ -163,6 +166,13 @@ def _with_outside(
     if not children or not outside:
         return children
     return (*children, (OUTSIDE, outside))
+
+
+def _parts_line(level: int) -> str:
+    """Tell the prompt what the parts below are: topics or areas of topics."""
+    if level > _DEFAULT_LEVEL:
+        return "THE PARTS BELOW ARE AREAS, each made of topics."
+    return "THE PARTS BELOW ARE TOPICS."
 
 
 def _level(scope: dict[str, object]) -> int:

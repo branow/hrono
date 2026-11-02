@@ -106,6 +106,8 @@ def _rewritable(conn: sqlite3.Connection, row: sqlite3.Row) -> bool:
     """
     if not unusable(conn, row):
         return False
+    if row["flagged"] == shape.COPIES:
+        return False  # asked twice, copied twice: same children, same copy
     return not (
         row["flagged"] == shape.ECHOES
         and refusal(conn, row["node_id"], "", row["text"], row["template"])

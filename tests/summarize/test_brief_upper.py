@@ -295,7 +295,9 @@ def test_a_stored_upper_brief_in_the_prompts_vocabulary_is_fresh_and_unlisted(
             None,
             "t",
         )
-        conn.execute("UPDATE briefs SET text = ?", (ECHOED["brief-upper"],))
+        # children in the prompt's vocabulary, in another order than the reply
+        backwards = " ".join(reversed(ECHOED["brief-upper"].split()))
+        conn.execute("UPDATE briefs SET text = ?", (backwards,))
 
     class Writing(FakeCompletion):
         def complete(self, request: CompletionRequest) -> CompletionResult:
@@ -390,3 +392,50 @@ def test_a_new_relation_makes_the_area_brief_stale(
     again = FakeCompletion()
     brief_upper(job(), JobContext(database), client=again)
     assert again.calls == 2
+
+
+LONG_A = (
+    "The widget module accepts an order, checks stock and reserves the items "
+    "before it hands the order to the shipping module for dispatch."
+)
+
+
+def test_an_area_brief_that_copies_one_child_is_asked_again_then_flagged(
+    db: tuple[Database, list[int]],
+) -> None:
+    database, _ = db
+    with database.connect() as conn, conn:
+        conn.execute(
+            "UPDATE briefs SET text = ? WHERE text LIKE 'child brief A%'",
+            (LONG_A,),
+        )
+
+    class Copying(FakeCompletion):
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            self.calls += 1
+            return CompletionResult(f"# Widgets\n\n{LONG_A}", Usage(5, 5))
+
+    client = Copying()
+    brief_upper(job(), JobContext(database), client=client)
+
+    with database.connect() as conn:
+        copied = briefs.get(conn, _parents(database)[0])["flagged"]
+        later = briefs.stale_or_missing(
+            conn,
+            TREE,
+            1,
+            briefs.get(conn, _parents(database)[0])["prompt_hash"],
+            MODEL,
+        )
+    assert client.calls == 3  # the copying parent twice, the other once
+    assert copied == "copies-a-child"
+    assert _parents(database)[0] not in later  # settled, not re-paid
+
+
+def test_the_parts_line_tells_topics_from_areas(
+    db: tuple[Database, list[int]],
+) -> None:
+    database, _ = db
+    client = FakeCompletion()
+    brief_upper(job(1), JobContext(database), client=client)
+    assert all("THE PARTS BELOW ARE TOPICS." in c for c in client.contents)

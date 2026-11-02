@@ -58,7 +58,7 @@ there), not evidence the model failed to answer.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from hrono.llm.client import (
     Completion,
@@ -151,16 +151,55 @@ def talks_back(text: str) -> str:
 
 
 ECHOES = "echoes-the-prompt"
+COPIES = "copies-a-child"
+COPY_SHARE = 0.3
+COPY_RUN = 6
 
 
-def brief_gate(template: str, material: str = "") -> Callable[[str], str]:
-    """``unusable``, plus ``echoes``, for a brief of ``material`` written from
-    ``template``."""
+def brief_gate(
+    template: str, material: str = "", children: Sequence[str] = ()
+) -> Callable[[str], str]:
+    """``unusable``, plus ``echoes`` and ``copies``, for a brief of
+    ``material`` written from ``template`` over its ``children``'s briefs."""
 
     def gate(text: str) -> str:
-        return unusable(text) or echoes(text, template, material)
+        return (
+            unusable(text)
+            or echoes(text, template, material)
+            or copies(text, children)
+        )
 
     return gate
+
+
+def copies(text: str, children: Sequence[str]) -> str:
+    """ "copies-a-child" when most of ``text`` is one child's text, else "".
+
+    The share of the brief's runs of ``COPY_RUN`` words found in a single
+    child's brief; over ``COPY_SHARE`` is a copy. An upper brief summarises
+    all its children, so one child cannot supply a third of its wording:
+    xgboost's root was its first child's brief, and bcreg's `hrono-v9.db`
+    nodes 467 and 468 shared 97% and 55% of a child. Needs two children: with
+    one, the brief is rightly that child's story. Real level-1 briefs share
+    under 10% with any one child.
+    """
+    if len(children) < 2:
+        return ""
+    runs = _runs(text)
+    if not runs:
+        return ""
+    for child in children:
+        if len(runs & _runs(child)) > COPY_SHARE * len(runs):
+            return COPIES
+    return ""
+
+
+def _runs(text: str) -> set[str]:
+    words = re.findall(r"\w+", text.lower())
+    return {
+        " ".join(words[i : i + COPY_RUN])
+        for i in range(len(words) - COPY_RUN + 1)
+    }
 
 
 def echoes(text: str, template: object, material: str = "") -> str:

@@ -194,6 +194,32 @@ def test_a_settled_echo_says_a_person_must_write_it_and_offers_no_button(
     assert "must write" not in plain
 
 
+def test_a_brief_flagged_as_copying_a_child_is_listed_and_settled(
+    browser: Browser,
+) -> None:
+    a, _, _ = browser.leaves
+    conn = browser.conn
+    with conn:  # type: ignore[union-attr]
+        briefs.upsert(
+            conn,  # type: ignore[arg-type]
+            a,
+            f"A summary of topic {a}, long enough to be a brief.",
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature=briefs.member_signature(conn, a),  # type: ignore[arg-type]
+            input_tokens=1,
+            output_tokens=1,
+            flagged="copies-a-child",
+        )
+    browser.sign_in()
+
+    row = _health(browser).split(f"/nodes/{a}?", 1)[1].split("</tr>", 1)[0]
+
+    assert "copies-a-child" in row
+    assert "a person must write this brief by hand" in row
+
+
 @pytest.mark.parametrize(
     ("change", "said"),
     [

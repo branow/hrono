@@ -182,12 +182,13 @@ def unusable_briefs(
     """Stored briefs that are not briefs.
 
     The model talking back, or a reply made of its prompt's own words
-    (``echoes-the-prompt``); ``why`` names which.
+    (``echoes-the-prompt``), or an upper brief that copies one child
+    (``copies-a-child``); ``why`` names which.
 
     ``POST /trees/{name}/sync`` rewrites a model's reply and nothing else. A
-    settled ``echoes-the-prompt`` stays listed but is not rewritten until its
-    members, the brief prompt or the brief model change; this is the list to
-    check first.
+    settled ``echoes-the-prompt`` or ``copies-a-child`` stays listed but is
+    not rewritten until its members, the brief prompt or the brief model
+    change; this is the list to check first.
     """
     with request.app.state.db.connect() as conn:
         found = briefs.unusable_in(conn, name)

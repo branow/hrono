@@ -30,6 +30,12 @@ class FakeCompletion:
 
     def complete(self, request: CompletionRequest) -> CompletionResult:
         self.calls += 1
+        if "THE PARTS BELOW" in request.content:  # an upper brief: not a copy
+            return CompletionResult(
+                "An area whose parts hand work along a chain, each doing "
+                "its own job before the next takes over.",
+                Usage(10, 4),
+            )
         return CompletionResult(
             "This topic covers the module's API and how its parts fit.",
             Usage(10, 4),
