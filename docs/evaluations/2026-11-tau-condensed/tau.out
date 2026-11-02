@@ -1,0 +1,18 @@
+sections 291  TAU 0.7
+at or above TAU 214 (73.5%)
+below TAU 77 (26.5%)
+p05 0.563
+p25 0.693
+p50 0.765
+p75 0.806
+leave-one-out placement of every member, by TAU:
+  TAU 0.55: own topic 66.7%  another topic 27.5%  parked 5.8%
+  TAU 0.60: own topic 62.2%  another topic 25.8%  parked 12.0%
+  TAU 0.65: own topic 57.4%  another topic 23.0%  parked 19.6%
+  TAU 0.70: own topic 49.5%  another topic 18.2%  parked 32.3%
+  TAU 0.75: own topic 35.1%  another topic 12.0%  parked 52.9%
+placed by the new update path (sections from id 1410 ):
+  src/flask/helpers.py: node 9 forced 0 own-centre 0.821 blend-vs-stored 0.0e+00
+  src/flask/probe.py: node 9 forced 1 own-centre 0.625 blend-vs-stored 0.0e+00
+  src/flask/helpers.py: node 10 forced 0 own-centre 0.777 blend-vs-stored 0.0e+00
+  src/flask/helpers.py: node 10 forced 0 own-centre 0.771 blend-vs-stored 0.0e+00

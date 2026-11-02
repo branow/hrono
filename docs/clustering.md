@@ -21,7 +21,7 @@ All baked in code, not config.
 | Recipe ladder | ≥ 27 points: UMAP 25 dims, 15 neighbours, `min_cluster_size` 5. ≥ 12 points: 10 dims, 10 neighbours, `min_cluster_size` 3. | `cluster/recipe.py` | One pipeline at every level, scaled to the point count. UMAP's spectral init needs N ≥ dims + 2 (UMAP-25 fails at 26 points). Below 12 points a level cannot be reduced and is one topic. |
 | UMAP | cosine, seed 42, warm `init` from stored coords | `cluster/build.py` | Build and settle only; never during an update. |
 | HDBSCAN | `leaf`, euclidean | `cluster/build.py` | Leaf selection gives the many small topics a summarization tree wants. |
-| `TAU` | 0.70 | `cluster/placement.py` | Similarity a section needs to join an existing topic. Set for the old content-and-path-string space; to recalibrate on the new clustering vector. |
+| `TAU` | 0.70 | `cluster/placement.py` | Similarity a section needs to join an existing topic. Kept at 0.70 on the condensation vectors a sync now places by (`docs/evaluations/2026-11-tau-condensed/`): no better value in the numbers. |
 | `MAX_CAP` | 30 members | `cluster/repair.py` | The edge of one faithful brief (~500 tokens × 30 ≈ 15k input tokens). Small corpora's organic leaves sit below it (5–28, median ~10); on bcreg (8,459 sections) 62 of 432 cold-built leaves held 31–65. A cold build splits them before any brief (`cluster/op.py`); 52 of the 62 split, the rest have no two density cores and stay whole. |
 | `MISFIT_THRESHOLD` | 0.25 | `cluster/repair.py` | Per-topic misfit share that triggers a migrate. |
 | `SAMPLE_SIZE` | 32 topics | `cluster/monitor.py` | Bounded re-check per batch beyond the dirty topics. |
