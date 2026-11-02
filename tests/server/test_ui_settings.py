@@ -840,6 +840,22 @@ def test_a_subscription_marks_the_insights_cost_as_an_estimate(
     assert "A subscription is not billed per call." in page
 
 
+def test_the_estimate_without_an_insights_model_reads_as_sentences(
+    browser: Browser,
+) -> None:
+    """The line says what it costs, then why nothing runs, each a sentence."""
+    browser.sign_in()
+
+    page = _insights_form(browser, **{"f.insights": "1"})
+
+    line = re.search(r'id="insights-line"[^>]*>(.*?)</p>', page, re.S)
+    text = " ".join(re.sub(r"<[^>]+>", "", line.group(1)).split())  # type: ignore[union-attr]
+    assert text == (
+        "Would review 1 topic, about $2.82 (estimate). No model has the role "
+        "insights: nothing runs until one does."
+    )
+
+
 def test_a_cleared_threshold_stays_cleared_when_the_form_is_refused(
     browser: Browser,
 ) -> None:

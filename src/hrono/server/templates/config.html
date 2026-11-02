@@ -189,9 +189,10 @@
 {% if est.on %}
 <p class="hint" id="insights-line" aria-live="polite">
   {% set amount %}<strong class="num" data-spend="{{ "estimate" if est.estimated_cost.subscription else "metered" }}">${{ "{:,.2f}".format(est.estimated_cost.usd) }}</strong>{% endset %}
-  {% if est.count %}{{ n_(est.count, "Would review {n} topic, about {amount} (estimate)", "Would review {n} topics, about {amount} (estimate)", amount=amount)|safe }}{% else %}{{ _("Would review no topic now, so no cost") }}{% endif %}
+  {% if est.count %}{{ n_(est.count, "Would review {n} topic, about {amount} (estimate)", "Would review {n} topics, about {amount} (estimate)", amount=amount)|safe }}{% else %}{{ _("Would review no topic now, so no cost") }}{% endif %}{% if est.estimated_cost.subscription or est.note %}.{% endif %}
   {% if est.estimated_cost.subscription %}{{ _("A subscription is not billed per call.") }}{% endif %}
-  {% if est.note %}{{ _(est.note) }}{% endif %}
+  {# the note is the registry's lower-case clause: one sentence of its own #}
+  {% if est.note %}{{ _(est.note)|capitalize }}.{% endif %}
 </p>
 {% else %}
 <p class="hint" id="insights-line" aria-live="polite">{{ _("Off: no reviews, no cost") }}</p>
