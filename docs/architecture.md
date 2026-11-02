@@ -212,7 +212,8 @@ source. The reading agent already has the repositories, so a page points into
 them. Each page is the stored brief (Caution section included) plus a listing
 rendered by code (`export/render.py`), so navigation never depends on an LLM
 writing a link correctly. The root page keeps only its brief's opening, since
-it is read on every turn; a middle page keeps its flows and hazards (not its
+it is read on every turn (plus the parts an insights pass wrote into it, so
+the tree-wide rules reach the first page an agent reads); a middle page keeps its flows and hazards (not its
 per-part list, which its children listing repeats), because the flows are what
 lead an agent from the part it found to the next. An index page lists its
 children, each with a

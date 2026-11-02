@@ -905,3 +905,71 @@ def test_a_leaf_under_an_area_links_the_area_brief(
         path for path in files if path.endswith(f"-{ids['root']}/brief.md")
     )
     assert leaf.split("\n\n")[1].startswith(f"Part of [Root overview]({area})")
+
+
+CHEAP_ROOT = (
+    "# Root overview\n\nEverything.\n\n## Flows\n\nA then B.\n\n"
+    "## Conventions\n\nUse the helper.\n\n## Hazards\n\nNone known."
+)
+EXTENDED_ROOT = CHEAP_ROOT.replace(
+    "Use the helper.", "Use the helper. A .env value never beats the shell."
+)
+
+
+def _extend_root(db: Database, root: int, text: str) -> None:
+    """Write the cheaper root brief, then a pass that replaces it with text."""
+    with db.write() as conn:
+        brief(conn, root, CHEAP_ROOT)
+        pass_id = conn.execute(
+            "INSERT INTO insights_passes(node_id, passed_at, model_name, "
+            "version, skipped, dropped, looked) VALUES (?, ?, 'm', 's', '', "
+            "'[]', '')",
+            (root, "9999"),
+        ).lastrowid
+        briefs.upsert(
+            conn,
+            root,
+            text,
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h",
+            member_signature="sig",
+            input_tokens=1,
+            output_tokens=1,
+            reason="insights",
+            pass_id=pass_id,
+        )
+
+
+def test_an_unextended_root_keeps_only_its_opening(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    with database.write() as conn:
+        brief(conn, ids["root"], CHEAP_ROOT)
+    root = _files(database)["root.md"]
+    assert "Everything." in root and "## Flows" not in root
+    assert "## Conventions" not in root
+
+
+def test_an_extended_root_page_states_what_the_pass_wrote(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    _extend_root(database, ids["root"], EXTENDED_ROOT)
+    root = _files(database)["root.md"]
+    assert "A .env value never beats the shell." in root
+    assert "## Flows" not in root and "## Hazards" not in root  # unchanged
+    assert "## Children" in root
+
+
+def test_a_root_written_again_after_its_pass_is_not_taken_for_extended(
+    db: tuple[Database, dict[str, int]],
+) -> None:
+    database, ids = db
+    _extend_root(database, ids["root"], EXTENDED_ROOT)
+    with database.write() as conn:  # a later cheap rewrite, no pass on it
+        brief(conn, ids["root"], CHEAP_ROOT.replace("A then B.", "A, C, B."))
+        conn.execute("UPDATE insights_passes SET passed_at = '0'")
+    root = _files(database)["root.md"]
+    assert "## Conventions" not in root and "## Flows" not in root

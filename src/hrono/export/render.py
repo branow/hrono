@@ -56,7 +56,7 @@ def render(
         path = "root.md" if node_id == tree.root else _under(directory, "brief")
         text = _brief_text(conn, node_id)
         if node_id == tree.root:
-            text = _routing(text)
+            text = _routing(text, briefs.cheaper_text(conn, node_id))
         elif node.children:
             text = _index(text)
         files[path] = _node_markdown(
@@ -210,7 +210,7 @@ def _with_connections(
     return head + "\n\n" + block + cut + tail
 
 
-def _routing(brief: str) -> str:
+def _routing(brief: str, cheaper: str | None = None) -> str:
     """The root page's opening, which says what the whole tree is about.
 
     The root is read first and the pages under it next, and every later turn
@@ -219,15 +219,42 @@ def _routing(brief: str) -> str:
     the reader is where to go, and ``## Children`` says that; the facts under a
     brief's own headings live in the children and their sections, so the page
     keeps only what comes before the first heading that follows prose.
+
+    A root whose brief an insights pass extended (``cheaper`` is the brief it
+    replaced) also keeps the parts the pass wrote: the sections that are new
+    or differ from the cheaper brief's, which hold the tree-wide rules an
+    agent reads this page for.
     """
     kept: list[str] = []
     prose = False
-    for line in brief.splitlines():
+    cut = len(brief)
+    offset = 0
+    for line in brief.splitlines(keepends=True):
         if line.startswith("## ") and prose:
+            cut = offset
             break
         prose = prose or bool(line.strip() and not line.startswith("#"))
         kept.append(line)
-    return "\n".join(kept)
+        offset += len(line)
+    opening = "".join(kept).rstrip("\n")
+    if cheaper is None:
+        return opening
+    old = dict(_sections(cheaper))
+    wrote = [
+        body for head, body in _sections(brief[cut:]) if old.get(head) != body
+    ]
+    return "\n\n".join([opening, *wrote])
+
+
+def _sections(brief: str) -> list[tuple[str, str]]:
+    """A brief's ``## `` sections as (heading line, whole section) pairs."""
+    found: list[list[str]] = []
+    for line in brief.splitlines():
+        if line.startswith("## "):
+            found.append([])
+        if found:
+            found[-1].append(line)
+    return [(one[0].strip(), "\n".join(one).strip()) for one in found]
 
 
 # An upper brief's one-line-per-part list says what ## Children already says.

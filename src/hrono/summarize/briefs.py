@@ -732,6 +732,20 @@ def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def cheaper_text(conn: sqlite3.Connection, node_id: int) -> str | None:
+    """The brief the node's latest pass replaced, while its brief is that
+    pass's output; None when it has no pass or was written again since."""
+    row = conn.execute(
+        "SELECT v.text FROM brief_versions v "
+        "JOIN insights_passes p ON p.id = v.pass_id "
+        "JOIN briefs b ON b.node_id = v.node_id "
+        "WHERE v.node_id = ? AND v.reason = 'insights' "
+        "AND p.passed_at >= b.created_at ORDER BY v.id DESC LIMIT 1",
+        (node_id,),
+    ).fetchone()
+    return None if row is None else str(row["text"])
+
+
 def get(conn: sqlite3.Connection, node_id: int) -> sqlite3.Row | None:
     """Return a node's brief row, or None."""
     return conn.execute(
