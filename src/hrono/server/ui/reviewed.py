@@ -84,30 +84,44 @@ def _finding(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, object]:
 
 
 def _cite(conn: sqlite3.Connection, item: dict[str, str]) -> dict[str, object]:
-    """One evidence path as `path:lines`, linked when its source has a host."""
+    """One evidence path as `path:lines`, linked when its source has a host.
+
+    The link opens the version the review read. A finding stored before that
+    was kept links the file's current version and says the version is not
+    recorded.
+    """
     path = item.get("file", "")
     lines = item.get("lines", "")
     shown = f"{path}:{lines}" if lines else path
+    version = item.get("version") or None
+    link = _link(conn, path, lines, version)
     return {
         "text": shown,
-        "link": _link(conn, path, lines),
+        "link": link,
+        "unrecorded": link is not None and version is None,
     }
 
 
-def _link(conn: sqlite3.Connection, path: str, lines: str) -> str | None:
+def _link(
+    conn: sqlite3.Connection, path: str, lines: str, version: str | None
+) -> str | None:
     row = conn.execute(
-        "SELECT instance, version FROM sections WHERE path = ? "
+        "SELECT instance, path, version FROM sections WHERE "
+        "(path = ?1 OR source || '/' || path = ?1 "
+        "OR 'source/' || source || '/' || path = ?1 "
+        "OR 'condensed/' || source || '/' || path || '.md' = ?1) "
         "AND source_type = 'git' LIMIT 1",
         (path,),
     ).fetchone()
     if row is None:
         return None
+    at = version or row["version"]
     first, _dash, last = lines.partition("-")
     if not first.strip().isdigit():
-        return blob_url(row["instance"], path, row["version"], 1, 1)
+        return blob_url(row["instance"], row["path"], at, 1, 1)
     start = int(first)
     end = int(last) if last.strip().isdigit() else start
-    return blob_url(row["instance"], path, row["version"], start, end)
+    return blob_url(row["instance"], row["path"], at, start, end)
 
 
 def _evidence(column: object) -> list[dict[str, str]]:

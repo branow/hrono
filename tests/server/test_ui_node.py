@@ -775,6 +775,7 @@ def _pass(
     skipped: str = "",
     findings: int = 2,
     dropped: tuple[str, ...] = (),
+    evidence: dict[str, str] | None = None,
 ) -> int:
     conn = browser.conn
     with conn:  # type: ignore[attr-defined]
@@ -794,7 +795,12 @@ def _pass(
                     pid,
                     i,
                     f"Rule {i} holds across signers.",
-                    json.dumps([{"file": "docs/sign/core.md", "lines": "1-2"}]),
+                    json.dumps(
+                        [
+                            evidence
+                            or {"file": "docs/sign/core.md", "lines": "1-2"}
+                        ]
+                    ),
                     "not stated",
                     "high" if i == 0 else "medium, until the changelog",
                 ),
@@ -838,6 +844,60 @@ def test_an_extended_topic_shows_who_extended_it_and_what_it_found(
     assert "docs/sign/core.md:1-2" in page
     assert "Checked and dropped (1)" in page and "a guess the code" in page
     assert "<form" not in page.split('id="findings"')[1].split("</section>")[0]
+
+
+def test_evidence_links_the_version_the_review_read_not_the_synced_one(
+    browser: Browser,
+) -> None:
+    topic = _ingest_from(browser, "git", "github.com/acme/repo", "docs/g.md")
+    browser.sign_in()
+    # the file was reviewed at 0ldc0de; a sync since moved its sections on
+    _pass(
+        browser,
+        topic,
+        findings=1,
+        evidence={"file": "docs/g.md", "lines": "3-4", "version": "0ldc0de"},
+    )
+
+    page = _body(browser, topic)
+
+    assert "github.com/acme/repo/blob/0ldc0de/docs/g.md#L3-L4" in page
+    assert "version not recorded" not in page
+
+
+def test_evidence_named_as_the_lookups_print_it_still_links(
+    browser: Browser,
+) -> None:
+    topic = _ingest_from(browser, "git", "github.com/acme/repo", "docs/g.md")
+    browser.sign_in()
+    _pass(
+        browser,
+        topic,
+        findings=1,
+        evidence={"file": "source/docs/docs/g.md", "version": "0ldc0de"},
+    )
+
+    page = _body(browser, topic)
+
+    assert "github.com/acme/repo/blob/0ldc0de/docs/g.md#L1" in page
+
+
+def test_a_finding_stored_without_a_version_links_today_s_and_says_so(
+    browser: Browser,
+) -> None:
+    topic = _ingest_from(browser, "git", "github.com/acme/repo", "docs/g.md")
+    browser.sign_in()
+    _pass(
+        browser,
+        topic,
+        findings=1,
+        evidence={"file": "docs/g.md", "lines": "3-4"},
+    )
+
+    page = _body(browser, topic)
+
+    assert "github.com/acme/repo/blob/c0ffee/docs/g.md#L3-L4" in page
+    assert page.count("version not recorded") == 1
 
 
 def test_a_brief_written_again_after_the_pass_is_no_longer_called_extended(

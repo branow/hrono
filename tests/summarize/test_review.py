@@ -36,6 +36,7 @@ from hrono.summarize.resolve import (
     resolve_text_model,
     template_hash,
 )
+from hrono.tree.settle import settle
 
 TREE = "default"
 CHEAP = "A topic that gathers the signing code."
@@ -45,7 +46,7 @@ FINDINGS = {
             "statement": "Signing skips unsigned drafts",
             "angle": "rules",
             "why": "a copy of the newest member would sign them",
-            "evidence": [{"file": "a.py", "lines": "1-3", "version": "v1"}],
+            "evidence": [{"file": "a.py", "lines": "1-3", "version": "guess"}],
             "placement": "not stated; the area",
             "confidence": "high",
         }
@@ -255,7 +256,10 @@ def test_a_review_stores_its_findings_and_reads_only_its_subtree(world) -> None:
     row = found[0]
     assert row["node_id"] == ids["mid"] and row["skipped"] == ""
     assert row["statement"] == "Signing skips unsigned drafts"
-    assert json.loads(row["evidence"]) == FINDINGS["findings"][0]["evidence"]
+    # the version is the file's synced one, not what the reviewer wrote
+    assert json.loads(row["evidence"]) == [
+        {"file": "a.py", "lines": "1-3", "version": "v1"}
+    ]
     assert row["confidence"] == "high" and "area" in row["placement"]
     assert json.loads(row["dropped"]) == FINDINGS["dropped"]
     # the lookups: its own file is readable, a file under another topic is not
@@ -263,6 +267,91 @@ def test_a_review_stores_its_findings_and_reads_only_its_subtree(world) -> None:
     assert reviewer.saw["source/repo/c.py"].startswith("No such file")
     assert "c.py" not in reviewer.saw["grep"]
     assert reviewer.saw["most"] == str(review.MOST_LOOKUPS)
+
+
+def test_evidence_outside_the_area_gets_no_version(world) -> None:  # type: ignore[no-untyped-def]
+    database, _ = world
+    found = {
+        "findings": [
+            {
+                "statement": "s",
+                "evidence": [
+                    {"file": "c.py", "version": "guess"},
+                    {"file": "a.py"},
+                    {"file": "source/repo/b.py", "lines": "1"},
+                    {"file": "condensed/repo/b.py.md"},
+                ],
+            }
+        ]
+    }
+
+    _run(database, Reviewer(findings=found), [1])
+
+    with database.connect() as conn:
+        stored = json.loads(
+            conn.execute("SELECT evidence FROM insights_findings").fetchone()[0]
+        )
+    # a file named as the lookups print it (`source/<source>/<path>`) too
+    assert stored == [
+        {"file": "c.py"},
+        {"file": "a.py", "version": "v1"},
+        {"file": "source/repo/b.py", "lines": "1", "version": "v1"},
+        {"file": "condensed/repo/b.py.md", "version": "v1"},
+    ]
+
+
+def _settle(database: Database, reviewer: Reviewer) -> dict[str, object]:
+    job = Job("s", None, TREE, "settle", {}, "running", None, "t", "t")
+    return dict(settle(job, JobContext(database), client=reviewer))
+
+
+def test_an_untripped_settle_reviews_what_is_due_root_last_and_only_that(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    reviewer = Reviewer()
+
+    done = _settle(database, reviewer)
+
+    assert done["settled"] is False and done["insights"]["reviews"] == 2  # type: ignore[index]
+    with database.connect() as conn:
+        reviewed = [
+            int(r[0])
+            for r in conn.execute(
+                "SELECT node_id FROM insights_passes ORDER BY passed_at, id"
+            )
+        ]
+    assert reviewed == [ids["mid"], ids["root"]]
+    # only the reviewed topic's parent (the root) was briefed again
+    assert len(reviewer.upper) == 1
+
+    again = Reviewer()
+    quiet = _settle(database, again)
+    assert quiet == {"settled": False, "held": 0, "released": 0}
+    assert again.models == []
+
+
+def test_an_untripped_settle_with_nothing_to_review_calls_no_model(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, _ = world
+    nothing = {"settled": False, "held": 0, "released": 0}
+    with database.write() as conn:
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, '$.insights', 0) "
+            "WHERE collection = 'trees'"
+        )
+    off = Reviewer()
+    assert _settle(database, off) == nothing and off.models == []
+
+    with database.write() as conn:
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, '$.insights', 1) "
+            "WHERE collection = 'trees'"
+        )
+        conn.execute("DELETE FROM registry WHERE name = 'opus'")
+    nomodel = Reviewer()
+    assert _settle(database, nomodel) == nothing and nomodel.models == []
 
 
 def test_the_extend_call_rewrites_the_brief_and_keeps_the_cheaper_one(

@@ -159,7 +159,7 @@
           {% if f.evidence %}
           <ul class="evidence mono small">
             {% for e in f.evidence %}
-            <li>{% if e.link %}<a href="{{ e.link }}" target="_blank" rel="noopener">{{ e.text }}</a>{% else %}{{ e.text }}{% endif %}</li>
+            <li>{% if e.link %}<a href="{{ e.link }}" target="_blank" rel="noopener">{{ e.text }}</a>{% else %}{{ e.text }}{% endif %}{% if e.unrecorded %} <span class="faint">{{ _("version not recorded") }}</span>{% endif %}</li>
             {% endfor %}
           </ul>
           {% endif %}

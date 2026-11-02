@@ -30,7 +30,7 @@ import logging
 import re
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 from hrono import naming, pins
@@ -147,6 +147,25 @@ def _answer_object(text: str) -> dict[str, object] | None:
     return None
 
 
+def _at_versions(found: Review, versions: dict[str, str]) -> Review:
+    """Each evidence item with a file stamped with the version it was read at.
+
+    The reviewer's own ``version`` is not trusted: the stamp is the synced
+    version of the file's sections when the review read them. A file the area
+    does not hold carries none.
+    """
+    stamped = []
+    for one in found.findings:
+        items = []
+        for item in one.evidence:
+            kept = {k: v for k, v in item.items() if k != "version"}
+            if (version := versions.get(item.get("file", ""))) is not None:
+                kept["version"] = version
+            items.append(kept)
+        stamped.append(replace(one, evidence=tuple(items)))
+    return replace(found, findings=tuple(stamped))
+
+
 def _finding(one: dict[str, object]) -> Finding:
     evidence = one.get("evidence")
     return Finding(
@@ -204,15 +223,32 @@ class Area:
     ) -> None:
         below = _below(conn, node)
         leaves = [n for n in below if not _children(conn, n)]
-        sections = {
-            int(r["section_id"]): f"{r['source']}/{r['path']}"
+        rows = [
+            r
             for n in leaves
             for r in conn.execute(
-                "SELECT m.section_id, s.source, s.path FROM node_members m "
+                "SELECT m.section_id, s.source, s.path, s.version "
+                "FROM node_members m "
                 "JOIN sections s ON s.id = m.section_id WHERE m.node_id = ?",
                 (n,),
             )
+        ]
+        sections = {
+            int(r["section_id"]): f"{r['source']}/{r['path']}" for r in rows
         }
+        # the version each file was at when the review read it: the synced
+        # commit its sections carry now, kept with each finding's evidence
+        # (a reviewer names a file as the tools print it, `source/<source>/
+        # <path>`, its condensation, or as its repository path)
+        self.versions = {}
+        for r in rows:
+            for name in (
+                str(r["path"]),
+                f"{r['source']}/{r['path']}",
+                f"{lookup.SOURCE}{r['source']}/{r['path']}",
+                f"{lookup.CONDENSED}{r['source']}/{r['path']}.md",
+            ):
+                self.versions[name] = str(r["version"])
         names = naming.names(conn, below)
         held = {
             n: str(r["text"])
@@ -392,7 +428,7 @@ def _review(
             CompletionRequest(model=model, system="", content=asked, tools=box)
         )
         usage.append((first.usage.input_tokens, first.usage.output_tokens))
-        review = parse(first.text)
+        review = _at_versions(parse(first.text), area.versions)
     except Unfinished as exc:
         return Reviewed(node, name, None, str(exc), "", "", tuple(usage))
     if not review.findings:
