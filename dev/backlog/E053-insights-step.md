@@ -32,9 +32,11 @@ So the step is worth having for briefs that are true and complete, not as a
 way to make a new feature correct. It is optional and off by default.
 
 How it works (agreed 2026-11-02):
-1. During `build-tree`, each node carries a counter: the brief characters
-   below it that no insights pass has reviewed. A leaf's counter is its brief
-   length; a parent's is the sum of its children's.
+1. During `build-tree`, each node carries a counter: the characters of every
+   brief below it, leaf and upper, that no insights pass has covered. Briefs
+   only, never the code or the condensations. A node's counter is the sum
+   over its children of the child's brief length plus the child's own
+   counter; a child that had a pass adds nothing.
 2. Right after `brief-upper` writes a node, and before its level is embedded
    and clustered into the next, a node whose counter reaches the tree's
    threshold (default 500k characters) gets one insights pass, and its
@@ -51,8 +53,9 @@ How it works (agreed 2026-11-02):
    belongs, correcting wrong statements in place and keeping the brief's
    structure. No separate file, section or page.
 
-On the eval's 461-leaf tree the counter fires 6 passes (5 subtrees plus the
-root).
+On the eval's 461-leaf tree, counting all briefs below a node, the counter
+fires 6 passes (5 subtrees plus the root). Decided 2026-11-02: the counter
+counts all briefs below the node; a rewritten brief gets its pass again.
 
 ## Tickets
 
@@ -105,17 +108,16 @@ Done when:
 - [ ] the export renders the extended brief like any other; nothing in the
   export names the step
 
-### 535 sync keeps the findings without paying for a new review each time
+### 535 a rewritten brief gets its pass again
 Problem: `sync-tree` rewrites a stale upper brief with the cheaper model,
-which drops the extension; a new review on every sync would cost a pass per
-change.
+which drops the extension. Rule (Orest, 2026-11-02): a rewritten brief that
+had a pass gets the pass again; stored findings are not re-applied.
 Done when:
-- [ ] when a reviewed node's brief is rewritten, its stored findings are
-  re-applied by the extend call; a finding whose evidence file changed
-  version is not re-applied and is marked for the next review
-- [ ] the unreviewed counter grows by the brief characters of the leaves
-  that changed below a node; a node reaching the threshold again gets a new
-  review on the next sync
+- [ ] when `brief-upper` rewrites the brief of a node that had a pass, that
+  node gets a full new pass (review and extend) in the same sync, after its
+  brief is written and before its parent's
+- [ ] a node with no pass whose counter reaches the threshold on a sync gets
+  its first pass
 - [ ] `settle` reviews the nodes the counter selects on the rebuilt tree
 
 ### 536 the dashboard shows the step
@@ -130,13 +132,11 @@ Done when:
   folded
 - [ ] the usage page counts the `insights` role like the others
 
-## Open questions (Orest decides before 532)
-- The threshold: characters of leaf briefs (as measured) or of all briefs
-  below; and its default.
-- One review per pass, or two in parallel (the findings of two passes over
-  the same unit overlapped by only 3 of 17).
-- Whether 535's re-apply is enough, or a changed subtree should always get a
-  new review.
+## Open question
+- How many review agents a pass runs on the same subtree. Two review agents
+  run on the same subtree found mostly different problems (3 shared of 17),
+  so running two and handing both lists to the extend call finds more, for
+  twice the review cost. One is the default until decided.
 
 ## Relation to E052
 E052 asks the upper brief prompt to state shared conventions and sibling
@@ -145,6 +145,8 @@ the cheap version for every upper brief. Decide both in the same prompt
 batch.
 
 ## Log
+- 2026-11-02: counter over all briefs below a node; a rewritten brief is
+  reviewed again (Orest).
 - 2026-11-02: proposed from the private-corpus experiment (seven review
   variants, two implementation re-runs with the findings); integration
   design agreed in conversation.
