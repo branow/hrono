@@ -61,8 +61,12 @@ the level's brief vectors, until one root remains (`summarize/build_tree.py`).
 
 `update` (`tree/update.py`) never runs UMAP or HDBSCAN over existing content,
 so untouched sections cannot move and churn equals changed content. The file
-diff (`ingest/diff.py`) classifies by content hash; placement
-(`cluster/placement.py`) is a dot product against the **pre-batch** centroids:
+diff (`ingest/diff.py`) classifies by content hash. New and changed sections
+are condensed and embedded first, so placement
+(`cluster/placement.py`) reads the same blended condensation vector a build
+clusters on (the raw vector only when no condense model is registered; the
+run's outcome says so). Placement is a dot product against the **pre-batch**
+centroids:
 
 - **Unchanged hash**: nothing.
 - **Deleted**: membership goes; a topic below 2 members dissolves and each

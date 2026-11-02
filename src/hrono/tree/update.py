@@ -90,6 +90,8 @@ from hrono.summarize import store as condensations
 from hrono.summarize.condense import condense
 from hrono.summarize.resolve import resolve_prompt, resolve_text_model
 
+NO_MODEL = "no condense model: placed by the raw vector"
+
 
 def update(
     job: Job,
@@ -106,21 +108,57 @@ def update(
 
     batch: int | None = None
     deferred = 0
+    spent: dict[str, object] = {}
     for name in sources:
         sync(_stage(tree, "sync", {"type": "source", "name": name}), context)
         batch, held = _update_source(
-            context, tree, name, model_name, encoder_for, batch
+            context, tree, name, model_name, encoder_for, batch, client, spent
         )
         deferred += held
     rescued, batch = _rescue(
-        context, tree, sources, model_name, encoder_for, batch
+        context, tree, sources, model_name, encoder_for, batch, client, spent
     )
-    condensed = None
-    if batch is not None or _talked_back(context):
-        condensed = condense(
-            _stage(tree, "condense", {}), context, client=client
-        )
-    return _outcome(context, tree, batch, condensed, rescued, deferred)
+    if _talked_back(context):
+        _condense(context, tree, client, spent)
+    condensed = spent.get("condense")
+    return _outcome(
+        context,
+        tree,
+        batch,
+        condensed,
+        rescued,
+        deferred,  # type: ignore[arg-type]
+    )
+
+
+def _condense(
+    context: JobContext,
+    tree: str,
+    client: object | None,
+    spent: dict[str, object],
+) -> None:
+    """Condense what is stored without one, adding what it spent to ``spent``.
+
+    Placement reads a section's condensation vector, so this runs before it.
+    With no condense model nothing is condensed and ``spent`` says so; the
+    sections are then placed by their raw vector.
+    """
+    try:
+        done = condense(_stage(tree, "condense", {}), context, client=client)
+    except LLMError:
+        spent.setdefault("condense", {"condensed": 0, "skipped": NO_MODEL})
+        return
+    total = spent.get("condense")
+    if not isinstance(total, dict) or "skipped" in total:
+        spent["condense"] = dict(done)
+        return
+    for key, value in done.items():
+        if isinstance(value, dict):
+            total[key] = {
+                k: total.get(key, {}).get(k, 0) + v for k, v in value.items()
+            }
+        else:
+            total[key] = total.get(key, 0) + value
 
 
 def _talked_back(context: JobContext) -> bool:
@@ -197,6 +235,8 @@ def _update_source(
     model_name: str,
     encoder_for: object | None,
     batch: int | None,
+    client: object | None,
+    spent: dict[str, object],
 ) -> tuple[int | None, int]:
     """Apply one source's delta; return (run batch, drains deferred).
 
@@ -225,6 +265,7 @@ def _update_source(
         )
         current = _next_batch(conn, tree) if batch is None else batch
 
+    _condense(context, tree, client, spent)
     embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
 
     with context.database.write() as conn:
@@ -264,6 +305,8 @@ def _rescue(
     model_name: str,
     encoder_for: object | None,
     batch: int | None,
+    client: object | None,
+    spent: dict[str, object],
 ) -> tuple[int, int | None]:
     """Park any section of this tree's sources that is in NO node and NOT
     pending; return (how many, the run batch).
@@ -297,6 +340,7 @@ def _rescue(
         current = _next_batch(conn, tree) if batch is None else batch
         for section_id in homeless:
             incubator.park(conn, tree, section_id, current)
+    _condense(context, tree, client, spent)
     embed(_stage(tree, "embed", {}), context, encoder_for=encoder_for)
     _drain(context, tree, model_name)
     return len(homeless), current

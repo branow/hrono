@@ -48,6 +48,14 @@ class FakeCompletion:
         )
 
 
+class EchoCompletion(FakeCompletion):
+    """Condenses a section to its own body, so its vector is the body's."""
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.calls += 1
+        return CompletionResult(request.content.split("\n\n")[-1], Usage(10, 4))
+
+
 def fake_encoder(model_id: str):
     def encode(texts: list[str]) -> list[list[float]]:
         return [[1.0] + [0.0] * (DIMS - 1) for _ in texts]
@@ -339,13 +347,65 @@ def test_update_homes_an_alien_chunk_in_the_run_that_parks_it(
         _job("update"),
         job_context(db, tmp_path),
         encoder_for=alien_encoder,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
 
     assert _pending(db) == []  # homed, never stranded
     assert _forced_node(db, "alien/zz.txt") is not None
     assert ("home", "forced") in _log(db)
     assert_pool_invariant(db, "default", "emb")
+
+
+def test_update_places_a_new_section_by_its_condensation(
+    built: tuple[Database, Path],
+    tmp_path: Path,
+) -> None:
+    # the body reads like every other file; only its condensation is alien.
+    # Placed by the raw vector it would join a topic unforced: it is forced
+    # only when condense ran, embedded its text, and placement read that.
+    class Alien(FakeCompletion):
+        def complete(self, request: CompletionRequest) -> CompletionResult:
+            self.calls += 1
+            return CompletionResult("alien: unlike everything", Usage(1, 1))
+
+    db, origin = built
+    (origin / "alien").mkdir(exist_ok=True)
+    (origin / "alien" / "zz.txt").write_text("module zz does thing zz\n")
+    _git(origin, "add", "-A")
+    _git(origin, "commit", "-qm", "plain body")
+
+    outcome = update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=Alien(),
+    )
+
+    assert outcome["condense"]["condensed"] == 1  # type: ignore[index]
+    assert _forced_node(db, "alien/zz.txt") is not None
+
+
+def test_update_without_a_condense_model_places_by_the_raw_vector(
+    built: tuple[Database, Path],
+    tmp_path: Path,
+) -> None:
+    db, origin = built
+    with db.connect() as conn, conn:
+        conn.execute(
+            "DELETE FROM registry WHERE collection = 'models' "
+            "AND name = 'sonnet'"
+        )
+    add_alien(origin, "zz.txt")
+
+    outcome = update(
+        _job("update"),
+        job_context(db, tmp_path),
+        encoder_for=alien_encoder,
+        client=FakeCompletion(),
+    )
+
+    assert outcome["condense"]["skipped"].startswith("no condense model")  # type: ignore[index]
+    assert _forced_node(db, "alien/zz.txt") is not None  # raw "alien" body
 
 
 def test_update_drains_a_full_pool_in_the_same_run(
@@ -360,7 +420,7 @@ def test_update_drains_a_full_pool_in_the_same_run(
         _job("update"),
         job_context(db, tmp_path),
         encoder_for=alien_encoder,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
 
     # a pool the real mini-pipeline can reduce never survives its own run:
@@ -389,7 +449,7 @@ def test_update_parks_only_the_twin_that_fits_nowhere(
         _job("update"),
         job_context(db, tmp_path),
         encoder_for=alien_encoder,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
 
     assert _pending(db) == []
@@ -556,7 +616,7 @@ def test_renaming_a_force_homed_chunk_leaves_nothing_pending(
         _job("update"),
         job_context(db, tmp_path),
         encoder_for=alien_encoder,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
     assert _forced_node(db, "alien/zz.txt") is not None
 
@@ -565,7 +625,7 @@ def test_renaming_a_force_homed_chunk_leaves_nothing_pending(
         _job("update"),
         job_context(db, tmp_path),
         encoder_for=alien_encoder,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
 
     assert _pending(db) == []
@@ -632,7 +692,7 @@ def test_a_leaf_update_drained_in_is_healed_by_the_next_settle(
         _job("update"),
         job_context(db, tmp_path),
         encoder_for=planted,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
 
     emitted = set(_leaf_ids(db)) - set(before)
@@ -651,7 +711,7 @@ def test_a_leaf_update_drained_in_is_healed_by_the_next_settle(
         force=True,
         build=fake_build,
         encoder_for=planted,
-        client=FakeCompletion(),
+        client=EchoCompletion(),
     )
 
     homes = _nodes_holding(db, "alien/")
