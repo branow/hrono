@@ -210,9 +210,9 @@ confidence, and the hypotheses it checked and dropped. They are stored
 (prompt role `insights-extend`, no tools) rewrites the brief in place with the
 findings put where their reader needs them. The cheaper brief stays as the
 previous version (`brief_versions`, reason `insights`, the pass that replaced
-it); the first one is never pushed out of the kept versions. The extended
-brief keeps the cheaper brief's provenance, so a later `brief-upper` leaves it
-alone until the topic's parts change.
+it); the one the latest run of passes extended is never pushed out of the
+kept versions. The extended brief keeps the cheaper brief's provenance, so a
+later `brief-upper` leaves it alone until the topic's parts change.
 
 A review that does not finish (the cap, an answer that is not findings) stores
 nothing and the job's result lists why under `failed`; the topic is due again.
@@ -236,8 +236,9 @@ reviewed when its count reaches the threshold or its brief was rewritten. A
 sync that leaves every count under the threshold and rewrites no reviewed
 brief calls no model. A pinned topic's brief is left alone and the new
 findings are stored, not applied. Each pass adds a version to the topic's
-history (the kept five, besides the first cheaper brief a pass replaced, so a
-run of passes never pushes out the cheaper brief a reader compares against).
+history (the kept five, besides the cheaper brief the latest run of passes
+replaced, so a run of passes never pushes out the cheaper brief a reader
+compares against; an earlier run's cheaper brief ages out like any version).
 The job result counts `reviews`, `extends` and `findings` (`insights` for a
 sync).
 
