@@ -185,7 +185,10 @@ cheaper brief corrected, with their evidence.
 **Which topics.** A topic is reviewed when the characters of brief below it
 that no pass has covered reach the tree's `insights_threshold` (default
 500 000). The root is reviewed when it never was, or when something under it
-is unreviewed; a second `settle` with nothing changed runs no pass. The count
+is unreviewed. A reviewed topic whose brief is written again (a pass on one of
+its parts briefs it again from the extended brief) is reviewed again, so its
+own findings are not lost; the dry run counts that pass too. A second `settle`
+with nothing changed runs no pass. The count
 is derived from stored briefs and the `insights_passes` rows: a brief is
 covered when it was written no later than a pass on its topic or on one
 between it and the topic, so a pass takes its subtree out of the count above
@@ -197,7 +200,7 @@ $0.39 to extend the brief.
 `insights`, with no fallback to another text model: with none, no pass runs
 and the job's result and the dry run say so. The review gets the area's brief
 and a one-line index of its topics in the prompt (prompt role
-`insights-review`, the measured recipe in `docs/research/insights-recipe.md`),
+`insights-review`, the measured recipe in `dev/research/insights-recipe.md`),
 and read-only lookups over the area and nothing else: the briefs of the
 topics under it (`brief/...`), their condensations and their source, with a cap
 of 60 calls. It answers with at most 15 findings: statement, angle, why it

@@ -94,7 +94,8 @@ without it is still complete. `PUT /trees/{name}?dry_run=true` adds
 `insights` to the impact: `{on, threshold, passes: [{topic, name, level,
 characters}], count, estimated_cost: {usd, basis}, note?}`. The passes are
 what the next build would review, lowest level first (the root is one when
-it never was reviewed or has unreviewed briefs under it);
+it never was reviewed or has unreviewed briefs under it, and a reviewed
+topic is one again when a pass below it will brief it again);
 off, there are none and `usd` is 0. The cost is a figure measured on Opus at
 API prices (about $2.43 a review and $0.39 to extend the brief), an estimate
 on a subscription; `note` says when no model has the role yet. The count of
