@@ -12,7 +12,12 @@ from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
 from hrono.jobs.model import Job
 from hrono.jobs.stages import StageFailed
-from hrono.llm.client import CompletionRequest, CompletionResult, Usage
+from hrono.llm.client import (
+    CompletionRequest,
+    CompletionResult,
+    LLMError,
+    Usage,
+)
 from hrono.registry import store as registry_store
 from hrono.summarize import review
 from hrono.tree.maintain import maintain
@@ -770,3 +775,41 @@ def test_a_sync_with_insights_off_calls_no_insights_model(
     outcome = _run(db, tmp_path, client)
 
     assert "insights" not in outcome and "review" not in client.log
+
+
+class Outage(Insighter):
+    """The insights provider is down: every review call fails."""
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        if request.content.startswith("REVIEW"):
+            raise LLMError("the insights provider is down")
+        return super().complete(request)
+
+
+def test_a_failed_pass_stops_the_sync_and_the_next_sync_reviews_again(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    db, origin = built
+    reviewed = _briefed_first(db, tmp_path)
+    with db.write() as conn:  # only the rewrite rule, never the counter
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, "
+            "'$.insights_threshold', 1000000000) WHERE collection = 'trees'"
+        )
+    before = len(_passes(db))
+    edit(origin, "f0.txt", "module 0 has been completely rewritten now\n")
+
+    # a provider error is not "nothing to review": the sync fails, named
+    with pytest.raises(StageFailed, match="provider is down") as failed:
+        _run(db, tmp_path, Outage())
+    assert failed.value.stage == "brief-upper"
+    assert len(_passes(db)) == before  # no pass stored for the failed call
+
+    # the next sync, with nothing new in the source, reviews the rewritten
+    # topic it could not review and writes its parent from the result
+    client = Insighter()
+    outcome = _run(db, tmp_path, client)
+
+    assert len(_passes(db)) > before and reviewed
+    assert outcome["insights"]["reviews"] >= 1  # type: ignore[index]
+    assert "brief-saw" in client.log[client.log.index("extend") :]
