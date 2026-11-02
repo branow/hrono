@@ -194,11 +194,11 @@ def _stage(
     calls, content = plan
     model = resolve_text_model(conn, {}, role)
     _, template = resolve_prompt(conn, role)
-    provider = _provider(conn, model)
+    provider = provider_of(conn, model)
     cli = provider in SUBSCRIPTION
     out = WRITTEN["claude-code" if cli else "api"][role]
     prompt = round(len(template) / BYTES_PER_TOKEN) + content
-    price = price_for(_upstream(conn, model), from_config(model))
+    price = price_for(upstream_of(conn, model), from_config(model))
     cached = (HARNESS_READ, HARNESS_WRITE + prompt) if cli else (0, 0)
     usd = (
         None
@@ -227,7 +227,7 @@ def _stage(
     )
 
 
-def _upstream(conn: sqlite3.Connection, model: dict[str, object]) -> str:
+def upstream_of(conn: sqlite3.Connection, model: dict[str, object]) -> str:
     """The id the provider says it ran, when a call has said it.
 
     A model may be registered under an alias (`haiku`) the price table does not
@@ -242,7 +242,7 @@ def _upstream(conn: sqlite3.Connection, model: dict[str, object]) -> str:
     return str(model["model"]) if row is None else str(row["upstream_model"])
 
 
-def _provider(conn: sqlite3.Connection, model: dict[str, object]) -> str:
+def provider_of(conn: sqlite3.Connection, model: dict[str, object]) -> str:
     row = store.get(conn, "connections", str(model.get("connection")))
     return "" if row is None else str(json.loads(row["config"])["provider"])
 

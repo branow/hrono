@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}hrono — {{ tree }}{% endblock %}
-{% from "_parts.html" import start_sync, money, unrecorded with context %}
+{% from "_parts.html" import start_sync, money, unrecorded, rewrite_says with context %}
 {% macro spend_row(label, s, link=none) %}
 <tr>
   <th scope="row">{% if link %}<a href="{{ link }}">{{ label }}</a>{% else %}{{ label }}{% endif %}</th>
@@ -31,6 +31,16 @@
     </div>
   </div>
 </div>
+
+{% if topics and rewrite %}
+<div class="callout warn mb-3" id="rewrite">
+  <div class="body">
+    <div class="title">{{ _("The next sync rewrites part of this tree") }}</div>
+    {{ rewrite_says(rewrite) }}
+    <a class="small" href="/ui/trees/{{ tree }}/triage?tree={{ tree }}#rewrite">{{ _("See which briefs") }}</a>
+  </div>
+</div>
+{% endif %}
 
 {% if topics == 0 %}
 {% if running %}

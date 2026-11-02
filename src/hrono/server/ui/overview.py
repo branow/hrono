@@ -24,6 +24,7 @@ from hrono.jobs.worker import enqueue
 from hrono.server import freshness
 from hrono.server.i18n import gettext as _
 from hrono.server.ui import Reader, Writer, _shape, _trees, router, templates
+from hrono.server.ui.health import rewrite
 from hrono.server.ui.jobs import clock, render_job
 from hrono.server.ui.setup import progress
 from hrono.server.ui.spend import describe
@@ -62,6 +63,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
         runs = _recent(conn, chosen)
         spent = describe(total(conn, Filter(tree=chosen)))
         started = not topics and any(progress(conn, chosen).done.values())
+        coming = rewrite(conn, chosen) if topics else None
     sources = [
         {
             "name": one.name,
@@ -89,6 +91,7 @@ def overview(request: Request, user: Reader, tree: str = "") -> Response:
             "topics": topics,
             "levels": levels,
             "shape": shape,
+            "rewrite": coming,
             "spent": spent,
             "setup_started": started,
             "attention": [item for item in attention if item.count],

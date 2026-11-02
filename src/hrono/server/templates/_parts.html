@@ -114,3 +114,15 @@
   </div>
 </div>
 {%- endmacro %}
+
+{# What the next sync rewrites, and what that costs. Money keeps its two kinds
+   apart: a metered provider's figure is billed, a subscription's is an
+   estimate and never called spend. Nothing is said of a price nobody knows. #}
+{% macro rewrite_says(r) -%}
+<ul class="rewrite-says">
+  {% if r.prompt %}<li>{{ n_(r.prompt, "{n} brief was written by an older prompt", "{n} briefs were written by an older prompt") }}</li>{% endif %}
+  {% if r.model %}<li>{{ n_(r.model, "{n} brief was written by another model", "{n} briefs were written by another model") }}</li>{% endif %}
+  {% if r.moving %}<li>{{ n_(r.moving, "{n} section will be placed by its condensation: topics over the size limit split and sections move", "{n} sections will be placed by their condensations: topics over the size limit split and sections move") }}</li>{% endif %}
+</ul>
+<p class="hint">{{ n_(r.calls, "The next sync does this once, about {n} model call", "The next sync does this once, about {n} model calls") }}{% if r.usd is not none and r.billing == "metered" %}, {{ _("billed about {amount}", amount=r.usd|dollars) }}{% elif r.usd is not none and r.billing == "subscription" %}, {{ _("about {amount} at the API's prices, an estimate and not spend", amount=r.usd|dollars) }}{% elif r.usd is not none %}, {{ _("about {amount} counting billed and subscription calls together, an estimate", amount=r.usd|dollars) }}{% endif %}. {{ _("A second sync with nothing changed costs nothing.") }}</p>
+{%- endmacro %}

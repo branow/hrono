@@ -16,10 +16,10 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 
-from hrono import edits
+from hrono import edits, naming
 from hrono.cluster.recipe import MIN_POINTS
 from hrono.errors import AppError, DomainError
-from hrono.health import attention, report, triage
+from hrono.health import attention, report, triage, upgrade
 from hrono.jobs.worker import enqueue
 from hrono.server.i18n import gettext as _
 from hrono.server.i18n import ngettext as n_
@@ -37,6 +37,31 @@ from hrono.server.ui.jobs import clock
 from hrono.server.ui.nodes import refusal
 
 
+def rewrite(conn: sqlite3.Connection, tree: str) -> dict[str, object] | None:
+    """What the next sync would rewrite, for Home and Health; None for nothing.
+
+    Live, not from the stored report: it is asked before any sync has run.
+    """
+    made = upgrade.plan(conn, tree)
+    if not made:
+        return None
+    shown = made.older[: attention.SHOWN]
+    called = naming.names(conn, [one.node_id for one in shown])
+    return {
+        "older": len(made.older),
+        "prompt": sum(1 for one in made.older if one.why == upgrade.PROMPT),
+        "model": sum(1 for one in made.older if one.why == upgrade.MODEL),
+        "moving": made.moving,
+        "calls": made.calls,
+        "usd": made.usd,
+        "billing": made.billing,
+        "rows": [
+            {"node_id": one.node_id, "name": called[one.node_id], "why": one.why}
+            for one in shown
+        ],
+    }
+
+
 @router.get("/ui/trees/{tree}/triage", response_class=HTMLResponse)
 def triage_page(tree: str, request: Request, user: Reader) -> Response:
     """What is wrong with this tree, counted, and each kind listed.
@@ -48,6 +73,7 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
         trees = _trees(conn)
         kept = report.load(conn, tree)
         checking = _checking(conn, tree)
+        coming = rewrite(conn, tree)
     items = tuple(_shown(item) for item in kept.items) if kept else ()
     context = {
         "checked_at": clock(kept.checked_at) if kept is not None else "",
@@ -70,6 +96,7 @@ def triage_page(tree: str, request: Request, user: Reader) -> Response:
             "user": user,
             "trees": trees,
             "tree": tree,
+            "rewrite": coming,
             "items": items,
             "clean": kept is not None and triage.clean(items),
             "can_write": user.role == "admin",

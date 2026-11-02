@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_parts.html" import rewrite_says with context %}
 {% macro picker(section, near, topics) %}
 <select name="to_node" aria-label="{{ _("topic for {section}", section=section) }}">
   {% for id, name in topics %}<option value="{{ id }}"{% if id == near %} selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -26,6 +27,29 @@
     </div>
   </div>
 </div>
+
+{% if rewrite %}
+<section class="card mb-3" id="rewrite">
+  <div class="card-body">
+    <h2>{{ _("Rewritten by the next sync") }}</h2>
+    {{ rewrite_says(rewrite) }}
+    {% if rewrite.rows %}
+    <div class="table-wrap"><table class="settings-table">
+      <thead><tr><th>{{ _("Topic") }}</th><th>{{ _("Why") }}</th></tr></thead>
+      <tbody>
+      {% for row in rewrite.rows %}
+        <tr>
+          <td><a href="/ui/trees/{{ tree }}/nodes/{{ row.node_id }}?tree={{ tree }}">{{ row.name }}</a></td>
+          <td>{% if row.why == "model" %}{{ _("written by another model") }}{% else %}{{ _("written by an older prompt") }}{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if rewrite.older > shown %}<p class="hint">{{ _("The first {shown} of {total}.", shown=shown, total=rewrite.older) }}</p>{% endif %}
+    {% endif %}
+  </div>
+</section>
+{% endif %}
 
 {% if not checked %}
 <section class="card" id="not-checked">
