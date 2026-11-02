@@ -27,6 +27,9 @@ from hrono.llm.client import LLMError
 from hrono.registry import store as registry_store
 
 INSIGHTS_ROLE = "insights"
+NO_INSIGHTS_MODEL = (
+    "no model has the role insights: nothing runs until one does"
+)
 
 
 def resolve_text_model(
@@ -64,6 +67,10 @@ def resolve_text_model(
             raise LLMError(f"multiple text models for role: {role}")
         if for_role:
             return for_role[0]
+        if role == INSIGHTS_ROLE:
+            # never the sole text model: a review is billed at a strong
+            # model's price, and only an admin who named one agreed to that
+            raise LLMError(NO_INSIGHTS_MODEL)
     if len(text) > 1:
         raise LLMError(
             f"multiple text models — give one a role ({role})"

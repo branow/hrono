@@ -17,7 +17,14 @@ from hrono.registry.write import content_hash
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
-ROLES = {"condense", "brief", "brief-upper", "judge"}
+ROLES = {
+    "condense",
+    "brief",
+    "brief-upper",
+    "judge",
+    "insights-review",
+    "insights-extend",
+}
 
 
 def _cipher() -> Cipher:
@@ -57,7 +64,7 @@ def test_reseed_is_idempotent_and_never_overwrites(tmp_path: Path) -> None:
     count = conn.execute(
         "SELECT count(*) FROM registry WHERE collection = 'prompts'"
     ).fetchone()[0]
-    assert count == 4
+    assert count == len(ROLES)
     kept = store.get(conn, "prompts", "condense")
     assert json.loads(kept["config"])["template"] == "MINE"
     conn.close()

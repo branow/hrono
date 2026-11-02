@@ -23,7 +23,14 @@ class Prompt(BaseModel):
     name: RegistryName = Field(
         title="Name", description="What this prompt is called."
     )
-    role: Literal["condense", "brief", "brief-upper", "judge"] = Field(
+    role: Literal[
+        "condense",
+        "brief",
+        "brief-upper",
+        "judge",
+        "insights-review",
+        "insights-extend",
+    ] = Field(
         title="Role",
         description="The writing job that sends it. One prompt per role.",
     )
@@ -45,6 +52,8 @@ _REQUIRED_PLACEHOLDERS: dict[str, tuple[str, ...]] = {
     "brief": ("{content}",),
     "brief-upper": ("{content}",),
     "judge": ("{source}", "{summary}"),
+    "insights-review": ("{brief}", "{index}"),
+    "insights-extend": ("{brief}", "{findings}"),
 }
 
 
@@ -311,11 +320,106 @@ CURRENT SUMMARY:
 THE CHANGE:
 {source}"""
 
+# The insights pair (dev/research/insights-recipe.md, measured on a 36-topic
+# area): one review with lookups, then one call that writes what it found into
+# the area's brief. Both run on the model that has the role `insights`.
+_INSIGHTS_REVIEW = """\
+You review one area of a knowledge base. Cheaper models have already written \
+a brief for every topic and one for the area. You do the part they cannot: \
+do not summarise or restate. Find what a capable developer who read the \
+briefs would still get wrong.
+
+THE UNIT
+The area is the topics in the index below. The area brief is at the end. \
+Use the whole index: an insight often comes from comparing topics nobody \
+reads together, including old ones.
+
+THE LAYERS
+- brief/<topic>.md: a topic's brief. Open one only when its index line is \
+not enough.
+- condensed/<source>/<path>.md: what each file does, in typed lines (RULE, \
+STATES, IN, CALLS OUT, ABSENT), each section headed by its file and byte \
+range. This is the layer to search.
+- source/<source>/<path>: the files themselves. Confirm by line range, \
+never read a file whole.
+Nothing counts until you have read the source that shows it.
+
+HOW TO WORK
+First turn is breadth: one Grep per question, all in parallel, over \
+condensed/, with tight patterns taken from what the brief and the index call \
+things. The questions:
+1. time: dates, periods, windows, boundaries;
+2. money and quantities: what is summed, and what reverses it;
+3. who counts: status, type, rank, market, exclusions;
+4. as of when: the state at the time, or today's;
+5. failure and reruns: transactions, locks, truncates, deletes, retries;
+6. one or two questions specific to this area.
+Then go deep only where members disagree, where a rule is in some members \
+and not in others, or where the code looks fragile. When older members of a \
+family apply a rule that newer ones do not, treat it as a rule the newer may \
+have dropped, and report it unless the code, a comment or a deployment script \
+shows it was deliberate: the newest member is what the next change copies.
+
+WHAT TO FIND
+- unwritten rules, and where members of a family disagree;
+- the next change: what a copy of the newest member carries or lacks, and \
+what the history of fixes and guards shows;
+- invariants the code holds only by convention.
+Also say where a statement in a brief is wrong. At most 15 findings, the most \
+important first. Fewer good ones beat many weak ones; none is acceptable.
+
+ANSWER
+Reply with one JSON object and nothing else:
+{"findings": [{"statement": "one line", "angle": "rules | next change | \
+invariants", "why": "why it matters", "evidence": [{"file": "path", \
+"lines": "12-40", "version": "what you read, when the file has one"}], \
+"placement": "where the briefs state it: not stated, only in <topic>, or \
+misstated in <topic>; and where it should be stated: the area or <topic>", \
+"confidence": "high | medium | low, and what would settle it"}], \
+"dropped": ["a hypothesis you checked and why you rejected it"], \
+"looked": "one line on where you looked"}
+
+THE AREA BRIEF
+{brief}
+
+THE INDEX
+{index}"""
+
+_INSIGHTS_EXTEND = """\
+Below is the brief of an area and the findings a review made about it. \
+Rewrite the brief so that it carries them.
+- Keep its structure, headings and wording. Change only what a finding \
+touches.
+- Put each finding in the section where its reader needs it: a hazard under \
+the hazards, an area rule where the flow is described, a difference between \
+members where the members are named. Write it as a statement about the area, \
+with its evidence paths, in the brief's own style.
+- Correct a wrong statement in place.
+- No separate section for the findings, no preamble, no note about the edit.
+- Drop nothing unless a finding proves it wrong.
+Return only the full brief.
+
+THE BRIEF
+{brief}
+
+THE FINDINGS
+{findings}"""
+
 _DEFAULTS: tuple[dict[str, object], ...] = (
     {"name": "condense", "role": "condense", "template": _CONDENSE},
     {"name": "brief", "role": "brief", "template": _BRIEF},
     {"name": "brief-upper", "role": "brief-upper", "template": _BRIEF_UPPER},
     {"name": "judge", "role": "judge", "template": _JUDGE},
+    {
+        "name": "insights-review",
+        "role": "insights-review",
+        "template": _INSIGHTS_REVIEW,
+    },
+    {
+        "name": "insights-extend",
+        "role": "insights-extend",
+        "template": _INSIGHTS_EXTEND,
+    },
 )
 
 

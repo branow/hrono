@@ -36,7 +36,13 @@ import fnmatch
 import hashlib
 import re
 import sqlite3
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import (
+    Callable,
+    Collection,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from dataclasses import dataclass
 
 import numpy
@@ -52,6 +58,9 @@ TEST_PATH = re.compile(
 )
 SOURCE = "source/"
 CONDENSED = "condensed/"
+BRIEF = (
+    "brief/"  # the briefs of the topics under an area an insights pass reviews
+)
 MOST_CALLS = 15
 MOST_USES = 12  # relations kept per brief: a popular file must not fan out
 ANSWER_CHARS = 12_000  # one tool answer at most
@@ -435,7 +444,13 @@ class Files:
         return listed or "No file found. " + self.hint()
 
     def hint(self) -> str:
-        roots = sorted({name.split("/")[1] for name in self.texts})
+        roots = sorted(
+            {
+                name.split("/")[1]
+                for name in self.texts
+                if name.startswith((SOURCE, CONDENSED))
+            }
+        )
         return (
             "Paths begin source/<source>/ or condensed/<source>/; the sources "
             "are: " + ", ".join(roots[:30])
@@ -506,20 +521,32 @@ def _within(name: str, pattern: str) -> bool:
     )
 
 
-def files(conn: sqlite3.Connection, tree: str, condense_model: str) -> Files:
-    """The tree's sections as files: each one's text and condensations."""
+def files(
+    conn: sqlite3.Connection,
+    tree: str,
+    condense_model: str,
+    only: Collection[int] | None = None,
+) -> Files:
+    """The tree's sections as files: each one's text and condensations.
+
+    ``only`` limits them to those section ids: an insights pass may read what
+    is under the topic it reviews and nothing else.
+    """
     scoped = sources_of(conn, tree)
     text: dict[str, list[str]] = {}
     condensed: dict[str, list[str]] = {}
     for row in conn.execute(
-        "SELECT s.source AS source, s.path AS path, c.body AS body, "
-        "d.text AS cond FROM sections s JOIN contents c USING (content_hash) "
+        "SELECT s.id AS id, s.source AS source, s.path AS path, "
+        "c.body AS body, d.text AS cond FROM sections s "
+        "JOIN contents c USING (content_hash) "
         "LEFT JOIN condensations d ON d.content_hash = s.content_hash "
         "AND d.model_name = ? WHERE s.source_type != 'node' "
         "ORDER BY s.source, s.path, s.id",
         (condense_model,),
     ):
         if scoped is not None and row["source"] not in scoped:
+            continue
+        if only is not None and row["id"] not in only:
             continue
         name = f"{row['source']}/{row['path']}"
         body = row["body"]
@@ -538,8 +565,14 @@ def files(conn: sqlite3.Connection, tree: str, condense_model: str) -> Files:
     return Files(out)
 
 
-def toolbox(found: Files, own: Iterable[str] = ()) -> Toolbox:
-    """The lookup tools over ``found``; reading ``own`` files is free."""
+def toolbox(
+    found: Files, own: Iterable[str] = (), most: int = MOST_CALLS
+) -> Toolbox:
+    """The lookup tools over ``found``; reading ``own`` files is free.
+
+    ``most`` caps the calls: a leaf brief gets a few, an insights pass about
+    sixty.
+    """
     mine = {SOURCE + name for name in own} | {
         CONDENSED + name + ".md" for name in own
     }
@@ -550,7 +583,7 @@ def toolbox(found: Files, own: Iterable[str] = ()) -> Toolbox:
         return None
 
     tools = TOOLS if found.meanings is None else (*TOOLS, SEARCH)
-    return Toolbox(tools=tools, answer=found.answer, most=MOST_CALLS, free=free)
+    return Toolbox(tools=tools, answer=found.answer, most=most, free=free)
 
 
 def file_of(path: str) -> str | None:

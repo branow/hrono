@@ -567,6 +567,8 @@ def test_the_json_view_is_the_whole_collection(browser: Browser) -> None:
         "brief",
         "brief-upper",
         "judge",
+        "insights-review",
+        "insights-extend",
     }
 
 

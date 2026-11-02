@@ -1,0 +1,565 @@
+"""The insights pass: a read-only review, then the brief extended in place.
+
+One real database, one fake model (the project's `Completion` seam). The fake
+plays the reviewer by calling the lookups it is given, so what a review could
+read is what the test asserts, not what a mock says.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+from hrono import pins
+from hrono.db.database import Database
+from hrono.ingest import store as istore
+from hrono.ingest.identity import Address, content_hash
+from hrono.jobs.model import Job
+from hrono.jobs.ops import JobContext
+from hrono.llm.client import (
+    CompletionRequest,
+    CompletionResult,
+    LLMError,
+    Unfinished,
+    Usage,
+)
+from hrono.registry import store as registry_store
+from hrono.summarize import briefs, insights, review
+from hrono.summarize import store as condensations
+from hrono.summarize.brief_upper import brief_upper
+from hrono.summarize.build_tree import build_tree
+from hrono.summarize.resolve import (
+    NO_INSIGHTS_MODEL,
+    resolve_text_model,
+    template_hash,
+)
+
+TREE = "default"
+CHEAP = "A topic that gathers the signing code."
+FINDINGS = {
+    "findings": [
+        {
+            "statement": "Signing skips unsigned drafts",
+            "angle": "rules",
+            "why": "a copy of the newest member would sign them",
+            "evidence": [{"file": "a.py", "lines": "1-3", "version": "v1"}],
+            "placement": "not stated; the area",
+            "confidence": "high",
+        }
+    ],
+    "dropped": ["b.py retries: it does not, checked"],
+    "looked": "a.py, b.py",
+}
+EXTENDED = CHEAP + " Signing skips unsigned drafts (a.py:1-3)."
+
+
+class Reviewer:
+    """Answers the review with findings, the extend call with a brief."""
+
+    def __init__(
+        self,
+        findings: object = FINDINGS,
+        fail: Exception | None = None,
+        probe: str = "c.py",
+    ) -> None:
+        self.findings = findings
+        self.fail = fail
+        self.probe = probe
+        self.reviews = 0
+        self.extends = 0
+        self.upper: list[str] = []
+        self.saw: dict[str, str] = {}
+        self.models: list[str] = []
+
+    def complete(self, request: CompletionRequest) -> CompletionResult:
+        self.models.append(str(request.model["name"]))
+        content = request.content
+        if content.startswith("REVIEW"):
+            self.reviews += 1
+            if request.tools is not None:
+                for path in ("source/repo/a.py", f"source/repo/{self.probe}"):
+                    self.saw[path] = request.tools.call("Read", {"path": path})
+                self.saw["grep"] = request.tools.call("Grep", {"pattern": "."})
+                self.saw["most"] = str(request.tools.most)
+            if self.fail is not None:
+                raise self.fail
+            return CompletionResult(
+                "```json\n" + json.dumps(self.findings) + "\n```", Usage(9, 3)
+            )
+        if content.startswith("EXTEND"):
+            self.extends += 1
+            return CompletionResult(EXTENDED, Usage(4, 2))
+        self.upper.append(content)
+        return CompletionResult(
+            "An area made of the parts below it, summarised.", Usage(1, 1)
+        )
+
+
+def _row(conn: object, table: str, name: str, **config: object) -> None:
+    registry_store.insert(
+        conn,  # type: ignore[arg-type]
+        table,
+        name,
+        json.dumps({"name": name, **config}),
+        None,
+        "t",
+    )
+
+
+def _section(conn: object, path: str, body: bytes, i: int) -> int:
+    istore.upsert_content(conn, content_hash(body), body)  # type: ignore[arg-type]
+    found = istore.insert_section(
+        conn,  # type: ignore[arg-type]
+        source="repo",
+        address=Address("git", "example.com/repo", path, "v1"),
+        start=0,
+        end=len(body),
+        content_hash=content_hash(body),
+        ordinal=i,
+    )
+    condensations.upsert(
+        conn,  # type: ignore[arg-type]
+        content_hash(body),
+        "cond",
+        f"RULE condensation of {path}",
+        10,
+        3,
+    )
+    return found
+
+
+def _node(conn: object, level: int, text: str) -> int:
+    node = int(
+        conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO nodes(tree, level, label, created_at) "
+            "VALUES (?, ?, -1, 't')",
+            (TREE, level),
+        ).lastrowid
+    )
+    briefs.upsert(
+        conn,  # type: ignore[arg-type]
+        node,
+        text,
+        model_name="cheap",
+        prompt_name="brief-upper",
+        prompt_hash="h",
+        member_signature=f"s{node}",
+        input_tokens=1,
+        output_tokens=1,
+    )
+    return node
+
+
+@pytest.fixture
+def world(tmp_path: Path) -> Iterator[tuple[Database, dict[str, int]]]:
+    """root <- (mid <- (a, b), c): a.py and b.py under mid, c.py outside."""
+    database = Database.at(tmp_path / "hrono.db")
+    with database.connect() as conn, conn:
+        _row(conn, "models", "cond", kind="text", role="condense", model="m")
+        _row(
+            conn, "models", "cheap", kind="text", role="brief-upper", model="m"
+        )
+        _row(conn, "models", "opus", kind="text", role="insights", model="m")
+        _row(conn, "prompts", "up", role="brief-upper", template="UP {content}")
+        _row(
+            conn,
+            "prompts",
+            "review",
+            role="insights-review",
+            template="REVIEW {brief} {index}",
+        )
+        _row(
+            conn,
+            "prompts",
+            "extend",
+            role="insights-extend",
+            template="EXTEND {brief} {findings}",
+        )
+        _row(
+            conn,
+            "trees",
+            TREE,
+            sources=["repo"],
+            insights=True,
+            insights_threshold=10,
+        )
+        ids = {}
+        for number, name in enumerate(("a.py", "b.py", "c.py")):
+            ids[name] = _section(conn, name, f"{name} body\n".encode(), number)
+        a = _node(conn, 0, "Topic a handles signing of drafts.")
+        b = _node(conn, 0, "Topic b handles retries.")
+        c = _node(conn, 0, "Topic c handles the outside world.")
+        mid = _node(conn, 1, CHEAP)
+        root = _node(conn, 2, "The whole area, in one place.")
+        for node, name in ((a, "a.py"), (b, "b.py"), (c, "c.py")):
+            conn.execute(
+                "INSERT INTO node_members(node_id, section_id, forced, "
+                "attached, created_at) VALUES (?, ?, 0, 0, 't')",
+                (node, ids[name]),
+            )
+        for parent, kids in ((mid, (a, b)), (root, (mid, c))):
+            for kid in kids:
+                conn.execute(
+                    "INSERT INTO node_children(parent_id, child_id, attached, "
+                    "created_at) VALUES (?, ?, 0, 't')",
+                    (parent, kid),
+                )
+    yield database, {"a": a, "b": b, "c": c, "mid": mid, "root": root}
+    database.close()
+
+
+def _run(
+    database: Database,
+    reviewer: Reviewer,
+    levels: list[int],
+    root: bool = False,
+    rebrief: object = None,
+) -> dict[str, object]:
+    return review.run(
+        JobContext(database),
+        TREE,
+        levels=levels,
+        root=root,
+        client=reviewer,
+        rebrief=rebrief,  # type: ignore[arg-type]
+    )
+
+
+def _text(database: Database, node: int) -> str:
+    with database.connect() as conn:
+        return str(briefs.get(conn, node)["text"])  # type: ignore[index]
+
+
+def _count(database: Database, sql: str) -> int:
+    with database.connect() as conn:
+        return int(conn.execute(sql).fetchone()[0])
+
+
+def test_a_review_stores_its_findings_and_reads_only_its_subtree(world) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    reviewer = Reviewer()
+
+    done = _run(database, reviewer, [1])
+
+    assert done["reviews"] == 1 and done["findings"] == 1
+    with database.connect() as conn:
+        found = conn.execute(
+            "SELECT f.*, p.dropped, p.looked, p.node_id, p.skipped "
+            "FROM insights_findings f JOIN insights_passes p "
+            "ON p.id = f.pass_id"
+        ).fetchall()
+    assert len(found) == 1
+    row = found[0]
+    assert row["node_id"] == ids["mid"] and row["skipped"] == ""
+    assert row["statement"] == "Signing skips unsigned drafts"
+    assert json.loads(row["evidence"]) == FINDINGS["findings"][0]["evidence"]
+    assert row["confidence"] == "high" and "area" in row["placement"]
+    assert json.loads(row["dropped"]) == FINDINGS["dropped"]
+    # the lookups: its own file is readable, a file under another topic is not
+    assert "a.py body" in reviewer.saw["source/repo/a.py"]
+    assert reviewer.saw["source/repo/c.py"].startswith("No such file")
+    assert "c.py" not in reviewer.saw["grep"]
+    assert reviewer.saw["most"] == str(review.MOST_LOOKUPS)
+
+
+def test_the_extend_call_rewrites_the_brief_and_keeps_the_cheaper_one(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+
+    _run(database, Reviewer(), [1])
+
+    assert _text(database, ids["mid"]) == EXTENDED
+    with database.connect() as conn:
+        kept = briefs.versions(conn, ids["mid"])
+        covered = insights.unreviewed(conn, TREE)
+    assert [(v["text"], v["reason"], v["reviewer"]) for v in kept] == [
+        (CHEAP, "insights", "opus")
+    ]
+    # the brief the pass left is covered by it, not counted as new
+    assert covered[ids["root"]] == len("Topic c handles the outside world.")
+
+
+def test_a_later_brief_upper_leaves_the_extended_brief_alone(world) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    _run(database, Reviewer(), [1])
+    with database.write() as conn:  # as the cheap role stored it
+        conn.execute(
+            "UPDATE briefs SET prompt_hash = ?, member_signature = ? "
+            "WHERE node_id = ?",
+            (
+                template_hash("UP {content}"),
+                briefs.member_signature(conn, ids["mid"]),
+                ids["mid"],
+            ),
+        )
+    cheap = Reviewer()
+    brief_upper(
+        Job(
+            "u",
+            None,
+            TREE,
+            "brief-upper",
+            {"level": 1},
+            "running",
+            None,
+            "t",
+            "t",
+        ),
+        JobContext(database),
+        client=cheap,
+    )
+
+    assert _text(database, ids["mid"]) == EXTENDED
+    assert cheap.upper == []
+
+
+def test_a_pinned_brief_is_kept_byte_for_byte_and_the_findings_are_marked(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    with database.write() as conn:
+        pins.pin(conn, pins.BRIEF, ids["mid"], reason="by hand")
+    reviewer = Reviewer()
+
+    done = _run(database, reviewer, [1])
+
+    assert _text(database, ids["mid"]) == CHEAP
+    assert reviewer.reviews == 1 and reviewer.extends == 0
+    assert done["findings"] == 1 and done["extends"] == 0
+    with database.connect() as conn:
+        row = conn.execute("SELECT skipped FROM insights_passes").fetchone()
+        assert row["skipped"] == "pinned"
+        assert briefs.versions(conn, ids["mid"]) == []
+    assert _count(database, "SELECT COUNT(*) FROM insights_findings") == 1
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [Unfinished("the model kept calling tools past its budget"), None],
+    ids=["turn cap", "not findings"],
+)
+def test_a_review_that_does_not_finish_stores_nothing_and_says_why(  # type: ignore[no-untyped-def]
+    world, failure, caplog
+) -> None:
+    database, ids = world
+    reviewer = Reviewer(findings="no json here", fail=failure)
+    if failure is None:
+        reviewer.findings = None
+
+    with caplog.at_level("WARNING", logger="hrono.insights"):
+        done = _run(database, reviewer, [1])
+
+    assert done["reviews"] == 0 and len(done["failed"]) == 1  # type: ignore[arg-type]
+    assert _text(database, ids["mid"]) == CHEAP
+    assert _count(database, "SELECT COUNT(*) FROM insights_passes") == 0
+    assert _count(database, "SELECT COUNT(*) FROM insights_findings") == 0
+    assert "no review stored" in caplog.text
+    # not covered: the topic is due again
+    with database.connect() as conn:
+        assert [p.node for p in insights.due(conn, TREE, 1, 10, False)] == [
+            ids["mid"]
+        ]
+
+
+def test_a_provider_error_stops_the_run_naming_the_topic(world) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    with pytest.raises(LLMError) as raised:
+        _run(database, Reviewer(fail=LLMError("rate limited")), [1])
+    assert f"topic {ids['mid']}" in "".join(raised.value.__notes__)
+    assert _count(database, "SELECT COUNT(*) FROM insights_passes") == 0
+
+
+def test_without_an_insights_model_nothing_runs_and_it_says_why(world) -> None:  # type: ignore[no-untyped-def]
+    database, _ = world
+    with database.write() as conn:
+        conn.execute("DELETE FROM registry WHERE name = 'opus'")
+    reviewer = Reviewer()
+
+    done = _run(database, reviewer, [1, 2], root=True)
+
+    assert done["note"] == NO_INSIGHTS_MODEL and done["reviews"] == 0
+    assert reviewer.models == []
+    # and the sole text model is not a stand-in for it
+    with (
+        database.connect() as conn,
+        pytest.raises(LLMError, match="role insights"),
+    ):
+        resolve_text_model(conn, {}, "insights")
+
+
+def test_a_pass_never_pushes_the_first_cheaper_brief_out_of_history(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    _run(database, Reviewer(), [1])
+    with database.write() as conn:
+        for i in range(briefs.KEEP_VERSIONS + 3):
+            briefs.upsert(
+                conn,
+                ids["mid"],
+                f"regenerated {i}",
+                model_name="cheap",
+                prompt_name="p",
+                prompt_hash="h",
+                member_signature="s",
+                input_tokens=0,
+                output_tokens=0,
+            )
+    with database.connect() as conn:
+        texts = [v["text"] for v in briefs.versions(conn, ids["mid"])]
+    assert CHEAP in texts
+    assert len(texts) == briefs.KEEP_VERSIONS + 1
+
+
+def test_the_root_is_reviewed_once_and_again_only_when_something_changed(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    first = Reviewer()
+    _run(database, first, [1, 2], root=True)
+    assert first.reviews == 2  # mid by the threshold, then the root
+
+    again = Reviewer()
+    assert _run(database, again, [1, 2], root=True)["reviews"] == 0
+    with database.connect() as conn:
+        assert insights.passes_for(conn, TREE, 10) == ()
+
+    with database.write() as conn:  # a brief under the root is rewritten
+        briefs.upsert(
+            conn,
+            ids["c"],
+            "Topic c now handles something else entirely.",
+            model_name="cheap",
+            prompt_name="p",
+            prompt_hash="h",
+            member_signature="new",
+            input_tokens=0,
+            output_tokens=0,
+        )
+    with database.connect() as conn:
+        assert [p.node for p in insights.passes_for(conn, TREE, 10**6)] == [
+            ids["root"]
+        ]
+
+
+def test_the_parent_is_briefed_from_the_extended_brief(world) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    cheap = Reviewer()
+    context = JobContext(database)
+
+    _run(
+        database,
+        Reviewer(),
+        [1],
+        rebrief=lambda level: brief_upper(
+            Job(
+                "u",
+                None,
+                TREE,
+                "brief-upper",
+                {"level": level},
+                "running",
+                None,
+                "t",
+                "t",
+            ),
+            context,
+            client=cheap,
+        ),
+    )
+
+    assert len(cheap.upper) == 1
+    assert f"=== {EXTENDED} ===" in cheap.upper[0]
+    assert f"=== {CHEAP} ===" not in cheap.upper[0]
+
+
+def test_with_the_step_off_a_build_makes_no_insights_call(world) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    with database.write() as conn:
+        conn.execute(
+            "UPDATE registry SET config = json_set(config, '$.insights', 0) "
+            "WHERE collection = 'trees'"
+        )
+    context = JobContext(database)
+    reviewer = Reviewer()
+    job = Job("bt", None, TREE, "build-tree", {}, "running", None, "t", "t")
+
+    result = build_tree(job, context, client=reviewer)
+
+    assert result == {} and reviewer.models == []
+    assert (
+        _count(
+            database, "SELECT COUNT(*) FROM llm_calls WHERE role = 'insights'"
+        )
+        == 0
+    )
+    assert _text(database, ids["mid"]) == CHEAP
+
+
+def test_a_build_with_the_step_on_runs_the_passes_the_counter_selects(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    context = JobContext(database)
+    reviewer = Reviewer()
+    job = Job("bt", None, TREE, "build-tree", {}, "running", None, "t", "t")
+
+    result = build_tree(job, context, client=reviewer)
+
+    assert result["insights"]["reviews"] == 2  # type: ignore[index]
+    assert result["insights"]["extends"] == 2  # type: ignore[index]
+    assert result["insights"]["findings"] == 2  # type: ignore[index]
+    with database.connect() as conn:
+        passed = sorted(
+            r["node_id"]
+            for r in conn.execute("SELECT node_id FROM insights_passes")
+        )
+    assert passed == sorted([ids["mid"], ids["root"]])
+    assert (
+        _count(
+            database, "SELECT COUNT(*) FROM llm_calls WHERE role = 'insights'"
+        )
+        == 4
+    )  # a review and an extend for each
+
+    again = Reviewer()
+    quiet = build_tree(job, context, client=again)
+    assert quiet["insights"]["reviews"] == 0 and again.models == []  # type: ignore[index]
+
+
+def test_a_sync_does_not_spend_on_passes_unasked(world) -> None:  # type: ignore[no-untyped-def]
+    database, _ = world
+    reviewer = Reviewer()
+    job = Job("bt", None, TREE, "build-tree", {}, "running", None, "t", "t")
+
+    build_tree(job, JobContext(database), client=reviewer, reviewing=False)
+
+    assert reviewer.models == []
+
+
+@pytest.mark.parametrize(
+    "text, count",
+    [
+        ('{"findings": []}', 0),
+        ('Here: {"findings": [{"statement": "x"}, {"nope": 1}]} done', 1),
+        ('{"findings": [{"statement": "s", "evidence": ["a.py"]}]}', 1),
+    ],
+)
+def test_the_answer_is_read_where_the_model_put_it(
+    text: str, count: int
+) -> None:
+    assert len(review.parse(text).findings) == count
+
+
+def test_an_answer_with_no_findings_list_is_not_an_answer() -> None:
+    with pytest.raises(Unfinished):
+        review.parse("I found several things, listed below.")
+
+
+def test_a_brief_that_contains_a_placeholder_is_not_filled_twice() -> None:
+    out = review.fill("A {brief} B {index}", brief="{index}", index="I")
+    assert out == "A {index} B I"

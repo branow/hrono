@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 from hrono import naming
 from hrono.registry import store
-from hrono.summarize.resolve import INSIGHTS_ROLE
+from hrono.summarize.resolve import INSIGHTS_ROLE, NO_INSIGHTS_MODEL
 
 # Measured on Opus at API prices on a 36-topic unit: $2.43 a review (the
 # spread over tries was $1.79-$3.25) and $0.39 for the extend call that
@@ -77,19 +77,30 @@ def passes_for(
 
     Walks up level by level as a build does: a topic that reaches the
     threshold is reviewed, its subtree then counts for nothing above it. The
-    root (the top level) is always reviewed, over whatever is left.
+    root (the top level) is reviewed when it never was or when something
+    under it is unreviewed.
     """
     tops = _Tree(conn, tree)
     if not tops.top:
         return ()
     found: list[Pass] = []
     for level in range(1, tops.top + 1):
-        for node in tops.at(level):
-            counted = tops.unreviewed(node)
-            if counted >= threshold or level == tops.top:
-                found.append(Pass(node, level, counted))
-                tops.planned.add(node)
+        for one in tops.due(level, threshold, root=True):
+            found.append(one)
+            tops.planned.add(one.node)
     return tuple(found)
+
+
+def due(
+    conn: sqlite3.Connection, tree: str, level: int, threshold: int, root: bool
+) -> tuple[Pass, ...]:
+    """The topics of one level that a pass should review now.
+
+    Read fresh from the stored passes each time, so a build that has just
+    run a level's passes sees what they covered. ``root`` says the top level
+    is final, so its topic is held to the root's rule.
+    """
+    return tuple(_Tree(conn, tree).due(level, threshold, root))
 
 
 def unreviewed(conn: sqlite3.Connection, tree: str) -> dict[int, int]:
@@ -141,6 +152,17 @@ class _Tree:
     def at(self, level: int) -> list[int]:
         return sorted(n for n, lv in self.level.items() if lv == level)
 
+    def due(self, level: int, threshold: int, root: bool) -> list[Pass]:
+        found = []
+        for node in self.at(level):
+            counted = self.unreviewed(node)
+            first = root and level == self.top
+            if counted >= threshold or (
+                first and (counted > 0 or node not in self.passed)
+            ):
+                found.append(Pass(node, level, counted))
+        return found
+
     def unreviewed(self, node: int) -> int:
         return self._below(node, self._passed(node), {node})
 
@@ -180,7 +202,7 @@ def _cost(
         return (
             usd,
             basis,
-            "no model has the role insights: nothing runs until one does",
+            NO_INSIGHTS_MODEL,
         )
     provider = _provider(conn, str(models[0].get("connection")))
     if provider == "claude-code":
