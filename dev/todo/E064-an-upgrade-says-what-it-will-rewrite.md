@@ -69,6 +69,10 @@ Done when:
       no hand edit of the cache (test with two local repos, and on the copy)
 - [ ] `tests/jobs/test_events.py::test_the_stream_follows_a_job_to_its_end`
       passes 20 runs in a row under `-n auto` load (cause in the Log)
+- [ ] `tests/server/test_manual_split.py::test_a_topic_that_does_not_divide_is_refused_and_left_intact`
+      rests on a fixture that does not divide for a reason other than a
+      degenerate UMAP of identical vectors; 20 runs in a row under
+      `-n auto` (from `backlog/flaky-test_a_topic_that_does_not_divide_is_refused_and_left_intact.md`)
 
 ## Out of scope
 - Making the prompt rewrite itself optional; the new prompts are wanted.
@@ -77,3 +81,4 @@ Done when:
 
 ## Log
 - 2026-11-02 po: created from acceptance 1 gaps 4, 5 and 7 (O5, O6).
+- 2026-11-02 po: the manual-split flake added to ticket 3 (seen again in E062's full run).

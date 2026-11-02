@@ -53,7 +53,7 @@ needs it: a build bills model calls (claude-code subscription).
 - uv and Python 3.13; `git`.
 - Chromium for Playwright (`uv run playwright install chromium`).
 - Network for Hugging Face weights on a first embed; the `claude` CLI,
-  signed in, for any real `claude-code` model call. No Docker.
+  signed in, for any real `claude-code` model call. No containers.
 
 ## Worktree setup
 `uv sync -q --extra embed --extra cluster --extra claude-code`

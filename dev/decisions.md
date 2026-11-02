@@ -78,3 +78,10 @@ What the PO decided for you, why, and how to undo it. Newest last.
   (about 2.7 h and 450k tokens, then a second acceptance), not proposals: gaps 1-3, 5 and 6 sit in
   O2, O4, O5 and O6, and gaps 4 (source url ignored) and 7 (a flaky test)
   are defects a user hits. Undo: archive E064 ticket 3.
+- D15 2026-11-02: E062's followups are fixed in this run, not left for
+  later: a `hrono tree review <tree>` CLI command (the README pointed a CLI
+  admin at `POST /jobs`, documented as debugging only), the README cost
+  ($2.80 a topic, as the dry run says), the Runs message after Review now,
+  the two-source evidence version, and the nav overlaps at 390, all in E063;
+  the manual-split flake in E064. Why: each is a gap a new user hits on O2
+  or the 390 bar. Replaces: nothing. Undo: drop E063 ticket 3.

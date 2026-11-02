@@ -1,12 +1,13 @@
 # Plan: the insights step, and the small E054 fixes
 Approved: 2026-11-02 (/autodev:run go)
-Estimate (left): 3 epics and a second acceptance, about 3.45 h and 600k
-output tokens, 1 at a time (E062 0.85 + E063 0.55 + E064 1.3 + acceptance
-0.75; 160k + 110k + 180k + 150k).
-First approved: 6 epics, 8.85 h, 1.39M; spent so far 806k on E055-E061 and
+Estimate (left): 2 epics and a second acceptance, about 2.8 h and 480k
+output tokens, 1 at a time (E064 1.3 + E063 0.75 + acceptance 0.75; 180k +
+150k + 150k).
+First approved: 6 epics, 8.85 h, 1.39M; spent so far 914k on E055-E062 and
 acceptance 1. Acceptance 1 failed O2 and the 390 bar and found 5 more gaps;
-E062-E064 fix them (D14), adding 2.7 h and 450k plus 0.75 h and 150k for
-acceptance 2.
+E062-E064 fix them (D14). E062's review folded its followups into E063
+(a `hrono tree review` command, README cost, Runs copy, 390 chrome; +0.2 h,
++40k) and a flaky test into E064 (D15).
 Based on: this run's epics, 20-45 min each from start to merge (median 37,
 board log) and 115k tokens per merged epic; E062 adds real passes to verify,
 E064 a likely rework round (the cause of the second sync's moves is unknown).
@@ -22,13 +23,13 @@ free, so one epic at a time.
 | 5 | E059 (done) | a sync re-reviews a rewritten reviewed brief before its parent; root.md carries the root's findings | O3 asked | 3 | 0.65 + 0.65 + 0.1 + 0.5 = 1.9 | 300k |
 | 6 | E060 (done) | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.85 + 0.4 + 0.1 + 0.6 = 1.95 | 290k |
 | 7 | E061 (done) | every tree's sync places by condensations; a failed pass shows on its topic | O6, O4 asked | 2 | 0.6 + 0.35 + 0.1 = 1.05 | 150k |
-| 8 | E062 | turning insights on and pressing Review now runs the named reviews, root included; findings link the version read; README | O2, O1, O4 asked | 3 | 0.45 + 0.35 + 0.05 = 0.85 | 160k |
-| 9 | E063 | a reviewed topic fits a phone; bad thresholds get a field error | O4 asked | 2 | 0.3 + 0.2 + 0.05 = 0.55 | 110k |
+| 8 | E062 (done) | turning insights on and pressing Review now runs the named reviews, root included; findings link the version read; README | O2, O1, O4 asked | 3 | 0.45 + 0.35 + 0.05 = 0.85 | 160k |
+| 9 | E063 | a reviewed topic and the nav fit a phone; bad thresholds get a field error; `hrono tree review` | O4, O2 asked | 3 | 0.45 + 0.25 + 0.05 = 0.75 | 150k |
 | 10 | E064 | an upgrade's first sync is announced with its cost, the next is free; a changed source url is fetched; steady events test | O5, O6 asked | 3 | 0.5 + 0.35 + 0.05 + 0.4 = 1.3 | 180k |
 Then: acceptance 2 as a new user on the flask copy (about 0.75 h, 150k).
 
-Order (one at a time): E057, E058, E056, E059, E060, E061 (done), then
-E062 (O2 fails without it), E064, E063.
+Order (one at a time): E057, E058, E056, E059, E060, E061, E062 (done),
+then E064, E063.
 
 Model calls: qa spends at most 10 real claude-code subscription calls per
 epic (D2), on the flask copy and the stored xgboost/bcreg trees; no rebuild.
