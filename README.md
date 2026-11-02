@@ -221,6 +221,30 @@ Models can be assigned per role (`condense`, `brief`, `brief-upper`, `judge`),
 so the condense model can use `anthropic` while everything else stays on
 `claude-code`. A one-model install needs no roles.
 
+### Insights (optional)
+
+A strong model can review the biggest topics of a tree and write what it finds
+into their briefs. Off by default, because each review is billed: about $2.50
+a topic at API prices (a subscription is not billed per token).
+
+1. Add a model with the role `insights` (`hrono models set opus -f opus.json`,
+   `"role": "insights"`, usually on an `anthropic` connection or `claude-code`).
+   Without one, nothing is reviewed.
+2. Turn it on for the tree: in the dashboard, Settings, Trees, edit the tree,
+   switch Insights on (or `"insights": true` and an optional
+   `"insights_threshold"` in the tree's config, `hrono tree config set`). A line
+   under the switch names the topics it would review, the root included, and
+   the cost.
+3. Press **Review now** next to that line (it runs `settle`; or
+   `POST /jobs {"op": "settle"}`, or the `settle` run on the Runs page). It
+   reviews those topics, bottom-up and the root last, and nothing else.
+   `hrono jobs watch <job-id>` follows it.
+
+After that, a `sync` reviews a topic again only when it rewrites that topic's
+brief or the topic first reaches the threshold; a sync that changes nothing
+calls no model. Each finding on a topic's page links the file at the version
+the review read.
+
 Every `set` is validated before it is stored: a connection against its
 provider, a local embedding model by loading its weights, a text model by one
 trivial call. `hrono connections get <name>` shows a stored config with its
