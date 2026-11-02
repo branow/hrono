@@ -41,3 +41,9 @@ What the PO decided for you, why, and how to undo it. Newest last.
   under the root reviews nothing. Why: a re-pass on an unchanged tree costs
   about $2.50 and finds nothing new. Replaces: the root on every run (E057's
   dry run). Undo: drop the line from E058 ticket 3.
+- D9 2026-11-02: the export's root page keeps its opening plus the parts
+  the root's insights extension wrote (its findings), not the opening alone.
+  Why: an agent reads `root.md` first and the root pass's findings are the
+  tree-wide rules the step exists for; today they reach only recall and the
+  node page. Replaces: `_routing` keeping only the opening for every root.
+  Undo: drop E059 ticket 3. The page's size is measured and logged.

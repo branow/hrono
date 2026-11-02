@@ -7,25 +7,26 @@ adds 0.15 h and 20k.
 Based on: the no-history figures (no epics since 2026-11-01), plus the
 verify time of real model calls (a pass is 34-45 turns) and one rework
 round on E058 and E060
-Machine now (2026-11-02, plan after E057): on battery, load 28.6 on 8
-cpus, 4.4 GiB free, so one epic at a time; the clock time is the agent
-time. Done: E055, E057 (accepted, merging). Building: E058. Left: E056,
-E059, E060. Left: 4 epics, about 6.85 h with acceptance, 1.07M tokens.
-E057's qa followups add two Done when lines to E058 and one to E060
-(about 0.1 h, 15k, inside the rows).
+Machine now (2026-11-02, plan after E058 review): on battery, load 13.3
+on 8 cpus, 4.4 GiB free, so one epic at a time; the clock time is the
+agent time. Done: E055, E057; E058 accepted (merging). Building: E056.
+Left: E056, E059, E060 and acceptance: about 5.1 h and 820k tokens.
+E058's qa followups add E059 ticket 3 (the export's root page carries the
+root's findings, D9: +0.3 h, +50k) and a Done when each to E059 and E060
+(inside the rows).
 
 | # | Epic | What the user gets | Outcome | Tickets | Hours (build + verify + merge + rework) | Tokens |
 |---|------|--------------------|---------|---------|------|--------|
 | 1 | E055 (done) | upper briefs name every child and their shared rules; a copying brief is caught | O5 asked | 2 | 0.5 + 0.4 + 0.1 = 1.0 | 150k |
-| 2 | E056 | a sync places new sections where a build would; older installs get current prompt defaults | O6 asked | 3 | 0.6 + 0.4 + 0.1 = 1.1 | 170k |
+| 2 | E056 (building) | a sync places new sections where a build would; older installs get current prompt defaults | O6 asked | 3 | 0.6 + 0.4 + 0.1 = 1.1 | 170k |
 | 3 | E057 (done) | insights role and tree settings; the dry run says which topics and what cost | O1 asked | 2 | 0.6 + 0.3 + 0.1 = 1.0 | 170k |
-| 4 | E058 | a pass reviews a subtree and extends its brief; pins kept; off = same tree | O1-O3 asked | 3 | 0.75 + 0.6 + 0.1 + 0.6 = 2.05 | 300k |
-| 5 | E059 | a sync re-reviews a rewritten reviewed brief before its parent | O3 asked | 2 | 0.5 + 0.5 + 0.1 = 1.1 | 170k |
+| 4 | E058 (accepted) | a pass reviews a subtree and extends its brief; pins kept; off = same tree | O1-O3 asked | 3 | 0.75 + 0.6 + 0.1 + 0.6 = 2.05 | 300k |
+| 5 | E059 | a sync re-reviews a rewritten reviewed brief before its parent; root.md carries the root's findings | O3 asked | 3 | 0.65 + 0.65 + 0.1 = 1.4 | 220k |
 | 6 | E060 | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.75 + 0.4 + 0.1 + 0.6 = 1.85 | 280k |
 Then: acceptance as a new user on the flask copy (about 0.75 h, 150k).
 
 Order (one at a time): E057, E058 (critical path to the insights outcomes),
-then E056, E059, E060; E058 after E057, E059 and E060 after E058.
+then E056 (needs nothing, starts while E058 merges), E059, E060.
 
 Model calls: qa spends at most 10 real claude-code subscription calls per
 epic (D2), on the flask copy and the stored xgboost/bcreg trees; no rebuild.

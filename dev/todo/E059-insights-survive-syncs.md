@@ -37,6 +37,10 @@ Done when:
       sync gets its first pass; a topic below the threshold gets none
 - [ ] a pinned reviewed topic: sync leaves its brief alone, the new
       findings are stored not applied (test)
+- [ ] a test drives a sync through `tree/sync_chain.py` (not `build_tree`
+      directly) and fails when the pass wiring there is removed or a sync
+      runs passes on topics under the threshold (E058 qa: the
+      `reviewing=False` guard had no test)
 
 ### 2 the version history keeps the cheaper brief a reader compares against
 Done when:
@@ -46,6 +50,19 @@ Done when:
 - [ ] docs/summarization.md and docs/architecture.md describe when a pass
       runs on build, settle and sync
 
+### 3 the export's root page carries the root pass's findings
+The root page keeps only the root brief's opening (`export/render.py`
+`_routing`), so the root pass's findings, placed under the brief's
+Conventions and hazard parts, never reach `root.md` (E058 qa). D9: the
+root page keeps the opening plus the parts the root's extension wrote.
+Done when:
+- [ ] `hrono tree export` of the flask copy after the root pass: `root.md`
+      states the root's findings (the dotenv precedence and the session
+      lifetime rule are readable there), `grep -ri insight` stays empty
+- [ ] an unextended root renders as today (test); the extended root page
+      stays under 2.5 times the unextended one on flask, and the number
+      goes in the epic's Log
+
 ## Out of scope
 - Re-applying old findings to a new brief (the rule says a new pass).
 
@@ -53,3 +70,4 @@ Done when:
 
 ## Log
 - 2026-11-02 po: created from E054 535 (O3).
+- 2026-11-02 po: folded E058 qa followups: a sync-chain test for the pass guard (ticket 1), the root page carries the root's extension (ticket 3, D9).

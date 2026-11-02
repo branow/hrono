@@ -1,3 +1,5 @@
 # hrono project lessons (read by every autodev agent; retro appends)
 - dev, prompts: when a shipped prompt default changes, add every earlier shipped default hash to the upgrade list and test an old row is replaced while an edited one is kept; E055 shipped without it and qa had to add 10 hashes (e4dc224).
 - dev, tests: for each line of prompt or wiring a feature depends on, remove it and see a test fail; E055 qa found the "areas" line for level 2+ could be deleted with the suite green (68b66e4).
+- dev, ui, i18n: every new setting label, tooltip or form field gets its Ukrainian string in the same commit, and a cost or price line states its basis for metered and subscription providers; E057 qa had to add the Ukrainian tooltips (88fd21d) and a subscription-estimate test (babab38), E055 and E057 followups both caught copy that only held for the metered setup.
+- dev, forms: a setup/settings form that is refused and re-rendered must keep a field the user cleared, not refill the default; test the refusal path with a cleared field (E057 f455a74 found by qa).

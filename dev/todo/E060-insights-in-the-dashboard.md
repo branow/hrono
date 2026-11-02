@@ -80,6 +80,8 @@ Done when:
       0 findings shows the empty line
 - [ ] a seeded topic with 15 long findings: no horizontal scroll at 390
 - [ ] a reader sees all of it and no write control
+- [ ] an extended topic's page dates the brief by the extension (today
+      "Built" shows the node's creation, 2026-10-10 on flask node 17)
 
 ### 3 Usage counts the insights role
 Done when:
@@ -96,3 +98,4 @@ Done when:
 ## Log
 - 2026-11-02 po: created from E054 536 (O4) with the shape brief.
 - 2026-11-02 po: folded E057 qa followups (tip copy, bool threshold).
+- 2026-11-02 po: folded E058 qa followup: the topic's date is the extension's.
