@@ -37,6 +37,7 @@ from collections.abc import Mapping
 from hrono.cluster import TooFewPoints, store
 from hrono.cluster import store as cluster_store
 from hrono.cluster.levels import attach_orphans, cluster_briefs
+from hrono.jobs.aggregate import total_spend
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.llm.client import Completion
@@ -128,12 +129,14 @@ def total_insights(runs: list[dict[str, object]]) -> dict[str, object]:
     """The insights outcomes of one build, added up."""
     out: dict[str, object] = {"reviews": 0, "extends": 0, "findings": 0}
     for one in runs:
-        for key in out:
+        for key in ("reviews", "extends", "findings"):
             out[key] = int(out[key]) + int(one.get(key, 0))  # type: ignore[call-overload]
         if one.get("failed"):
             out["failed"] = [*out.get("failed", []), *one["failed"]]  # type: ignore[misc,list-item]
         if one.get("note"):
             out["note"] = one["note"]
+    if (tokens := total_spend(runs)) is not None:
+        out["tokens"] = tokens
     return out
 
 

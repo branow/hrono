@@ -391,28 +391,60 @@ def test_without_an_insights_model_nothing_runs_and_it_says_why(world) -> None: 
         resolve_text_model(conn, {}, "insights")
 
 
-def test_a_pass_never_pushes_the_first_cheaper_brief_out_of_history(
+def _write(conn: object, node: int, text: str, reason: str) -> None:
+    briefs.upsert(
+        conn,  # type: ignore[arg-type]
+        node,
+        text,
+        model_name="cheap",
+        prompt_name="p",
+        prompt_hash="h",
+        member_signature="s",
+        input_tokens=0,
+        output_tokens=0,
+        reason=reason,
+    )
+
+
+def _kept(database: Database, node: int) -> list[tuple[str, str]]:
+    with database.connect() as conn:
+        return [
+            (v["text"], v["reason"]) for v in briefs.versions(conn, node)
+        ]
+
+
+def test_many_passes_never_push_the_cheaper_brief_out_of_history(
     world,
 ) -> None:  # type: ignore[no-untyped-def]
     database, ids = world
-    _run(database, Reviewer(), [1])
+    mid = ids["mid"]
     with database.write() as conn:
+        # an earlier cycle: a rewrite, then a pass, then the brief written again
+        _write(conn, mid, "rewritten by hand", "rewrite")
+        _write(conn, mid, "extended once", "insights")
+        _write(conn, mid, "written again", "regen")
+        # this cycle: the cheaper brief, then six passes with nothing between
+        for i in range(briefs.KEEP_VERSIONS + 1):
+            _write(conn, mid, f"extended {i}", "insights")
+    kept = _kept(database, mid)
+    assert ("written again", "insights") in kept
+    assert len(kept) == briefs.KEEP_VERSIONS + 1
+    # the cheaper brief of an earlier cycle is not kept for ever
+    assert "extended once" not in [text for text, _ in kept]
+
+
+def test_a_brief_written_again_after_the_passes_is_kept_like_any_other(
+    world,
+) -> None:  # type: ignore[no-untyped-def]
+    database, ids = world
+    mid = ids["mid"]
+    with database.write() as conn:
+        _write(conn, mid, "extended", "insights")
         for i in range(briefs.KEEP_VERSIONS + 3):
-            briefs.upsert(
-                conn,
-                ids["mid"],
-                f"regenerated {i}",
-                model_name="cheap",
-                prompt_name="p",
-                prompt_hash="h",
-                member_signature="s",
-                input_tokens=0,
-                output_tokens=0,
-            )
-    with database.connect() as conn:
-        texts = [v["text"] for v in briefs.versions(conn, ids["mid"])]
-    assert CHEAP in texts
-    assert len(texts) == briefs.KEEP_VERSIONS + 1
+            _write(conn, mid, f"regenerated {i}", "regen")
+    kept = _kept(database, mid)
+    assert len(kept) == briefs.KEEP_VERSIONS
+    assert CHEAP not in [text for text, _ in kept]
 
 
 def test_six_passes_in_a_row_keep_the_cheaper_brief_a_reader_compares(
@@ -605,6 +637,8 @@ def test_a_build_with_the_step_on_runs_the_passes_the_counter_selects(
     assert result["insights"]["reviews"] == 2  # type: ignore[index]
     assert result["insights"]["extends"] == 2  # type: ignore[index]
     assert result["insights"]["findings"] == 2  # type: ignore[index]
+    # each pass: a review (9 in, 3 out) and an extend (4 in, 2 out)
+    assert result["insights"]["tokens"] == {"input": 26, "output": 10}  # type: ignore[index]
     with database.connect() as conn:
         passed = sorted(
             r["node_id"]

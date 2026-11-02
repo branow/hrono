@@ -633,8 +633,9 @@ def upsert(
     A brief this replaces is first copied to ``brief_versions`` with ``reason``
     ('regen', 'rewrite' for a hand edit, or 'insights' for the pass named by
     ``pass_id``), and only the newest ``KEEP_VERSIONS`` are kept, besides the
-    brief the first insights pass replaced; a first write, or one that leaves
-    the text unchanged, copies nothing.
+    brief the first of the latest run of insights passes replaced (the cheaper
+    brief the passes since the last other write extended); a first write, or
+    one that leaves the text unchanged, copies nothing.
 
     ``unfaithful`` is the faithfulness gate's JSON verdict; default '[]'
     keeps callers that do not run the gate unchanged. ``flagged`` is the shape
@@ -699,8 +700,10 @@ def _keep_replaced(
         "DELETE FROM brief_versions WHERE node_id = ? AND id NOT IN ("
         "SELECT id FROM brief_versions WHERE node_id = ? "
         "ORDER BY id DESC LIMIT ?) AND id != COALESCE((SELECT MIN(id) "
-        "FROM brief_versions WHERE node_id = ? AND reason = 'insights'), 0)",
-        (node_id, node_id, KEEP_VERSIONS, node_id),
+        "FROM brief_versions WHERE node_id = ? AND reason = 'insights' "
+        "AND id > COALESCE((SELECT MAX(id) FROM brief_versions "
+        "WHERE node_id = ? AND reason != 'insights'), 0)), 0)",
+        (node_id, node_id, KEEP_VERSIONS, node_id, node_id),
     )
 
 
@@ -724,7 +727,8 @@ def kept_version(
 def versions(conn: sqlite3.Connection, node_id: int) -> list[sqlite3.Row]:
     """Return a node's kept previous briefs, newest first."""
     return conn.execute(
-        "SELECT v.text, v.model_name, v.written_at, v.replaced_at, v.reason, "
+        "SELECT v.id, v.text, v.model_name, v.written_at, v.replaced_at, "
+        "v.reason, "
         "v.pass_id, p.model_name AS reviewer FROM brief_versions v "
         "LEFT JOIN insights_passes p ON p.id = v.pass_id "
         "WHERE v.node_id = ? ORDER BY v.id DESC",
