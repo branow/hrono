@@ -71,3 +71,6 @@ Done when:
 
 ## Log
 - 2026-11-02 po: created from E054 531-532 (O1).
+- 2026-11-02 dev r1: T1 21d66ca, T2 same commit; real flask copy: CLI --dry-run off says no passes $0, on at 60000 lists topics 17 (level 1) and root, $5.64; threshold 0 refused; settings survived server restart. Mutations: ignore child pass in counter, drop always-root: tests fail.
+- 2026-11-02 qa r1: pass at 88fd21d. Drove on the flask copy: CLI and HTTP dry run off (no passes, $0) and on at 60000 (topics 17, 19, $5.64), after a pass row on 17 (root only, $2.82), with a claude-code insights model (subscription estimate in basis); hostile thresholds (0, -5, "many", 1.5, null, 1e30, "") refused 422 by field; role typo refused; dashboard form toggles on/off and refuses 0; settings survive restart; planner 0.12 s on a 20k-leaf tree. Re-ran mutation (child pass ignored: 4 fail). Fixed: f455a74 setup refilled a cleared insights field on retry, babab38 test for the subscription estimate, 88fd21d Ukrainian for the two tree-setting tooltips. Full suite green (2264). Followups: dev/backlog/E057-followups.md.
+- 2026-11-02 po: accepted at 88fd21d. The role, the two settings and the dry run hold on the flask copy; followups folded into E058 (no model, root re-pass, D8) and E060 (tip copy, bool threshold).

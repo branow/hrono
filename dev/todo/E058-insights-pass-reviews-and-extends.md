@@ -55,6 +55,9 @@ Done when:
 - [ ] a review that hits the turn cap or a provider error stores nothing
       half-done and the run's log says why
 - [ ] the review's lookups cannot read a file outside the topic's subtree
+- [ ] with no model holding the `insights` role, no pass runs (no fallback
+      to the sole text model, `summarize/resolve.py:55`); the job and the
+      dry run say why in plain words
 
 ### 2 the extend call rewrites the brief in place, keeping the cheaper one
 Done when:
@@ -73,6 +76,9 @@ Done when:
       other; the job's stages count reviews, extends and findings; the
       parent of a reviewed topic is briefed from the extended brief
       (its brief input hash shows it)
+- [ ] the root gets a pass when it never had one or has unreviewed
+      characters; a second `settle` with nothing changed runs no pass, and
+      the dry run says the same (D8)
 - [ ] with the step off, a build makes no insights call (zero `insights`
       ledger rows) and writes the same tree as before this epic (a test
       compares the two)
@@ -85,3 +91,5 @@ Done when:
 ## Log
 - 2026-11-02 po: created from E054 532-534 and the insights-recipe
   research (O1-O3).
+- 2026-11-02 po: folded E057 qa followups (no insights model means no
+  pass; root re-pass only when something under it changed, D8).

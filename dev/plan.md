@@ -7,15 +7,18 @@ adds 0.15 h and 20k.
 Based on: the no-history figures (no epics since 2026-11-01), plus the
 verify time of real model calls (a pass is 34-45 turns) and one rework
 round on E058 and E060
-Machine now (2026-11-02 15:51): on battery, load 13.9 on 8 cpus, 4.3 GiB
-free, so one epic at a time; the clock time is the agent time. Done: E055.
-Building: E057. Left: E056, E058-E060.
+Machine now (2026-11-02, plan after E057): on battery, load 28.6 on 8
+cpus, 4.4 GiB free, so one epic at a time; the clock time is the agent
+time. Done: E055, E057 (accepted, merging). Building: E058. Left: E056,
+E059, E060. Left: 4 epics, about 6.85 h with acceptance, 1.07M tokens.
+E057's qa followups add two Done when lines to E058 and one to E060
+(about 0.1 h, 15k, inside the rows).
 
 | # | Epic | What the user gets | Outcome | Tickets | Hours (build + verify + merge + rework) | Tokens |
 |---|------|--------------------|---------|---------|------|--------|
 | 1 | E055 (done) | upper briefs name every child and their shared rules; a copying brief is caught | O5 asked | 2 | 0.5 + 0.4 + 0.1 = 1.0 | 150k |
 | 2 | E056 | a sync places new sections where a build would; older installs get current prompt defaults | O6 asked | 3 | 0.6 + 0.4 + 0.1 = 1.1 | 170k |
-| 3 | E057 | insights role and tree settings; the dry run says which topics and what cost | O1 asked | 2 | 0.6 + 0.3 + 0.1 = 1.0 | 170k |
+| 3 | E057 (done) | insights role and tree settings; the dry run says which topics and what cost | O1 asked | 2 | 0.6 + 0.3 + 0.1 = 1.0 | 170k |
 | 4 | E058 | a pass reviews a subtree and extends its brief; pins kept; off = same tree | O1-O3 asked | 3 | 0.75 + 0.6 + 0.1 + 0.6 = 2.05 | 300k |
 | 5 | E059 | a sync re-reviews a rewritten reviewed brief before its parent | O3 asked | 2 | 0.5 + 0.5 + 0.1 = 1.1 | 170k |
 | 6 | E060 | the dashboard shows the cost, the extension, the findings and Usage | O4 asked | 3 | 0.75 + 0.4 + 0.1 + 0.6 = 1.85 | 280k |

@@ -65,6 +65,9 @@ Done when:
 - [ ] on the flask copy, Settings > trees shows Insights and the threshold
       with tips; toggling on shows the topics count and estimated cost from
       the dry run, off shows no cost; saved values round-trip
+- [ ] the Insights tip says "about $2.50 a pass at API prices" (a
+      subscription is not billed per token, `trees.py:63`); a threshold of
+      `true` is refused like any non-integer (`trees.py:68`)
 - [ ] 390 and 1440 wide, light and dark, keyboard only: screenshots in
       `evidence/E060/`
 
@@ -92,3 +95,4 @@ Done when:
 
 ## Log
 - 2026-11-02 po: created from E054 536 (O4) with the shape brief.
+- 2026-11-02 po: folded E057 qa followups (tip copy, bool threshold).

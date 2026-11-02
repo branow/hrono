@@ -36,3 +36,8 @@ What the PO decided for you, why, and how to undo it. Newest last.
   Usage; no Insights page or tab. Why: the goal keeps findings inside the
   brief, and the topic page is where a curator checks a brief. Undo: a new
   epic for a page.
+- D8 2026-11-02: "the root always gets a pass" means on a build, or when
+  anything under the root is unreviewed; a settle or sync with nothing new
+  under the root reviews nothing. Why: a re-pass on an unchanged tree costs
+  about $2.50 and finds nothing new. Replaces: the root on every run (E057's
+  dry run). Undo: drop the line from E058 ticket 3.
