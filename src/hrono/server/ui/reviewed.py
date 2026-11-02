@@ -86,13 +86,11 @@ def _cite(conn: sqlite3.Connection, item: dict[str, str]) -> dict[str, object]:
     shown = f"{path}:{lines}" if lines else path
     return {
         "text": shown,
-        "link": _link(conn, path, lines, item.get("version", "")),
+        "link": _link(conn, path, lines),
     }
 
 
-def _link(
-    conn: sqlite3.Connection, path: str, lines: str, version: str
-) -> str | None:
+def _link(conn: sqlite3.Connection, path: str, lines: str) -> str | None:
     row = conn.execute(
         "SELECT instance, version FROM sections WHERE path = ? "
         "AND source_type = 'git' LIMIT 1",
