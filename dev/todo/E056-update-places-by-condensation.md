@@ -44,6 +44,17 @@ Done when:
       is written to `docs/evaluations/2026-11-tau-condensed/` with the
       script; TAU changes only if the numbers say so, and the note says why
 
+### 3 an older install gets the current brief, condense and judge defaults
+Change: list the earlier shipped hashes of the `brief`, `condense` and
+`judge` defaults in `superseded` (`registry/collections/prompts.py`), as
+E055 did for `brief-upper` (from git history); an edited prompt stays.
+Done when:
+- [ ] `hrono serve` on the flask copy (it holds the 2026-10-09 defaults)
+      replaces the untouched `brief`, `condense` and `judge` rows with the
+      current defaults; a restart changes nothing more
+- [ ] a test holding each first-shipped text fails without the hashes;
+      an edited prompt survives the upgrade
+
 ## Out of scope
 - Re-placing sections already in the tree.
 
@@ -53,3 +64,4 @@ Done when:
 - 2026-11-02 po: created from E054 506 (O6, D1); 506 was dropped on
   2026-10-12 for a different reason (E29) and is back as the placement gap
   E050's log names.
+- 2026-11-02 po: ticket 3 added from E055 followups (old defaults on the flask copy are never upgraded, and this epic condenses with that prompt).
