@@ -73,6 +73,18 @@ def sync(
     tree = job.tree or DEFAULT_TREE
     with context.database.connect() as conn:
         before = changes.snapshot(conn, tree)
+
+    def embedded() -> Mapping[str, object]:
+        return embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
+
+    def repair_stage() -> Mapping[str, object]:
+        return repair(
+            _stage(tree, "repair"), context, core_labeler=core_labeler
+        )
+
+    def adopt() -> tuple[int, dict[str, object]]:
+        return _adopt(tree, context, encoder_for=encoder_for, client=client)
+
     run = Stages(report=recorder(context.database, job.id))
     ingested = run.run(
         "update",
@@ -96,27 +108,36 @@ def sync(
             lambda: _brief_upper_levels(tree, context, client=client),
         )
     ]
+    # the monitor and repair below read vectors: of the condensations a tree
+    # built before they were embedded still lacks, and of the briefs just
+    # written. Embedded here, they work in the space the tree will be in, not
+    # one the last stage replaces, and an unchanged source finds nothing to move
+    run.run("embed", embedded)
     measured = run.run(
         "monitor", lambda: monitor(_stage(tree, "monitor"), context)
     )
-    repaired = run.run(
-        "repair",
-        lambda: repair(
-            _stage(tree, "repair"), context, core_labeler=core_labeler
-        ),
-    )
-    adopted, late = run.run(
-        "adopt",
-        lambda: _adopt(tree, context, encoder_for=encoder_for, client=client),
-    )
+    repaired = run.run("repair", repair_stage)
+    reshaped = bool(repaired["split"] or repaired["dissolved"])
+    adopted, late = run.run("adopt", adopt)
     reviewed.append(late)
     # brief, brief-upper and adopt wrote node:// brief passages; vectorise
     # them, as maintain does, or recall's cosine leg never sees a brief
     # written by a sync (the v9 eval tree had 11,000 of 11,006 unembedded)
-    run.run(
-        "embed",
-        lambda: embed(_stage(tree, "embed"), context, encoder_for=encoder_for),
-    )
+    run.run("embed", embedded)
+    if reshaped:
+        # the topics a split or dissolve made had no brief, so no vector, when
+        # repair placed them: place once more now they do, or the next sync
+        # moves them and rewrites the briefs above for an unchanged source
+        again = run.run("repair", repair_stage)
+        repaired = {
+            key: _total(value, again.get(key)) if key != "pinned" else value
+            for key, value in repaired.items()
+        }
+        if again["migrated"] or again["reparented"]:
+            adopted_more, late = run.run("adopt", adopt)
+            adopted += adopted_more
+            reviewed.append(late)
+            run.run("embed", embedded)
     run.run("health", lambda: report.refresh(context.database, tree))
     with context.database.connect() as conn:
         settle_due = should_settle(conn, tree)
@@ -198,6 +219,10 @@ def _forest(context: JobContext, tree: str) -> bool:
             (tree, tree),
         ).fetchone()
     return row is not None and int(row["n"]) > 1
+
+
+def _total(first: object, second: object) -> object:
+    return int(first) + int(second or 0)  # type: ignore[call-overload]
 
 
 def _sum(runs: list[dict[str, object]]) -> dict[str, object]:
