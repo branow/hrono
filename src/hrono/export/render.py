@@ -242,10 +242,10 @@ def _routing(brief: str, cheaper: str | None = None) -> str:
         return opening
     old = {line.strip() for line in cheaper.splitlines()}
     wrote: list[str] = []
-    for heading, lines in _sections(brief[cut:]):
+    for title, lines in _sections(brief[cut:]):
         new = [line for line in lines if line.strip() not in old]
         if new:
-            wrote.append("\n\n".join([heading, *new]))
+            wrote.append("\n\n".join([title, *new]))
     return "\n\n".join([opening, *wrote])
 
 
