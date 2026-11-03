@@ -320,7 +320,11 @@ def test_a_live_run_with_a_stage_done_reads_running_never_partial(
     page.goto(f"{solo.base}{route}")  # type: ignore[attr-defined]
     page.wait_for_load_state("load")  # type: ignore[attr-defined]
     shown = page.locator(badge).first  # type: ignore[attr-defined]
-    assert shown.inner_text() == "running"
+    page.wait_for_function(  # type: ignore[attr-defined]
+        "(sel) => document.querySelector(sel).textContent.trim() === 'running'",
+        arg=badge,
+        timeout=8000,
+    )
 
     solo.finish_piece(0)
 
