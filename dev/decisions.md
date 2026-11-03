@@ -94,3 +94,12 @@ What the PO decided for you, why, and how to undo it. Newest last.
   Why: the bench copy had no baseline, so qa could not see it; most real
   upgraded trees have one. Replaces: merging at 317990a. Undo: accept
   317990a and leave the items in backlog/E064-followups.md.
+- D17 2026-11-03: E063 accepted at eb7e939; its followups become E065
+  instead of waiting for acceptance 2: a review that fails from Review now
+  or `hrono tree review` never shows on its topic (O4 holds only for a
+  sync), the failed card also says "found nothing to add", the uk chip shows
+  English level words, the low chip looks like plain text, E063's hidden
+  closed disclosures break find-in-page; plus `POST /jobs` settle on an
+  unknown tree and an unbounded threshold. Why: the first is a gap on an
+  asked outcome a curator hits on a provider outage. Replaces: leaving them
+  in backlog. Undo: archive E065, items back to backlog/E063-followups.md.
