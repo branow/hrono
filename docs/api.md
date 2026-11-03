@@ -215,6 +215,7 @@ hrono tree config list | get | set | rm        the trees collection
 
 hrono tree maintain <tree>                     cold build
 hrono tree sync <tree>                         incremental update
+hrono tree review <tree>                       run the insights reviews due (queues settle, follows it)
 hrono tree export <tree> -o DIR [--levels 4]   write the rendered tree to DIR
 hrono tree pending <tree>
 

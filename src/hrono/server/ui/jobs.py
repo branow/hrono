@@ -413,7 +413,7 @@ async def revert_from_the_page(
 
 @router.post("/ui/jobs/run")
 async def run_from_the_page(
-    request: Request, user: Admin, tree: str = ""
+    request: Request, user: Admin, tree: str = "", then: str = ""
 ) -> Response:
     """Run any registered op from the page — the API's own door, drawn.
 
@@ -438,9 +438,15 @@ async def run_from_the_page(
         started = await run_in_threadpool(
             enqueue, database, op, scope, tree=tree, started_by=user.name
         )
+    # `then=review`: pressed from the insights line, so say what was started,
+    # not the op that carries it
+    said = (
+        _("Started the reviews.")
+        if then == "review"
+        else _("Started {op}.", op=op)
+    )
     return RedirectResponse(
-        f"/ui/jobs?tree={tree or 'default'}"
-        f"&done={quote(_('Started {op}.', op=op))}&run={started}",
+        f"/ui/jobs?tree={tree or 'default'}&done={quote(said)}&run={started}",
         status_code=303,
     )
 

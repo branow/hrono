@@ -540,3 +540,42 @@ def test_a_dry_run_set_writes_nothing_and_says_the_insights_passes(
     assert "1 pass(es)" in result.stdout and "$2.82" in result.stdout
     assert "topic 17 'Flask docs', level 1" in result.stdout
     assert "No model has the role insights" in result.stdout
+
+
+def test_tree_review_queues_settle_follows_it_and_prints_the_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = {"insights": {"reviews": 2, "extends": 1, "findings": 5}}
+    client = _patch(
+        monkeypatch,
+        "hrono.tree.commands",
+        FakeClient({"job_id": "j1", "result": result}),
+    )
+    monkeypatch.setattr("hrono.tree.commands.watch_job", lambda job_id: None)
+
+    run = runner.invoke(app, ["tree", "review", "flask"])
+
+    assert run.exit_code == 0
+    assert client.calls[0] == (
+        "POST",
+        "/jobs",
+        {"op": "settle", "tree": "flask"},
+    )
+    assert client.calls[1][:2] == ("GET", "/jobs/j1")
+    assert "Reviewed 2 topics, extended 1: 5 findings." in run.stdout
+
+
+def test_tree_review_with_nothing_due_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch(
+        monkeypatch,
+        "hrono.tree.commands",
+        FakeClient({"job_id": "j1", "result": {"settled": False}}),
+    )
+    monkeypatch.setattr("hrono.tree.commands.watch_job", lambda job_id: None)
+
+    run = runner.invoke(app, ["tree", "review", "flask"])
+
+    assert run.exit_code == 0
+    assert "Nothing is due for review; no model was called." in run.stdout

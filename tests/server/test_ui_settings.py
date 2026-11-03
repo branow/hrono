@@ -853,7 +853,7 @@ def test_review_now_is_offered_only_when_settle_would_run_a_review(
     _insights_model(browser)
     page = browser.config(edit="trees:beta")
     assert 'id="review-now"' in page
-    assert 'formaction="/ui/jobs/run?tree=beta"' in page
+    assert 'formaction="/ui/jobs/run?tree=beta&then=review"' in page
     assert 'name="op" value="settle"' in page
     assert re.search(r"\.\s+Review now runs them", page)
     # metered: no subscription sentence between, the line still reads
@@ -868,14 +868,25 @@ def test_review_now_is_offered_only_when_settle_would_run_a_review(
     # the button reviews the tree being edited, not the one the page is on
     browser.item("trees", **{"f.name": "gamma", "f.sources": ["gh"]})
     other = browser.config(edit="trees:beta", tree="gamma")
-    assert 'formaction="/ui/jobs/run?tree=beta"' in other
+    assert 'formaction="/ui/jobs/run?tree=beta&then=review"' in other
     # the button submits the form's fields beside op=settle: it queues the run
     queued = browser.client.post(  # type: ignore[attr-defined]
-        "/ui/jobs/run?tree=beta",
+        "/ui/jobs/run?tree=beta&then=review",
         data={"f.name": "beta", "f.sources": ["gh"], "op": "settle"},
         follow_redirects=False,
     )
     assert queued.status_code == 303 and "run=" in queued.headers["location"]
+    # the Runs page names the reviews, not the op that carries them
+    runs = browser.client.get(queued.headers["location"]).text  # type: ignore[attr-defined]
+    assert "Started the reviews." in runs and "Started settle" not in runs
+    browser.client.cookies.set("hrono_lang", "uk")  # type: ignore[attr-defined]
+    assert (
+        "Перевірки запущено."
+        in browser.client.get(  # type: ignore[attr-defined]
+            queued.headers["location"]
+        ).text
+    )
+    browser.client.cookies.set("hrono_lang", "en")  # type: ignore[attr-defined]
     row = browser.conn.execute(  # type: ignore[attr-defined]
         "SELECT op, tree FROM jobs WHERE op = 'settle'"
     ).fetchone()

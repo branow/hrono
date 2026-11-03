@@ -124,6 +124,7 @@ the same at `/ui/guide`, with this install's numbers.
 | `hrono tree config list\|get\|set\|rm` | Manage trees and the sources each maps. |
 | `hrono tree maintain <tree>` | Build a tree from scratch. |
 | `hrono tree sync <tree>` | Bring a built tree up to date incrementally. |
+| `hrono tree review <tree>` | Run the insights reviews a tree owes. |
 | `hrono tree export <tree> --out <dir>` | Write the tree as a folder of Markdown (`--levels` sets the hop limit, default 4). |
 | `hrono tree pending <tree>` | List sections not yet placed in a topic. |
 | `hrono jobs list\|get\|watch\|cancel` | Inspect and control background jobs. |
@@ -224,8 +225,9 @@ so the condense model can use `anthropic` while everything else stays on
 ### Insights (optional)
 
 A strong model can review the biggest topics of a tree and write what it finds
-into their briefs. Off by default, because each review is billed: about $2.50
-a topic at API prices (a subscription is not billed per token).
+into their briefs. Off by default, because each review is billed: about $2.80
+a topic at API prices, a review and the extend call (a subscription is not
+billed per token).
 
 1. Add a model with the role `insights` (`hrono models set opus -f opus.json`,
    `"role": "insights"`, usually on an `anthropic` connection or `claude-code`).
@@ -235,10 +237,10 @@ a topic at API prices (a subscription is not billed per token).
    `"insights_threshold"` in the tree's config, `hrono tree config set`). A line
    under the switch names the topics it would review, the root included, and
    the cost.
-3. Press **Review now** next to that line (it runs `settle`; or
-   `POST /jobs {"op": "settle"}`, or the `settle` run on the Runs page). It
-   reviews those topics, bottom-up and the root last, and nothing else.
-   `hrono jobs watch <job-id>` follows it.
+3. Press **Review now** next to that line, or run `hrono tree review <tree>`.
+   It reviews those topics, bottom-up and the root last, and nothing else;
+   with none due it says so and calls no model. The command follows the run
+   and prints how many topics it reviewed and what it found.
 
 After that, a `sync` reviews a topic again only when it rewrites that topic's
 brief or the topic first reaches the threshold; a sync that changes nothing

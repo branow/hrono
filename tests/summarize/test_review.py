@@ -110,12 +110,19 @@ def _row(conn: object, table: str, name: str, **config: object) -> None:
     )
 
 
-def _section(conn: object, path: str, body: bytes, i: int) -> int:
+def _section(
+    conn: object,
+    path: str,
+    body: bytes,
+    i: int,
+    source: str = "repo",
+    version: str = "v1",
+) -> int:
     istore.upsert_content(conn, content_hash(body), body)  # type: ignore[arg-type]
     found = istore.insert_section(
         conn,  # type: ignore[arg-type]
-        source="repo",
-        address=Address("git", "example.com/repo", path, "v1"),
+        source=source,
+        address=Address("git", f"example.com/{source}", path, version),
         start=0,
         end=len(body),
         content_hash=content_hash(body),
@@ -297,6 +304,45 @@ def test_evidence_outside_the_area_gets_no_version(world) -> None:  # type: igno
         {"file": "a.py", "version": "v1"},
         {"file": "source/repo/b.py", "lines": "1", "version": "v1"},
         {"file": "condensed/repo/b.py.md", "version": "v1"},
+    ]
+
+
+def test_a_path_two_sources_hold_gets_the_version_of_the_source_it_names(
+    world,  # type: ignore[no-untyped-def]
+) -> None:
+    database, ids = world
+    with database.connect() as conn, conn:
+        twin = _section(conn, "a.py", b"other a body\n", 9, "other", "v2")
+        conn.execute(
+            "INSERT INTO node_members(node_id, section_id, forced, attached, "
+            "created_at) VALUES (?, ?, 0, 0, 't')",
+            (ids["b"], twin),
+        )
+    found = {
+        "findings": [
+            {
+                "statement": "s",
+                "evidence": [
+                    {"file": "a.py"},
+                    {"file": "b.py"},
+                    {"file": "source/repo/a.py"},
+                    {"file": "source/other/a.py"},
+                ],
+            }
+        ]
+    }
+
+    _run(database, Reviewer(findings=found), [1])
+
+    with database.connect() as conn:
+        stored = json.loads(
+            conn.execute("SELECT evidence FROM insights_findings").fetchone()[0]
+        )
+    assert stored == [
+        {"file": "a.py"},  # two sources hold it: which one is not said
+        {"file": "b.py", "version": "v1"},
+        {"file": "source/repo/a.py", "version": "v1"},
+        {"file": "source/other/a.py", "version": "v2"},
     ]
 
 

@@ -82,7 +82,9 @@ when, and with how many tokens; hashes are behind Details.
   with what it checked and dropped folded away. A pinned topic keeps its
   findings and says they were not applied; a review with nothing to add says
   so; a run that failed on the topic links the run and says the brief is
-  unchanged. A topic never reviewed shows none of it. Readers see all of it.
+  unchanged, and the heading then carries no count. The confidence is a chip
+  for its level word (high, medium, low) and the model's own sentence as
+  wrapping text beside it. A topic never reviewed shows none of it. Readers see all of it.
 - **Sections.** Each shows where it starts (heading, lines, size), worst fit
   first, filterable by path and paged. A section from a repository on
   github.com, gitlab.com or bitbucket.org links to its file at the synced
@@ -208,7 +210,8 @@ them says what turning it on would cost, from the same dry run as `PUT
 prices ("Off: no reviews, no cost" when off). It follows the unsaved fields
 and saves nothing; on a subscription it says that nothing is billed per call.
 When the saved settings have a review due and a model has the role, a "Review
-now" button beside the line queues `settle` and opens the Runs page on it;
+now" button beside the line queues `settle` and opens the Runs page on it,
+which says the reviews started;
 with nothing due the line says every topic over the threshold is reviewed. A
 finding's evidence links the file at the version the review read, "version
 not recorded" on older findings.

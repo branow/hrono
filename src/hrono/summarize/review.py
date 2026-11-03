@@ -240,15 +240,21 @@ class Area:
         # commit its sections carry now, kept with each finding's evidence
         # (a reviewer names a file as the tools print it, `source/<source>/
         # <path>`, its condensation, or as its repository path)
+        # A bare repository path names a file only when one source holds it;
+        # in a tree of two sources both holding `README.md` it gets no version.
+        holders: dict[str, set[str]] = {}
         self.versions = {}
         for r in rows:
+            holders.setdefault(str(r["path"]), set()).add(str(r["source"]))
             for name in (
-                str(r["path"]),
                 f"{r['source']}/{r['path']}",
                 f"{lookup.SOURCE}{r['source']}/{r['path']}",
                 f"{lookup.CONDENSED}{r['source']}/{r['path']}.md",
             ):
                 self.versions[name] = str(r["version"])
+        for r in rows:
+            if len(holders[str(r["path"])]) == 1:
+                self.versions[str(r["path"])] = str(r["version"])
         names = naming.names(conn, below)
         held = {
             n: str(r["text"])

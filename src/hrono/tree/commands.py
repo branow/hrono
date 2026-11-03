@@ -28,6 +28,7 @@ from typing import Annotated
 import typer
 
 from hrono.client.http import from_profile
+from hrono.jobs.commands import watch_job
 
 _WHY = {
     "escapes": "write outside",
@@ -70,6 +71,45 @@ def sync(name: str) -> None:
 
     result = from_profile().post(f"/trees/{name}/sync", {})
     _started("sync", name, result)
+
+
+@app.command("review")
+def review(name: str) -> None:
+    """Run the insights reviews a tree owes, and print what they found.
+
+    Queues a 'settle' (which reviews only the topics now over the threshold,
+    the root last, and calls no model when none is due), follows it until it
+    ends, and prints its result. Needs the insights model and the tree's
+    Insights switch; the cost is shown on the tree's settings page.
+    """
+
+    client = from_profile()
+    started = client.post("/jobs", {"op": "settle", "tree": name})
+    job_id = started.get("job_id") if isinstance(started, dict) else None
+    if not job_id:
+        _started("review", name, started)  # says the server returned no job
+        return
+    typer.echo(f"Started review job {job_id} for tree '{name}'.")
+    watch_job(str(job_id))
+    job = client.get(f"/jobs/{job_id}")
+    result = job.get("result") if isinstance(job, dict) else None
+    typer.echo(_reviewed(result if isinstance(result, dict) else {}))
+
+
+def _reviewed(result: dict[str, object]) -> str:
+    found = result.get("insights")
+    if not isinstance(found, dict):
+        return "Nothing is due for review; no model was called."
+    line = (
+        f"Reviewed {found.get('reviews', 0)} topics, extended "
+        f"{found.get('extends', 0)}: {found.get('findings', 0)} findings."
+    )
+    if found.get("note"):
+        line += f" {found['note']}"
+    failed = found.get("failed")
+    if isinstance(failed, list) and failed:
+        line += f" Did not finish: {'; '.join(str(f) for f in failed)}."
+    return line
 
 
 def _started(verb: str, name: str, result: object) -> None:
