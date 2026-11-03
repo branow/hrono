@@ -8,6 +8,7 @@ read is what the test asserts, not what a mock says.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -17,9 +18,11 @@ from hrono import pins
 from hrono.db.database import Database
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
+from hrono.jobs import store as jobs_store
 from hrono.jobs.model import Job
 from hrono.jobs.ops import JobContext
 from hrono.jobs.stages import StageFailed
+from hrono.jobs.worker import Worker, enqueue
 from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
@@ -28,6 +31,7 @@ from hrono.llm.client import (
     Usage,
 )
 from hrono.registry import store as registry_store
+from hrono.server.ui.reviewed import reviewed as topic_view
 from hrono.summarize import briefs, insights, review
 from hrono.summarize import store as condensations
 from hrono.summarize.brief_upper import brief_upper
@@ -522,6 +526,39 @@ def test_a_failed_review_in_a_settle_names_the_topic_on_the_failed_run(
         _settle(database, Reviewer(fail=LLMError("rate limited")))
     assert raised.value.stage == "review"
     assert raised.value.item == review.review_item(ids["mid"])
+
+
+def test_a_settle_the_provider_failed_shows_on_the_reviewed_topic(
+    world,  # type: ignore[no-untyped-def]
+) -> None:
+    """Review now end to end: the worker records the failed settle, and the
+    topic's view finds that run (what its page links as "See the run")."""
+    database, ids = world
+    failing = Reviewer(fail=LLMError("the model server returned 500"))
+    worker = Worker(
+        database, {"settle": lambda job, ctx: settle(job, ctx, client=failing)}
+    )
+    worker.start()
+    try:
+        job_id = enqueue(database, "settle", {}, tree=TREE)
+        deadline = time.monotonic() + 10
+        status = None
+        while status not in ("failed", "succeeded"):
+            assert time.monotonic() < deadline, f"settle still {status}"
+            with database.connect() as conn:
+                status = jobs_store.get(conn, job_id)["status"]
+            time.sleep(0.01)
+    finally:
+        worker.stop()
+        worker.join(timeout=5)
+
+    assert status == "failed"
+    with database.connect() as conn:
+        seen = topic_view(conn, TREE, ids["mid"], "mid", "", str)
+    assert seen is not None and seen["failed"] == job_id
+    assert (
+        seen["reviewed"] is False
+    )  # no pass stored: "found nothing" stays off
 
 
 def test_without_an_insights_model_nothing_runs_and_it_says_why(world) -> None:  # type: ignore[no-untyped-def]
