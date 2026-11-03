@@ -10,3 +10,5 @@
 (po 2026-11-03: the baseline reset, `set-url --` and the Health hint margin went back with E064 round 2, with the boot torch race (so the test-side torch import and its importorskip go) and the live-run browser flake. Left here: Home's 0.55 s plan query, the long moving line, the estimate not counting migrations.)
 - (qa round 2) test_a_baseline_taken_on_raw_vectors_is_measured_again_after_an_upgrade bites only on its baseline assert: the toy tree's misfit rate is 0, so its settle_due and zero-call asserts pass without the reset; tests/tree/test_sync_chain.py:469, give the fixture one real misfit so settle_due itself fails without it. (Bench copy: raw baseline 0.0877, after sync 1 0.1266, sync 2 kept it, settle_due false both.)
 - (po review round 2) Health's rewrite card shows the cost to four decimals ("billed about $0.8177"); an estimate reads better rounded ("about $0.82"); src/hrono/server/templates/_parts.html, the rewrite hint.
+
+(po 2026-11-03, after acceptance 2: the cents rounding folded into E066.)

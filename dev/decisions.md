@@ -110,3 +110,12 @@ What the PO decided for you, why, and how to undo it. Newest last.
   O2 or O4, an epic of polish alone costs about 120k of the 376k left, and
   acceptance 2 needs 150k. Replaces: nothing. Undo: author an epic from
   backlog/E065-followups.md.
+- D19 2026-11-03: acceptance 2 passed O1-O6 with six small gaps; they are
+  one epic, E066 (findings chip and code, the settings line after reviews,
+  the review run title, the upgrade estimate with cache writes and to
+  cents, two fast-suite flakes), with the CLI failure line naming the topic
+  from E065's followups, then a scoped acceptance 3. Why: each is a gap a
+  curator sees on O4 or a contributor's red gate; the estimate off by 2x
+  misleads an admin deciding to upgrade. Budget: about 120k + 150k of the
+  320k left. Replaces: ending the run on acceptance 2. Undo: archive E066,
+  items back to backlog.

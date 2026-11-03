@@ -8,3 +8,5 @@ On a long topic (flask node 17) the clamped brief's list items and code spans ar
 - `POST /jobs` still queues every other op (brief, brief-upper, ...) for an unregistered tree (src/hrono/server/jobs.py:115); refuse any tree-scoped op the same way.
 
 (po 2026-11-03: left for acceptance 2 to confirm or fold; none blocks O2 or O4. The ui-check item is a fix to the autodev tool, not to hrono.)
+
+(po 2026-11-03, after acceptance 2: the run title and the CLI failure line folded into E066; POST /jobs other ops and the ui-check item stay.)
