@@ -26,6 +26,12 @@ from hrono.registry import store as registry_store
 from hrono.server.app import create_app
 
 KEY = Fernet.generate_key()
+# The app's startup warms the query encoder on a background thread, which
+# imports torch while a request clusters; scipy, probing for array types
+# mid-import, sees a half-built torch and UMAP fails ("the reduction failed").
+# Imported here, torch is whole before any thread races it.
+pytest.importorskip("torch")
+
 TREE = "default"
 MODEL = "emb"
 

@@ -10,6 +10,7 @@ import pytest
 from hrono import pins
 from hrono.cluster import store as cluster_store
 from hrono.db.database import Database
+from hrono.ingest.identity import content_hash
 from hrono.jobs.model import Job
 from hrono.jobs.stages import StageFailed
 from hrono.llm.client import (
@@ -410,6 +411,29 @@ def test_a_run_over_an_unchanged_corpus_says_nothing_changed(
     outcome = _run(db, tmp_path, Judge())
 
     assert outcome["changed"] is False
+
+
+def test_a_tree_built_today_synced_twice_unchanged_calls_no_model(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # the first sync after a build places by condensation vectors the build
+    # never embedded; if it moved anything it would rewrite briefs for a source
+    # that did not change, and the second would move the next misfit
+    db, _origin = built
+    judge = Judge()
+    with db.connect() as conn, conn:
+        # a tree built before condensations were embedded
+        for row in conn.execute("SELECT text FROM condensations").fetchall():
+            conn.execute(
+                "DELETE FROM embeddings WHERE content_hash = ?",
+                (content_hash(row["text"].encode("utf-8")),),
+            )
+
+    for _ in range(2):
+        outcome = _run(db, tmp_path, judge)
+
+        assert outcome["changed"] is False
+        assert judge.calls == 0
 
 
 def test_a_forced_assignment_is_counted(
