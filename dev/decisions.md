@@ -85,3 +85,12 @@ What the PO decided for you, why, and how to undo it. Newest last.
   the two-source evidence version, and the nav overlaps at 390, all in E063;
   the manual-split flake in E064. Why: each is a gap a new user hits on O2
   or the 390 bar. Replaces: nothing. Undo: drop E063 ticket 3.
+- D16 2026-11-03: E064 goes back for one round instead of merging with
+  followups: a tree synced before the upgrade keeps its raw-vector monitor
+  baseline, so its second unchanged sync can still settle and pay calls,
+  the very fault E064 fixes. The round also fixes the boot torch race in
+  the app (a sync right after `hrono serve` fails "the reduction failed")
+  rather than in the test, and steadies the live-run browser flake.
+  Why: the bench copy had no baseline, so qa could not see it; most real
+  upgraded trees have one. Replaces: merging at 317990a. Undo: accept
+  317990a and leave the items in backlog/E064-followups.md.

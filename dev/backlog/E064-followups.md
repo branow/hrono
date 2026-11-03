@@ -1,0 +1,10 @@
+# E064 followups (qa, round 1)
+- Monitor baseline is not reset when the placement vector space changes: a tree that already holds a baseline measured on raw vectors keeps it, so `settle_due` may fire falsely after the upgrade (bench copy had none, so unseen); src/hrono/cluster/monitor.py:58, reset the baseline when the condensations are first embedded.
+- `git remote set-url origin <url>` has no `--`, unlike clone and ls-remote; a url starting with "-" is read as an option (registration refuses such urls today); src/hrono/ingest/git_syncer.py:38, use `["remote", "set-url", "--", "origin", clean_url]`.
+- Home computes the rewrite plan live on every load: 0.55 s on the 8459-section bcreg tree; src/hrono/health/upgrade.py:115 `_moving` runs one query per condensation, make it one join.
+- `pytest.importorskip("torch")` skips all of test_manual_split.py where the embed extra is missing though the tests need only the cluster extra; tests/server/test_manual_split.py:33, use a plain `import torch` guarded by the cluster extra, or fix the boot race (backlog/startup-torch-import-races-umap.md) and drop it.
+- Health's rewrite card: the hint runs into the table header with no gap; src/hrono/server/templates/triage.html:36, add margin below the hint.
+- The moving line is long ("... placed by their condensations: topics over the size limit split and sections move"); shorten it in en and uk (_parts.html:125).
+- The estimate counts splits but not migrations, so it ran 12% under on the bench copy (25 vs 28 calls, 3 were copy re-asks); fine within 25%, note it if a bigger tree misses.
+
+(po 2026-11-03: the baseline reset, `set-url --` and the Health hint margin went back with E064 round 2, with the boot torch race (so the test-side torch import and its importorskip go) and the live-run browser flake. Left here: Home's 0.55 s plan query, the long moving line, the estimate not counting migrations.)

@@ -79,3 +79,4 @@ Done when:
 ## Log
 - 2026-11-02 po: created from acceptance 1 gap 3 and E061 followups.
 - 2026-11-02 po: ticket 3 and the chrome line added from E062 review (backlog/E062-followups.md).
+- 2026-11-03 dev: round 1 started, branch epic/E063.
