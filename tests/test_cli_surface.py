@@ -591,7 +591,7 @@ def test_tree_review_queues_settle_follows_it_and_prints_the_result(
     assert client.calls[2] == (
         "POST",
         "/jobs",
-        {"op": "settle", "tree": "flask"},
+        {"op": "settle", "tree": "flask", "scope": {"review_only": True}},
     )
     assert client.calls[3][:2] == ("GET", "/jobs/j1")
     assert "Reviewed 2 topics, extended 1: 5 findings." in run.stdout

@@ -454,6 +454,9 @@ async def run_from_the_page(
     scope: dict[str, object] = (
         {"type": "source", "name": name} if name else {"type": "all"}
     )
+    if op == "settle" and then == "review":
+        # Review now runs the reviews alone; a drifted tree is not rebuilt
+        scope["review_only"] = True
     database = request.app.state.db
     if fans_out(op, scope):
         started = await run_in_threadpool(

@@ -77,9 +77,10 @@ def sync(name: str) -> None:
 def review(name: str) -> None:
     """Run the insights reviews a tree owes, and print what they found.
 
-    Queues a 'settle' (which reviews only the topics now over the threshold,
-    the root last, and calls no model when none is due), follows it until it
-    ends, and prints its result. Needs the insights model and the tree's
+    Queues a review-only 'settle': it reviews the topics now over the
+    threshold, the root last, and calls no model when none is due. It never
+    re-clusters or rewrites the tree, even a drifted one. It follows the job
+    until it ends and prints its result. Needs the insights model and the tree's
     Insights switch; the cost is shown on the tree's settings page.
     """
 
@@ -100,7 +101,10 @@ def review(name: str) -> None:
     ):
         typer.echo("No model has the role insights. No model was called.")
         raise typer.Exit(1)
-    started = client.post("/jobs", {"op": "settle", "tree": name})
+    started = client.post(
+        "/jobs",
+        {"op": "settle", "tree": name, "scope": {"review_only": True}},
+    )
     job_id = started.get("job_id") if isinstance(started, dict) else None
     if not job_id:
         _started("review", name, started)  # says the server returned no job

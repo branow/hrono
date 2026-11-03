@@ -329,3 +329,18 @@ def test_the_running_filter_includes_a_run_with_stages_done(
     assert f'data-job="{parent}"' in page
     assert "1/2" in page
     assert 'value="partial"' not in page
+
+
+def test_review_now_queues_a_settle_that_only_reviews(browser: Browser) -> None:
+    # pressed on a drifted tree, a plain settle re-clusters and rewrites every
+    # brief before any review; Review now must ask for the reviews alone
+    browser.sign_in()
+
+    browser.client.post(
+        "/ui/jobs/run?tree=default&then=review", data={"op": "settle"}
+    )
+
+    row = browser.conn.execute(  # type: ignore[attr-defined]
+        "SELECT scope FROM jobs WHERE op = 'settle'"
+    ).fetchone()
+    assert json.loads(row["scope"])["review_only"] is True

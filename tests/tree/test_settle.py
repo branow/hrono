@@ -676,9 +676,7 @@ class Reviewing(FakeCompletion):
         return super().complete(request)
 
 
-def test_settle_with_insights_on_reviews_the_root_and_says_so_in_its_result(
-    built: Database, tmp_path: Path
-) -> None:
+def _insights_on(built: Database) -> None:
     with built.write() as conn:
         for name, role, template in (
             ("review", "insights-review", "REVIEW {brief} {index}"),
@@ -717,6 +715,12 @@ def test_settle_with_insights_on_reviews_the_root_and_says_so_in_its_result(
             None,
             "t",
         )
+
+
+def test_settle_with_insights_on_reviews_the_root_and_says_so_in_its_result(
+    built: Database, tmp_path: Path
+) -> None:
+    _insights_on(built)
     outcome = settle(
         _job(),
         job_context(built, tmp_path),
@@ -735,3 +739,34 @@ def test_settle_with_insights_on_reviews_the_root_and_says_so_in_its_result(
             "FROM insights_passes p JOIN nodes n ON n.id = p.node_id"
         ).fetchall()
     assert [row["root"] for row in top] == [1]  # the root, and no other topic
+
+
+def test_a_review_only_settle_never_reclusters_a_drifted_tree(
+    built: Database, tmp_path: Path
+) -> None:
+    # `hrono tree review` on a tree past the churn threshold must run the
+    # reviews alone: a re-cluster rewrites every leaf brief on the way
+    _insights_on(built)
+    _set_drift(built, CHURN_THRESHOLD + 5)
+    with built.connect() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+    job = _job()
+    job.scope["review_only"] = True
+
+    def no_build(*args: object, **kwargs: object) -> object:
+        raise AssertionError("a review-only settle re-clustered the tree")
+
+    outcome = settle(
+        job,
+        job_context(built, tmp_path),
+        build=no_build,
+        encoder_for=fake_encoder,
+        client=Reviewing(),
+    )
+
+    assert outcome["settled"] is False
+    assert outcome["insights"]["reviews"] >= 1  # type: ignore[index]
+    with built.connect() as conn:
+        after = conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
+        assert should_settle(conn, TREE) is True  # the drift is left for later
+    assert after == before

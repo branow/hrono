@@ -72,8 +72,11 @@ def settle(
     """Warm-reconcile the tree when churn/misfit crosses the trigger."""
     tree = job.tree or DEFAULT_TREE
     run = Stages(report=recorder(context.database, job.id))
+    # `hrono tree review` asks for the reviews alone: a drifted tree is then
+    # left as it is, never re-clustered and re-briefed on the way
+    review_only = bool(job.scope.get("review_only"))
     with context.database.connect() as conn:
-        tripped = force or should_settle(conn, tree)
+        tripped = not review_only and (force or should_settle(conn, tree))
         owed = () if tripped else insights.pending(conn, tree)
     if not tripped:
         # not drifted, but the tree's insights step may still owe reviews:
