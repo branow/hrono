@@ -15,9 +15,16 @@ from collections.abc import Callable
 from hrono.ingest.blob_link import blob_url
 from hrono.summarize.review import review_item
 
-_CONFIDENCE = {"high": "ok", "medium": "warn"}
+# a range takes the lower level's tone
+_CONFIDENCE = {
+    "high": "ok",
+    "medium-high": "warn",
+    "medium": "warn",
+    "low-medium": "plain",
+    "low": "plain",
+}
 _CONFIDENCE_LINE = re.compile(
-    r"\s*(?:(?P<level>high|medium|low)\b[\s,;:.\u2013\u2014-]*)?"
+    r"\s*(?:(?P<level>medium-high|low-medium|high|medium|low)\b[\s,;:.\u2013\u2014-]*)?"
     r"(?P<rest>.*)",
     re.I | re.S,
 )

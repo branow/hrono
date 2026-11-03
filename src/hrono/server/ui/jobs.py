@@ -72,6 +72,7 @@ MEANS = {
     "monitor": "look for topics that have drifted out of shape",
     "repair": "split, merge or retire the topics that drifted",
     "settle": "place the sections that were still waiting",
+    "settle:review": "review the topics that were due",
     "health": "check what needs attention in the tree and keep the report "
     "for the Health page",
     "export": "write the tree out as the Markdown files an agent reads, and "
@@ -239,7 +240,7 @@ def render_job(
         "started": clock(job.created_at),
         "took": _elapsed(job.created_at, job.updated_at, live=status in _LIVE),
         "op": job.op,
-        "means": _(MEANS.get(job.op, "")),
+        "means": _(_means(job.op, job.result)),
         "status": status,
         "live": status in _LIVE,
         "progress": (
@@ -268,7 +269,7 @@ def render_job(
         "children": [
             {
                 "op": str(child["op"]),
-                "means": _(MEANS.get(str(child["op"]), "")),
+                "means": _(_means(str(child["op"]), to_job(child).result)),
                 "status": str(child["status"]),
                 "scope": to_job(child).scope,
                 "outcome": outcome.read(to_job(child).result),
@@ -277,6 +278,13 @@ def render_job(
             for child in children
         ],
     }
+
+
+def _means(op: str, result: Mapping[str, object] | None) -> str:
+    """What the stage does; a settle that only reviewed says so."""
+    if op == "settle" and (result or {}).get("settled") is False:
+        return MEANS["settle:review"]
+    return MEANS.get(op, "")
 
 
 def _stages(result: Mapping[str, object] | None) -> list[dict[str, object]]:

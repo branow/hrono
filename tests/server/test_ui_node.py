@@ -950,6 +950,8 @@ def test_a_review_with_no_findings_says_so(browser: Browser) -> None:
         ("high; the code path is unconditional", "high", "the code path"),
         ("Low - a guess", "low", "a guess"),
         ("certain beyond doubt", "", "certain beyond doubt"),
+        ("medium-high, relies on X", "medium-high", "relies on X"),
+        ("low-medium: a guess", "low-medium", "a guess"),
     ],
 )
 def test_only_a_level_word_becomes_the_chip(
@@ -970,6 +972,48 @@ def test_only_a_level_word_becomes_the_chip(
     if chip:
         assert re.search(rf'class="chip \w+">{chip}</span>', card)
     assert prose in card
+
+
+def test_a_range_takes_the_lower_levels_tone(browser: Browser) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    pid = _pass(browser, node, findings=1)
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE insights_findings SET confidence = 'medium-high' "
+            "WHERE pass_id = ?",
+            (pid,),
+        )
+
+    card = _body(browser, node).split('id="findings"')[1]
+
+    assert 'class="chip warn">medium-high</span>' in card
+
+
+def test_a_finding_sets_identifiers_as_code_and_escapes_the_rest(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    pid = _pass(browser, node, findings=1)
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE insights_findings SET statement = ?, placement = ?, "
+            "confidence = ? WHERE pass_id = ?",
+            (
+                "`sign()` runs <script>alert(1)</script> first",
+                "after `verify`",
+                "medium, relies on `key`",
+                pid,
+            ),
+        )
+
+    card = _body(browser, node).split('id="findings"')[1].split("</ol>")[0]
+
+    assert "<code>sign()</code>" in card
+    assert "<script>" not in card and "&lt;script&gt;" in card
+    assert "<code>verify</code>" in card and "<code>key</code>" in card
+    assert "`" not in card
 
 
 @pytest.mark.parametrize(

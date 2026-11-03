@@ -128,6 +128,36 @@ def test_a_finished_run_shows_what_it_spent(browser: Browser) -> None:
     assert "2/2" in page
 
 
+def test_a_settle_that_only_reviewed_is_titled_as_a_review(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    titles = {}
+    for settled in (False, True):
+        job = str(
+            browser.client.post(
+                "/jobs",
+                json={"op": "settle", "tree": "default"},
+                headers=browser.api(),
+            ).json()["job_id"]
+        )
+        job_store.set_status(
+            browser.conn,  # type: ignore[arg-type]
+            job,
+            "succeeded",
+            None,
+            "t",
+            result=json.dumps({"settled": settled}),
+        )
+        titles[settled] = browser.client.get(
+            f"/ui/jobs/{job}?tree=default"
+        ).text
+
+    assert "review the topics that were due" in titles[False]
+    assert "place the sections" not in titles[False]
+    assert "place the sections that were still waiting" in titles[True]
+
+
 def test_a_failed_run_shows_its_code_and_message(browser: Browser) -> None:
     # the error envelope's code and message are where someone reads them
     browser.sign_in()

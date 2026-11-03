@@ -892,7 +892,14 @@ def test_review_now_is_offered_only_when_settle_would_run_a_review(
     ).fetchone()
     assert tuple(row) == ("settle", "beta")
 
-    # everything over the threshold is reviewed: nothing to offer
+    # everything over the threshold is reviewed: nothing to offer, and no
+    # billing note even on a subscription
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE registry SET config = ? WHERE collection = 'connections' "
+            "AND name = 'sub'",
+            (json.dumps({"name": "sub", "provider": "claude-code"}),),
+        )
     with browser.conn:  # type: ignore[attr-defined]
         browser.conn.execute(  # type: ignore[attr-defined]
             "INSERT INTO insights_passes(node_id, passed_at, model_name, "
@@ -901,7 +908,13 @@ def test_review_now_is_offered_only_when_settle_would_run_a_review(
         )
     done = browser.config(edit="trees:beta")
     assert 'id="review-now"' not in done
-    assert "Every topic over the threshold is reviewed." in done
+    sentence = (
+        "Every topic over the threshold has been reviewed; a sync reviews "
+        "a topic again when it rewrites its brief."
+    )
+    line = done.split('id="insights-line"')[1].split("</p>")[0]
+    assert sentence in line and ".." not in line
+    assert "subscription" not in line.lower()
 
 
 def test_a_subscription_marks_the_insights_cost_as_an_estimate(

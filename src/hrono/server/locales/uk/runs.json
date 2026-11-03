@@ -470,5 +470,6 @@
   "{value}m": "{value} хв",
   "{value}s": "{value} с",
   "{verdict} is the judge's majority answer to how much the change altered what a reader must know — {none}, {minor} or {major}.": "{verdict} — це відповідь більшості суддів на питання, наскільки зміна вплинула на те, що має знати читач: {none}, {minor} чи {major}.",
-  "… cut": "… обрізано"
+  "… cut": "… обрізано",
+  "review the topics that were due": "переглянути теми, що були в черзі"
 }

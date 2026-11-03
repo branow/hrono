@@ -150,14 +150,14 @@
       <ol class="findings">
         {% for f in found.findings %}
         <li>
-          <p class="statement">{{ f.statement }}</p>
+          <p class="statement">{{ f.statement|idents }}</p>
           {% if f.level or f.settle %}
           <p class="confidence">
-            {% if f.level %}<span class="chip {{ f.tone }}">{% if f.level == "high" %}{{ _("high") }}{% elif f.level == "medium" %}{{ _("medium") }}{% else %}{{ _("low") }}{% endif %}</span>{% endif %}
-            {% if f.settle %}<span class="hint">{{ f.settle }}</span>{% endif %}
+            {% if f.level %}<span class="chip {{ f.tone }}">{% if f.level == "high" %}{{ _("high") }}{% elif f.level == "medium-high" %}{{ _("medium-high") }}{% elif f.level == "medium" %}{{ _("medium") }}{% elif f.level == "low-medium" %}{{ _("low-medium") }}{% else %}{{ _("low") }}{% endif %}</span>{% endif %}
+            {% if f.settle %}<span class="hint">{{ f.settle|idents }}</span>{% endif %}
           </p>
           {% endif %}
-          {% if f.placement %}<p class="faint small">{{ f.placement }}</p>{% endif %}
+          {% if f.placement %}<p class="faint small">{{ f.placement|idents }}</p>{% endif %}
           {% if f.evidence %}
           <ul class="evidence mono small">
             {% for e in f.evidence %}

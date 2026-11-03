@@ -340,5 +340,7 @@
   "Checked and dropped ({n})|Checked and dropped ({n})": [
     "Перевірено й відкинуто ({n})", "Перевірено й відкинуто ({n})", "Перевірено й відкинуто ({n})"
   ],
-  "the cheaper brief": "дешевший опис"
+  "the cheaper brief": "дешевший опис",
+  "medium-high": "середньо-висока",
+  "low-medium": "низько-середня"
 }

@@ -189,12 +189,14 @@
 {% if est.on %}
 <p class="hint" id="insights-line" aria-live="polite">
   {% set amount %}<strong class="num" data-spend="{{ "estimate" if est.estimated_cost.subscription else "metered" }}">${{ "{:,.2f}".format(est.estimated_cost.usd) }}</strong>{% endset %}
-  {% if est.count %}{{ n_(est.count, "Would review {n} topic, about {amount} (estimate)", "Would review {n} topics, about {amount} (estimate)", amount=amount)|safe }}{% else %}{{ _("Every topic over the threshold is reviewed.") }}{% endif %}{% if est.estimated_cost.subscription or est.note or est.runnable %}.{% endif %}
+  {% if not est.count %}{{ _("Every topic over the threshold has been reviewed; a sync reviews a topic again when it rewrites its brief.") }}{% if est.note %} {{ _(est.note)|capitalize }}.{% endif %}
+  {% else %}{{ n_(est.count, "Would review {n} topic, about {amount} (estimate)", "Would review {n} topics, about {amount} (estimate)", amount=amount)|safe }}{% if est.estimated_cost.subscription or est.note or est.runnable %}.{% endif %}
   {% if est.estimated_cost.subscription %}{{ _("A subscription is not billed per call.") }}{% endif %}
   {# the note is the registry's lower-case clause: one sentence of its own #}
   {% if est.note %}{{ _(est.note)|capitalize }}.{% endif %}
   {% if est.runnable %}{{ _("Review now runs them; a sync reviews a topic whose brief it rewrites.") }}
   <button class="btn small" type="submit" id="review-now" name="op" value="settle" formaction="/ui/jobs/run?tree={{ est.tree }}&then=review" formnovalidate title="{{ _("Runs the reviews for the saved settings, then shows the run") }}">{{ _("Review now") }}</button>{% endif %}
+  {% endif %}
 </p>
 {% else %}
 <p class="hint" id="insights-line" aria-live="polite">{{ _("Off: no reviews, no cost") }}</p>
