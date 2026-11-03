@@ -212,6 +212,7 @@ def test_the_result_says_what_the_run_did(
         "propagate",
         "brief",
         "brief-upper",
+        "embed",  # condensations and briefs, so monitor measures the new space
         "monitor",
         "repair",
         "adopt",
