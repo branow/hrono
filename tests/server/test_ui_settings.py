@@ -969,6 +969,23 @@ def test_a_cleared_threshold_stays_cleared_when_the_form_is_refused(
     assert "insights-line" not in page
 
 
+def test_review_now_for_an_unregistered_tree_is_refused_and_queues_nothing(
+    browser: Browser,
+) -> None:
+    """The page's door refuses what `POST /jobs` refuses."""
+    browser.sign_in()
+    refused = browser.client.post(  # type: ignore[attr-defined]
+        "/ui/jobs/run?tree=nope&then=review",
+        data={"op": "settle"},
+        follow_redirects=False,
+    )
+    assert refused.status_code == 404
+    queued = browser.conn.execute(  # type: ignore[attr-defined]
+        "SELECT COUNT(*) FROM jobs WHERE op = 'settle'"
+    ).fetchone()[0]
+    assert queued == 0
+
+
 @pytest.mark.parametrize("bad", ["abc", "500,000", "9" * 40])
 def test_a_threshold_that_is_not_a_number_is_a_field_error(
     browser: Browser, bad: str

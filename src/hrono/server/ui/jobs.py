@@ -28,6 +28,7 @@ from hrono.server import events, failures, i18n, outcome
 from hrono.server.changed import changed
 from hrono.server.i18n import gettext as _
 from hrono.server.i18n import ngettext as n_
+from hrono.server.trees import require_tree
 from hrono.server.ui import (
     Admin,
     Reader,
@@ -425,6 +426,8 @@ async def run_from_the_page(
     op = fields.get("op", "")
     if op not in OPS:
         raise NotFound(f"unknown op: {op}")
+    if op == "settle" and tree:
+        require_tree(request, tree)  # as POST /jobs does
     name = fields.get("source", "")
     scope: dict[str, object] = (
         {"type": "source", "name": name} if name else {"type": "all"}
