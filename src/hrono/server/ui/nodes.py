@@ -820,8 +820,8 @@ def _titled(brief: object, node_id: int) -> str:
     """A topic's name: its own, else its brief's first line (0032)."""
     if brief is None:
         return _("topic {id}", id=node_id)
-    first = str(brief["text"]).strip().splitlines()[0]  # type: ignore[index]
-    return _clipped(first) or _("topic {id}", id=node_id)
+    first = _first_line(brief["text"])  # type: ignore[index]
+    return first or _("topic {id}", id=node_id)
 
 
 def _titled_row(row: object, node_id: int) -> str:
@@ -836,7 +836,9 @@ def _first_line(brief: object) -> str:
     """A brief's opening line, clipped: the name a topic with none gets."""
     if not brief:
         return ""
-    return _clipped(str(brief).strip().splitlines()[0])
+    # an upper brief opens with a markdown heading; its name is the words
+    first = str(brief).strip().splitlines()[0].strip("#* ").strip()
+    return _clipped(first)
 
 
 def _clipped(text: str) -> str:

@@ -22,5 +22,6 @@ def usd(amount: object, billed: bool) -> str:
     if known is None:
         return "unknown"
     dollars = float(known)
-    # a single call is a fraction of a cent; two places would show it as $0.00
-    return f"${dollars:,.2f}" if dollars >= 1 else f"${dollars:.4f}"
+    # a single call is a fraction of a cent; two places would show it as
+    # $0.00, so only a sub-cent figure keeps four
+    return f"${dollars:,.2f}" if dollars >= 0.01 else f"${dollars:.4f}"

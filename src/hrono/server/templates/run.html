@@ -99,7 +99,7 @@
       </dl>
       {% if job.spend_by_stage|length > 1 %}
       <div class="table-wrap mt-3">
-        <table class="usage">
+        <table class="usage stages">
           <thead><tr><th>{{ _("Stage") }}</th><th class="count">{{ _("Calls") }}</th><th class="count">{{ _("In") }}</th><th class="count">{{ _("Out") }}</th><th class="count">{{ _("Time") }}</th><th class="count">{{ _("Cost") }}</th></tr></thead>
           <tbody>
             {% for row in job.spend_by_stage %}

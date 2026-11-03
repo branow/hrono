@@ -173,7 +173,7 @@
       <details>
         <summary class="twisty">{{ n_(found.dropped|length, "Checked and dropped ({n})", "Checked and dropped ({n})") }}</summary>
         <ul class="dropped">
-          {% for line in found.dropped %}<li class="hint">{{ line }}</li>{% endfor %}
+          {% for line in found.dropped %}<li class="hint">{{ line|idents }}</li>{% endfor %}
         </ul>
       </details>
       {% endif %}

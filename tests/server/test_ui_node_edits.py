@@ -117,6 +117,30 @@ def test_a_rename_lands_in_the_store_and_on_the_page(
     assert "Signing and serialization" in browser.page()
 
 
+def test_the_name_field_drops_the_briefs_heading_markup(
+    browser: Browser,
+) -> None:
+    # an upper brief opens with "# <name>"; the field offers the words
+    with browser.conn:  # type: ignore[attr-defined]
+        briefs.upsert(
+            browser.conn,  # type: ignore[arg-type]
+            browser.node,
+            "# Flask repository and docs\n\nThe rest of the brief.",
+            model_name="m",
+            prompt_name="brief",
+            prompt_hash="h2",
+            member_signature="sig",
+            input_tokens=1,
+            output_tokens=1,
+        )
+    browser.sign_in()
+
+    field = re.search(r'<input[^>]*id="topic-name"[^>]*>', browser.page())
+
+    assert field is not None
+    assert 'value="Flask repository and docs"' in field.group(0)
+
+
 def test_a_rename_pins_the_brief_so_it_cannot_be_re_derived(
     browser: Browser,
 ) -> None:

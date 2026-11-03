@@ -86,6 +86,22 @@ def test_set_puts_the_config_so_it_creates_or_replaces(
     assert body == {"name": "repo", "type": "git"}
 
 
+def test_set_reads_stdin_for_a_dash_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # the README Quickstart pipes a heredoc through `-f -`
+    client = _patch(monkeypatch, "hrono.registry.commands", FakeClient())
+
+    result = runner.invoke(
+        app,
+        ["sources", "set", "repo", "-f", "-"],
+        input=json.dumps({"name": "repo", "type": "git"}),
+    )
+
+    assert result.exit_code == 0, result.output
+    assert client.calls[0][2] == {"name": "repo", "type": "git"}
+
+
 def test_set_defaults_the_name_from_the_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

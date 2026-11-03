@@ -37,7 +37,10 @@ WRITE_TIMEOUT = 120.0
 
 
 def _read(source: Path | None) -> dict[str, object]:
-    """The config to write: a JSON file, or stdin when no file is given."""
+    """The config to write: a JSON file, or stdin when no file (or -) is
+    given."""
+    if source == Path("-"):
+        source = None
     if source is None and sys.stdin.isatty():
         # without this, `set` at a terminal just sat there looking hung
         typer.echo(
@@ -131,9 +134,10 @@ def build_app(collection: str) -> typer.Typer:
             typer.Option(
                 "-f",
                 "--file",
-                help="JSON config file; omitted, the config is read "
+                help="JSON config file; omitted or -, the config is read "
                 "from stdin.",
                 exists=True,
+                allow_dash=True,
                 dir_okay=False,
                 readable=True,
             ),
