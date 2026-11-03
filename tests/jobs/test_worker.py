@@ -465,8 +465,15 @@ def test_health_depends_on_the_beat_actually_coming_round(
     worker.start()
     try:
         assert wait_healthy(worker)
-        time.sleep(_BEAT_GRACE * 0.02 * 3)  # three grace windows
-        assert worker.healthy()
+        # three grace windows on, the stamp must have come round again: wait
+        # for that, then for the check to see it (a loaded machine may delay
+        # the beat, which is not a wedged one)
+        later = time.monotonic() + _BEAT_GRACE * 0.02 * 3
+        deadline = time.monotonic() + 10
+        while worker._last_beat < later:
+            assert time.monotonic() < deadline, "the beat never came round"
+            time.sleep(0.01)
+        assert wait_healthy(worker)
     finally:
         worker.stop()
         worker.join(timeout=5)

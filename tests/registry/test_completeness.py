@@ -8,7 +8,6 @@ ignored.
 
 from __future__ import annotations
 
-import gc
 import json
 import sqlite3
 from collections.abc import Iterator
@@ -151,11 +150,28 @@ def test_the_delete_copy_has_every_column_the_real_registry_has(
 
 
 def test_the_delete_preview_closes_its_copy(
-    conn: sqlite3.Connection, recwarn: pytest.WarningsRecorder
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # watch the connections THIS call opens: a ResourceWarning check over
+    # gc fires for any test in the process that left one open
+    opened: list[sqlite3.Connection] = []
+
+    class Watched(sqlite3.Connection):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+            opened.append(self)
+
+    real = sqlite3.connect
+    monkeypatch.setattr(
+        sqlite3,
+        "connect",
+        lambda *args, **kwargs: real(*args, factory=Watched, **kwargs),
+    )
     _complete(conn)
 
     completeness.gaps(conn, without=("connections", "cc"))
-    gc.collect()
 
-    assert not [w for w in recwarn if issubclass(w.category, ResourceWarning)]
+    assert opened
+    for copy in opened:
+        with pytest.raises(sqlite3.ProgrammingError):
+            copy.execute("SELECT 1")
