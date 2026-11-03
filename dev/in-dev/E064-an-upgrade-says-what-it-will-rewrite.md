@@ -82,3 +82,4 @@ Done when:
 ## Log
 - 2026-11-02 po: created from acceptance 1 gaps 4, 5 and 7 (O5, O6).
 - 2026-11-02 po: the manual-split flake added to ticket 3 (seen again in E062's full run).
+- 2026-11-02 dev round 1 started, worktree .claude/worktrees/E064

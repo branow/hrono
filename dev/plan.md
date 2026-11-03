@@ -29,7 +29,7 @@ free, so one epic at a time.
 Then: acceptance 2 as a new user on the flask copy (about 0.75 h, 150k).
 
 Order (one at a time): E057, E058, E056, E059, E060, E061, E062 (done),
-then E064, E063.
+then E064 (restarted 2026-11-03, 3 commits on its branch), E063.
 
 Model calls: qa spends at most 10 real claude-code subscription calls per
 epic (D2), on the flask copy and the stored xgboost/bcreg trees; no rebuild.
