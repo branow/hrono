@@ -185,6 +185,37 @@ def test_the_cost_counts_the_cache_tokens_the_ledger_measured(
     assert f"${full:,.2f}" in tree.home()
 
 
+def test_the_cache_tokens_are_this_trees_own(tree: Tree) -> None:
+    # another tree's prompts are cached at their own size: its rows must not
+    # move this tree's price while this tree has rows of its own
+    tree.write_briefs("an-older-prompt")
+    bare = upgrade.plan(tree.conn, TREE).usd  # type: ignore[arg-type]
+    with tree.conn:  # type: ignore[attr-defined]
+        for job, name, cached in (
+            ("job_here", TREE, 1_000_000),
+            ("job_there", "other", 9_000_000),
+        ):
+            tree.conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO jobs (id, tree, op, scope, status, created_at, "
+                "updated_at) VALUES (?, ?, 'brief', '{}', 'succeeded', 't', "
+                "'t')",
+                (job, name),
+            )
+            tree.conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO llm_calls (job_id, model, role, provider, "
+                "input_tokens, output_tokens, cache_read_tokens, "
+                "cache_creation_tokens, duration_ms, ok, created_at) VALUES "
+                "(?, 'brief', 'brief', 'x', 2, 1, ?, ?, 1, 1, 't')",
+                (job, cached, cached),
+            )
+
+    full = upgrade.plan(tree.conn, TREE).usd  # type: ignore[arg-type]
+
+    # three leaf briefs at this tree's million reads and writes: 3 * 4.05
+    assert bare is not None and full is not None
+    assert round(full - bare, 2) == 12.15
+
+
 def test_current_briefs_say_nothing(tree: Tree) -> None:
     _, template = resolve_prompt(tree.conn, "brief")  # type: ignore[arg-type]
     tree.write_briefs(template_hash(template))
