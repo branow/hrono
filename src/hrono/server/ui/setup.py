@@ -617,7 +617,7 @@ def dollars(amount: float | None) -> str:
     """A cost as a person reads it; unknown stays unknown, never zero."""
     if amount is None:
         return _("unknown")
-    return f"${amount:,.2f}" if amount >= 1 else f"${amount:.4f}"
+    return "<$0.01" if 0 < amount < 0.005 else f"${amount:,.2f}"
 
 
 # Why a file is left out, as `ingest.filter` says it: a fixed few reasons, and

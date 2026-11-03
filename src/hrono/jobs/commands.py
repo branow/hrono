@@ -151,7 +151,11 @@ def watch_job(job_id: str) -> None:
         last = job if isinstance(job, dict) else last
     error = last.get("error")
     if isinstance(error, dict):
+        details = error.get("details")
+        item = details.get("item") if isinstance(details, dict) else None
         typer.echo(
-            f"error: {error.get('code')}: {error.get('message')}", err=True
+            f"error: {error.get('code')}: {error.get('message')}"
+            + (f" (on {item})" if item else ""),
+            err=True,
         )
     _gate(str(last.get("status")))

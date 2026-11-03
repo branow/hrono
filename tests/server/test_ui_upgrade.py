@@ -120,7 +120,12 @@ def tree(tmp_path: Path) -> Iterator[Tree]:
                     "model": "m",
                     "role": role,
                     "params": {},
-                    "price": None,
+                    "price": {
+                        "input": 3.0,
+                        "output": 15.0,
+                        "cache_read": 0.3,
+                        "cache_write": 3.75,
+                    },
                 }
             ),
             None,
@@ -157,6 +162,27 @@ def test_briefs_from_an_older_prompt_are_announced_with_their_cost(
     assert "/triage?tree=default#rewrite" in home
     assert 'id="rewrite"' in health
     assert health.count("written by an older prompt</td>") == 3
+
+
+def test_the_cost_counts_the_cache_tokens_the_ledger_measured(
+    tree: Tree,
+) -> None:
+    tree.write_briefs("an-older-prompt")
+    bare = upgrade.plan(tree.conn, TREE).usd  # type: ignore[arg-type]
+    with tree.conn:  # type: ignore[attr-defined]
+        tree.conn.execute(  # type: ignore[attr-defined]
+            "INSERT INTO llm_calls (model, role, provider, input_tokens, "
+            "output_tokens, cache_read_tokens, cache_creation_tokens, "
+            "duration_ms, ok, created_at) VALUES ('brief', 'brief', 'x', 2, "
+            "1, 1000000, 1000000, 1, 1, 't')"
+        )
+
+    full = upgrade.plan(tree.conn, TREE).usd  # type: ignore[arg-type]
+
+    # three leaf briefs, each a million cache reads and writes: 3 * 4.05
+    assert bare is not None and full is not None
+    assert round(full - bare, 2) == 12.15
+    assert f"${full:,.2f}" in tree.home()
 
 
 def test_current_briefs_say_nothing(tree: Tree) -> None:

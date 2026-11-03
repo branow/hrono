@@ -202,9 +202,33 @@ def _priced(
         if price is None or made.tokens is None or usd is None:
             usd = None
         else:
-            usd += price.cost(made.tokens["input"], made.tokens["output"], 0, 0)
+            read, wrote = _cached(conn, role, count)
+            usd += price.cost(
+                made.tokens["input"], made.tokens["output"], read, wrote
+            )
             billing = _billing(billing, provider_of(conn, model))
     return Plan(older, moving, calls, tokens, usd, billing if usd else "")
+
+
+def _cached(conn: sqlite3.Connection, role: str, calls: int) -> tuple[int, int]:
+    """Cache reads and writes ``calls`` briefs would make, from the ledger.
+
+    A brief's own row keeps only the uncached input; the cache tokens are
+    most of what a call is billed for, so the mean of this install's own
+    ledger rows for the role stands in for them.
+    """
+    row = conn.execute(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(cache_read_tokens), 0) AS r, "
+        "COALESCE(SUM(cache_creation_tokens), 0) AS w FROM llm_calls "
+        "WHERE role = ? AND ok = 1 AND input_tokens IS NOT NULL",
+        (role,),
+    ).fetchone()
+    if not row["n"]:
+        return 0, 0
+    return (
+        round(int(row["r"]) / row["n"] * calls),
+        round(int(row["w"]) / row["n"] * calls),
+    )
 
 
 def _billing(so_far: str, provider: str) -> str:

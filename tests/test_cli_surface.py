@@ -620,6 +620,29 @@ def test_a_watched_job_that_failed_says_why(
     assert "llm-error: the model server returned 500" in run.output
 
 
+def test_a_watched_job_that_failed_on_an_item_names_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Streams(FakeClient):
+        def stream(self, path: str):
+            yield 'data: {"id": "j1", "status": "failed"}'
+
+    error = {
+        "code": "llm-error",
+        "message": "the model server returned 500",
+        "details": {"stage": "review", "item": "review of topic 17"},
+    }
+    _patch(
+        monkeypatch,
+        "hrono.jobs.commands",
+        Streams({"id": "j1", "status": "failed", "error": error}),
+    )
+
+    run = runner.invoke(app, ["jobs", "watch", "j1"])
+
+    assert "returned 500 (on review of topic 17)" in run.output
+
+
 def test_tree_review_on_a_drifted_tree_says_it_reclustered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
