@@ -70,7 +70,7 @@ class Tree(BaseModel):
         default=INSIGHTS_THRESHOLD,
         gt=0,
         title="Insights threshold",
-        examples=["500,000"],
+        examples=[INSIGHTS_THRESHOLD],
         description=(
             "A topic gets a review once the briefs under it that no review "
             "has covered hold this many characters. The root always gets one."

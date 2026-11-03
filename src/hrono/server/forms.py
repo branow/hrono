@@ -273,7 +273,7 @@ def _fields(
                 path=path,
                 label=_(info.title or ""),
                 help=_(info.description or ""),
-                example=str(info.examples[0]) if info.examples else "",
+                example=_example(info),
                 group=section,
                 annotation=inner,
                 required=info.is_required() and not optional,
@@ -398,10 +398,23 @@ def _read(field: Field, posted: Mapping[str, Sequence[str]]) -> object | None:
 
 
 def _number(raw: str) -> object:
-    try:
-        return int(raw)
-    except ValueError:
-        return float(raw)
+    """The number posted, or the text itself when it is not one: pydantic then
+    refuses it against the field, instead of the form answering 500."""
+    for kind in (int, float):
+        try:
+            return kind(raw)
+        except ValueError:
+            pass
+    return raw
+
+
+def _example(info: FieldInfo) -> str:
+    """The placeholder: a whole number is grouped, and its grouping is the
+    locale's (the catalog holds `500,000` as `500 000`)."""
+    if not info.examples:
+        return ""
+    example = info.examples[0]
+    return _(f"{example:,}") if isinstance(example, int) else str(example)
 
 
 def _unwrap(annotation: object) -> tuple[object, bool]:

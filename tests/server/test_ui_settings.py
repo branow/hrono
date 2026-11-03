@@ -958,6 +958,39 @@ def test_a_cleared_threshold_stays_cleared_when_the_form_is_refused(
     assert "insights-line" not in page
 
 
+@pytest.mark.parametrize("bad", ["abc", "500,000"])
+def test_a_threshold_that_is_not_a_number_is_a_field_error(
+    browser: Browser, bad: str
+) -> None:
+    browser.sign_in()
+    browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
+
+    reply = browser.item(
+        "trees",
+        name="beta",
+        **{"f.name": "beta", "f.sources": ["gh"], "f.insights_threshold": bad},
+    )
+
+    assert reply.status_code < 500
+    assert "valid integer" in reply.text
+    assert f'name="f.insights_threshold" value="{bad}"' in reply.text
+    stored = browser.stored("trees", "beta")
+    assert stored["insights_threshold"] == 500_000  # type: ignore[index]
+
+
+def test_the_threshold_placeholder_groups_digits_per_language(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    browser.item("trees", **{"f.name": "beta", "f.sources": ["gh"]})
+    en = browser.config(edit="trees:beta")
+    browser.client.cookies.set("hrono_lang", "uk")
+    uk = browser.config(edit="trees:beta")
+
+    assert 'placeholder="500,000"' in en
+    assert 'placeholder="500\u00a0000"' in uk
+
+
 # ------------------------------------------------------------------ unions
 
 
