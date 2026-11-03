@@ -170,7 +170,8 @@ created_at, updated_at, progress?, cost?}`. Leaf statuses are `pending`,
 `running`, `succeeded`, `failed` and `canceled`. A parent's status, progress and
 cost are derived from its children, and `partial` is a derived status only.
 Running stages out of order through `POST /jobs` can leave a tree that looks
-right but is wrong. Use `/sync` instead.
+right but is wrong. Use `/sync` instead. A `settle` for a tree nobody
+registered answers 404 and queues nothing, as `/trees/{name}/sync` does.
 
 The registered ops (`OPS` in `src/hrono/jobs/ops.py`, filled by each stage
 module) are `maintain`, `sync-tree`, `sync`, `split`, `embed`, `cluster`,
