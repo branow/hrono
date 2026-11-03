@@ -131,9 +131,27 @@ def test_a_finished_run_shows_what_it_spent(browser: Browser) -> None:
 def test_a_settle_that_only_reviewed_is_titled_as_a_review(
     browser: Browser,
 ) -> None:
+    # the title follows what ran (its stages, or the stage it failed in),
+    # not the settled flag alone: a settle with nothing to review or place
+    # did no review
+    review = {"op": "review", "over": None, "seconds": 1.0, "result": {}}
+    runs = {
+        "reviewed": ("succeeded", {"settled": False, "stages": [review]}, None),
+        "failed": (
+            "failed",
+            {"stages": []},
+            {
+                "type": "LLMError",
+                "stage": "review",
+                "item": "review of topic 1",
+            },
+        ),
+        "idle": ("succeeded", {"settled": False, "stages": []}, None),
+        "placed": ("succeeded", {"settled": True, "stages": []}, None),
+    }
     browser.sign_in()
     titles = {}
-    for settled in (False, True):
+    for name, (status, result, details) in runs.items():
         job = str(
             browser.client.post(
                 "/jobs",
@@ -144,18 +162,21 @@ def test_a_settle_that_only_reviewed_is_titled_as_a_review(
         job_store.set_status(
             browser.conn,  # type: ignore[arg-type]
             job,
-            "succeeded",
-            None,
+            status,
+            "boom" if details else None,
             "t",
-            result=json.dumps({"settled": settled}),
+            result=json.dumps(result),
+            code="llm-error" if details else None,
+            details=json.dumps(details) if details else None,
         )
-        titles[settled] = browser.client.get(
-            f"/ui/jobs/{job}?tree=default"
-        ).text
+        titles[name] = browser.client.get(f"/ui/jobs/{job}?tree=default").text
 
-    assert "review the topics that were due" in titles[False]
-    assert "place the sections" not in titles[False]
-    assert "place the sections that were still waiting" in titles[True]
+    for name in ("reviewed", "failed"):
+        assert "review the topics that were due" in titles[name], name
+        assert "place the sections" not in titles[name], name
+    for name in ("idle", "placed"):
+        assert "place the sections that were still waiting" in titles[name]
+        assert "review the topics that were due" not in titles[name], name
 
 
 def test_a_failed_run_shows_its_code_and_message(browser: Browser) -> None:

@@ -19,7 +19,7 @@ from hrono.errors import Forbidden, NotFound
 from hrono.jobs import store as job_store
 from hrono.jobs.aggregate import PARTIAL, rollup, total_spend
 from hrono.jobs.cancel import cancel
-from hrono.jobs.model import to_job
+from hrono.jobs.model import Job, to_job
 from hrono.jobs.ops import OPS
 from hrono.jobs.scope import SOURCE_SCOPED, fan_out, fans_out
 from hrono.jobs.worker import enqueue
@@ -240,7 +240,7 @@ def render_job(
         "started": clock(job.created_at),
         "took": _elapsed(job.created_at, job.updated_at, live=status in _LIVE),
         "op": job.op,
-        "means": _(_means(job.op, job.result)),
+        "means": _(_means(job)),
         "status": status,
         "live": status in _LIVE,
         "progress": (
@@ -269,7 +269,7 @@ def render_job(
         "children": [
             {
                 "op": str(child["op"]),
-                "means": _(_means(str(child["op"]), to_job(child).result)),
+                "means": _(_means(to_job(child))),
                 "status": str(child["status"]),
                 "scope": to_job(child).scope,
                 "outcome": outcome.read(to_job(child).result),
@@ -280,11 +280,25 @@ def render_job(
     }
 
 
-def _means(op: str, result: Mapping[str, object] | None) -> str:
+def _means(job: Job) -> str:
     """What the stage does; a settle that only reviewed says so."""
-    if op == "settle" and (result or {}).get("settled") is False:
+    if job.op == "settle" and _only_reviewed(job):
         return MEANS["settle:review"]
-    return MEANS.get(op, "")
+    return MEANS.get(job.op, "")
+
+
+def _only_reviewed(job: Job) -> bool:
+    # what ran says it: the review stage it finished, or the one it failed in
+    result = job.result or {}
+    if result.get("settled"):
+        return False
+    stages = result.get("stages")
+    ran = (
+        [s.get("op") for s in stages if isinstance(s, dict)]
+        if isinstance(stages, list)
+        else []
+    )
+    return "review" in ran or (job.error_details or {}).get("stage") == "review"
 
 
 def _stages(result: Mapping[str, object] | None) -> list[dict[str, object]]:
