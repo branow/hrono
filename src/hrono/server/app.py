@@ -110,6 +110,20 @@ def report_version() -> dict[str, str]:
 _logger = logging.getLogger("hrono")
 
 
+def _import_torch() -> None:
+    """Import torch whole, before the worker or the warm-up thread can race it.
+
+    The warm-up below imports torch on a thread; a clustering job running at
+    the same time has scipy probe for array types mid-import and see a
+    half-built torch, so UMAP fails ("the reduction failed") on a sync pressed
+    right after boot. Not installed (no ``embed`` extra) is not a failed boot.
+    """
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        _logger.debug("torch not installed", exc_info=True)
+
+
 def _warm_query_encoder(database: Database) -> None:
     """Load the query encoder in the background while the server boots.
 
@@ -199,6 +213,7 @@ def create_app(
             )
             app.state.worker = worker
             app.state.cache_root = anchored_cache
+            _import_torch()
             worker.start()
             _warm_query_encoder(database)
             yield
