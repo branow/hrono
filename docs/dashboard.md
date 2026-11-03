@@ -222,7 +222,10 @@ and saves nothing; on a subscription it says that nothing is billed per call.
 When the saved settings have a review due and a model has the role, a "Review
 now" button beside the line queues `settle` and opens the Runs page on it,
 which says the reviews started;
-with nothing due the line says every topic over the threshold is reviewed. A
+with nothing due the line says every topic over the threshold has been
+reviewed and a sync reviews one again when it rewrites its brief (no billing
+note, no button). A finding's confidence is a chip (high, medium-high, medium,
+low-medium, low); backticked identifiers show as code. A
 finding's evidence links the file at the version the review read, "version
 not recorded" on older findings.
 
