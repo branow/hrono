@@ -542,6 +542,22 @@ def test_a_dry_run_set_writes_nothing_and_says_the_insights_passes(
     assert "No model has the role insights" in result.stdout
 
 
+class Reviews(FakeClient):
+    """A server whose tree has insights on and a model with the role."""
+
+    def __init__(self, reply: object = None, insights: bool = True) -> None:
+        super().__init__(reply)
+        self.insights = insights
+
+    def get(self, path: str) -> object:
+        super().get(path)
+        if path == "/models":
+            return [{"name": "opus", "role": "insights"}]
+        if path.startswith("/trees/"):
+            return {"name": "flask", "insights": self.insights}
+        return self.reply
+
+
 def test_tree_review_queues_settle_follows_it_and_prints_the_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -549,19 +565,19 @@ def test_tree_review_queues_settle_follows_it_and_prints_the_result(
     client = _patch(
         monkeypatch,
         "hrono.tree.commands",
-        FakeClient({"job_id": "j1", "result": result}),
+        Reviews({"job_id": "j1", "result": result}),
     )
     monkeypatch.setattr("hrono.tree.commands.watch_job", lambda job_id: None)
 
     run = runner.invoke(app, ["tree", "review", "flask"])
 
     assert run.exit_code == 0
-    assert client.calls[0] == (
+    assert client.calls[2] == (
         "POST",
         "/jobs",
         {"op": "settle", "tree": "flask"},
     )
-    assert client.calls[1][:2] == ("GET", "/jobs/j1")
+    assert client.calls[3][:2] == ("GET", "/jobs/j1")
     assert "Reviewed 2 topics, extended 1: 5 findings." in run.stdout
 
 
@@ -571,7 +587,7 @@ def test_tree_review_with_nothing_due_says_so(
     _patch(
         monkeypatch,
         "hrono.tree.commands",
-        FakeClient({"job_id": "j1", "result": {"settled": False}}),
+        Reviews({"job_id": "j1", "result": {"settled": False}}),
     )
     monkeypatch.setattr("hrono.tree.commands.watch_job", lambda job_id: None)
 
@@ -579,3 +595,59 @@ def test_tree_review_with_nothing_due_says_so(
 
     assert run.exit_code == 0
     assert "Nothing is due for review; no model was called." in run.stdout
+
+
+def test_a_watched_job_that_failed_says_why(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # the event stream's last frame carries the status, not the error; a
+    # `tree review` whose model answered 500 printed "failed" and nothing else
+    class Streams(FakeClient):
+        def stream(self, path: str):
+            yield "event: state"
+            yield 'data: {"id": "j1", "status": "failed"}'
+
+    error = {"code": "llm-error", "message": "the model server returned 500"}
+    _patch(
+        monkeypatch,
+        "hrono.jobs.commands",
+        Streams({"id": "j1", "status": "failed", "error": error}),
+    )
+
+    run = runner.invoke(app, ["jobs", "watch", "j1"])
+
+    assert run.exit_code == 1
+    assert "llm-error: the model server returned 500" in run.output
+
+
+def test_tree_review_on_a_drifted_tree_says_it_reclustered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # settle re-clusters and rewrites briefs first when the tree has drifted:
+    # that calls the brief models, so "no model was called" would be false
+    _patch(
+        monkeypatch,
+        "hrono.tree.commands",
+        Reviews({"job_id": "j1", "result": {"settled": True}}),
+    )
+    monkeypatch.setattr("hrono.tree.commands.watch_job", lambda job_id: None)
+
+    run = runner.invoke(app, ["tree", "review", "flask"])
+
+    assert run.exit_code == 0
+    assert "no model was called" not in run.stdout
+    assert "re-clustered" in run.stdout
+
+
+def test_tree_review_with_insights_off_says_so_and_queues_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _patch(
+        monkeypatch, "hrono.tree.commands", Reviews({}, insights=False)
+    )
+
+    run = runner.invoke(app, ["tree", "review", "requests"])
+
+    assert run.exit_code == 1
+    assert "Insights is off for tree 'requests'" in run.stdout
+    assert not [c for c in client.calls if c[0] == "POST"]

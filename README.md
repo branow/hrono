@@ -238,9 +238,11 @@ billed per token).
    under the switch names the topics it would review, the root included, and
    the cost.
 3. Press **Review now** next to that line, or run `hrono tree review <tree>`.
-   It reviews those topics, bottom-up and the root last, and nothing else;
-   with none due it says so and calls no model. The command follows the run
-   and prints how many topics it reviewed and what it found.
+   It reviews those topics, bottom-up and the root last; with none due it
+   says so and calls no model. It runs `settle`, so a tree that has drifted
+   enough to need one is first re-clustered and re-briefed. The command
+   follows the run and prints how many topics it reviewed and what it found,
+   or why the run failed.
 
 After that, a `sync` reviews a topic again only when it rewrites that topic's
 brief or the topic first reaches the threshold; a sync that changes nothing

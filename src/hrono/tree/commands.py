@@ -84,6 +84,22 @@ def review(name: str) -> None:
     """
 
     client = from_profile()
+    # settle runs on any name and reviews nothing when insights cannot run:
+    # say why here, not "nothing is due" (an unknown tree is refused here)
+    tree = client.get(f"/trees/{name}")
+    models = client.get("/models")
+    if not (isinstance(tree, dict) and tree.get("insights")):
+        typer.echo(
+            f"Insights is off for tree '{name}'; turn it on in the tree's "
+            "settings ('insights': true). No model was called."
+        )
+        raise typer.Exit(1)
+    if not any(
+        isinstance(m, dict) and m.get("role") == "insights"
+        for m in (models if isinstance(models, list) else [])
+    ):
+        typer.echo("No model has the role insights. No model was called.")
+        raise typer.Exit(1)
     started = client.post("/jobs", {"op": "settle", "tree": name})
     job_id = started.get("job_id") if isinstance(started, dict) else None
     if not job_id:
@@ -97,11 +113,20 @@ def review(name: str) -> None:
 
 
 def _reviewed(result: dict[str, object]) -> str:
+    # a drifted tree is re-clustered and re-briefed before any review
+    drifted = (
+        "The tree had drifted, so it was re-clustered and its briefs "
+        "rewritten first. "
+        if result.get("settled")
+        else ""
+    )
     found = result.get("insights")
     if not isinstance(found, dict):
+        if drifted:
+            return f"{drifted}No review was due."
         return "Nothing is due for review; no model was called."
     line = (
-        f"Reviewed {found.get('reviews', 0)} topics, extended "
+        f"{drifted}Reviewed {found.get('reviews', 0)} topics, extended "
         f"{found.get('extends', 0)}: {found.get('findings', 0)} findings."
     )
     if found.get("note"):

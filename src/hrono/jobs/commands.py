@@ -129,7 +129,8 @@ def watch_job(job_id: str) -> None:
     """Follow a job until it ends; exits 1 when it failed or was canceled."""
 
     last: dict[str, object] = {}
-    for line in from_profile().stream(f"/jobs/{job_id}/events"):
+    client = from_profile()
+    for line in client.stream(f"/jobs/{job_id}/events"):
         if not line.startswith("data: "):
             continue  # the event name and the blank separator
         try:
@@ -144,6 +145,10 @@ def watch_job(job_id: str) -> None:
         if isinstance(progress, dict):
             shown += f"  {progress.get('done')}/{progress.get('total')}"
         typer.echo(shown)
+    if last.get("status") == "failed" and "error" not in last:
+        # the stream's frames carry the status only; the job holds the why
+        job = client.get(f"/jobs/{job_id}")
+        last = job if isinstance(job, dict) else last
     error = last.get("error")
     if isinstance(error, dict):
         typer.echo(
