@@ -20,6 +20,7 @@ from hrono.auth.users import create_user
 from hrono.cluster import store as cluster_store
 from hrono.crypto.masterkey import reconcile
 from hrono.db.database import open_database
+from hrono.health import upgrade
 from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.registry import store as registry_store
@@ -169,4 +170,54 @@ def test_current_briefs_say_nothing(tree: Tree) -> None:
 def test_the_announcement_reads_in_ukrainian(tree: Tree) -> None:
     tree.write_briefs("an-older-prompt")
 
-    assert "Наступне оновлення перепише частину цього дерева" in tree.home("uk")
+    home = tree.home("uk")
+
+    assert "Наступне оновлення перепише частину цього дерева" in home
+    # the second sync is free, not the next one, which this line prices
+    assert "Друге оновлення без змін нічого не коштує." in home
+
+
+def test_sections_moving_to_their_condensations_are_announced(
+    tree: Tree, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # briefs are current; what is left is placement: every member has a
+    # condensation the tree never embedded, and each topic is over the cap,
+    # so the sync splits each one in two and briefs both halves
+    _, template = resolve_prompt(tree.conn, "brief")  # type: ignore[arg-type]
+    tree.write_briefs(template_hash(template))
+    monkeypatch.setattr(upgrade, "MAX_CAP", 0)
+    with tree.conn:  # type: ignore[attr-defined]
+        for name, kind, role in (
+            ("emb", "embedding", None),
+            ("cd", "text", "condense"),
+        ):
+            registry_store.insert(
+                tree.conn,  # type: ignore[arg-type]
+                "models",
+                name,
+                json.dumps(
+                    {
+                        "name": name,
+                        "kind": kind,
+                        "connection": None if role is None else "local",
+                        "model": "m",
+                        "role": role,
+                        "params": {},
+                        "price": None,
+                    }
+                ),
+                None,
+                "t",
+            )
+        for row in tree.conn.execute(
+            "SELECT content_hash FROM sections"
+        ).fetchall():  # type: ignore[attr-defined]
+            tree.conn.execute(  # type: ignore[attr-defined]
+                "INSERT INTO condensations VALUES (?, 'cd', ?, 1, 1, 't')",
+                (row["content_hash"], f"condensed {row['content_hash']}"),
+            )
+
+    home = tree.home()
+
+    assert "3 sections will be placed by their condensations" in home
+    assert "about 6 model calls" in home

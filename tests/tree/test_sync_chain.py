@@ -9,6 +9,7 @@ import pytest
 
 from hrono import pins
 from hrono.cluster import store as cluster_store
+from hrono.cluster.monitor import monitor
 from hrono.db.database import Database
 from hrono.ingest.identity import content_hash
 from hrono.jobs.model import Job
@@ -21,6 +22,7 @@ from hrono.llm.client import (
 )
 from hrono.registry import store as registry_store
 from hrono.summarize import review
+from hrono.tree import sync_chain
 from hrono.tree.maintain import maintain
 from hrono.tree.sync_chain import sync
 from tests import world
@@ -414,8 +416,23 @@ def test_a_run_over_an_unchanged_corpus_says_nothing_changed(
     assert outcome["changed"] is False
 
 
+def _unembedded_condensations(conn: object) -> int:
+    texts = conn.execute("SELECT text FROM condensations").fetchall()  # type: ignore[attr-defined]
+    return sum(
+        1
+        for row in texts
+        if conn.execute(  # type: ignore[attr-defined]
+            "SELECT 1 FROM embeddings WHERE content_hash = ?",
+            (content_hash(row["text"].encode("utf-8")),),
+        ).fetchone()
+        is None
+    )
+
+
 def test_a_tree_built_today_synced_twice_unchanged_calls_no_model(
-    built: tuple[Database, Path], tmp_path: Path
+    built: tuple[Database, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # the first sync after a build places by condensation vectors the build
     # never embedded; if it moved anything it would rewrite briefs for a source
@@ -430,11 +447,23 @@ def test_a_tree_built_today_synced_twice_unchanged_calls_no_model(
                 (content_hash(row["text"].encode("utf-8")),),
             )
 
+    # the toy's vectors are all alike, so nothing would move either way; what
+    # is checked is that the monitor (and the baseline it captures) and repair
+    # read the condensations' space, not the one the last embed replaces
+    unembedded: list[int] = []
+
+    def measured(job: Job, context: object) -> object:
+        with db.connect() as conn:
+            unembedded.append(_unembedded_condensations(conn))
+        return monitor(job, context)
+
+    monkeypatch.setattr(sync_chain, "monitor", measured)
     for _ in range(2):
         outcome = _run(db, tmp_path, judge)
 
         assert outcome["changed"] is False
         assert judge.calls == 0
+    assert unembedded == [0, 0]
 
 
 def test_a_forced_assignment_is_counted(
