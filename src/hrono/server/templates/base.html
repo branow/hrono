@@ -215,6 +215,11 @@ details.reveal[open] > summary:not(.twisty)::before { transform: rotate(90deg); 
 details.reveal > summary:hover { color: var(--ink); }
 details.reveal .hint { margin-top: var(--s2); }
 
+/* A closed disclosure draws nothing, but Chromium still gives its content a
+   box, so a layout check (and a screen reader's rotor) sees it overlapping
+   what is drawn there. */
+details:not([open]) > :not(summary) { display: none; }
+
 /* ------------------------------------------------------------------ shell */
 .topbar {
   display: flex;
@@ -412,7 +417,8 @@ input.narrow { width: 6rem; }
 .findings > li { padding: var(--s3) 0; border-top: 1px solid var(--rule); display: grid; gap: var(--s1); }
 .findings > li:first-child { border-top: 0; padding-top: 0; }
 .findings p { margin: 0; }
-.findings .statement { overflow-wrap: anywhere; }
+.findings .statement, .findings .confidence { overflow-wrap: anywhere; }
+.findings .confidence .chip { vertical-align: baseline; margin-right: .35rem; }
 .evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
 .dropped { margin: var(--s2) 0 0; padding-left: var(--s4); }
 
@@ -1860,6 +1866,10 @@ ul.pick { list-style: none; margin: .25rem 0 0; padding: 0; display: flex; flex-
 }
 @media (max-width: 720px) {
   main { padding: var(--s4) var(--s4) var(--s6); }
+  /* nine tabs, and longer words in Ukrainian, do not fit one row of a phone:
+     they take two, so none is cut at the edge */
+  .topbar .tabs { flex-wrap: wrap; overflow-x: visible; }
+  .tab { padding-inline: .35rem; }
 }
 </style>
 </head>

@@ -942,6 +942,48 @@ def test_a_review_with_no_findings_says_so(browser: Browser) -> None:
     assert "Findings" in page
 
 
+@pytest.mark.parametrize(
+    ("said", "chip", "prose"),
+    [
+        ("high", "high", ""),
+        ("medium, until X", "medium", "until X"),
+        ("high; the code path is unconditional", "high", "the code path"),
+        ("Low - a guess", "low", "a guess"),
+        ("certain beyond doubt", "", "certain beyond doubt"),
+    ],
+)
+def test_only_a_level_word_becomes_the_chip(
+    browser: Browser, said: str, chip: str, prose: str
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    pid = _pass(browser, node, findings=1)
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE insights_findings SET confidence = ? WHERE pass_id = ?",
+            (said, pid),
+        )
+
+    card = _body(browser, node).split('id="findings"')[1]
+
+    assert ('<span class="chip' in card.split("</ol>")[0]) == bool(chip)
+    if chip:
+        assert re.search(rf'class="chip \w+">{chip}</span>', card)
+    assert prose in card
+
+
+def test_a_review_that_did_not_finish_shows_no_finding_count(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _failed_job(browser, "j-down", TREE, review.review_item(node))
+
+    head = _body(browser, node).split('id="findings"')[1].split("</h2>")[0]
+
+    assert "Findings" in head and 'class="faint num"' not in head
+
+
 def test_a_review_that_did_not_finish_links_the_run(browser: Browser) -> None:
     browser.sign_in()
     node = _node_id(browser)

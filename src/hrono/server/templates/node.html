@@ -120,7 +120,7 @@
   {% set found = node.insights %}
   <section class="card" id="findings">
     <div class="card-head">
-      <h2>{{ _("Findings") }} <span class="faint num">{{ found.findings|length }}</span><span class="tip" tabindex="0" role="note" data-tip="{{ _("What a stronger model found when it reviewed this topic and everything under it: rules no single section states and statements the code contradicts. Each carries the files it read") }}">?</span></h2>
+      <h2>{{ _("Findings") }}{% if not found.failed %} <span class="faint num">{{ found.findings|length }}</span>{% endif %}<span class="tip" tabindex="0" role="note" data-tip="{{ _("What a stronger model found when it reviewed this topic and everything under it: rules no single section states and statements the code contradicts. Each carries the files it read") }}">?</span></h2>
     </div>
     <div class="card-body stack">
       {% if found.failed %}
@@ -151,11 +151,13 @@
         {% for f in found.findings %}
         <li>
           <p class="statement">{{ f.statement }}</p>
-          <p class="row">
+          {% if f.level or f.settle %}
+          <p class="confidence">
             {% if f.level %}<span class="chip {{ f.tone }}">{{ f.level }}</span>{% endif %}
-            {% if f.placement %}<span class="faint small">{{ f.placement }}</span>{% endif %}
+            {% if f.settle %}<span class="hint">{{ f.settle }}</span>{% endif %}
           </p>
-          {% if f.settle %}<p class="hint">{{ f.settle }}</p>{% endif %}
+          {% endif %}
+          {% if f.placement %}<p class="faint small">{{ f.placement }}</p>{% endif %}
           {% if f.evidence %}
           <ul class="evidence mono small">
             {% for e in f.evidence %}

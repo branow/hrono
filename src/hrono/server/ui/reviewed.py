@@ -8,6 +8,7 @@ brief it replaced is the topic's kept version (`brief_versions`, reason
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Callable
 
@@ -15,6 +16,11 @@ from hrono.ingest.blob_link import blob_url
 from hrono.summarize.review import review_item
 
 _CONFIDENCE = {"high": "ok", "medium": "warn"}
+_CONFIDENCE_LINE = re.compile(
+    r"\s*(?:(?P<level>high|medium|low)\b[\s,;:.\u2013\u2014-]*)?"
+    r"(?P<rest>.*)",
+    re.I | re.S,
+)
 
 
 def reviewed(
@@ -69,15 +75,17 @@ def reviewed(
 
 
 def _finding(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, object]:
-    # the model writes "high", or "medium, until X is checked": the first word
-    # is the level, the rest is what would settle it
-    level, _sep, rest = str(row["confidence"]).partition(",")
-    level = level.strip().lower()
+    # the model writes "high", or "medium, until X is checked", or "high; the
+    # code path is unconditional": a leading level word is the chip, the rest
+    # is prose; a confidence with no level word is prose alone
+    said = _CONFIDENCE_LINE.match(str(row["confidence"]))
+    assert said is not None  # every part is optional
+    level = (said["level"] or "").lower()
     return {
         "statement": str(row["statement"]),
         "level": level,
         "tone": _CONFIDENCE.get(level, "plain"),
-        "settle": rest.strip(),
+        "settle": said["rest"].strip(),
         "placement": str(row["placement"]),
         "evidence": [_cite(conn, item) for item in _evidence(row["evidence"])],
     }

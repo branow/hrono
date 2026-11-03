@@ -927,7 +927,12 @@ def _review_a_topic(live: Live, findings: int, long: bool) -> int:
                 + "teardown runs in reverse order, " * (6 if long else 1),
                 json.dumps([{"file": f"docs/{stem}{i}.md", "lines": "1-9"}]),
                 "misstated in a topic; state it in the area",
-                "medium, until the changelog is read",
+                (
+                    "high; the code path in make_config is unconditional, "
+                    "so every caller goes through it " * 2
+                    if long
+                    else "medium, until the changelog is read"
+                ),
             ),
         )
     live.write(
@@ -950,10 +955,17 @@ def test_fifteen_long_findings_fit_a_phone_and_what_changed_opens(
     wide = solo_page.evaluate(  # type: ignore[attr-defined]
         "document.documentElement.scrollWidth - innerWidth"
     )
+    cut = solo_page.evaluate(  # type: ignore[attr-defined]
+        "(() => { const t = document.querySelector('.topbar .tabs');"
+        " return t.scrollWidth - t.clientWidth; })()"
+    )
     solo_page.click("#extension a")  # type: ignore[attr-defined]
     solo_page.wait_for_selector("#cheaper-brief", state="visible")  # type: ignore[attr-defined]
 
     assert wide <= 0
+    assert cut <= 0  # every nav item fits, none is cut at the edge
+    chip = solo_page.locator("#findings .confidence .chip").first  # type: ignore[attr-defined]
+    assert chip.inner_text() == "high"
     assert solo_page.locator("#findings .findings > li").count() == 15  # type: ignore[attr-defined]
     assert solo_page.is_visible("#cheaper-brief pre")  # type: ignore[attr-defined]
 
