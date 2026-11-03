@@ -60,6 +60,14 @@ Home answers four questions:
 - **Is anything running?** Live, from the same event stream as Runs.
 - **What did the last run do?**
 - **Does anything need a person?**
+- **Will the next sync rewrite something?** After an upgrade that changed the
+  brief prompt, or moved a tree's sections to be placed by their condensations,
+  the first sync rewrites briefs for a source that did not change. Until it has
+  run, Home says how many briefs were written by an older prompt (or another
+  model), how many sections will be placed by their condensations, and the
+  model calls that costs, with the money as billed or as a subscription
+  estimate, never as spend. It links to Health. The line is gone once the
+  briefs are current, and a second sync with nothing changed costs nothing.
 
 Every empty state offers its next step as a button, and every action returns
 to the page it came from saying what it did.
@@ -146,7 +154,9 @@ section into its nearest topic or a chosen one, move a section that was placed
 without a score (both placements are held by hand, so a sync leaves them in
 place), rewrite one stale brief, and hand back any hand edit. Each item says
 whether automation will fix it or a person must. A reader sees the same lists
-with no controls.
+with no controls. When the next sync will rewrite briefs (see Home), a first
+card lists them, each with why: written by an older prompt or by another
+model.
 
 ## Runs and Usage
 

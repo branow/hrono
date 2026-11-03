@@ -1,0 +1,31 @@
+{
+  "A second sync with nothing changed costs nothing.": "Наступне оновлення без змін нічого не коштує.",
+  "Rewritten by the next sync": "Наступне оновлення перепише",
+  "See which briefs": "Які описи",
+  "The next sync does this once, about {n} model call|The next sync does this once, about {n} model calls": [
+    "Наступне оновлення зробить це один раз: близько {n} виклику моделі",
+    "Наступне оновлення зробить це один раз: близько {n} викликів моделі",
+    "Наступне оновлення зробить це один раз: близько {n} викликів моделі"
+  ],
+  "The next sync rewrites part of this tree": "Наступне оновлення перепише частину цього дерева",
+  "about {amount} at the API's prices, an estimate and not spend": "близько {amount} за цінами API, це оцінка, а не витрати",
+  "about {amount} counting billed and subscription calls together, an estimate": "близько {amount}, якщо рахувати разом виклики з оплатою за токени й за підпискою, це оцінка",
+  "billed about {amount}": "до сплати близько {amount}",
+  "written by an older prompt": "написаний за старішим промптом",
+  "written by another model": "написаний іншою моделлю",
+  "{n} brief was written by an older prompt|{n} briefs were written by an older prompt": [
+    "{n} опис написано за старішим промптом",
+    "{n} описи написано за старішим промптом",
+    "{n} описів написано за старішим промптом"
+  ],
+  "{n} brief was written by another model|{n} briefs were written by another model": [
+    "{n} опис написано іншою моделлю",
+    "{n} описи написано іншою моделлю",
+    "{n} описів написано іншою моделлю"
+  ],
+  "{n} section will be placed by its condensation: topics over the size limit split and sections move|{n} sections will be placed by their condensations: topics over the size limit split and sections move": [
+    "{n} фрагмент розмістять за його конспектом: теми понад ліміт розміру діляться, а фрагменти переходять",
+    "{n} фрагменти розмістять за їхніми конспектами: теми понад ліміт розміру діляться, а фрагменти переходять",
+    "{n} фрагментів розмістять за їхніми конспектами: теми понад ліміт розміру діляться, а фрагменти переходять"
+  ]
+}

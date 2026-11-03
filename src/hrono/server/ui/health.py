@@ -56,7 +56,11 @@ def rewrite(conn: sqlite3.Connection, tree: str) -> dict[str, object] | None:
         "usd": made.usd,
         "billing": made.billing,
         "rows": [
-            {"node_id": one.node_id, "name": called[one.node_id], "why": one.why}
+            {
+                "node_id": one.node_id,
+                "name": called[one.node_id],
+                "why": one.why,
+            }
             for one in shown
         ],
     }

@@ -2,9 +2,10 @@
 
 First run clones into the cache path the caller chose — that root hangs off the
 database file, never the working directory; later runs point the cache at the
-registry's current url, fetch and hard-reset to the remote's current bytes. The version is the resolved commit SHA —
-content-addressed, so it is the same whether the repo was fetched over SSH or
-HTTPS (fetch-method-independent identity).
+registry's current url, fetch and hard-reset to the remote's current bytes.
+The version is the resolved commit SHA — content-addressed, so it is the
+same whether the repo was fetched over SSH or HTTPS (fetch-method-independent
+identity).
 
 It lives apart from the ``sync`` op because clone/pull is git's transport,
 not the abstraction every source type shares.

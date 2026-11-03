@@ -235,8 +235,12 @@ Updates never re-run the build pipeline. Full rules:
   condense → cluster → brief → build to root.
 - **`sync-tree`** (`tree/sync_chain.py`) refreshes one: update → propagate →
   brief stale leaves → brief stale upper levels (with insights on, each level's
-  passes run right after its briefs, before its parent's) → monitor → repair →
-  adopt new leaves. The order is load-bearing, so it is one op.
+  passes run right after its briefs, before its parent's) → embed (the
+  condensations and briefs just written) → monitor → repair (once more after a
+  split or dissolve, for the briefs those topics now have) → adopt new leaves →
+  embed. The order is load-bearing, so it is one op. A sync over an unchanged
+  source moves nothing and makes no model call, on a tree built by this version
+  or by an older one after its first sync.
 - **`update`** (`tree/update.py`) syncs, diffs files by content hash, re-splits
   only changed files, condenses then embeds only new bytes, and places changed
   sections by their condensation's vector, as a build clusters, against the

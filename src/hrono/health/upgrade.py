@@ -202,9 +202,7 @@ def _priced(
         if price is None or made.tokens is None or usd is None:
             usd = None
         else:
-            usd += price.cost(
-                made.tokens["input"], made.tokens["output"], 0, 0
-            )
+            usd += price.cost(made.tokens["input"], made.tokens["output"], 0, 0)
             billing = _billing(billing, provider_of(conn, model))
     return Plan(older, moving, calls, tokens, usd, billing if usd else "")
 

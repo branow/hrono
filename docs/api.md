@@ -49,6 +49,8 @@ validation is refused. `?dry_run=true` applies nothing and returns the impact
 on every tree that references the item (`src/hrono/registry/impact.py`). A real
 edit marks the affected entities stale and runs nothing. A source edit that
 only changes auth leaves nothing stale.
+A git source's cache follows the registered `url`: the next sync points the
+cache at it before fetching, so an edited url needs no hand edit of the cache.
 
 Bodies:
 
