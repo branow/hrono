@@ -217,8 +217,11 @@ details.reveal .hint { margin-top: var(--s2); }
 
 /* A closed disclosure draws nothing, but Chromium still gives its content a
    box, so a layout check (and a screen reader's rotor) sees it overlapping
-   what is drawn there. */
-details:not([open]) > :not(summary) { display: none; }
+   what is drawn there. Only the menu and the raw boxes are taken out of the
+   layout: every other closed disclosure keeps its content findable, because
+   display:none hides it from the browser's find-in-page. */
+details.treepick:not([open]) > :not(summary),
+details.reveal:not([open]) > :not(summary) { display: none; }
 
 /* ------------------------------------------------------------------ shell */
 .topbar {
@@ -419,6 +422,8 @@ input.narrow { width: 6rem; }
 .findings p { margin: 0; }
 .findings .statement, .findings .confidence { overflow-wrap: anywhere; }
 .findings .confidence .chip { vertical-align: baseline; margin-right: .35rem; }
+/* a low level still reads as a chip, not as mono text */
+.findings .confidence .chip.plain { background: var(--sunken); border-color: var(--rule-firm); padding-left: .4rem; }
 .evidence { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
 .dropped { margin: var(--s2) 0 0; padding-left: var(--s4); }
 

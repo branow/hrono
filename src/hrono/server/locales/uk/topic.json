@@ -333,6 +333,9 @@
   "Pinned: findings kept, not applied to the brief": "Закріплено: знахідки збережено, до опису не внесено",
   "The findings were not written into the brief": "Знахідки не вписано в опис",
   "The review found nothing to add.": "Перегляд не знайшов, що додати.",
+  "high": "висока",
+  "medium": "середня",
+  "low": "низька",
   "version not recorded": "версію не записано",
   "Checked and dropped ({n})|Checked and dropped ({n})": [
     "Перевірено й відкинуто ({n})", "Перевірено й відкинуто ({n})", "Перевірено й відкинуто ({n})"

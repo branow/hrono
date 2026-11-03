@@ -1013,3 +1013,17 @@ def test_turning_insights_on_re_estimates_without_saving(
         "WHERE name = 'default' AND collection = 'trees'",
     )
     assert json.loads(stored[0][0])["insights"] is False
+
+
+def test_find_in_page_reaches_text_inside_a_closed_disclosure(
+    page: object, live: Live
+) -> None:
+    """`display: none` on a closed disclosure hides its text from the browser's
+    own find; only the tree menu and the raw boxes may be taken out."""
+    ids = _query(live, "SELECT id FROM nodes ORDER BY level, id")
+    page.goto(f"{live.base}/ui/trees/default/nodes/{ids[0][0]}")  # type: ignore[attr-defined]
+    page.evaluate(  # type: ignore[attr-defined]
+        "document.querySelector('main').insertAdjacentHTML('beforeend',"
+        "'<details><summary>more</summary><p>zqxwvutsr</p></details>')"
+    )
+    assert page.evaluate("window.find('zqxwvutsr')")  # type: ignore[attr-defined]

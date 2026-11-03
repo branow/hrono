@@ -972,6 +972,46 @@ def test_only_a_level_word_becomes_the_chip(
     assert prose in card
 
 
+@pytest.mark.parametrize(
+    ("said", "word"),
+    [("high", "висока"), ("medium", "середня"), ("low", "низька")],
+)
+def test_the_level_chip_reads_in_the_page_language(
+    browser: Browser, said: str, word: str
+) -> None:
+    browser.sign_in()
+    browser.client.cookies.set("hrono_lang", "uk")  # type: ignore[attr-defined]
+    node = _node_id(browser)
+    pid = _pass(browser, node, findings=1)
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE insights_findings SET confidence = ? WHERE pass_id = ?",
+            (said, pid),
+        )
+
+    card = _body(browser, node).split('id="findings"')[1]
+
+    assert re.search(rf'class="chip \w+">{word}</span>', card)
+
+
+def test_a_failed_review_after_an_empty_one_says_only_that_it_failed(
+    browser: Browser,
+) -> None:
+    browser.sign_in()
+    node = _node_id(browser)
+    _pass(browser, node, skipped="no findings", findings=0)
+    _failed_job(browser, "j-down", TREE, review.review_item(node), op="settle")
+    with browser.conn:  # type: ignore[attr-defined]
+        browser.conn.execute(  # type: ignore[attr-defined]
+            "UPDATE jobs SET updated_at = '2999-06-01T00:00:00'"
+        )
+
+    page = _body(browser, node)
+
+    assert "The last review of this topic did not finish" in page
+    assert "found nothing to add" not in page
+
+
 def test_a_review_that_did_not_finish_shows_no_finding_count(
     browser: Browser,
 ) -> None:
