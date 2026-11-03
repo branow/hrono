@@ -136,7 +136,7 @@
   "Start the server with the master key the secrets were saved under, or enter the secret again in Settings.": "Запустіть сервер з головним ключем, яким збережено секрети, або введіть секрет знову в параметрах.",
   "Started a sync. It reads every source and files what changed.": "Оновлення запущено. Воно перечитує всі джерела й розміщує змінене.",
   "Started again from {run}.": "Перезапущено з {run}.",
-  "Started the reviews.": "Перевірки запущено.",
+  "Started the reviews.": "Перегляди запущено.",
   "Started {op}.": "Запущено {op}.",
   "Status": "Статус",
   "Still to do": "Ще треба зробити",

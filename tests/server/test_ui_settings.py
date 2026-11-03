@@ -881,7 +881,7 @@ def test_review_now_is_offered_only_when_settle_would_run_a_review(
     assert "Started the reviews." in runs and "Started settle" not in runs
     browser.client.cookies.set("hrono_lang", "uk")  # type: ignore[attr-defined]
     assert (
-        "Перевірки запущено."
+        "Перегляди запущено."
         in browser.client.get(  # type: ignore[attr-defined]
             queued.headers["location"]
         ).text
