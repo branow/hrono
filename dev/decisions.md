@@ -103,3 +103,10 @@ What the PO decided for you, why, and how to undo it. Newest last.
   unknown tree and an unbounded threshold. Why: the first is a gap on an
   asked outcome a curator hits on a provider outage. Replaces: leaving them
   in backlog. Undo: archive E065, items back to backlog/E063-followups.md.
+- D18 2026-11-03: E065 accepted at d347ea1; its four small followups
+  (the CLI failure line naming the topic, the Review now run title,
+  POST /jobs other ops on an unknown tree, ui-check reading undrawn closed
+  disclosures) wait for acceptance 2 instead of a new epic. Why: none stops
+  O2 or O4, an epic of polish alone costs about 120k of the 376k left, and
+  acceptance 2 needs 150k. Replaces: nothing. Undo: author an epic from
+  backlog/E065-followups.md.
