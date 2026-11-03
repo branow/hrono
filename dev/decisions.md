@@ -119,3 +119,9 @@ What the PO decided for you, why, and how to undo it. Newest last.
   misleads an admin deciding to upgrade. Budget: about 120k + 150k of the
   320k left. Replaces: ending the run on acceptance 2. Undo: archive E066,
   items back to backlog.
+- D20 2026-11-03: E066 accepted; its four qa followups (odd backtick count
+  shows raw, uk failure line keeps English item, run Spent card to four
+  decimals, an idle settle titled as placing) wait for acceptance 3 instead
+  of a new epic. Why: none stops an outcome, and an epic (~120k) plus
+  acceptance 3 (~150k) exceeds the 232k left. Replaces: nothing. Undo:
+  author an epic from backlog/E066-followups.md.
