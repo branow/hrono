@@ -32,6 +32,7 @@ from hrono.registry.descriptor import (
 
 DEFAULT_TREE = "default"
 INSIGHTS_THRESHOLD = 500_000
+MAX_INSIGHTS_THRESHOLD = 100_000_000  # characters; a bigger value never fires
 
 
 class Tree(BaseModel):
@@ -69,6 +70,7 @@ class Tree(BaseModel):
     insights_threshold: int = Field(
         default=INSIGHTS_THRESHOLD,
         gt=0,
+        le=MAX_INSIGHTS_THRESHOLD,
         title="Insights threshold",
         examples=[INSIGHTS_THRESHOLD],
         description=(

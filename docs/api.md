@@ -88,7 +88,7 @@ Bodies:
 { "name": "backend", "sources": ["api", "wiki"],
   "lookups": false,
   "insights": false,                 // off by default; each review is billed
-  "insights_threshold": 500000 }     // positive whole number of characters (true is refused)
+  "insights_threshold": 500000 }     // whole number of characters, 1 to 100000000 (true is refused)
 ```
 
 The role `insights` is optional: no build role falls back to it and a registry

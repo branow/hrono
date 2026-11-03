@@ -969,7 +969,7 @@ def test_a_cleared_threshold_stays_cleared_when_the_form_is_refused(
     assert "insights-line" not in page
 
 
-@pytest.mark.parametrize("bad", ["abc", "500,000"])
+@pytest.mark.parametrize("bad", ["abc", "500,000", "9" * 40])
 def test_a_threshold_that_is_not_a_number_is_a_field_error(
     browser: Browser, bad: str
 ) -> None:
@@ -983,7 +983,7 @@ def test_a_threshold_that_is_not_a_number_is_a_field_error(
     )
 
     assert reply.status_code < 500
-    assert "valid integer" in reply.text
+    assert "valid integer" in reply.text or "less than or equal" in reply.text
     assert f'name="f.insights_threshold" value="{bad}"' in reply.text
     stored = browser.stored("trees", "beta")
     assert stored["insights_threshold"] == 500_000  # type: ignore[index]

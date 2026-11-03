@@ -294,7 +294,12 @@ def test_untriggered_settle_leaves_the_counter(
         client=FakeCompletion(),
     )
     assert _drift(built) == 3  # never ran, counter untouched
-    assert outcome == {"settled": False, "held": 0, "released": 0}
+    assert outcome == {
+        "settled": False,
+        "held": 0,
+        "released": 0,
+        "stages": [],
+    }
 
 
 def _park_a_member(db: Database) -> int:

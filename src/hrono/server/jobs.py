@@ -32,6 +32,7 @@ from hrono.jobs.scope import fan_out, fans_out
 from hrono.jobs.worker import enqueue
 from hrono.server import events
 from hrono.server.auth import require_role
+from hrono.server.trees import require_tree
 from hrono.usage.rollup import for_jobs
 
 router = APIRouter()
@@ -111,6 +112,8 @@ def run_job(body: JobRequest, request: Request, user: Admin) -> dict[str, str]:
             f"unknown op: {body.op}",
             details={"registered": sorted(OPS)},
         )
+    if body.op == "settle" and body.tree is not None:
+        require_tree(request, body.tree)  # as /trees/{name}/sync does
     database = request.app.state.db
     if fans_out(body.op, body.scope):
         # a source-scoped op over every source is a job PER SOURCE, under one

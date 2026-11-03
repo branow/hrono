@@ -49,6 +49,7 @@ from hrono.embed.op import embed
 from hrono.health import report
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
+from hrono.jobs.stages import Stages, recorder
 from hrono.registry.collections.trees import DEFAULT_TREE
 from hrono.summarize import insights, review
 from hrono.summarize.brief import brief
@@ -70,14 +71,20 @@ def settle(
 ) -> Mapping[str, object]:
     """Warm-reconcile the tree when churn/misfit crosses the trigger."""
     tree = job.tree or DEFAULT_TREE
+    run = Stages(report=recorder(context.database, job.id))
     with context.database.connect() as conn:
         tripped = force or should_settle(conn, tree)
         owed = () if tripped else insights.pending(conn, tree)
     if not tripped:
         # not drifted, but the tree's insights step may still owe reviews:
         # run just those, never a re-cluster
-        done = _review_due(tree, owed, context, client) if owed else {}
-        return {"settled": False, "held": 0, "released": 0, **done}
+        # a stage, so a failed review names its topic on the failed run
+        done = (
+            run.run("review", lambda: _review_due(tree, owed, context, client))
+            if owed
+            else {}
+        )
+        return run.outcome({"settled": False, "held": 0, "released": 0, **done})
 
     # WHERE a pinned chunk belongs has to be read before the rebuild, because
     # the rebuild is what erases it.
@@ -98,12 +105,15 @@ def settle(
     with context.database.write() as conn:
         incubator.home(conn, tree, model)
     brief(_stage(tree, "brief"), context, client=client)
-    reviewed = build_tree(
-        _stage(tree, "build-tree"),
-        context,
-        client=client,
-        encoder_for=encoder_for,
-        build=build,
+    reviewed = run.run(
+        "build-tree",
+        lambda: build_tree(
+            _stage(tree, "build-tree"),
+            context,
+            client=client,
+            encoder_for=encoder_for,
+            build=build,
+        ),
     )
     embed(_stage(tree, "embed"), context, encoder_for=encoder_for)
 
@@ -113,12 +123,14 @@ def settle(
         )
         _reset_drift(conn, tree)
     report.refresh(context.database, tree)
-    return {
-        "settled": True,
-        "held": held,
-        "released": released,
-        **(reviewed or {}),
-    }
+    return run.outcome(
+        {
+            "settled": True,
+            "held": held,
+            "released": released,
+            **(reviewed or {}),
+        }
+    )
 
 
 def _review_due(

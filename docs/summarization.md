@@ -216,7 +216,8 @@ later `brief-upper` leaves it alone until the topic's parts change.
 
 A review that does not finish (the cap, an answer that is not findings) stores
 nothing and the job's result lists why under `failed`; the topic is due again.
-A provider error fails the job, naming the topic (`review of topic <id>`);
+A provider error fails the job, naming the topic (`review of topic <id>`) in
+the stage `review` of a settle, as in a sync;
 the topic's page then shows the failed run, as it does for a review that
 did not finish. A pinned brief is never
 overwritten: its findings are stored and the pass is marked skipped. The

@@ -89,6 +89,20 @@ def test_maintain_for_an_unregistered_tree_is_refused_and_queues_nothing(
     assert harness.conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0] == 0
 
 
+def test_settle_for_an_unregistered_tree_is_refused_and_queues_nothing(
+    harness: Harness,
+) -> None:
+    resp = harness.client.post(
+        "/jobs",
+        json={"op": "settle", "tree": "nope"},
+        headers=harness.auth("admin"),
+    )
+
+    assert resp.status_code == 404
+    assert "tree not registered: nope" in resp.json()["error"]["message"]
+    assert harness.conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+
+
 def test_maintain_for_a_registered_tree_queues_a_job(
     harness: Harness,
 ) -> None:

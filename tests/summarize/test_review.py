@@ -19,6 +19,7 @@ from hrono.ingest import store as istore
 from hrono.ingest.identity import Address, content_hash
 from hrono.jobs.model import Job
 from hrono.jobs.ops import JobContext
+from hrono.jobs.stages import StageFailed
 from hrono.llm.client import (
     CompletionRequest,
     CompletionResult,
@@ -373,7 +374,12 @@ def test_an_untripped_settle_reviews_what_is_due_root_last_and_only_that(
 
     again = Reviewer()
     quiet = _settle(database, again)
-    assert quiet == {"settled": False, "held": 0, "released": 0}
+    assert quiet == {
+        "settled": False,
+        "held": 0,
+        "released": 0,
+        "stages": [],
+    }
     assert again.models == []
 
 
@@ -381,7 +387,7 @@ def test_an_untripped_settle_with_nothing_to_review_calls_no_model(
     world,
 ) -> None:  # type: ignore[no-untyped-def]
     database, _ = world
-    nothing = {"settled": False, "held": 0, "released": 0}
+    nothing = {"settled": False, "held": 0, "released": 0, "stages": []}
     with database.write() as conn:
         conn.execute(
             "UPDATE registry SET config = json_set(config, '$.insights', 0) "
@@ -506,6 +512,16 @@ def test_a_provider_error_stops_the_run_naming_the_topic(world) -> None:  # type
         _run(database, Reviewer(fail=LLMError("rate limited")), [1])
     assert review.review_item(ids["mid"]) in "".join(raised.value.__notes__)
     assert _count(database, "SELECT COUNT(*) FROM insights_passes") == 0
+
+
+def test_a_failed_review_in_a_settle_names_the_topic_on_the_failed_run(
+    world,  # type: ignore[no-untyped-def]
+) -> None:
+    database, ids = world
+    with pytest.raises(StageFailed) as raised:
+        _settle(database, Reviewer(fail=LLMError("rate limited")))
+    assert raised.value.stage == "review"
+    assert raised.value.item == review.review_item(ids["mid"])
 
 
 def test_without_an_insights_model_nothing_runs_and_it_says_why(world) -> None:  # type: ignore[no-untyped-def]
