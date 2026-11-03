@@ -257,6 +257,13 @@ def capture_baseline(conn: sqlite3.Connection, tree: str, rate: float) -> None:
     )
 
 
+def drop_baseline(conn: sqlite3.Connection, tree: str) -> None:
+    """Forget the baseline, so the next monitor measures it afresh."""
+    conn.execute(
+        "UPDATE tree_batch SET baseline = NULL WHERE tree = ?", (tree,)
+    )
+
+
 def baseline(conn: sqlite3.Connection, tree: str) -> float | None:
     row = conn.execute(
         "SELECT baseline FROM tree_batch WHERE tree = ?", (tree,)

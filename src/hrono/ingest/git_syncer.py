@@ -35,7 +35,7 @@ def git_sync(config: dict[str, object], cache: Path, timeout: float) -> str:
             # the url may have been edited since the clone: the cache follows
             # the registry, not what it was first cloned from
             _run(
-                ["remote", "set-url", "origin", clean_url],
+                ["remote", "set-url", "--", "origin", clean_url],
                 name,
                 cache,
                 env,

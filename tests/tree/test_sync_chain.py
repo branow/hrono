@@ -9,7 +9,7 @@ import pytest
 
 from hrono import pins
 from hrono.cluster import store as cluster_store
-from hrono.cluster.monitor import monitor
+from hrono.cluster.monitor import baseline, capture_baseline, monitor
 from hrono.db.database import Database
 from hrono.ingest.identity import content_hash
 from hrono.jobs.model import Job
@@ -464,6 +464,33 @@ def test_a_tree_built_today_synced_twice_unchanged_calls_no_model(
         assert outcome["changed"] is False
         assert judge.calls == 0
     assert unembedded == [0, 0]
+
+
+def test_a_baseline_taken_on_raw_vectors_is_measured_again_after_an_upgrade(
+    built: tuple[Database, Path], tmp_path: Path
+) -> None:
+    # every tree synced before the upgrade holds a baseline taken on raw
+    # vectors; kept, the next unchanged sync compares the condensation space
+    # to it, trips settle and pays calls
+    db, _origin = built
+    planted = 1e-9
+    with db.connect() as conn, conn:
+        for row in conn.execute("SELECT text FROM condensations").fetchall():
+            conn.execute(
+                "DELETE FROM embeddings WHERE content_hash = ?",
+                (content_hash(row["text"].encode("utf-8")),),
+            )
+        capture_baseline(conn, TREE, planted)
+    judge = Judge()
+
+    first = _run(db, tmp_path, judge)
+    with db.connect() as conn:
+        assert baseline(conn, TREE) != planted
+    second = _run(db, tmp_path, judge)
+
+    assert first["settle_due"] is False
+    assert second["settle_due"] is False
+    assert judge.calls == 0
 
 
 def test_a_forced_assignment_is_counted(

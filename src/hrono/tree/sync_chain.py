@@ -40,10 +40,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from hrono.cluster.levels import attach_orphans
-from hrono.cluster.monitor import monitor
+from hrono.cluster.monitor import drop_baseline, monitor
 from hrono.cluster.repair import repair
 from hrono.embed.op import embed
 from hrono.health import report
+from hrono.health.upgrade import moving_sections
 from hrono.jobs.model import Job
 from hrono.jobs.ops import OPS, JobContext
 from hrono.jobs.stages import Stages, recorder
@@ -112,7 +113,14 @@ def sync(
     # built before they were embedded still lacks, and of the briefs just
     # written. Embedded here, they work in the space the tree will be in, not
     # one the last stage replaces, and an unchanged source finds nothing to move
+    with context.database.connect() as conn:
+        respaced = moving_sections(conn, tree) > 0
     run.run("embed", embedded)
+    if respaced:
+        # a baseline measured on the raw vectors compares nothing to the
+        # condensation vectors the tree is now placed by: measure it afresh
+        with context.database.write() as conn:
+            drop_baseline(conn, tree)
     measured = run.run(
         "monitor", lambda: monitor(_stage(tree, "monitor"), context)
     )

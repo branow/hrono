@@ -72,7 +72,7 @@ class Plan:
 def plan(conn: sqlite3.Connection, tree: str) -> Plan:
     """What the next sync would rewrite in ``tree``, if nothing else changed."""
     older = _older(conn, tree)
-    moving = _moving(conn, tree)
+    moving = moving_sections(conn, tree)
     leaves = sum(1 for one in older if one.level == 0)
     upper = len(older) - leaves
     if moving:
@@ -119,7 +119,7 @@ def _older(conn: sqlite3.Connection, tree: str) -> tuple[Older, ...]:
     return tuple(found)
 
 
-def _moving(conn: sqlite3.Connection, tree: str) -> int:
+def moving_sections(conn: sqlite3.Connection, tree: str) -> int:
     """Sections in the tree whose condensation is not embedded yet."""
     condenser = condense_model(conn)
     if condenser is None:
