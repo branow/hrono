@@ -1,6 +1,6 @@
 # Plan: the insights step, and the small E054 fixes
 Approved: 2026-11-02 (/autodev:run go)
-Estimate (left): E066 merging, then a scoped acceptance 3, about 0.85 h and 150k output tokens.
+Estimate (left): a scoped acceptance 3, about 0.75 h and 150k output tokens.
 First approved: 6 epics, 8.85 h, 1.39M; spent so far 914k on E055-E062 and
 acceptance 1. Acceptance 1 failed O2 and the 390 bar and found 5 more gaps;
 E062-E064 fix them (D14). E062's review folded its followups into E063
@@ -27,6 +27,8 @@ the cost, two fast-suite flakes); they are E066 (D19: +0.75 h, +120k), then
 acceptance 3 (400k used, 320k left).
 2026-11-03: E066 accepted at 778e712, merging; its four small followups
 wait for acceptance 3 (D20). 488k used, 232k left.
+2026-11-03: E066 merged (9be9f77). Every planned epic is done; acceptance 3
+next (493k used, 227k left).
 Machine now (plan after acceptance 1): on battery, load 5 on 8 cpus, 4.4 GiB
 free, so one epic at a time.
 
@@ -43,11 +45,11 @@ free, so one epic at a time.
 | 9 | E063 (done) | a reviewed topic and the nav fit a phone; bad thresholds get a field error; `hrono tree review` | O4, O2 asked | 3 | 0.45 + 0.25 + 0.05 = 0.75 | 150k |
 | 10 | E064 (done) | an upgrade's first sync is announced with its cost, the next is free; a changed source url is fetched; steady events test | O5, O6 asked | 3 | 0.5 + 0.35 + 0.05 + 0.4 = 1.3 | 180k |
 | 11 | E065 (done) | a review that fails from Review now shows on its topic; uk chips and find-in-page | O4, O2 asked | 2 | 0.45 + 0.25 + 0.05 = 0.75 | 120k |
-| 12 | E066 (accepted, merging) | findings, settings line and run title read right; the upgrade notice prices the sync within its "about"; the fast suite holds under load | O4, O2, O5 asked | 3 | 0.45 + 0.25 + 0.05 = 0.75 | 120k |
+| 12 | E066 (done) | findings, settings line and run title read right; the upgrade notice prices the sync within its "about"; the fast suite holds under load | O4, O2, O5 asked | 3 | 0.45 + 0.25 + 0.05 = 0.75 | 120k |
 Then: acceptance 3 on the flask copy, scoped on acceptance 2 (about 0.75 h, 150k).
 
 Order (one at a time): E057, E058, E056, E059, E060, E061, E062 (done),
-E063 (done), E064 (done), E065 (done), acceptance 2 (done), E066 (merging), then acceptance 3.
+E063 (done), E064 (done), E065 (done), acceptance 2 (done), E066 (done), then acceptance 3.
 
 Model calls: qa spends at most 10 real claude-code subscription calls per
 epic (D2), on the flask copy and the stored xgboost/bcreg trees; no rebuild.
