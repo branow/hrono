@@ -123,7 +123,9 @@ brief space over child edges.
 Per-topic counts persist, so a batch re-checks only dirty topics plus a
 sample. The first run records the baseline; a fresh build's rate is nonzero
 by nature (0.031 measured, since clusters are not spheres), so every threshold
-is relative to it.
+is relative to it. A tree built before condensations were embedded moves to
+condensation vectors on its next sync; that sync drops the baseline taken on
+the raw vectors and the monitor records it again on the new space.
 
 ## Repair
 
