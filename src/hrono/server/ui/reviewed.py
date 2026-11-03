@@ -23,11 +23,18 @@ _CONFIDENCE = {
     "low-medium": "plain",
     "low": "plain",
 }
+# a level, or a range of two written with a dash, a slash or "to", in either
+# order ("medium-high", "medium\u2013high", "high to medium")
 _CONFIDENCE_LINE = re.compile(
-    r"\s*(?:(?P<level>medium-high|low-medium|high|medium|low)\b[\s,;:.\u2013\u2014-]*)?"
-    r"(?P<rest>.*)",
+    r"\s*(?:(?P<level>(?:high|medium|low)"
+    r"(?:\s*(?:[-/\u2013\u2014]|to\b)\s*(?:high|medium|low))?)\b"
+    r"[\s,;:.\u2013\u2014-]*)?(?P<rest>.*)",
     re.I | re.S,
 )
+_RANGES = {
+    frozenset({"medium", "high"}): "medium-high",
+    frozenset({"low", "medium"}): "low-medium",
+}
 
 
 def reviewed(
@@ -87,12 +94,17 @@ def _finding(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, object]:
     # is prose; a confidence with no level word is prose alone
     said = _CONFIDENCE_LINE.match(str(row["confidence"]))
     assert said is not None  # every part is optional
-    level = (said["level"] or "").lower()
+    words = frozenset(
+        re.findall(r"high|medium|low", (said["level"] or "").lower())
+    )
+    level = next(iter(words)) if len(words) == 1 else _RANGES.get(words, "")
+    # a level the chip cannot say ("low to high") leaves the whole text prose
+    rest = said["rest"] if level or not words else str(row["confidence"])
     return {
         "statement": str(row["statement"]),
         "level": level,
         "tone": _CONFIDENCE.get(level, "plain"),
-        "settle": said["rest"].strip(),
+        "settle": rest.strip(),
         "placement": str(row["placement"]),
         "evidence": [_cite(conn, item) for item in _evidence(row["evidence"])],
     }

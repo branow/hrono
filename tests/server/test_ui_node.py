@@ -952,6 +952,10 @@ def test_a_review_with_no_findings_says_so(browser: Browser) -> None:
         ("certain beyond doubt", "", "certain beyond doubt"),
         ("medium-high, relies on X", "medium-high", "relies on X"),
         ("low-medium: a guess", "low-medium", "a guess"),
+        ("medium\u2013high: relies on X", "medium-high", "relies on X"),
+        ("High to medium; a guess", "medium-high", "a guess"),
+        ("medium/low, few callers", "low-medium", "few callers"),
+        ("low-high: unsure", "", "low-high: unsure"),
     ],
 )
 def test_only_a_level_word_becomes_the_chip(
@@ -971,7 +975,8 @@ def test_only_a_level_word_becomes_the_chip(
     assert ('<span class="chip' in card.split("</ol>")[0]) == bool(chip)
     if chip:
         assert re.search(rf'class="chip \w+">{chip}</span>', card)
-    assert prose in card
+    # the prose starts after the whole level: no stray "high:" left over
+    assert not prose or f'<span class="hint">{prose}' in card
 
 
 def test_a_range_takes_the_lower_levels_tone(browser: Browser) -> None:
