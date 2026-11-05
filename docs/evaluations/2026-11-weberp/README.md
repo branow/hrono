@@ -157,3 +157,36 @@ not a test: on this pilot hrono did not help.
 Tree cost (hrono's price table, API-equivalent; subscription-billed):
 build $60.28, sync to t2 $35.35 (5 changed files), sync to t3 $28.48
 (27 changed files); total $124.11. Reviews: $0.42 + $0.67 + $0.62.
+
+## Retrospective (2026-11-05, after the pilot)
+
+Checked against the exports and transcripts:
+
+- The map held what the hrono arm got wrong; the arm did not read it. t3:
+  the leaf brief of topic 50 (includes, session, bootstrap) states
+  "`$_POST` and `$_GET` values are escaped with
+  `DB_escape_string(htmlspecialchars())`"; the arm read root.md and the
+  briefs of topics 56, 72, 102, and escaped again. root.md says nothing
+  about escaping. t2: BankReconciliation.php is covered by topic 123's
+  brief; the arm read root.md only (1 of 138 pages) and worked by grep.
+- The plugin's session note and skill are written for questions ("read
+  the map before any code ... to confirm the claims you make", "stop
+  exploring after about 20 tool calls and write the answer"). Nothing told
+  an implementing agent to read the briefs of the files it edits.
+- The tasks can be found by grep: each change hangs on a searchable name
+  (`exchangediffact`, `companies`, `stockmaster`). On the PDP contest task the rules
+  had no shared name across stored procedures, which is where the map
+  helped. The tasks were chosen for code mess, not for hidden rules.
+- One try per arm cannot separate the arms: the differences are 1-1.5
+  points on single runs, and t1 went to hrono.
+- Cost: $63.83 of the ~$128 went to two tree syncs that only existed
+  because the three tasks had three bases; my estimates for them ($16-19,
+  then $25-35) were low. The syncs are expensive because lookups make
+  every brief that consulted a changed shared include (SQL_CommonFunctions,
+  session, GetConfig) material: 51 and 44 topics re-briefed for 5 and 27
+  changed files.
+
+Follow-ups: protocol amendment 1 (the change-task skill, rerun with 3 tries
+per arm, no syncs); a backlog item on sync cost from lookups into shared
+includes; whether cross-cutting conventions (input escaping, install and
+upgrade steps) should reach root.md.
