@@ -1,0 +1,75 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    0.5,
+    "sql/updates/44.php creates stockitemnotes (stockid FK, many notes per item) with CreateTable and the next free number. install/sql/tables/stockitemnotes.sql is not added, and the installer sets DBUpdateNumber to the highest file, so a fresh install never gets the table."
+   ],
+   "2": [
+    1,
+    "StockNotes.php covers add, list, edit and delete. It uses header/footer, $Title, __() strings, a FormID in every form, POST input escaped by session.php, an (int) cast on NoteID, an empty-note check and a confirm() on the POST delete form. It does not show who wrote a note or use field/label markup, and $BookMark is empty."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) in 44.php registers the page at the same token as SelectProduct.php, so stock users can open it. It is not added to install/sql/data/scripts.sql."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link with urlencode($StockID) under the Stock Maintenance Options."
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 19th 'Notes' column (18 or 19 columns allowed) and splits it on '||'. Each note is inserted with DB_escape_string(htmlspecialchars()) after the locstock insert, inside the import transaction."
+   ],
+   "6": [
+    0.5,
+    "Stocks.php now runs DELETE FROM stockitemnotes with the error trap on. On a fresh install, where the table does not exist, deleting an item fails. Upgraded databases are not affected."
+   ]
+  },
+  "checklist_total": 5.0,
+  "correctness": 4,
+  "conventions": 3,
+  "regressions": [
+   "On fresh installs stockitemnotes is missing (no install/sql/tables file, and DBUpdateNumber is set past 44), so item deletion in Stocks.php fails on the new trapped DELETE FROM stockitemnotes",
+   "On fresh installs StockNotes.php is not in the scripts table, so the new page is unusable"
+  ],
+  "justification": "A works on an upgraded database. The upgrade script uses the webERP helpers (CreateTable, NewScript, UpdateDBNo) with the next free number. The maintenance page is sound: FormID tokens, a POST delete with confirm, stockid-scoped queries and escaped input. The import takes an optional Notes column, accepts multiple notes, keeps old 18-column files working and stays inside the transaction. It also cleans up notes when an item is deleted, which the reference does not. The main gap is the missing fresh-install schema. Because of it the feature is absent on new installs, and the added cascade delete in Stocks.php then breaks item deletion there. Token 2 is a defensible choice. The page is more minimal than webERP's notes scripts: no BookMark and no field/label layout."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    0.5,
+    "sql/updates/44.php creates stockitemnotes (stockid FK, userid, datecreated) with CreateTable and the next free number. install/sql/tables/stockitemnotes.sql is not added, so fresh installs lack the table."
+   ],
+   "2": [
+    1,
+    "StockNotes.php covers add, list, edit and delete. It uses header/footer, $Title, $BookMark, __() strings, a FormID in every form, field/label/legend markup, a check that the item exists, an empty-note check, an (int) note id and a confirm() on the POST delete button."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 11) in 44.php uses the same token as Stocks.php and the reference. It is not added to install/sql/data/scripts.sql."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link with urlencode($StockID). The extra tab of indentation is cosmetic only."
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 'Notes' column and validates the header against the extended list. The template download now includes the column with help text. Notes are split on '|' and inserted escaped inside the transaction, stopping on the first error."
+   ],
+   "6": [
+    0.5,
+    "Stocks.php adds a trapped DELETE FROM stockitemnotes and Z_ChangeStockCode.php adds a trapped ChangeFieldInTable('stockitemnotes'). Both fail on a fresh install, where the table does not exist."
+   ]
+  },
+  "checklist_total": 5.0,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "On fresh installs stockitemnotes is missing, so item deletion in Stocks.php fails on the new trapped DELETE",
+   "On fresh installs Z_ChangeStockCode.php fails on the new trapped UPDATE of stockitemnotes",
+   "On fresh installs StockNotes.php is not in the scripts table, so the new page is unusable"
+  ],
+  "justification": "B works on an upgraded database. The upgrade script follows webERP's pattern and uses the same security token as the reference (11). The maintenance page is the more complete of the two in webERP style: BookMark, field/label markup, an item-existence check, FormID, a POST delete with confirm and escaped input. The import is careful: the Notes column is optional, the header is validated against it, the template shows it with help text, and inserts stay in the transaction. B also keeps notes consistent when an item is deleted and when its stock code is changed. Like A, it omits the install schema file. That leaves fresh installs without the table, and the new trapped statements in Stocks.php and Z_ChangeStockCode.php then fail there."
+ }
+}

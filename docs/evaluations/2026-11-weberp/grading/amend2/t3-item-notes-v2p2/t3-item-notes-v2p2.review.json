@@ -1,0 +1,72 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php (44 is the next free number after 43) uses CreateTable() to make stockitemnotes (noteid PK, stockid FK to stockmaster, note, date), and the same table is added as install/sql/tables/stockitemnotes.sql"
+   ],
+   "2": [
+    0.5,
+    "StockItemNotes.php has session/header/footer, $Title, __() strings, FormID, an empty-note and date check, add/list/edit/delete and a confirm() on delete. But it runs DB_escape_string() on $_POST['Note'], which session.php has already escaped and HTML-encoded, then htmlspecialchars() again on output. Notes get escaped twice and HTML-encoded twice."
+   ],
+   "3": [
+    1,
+    "NewScript('StockItemNotes.php', 11) in the upgrade script plus a row in install/sql/data/scripts.sql. Token 11 is the same one Stocks.php and PriceMatrix.php use."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link to StockItemNotes.php?StockID=urlencode($StockID) under Stock Maintenance"
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 19th 'Notes' column with several notes separated by |, inserts each one (escaped) into stockitemnotes inside the import transaction, and adds the column to the template. Old 18-column files still pass."
+   ],
+   "6": [
+    1,
+    "The item page and the import still work, including 18-column files. It also cascade-deletes notes in Stocks.php and renames them in Z_ChangeStockCode.php, so the new foreign key does not block deleting or renaming an item."
+   ]
+  },
+  "checklist_total": 5.5,
+  "correctness": 3,
+  "conventions": 4,
+  "regressions": [
+   "none (the new notes page mangles text it saves itself: an apostrophe shows as &#039; and line breaks are stored as a literal \\r\\n)"
+  ],
+  "justification": "A covers everything the task asks for. It has a properly numbered upgrade script using the helpers, the install table, a scripts.sql row with a sensible token (11, as for Stocks.php), the SelectProduct link, a full add/list/edit/delete page with FormID and a delete confirm, and notes in Z_ImportStocks itself, with an optional column that keeps old files working. It also goes beyond the reference by cleaning up notes when an item is deleted or its code is changed, which the foreign key would otherwise block. The main runtime problem is escaping. webERP's session.php already applies DB_escape_string(htmlspecialchars()) to $_POST, and A escapes the note again and HTML-encodes it again on display. Any note with an apostrophe, quote, & or < shows visible entity text, and a multi-line note is saved with literal backslash-r backslash-n characters. That is a common, visible bug in the core feature, so correctness is held to 3. Conventions are otherwise good."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable() for stockitemnotes (noteid, stockid FK, note, userid, dateadded), and the same table is in install/sql/tables/stockitemnotes.sql"
+   ],
+   "2": [
+    1,
+    "StockNotes.php has session/header/footer, $Title, __() strings, FormID, an empty-note check, add/list/edit/delete with a confirm() on delete, and checks the item exists. It relies on session.php's escaping as other webERP scripts do, so notes are stored and displayed correctly. Minor gap: the 'Back to Items' link drops the StockID."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) and NewScript('Z_ImportStockNotes.php', 15) in the upgrade script, plus rows in install scripts.sql. Token 2 is the inquiry level, which is loose for a page that writes data, but it works for stock users."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link to StockNotes.php?StockID=urlencode($StockID)"
+   ],
+   "5": [
+    0.5,
+    "Z_ImportStocks.php is not changed. It adds a separate Z_ImportStockNotes.php (StockID,Note CSV in a transaction, checks the item exists). Notes can be imported, but not as part of the item import as the checklist asks, and the new menu item is added only by NewMenuItem in the upgrade, not in install menuitems.sql."
+   ],
+   "6": [
+    1,
+    "The item page and Z_ImportStocks keep working. Stocks.php and Z_ChangeStockCode.php are not updated for the new foreign key, so an item that has notes can no longer be deleted or have its code changed (the reference has the same gap)."
+   ]
+  },
+  "checklist_total": 5.5,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "Deleting an item that has notes (Stocks.php) or changing its code (Z_ChangeStockCode.php) now fails on the stockitemnotes foreign key. This only affects items that have notes."
+  ],
+  "justification": "B's maintenance page is solid and handles escaping the webERP way: it uses the already-escaped $_POST values, so apostrophes and newlines round-trip correctly. It also records the user and a timestamp. The schema is in both the upgrade script and the install files, and registration uses NewScript plus scripts.sql. The main gap is import. It does not extend Z_ImportStocks, which the checklist asks for, and builds a separate notes importer instead. That importer works, but the menu entry it adds exists only in the upgrade path, so fresh installs lack it. Token 2 is permissive for a page that writes data. B also leaves Stocks.php and Z_ChangeStockCode.php unaware of the new foreign key, so items with notes cannot be deleted or have their code changed. This is new-data breakage rather than a regression of existing behaviour, and the reference shares it. At runtime B works well, hence correctness 4; conventions 4 because of the separate importer and the missing install menu row."
+ }
+}

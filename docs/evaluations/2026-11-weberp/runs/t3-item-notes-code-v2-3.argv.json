@@ -1,0 +1,21 @@
+[
+ "claude",
+ "-p",
+ "# Task: notes on stock items\n\nWhen implementing webERP and importing data from another system, ad hoc\nitem \"notes\" are often available and worth keeping. webERP has no item\nnotes feature; today people put such text in the item's long description.\n\nAdd the option to store zero to many notes about a stock item: a way to\nadd, view, edit and delete an item's notes, reachable from the item's page,\nand a way to bring notes in when items are imported.\n\n\nThe webERP repository is in the current directory; the task is task/task.md. There is nothing to run against: deliver the change as files.",
+ "--model",
+ "sonnet",
+ "--max-turns",
+ "200",
+ "--setting-sources",
+ "",
+ "--strict-mcp-config",
+ "--output-format",
+ "stream-json",
+ "--verbose",
+ "--permission-mode",
+ "acceptEdits",
+ "--disallowedTools",
+ "Bash,WebFetch,WebSearch,Task,NotebookEdit",
+ "--allowedTools",
+ "Read,Grep,Glob,Edit,Write,TodoWrite,Skill"
+]

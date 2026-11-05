@@ -1,0 +1,74 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable for stockitemnotes (noteid PK, stockid key, note, createdby, createddate) plus UpdateDBNo; the same table is added in install/sql/tables/stockitemnotes.sql"
+   ],
+   "2": [
+    1,
+    "StockNotes.php has session/header/footer, $Title, __() strings and a FormID hidden input; it checks the item exists, rejects empty notes, relies on session.php sanitising $_POST, casts NoteID to int, and offers add/list/edit/delete with a JS confirm on delete"
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) in the upgrade and a row added to install/sql/data/scripts.sql, so non-admin users can open it (token 2 is laxer than the reference's 11)"
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds 'Maintain Item Notes' with urlencode($StockID), outside the kitset condition, so every item type gets the link"
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 19th 'Notes' column (with 18 columns still valid), splits it on |, and inserts each note escaped the way session.php escapes input; the template includes the column"
+   ],
+   "6": [
+    1,
+    "Stocks.php now deletes an item's notes when the item is deleted, Z_ChangeStockCode.php moves notes to the new code, and old 18-column import files still validate"
+   ]
+  },
+  "checklist_total": 6,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A is a complete, working implementation. The upgrade script uses webERP's helpers (CreateTable, NewScript, UpdateDBNo), and the table is in the install schema and the script in scripts.sql. The maintenance page follows the usual webERP page pattern: header, $Title, __() strings, FormID, validation, delete confirmation. It treats $_POST as already sanitised by session.php, the same way existing webERP scripts do, so stored notes display correctly. The SelectProduct link shows for every item type. The import change keeps old 18-column files working, supports several notes split by |, and escapes imported text consistently. A also deletes notes when an item is deleted and moves them in Z_ChangeStockCode, which the reference skipped. Minor points: there is no foreign key; token 2 lets inquiry-level users edit notes; demo.sql's script list was not updated; delete works by GET without a token, as in the reference."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable for stockitemnotes with an inline FK to stockmaster, and the table is in install/sql/tables; the SQL already ends in ENGINE/CHARSET, which CreateTable then appends a second time"
+   ],
+   "2": [
+    0.5,
+    "StockItemNotes.php has header/footer, $Title, __() strings, FormID, an empty-note check and delete confirm, but it runs DB_escape_string on $_POST['Note'] that session.php already escaped and htmlspecialchars-ed. Newlines are stored as a literal \\n, and quotes and & display as &#039; and &amp; on the page and in the edit box"
+   ],
+   "3": [
+    1,
+    "NewScript('StockItemNotes.php', 11), with the row also added to scripts.sql and demo.sql"
+   ],
+   "4": [
+    0.5,
+    "The SelectProduct.php link is inside if ($Its_A_Kitset_Assembly_Or_Dummy == false), so kitset, assembly and dummy items get no notes link"
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional Notes column, validates its header, splits on | and inserts each note; the template shows the column"
+   ],
+   "6": [
+    0.5,
+    "The new FK to stockmaster is not handled in Stocks.php (delete) or Z_ChangeStockCode.php, so once an item has notes it can no longer be deleted or have its code changed"
+   ]
+  },
+  "checklist_total": 4.5,
+  "correctness": 3,
+  "conventions": 3,
+  "regressions": [
+   "Deleting a stock item that has notes fails on the stockitemnotes FK (Stocks.php does not remove notes first)",
+   "Z_ChangeStockCode fails for items that have notes: notes are not moved and the old stockmaster row cannot be deleted because of the FK",
+   "Kitset/assembly/dummy items have no link to notes"
+  ],
+  "justification": "B is well organised. It adds an upgrade script, an install table with an FK, script registration in scripts.sql and demo.sql, and a careful optional Notes column in the import. However, the maintenance page escapes input that webERP's session.php has already escaped and htmlspecialchars-ed, then encodes it again on output. As a result, notes typed in the UI with newlines, apostrophes or & are stored or shown corrupted, and each edit makes it worse. That is a real defect for a free-text notes feature. The menu link sits inside the kitset/assembly/dummy condition, so some items cannot reach their notes. The FK is not reflected in Stocks.php deletion or Z_ChangeStockCode, so items with notes can no longer be deleted or renamed. On conventions, it uses an inline FK where the reference uses AddConstraint, passes ENGINE/CHARSET to CreateTable, which appends its own (so they appear twice), and its manual double-escaping goes against webERP's input-sanitising convention."
+ }
+}

@@ -230,3 +230,28 @@ reconciliation), yet no run of either arm, pilot included, changed
 BankReconciliation.php. Agents treat the page they copy as the shared
 context, not the includes every page runs through. Agent cost: hrono
 $0.48-1.03 a try, code $0.39-0.69.
+
+## Amendment 2 results (2026-11-05, harness v2: real plugin, recall on)
+
+t3 at 4cb937f, 3 tries per arm, all six in parallel, 0 failures. Recall
+attached to every hrono prompt (runs/*-hrono-v2-*.recall.md): pages of
+topics 56, 8, 9, 10, 55, 52 and passages of README.md, Stocks.php,
+upgrade2.9-2.9a.sql, FixedAssetItems.php; not topic 50 (session.php).
+Reviews: grading/amend2/ (pair k = hrono v2-k vs code v2-k; $0.60, $0.65,
+$1.05).
+
+| arm | try | checklist | correctness | conventions | s | turns | agent $ | map pages opened | Skill calls |
+|---|---|---|---|---|---|---|---|---|---|
+| hrono | v2-1 | 5/6 | 4 | 4 | 116 | 43 | 0.6408 | 2 (56, 72) | 0 |
+| hrono | v2-2 | 5.5/6 | 4 | 4 | 94 | 36 | 0.5232 | 0 | 0 |
+| hrono | v2-3 | 4.5/6 | 3 | 3 | 97 | 43 | 0.5083 | 0 | 0 |
+| code | v2-1 | 5/6 | 4 | 3 | 100 | 46 | 0.5763 | - | - |
+| code | v2-2 | 5.5/6 | 3 | 4 | 92 | 45 | 0.5524 | - | - |
+| code | v2-3 | 6/6 | 4 | 4 | 97 | 48 | 0.5703 | - | - |
+
+Means: hrono 5.00, 3.67, 3.67; code 5.50, 3.67, 3.67. With recall
+attached the hrono arm opened fewer map pages than without it (0-2 vs 3-6
+in amendment 1) and never called the skill: it took the passages as enough
+and worked by grep. On a task this size the map does not change the
+outcome; recall did not bring the cross-cutting rule (escaping) because
+the task text does not name it.
