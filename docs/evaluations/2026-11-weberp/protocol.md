@@ -101,3 +101,24 @@ for the hrono arm also which map pages were read (from the transcript).
   log and syncs/.
 - 2026-11-05: in every task both arms ran in parallel (same start
   second, separate workspaces); the protocol did not fix the order.
+
+## Amendment 1 (2026-11-05, before any of its runs)
+
+Retrospective of the pilot (README "Retrospective"): the map held the
+facts the hrono arm got wrong (t3: topic 50 states POST data is already
+escaped by session.php; t2: topic 123 covers BankReconciliation.php), but
+the arm read 1-4 pages and the plugin's note and skill only covered
+answering questions. hrono f8004fd adds a "When the task is a change" section
+to the skill and one sentence to the session note: before the first edit,
+read the leaf brief of every file to be edited and of the shared files it
+includes. No tree, prompt or task changed.
+
+Rerun of t2 and t3 on the existing trees (db/snap-2d8fa77.db,
+db/snap-4cb937f.db; exports unchanged), no sync:
+- hrono arm: tries 2, 3, 4 with hrono f8004fd (the pilot's try 1 used the old
+  note and is reported separately, not pooled).
+- code arm: tries 2, 3 (identical setup; try 1 is pooled, giving 3).
+- Grading: three blind pair reviews per task, hrono try k+1 vs code try k
+  (k = 1, 2, 3), each with its own coin flip, same reviewer prompt.
+- Reported: per-arm mean and every individual score; with n = 3 per arm
+  still an observation, not a significance test.
