@@ -36,7 +36,12 @@ function note(config) {
         "part: the area brief only summarises them. " +
         "Only then open the source files, to confirm the claims you " +
         "make; a part whose brief you have not read is one you would guess " +
-        "about. The hrono skill has the details.",
+        "about. For a change, before the first edit also read the leaf " +
+        "brief of every file you will edit and of every shared file it " +
+        "includes (grep the map for the path; leaves list their files " +
+        "under ## Sources): they state the rules the project applies " +
+        "around that code, which a code search does not show. " +
+        "The hrono skill has the details.",
     );
   } else {
     lines.push(`It is not exported yet; the hrono-export skill writes it.`);

@@ -70,6 +70,27 @@ How to spend your turns:
 - A brief over about 20 KB: grep it for the question's terms and read
   those parts instead of reading it whole.
 - Keep turns for the answer: after about 20 tool calls, stop exploring and
-  write it. An answer with what you found beats no answer.
+  write it. An answer with what you found beats no answer. For a change,
+  this limit is for exploring before the first edit.
+
+## When the task is a change
+
+A code search finds the places that name what you change. It does not find
+the rules the project applies around them, which the code shows only by
+example; the briefs state them. Before the first edit:
+
+1. Read `root.md`, its Conventions in full, and the brief of every area the
+   change touches.
+2. For every file you will edit, and every file you copy as a pattern,
+   grep the map for its path (the leaves list their files under
+   `## Sources`) and read that leaf brief in full.
+3. For every shared file those files include or call (bootstrap, session,
+   common functions, the install and upgrade scripts), read its leaf brief
+   too: what it already does to input and state, and what a new page,
+   table or setting must also touch.
+4. Write down every place the briefs say the same data or rule also lives
+   (install schema and seed data, upgrade scripts, lists that name it,
+   menus, permissions, a second path doing the same job) and make the
+   change cover each one, or say why it need not.
 
 If no export exists, use hrono-export.
