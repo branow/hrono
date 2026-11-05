@@ -62,3 +62,29 @@ month" terms (`CustomerAccount.php` vs `CustomerInquiry.php`,
   checklist of the places the rule lives; webERP has no tests for them):
   #845 bank accounts revalued on automatic rate updates, #848 a configurable
   exchange-difference account, #878 standard costs to 8 decimals.
+- 2026-11-05 12:03 UTC: familiarity probes (probes/): 0 right, 1 partial,
+  2 wrong. Protocol written (protocol.md), tasks and checklists
+  (tasks/). Found while writing the t1 checklist: the merged #845 never
+  calls its new revaluation function from the login rate update (only
+  Currencies.php:152 calls it, at 2d8fa77 and on master).
+- 2026-11-05 12:06 UTC: t1 runs (runs/). hrono: 52 s, 24 turns, $0.3496,
+  1 file +53/-4. code: 80 s, 35 turns, $0.3487. Blind Opus review
+  (grading/t1-bank-revalue/, coin flip A=hrono): hrono checklist 6/7,
+  correctness 4, conventions 3; code 5/7, 4, 2; no regressions in either.
+- 2026-11-05 ~12:10-12:35 UTC: tree sync to t2's base 2d8fa77 (mirror pin
+  moved; db snapshot db/snap-842d073.db). update: 5 files, 7 sections
+  condensed (2 calls). propagate: judged 51 topics (best-of-3, 153 haiku
+  judge calls), all 51 material, because 46 topics' briefs had looked up the
+  changed shared includes (brief_uses on session.php, MiscFunctions.php,
+  LoginFunctions.php, ...). The brief stage was then about to rewrite 51
+  leaf briefs (~$16-19 at $0.31 each) and was STOPPED by killing the server
+  before any brief call completed. Sync cost so far (haiku, API prices
+  computed from tokens): judge ~$0.96, condense ~$0.08. Tree is mid-sync:
+  sections at 2d8fa77, 51 leaf briefs marked stale, export for 2d8fa77 not
+  made.
+- 2026-11-05 12:25 UTC: on the user's go, the t2 sync resumed (db copy of
+  the stopped state: db/snap-2d8fa77-midsync.db). The restarted server
+  reclaimed the job; propagate re-judged only 3 topics (9 calls). Brief
+  stage: 97 brief calls, 0 failures; then brief-upper. Next: when it ends,
+  snapshot db/snap-2d8fa77.db, export, run t2; then the same for t3
+  (pin 4cb937f79, db/snap-4cb937f.db).

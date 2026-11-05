@@ -1,0 +1,1 @@
+In webERP (the open-source PHP ERP), how is the due date of a "day in following month" payment term computed when the system shows a customer's overdue balances, and is it computed the same way in every script that shows them? Name the files and the SQL expressions. Answer from memory only; say "don't know" if unsure.

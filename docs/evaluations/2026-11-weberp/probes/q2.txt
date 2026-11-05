@@ -1,0 +1,1 @@
+In webERP (the open-source PHP ERP), where are the automatic daily exchange-rate updates applied, and what does that code do about the balances of foreign-currency bank accounts? Name the file and function or code path. Answer from memory only; say "don't know" if unsure.

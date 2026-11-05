@@ -1,0 +1,1 @@
+In webERP (the open-source PHP ERP), which general-ledger account do customer allocations, supplier allocations and the bank reconciliation post exchange differences to, and is it the same account for all three? Name the config fields and files. Answer from memory only; say "don't know" if unsure.

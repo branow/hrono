@@ -1,0 +1,120 @@
+diff --git a/api/includes/api_login.php b/api/includes/api_login.php
+index 0ba2ac1..1bab240 100644
+--- a/api/includes/api_login.php
++++ b/api/includes/api_login.php
+@@ -145,6 +145,7 @@ function DoSetup()
+ 				 	ConvertSQLDate($_SESSION['UpdateCurrencyRatesDaily'])
+ 					,'d')> 0){
+ 
++				$OldCurrencyRates = GetCurrencyRatesSnapshot();
+ 			    $CurrencyRates = GetECBCurrencyRates(); // gets rates from ECB see includes/MiscFunctions.php
+ 				/*Loop around the defined currencies and get the rate from ECB */
+ 			    $CurrenciesResult = DB_query('SELECT currabrev FROM currencies');
+@@ -155,6 +156,7 @@ function DoSetup()
+ 											    WHERE currabrev='" . $CurrencyRow[0] . "'");
+ 					}
+ 			    }
++				RevalueForeignBankAccounts($OldCurrencyRates);
+ 				$_SESSION['UpdateCurrencyRatesDaily'] = Date('Y-m-d');
+ 			    $UpdateConfigResult = DB_query("UPDATE config SET confvalue = CURRENT_DATE WHERE confname='UpdateCurrencyRatesDaily'");
+ 			}
+diff --git a/includes/LoginFunctions.php b/includes/LoginFunctions.php
+index e2d8873..25bde6e 100644
+--- a/includes/LoginFunctions.php
++++ b/includes/LoginFunctions.php
+@@ -11,6 +11,79 @@ define('UL_CONFIGERR', 3);	/* Configuration error in webERP or server */
+ define('UL_SHOWLOGIN', 4);
+ define('UL_MAINTENANCE', 5);
+ 
++/*
++ *  Returns the current exchange rate of every currency, keyed by currency code.
++ *  Call before updating the rates so RevalueForeignBankAccounts() can see what changed.
++ */
++function GetCurrencyRatesSnapshot() {
++	$Rates = array();
++	$Result = DB_query("SELECT currabrev, rate FROM currencies");
++	while ($Row = DB_fetch_array($Result)) {
++		$Rates[$Row['currabrev']] = $Row['rate'];
++	}
++	return $Rates;
++}
++
++/*
++ *  Posts a general ledger journal (type 36) for every foreign currency bank account so that its
++ *  balance in the bank's currency is unchanged by a change of exchange rate, the same
++ *  result as "Calculate and Post Exchange Difference" in the bank reconciliation.
++ *  @param array $OldRates Rates before the update, from GetCurrencyRatesSnapshot()
++ */
++function RevalueForeignBankAccounts($OldRates) {
++	$DefaultCurrency = $_SESSION['CompanyRecord']['currencydefault'];
++	$ExchangeDiffAct = $_SESSION['CompanyRecord']['exchangediffact'];
++	$DecimalPlaces = $_SESSION['CompanyRecord']['decimalplaces'];
++	$PostingDate = Date($_SESSION['DefaultDateFormat']);
++	$PeriodNo = GetPeriod($PostingDate);
++
++	$SQL = "SELECT bankaccounts.accountcode,
++					bankaccounts.bankaccountname,
++					bankaccounts.currcode,
++					currencies.rate
++			FROM bankaccounts
++			INNER JOIN currencies
++				ON bankaccounts.currcode = currencies.currabrev
++			WHERE bankaccounts.currcode <> '" . $DefaultCurrency . "'";
++	$AccountsResult = DB_query($SQL);
++
++	while ($Account = DB_fetch_array($AccountsResult)) {
++		$NewRate = $Account['rate'];
++		$OldRate = $OldRates[$Account['currcode']] ?? 0;
++		if (!is_numeric($NewRate) or $NewRate <= 0 or !is_numeric($OldRate) or $OldRate <= 0 or $NewRate == $OldRate) {
++			continue;
++		}
++
++		$BalanceResult = DB_query("SELECT SUM(amount) AS total
++									FROM gltotals
++									WHERE account = '" . $Account['accountcode'] . "'
++										AND period <= " . $PeriodNo);
++		$BalanceRow = DB_fetch_array($BalanceResult);
++		$Balance = $BalanceRow['total'] ?? 0;
++
++		/* Rates are units of the bank currency per unit of functional currency. Keep the
++		bank currency balance (Balance * OldRate) constant at the new rate. */
++		$Adjustment = round($Balance * ($OldRate / $NewRate - 1), $DecimalPlaces);
++		if ($Adjustment == 0) {
++			continue;
++		}
++
++		DB_Txn_Begin();
++		DB_query("SELECT typeno FROM systypes WHERE typeid = 36 FOR UPDATE");
++		DB_query("UPDATE systypes SET typeno = typeno + 1 WHERE typeid = 36");
++		$TransNoResult = DB_query("SELECT typeno FROM systypes WHERE typeid = 36");
++		$TransNoRow = DB_fetch_row($TransNoResult);
++		$TransNo = $TransNoRow[0];
++
++		$Narrative = DB_escape_string(mb_substr($Account['bankaccountname'] . ' ' . __('revaluation on') . ' ' . $PostingDate, 0, 200));
++		$InsertPrefix = "INSERT INTO gltrans (type, typeno, trandate, periodno, account, narrative, amount)
++					VALUES (36, '" . $TransNo . "', '" . FormatDateForSQL($PostingDate) . "', '" . $PeriodNo . "', ";
++		DB_query($InsertPrefix . "'" . $ExchangeDiffAct . "', '" . $Narrative . "', '" . -$Adjustment . "')", '', '', true);
++		DB_query($InsertPrefix . "'" . $Account['accountcode'] . "', '" . $Narrative . "', '" . $Adjustment . "')", '', '', true);
++		DB_Txn_Commit();
++	}
++}
++
+ /*
+  *  Function to validate username and password, perform validity checks and initialise $_SESSION data.
+  *  @returns int See define() statements above.
+@@ -204,6 +277,7 @@ function userLogin($Name, $Password, $SysAdminEmail = '') {
+ 					if (DateDiff(Date($_SESSION['DefaultDateFormat']),
+ 						ConvertSQLDate($_SESSION['UpdateCurrencyRatesDaily']),'d')> 0) {
+ 
++						$OldCurrencyRates = GetCurrencyRatesSnapshot();
+ 						if ($_SESSION['ExchangeRateFeed']=='ECB') {
+ 							$CurrencyRates = GetECBCurrencyRates(); // gets rates from ECB see includes/MiscFunctions.php
+ 							/*Loop around the defined currencies and get the rate from ECB */
+@@ -236,6 +310,7 @@ function userLogin($Name, $Password, $SysAdminEmail = '') {
+ 								}
+ 							}
+ 						}
++						RevalueForeignBankAccounts($OldCurrencyRates);
+ 						$_SESSION['UpdateCurrencyRatesDaily'] = Date('Y-m-d');
+ 						$UpdateConfigResult = DB_query("UPDATE config SET confvalue = CURRENT_DATE WHERE confname='UpdateCurrencyRatesDaily'");
+ 					}

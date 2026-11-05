@@ -1,0 +1,80 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "includes/LoginFunctions.php: in the UpdateCurrencyRatesDaily block of userLogin, both the ECB UPDATE and the other/DXR UPDATE are replaced by SetCurrencyRateAndRevalueBanks(), so both feeds revalue."
+   ],
+   "2": [
+    0.5,
+    "It copies the Currencies.php algorithm closely (same gltotals balance, same formula, same narrative string) into a new LoginFunctions.php function. Currencies.php is not refactored to call it, so two copies of the logic now exist."
+   ],
+   "3": [
+    1,
+    "Selects every bankaccounts row WHERE currcode = the currency, takes SUM(gltotals.amount) up to period GetPeriod(today), and computes Balance*Old/New - Balance."
+   ],
+   "4": [
+    1,
+    "Posts two balanced type-36 gltrans rows (exchangediffact gets -diff, the bank account gets +diff), numbered with GetNextTransNo(36) and dated to the GetPeriod period, inside DB_Txn_Begin/Commit."
+   ],
+   "5": [
+    0.5,
+    "Reads the old rate before the UPDATE and posts only if Old != New and both are > 0, so a 0 or empty rate posts nothing. But the existing ECB fallback ($Rate = 1 when the feed has no rate) still produces a bogus revaluation to rate 1."
+   ],
+   "6": [
+    1,
+    "The function sits in LoginFunctions.php and include_once()s SQL_CommonFunctions.php for GetNextTransNo. GetPeriod comes from DateFunctions, which session.php already loads."
+   ],
+   "7": [
+    1,
+    "Currencies.php is untouched, so the manual posting is unchanged."
+   ]
+  },
+  "checklist_total": 6,
+  "correctness": 4,
+  "conventions": 3,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A finds the real automatic-update site and revalues on both feed paths, which the reference never does. For each currency it reads the old rate, updates the rate and posts a balanced type-36 pair per bank account, using GetNextTransNo, GetPeriod, exchangediffact and the same __() narrative as Currencies.php, all in one transaction. The math and signs match the manual path. It guards against zero or empty rates, but not against the ECB 'no rate -> 1' fallback, which can still post a spurious revaluation. The main convention weakness is that it adds a second copy of the Currencies.php logic in LoginFunctions.php instead of one shared function in SQL_CommonFunctions.php called from both places. The include_once of SQL_CommonFunctions on the login path is harmless in practice: the login form posts to index.php, which does not include that file again."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "includes/LoginFunctions.php: takes GetCurrencyRatesSnapshot() before the ECB/other branch and calls RevalueForeignBankAccounts() after it, so both feeds are covered. It also adds the same to api/includes/api_login.php."
+   ],
+   "2": [
+    0,
+    "Writes a new, different implementation (its own rounding, a new 'revaluation on' narrative, its own transaction-number logic) and does not reuse or share the Currencies.php logic."
+   ],
+   "3": [
+    1,
+    "Joins bankaccounts to currencies for every non-default currency and takes SUM(gltotals.amount) up to the GetPeriod period. Adjustment = Balance*(Old/New - 1)."
+   ],
+   "4": [
+    0.5,
+    "Posts a balanced type-36 pair (exchangediffact and the bank account) with GetPeriod. But it inlines the systypes FOR UPDATE / UPDATE / SELECT sequence instead of calling GetNextTransNo(36)."
+   ],
+   "5": [
+    0.5,
+    "Snapshots old rates before the UPDATEs and skips when the rate is unchanged or either rate is <= 0 or non-numeric. Like A, the ECB fallback to rate 1 still causes a bogus revaluation."
+   ],
+   "6": [
+    1,
+    "Uses only GetPeriod/DB functions, which are available at login (DateFunctions is loaded by session.php and api_session.php), and inlines the transaction number. Nothing on the login path is undefined."
+   ],
+   "7": [
+    1,
+    "Currencies.php is untouched, so the manual posting is unchanged."
+   ]
+  },
+  "checklist_total": 5,
+  "correctness": 4,
+  "conventions": 2,
+  "regressions": [
+   "none"
+  ],
+  "justification": "B also hooks the real daily update, on both feeds and additionally on the API login, and the revaluation math and signs are correct: balanced type-36 pairs against exchangediffact, one transaction per account. It handles zero, empty and unchanged rates, but shares the ECB 'rate 1' fallback problem. On conventions it is weaker: it copies GetNextTransNo's SQL inline instead of calling the shared function, adds a different narrative and a new __() string, and creates a third, divergent revaluation routine instead of reusing the Currencies.php logic through a shared SQL_CommonFunctions function. It works at runtime, but it adds duplicate code to maintain and its postings differ from those of the manual rate change."
+ }
+}

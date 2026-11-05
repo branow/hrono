@@ -1,0 +1,56 @@
+{
+ "task": "t1-bank-revalue",
+ "base": "842d073742e0e4ca3479894e9af84f34b153d1e9",
+ "arm": "code",
+ "try": "1",
+ "model_alias": "sonnet",
+ "models_reported": [
+  "claude-sonnet-5-5"
+ ],
+ "started_utc": "2026-11-05T12:06:55Z",
+ "seconds": 80,
+ "turns": 35,
+ "max_turns": 200,
+ "subtype": "success",
+ "is_error": false,
+ "cost_usd": 0.3486562000000001,
+ "usage": {
+  "input_tokens": 30,
+  "cache_creation_input_tokens": 34930,
+  "cache_read_input_tokens": 506531,
+  "output_tokens": 10757,
+  "output_tokens_details": {
+   "thinking_tokens": 2292
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 34930,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 2,
+    "output_tokens": 586,
+    "cache_read_input_tokens": 44404,
+    "cache_creation_input_tokens": 643,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 643
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null
+ },
+ "exit_code": 0,
+ "stat": [
+  " 2 files changed, 77 insertions(+)"
+ ],
+ "stderr_tail": ""
+}

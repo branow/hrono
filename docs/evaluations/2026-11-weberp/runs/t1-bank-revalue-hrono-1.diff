@@ -1,0 +1,82 @@
+diff --git a/includes/LoginFunctions.php b/includes/LoginFunctions.php
+index e2d8873..345435a 100644
+--- a/includes/LoginFunctions.php
++++ b/includes/LoginFunctions.php
+@@ -11,6 +11,57 @@ define('UL_CONFIGERR', 3);	/* Configuration error in webERP or server */
+ define('UL_SHOWLOGIN', 4);
+ define('UL_MAINTENANCE', 5);
+ 
++/*
++ *  Sets the rate of a currency (as the automatic daily update does) and, in the same transaction, revalues the
++ *  bank accounts held in that currency to the new rate, as Currencies.php does when a rate is edited by hand:
++ *  a type 36 journal between each bank account and the exchange difference account, so that no manual
++ *  "Calculate and Post Exchange Difference" is needed for the rate change.
++ */
++function SetCurrencyRateAndRevalueBanks($CurrCode, $NewRate) {
++
++	global $PathPrefix;
++
++	include_once($PathPrefix . 'includes/SQL_CommonFunctions.php');
++
++	$OldRateResult = DB_query("SELECT rate FROM currencies WHERE currabrev='" . $CurrCode . "'");
++	$OldRateRow = DB_fetch_row($OldRateResult);
++	$OldRate = $OldRateRow[0];
++
++	DB_Txn_Begin();
++	DB_query("UPDATE currencies SET rate='" . $NewRate . "' WHERE currabrev='" . $CurrCode . "'");
++
++	/* Nothing to revalue if the rate is unchanged or either rate is unusable (would divide by zero) */
++	if ($OldRate != $NewRate and $OldRate > 0 and $NewRate > 0) {
++		$BankAccountsResult = DB_query("SELECT bankaccountname, accountcode
++										FROM bankaccounts
++										WHERE currcode='" . $CurrCode . "'");
++		if (DB_num_rows($BankAccountsResult) > 0) {
++			$PostingDate = Date('Y-m-d');
++			$PeriodNo = GetPeriod(Date($_SESSION['DefaultDateFormat']));
++			$ExDiffTransNo = GetNextTransNo(36);
++			while ($BankAccountRow = DB_fetch_array($BankAccountsResult)) {
++				$BalanceResult = DB_query("SELECT SUM(amount) AS balance
++											FROM gltotals
++											WHERE period<='" . $PeriodNo . "'
++											AND account='" . $BankAccountRow['accountcode'] . "'");
++				$BalanceRow = DB_fetch_row($BalanceResult);
++				$OldBalance = $BalanceRow[0];
++				$DifferenceToAdjust = $OldBalance * $OldRate / $NewRate - $OldBalance;
++				if ($DifferenceToAdjust != 0) {
++					$Narrative = mb_substr($BankAccountRow['bankaccountname'] . ' ' . __('currency rate adjustment to') . ' ' . locale_number_format($NewRate, 'Variable') . ' ' . $CurrCode . '/' . $_SESSION['CompanyRecord']['currencydefault'], 0, 200);
++					DB_query("INSERT INTO gltrans (type, typeno, trandate, periodno, account, narrative, amount)
++								VALUES (36, '" . $ExDiffTransNo . "', '" . $PostingDate . "', '" . $PeriodNo . "', '" .
++								$_SESSION['CompanyRecord']['exchangediffact'] . "', '" . DB_escape_string($Narrative) . "', '" . (-$DifferenceToAdjust) . "')");
++					DB_query("INSERT INTO gltrans (type, typeno, trandate, periodno, account, narrative, amount)
++								VALUES (36, '" . $ExDiffTransNo . "', '" . $PostingDate . "', '" . $PeriodNo . "', '" .
++								$BankAccountRow['accountcode'] . "', '" . DB_escape_string($Narrative) . "', '" . $DifferenceToAdjust . "')");
++				}
++			}
++		}
++	}
++	DB_Txn_Commit();
++}
++
+ /*
+  *  Function to validate username and password, perform validity checks and initialise $_SESSION data.
+  *  @returns int See define() statements above.
+@@ -215,8 +266,7 @@ function userLogin($Name, $Password, $SysAdminEmail = '') {
+ 										if ($Rate == '') {
+ 											$Rate = 1;
+ 										}
+-										$UpdateCurrRateResult = DB_query("UPDATE currencies SET rate='" . $Rate . "'
+-																			WHERE currabrev='" . $CurrencyRow[0] . "'");
++										SetCurrencyRateAndRevalueBanks($CurrencyRow[0], $Rate);
+ 									}
+ 								}
+ 							}
+@@ -231,8 +281,7 @@ function userLogin($Name, $Password, $SysAdminEmail = '') {
+ 									} else {
+ 										$CurrencyRatesArray = array();
+ 									}
+-									$UpdateCurrRateResult = DB_query("UPDATE currencies SET rate='" . GetCurrencyRate($CurrencyRow[0], $CurrencyRatesArray) . "'
+-																		WHERE currabrev='" . $CurrencyRow[0] . "'");
++									SetCurrencyRateAndRevalueBanks($CurrencyRow[0], GetCurrencyRate($CurrencyRow[0], $CurrencyRatesArray));
+ 								}
+ 							}
+ 						}
