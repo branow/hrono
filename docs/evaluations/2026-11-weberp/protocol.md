@@ -122,3 +122,27 @@ db/snap-4cb937f.db; exports unchanged), no sync:
   (k = 1, 2, 3), each with its own coin flip, same reviewer prompt.
 - Reported: per-arm mean and every individual score; with n = 3 per arm
   still an observation, not a significance test.
+
+## Amendment 2 (2026-11-05, before any of its runs)
+
+Found after amendment 1: the harness (v1, copied from the PDP harness)
+ran `--safe-mode`, which turns off every plugin and hook. The hrono arm got
+the plugin's note and skill pasted into the prompt, and the plugin's recall
+hook (UserPromptSubmit: `hrono recall <tree> <prompt>`, the top passages and
+their pages attached to the prompt) never ran, in any webERP or PDP run.
+
+Harness v2 (harness/implement.py) runs the real plugin: `--plugin-dir
+plugins/hrono`, the plugin's settings in `~/hrono-weberp/home/agent.json`
+per workspace, recall from the live tree (the run refuses to start unless
+the mirror's pin is the task's base), the Skill tool allowed. Both arms drop
+`--safe-mode` for `--setting-sources ""` and `--strict-mcp-config` (checked:
+no user CLAUDE.md, settings, plugins or MCP load; Claude Code's built-in
+plugins, skills and memory instructions do, in both arms). The prompt is
+the same text as before, passed as an argument; the hrono arm's prompt no
+longer carries the note and skill (the plugin supplies them). The recall
+text is saved per run (<run>.recall.md), produced by the same hook code.
+
+Runs: t3 at 4cb937f (the live tree's base), 3 tries per arm, both arms
+new (v2), all six in parallel; three blind pair reviews (hrono k vs code
+k, own coin flip each). t2 needs the tree restored to 2d8fa77 for recall
+and follows only on the user's go.
