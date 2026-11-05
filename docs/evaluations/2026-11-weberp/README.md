@@ -225,8 +225,8 @@ the spread between tries of the same arm.
 What the transcripts show: with the change-task skill the hrono arm read
 2-6 map pages (pilot: 1-4) and grepped the map for the files it edits,
 but no t3 try opened topic 50 (session.php, where the map states POST
-data is already escaped) and no t2 try opened a brief that names
-BankReconciliation.php's exchange posting beyond topic 123 in two tries
-(both still missed it). Agents treat the page they copy as the shared
+data is already escaped). In t2, tries 2 and 3 read topic 123 (bank
+reconciliation), yet no run of either arm, pilot included, changed
+BankReconciliation.php. Agents treat the page they copy as the shared
 context, not the includes every page runs through. Agent cost: hrono
 $0.48-1.03 a try, code $0.39-0.69.
