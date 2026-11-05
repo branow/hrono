@@ -1,0 +1,114 @@
+# Task: a separate GL account for unrealized currency exchange differences
+
+When a currency rate is updated, webERP adjusts the value of all
+foreign-currency bank accounts to the new exchange rate, so the balance
+sheet shows the current value. That is an unrealized gain or loss: the next
+rate update triggers another adjustment, and no foreign currency has
+actually been sold or bought.
+
+But these adjustments are posted to the "Sales Exchange Variances GL
+Account" from the company preferences, which by its definition holds
+realized profit and loss: the realized P/L of sales in foreign currency. So
+realized and unrealized P/L are mixed in one account.
+
+Add a company preference for a separate "currency exchange (unrealized)
+P/L" GL account, alongside the existing exchange-variance accounts, and
+post the revaluation of foreign-currency bank accounts to it. Existing
+installations must keep working after the upgrade.
+
+
+The webERP repository is in the current directory; the task is task/task.md. There is nothing to run against: deliver the change as files.
+
+This project has an hrono map (tree "weberp"): briefs of everything its sources hold, from one overview down to the files. It is exported at /Users/orest/hrono-weberp/exports/2d8fa778b57d782c0e833ab4fa6373df19f6f7c1. A leaf brief.md states what its sources do exactly - the checks that guard each entry point, every branch and the state it sets, what happens on errors, what it sends and receives and from which other parts - so one brief replaces many file reads. For a question about how something works or how parts fit, read the map before any code, from the top down: start at /Users/orest/hrono-weberp/exports/2d8fa778b57d782c0e833ab4fa6373df19f6f7c1/root.md, read the brief.md of every area whose line touches the question - its Flows name every part a piece of work passes through, what each does when a step fails and what repairs it - then the leaf brief of every part on that path, to its last part: the area brief only summarises them. Only then open the source files, to confirm the claims you make; a part whose brief you have not read is one you would guess about. For a change, before the first edit also read the leaf brief of every file you will edit and of every shared file it includes (grep the map for the path; leaves list their files under ## Sources): they state the rules the project applies around that code, which a code search does not show. The hrono skill has the details.
+
+The hrono skill:
+# hrono - read the map
+
+The map is already exported; the session's opening note gives its folder.
+It is a tree of briefs over whatever the tree was built from: repositories,
+documentation, wikis. A leaf brief states what its sources do exactly: the
+checks that guard each entry point with their conditions, every branch and
+the state it sets, what happens on each error, what it sends and receives,
+and which other parts it connects to. One brief replaces many file reads.
+
+Read the map from the top down, and read it before any code: a search
+over the briefs returns dozens of pages in no useful order, while the
+overview names each area in one line.
+
+1. Read the pages "hrono recall" lists on the prompt, when it is attached
+   (see below). Then `root.md`: pick every area whose line touches the
+   question, and read each one's `brief.md` in full. Its `Flows` name every part a piece
+   of work passes through, step by step, what each does when a step fails,
+   and the parts elsewhere that repair a step or take the same work.
+2. Write down the path: every part the work passes through, from what
+   starts it to its last effect (the record applied, the email sent), and
+   every part named as a repair or a second path, wherever it sits. A
+   part the work is handed to - the one that applies it, the one that sends
+   a notice or email about it - is on the path even when the question names
+   only the first part.
+3. Read the leaf brief of every part on that list - the last parts as much
+   as the first: the area brief gives each part a line or two and its
+   failure handling as one rule, while the leaf gives the exact conditions,
+   what it skips and how each step fails. The area's `## Children`
+   links them; grep the briefs for a part's name only when it is not
+   there. Each leaf's `Part of` line links its area, and its
+   `## Connected topics` the parts it exchanges work or records with:
+   follow them to the parts your list is missing.
+4. Only then open code, to confirm the claims you will make - the files are
+   under each leaf's `## Sources` - not to explore. Where the code and a
+   brief disagree, the code wins.
+5. Before you answer, go down the list: for every part, have you read its
+   brief, and can you say what it does when the work arrives, when it
+   fails partway, and when the same work arrives twice? A part you have not
+   read is one you would guess about, and guesses are where answers go
+   wrong: read it. What the area brief says about a part does not count as
+   reading it. Having an answer for the first parts is not a reason to
+   stop.
+6. In the answer, give every part on the path its own behaviour. Where two
+   parts do the same job - an old and a new consumer, two paths for one
+   piece of work - say how each one behaves; they rarely match, and "it
+   does the same" loses what the question is about.
+7. Before you finish, go over the briefs you read - from what you already
+   have, without opening them again - and carry into the answer every
+   drop, skip and conclusion they state about the parts on the path -
+   which work a check silently drops, a sender and receiver that do not
+   match, what a second delivery does, a failure nothing repairs - even
+   where the question did not ask for it by name. A fact you read and
+   left out scores as a fact you never found.
+
+How to spend your turns:
+- When "hrono recall" is attached to the prompt, its numbered pages are the
+  leaves most likely to hold the answer, best first. Read them before
+  `root.md`: the first five at least, and every other one whose passage
+  touches the question. Then the overview and the areas, for the parts
+  they leave out. A passage is a slice of its page; having read the
+  passage is not having read the page.
+- Read each brief once. What you read stays in front of you; reading it
+  again only spends a turn.
+- A brief over about 20 KB: grep it for the question's terms and read
+  those parts instead of reading it whole.
+- Keep turns for the answer: after about 20 tool calls, stop exploring and
+  write it. An answer with what you found beats no answer. For a change,
+  this limit is for exploring before the first edit.
+
+## When the task is a change
+
+A code search finds the places that name what you change. It does not find
+the rules the project applies around them, which the code shows only by
+example; the briefs state them. Before the first edit:
+
+1. Read `root.md`, its Conventions in full, and the brief of every area the
+   change touches.
+2. For every file you will edit, and every file you copy as a pattern,
+   grep the map for its path (the leaves list their files under
+   `## Sources`) and read that leaf brief in full.
+3. For every shared file those files include or call (bootstrap, session,
+   common functions, the install and upgrade scripts), read its leaf brief
+   too: what it already does to input and state, and what a new page,
+   table or setting must also touch.
+4. Write down every place the briefs say the same data or rule also lives
+   (install schema and seed data, upgrade scripts, lists that name it,
+   menus, permissions, a second path doing the same job) and make the
+   change cover each one, or say why it need not.
+
+If no export exists, use hrono-export.

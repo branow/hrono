@@ -1,0 +1,75 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/41.php uses AddColumn('unrealizedexchangediffact', ...) after purchasesexchangediffact; install/sql/tables/companies.sql and install/sql/demo.sql both get the column (demo value '4200' is in the right position)"
+   ],
+   "2": [
+    0.5,
+    "41.php copies exchangediffact into the new column, but includes/GetConfig.php selects the new column with no check. On login, before Z_UpgradeDatabase.php can run, that query fails and DB_query exits, so existing users are locked out of the upgrade"
+   ],
+   "3": [
+    1,
+    "CompanyPreferences.php adds a P&L GL picker 'Currency Exchange (Unrealized) P/L GL Account' and includes the column in the UPDATE, SELECT and $_POST load"
+   ],
+   "4": [
+    0.5,
+    "AdjustBankAccountsDueToCurrencyExchangeRate in includes/SQL_CommonFunctions.php posts to the new account (falls back to exchangediffact when it is empty or 0); BankReconciliation.php's 'Post Exchange Difference' is unchanged and still posts to exchangediffact"
+   ],
+   "5": [
+    1,
+    "CustomerAllocations.php, Z_AutoCustomerAllocations.php and SupplierAllocations.php are untouched, so they stay on exchangediffact / purchasesexchangediffact"
+   ],
+   "6": [
+    1,
+    "Column added to GLAccounts.php delete guard, Z_ChangeGLAccountCode.php, Z_CreateCompanyTemplateFile.php and includes/GetConfig.php"
+   ]
+  },
+  "checklist_total": 5,
+  "correctness": 2,
+  "conventions": 4,
+  "regressions": [
+   "includes/GetConfig.php selects unrealizedexchangediffact unconditionally. On an existing database, a fresh login runs that query (via LoginFunctions) before the redirect to Z_UpgradeDatabase.php, the query fails, DB_query exits, and the upgrade can't be reached",
+   "The new column sits in the middle of companies.sql, but includes/InstallFunctions.php's positional INSERT INTO companies VALUES(...) still has 27 values. A fresh non-demo install fails to insert the company record (column count mismatch)",
+   "Bank reconciliation exchange differences still post to the realized sales account"
+  ],
+  "justification": "A follows webERP's patterns closely. It uses an AddColumn upgrade script that copies the old account into the new column, updates the install schema and demo data, adds a picker in the same style as the existing ones, and updates every control-account list. Revaluations from the shared function go to the new account, with a sensible fallback. It misses BankReconciliation.php's exchange-difference posting, which is also an unrealized revaluation. It also adds the column to GetConfig's company query without the column-existence check the reference added. That query runs at login before the upgrade redirect, so existing installs can't log in to apply update 41. A further problem: A inserts the column in the middle of the table but doesn't update the positional INSERT in InstallFunctions.php, so a fresh non-demo install no longer gets a company record. The picker also reuses tabindex 21, a cosmetic issue."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/41.php uses AddColumn('unrealizedexchangediffact', ...) after freightact, guarded by the Errors check; companies.sql adds the column at the end, and demo.sql gets '4200' appended in the matching position"
+   ],
+   "2": [
+    0.5,
+    "41.php copies exchangediffact into the new column, and the installer's InstallFunctions.php INSERT is extended to match; but includes/GetConfig.php selects the new column with no check, so a pre-upgrade login fails before reaching Z_UpgradeDatabase.php"
+   ],
+   "3": [
+    1,
+    "CompanyPreferences.php adds a P&L GL picker 'Currency Exchange (Unrealized) GL Account' and includes the column in the UPDATE, SELECT and $_POST load"
+   ],
+   "4": [
+    0.5,
+    "AdjustBankAccountsDueToCurrencyExchangeRate in includes/SQL_CommonFunctions.php uses the new account (falls back to exchangediffact); BankReconciliation.php's 'Post Exchange Difference' is unchanged and still posts to exchangediffact"
+   ],
+   "5": [
+    1,
+    "Customer, auto-customer and supplier allocation scripts are untouched and stay on the realized accounts"
+   ],
+   "6": [
+    1,
+    "Column added to GLAccounts.php, Z_ChangeGLAccountCode.php, Z_CreateCompanyTemplateFile.php and includes/GetConfig.php"
+   ]
+  },
+  "checklist_total": 5,
+  "correctness": 3,
+  "conventions": 4,
+  "regressions": [
+   "includes/GetConfig.php selects unrealizedexchangediffact unconditionally. On an existing database, a fresh login runs that query before the redirect to Z_UpgradeDatabase.php, the query fails, DB_query exits, and the upgrade can't be reached",
+   "Bank reconciliation exchange differences still post to the realized sales account"
+  ],
+  "justification": "B covers the same ground as A in the same webERP style. It has an AddColumn upgrade script guarded by the Errors check, as many existing updates are, and copies the old account into the new column. The install schema, the picker, the updated control-account lists and the redirected shared revaluation function are all done the same way. B also appends the column at the end of the table and extends the positional INSERT in InstallFunctions.php to match, so fresh non-demo installs keep working; even the reference misses this. B shares A's two main gaps. BankReconciliation.php's exchange-difference posting still goes to the realized sales account. And GetConfig.php selects the new column unconditionally: since GetConfig runs at login before the upgrade redirect, existing installs can't log in to apply update 41, which undercuts the task's requirement that existing installations keep working. The picker also reuses tabindex 21, a cosmetic issue."
+ }
+}

@@ -1,0 +1,72 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php (next free number) uses CreateTable() to make stockitemnotes with noteid PK, stockid FK to stockmaster, userid and dateadded; the same table is added to install/sql/tables/stockitemnotes.sql"
+   ],
+   "2": [
+    1,
+    "StockNotes.php has header/footer, $Title, __() strings, a FormID hidden field, an empty-note check, relies on session.php's POST escaping (webERP convention), and asks for confirm() before delete; it can add, list, edit and delete notes"
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) and NewScript('Z_ImportStockNotes.php', 15) in 44.php, plus rows in install/sql/data/scripts.sql. Token 2 is looser than the reference's 11 (inventory) but still lets non-admin stock users open the page"
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link to StockNotes.php?StockID=urlencode($StockID) in the maintenance column"
+   ],
+   "5": [
+    0.5,
+    "Notes can be imported, but through a new Z_ImportStockNotes.php (StockID,Note CSV, transaction, NewMenuItem). Z_ImportStocks.php itself does not accept notes"
+   ],
+   "6": [
+    1,
+    "Z_ImportStocks.php is untouched; SelectProduct only gains a link; Stocks.php delete also cascades to notes and Z_ChangeStockCode renames notes, so neither breaks on the new FK"
+   ]
+  },
+  "checklist_total": 5.5,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A is a complete feature that works. The upgrade script uses webERP's helpers correctly: CreateTable is given no ENGINE clause because the helper appends one, and NewScript and NewMenuItem are used as intended. The install schema and scripts.sql are updated too. StockNotes.php follows webERP's page structure. It stores notes already escaped by session.php and prints them raw, the same way the rest of webERP does. A also handles the item's other lifecycle steps: deleting an item in Stocks.php and changing a stock code in Z_ChangeStockCode both carry the notes along. The import works through a separate, well-built Z_ImportStockNotes.php, which escapes notes the same way as the UI, but notes cannot be brought in with the stock import itself as the checklist asks. Smaller points: security token 2 is more permissive than inventory (11); the new import menu item is added only by the upgrade script and not to the fresh-install menu data; and after a failed validation, the textarea can show escaped text."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php (next free number) uses CreateTable() for stockitemnotes with an FK to stockmaster, plus install/sql/tables/stockitemnotes.sql. It puts its own ENGINE/CHARSET clause in the SQL even though the helper appends one; MySQL accepts the repeated table options, so it still works"
+   ],
+   "2": [
+    0.5,
+    "StockNotes.php has header/footer, $Title, __(), FormID, an empty-note check and confirm() on delete. However, it runs DB_escape_string on $_POST that session.php has already escaped, and htmlspecialchars on output of notes that were stored HTML-encoded, so typed apostrophes, quotes or ampersands show up as &#039; or &amp; and get worse on each edit"
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 11) in 44.php and a scripts.sql row with token 11, matching the reference"
+   ],
+   "4": [
+    0.5,
+    "No link in SelectProduct.php. The link 'Item Notes (n)' is placed on the Stocks.php edit form instead, which is reachable from the item but is not the item's menu page"
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 19th 'Notes' column with zero or more '|'-separated notes, inserted with DB_escape_string after the locstock insert; the template includes the column and the old 18-column files still work"
+   ],
+   "6": [
+    1,
+    "The import stays backward compatible; Stocks.php delete cascades to notes; Z_ChangeStockCode renames notes"
+   ]
+  },
+  "checklist_total": 5,
+  "correctness": 3,
+  "conventions": 3.5,
+  "regressions": [
+   "none"
+  ],
+  "justification": "B covers the database side well: the table is created in both the upgrade script and the install schema, registered at the right security token, cascaded on item delete and stock-code change. Its import fits the checklist exactly, as an optional, backward-compatible multi-note column in Z_ImportStocks.php. The maintenance page has the standard structure, but its escaping is wrong for webERP. session.php already HTML-encodes and DB-escapes every POST value, and B then HTML-encodes again on output. As a result, any note typed in the UI that contains quotes, apostrophes, ampersands or angle brackets displays visibly corrupted (for example &#039;), and each edit adds another layer of encoding. Imported notes are stored raw, so they display correctly, which makes the two paths inconsistent. The link is on Stocks.php rather than the SelectProduct item menu, and the upgrade script passes its own ENGINE clause to a CreateTable helper that already appends one; that is harmless but not the webERP way."
+ }
+}

@@ -1,0 +1,56 @@
+{
+ "task": "t2-unrealized-account",
+ "base": "2d8fa778b57d782c0e833ab4fa6373df19f6f7c1",
+ "arm": "hrono",
+ "try": "4",
+ "model_alias": "sonnet",
+ "models_reported": [
+  "claude-sonnet-5-5"
+ ],
+ "started_utc": "2026-11-05T17:15:39Z",
+ "seconds": 93,
+ "turns": 53,
+ "max_turns": 200,
+ "subtype": "success",
+ "is_error": false,
+ "cost_usd": 0.48337520000000006,
+ "usage": {
+  "input_tokens": 27,
+  "cache_creation_input_tokens": 57999,
+  "cache_read_input_tokens": 632176,
+  "output_tokens": 12489,
+  "output_tokens_details": {
+   "thinking_tokens": 1516
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 57999,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [
+   {
+    "input_tokens": 1,
+    "output_tokens": 842,
+    "cache_read_input_tokens": 66809,
+    "cache_creation_input_tokens": 1307,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 1307
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null
+ },
+ "exit_code": 0,
+ "stat": [
+  " 9 files changed, 57 insertions(+), 2 deletions(-)"
+ ],
+ "stderr_tail": ""
+}

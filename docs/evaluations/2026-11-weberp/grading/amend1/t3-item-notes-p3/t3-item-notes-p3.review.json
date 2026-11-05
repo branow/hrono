@@ -1,0 +1,72 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php (next free number after 43) creates `stockitemnotes` with CreateTable(), including a foreign key to stockmaster, and install/sql/tables/stockitemnotes.sql adds the same table to the fresh-install schema; many notes per stockid."
+   ],
+   "2": [
+    1,
+    "StockNotes.php has session/header/footer, $Title, __() strings, a FormID hidden input and an empty-note check; it adds, lists (newest first, with user), edits and deletes notes, with a JS confirm on delete. It relies on session.php's escaping of input and checks that the item exists."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) in 44.php and a matching row in install/sql/data/scripts.sql; token 2 is the SelectProduct.php token, so anyone who can see the item page can open it."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link with urlencode($StockID), shown for every item type."
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 19th 'Notes' column (several notes separated by ||). It inserts them with DB_escape_string(htmlspecialchars()), matching what session.php does, inside the import transaction. The template shows the column."
+   ],
+   "6": [
+    1,
+    "Old 18-column files still import because the notes column is optional. Stocks.php deletes notes before deleting the item, so the foreign key does not block deletion, and Z_ChangeStockCode.php renames stockid in the notes table."
+   ]
+  },
+  "checklist_total": 6,
+  "correctness": 5,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A is complete and should work at runtime. The upgrade script uses the standard helpers (CreateTable, NewScript, UpdateDBNo guarded by an error check), the install schema and scripts.sql are both updated, and the maintenance page follows webERP's page structure with FormID, __() strings and confirm-on-delete. All functions it calls exist: ConvertSQLDateTime and DB_escape_string. It also handles the side effects the reference skipped: notes are deleted with the item and renamed when a stock code changes. The stock import takes notes as an optional column, so old files still load, and several notes can go in one cell. Small differences from the reference: it uses a created-datetime and user instead of an editable note date, and token 2 lets inquiry-level users edit notes. The page is built from scratch rather than adapted from AddCustomerNotes.php's layout, but it is close enough to count as following convention."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php creates `stocknotes` with CreateTable() and install/sql/tables/stocknotes.sql adds it to the fresh-install schema; it has an index on stockid but no foreign key, which the checklist does not require."
+   ],
+   "2": [
+    0.5,
+    "StockNotes.php closely follows AddCustomerNotes.php (Id/delete parameters, note date, Is_Date validation, FormID, confirm on delete). But it calls DB_escape_string() again on $_POST input that session.php has already escaped and HTML-encoded, and htmlspecialchars() again on output. Apostrophes then show as a literal '&#039;' and line breaks are stored as a literal backslash-n."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 11) and NewScript('Z_ImportStockNotes.php', 15) in 44.php, plus matching rows in install/sql/data/scripts.sql; 11 is the same token as Stocks.php."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link with urlencode($StockID) next to 'Modify Item Details'."
+   ],
+   "5": [
+    0.5,
+    "Z_ImportStocks.php itself does not accept notes; it only gains a link to a new Z_ImportStockNotes.php. That importer (StockID, Note, Date, inside a transaction) works, but notes are not part of the item import as the checklist asks."
+   ],
+   "6": [
+    1,
+    "Z_ImportStocks.php is unchanged apart from the link. Stocks.php deletes notes along with the item and Z_ChangeStockCode.php renames stockid in the notes table; nothing existing breaks."
+   ]
+  },
+  "checklist_total": 5,
+  "correctness": 3,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "B is well structured and follows convention: a numbered upgrade script, the install table, scripts.sql entries with sensible tokens, a page modelled on AddCustomerNotes.php, a menu link, and clean-up when an item is deleted or its code changes. However, the maintenance page escapes input twice. session.php already applies DB_escape_string(htmlspecialchars()) to every $_POST value, and B escapes again on insert and HTML-encodes again on output. Any note containing an apostrophe, quote or ampersand displays garbled entities, multi-line notes are stored with literal backslash-n sequences, and every edit makes it worse. For import it adds a separate notes importer rather than letting the stock import accept notes. This is a reasonable design but only partly meets item 5. The table has no foreign key, although the explicit delete in Stocks.php partly makes up for it."
+ }
+}

@@ -1,0 +1,73 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php (next free number) uses CreateTable for `stockitemnotes` (noteid PK, stockid FK to stockmaster, note, date) and guards UpdateDBNo on Errors==0; install/sql/tables/stockitemnotes.sql adds the matching fresh-install table"
+   ],
+   "2": [
+    1,
+    "StockNotes.php adds, lists, edits and deletes notes on the AddCustomerNotes pattern: session.php, $Title, header/footer, __() strings, FormID, a check that the item exists, empty-note and date validation, a JS confirm on delete, and session-escaped $_POST values used as webERP does"
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 11) (same token as Stocks.php) and NewScript('Z_ImportStockNotes.php', 15) in 44.php; both rows also added to install/sql/data/scripts.sql"
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link to StockNotes.php?StockID=urlencode($StockID) under Stock Maintenance"
+   ],
+   "5": [
+    0.5,
+    "Notes come in through a new Z_ImportStockNotes.php (StockID, Note, optional Date; many rows per item; transaction and rollback), linked from Z_ImportStocks.php; Z_ImportStocks.php itself still does not accept a notes column"
+   ],
+   "6": [
+    1,
+    "Existing pages are untouched apart from added links; Stocks.php now deletes notes before deleting the item, and Z_ChangeStockCode.php now moves notes to the new code, so the new FK does not block those flows"
+   ]
+  },
+  "checklist_total": 5.5,
+  "correctness": 5,
+  "conventions": 5,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A builds a complete, working feature the way webERP does it. The upgrade script uses the CreateTable and NewScript helpers, there is a matching install-schema table and scripts.sql rows, and the maintenance page closely follows AddCustomerNotes.php: FormID, __() strings, delete confirm, and session.php's input escaping used as intended. Its dates work with the HTML date input, because FormatDateForSQL passes Y-m-d through unchanged. It also handles side effects the reference misses: Stocks.php now deletes an item's notes before deleting the item, and Z_ChangeStockCode.php moves notes to the new code, so the new foreign key does not break either flow. The import is a separate Z_ImportStockNotes.php linked from Z_ImportStocks.php. It escapes values the same way session.php does and supports many notes per item. Its only gap against the checklist is that Z_ImportStocks.php itself does not take a notes column."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable for `stocknotes` (noteid, stockid FK, note, userid, createdate) with a guarded UpdateDBNo; install/sql/tables/stocknotes.sql adds it to the fresh-install schema"
+   ],
+   "2": [
+    0.5,
+    "StockNotes.php has add, list, edit and delete with header/footer, $Title, FormID and a confirm on delete, but it runs DB_escape_string/htmlspecialchars again on $_POST values that session.php has already escaped. Newlines are stored as a literal '\\n', apostrophes show as '&#039;', and each edit adds more encoding. Parts of the import page put concatenated text inside __()"
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) and NewScript('Z_ImportStockNotes.php', 15) plus scripts.sql rows; stock users can open the page, though token 2 is the inquiry level and this page writes data"
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds an 'Item Notes' link with the urlencoded StockID under Stock Inquiry"
+   ],
+   "5": [
+    0.5,
+    "Notes come in through a separate Z_ImportStockNotes.php (StockID, Note; many rows per item; transaction), linked from Z_ImportStocks.php; Z_ImportStocks.php itself does not accept notes"
+   ],
+   "6": [
+    0.5,
+    "Stocks.php and Z_ChangeStockCode.php are not updated for the new FK table: once an item has notes, deleting it fails on the constraint, and changing its stock code leaves notes orphaned under the old code"
+   ]
+  },
+  "checklist_total": 4.5,
+  "correctness": 3,
+  "conventions": 3,
+  "regressions": [
+   "Deleting a stock item that has notes fails on the stocknotes FK because Stocks.php does not delete its notes first",
+   "Z_ChangeStockCode.php leaves notes under the old stock code (FK checks are disabled there), orphaning them"
+  ],
+  "justification": "B has the right overall shape: an upgrade script using the helpers, an install table, scripts.sql registration, a menu link, a CRUD page and a separate notes importer. The page has a real runtime bug, though. It escapes $_POST['Note'] again even though session.php has already applied DB_escape_string and htmlspecialchars. As a result, multi-line notes are stored with literal backslash-n text, and apostrophes and other special characters are shown double-encoded. Editing a note re-encodes it every time, and notes entered through the form end up stored differently from imported ones. It also does not update Stocks.php or Z_ChangeStockCode.php for the new foreign-key table, so deleting an item that has notes fails and changing its stock code orphans its notes. On conventions, it registers a page that writes data at the inquiry token 2, puts concatenated text inside __() in the importer, and builds a simpler form that does not use the field/label structure of the existing notes scripts. Like A, it handles import in a separate script instead of extending Z_ImportStocks.php."
+ }
+}

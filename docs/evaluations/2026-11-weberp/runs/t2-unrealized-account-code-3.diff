@@ -1,0 +1,188 @@
+diff --git a/CompanyPreferences.php b/CompanyPreferences.php
+index 723d7c0..b86bb71 100644
+--- a/CompanyPreferences.php
++++ b/CompanyPreferences.php
+@@ -71,6 +71,7 @@ if (isset($_POST['submit'])) {
+ 									commissionsact='" . $_POST['CommAct'] . "',
+ 									exchangediffact='" . $_POST['ExchangeDiffAct'] . "',
+ 									purchasesexchangediffact='" . $_POST['PurchasesExchangeDiffAct'] . "',
++									unrealizedexchangediffact='" . $_POST['UnrealizedExchangeDiffAct'] . "',
+ 									retainedearnings='" . $_POST['RetainedEarnings'] . "',
+ 									gllink_debtors='" . $_POST['GLLink_Debtors'] . "',
+ 									gllink_creditors='" . $_POST['GLLink_Creditors'] . "',
+@@ -137,6 +138,7 @@ if ($InputError !=  1) {
+ 					commissionsact,
+ 					exchangediffact,
+ 					purchasesexchangediffact,
++					unrealizedexchangediffact,
+ 					retainedearnings,
+ 					gllink_debtors,
+ 					gllink_creditors,
+@@ -172,6 +174,7 @@ if ($InputError !=  1) {
+ 	$_POST['CommAct'] = $MyRow['commissionsact'];
+ 	$_POST['ExchangeDiffAct']  = $MyRow['exchangediffact'];
+ 	$_POST['PurchasesExchangeDiffAct']  = $MyRow['purchasesexchangediffact'];
++	$_POST['UnrealizedExchangeDiffAct']  = $MyRow['unrealizedexchangediffact'];
+ 	$_POST['RetainedEarnings'] = $MyRow['retainedearnings'];
+ 	$_POST['GLLink_Debtors'] = $MyRow['gllink_debtors'];
+ 	$_POST['GLLink_Creditors'] = $MyRow['gllink_creditors'];
+@@ -437,6 +440,24 @@ echo '</select>
+ 	<fieldhelp>' . __('Select the general ledger account to be used for posting the exchange differences on the accounts payable transactions to. Supplier invoices entered at one currency and paid in the supplier currency at a different exchange rate have the differences calculated automatically and posted to this general ledger account. Only profit and loss general ledger accounts are available for this selection.') . '</fieldhelp>
+ </field>';
+ 
++echo '<field>
++		<label>' . __('Unrealized Exchange Variances GL Account') . ':</label>
++		<select tabindex="21" title="" name="UnrealizedExchangeDiffAct">';
++
++while ($MyRow = DB_fetch_row($Result)) {
++	if ($_POST['UnrealizedExchangeDiffAct']==$MyRow[0]){
++		echo '<option selected="selected" value="'. $MyRow[0] . '">' . htmlspecialchars($MyRow[1],ENT_QUOTES,'UTF-8') . ' ('.$MyRow[0].')</option>';
++	} else {
++		echo '<option value="'. $MyRow[0] . '">' . htmlspecialchars($MyRow[1],ENT_QUOTES,'UTF-8') . ' ('.$MyRow[0].')</option>';
++	}
++} //end while loop
++
++DB_data_seek($Result,0);
++
++echo '</select>
++	<fieldhelp>' . __('Select the general ledger account to be used for posting unrealized exchange differences to. When a currency rate is changed the foreign currency bank accounts are revalued at the new rate and the difference is posted to this general ledger account. No foreign currency has been bought or sold, so these differences are kept apart from the realized exchange variances. Only profit and loss general ledger accounts are available for this selection.') . '</fieldhelp>
++</field>';
++
+ echo '<field>
+ 		<label>' . __('Payment Discount GL Account') . ':</label>
+ 		<select title="" tabindex="22" name="PytDiscountAct">';
+diff --git a/GLAccounts.php b/GLAccounts.php
+index 57d6633..becfdb5 100644
+--- a/GLAccounts.php
++++ b/GLAccounts.php
+@@ -122,6 +122,7 @@ if (isset($_POST['submit'])) {
+ 					OR grnact='" . $SelectedAccount . "'
+ 					OR exchangediffact='" . $SelectedAccount . "'
+ 					OR purchasesexchangediffact='" . $SelectedAccount . "'
++					OR unrealizedexchangediffact='" . $SelectedAccount . "'
+ 					OR retainedearnings='" . $SelectedAccount . "'";
+ 			$ErrMsg = __('Could not test for default company GL codes because');
+ 			$Result = DB_query($SQL, $ErrMsg);
+diff --git a/Z_ChangeGLAccountCode.php b/Z_ChangeGLAccountCode.php
+index 4f9011d..baf6c04 100644
+--- a/Z_ChangeGLAccountCode.php
++++ b/Z_ChangeGLAccountCode.php
+@@ -84,6 +84,7 @@ if (isset($_POST['ProcessGLAccountCode'])) {
+ 		ChangeFieldInTable("companies", "grnact", $_POST['OldAccountCode'], $_POST['NewAccountCode']);
+ 		ChangeFieldInTable("companies", "exchangediffact", $_POST['OldAccountCode'], $_POST['NewAccountCode']);
+ 		ChangeFieldInTable("companies", "purchasesexchangediffact", $_POST['OldAccountCode'], $_POST['NewAccountCode']);
++		ChangeFieldInTable("companies", "unrealizedexchangediffact", $_POST['OldAccountCode'], $_POST['NewAccountCode']);
+ 		ChangeFieldInTable("companies", "retainedearnings", $_POST['OldAccountCode'], $_POST['NewAccountCode']);
+ 		ChangeFieldInTable("companies", "freightact", $_POST['OldAccountCode'], $_POST['NewAccountCode']);
+ 
+diff --git a/Z_CreateCompanyTemplateFile.php b/Z_CreateCompanyTemplateFile.php
+index cf7762f..10713da 100644
+--- a/Z_CreateCompanyTemplateFile.php
++++ b/Z_CreateCompanyTemplateFile.php
+@@ -24,6 +24,7 @@ if (isset($_POST['CreateTemplate'])){
+ 								  grnact,
+ 								  exchangediffact,
+ 								  purchasesexchangediffact,
++								  unrealizedexchangediffact,
+ 								  retainedearnings,
+ 								  freightact
+ 								FROM currencies INNER JOIN companies
+@@ -44,6 +45,7 @@ if (isset($_POST['CreateTemplate'])){
+                                               grnact=" . $CurrRow['grnact'] . ",
+                                               exchangediffact=" . $CurrRow['exchangediffact'] . ",
+                                               purchasesexchangediffact=" . $CurrRow['purchasesexchangediffact'] . ",
++                                              unrealizedexchangediffact=" . $CurrRow['unrealizedexchangediffact'] . ",
+                                               retainedearnings=" . $CurrRow['retainedearnings'] . ",
+                                               freightact=" . $CurrRow['freightact'] . "
+                           WHERE coycode='1';\n";
+diff --git a/includes/GetConfig.php b/includes/GetConfig.php
+index b711590..ee3fb7d 100644
+--- a/includes/GetConfig.php
++++ b/includes/GetConfig.php
+@@ -67,6 +67,7 @@ if ((isset($ForceConfigReload) AND $ForceConfigReload==true) OR !isset($_SESSION
+ 					grnact,
+ 					exchangediffact,
+ 					purchasesexchangediffact,
++					unrealizedexchangediffact,
+ 					retainedearnings,
+ 					freightact,
+ 					gllink_debtors,
+diff --git a/includes/InstallFunctions.php b/includes/InstallFunctions.php
+index 1c20c09..a4e63dd 100644
+--- a/includes/InstallFunctions.php
++++ b/includes/InstallFunctions.php
+@@ -528,7 +528,8 @@ function UploadData($Demo, $AdminPassword, $AdminUser, $Email, $Language, $CoA,
+ 											1,
+ 											1,
+ 											1,
+-											'5600'
++											'5600',
++											'4200'
+ 										)";
+ 		$Result = DB_query($SQL, '', '', false, false);
+ 		if (DB_error_no() == 0) {
+diff --git a/includes/SQL_CommonFunctions.php b/includes/SQL_CommonFunctions.php
+index 74887a4..ad85d82 100644
+--- a/includes/SQL_CommonFunctions.php
++++ b/includes/SQL_CommonFunctions.php
+@@ -475,6 +475,13 @@ function AdjustBankAccountsDueToCurrencyExchangeRate($SelectedCurrency, $OldRate
+ 
+ 	$ExDiffTransNo = GetNextTransNo(36);
+ 
++	/* Revaluation is an unrealized difference. Fall back to the realized sales exchange
++	variances account while no separate account is configured (e.g. a not yet upgraded record) */
++	$UnrealizedExchangeDiffAct = $_SESSION['CompanyRecord']['unrealizedexchangediffact'] ?? '';
++	if ($UnrealizedExchangeDiffAct == '' or $UnrealizedExchangeDiffAct == '0') {
++		$UnrealizedExchangeDiffAct = $_SESSION['CompanyRecord']['exchangediffact'];
++	}
++
+ 	/* get all the bank accounts denominated on the selected currency */
+ 	$SQLBankAccounts = "SELECT 	bankaccountname,
+ 								accountcode
+@@ -515,7 +522,7 @@ function AdjustBankAccountsDueToCurrencyExchangeRate($SelectedCurrency, $OldRate
+ 							$ExDiffTransNo . "', '" .
+ 							FormatDateForSQL($PostingDate) . "', '" .
+ 							$PeriodNo . "', '" .
+-							$_SESSION['CompanyRecord']['exchangediffact'] . "', '" .
++							$UnrealizedExchangeDiffAct . "', '" .
+ 							mb_substr($MyRowBankAccount['bankaccountname'] . ' ' . __('currency rate adjustment to') . ' ' . locale_number_format($NewRate, 'Variable') . ' ' . $SelectedCurrency . '/' . $_SESSION['CompanyRecord']['currencydefault'], 0, 200) . "', '" .
+ 							(-$DifferenceToAdjust) . "')";
+ 			$ErrMsg = __('Cannot insert a GL entry for the exchange difference because');
+diff --git a/install/sql/demo.sql b/install/sql/demo.sql
+index 25ab0bf..e0cc9f3 100644
+--- a/install/sql/demo.sql
++++ b/install/sql/demo.sql
+@@ -11,7 +11,7 @@ INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2
+ 
+ INSERT INTO `favourites` VALUES ('admin','Search Customers','SelectCustomer.php'),('admin','Search Inventory Items','SelectProduct.php'),('admin','Search Suppliers','SelectSupplier.php');
+ INSERT INTO `systypes` VALUES (0,'Journal - GL',0),(1,'Payment - GL',0),(2,'Receipt - GL',0),(3,'Standing Journal',0),(4,'Journal Template Number',0),(10,'Sales Invoice',0),(11,'Credit Note',0),(12,'Receipt',0),(15,'Journal - Debtors',0),(16,'Location Transfer',0),(17,'Stock Adjustment',0),(18,'Purchase Order',0),(19,'Picking List',0),(20,'Purchase Invoice',0),(21,'Debit Note',0),(22,'Creditors Payment',0),(23,'Creditors Journal',0),(25,'Purchase Order Delivery',0),(26,'Work Order Receipt',0),(28,'Work Order Issue',0),(29,'Work Order Variance',0),(30,'Sales Order',0),(31,'Shipment Close',0),(32,'Contract Close',0),(35,'Cost Update',0),(36,'Exchange Difference',0),(37,'Tenders',0),(38,'Stock Requests',0),(39,'Sales Commision Accruals',0),(40,'Work Order',0),(41,'Asset Addition',0),(42,'Asset Category Change',0),(43,'Delete w/down asset',0),(44,'Depreciation',0),(49,'Import Fixed Assets',0),(50,'Opening Balance',0),(500,'Auto Debtor Number',0),(600,'Auto Supplier Number',0);
+-INSERT INTO `companies` VALUES (1,'webERP Demonstration Company Ltd','1234567890','','123 Web Way','PO Box 123','Queen Street','Melbourne','Victoria 3043','Australia','+61 3 4567 8901','+61 3 4567 8902','weberp@weberpdemo.com','USD','1100','4900','2100','2400','2150','2150','4200','5200','3500',1,1,1,'5600');
++INSERT INTO `companies` VALUES (1,'webERP Demonstration Company Ltd','1234567890','','123 Web Way','PO Box 123','Queen Street','Melbourne','Victoria 3043','Australia','+61 3 4567 8901','+61 3 4567 8902','weberp@weberpdemo.com','USD','1100','4900','2100','2400','2150','2150','4200','5200','3500',1,1,1,'5600','4200');
+ 
+ INSERT INTO `accountsection` (`sectionid`, `sectionname`) VALUES
+ (1, 'Revenue'),
+diff --git a/install/sql/tables/companies.sql b/install/sql/tables/companies.sql
+index ac091be..d0c1269 100644
+--- a/install/sql/tables/companies.sql
++++ b/install/sql/tables/companies.sql
+@@ -26,5 +26,6 @@ CREATE TABLE `companies` (
+   `gllink_creditors` tinyint(1) DEFAULT '1',
+   `gllink_stock` tinyint(1) DEFAULT '1',
+   `freightact` varchar(20) NOT NULL DEFAULT '0',
++  `unrealizedexchangediffact` varchar(20) NOT NULL DEFAULT '0',
+   PRIMARY KEY (`coycode`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/sql/updates/41.php b/sql/updates/41.php
+new file mode 100644
+index 0000000..ced40b1
+--- /dev/null
++++ b/sql/updates/41.php
+@@ -0,0 +1,8 @@
++<?php
++
++AddColumn('unrealizedexchangediffact', 'companies', 'varchar(20)', 'NOT NULL', '0', 'freightact');
++
++// Until a separate account is chosen, keep posting where the revaluations have always gone
++executeSQL("UPDATE companies SET unrealizedexchangediffact = exchangediffact WHERE unrealizedexchangediffact = '0' OR unrealizedexchangediffact = ''");
++
++UpdateDBNo(basename(__FILE__, '.php'), __('Add a GL account for unrealized currency exchange differences'));

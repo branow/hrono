@@ -190,3 +190,43 @@ Follow-ups: protocol amendment 1 (the change-task skill, rerun with 3 tries
 per arm, no syncs); a backlog item on sync cost from lookups into shared
 includes; whether cross-cutting conventions (input escaping, install and
 upgrade steps) should reach root.md.
+
+## Amendment 1 results (2026-11-05)
+
+Runs: t2 and t3, hrono tries 2-4 (hrono f8004fd, change-task skill),
+code tries 2-3, all five per task in parallel; t2 first, then t3. 0
+failures. Reviews: grading/amend1/<task>-p<k>/, pair k = hrono try k+1 vs
+code try k, own coin flip each; review cost t2 $0.75, $0.95, $0.81; t3
+$0.63, $0.56, $0.62. (Code try 1 was reviewed again here, paired with
+hrono try 2; its t2 scores matched the pilot review, 5.5/3/4; on t3 it got
+5.5/4/4 vs 5.5/4.5/4 in the pilot.)
+
+| task | arm | try | checklist | correctness | conventions | regressions listed | s | turns | agent $ | map pages |
+|---|---|---|---|---|---|---|---|---|---|---|
+| t2 | hrono | 2 | 5.5/6 | 3 | 4 | GetConfig, BankReconciliation | 88 | 54 | 0.5336 | 3 (root, 123, 41) |
+| t2 | hrono | 3 | 5/6 | 3 | 4 | GetConfig, BankReconciliation | 87 | 49 | 0.5316 | 3 (root, 23, 123) |
+| t2 | hrono | 4 | 5/6 | 3 | 4 | demo.sql positional INSERT | 93 | 53 | 0.4834 | 2 (root, 23) |
+| t2 | code | 1 | 5.5/6 | 3 | 4 | GetConfig, BankReconciliation | 125 | 54 | 0.3853 | - |
+| t2 | code | 2 | 5/6 | 2 | 4 | GetConfig, InstallFunctions positional INSERT, BankReconciliation | 107 | 66 | 0.5165 | - |
+| t2 | code | 3 | 5/6 | 2 | 4 | GetConfig | 87 | 60 | 0.4643 | - |
+| t3 | hrono | 2 | 5/6 | 3 | 3.5 | none | 118 | 50 | 0.7386 | 3 (root, 72, 56) |
+| t3 | hrono | 3 | 5.5/6 | 5 | 5 | none | 139 | 54 | 1.0267 | 6 (root, 72, 56, 151, 105, 25) |
+| t3 | hrono | 4 | 5/6 | 3 | 4 | none | 109 | 44 | 0.7882 | 5 (root, 151, 72, 56, 105) |
+| t3 | code | 1 | 5.5/6 | 4 | 4 | none | 102 | 43 | 0.5209 | - |
+| t3 | code | 2 | 4.5/6 | 3 | 3 | notes not deleted with the item; orphaned on code change | 97 | 44 | 0.4886 | - |
+| t3 | code | 3 | 6/6 | 5 | 4 | none | 133 | 66 | 0.6883 | - |
+
+Means (n = 3 per arm): t2 hrono checklist 5.17, correctness 3.00,
+conventions 4.00; code 5.17, 2.33, 4.00. t3 hrono 5.17, 3.67, 4.17; code
+5.33, 4.00, 3.67. Over both tasks: hrono correctness 3.33, code 3.17;
+conventions 4.08 vs 3.83; checklist 5.17 vs 5.25. No difference beyond
+the spread between tries of the same arm.
+
+What the transcripts show: with the change-task skill the hrono arm read
+2-6 map pages (pilot: 1-4) and grepped the map for the files it edits,
+but no t3 try opened topic 50 (session.php, where the map states POST
+data is already escaped) and no t2 try opened a brief that names
+BankReconciliation.php's exchange posting beyond topic 123 in two tries
+(both still missed it). Agents treat the page they copy as the shared
+context, not the includes every page runs through. Agent cost: hrono
+$0.48-1.03 a try, code $0.39-0.69.
