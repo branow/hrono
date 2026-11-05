@@ -50,3 +50,15 @@ month" terms (`CustomerAccount.php` vs `CustomerInquiry.php`,
   refused, $12.78); cluster 132 topics; briefs with lookups 66 of 132 done,
   ~$0.31 a topic ($20.67 so far). Job job_ab34ec16 still running; upper
   levels and insights reviews follow. Server on 8792 (`~/hrono-weberp/h`).
+- 2026-11-05: the first job failed overnight (the Mac slept: "Connection lost
+  while your computer was asleep") after 67 of 132 briefs. Resumed with
+  `hrono tree maintain` under `caffeinate`: condense fully cached (0 calls),
+  re-cluster gave the same 132 topics, the 67 briefs kept. Built: 132 topics,
+  5 level-1, root at level 2. Insights: 3 passes (topics 150, 151, 154 =
+  root), 27 findings; none further due. Total API-equivalent $60.28: condense
+  $12.78, brief $41.19 (253 calls, ~2 per topic with the look-again retry),
+  brief-upper $3.20, insights $3.11. hrono's estimate was $32.50.
+- Pilot tasks chosen (graded by blind review against the merged diff plus a
+  checklist of the places the rule lives; webERP has no tests for them):
+  #845 bank accounts revalued on automatic rate updates, #848 a configurable
+  exchange-difference account, #878 standard costs to 8 decimals.
