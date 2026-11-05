@@ -1,0 +1,72 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable('stocknotes', \u2026) with a foreign key to stockmaster, and install/sql/tables/stocknotes.sql adds the same table (noteid, stockid, note, userid, createdate) for fresh installs."
+   ],
+   "2": [
+    0.5,
+    "StockNotes.php does add, list, edit and delete with session.php, header/footer, $Title, __() strings, FormID, an empty-note check and a confirm on delete. However, it calls htmlspecialchars again on notes that session.php has already escaped, so quotes and ampersands show as entities and the text gets worse on every edit."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 11) is in the upgrade script and ('StockNotes.php',11,\u2026) is added to install/sql/data/scripts.sql."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link to StockNotes.php?StockID=urlencode($StockID) in the stock maintenance menu."
+   ],
+   "5": [
+    1,
+    "Z_ImportStocks.php accepts an optional 19th 'Notes' column (several notes separated by |), still accepts 18-column files, adds the column to the template and inserts each note into stocknotes."
+   ],
+   "6": [
+    1,
+    "The item page and the old 18-column import still work. Stocks.php also deletes an item's notes when the item is deleted, and Z_ChangeStockCode.php renames them with the item."
+   ]
+  },
+  "checklist_total": 5.5,
+  "correctness": 3,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A is complete. It has the table, an upgrade script using the standard helpers, the install schema, a security token in both places, the item-page link and notes in the stock import, plus cleanup in Stocks.php and Z_ChangeStockCode.php. The main runtime defect is escaping. session.php already applies htmlspecialchars and DB_escape_string to all POST data, and StockNotes.php escapes again on output and in the textarea. Any note containing an apostrophe, ampersand or < therefore shows as literal entities, and each edit adds another layer. The import inserts the raw CSV note without escaping, so imported and screen-entered notes are stored differently, and a note with an apostrophe breaks the import. That last flaw also exists for the other fields in the original importer. Smaller points: the date column shows the raw datetime instead of using ConvertSQLDate, and int(11) is used. Conventions are otherwise good (CreateTable, NewScript, UpdateDBNo, FormID, __())."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable('stockitemnotes', \u2026) with a foreign key to stockmaster, and install/sql/tables/stockitemnotes.sql adds the same table."
+   ],
+   "2": [
+    1,
+    "StockNotes.php does add, list, edit and delete with header/footer, $Title, __() strings, FormID, a check that the item exists, an empty-note check and a confirm on delete. It relies on session.php's escaping and outputs stored notes as-is, which is how webERP does it."
+   ],
+   "3": [
+    1,
+    "NewScript('StockNotes.php', 2) and NewScript('Z_ImportStockNotes.php', 15) are in the upgrade script, and both are added to install/sql/data/scripts.sql. Token 2 lets non-admin stock users open the page."
+   ],
+   "4": [
+    1,
+    "SelectProduct.php adds a 'Maintain Item Notes' link with urlencode($StockID) to the item's maintenance links."
+   ],
+   "5": [
+    0.5,
+    "Notes come in through a new Z_ImportStockNotes.php (StockID,Note CSV, in a transaction, with a check that the item exists and escaping that matches the UI). Z_ImportStocks.php itself is not changed, so notes cannot be loaded together with the items."
+   ],
+   "6": [
+    1,
+    "Nothing existing is changed in a breaking way. Stocks.php deletes an item's notes when the item is deleted, and Z_ChangeStockCode.php renames them with the item."
+   ]
+  },
+  "checklist_total": 5.5,
+  "correctness": 4.5,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "B is a clean, working implementation. It has the stockitemnotes table (same name as the reference) in both the upgrade script and the install schema, scripts registered through NewScript and scripts.sql, the item-page link, and correct escaping. Stored notes are already HTML-escaped and are output as-is, and the importer stores them the same way using DB_escape_string. It also cleans up notes on item delete and on stock code change, and validates the item code. The importer is a separate Z_ImportStockNotes.php rather than an extra column in Z_ImportStocks.php. That is a reasonable webERP-style importer, but it only partly meets the 'when items are imported' item. Convention gaps: the NewMenuItem for the importer is only in the upgrade script and not in install/sql/data/menuitems.sql, so fresh installs get no menu entry. The maintenance page uses token 2 where the reference uses 11, which is arguably looser for a write page. There are no runtime errors I can see."
+ }
+}

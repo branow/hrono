@@ -113,3 +113,47 @@ month" terms (`CustomerAccount.php` vs `CustomerInquiry.php`,
   missed Z_CreateCompanyTemplateFile.php. Both missed BankReconciliation.php
   and both select the new column in GetConfig.php without the reference's
   SHOW COLUMNS guard.
+- 2026-11-05 ~14:49-15:40 UTC: t3 sync to 4cb937f79 (mirror pin moved;
+  start state db/snap-2d8fa77.db), job_4dbc1d91 succeeded (result:
+  syncs/t3-4cb937f-job.txt). $28.48 API-equivalent (`hrono usage --by
+  run`): brief 89 calls $14.81, brief-upper 11 $5.76, insights 12 calls (6
+  reviews, 51 findings) $6.78, judge 132 (44 topics, all material) $0.83,
+  condense 9 $0.30; 0 failures. Tree: 0 topics added or removed, 3
+  sections refiled, 51 briefs rewritten. Snapshot db/snap-4cb937f.db;
+  export exports/4cb937f79e8b (138 files, 3 hops, pages 1/5/132).
+- 2026-11-05 15:52 UTC: t3 runs (runs/, both arms in parallel). hrono:
+  102 s, 50 turns, $0.7658, 8 files +205/-4; read 4 map pages (root.md and
+  the briefs of topics 56 Z-import utilities, 72 stock item maintenance,
+  102 item selection), 15 reads, 19 grep/glob. code: 102 s, 43 turns,
+  $0.5209, 8 files +296/-1; 9 reads, 22 grep/glob. Blind Opus review
+  (grading/t3-item-notes/, coin flip 1: A=hrono, B=code; 21 turns,
+  $0.6166): hrono checklist 5.5/6, correctness 3, conventions 4; code
+  5.5/6, 4.5, 4; no regressions listed for either. hrono's defect: it
+  escapes notes again although session.php already escapes all POST data
+  (apostrophes, & and < show as entities and grow on each edit), and its
+  import stores raw CSV notes unescaped. code put the import in a new
+  Z_ImportStockNotes.php instead of a column in Z_ImportStocks.php
+  (item 5 partly met).
+
+## Results (pilot, one try per arm per task)
+
+Blind Opus review; checklist items met, correctness 0-5, conventions 0-5.
+Agent cost is claude-code's reported API-equivalent.
+
+| task | arm | checklist | correctness | conventions | regressions | s | turns | agent $ | map pages read |
+|---|---|---|---|---|---|---|---|---|---|
+| t1-bank-revalue | hrono | 6/7 | 4 | 3 | none | 52 | 24 | 0.3496 | 4 |
+| t1-bank-revalue | code | 5/7 | 4 | 2 | none | 80 | 35 | 0.3487 | - |
+| t2-unrealized-account | hrono | 4.5/6 | 2 | 3 | fresh install broken | 80 | 40 | 0.3242 | 1 |
+| t2-unrealized-account | code | 5.5/6 | 3 | 4 | none new | 125 | 54 | 0.3853 | - |
+| t3-item-notes | hrono | 5.5/6 | 3 | 4 | none | 102 | 50 | 0.7658 | 4 |
+| t3-item-notes | code | 5.5/6 | 4.5 | 4 | none | 102 | 43 | 0.5209 | - |
+
+Sums: hrono checklist 16/19, correctness 9, conventions 10; code 16/19,
+11.5, 10. (t2: both arms share the GetConfig.php pre-upgrade risk, listed
+for both by the reviewer.) With one try per arm this is an observation,
+not a test: on this pilot hrono did not help.
+
+Tree cost (hrono's price table, API-equivalent; subscription-billed):
+build $60.28, sync to t2 $35.35 (5 changed files), sync to t3 $28.48
+(27 changed files); total $124.11. Reviews: $0.42 + $0.67 + $0.62.

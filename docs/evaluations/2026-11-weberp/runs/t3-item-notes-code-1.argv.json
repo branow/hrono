@@ -1,0 +1,18 @@
+[
+ "claude",
+ "-p",
+ "--model",
+ "sonnet",
+ "--max-turns",
+ "200",
+ "--safe-mode",
+ "--output-format",
+ "stream-json",
+ "--verbose",
+ "--permission-mode",
+ "acceptEdits",
+ "--disallowedTools",
+ "Bash,WebFetch,WebSearch,Task,NotebookEdit",
+ "--allowedTools",
+ "Read,Grep,Glob,Edit,Write,TodoWrite"
+]

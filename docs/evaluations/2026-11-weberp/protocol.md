@@ -95,5 +95,9 @@ for the hrono arm also which map pages were read (from the transcript).
   from the tree pin, so it was replaced (before any run) by commit
   cc85fec49 + 73c1963cb (issue #592), base 31 files from the pin.
 - 2026-11-05: the tree sync to t2's base was stopped in its brief stage
-  (51 leaf briefs to rewrite, ~$16-19, beyond the pilot budget); how t2 and
-  t3 proceed is pending the user's decision (README log).
+  (51 leaf briefs to rewrite, ~$16-19, beyond the pilot budget); on the user's
+  go it was resumed from the stopped state (db/snap-2d8fa77-midsync.db) and
+  completed; t3's sync ran in full. Both syncs are recorded in the README
+  log and syncs/.
+- 2026-11-05: t2 and t3 ran both arms in parallel (separate workspaces);
+  t1 ran them one after the other.
