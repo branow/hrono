@@ -88,3 +88,28 @@ month" terms (`CustomerAccount.php` vs `CustomerInquiry.php`,
   stage: 97 brief calls, 0 failures; then brief-upper. Next: when it ends,
   snapshot db/snap-2d8fa77.db, export, run t2; then the same for t3
   (pin 4cb937f79, db/snap-4cb937f.db).
+- 2026-11-05 15:35 UTC: t2 sync job_e0861770 succeeded (result:
+  syncs/t2-2d8fa77-job.txt). Over the whole job (both halves; `hrono usage
+  --by run`, hrono's price table src/hrono/usage/prices.py, the same as the
+  build figure): $35.35 API-equivalent. By role (llm_calls by job_id, same
+  prices): brief 118 calls $20.43, brief-upper 12 $6.17, insights 12 calls
+  (6 reviews, 62 findings) $7.64, judge 162 $1.04, condense 2 $0.08; 0
+  failures. Tree: 0 topics added or removed, 10 sections refiled, 65 briefs
+  rewritten. A sync over 5 changed files cost 59% of the $60.28 build,
+  because briefs that looked up the changed shared includes were all judged
+  material. Snapshot db/snap-2d8fa77.db; export exports/2d8fa778b57d (138
+  files, 3 hops, pages 1/5/132).
+- 2026-11-05 14:44 UTC: t2 runs (runs/, both arms in parallel, separate
+  workspaces). hrono: 80 s, 40 turns, $0.3242, 7 files +48/-1; read 1 map
+  page (root.md), 13 file reads, 13 grep/glob. code: 125 s, 54 turns,
+  $0.3853, 10 files +50/-4; 13 reads, 21 grep/glob. (t1 for comparison:
+  hrono read 4 map pages, 12 reads, 7 grep/glob; code 10 reads, 11
+  grep/glob.) Blind Opus review (grading/t2-unrealized-account/, coin flip
+  0: A=code, B=hrono; 18 turns, $0.6700): code checklist 5.5/6,
+  correctness 3, conventions 4; hrono 4.5/6, 2, 3. hrono's regression: the
+  new column is added mid-table in install/sql/tables/companies.sql while
+  the positional company INSERTs (includes/InstallFunctions.php,
+  install/sql/demo.sql) are not updated, so a fresh install fails; it also
+  missed Z_CreateCompanyTemplateFile.php. Both missed BankReconciliation.php
+  and both select the new column in GetConfig.php without the reference's
+  SHOW COLUMNS guard.

@@ -1,0 +1,1 @@
+{"task":"t2-unrealized-account","flip":0,"A":"code","B":"hrono","drawn_utc":"2026-11-05T14:46:53Z","method":"python secrets.randbelow(2); 0 -> A=code"}
