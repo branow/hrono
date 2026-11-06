@@ -1,0 +1,1 @@
+coin 1: X=hrono-b100-1, Y=code-b100-1 (keep from graders)

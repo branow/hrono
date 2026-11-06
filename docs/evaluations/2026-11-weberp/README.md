@@ -524,3 +524,27 @@ its way to almost every rule, including the invoicing, EDI, recurring and
 API hold checks, Z_ChangeCustomerCode, Z_ImportDebtors and the GLAccounts
 guard. It fails the gate: given unlimited turns, code-only finds the rules
 in webERP's code.
+
+## t10 at a 100-turn budget (2026-11-06, amendment 7)
+
+Both arms in parallel, TURNS=100 and BUDGET_NOTE=1; hrono with READ_MAP=1
+and the threads export. Blind grading by a reading agent per run (labels
+X/Y by coin flip, grading/t10-credit-control/b100/KEY.txt).
+
+| arm | turns (reported) | tool calls | end | s | $ | files | A /15 | B /40 | all /55 | correctness | conventions |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| code (Y) | 101 | 248 | cut at max turns, no NOTES.md | 1,037 | 6.67 | 37 | 13.5 | 32 | 45.5 | 3.5 | 3 |
+| hrono (X) | 231 | 230 | finished | 1,126 | 8.89 | 41 | 14.5 | 33.5 | 48 | 4 | 4 |
+| code gate (no budget) | 287 | - | finished | 1,212 | 10.04 | 52 | 14.5 | 35.5 | 50 | 4 | 3 |
+
+The budget did not bind equally: Claude Code counts a turn per model
+message, the code arm called tools in parallel (248 calls in 101 turns)
+and was stopped, the hrono arm called them one at a time (230 in 231) and
+was not stopped at 100 (it finished with subtype success). Both did about
+the same number of tool calls. hrono read 151 map pages.
+
+hrono ahead by 1.5 B items, 2.5 overall, and +0.5/+1 on correctness and
+conventions; one try per arm, within the spread seen between tries.
+Both missed B15 (EnsureGLEntriesBalance), B21 (account/inquiry pages show
+the new types) and B32 (#761, permission through a scripts entry), although
+the map states all three and the hrono arm read the pages that hold them.

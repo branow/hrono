@@ -240,3 +240,19 @@ evidence for the mechanism, not an average over webERP tasks.
 Runs as amendment 5 (gate, then hrono, then 3 per arm), harness v2 with
 THREADS, threads export, plugin with the brief gate; the hrono arm with
 READ_MAP=1. Primary score: B met (/40), graded blind.
+
+## Amendment 7 (2026-11-06, before any of its runs): t10 at a fixed turn budget
+
+The t10 code-only gate met 35.5 of 40 B rules, but in 287 turns and $10:
+with no budget it reads its way to the rules. Real agents run with a
+budget, and on the PDP contest task and t9 the map arm used fewer turns. The
+question becomes: at the same budget, how many B rules does each arm meet?
+
+Both arms: t10 unchanged, `--max-turns 100` (TURNS=100), and both prompts
+say "You have a budget of 100 turns for the whole task; plan your reading
+so that the change is complete and NOTES.md written within it."
+(BUDGET_NOTE=1). hrono arm with READ_MAP=1 and the threads export as in
+amendment 6. One try per arm first, both in parallel; graded by the same
+reading-agent audit as the gate (checklist A and B), then, if the arms
+differ by more than a few B items, 3 tries per arm graded blind. A run cut
+by the budget is graded on what it delivered.

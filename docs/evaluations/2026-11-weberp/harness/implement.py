@@ -97,6 +97,9 @@ def main() -> None:
     if THREADS:
         prompt += (" The repository's GitHub issues, pull requests and discussions up to"
                    " the base date are in github/, one markdown file per thread.")
+    if os.environ.get("BUDGET_NOTE") == "1":  # amendment 7: both arms are told the turn budget
+        prompt += (f" You have a budget of {TURNS} turns for the whole task; plan your reading so"
+                   " that the change is complete and NOTES.md written within it.")
     argv = ["claude", "-p", prompt, "--model", MODEL, "--max-turns", str(TURNS),
             "--setting-sources", "", "--strict-mcp-config",
             "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",
