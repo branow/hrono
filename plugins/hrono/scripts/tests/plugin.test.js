@@ -96,6 +96,20 @@ test("a prompt gets its recalled passages, each headed by where it comes from", 
   assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--limit", "5"]);
 });
 
+test("a file the prompt hands the work over in is recalled on, first", () => {
+  const w = world();
+  w.configure({ tree: "demo" });
+  fs.mkdirSync(path.join(w.project, "task"));
+  fs.writeFileSync(path.join(w.project, "task", "brd.md"), "Customers need balance adjustments.\n");
+  const prompt = "Implement the change requested in task/brd.md and ../outside.md.";
+  fs.writeFileSync(path.join(w.dir, "outside.md"), "Not part of the project.");
+  assert.notEqual(attached(w.run("recall.js", { prompt })), null);
+  assert.equal(
+    w.calls()[0][2],
+    `Customers need balance adjustments.\n\n${prompt}`,
+  );
+});
+
 test("a passage names its brief's page once, when the export has it", () => {
   const w = world([{ ...LOGIN, topic: 7 }, BRIEF]);
   const page = path.join(w.dir, "export", "auth-area-3", "sign-in-7", "brief.md");
@@ -179,4 +193,5 @@ test("the session opens with where the map is and how to read it", () => {
   assert.match(note, /hrono map \(tree "demo"\)/);
   assert.ok(note.includes(`start at ${path.join(folder, "root.md")}`));
   assert.match(note, /attached to prompts automatically/);
+  assert.match(note, /including one handed over in a file, goes through the map too/);
 });

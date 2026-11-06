@@ -16,20 +16,56 @@ const settings = require("../lib/settings");
 // attach more than this.
 const INLINE = 10000;
 
+// A prompt that hands the work over in a file ("implement task/brd.md") says
+// what the work is in that file, not in its own words, so recall reads the
+// files it names. Only text files inside the project, and only so much: the
+// embedding reads the start of a query, and the file goes first.
+const NAMED = /[\w./-]+\.(?:md|txt|rst)\b/g;
+const LONGEST_NAMED = 20000;
+const LONGEST_QUERY = 6000;
+
 /**
  * The recalled passages for ``prompt`` as one block of text, or null when
  * there is nothing to attach.
  * @param {settings.Settings | null} config
  * @param {string} prompt
+ * @param {string} cwd
  * @returns {string | null}
  */
-function attachment(config, prompt) {
+function attachment(config, prompt, cwd) {
   const question = prompt.trim();
   if (!config || !config.recall) return null;
   if (question.length < config.shortest || question.startsWith("/")) return null;
-  const recalled = hrono.recall(config.bin, config.tree, question, config.limit);
+  const query = [...named(question, cwd), question].join("\n\n").slice(0, LONGEST_QUERY);
+  const recalled = hrono.recall(config.bin, config.tree, query, config.limit);
   if (!recalled.ok || recalled.hits.length === 0) return null;
   return render(config, recalled.hits, pageIndex(config.folder));
+}
+
+/**
+ * The text of each file ``prompt`` names that is a small text file inside
+ * ``cwd``, once each.
+ * @param {string} prompt
+ * @param {string} cwd
+ * @returns {string[]}
+ */
+function named(prompt, cwd) {
+  const root = path.resolve(cwd);
+  const seen = new Set();
+  /** @type {string[]} */
+  const texts = [];
+  for (const [name] of prompt.matchAll(NAMED)) {
+    const file = path.resolve(root, name);
+    if (seen.has(file) || !file.startsWith(root + path.sep)) continue;
+    seen.add(file);
+    try {
+      if (fs.statSync(file).size > LONGEST_NAMED) continue;
+      texts.push(fs.readFileSync(file, "utf8").trim());
+    } catch {
+      continue;
+    }
+  }
+  return texts;
 }
 
 /**
@@ -110,7 +146,7 @@ function pageIndex(folder) {
 
 if (require.main === module) {
   hook.run("UserPromptSubmit", ({ cwd, prompt }) =>
-    attachment(settings.load(cwd), prompt),
+    attachment(settings.load(cwd), prompt, cwd),
   );
 }
 

@@ -8,7 +8,8 @@ down to the files.
   passages that match each prompt and attaches them, marked "hrono recall":
   best first, each headed by the brief it is a slice of (or the file it
   quotes and the brief that describes it). 5 passages by default, 10 at
-  most.
+  most. A prompt that names a text file in the project ("implement
+  task/brd.md") is recalled on that file's text too.
   Short prompts and slash commands are skipped, and a slow or unreachable
   server never blocks a prompt.
 - **The map in every session.** A `SessionStart` hook says the project has a

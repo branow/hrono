@@ -36,11 +36,16 @@ function note(config) {
         "part: the area brief only summarises them. " +
         "Only then open the source files, to confirm the claims you " +
         "make; a part whose brief you have not read is one you would guess " +
-        "about. For a change, before the first edit also read the leaf " +
+        "about. A change or a new feature, including one handed over in a " +
+        "file, goes through the map too, before the first code search: read " +
+        "root.md and the brief of every area the work touches, then the leaf " +
         "brief of every file you will edit and of every shared file it " +
         "includes (grep the map for the path; leaves list their files " +
-        "under ## Sources): they state the rules the project applies " +
-        "around that code, which a code search does not show. " +
+        "under ## Sources). They state the rules the project applies " +
+        "around that code and the other places the same data or work " +
+        "reaches (lists, checks, reports, permissions, install and " +
+        "upgrade), which a code search for the new feature's names does " +
+        "not find. " +
         "The hrono skill has the details.",
     );
   } else {

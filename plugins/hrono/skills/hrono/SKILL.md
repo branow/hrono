@@ -77,7 +77,8 @@ How to spend your turns:
 
 A code search finds the places that name what you change. It does not find
 the rules the project applies around them, which the code shows only by
-example; the briefs state them. Before the first edit:
+example; the briefs state them. Before the first code search, also when
+the work is handed over in a file:
 
 1. Read `root.md`, its Conventions in full, and the brief of every area the
    change touches.
