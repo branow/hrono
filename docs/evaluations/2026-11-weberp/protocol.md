@@ -146,3 +146,20 @@ Runs: t3 at 4cb937f (the live tree's base), 3 tries per arm, both arms
 new (v2), all six in parallel; three blind pair reviews (hrono k vs code
 k, own coin flip each). t2 needs the tree restored to 2d8fa77 for recall
 and follows only on the user's go.
+
+## Amendment 3 (2026-11-06, before any of its runs)
+
+The pilot tasks were small (3-10 files, ~50-300 lines, ~45 turns) and
+greppable; hrono helped on PDP only on the large feature (contest: 31 files
++4,481, ~120 turns, with a 31 KB BRD), not on the smaller ETL task. t4 is
+a large feature made up from webERP's next big change after the base:
+the forecasting module (ef95df0b3, 34 files +8,989), described in a BRD
+written from its manual without file, table or SQL names
+(tasks/t4-forecasting/: task.md and brd.md go to the agent; checklist.md
+and reference.diff do not). Base 4cb937f79e8b, the tree's current commit,
+so no sync; the reference was written ~500 app files later and has known
+gaps (checklist.md). The harness now copies every task file except
+checklist.md and reference.diff into task/. Harness v2 (real plugin and
+recall); the prompt is task.md as before. 3 tries per arm, all six in
+parallel; three blind pair reviews (hrono k vs code k), same reviewer
+prompt.

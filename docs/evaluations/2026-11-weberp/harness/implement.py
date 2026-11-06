@@ -62,7 +62,9 @@ def workspace(task: str, base: str, arm: str, attempt: str) -> Path:
                          capture_output=True, check=True).stdout
     subprocess.run(["tar", "-x", "-C", str(ws)], input=tar, check=True)
     (ws / "task").mkdir()
-    shutil.copy(EVAL / "tasks" / task / "task.md", ws / "task" / "task.md")
+    for src in sorted((EVAL / "tasks" / task).iterdir()):  # task.md and its inputs (brd.md), never the answers
+        if src.name not in ("checklist.md", "reference.diff"):
+            shutil.copy(src, ws / "task" / src.name)
     for args in (["init", "-q"], ["add", "-A"], ["-c", "user.name=eval", "-c", "user.email=eval@local",
                                                  "commit", "-q", "-m", "baseline"]):
         subprocess.run(["git", "-C", str(ws), *args], check=True)
