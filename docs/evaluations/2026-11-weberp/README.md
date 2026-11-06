@@ -427,3 +427,19 @@ tags, access). Code arm, harness v2 with THREADS: 389 s, 128 turns, $2.77,
   new lists.
 
 Closer to the aim (about half) than t7's 17/21, with two real bugs.
+
+## t8 hrono try 1 (2026-11-06): the map was never read
+
+Harness v2, THREADS, EXPORT=4cb937f...-threads (the threads map). A first
+start returned no recall (the hook timed out on the server's first call
+after the sync); it was stopped and rerun, and the rerun's recall attached
+5 passages, all from project-history threads (the prompt only says
+"implement task/brd.md"). Run: 461 s, 161 turns, $3.33, 26 files
++799/-41. The SessionStart note was delivered, yet the agent never opened
+root.md, a brief, or the hrono skill: 160 tool calls, all on the code.
+
+Checked every hrono try for paths under exports/ in its transcript (the
+note alone accounts for about 2): t1 12, t2 3/38/20/35, t3 31/35/40/17,
+t4 2/2/2, t8 2. So the t4 hrono tries never read the map either: the t4
+"tie" was code against code. The tasks given as a business request file
+(t4, t8) are the ones where the agent skips the map.
