@@ -1,0 +1,819 @@
+diff --git a/CustomerAccount.php b/CustomerAccount.php
+index 85ba99a..ecb95aa 100644
+--- a/CustomerAccount.php
++++ b/CustomerAccount.php
+@@ -240,6 +240,8 @@ echo __('Show all transactions after'), ':
+ 		'<input name="Refresh Inquiry" tabindex="3" type="submit" value="', __('Refresh Inquiry'), '" />
+ 	</form>';
+ 
++echo EarlyPaymentDiscountOpenInvoicesHTML($CustomerID, $CustomerRecord['decimalplaces']);
++
+ /* Show a table of the invoices returned by the SQL. */
+ 
+ echo '<br /><table class="selection">
+diff --git a/CustomerInquiry.php b/CustomerInquiry.php
+index fc10d1b..1843e04 100644
+--- a/CustomerInquiry.php
++++ b/CustomerInquiry.php
+@@ -188,6 +188,8 @@ echo '<tr>
+ 	</tr>
+ </table>';
+ 
++echo '<br />', EarlyPaymentDiscountOpenInvoicesHTML($CustomerID, $CustomerRecord['decimalplaces']);
++
+ echo '<div class="centre"><form onSubmit="return VerifyForm(this);" action="', htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'), '" method="post" class="noPrint">
+ 		<input type="hidden" name="FormID" value="', $_SESSION['FormID'], '" />';
+ echo __('Show all transactions after'), ':<input required="required" type="date" name="TransAfterDate" value="', FormatDateForSQL($_POST['TransAfterDate']), '" maxlength="10" size="11" />';
+diff --git a/CustomerReceipt.php b/CustomerReceipt.php
+index 89886a9..9bd8d53 100644
+--- a/CustomerReceipt.php
++++ b/CustomerReceipt.php
+@@ -12,7 +12,6 @@ if (isset($_POST['DateBanked'])) {
+ }
+ 
+ include('includes/GetPaymentMethods.php');
+-
+ $Title = __('Receipt Entry');
+ 
+ if ($_GET['Type']=='GL') {
+@@ -198,6 +197,57 @@ if (isset($_POST['Process'])){ //user hit submit a new entry to the receipt batc
+ 		}
+ 	}
+ 
++	/* Early payment discount from the customer's payment terms: only when this is a customer receipt,
++	 * no discount has been entered or defaulted (the customer's own agreed prompt payment discount or the
++	 * receipt type discount - never two discounts for one payment), and the amount paid settles an open
++	 * invoice less its discount, banked within the discount period. */
++	$EarlyDiscountInvoiceID = 0;
++	if (isset($_GET['Type']) AND $_GET['Type'] == 'Customer' AND $_POST['CustomerID'] != ''
++		AND filter_number_format($_POST['Discount']) == 0 AND filter_number_format($_POST['Amount']) > 0) {
++		$SQL = "SELECT debtorsmaster.pymtdiscount,
++						paymentterms.discountpercent,
++						paymentterms.discountdays,
++						currencies.decimalplaces
++					FROM debtorsmaster
++					INNER JOIN paymentterms ON debtorsmaster.paymentterms = paymentterms.termsindicator
++					INNER JOIN currencies ON debtorsmaster.currcode = currencies.currabrev
++					WHERE debtorsmaster.debtorno = '" . $_POST['CustomerID'] . "'";
++		$Result = DB_query($SQL);
++		$EarlyRow = DB_fetch_array($Result);
++		if ($EarlyRow AND $EarlyRow['pymtdiscount'] == 0
++			AND $ReceiptTypes[$_SESSION['ReceiptBatch' . $identifier]->ReceiptType]['percentdiscount'] == 0
++			AND $EarlyRow['discountpercent'] > 0 AND $EarlyRow['discountdays'] > 0) {
++			$BankedDate = FormatDateForSQL($_SESSION['ReceiptBatch' . $identifier]->DateBanked);
++			$AmountPaid = filter_number_format($_POST['Amount']);
++			$SQL = "SELECT id, trandate, balance
++						FROM debtortrans
++						WHERE debtorno = '" . $_POST['CustomerID'] . "'
++						AND type = 10
++						AND settled = 0
++						AND balance > 0
++						AND DATE_ADD(trandate, INTERVAL " . (int) $EarlyRow['discountdays'] . " DAY) >= '" . $BankedDate . "'
++					ORDER BY trandate, id";
++			$Result = DB_query($SQL);
++			$AlreadyClaimed = array();
++			foreach ($_SESSION['ReceiptBatch' . $identifier]->Items as $BatchItem) {
++				if (!empty($BatchItem->AllocateToInvoice)) {
++					$AlreadyClaimed[$BatchItem->AllocateToInvoice] = 1;
++				}
++			}
++			while ($InvRow = DB_fetch_array($Result)) {
++				if (isset($AlreadyClaimed[$InvRow['id']])) {
++					continue;
++				}
++				$EarlyDiscount = EarlyPaymentDiscountAmount($InvRow['balance'], $EarlyRow['discountpercent'], $EarlyRow['decimalplaces']);
++				if ($EarlyDiscount > 0 AND abs($InvRow['balance'] - $EarlyDiscount - $AmountPaid) < CurrencyTolerance($_SESSION['ReceiptBatch' . $identifier]->Currency)) {
++					$_POST['Discount'] = locale_number_format($EarlyDiscount, $EarlyRow['decimalplaces']);
++					$EarlyDiscountInvoiceID = $InvRow['id'];
++					break;
++				}
++			}
++		}
++	}
++
+ 	if ($_POST['GLCode'] == '' AND $_GET['Type']=='GL') {
+ 		prnMsg( __('No General Ledger code has been chosen') . ' - ' . __('so this GL analysis item could not be added'),'warn');
+ 
+@@ -227,6 +277,11 @@ if (isset($_POST['Process'])){ //user hit submit a new entry to the receipt batc
+ 													$_POST['PayeeBankDetail'],
+ 													$_POST['CustomerName'],
+ 													$_POST['tag']);
++			if ($EarlyDiscountInvoiceID > 0) {
++				$NewItem = end($_SESSION['ReceiptBatch' . $identifier]->Items);
++				$NewItem->AllocateToInvoice = $EarlyDiscountInvoiceID;
++				prnMsg(__('Early payment discount of') . ' ' . $_POST['Discount'] . ' ' . __('recognised - the receipt will be allocated to the invoice and settle it'), 'info');
++			}
+ 			/*Make sure the same receipt is not double processed by a page refresh */
+ 			$Cancel = 1;
+ 		}
+@@ -469,6 +524,33 @@ if (isset($_POST['CommitBatch'])){
+ 			$ErrMsg = __('Cannot insert a receipt transaction against the customer because') ;
+ 			$Result = DB_query($SQL, $ErrMsg, '', true);
+ 
++			if ($ReceiptItem->AllocateToInvoice > 0) {
++				/* Early payment discount taken: allocate receipt plus discount to the invoice and settle both */
++				$ReceiptTransID = DB_Last_Insert_ID('debtortrans', 'id');
++				$AllocAmount = $ReceiptItem->Amount + $ReceiptItem->Discount;
++				$SQL = "INSERT INTO custallocns (datealloc, amt, transid_allocfrom, transid_allocto)
++						VALUES ('" . FormatDateForSQL($_SESSION['ReceiptBatch' . $identifier]->DateBanked) . "',
++							'" . $AllocAmount . "',
++							'" . $ReceiptTransID . "',
++							'" . $ReceiptItem->AllocateToInvoice . "')";
++				$ErrMsg = __('Cannot insert the allocation of the receipt to the invoice because');
++				$Result = DB_query($SQL, $ErrMsg, '', true);
++
++				$SQL = "UPDATE debtortrans
++						SET alloc = alloc + " . $AllocAmount . ",
++						settled = IF(ABS(ovamount + ovgst + ovfreight + ovdiscount - (alloc + " . $AllocAmount . ")) < " . CurrencyTolerance($_SESSION['ReceiptBatch' . $identifier]->Currency) . ", 1, 0)
++						WHERE id = '" . $ReceiptItem->AllocateToInvoice . "'";
++				$ErrMsg = __('Cannot update the invoice allocation because');
++				$Result = DB_query($SQL, $ErrMsg, '', true);
++
++				$SQL = "UPDATE debtortrans
++						SET alloc = '" . -$AllocAmount . "',
++						settled = 1
++						WHERE id = '" . $ReceiptTransID . "'";
++				$ErrMsg = __('Cannot update the receipt allocation because');
++				$Result = DB_query($SQL, $ErrMsg, '', true);
++			}
++
+ 			$SQL = "UPDATE debtorsmaster
+ 						SET lastpaiddate = '" . FormatDateForSQL($_SESSION['ReceiptBatch' . $identifier]->DateBanked) . "',
+ 						lastpaid='" . $ReceiptItem->Amount ."'
+diff --git a/NOTES.md b/NOTES.md
+new file mode 100644
+index 0000000..18f1078
+--- /dev/null
++++ b/NOTES.md
+@@ -0,0 +1,39 @@
++# Early payment discount terms — notes
++
++Nothing was run or tested (no PHP/DB available here); all changes are untested code.
++
++## What changed
++
++**Schema** (existing DBs and new installs)
++- `sql/updates/44.php`: adds `paymentterms.discountpercent` (double, percent, 2 = 2%) and `paymentterms.discountdays` (smallint, days from invoice date). Defaults 0/0, so existing terms, invoices and balances are untouched.
++- `install/sql/tables/paymentterms.sql`: same two columns. New installs set `DBUpdateNumber` to the highest update file, so they never run 44.php.
++
++**Shared helpers** — `includes/EarlyPaymentDiscount.php` (included from `includes/session.php`): discount date, discount amount, "still open" test, and the HTML panels for open invoices (customer and supplier).
++
++**Terms maintenance** — `PaymentTerms.php`: new percent and days fields, validated (0 ≤ % < 100, both set or both zero, days before the due date for "days after" terms) and shown in the list.
++
++**Customers**
++- `PrintCustTrans.php`: the invoice shows discount %, amount, last date and amount to pay by that date.
++- `PrintCustStatements.php`: a section listing every open invoice still inside its discount period.
++- `CustomerInquiry.php`, `CustomerAccount.php`: panel of open invoices that can still be paid with a discount, with the date.
++- `CustomerReceipt.php` + `includes/DefineReceiptClass.php`: on adding a customer receipt, if the amount equals an open invoice's balance less its discount and the banked date is within the discount period, the discount is filled in. On commit the receipt is allocated to that invoice (`custallocns`) and both are settled. The discount posts through the existing receipt-discount GL path (`pytdiscountact`).
++- Double-discount protection: nothing is applied if the customer has its own `pymtdiscount`, the receipt type has a `percentdiscount`, or staff entered a discount. After the discount date nothing is automatic. Staff can still key a discount by hand.
++
++**Suppliers**
++- `SupplierInquiry.php`: panel of open invoices still inside their discount period.
++- `SuppPaymentRun.php`: invoices inside their discount period are paid less the discount (invoices past it, credit notes and terms without a discount are paid in full). New option "Also pay invoices with discount expiring before next run" with a "Next payment run date", on by default. The report shows discount taken per line plus "Discount Saved" and total payments. With creditors GL integration, the total discount posts Dr creditors / Cr discount received (`pytdiscountact`) in functional currency at the run's exchange rate.
++
++**Unchanged on purpose**: due dates, overdue buckets, `AgedDebtors`, `AgedSuppliers` and the aged queries in the inquiry and statement pages still use the net due date only.
++
++## Ambiguities and how I resolved them
++- **Discount base**: percent of the open balance (invoice total incl. tax and freight) at the time of payment or display. On the printed invoice that is the invoice total.
++- **Terms vs. invoice**: the discount is read from the customer's or supplier's *current* terms, as the debtor due date already is. Changing a term's discount therefore changes open invoices on those terms. I did not snapshot it onto invoices.
++- **Last date**: `invoice date + discountdays`, inclusive. "Expiring before the next run" means discount date strictly before the next-run date, and still ahead today.
++- **Receipt matching**: only exact matches (amount = balance − discount, in the customer's currency, oldest invoice first). Part-payments, one receipt covering several invoices, and receipts in a different currency from the customer's get no automatic discount.
++- **Supplier "wherever we review what we owe"**: I covered the supplier inquiry and the payment run, not every report.
++- **Not covered**: manual supplier payments (`Payments.php`), the REST API and the POS export. Manual payments still have the existing "Amount of Discount" field.
++
++## Things you should check
++- **`SuppPaymentRun.php` existing behaviour**: the original code started a DB transaction on "Print and Process" and never committed it, so its updates would have been rolled back. I added `DB_Txn_Commit()` so the settlement and the discount GL entries persist. This changes behaviour. The run still only marks invoices settled and does not create the bank/payment transaction. The discount GL pair is therefore posted under type 22 with a fresh transaction number and no `supptrans`/`banktrans` row.
++- `install/sql/tables/supptrans.sql` has no `balance` column (it comes from update 33), which looks like a pre-existing gap for fresh installs. I did not touch it.
++- Receipt auto-allocation assumes the invoice has not been allocated elsewhere between entering and committing the receipt batch.
+diff --git a/PaymentTerms.php b/PaymentTerms.php
+index 180ace9..2481c3a 100644
+--- a/PaymentTerms.php
++++ b/PaymentTerms.php
+@@ -68,6 +68,31 @@ if (isset($_POST['submit'])) {
+ 		$i++;
+ 	}
+ 
++	$DiscountPercent = filter_number_format($_POST['DiscountPercent'] ?? 0);
++	$DiscountDays = filter_number_format($_POST['DiscountDays'] ?? 0);
++	if (!is_numeric($DiscountPercent) OR $DiscountPercent < 0 OR $DiscountPercent >= 100) {
++		$InputError = 1;
++		prnMsg(__('The early payment discount percentage must be at least 0 and less than 100'),'error');
++		$Errors[$i] = 'DiscountPercent';
++		$i++;
++	}
++	if (!is_numeric($DiscountDays) OR $DiscountDays < 0 OR $DiscountDays != round($DiscountDays)) {
++		$InputError = 1;
++		prnMsg(__('The early payment discount days must be a whole number of days, zero or more'),'error');
++		$Errors[$i] = 'DiscountDays';
++		$i++;
++	} elseif (($DiscountPercent > 0) != ($DiscountDays > 0)) {
++		$InputError = 1;
++		prnMsg(__('Enter both the early payment discount percentage and the number of days, or leave both at zero'),'error');
++		$Errors[$i] = 'DiscountDays';
++		$i++;
++	} elseif ($DiscountDays > 0 AND !empty($_POST['DaysOrFoll']) AND $DiscountDays >= filter_number_format($_POST['DayNumber'])) {
++		$InputError = 1;
++		prnMsg(__('The early payment discount days must be fewer than the days until the invoice is due'),'error');
++		$Errors[$i] = 'DiscountDays';
++		$i++;
++	}
++
+ 	if (isset($SelectedTerms) AND $InputError != 1) {
+ 
+ 		/*SelectedTerms could also exist if submit had not been clicked this code would not run in this case cos submit is false of course  see the delete code below*/
+@@ -76,13 +101,17 @@ if (isset($_POST['submit'])) {
+ 			$SQL = "UPDATE paymentterms SET
+ 							terms='" . $_POST['Terms'] . "',
+ 							dayinfollowingmonth=0,
+-							daysbeforedue='" . filter_number_format($_POST['DayNumber']) . "'
++							daysbeforedue='" . filter_number_format($_POST['DayNumber']) . "',
++							discountpercent='" . $DiscountPercent . "',
++							discountdays='" . $DiscountDays . "'
+ 					WHERE termsindicator = '" . $SelectedTerms . "'";
+ 		} else {
+ 			$SQL = "UPDATE paymentterms SET
+ 							terms='" . $_POST['Terms'] . "',
+ 							dayinfollowingmonth='" . filter_number_format($_POST['DayNumber']) . "',
+-							daysbeforedue=0
++							daysbeforedue=0,
++							discountpercent='" . $DiscountPercent . "',
++							discountdays='" . $DiscountDays . "'
+ 						WHERE termsindicator = '" . $SelectedTerms . "'";
+ 		}
+ 
+@@ -95,23 +124,31 @@ if (isset($_POST['submit'])) {
+ 			$SQL = "INSERT INTO paymentterms (termsindicator,
+ 								terms,
+ 								daysbeforedue,
+-								dayinfollowingmonth)
++								dayinfollowingmonth,
++								discountpercent,
++								discountdays)
+ 						VALUES (
+ 							'" . $_POST['TermsIndicator'] . "',
+ 							'" . $_POST['Terms'] . "',
+ 							'" . filter_number_format($_POST['DayNumber']) . "',
+-							0
++							0,
++							'" . $DiscountPercent . "',
++							'" . $DiscountDays . "'
+ 						)";
+ 		} else {
+ 			$SQL = "INSERT INTO paymentterms (termsindicator,
+ 								terms,
+ 								daysbeforedue,
+-								dayinfollowingmonth)
++								dayinfollowingmonth,
++								discountpercent,
++								discountdays)
+ 						VALUES (
+ 							'" . $_POST['TermsIndicator'] . "',
+ 							'" . $_POST['Terms'] . "',
+ 							0,
+-							'" . filter_number_format($_POST['DayNumber']) . "'
++							'" . filter_number_format($_POST['DayNumber']) . "',
++							'" . $DiscountPercent . "',
++							'" . $DiscountDays . "'
+ 							)";
+ 		}
+ 
+@@ -126,6 +163,8 @@ if (isset($_POST['submit'])) {
+ 		unset($_POST['TermsIndicator']);
+ 		unset($_POST['Terms']);
+ 		unset($_POST['DayNumber']);
++		unset($_POST['DiscountPercent']);
++		unset($_POST['DiscountDays']);
+ 	}
+ 
+ } elseif (isset($_GET['delete'])) {
+@@ -165,19 +204,20 @@ then none of the above are true and the list of payment termss will be displayed
+ links to delete or edit each. These will call the same page again and allow update/input
+ or deletion of the records*/
+ 
+-	$SQL = "SELECT termsindicator, terms, daysbeforedue, dayinfollowingmonth FROM paymentterms";
++	$SQL = "SELECT termsindicator, terms, daysbeforedue, dayinfollowingmonth, discountpercent, discountdays FROM paymentterms";
+ 	$Result = DB_query($SQL);
+ 
+ 	echo '<table class="selection">';
+ 	echo '<thead>
+ 			<tr>
+-				<th colspan="6"><h3>' . __('Payment Terms.') . '</h3></th>
++				<th colspan="7"><h3>' . __('Payment Terms.') . '</h3></th>
+ 			</tr>';
+ 	echo '<tr>
+ 			<th class="SortedColumn">' . __('Term Code') . '</th>
+ 			<th class="SortedColumn">' . __('Description') . '</th>
+ 			<th class="SortedColumn">' . __('Following Month On') . '</th>
+ 			<th class="SortedColumn">' . __('Due After (Days)') . '</th>
++				<th class="SortedColumn">' . __('Early Payment Discount') . '</th>
+ 		</tr>
+ 	</thead>';
+ 
+@@ -200,6 +240,7 @@ or deletion of the records*/
+ 			<td>', $MyRow['terms'], '</td>
+ 			<td>', $FollMthText, '</td>
+ 			<td>', $DueAfterText, '</td>
++				<td>', ($MyRow['discountpercent'] > 0 AND $MyRow['discountdays'] > 0) ? locale_number_format($MyRow['discountpercent'], 2) . '% ' . __('within') . ' ' . $MyRow['discountdays'] . ' ' . __('days') : __('N/A'), '</td>
+ 			<td><a href="', htmlspecialchars($_SERVER['PHP_SELF'],ENT_QUOTES,'UTF-8'), '?SelectedTerms=', $MyRow[0], '">' . __('Edit') . '</a></td>
+ 			<td><a href="', htmlspecialchars($_SERVER['PHP_SELF'],ENT_QUOTES,'UTF-8'), '?SelectedTerms=', $MyRow[0], '&amp;delete=1" onclick="return confirm(\'' . __('Are you sure you wish to delete this payment term?') . '\');">' . __('Delete') . '</a></td>
+ 		</tr>';
+@@ -225,7 +266,9 @@ if (!isset($_GET['delete'])) {
+ 		$SQL = "SELECT termsindicator,
+ 						terms,
+ 						daysbeforedue,
+-						dayinfollowingmonth
++						dayinfollowingmonth,
++						discountpercent,
++						discountdays
+ 					FROM paymentterms
+ 					WHERE termsindicator='" . $SelectedTerms . "'";
+ 
+@@ -236,6 +279,10 @@ if (!isset($_GET['delete'])) {
+ 		$_POST['Terms']  = $MyRow['terms'];
+ 		$DaysBeforeDue  = $MyRow['daysbeforedue'];
+ 		$DayInFollowingMonth  = $MyRow['dayinfollowingmonth'];
++		if (!isset($_POST['DiscountPercent'])) {
++			$_POST['DiscountPercent'] = $MyRow['discountpercent'];
++			$_POST['DiscountDays'] = $MyRow['discountdays'];
++		}
+ 
+ 		echo '<input type="hidden" name="SelectedTerms" value="' . $SelectedTerms . '" />';
+ 		echo '<input type="hidden" name="TermsIndicator" value="' . $_POST['TermsIndicator'] . '" />';
+@@ -293,7 +340,19 @@ if (!isset($_GET['delete'])) {
+ 		}
+ 	}
+ 	echo '" />
+-		<field>
++		</field>';
++
++	echo '<field>
++			<label for="DiscountPercent">' . __('Early Payment Discount (%)') . ':</label>
++			<input type="text" ' . (in_array('DiscountPercent',$Errors) ? 'class="inputerror number"' : 'class="number"') . ' name="DiscountPercent" size="6" maxlength="6" value="' . locale_number_format($_POST['DiscountPercent'] ?? 0, 2) . '" />
++			<fieldhelp>' . __('Percentage the payer may deduct when paying within the discount days, e.g. 2 for "2% 10, net 30". Leave 0 for no early payment discount') . '</fieldhelp>
++		</field>';
++
++	echo '<field>
++			<label for="DiscountDays">' . __('Early Payment Discount Days') . ':</label>
++			<input type="text" ' . (in_array('DiscountDays',$Errors) ? 'class="inputerror integer"' : 'class="integer"') . ' name="DiscountDays" size="4" maxlength="3" value="' . locale_number_format($_POST['DiscountDays'] ?? 0, 0) . '" />
++			<fieldhelp>' . __('Number of days from the invoice date within which the discount can be taken') . '</fieldhelp>
++		</field>
+ 	</fieldset>';
+ 
+ 	echo '<div class="centre">
+diff --git a/PrintCustStatements.php b/PrintCustStatements.php
+index 1dfa232..76b8f2c 100644
+--- a/PrintCustStatements.php
++++ b/PrintCustStatements.php
+@@ -250,7 +250,49 @@ if (isset($_POST['PrintPDF']) and isset($_POST['FromCust']) and $_POST['FromCust
+ 					$HTML .= '</table>';
+ 				}
+ 
+-				// Aged Analysis
++				// Early payment discounts still available on open invoices
++					$SQL = "SELECT debtortrans.transno,
++								debtortrans.trandate,
++								debtortrans.balance,
++								paymentterms.discountpercent,
++								paymentterms.discountdays
++							FROM debtortrans
++							INNER JOIN debtorsmaster ON debtortrans.debtorno = debtorsmaster.debtorno
++							INNER JOIN paymentterms ON debtorsmaster.paymentterms = paymentterms.termsindicator
++							WHERE debtortrans.debtorno = '" . $StmtHeader['debtorno'] . "'
++							AND debtortrans.type = 10
++							AND debtortrans.settled = 0
++							AND debtortrans.balance > 0
++							AND paymentterms.discountpercent > 0
++							AND paymentterms.discountdays > 0
++							AND DATE_ADD(debtortrans.trandate, INTERVAL paymentterms.discountdays DAY) >= CURRENT_DATE";
++					if ($_SESSION['SalesmanLogin'] != '') {
++						$SQL .= " AND debtortrans.salesperson='" . $_SESSION['SalesmanLogin'] . "'";
++					}
++					$SQL .= " ORDER BY debtortrans.trandate, debtortrans.transno";
++					$DiscountResult = DB_query($SQL);
++					if (DB_num_rows($DiscountResult) > 0) {
++						$HTML .= '<div class="section-title">' . __('Early Payment Discounts Available') . '</div>';
++						$HTML .= '<table>
++							<tr>
++								<th>' . __('Invoice') . '</th>
++								<th>' . __('Discount') . '</th>
++								<th>' . __('Discount Date') . '</th>
++								<th>' . __('Amount To Pay By Discount Date') . '</th>
++							</tr>';
++						while ($DiscountRow = DB_fetch_array($DiscountResult)) {
++							$DiscountAmount = EarlyPaymentDiscountAmount($DiscountRow['balance'], $DiscountRow['discountpercent'], $StmtHeader['currdecimalplaces']);
++							$HTML .= '<tr>
++								<td>' . $DiscountRow['transno'] . '</td>
++								<td class="right">' . locale_number_format($DiscountRow['discountpercent'], 2) . '% (' . locale_number_format($DiscountAmount, $StmtHeader['currdecimalplaces']) . ')</td>
++								<td>' . ConvertSQLDate(EarlyPaymentDiscountDate($DiscountRow['trandate'], $DiscountRow['discountpercent'], $DiscountRow['discountdays'])) . '</td>
++								<td class="right">' . locale_number_format($DiscountRow['balance'] - $DiscountAmount, $StmtHeader['currdecimalplaces']) . '</td>
++							</tr>';
++						}
++						$HTML .= '</table>';
++					}
++
++					// Aged Analysis
+ 				$SQL = "SELECT debtorsmaster.name,
+ 							currencies.currency,
+ 							paymentterms.terms,
+diff --git a/PrintCustTrans.php b/PrintCustTrans.php
+index fd8cab9..e99c08d 100644
+--- a/PrintCustTrans.php
++++ b/PrintCustTrans.php
+@@ -103,6 +103,8 @@ if (isset($PrintPDF)
+ 							paymentterms.terms,
+ 							paymentterms.dayinfollowingmonth,
+ 							paymentterms.daysbeforedue,
++							paymentterms.discountpercent,
++							paymentterms.discountdays,
+ 							salesorders.deliverto,
+ 							salesorders.deladd1,
+ 							salesorders.deladd2,
+@@ -295,6 +297,17 @@ if (isset($PrintPDF)
+ 			// --- Calculate Due Date (Invoice only) ---
+ 			if ($InvOrCredit=='Invoice') {
+ 				$DisplayDueDate = CalcDueDate(ConvertSQLDate($MyRow['trandate']), $MyRow['dayinfollowingmonth'], $MyRow['daysbeforedue']);
++
++				// Early payment discount: percentage of the invoice total, last date and amount payable by then
++				$DisplayDiscountText = '';
++				$EarlyDiscountDate = EarlyPaymentDiscountDate($MyRow['trandate'], $MyRow['discountpercent'], $MyRow['discountdays']);
++				if ($EarlyDiscountDate != '') {
++					$InvoiceTotal = $MyRow['ovfreight'] + $MyRow['ovgst'] + $MyRow['ovamount'];
++					$EarlyDiscountAmount = EarlyPaymentDiscountAmount($InvoiceTotal, $MyRow['discountpercent'], $MyRow['decimalplaces']);
++					$DisplayDiscountText = '<br />' . __('Early Payment Discount') . ': ' . locale_number_format($MyRow['discountpercent'], 2) . '% (' . locale_number_format($EarlyDiscountAmount, $MyRow['decimalplaces']) . ' ' . $MyRow['currcode'] . ')'
++						. '<br />' . __('Discount Date') . ': ' . ConvertSQLDate($EarlyDiscountDate)
++						. '<br />' . __('Amount To Pay By Discount Date') . ': ' . locale_number_format($InvoiceTotal - $EarlyDiscountAmount, $MyRow['decimalplaces']) . ' ' . $MyRow['currcode'];
++				}
+ 			}
+ 
+ 			// --- Calculate Totals ---
+@@ -343,7 +356,7 @@ if (isset($PrintPDF)
+ 
+ 			$HTML .= '<p>' . __("Tax Authority Ref") . '. ' . $_SESSION['CompanyRecord']['gstno'] . '</p>';
+ 			if ($InvOrCredit == "Invoice") {
+-				$HTML .='<p>' . __("Payment Terms") . ': ' . $MyRow['terms'] . '<br />' . __("Due Date") . ': ' . $DisplayDueDate . '</p>
++				$HTML .='<p>' . __("Payment Terms") . ': ' . $MyRow['terms'] . '<br />' . __("Due Date") . ': ' . $DisplayDueDate . $DisplayDiscountText . '</p>
+ 						</td>
+ 						<td>
+ 							<b>' . $_SESSION['CompanyRecord']['coyname'] . '</b><br/>'
+diff --git a/SuppPaymentRun.php b/SuppPaymentRun.php
+index 2236073..07911eb 100644
+--- a/SuppPaymentRun.php
++++ b/SuppPaymentRun.php
+@@ -22,6 +22,9 @@ class Allocation {
+ if (isset($_POST['AmountsDueBy'])) {
+ 	$_POST['AmountsDueBy'] = ConvertSQLDate($_POST['AmountsDueBy']);
+ }
++if (isset($_POST['NextRunDate'])) {
++	$_POST['NextRunDate'] = ConvertSQLDate($_POST['NextRunDate']);
++}
+ 
+ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset($_POST['FromCriteria']) and mb_strlen($_POST['FromCriteria']) >= 1 and isset($_POST['ToCriteria']) and mb_strlen($_POST['ToCriteria']) >= 1 and is_numeric(filter_number_format($_POST['ExRate']))) {
+ 
+@@ -49,10 +52,23 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 			<th>' . __('Type') . '</th>
+ 			<th>' . __('Reference') . '</th>
+ 			<th>' . __('Balance') . '</th>
++			<th>' . __('Discount Taken') . '</th>
++			<th>' . __('Amount To Pay') . '</th>
+ 			<th>' . __('Diff On Exch') . '</th>
+ 		</tr>
+ 	</thead><tbody>';
+ 
++	/* Also pay invoices not yet due whose early payment discount expires before the next run
++	 * (the discount date is still ahead today, since payments are made today) */
++	$EarlyPaymentCondition = '';
++	if (!empty($_POST['IncludeExpiringDiscounts']) AND !empty($_POST['NextRunDate'])) {
++		$EarlyPaymentCondition = " OR (supptrans.type = 20
++				AND paymentterms.discountpercent > 0
++				AND paymentterms.discountdays > 0
++				AND DATE_ADD(supptrans.trandate, INTERVAL paymentterms.discountdays DAY) >= CURRENT_DATE
++				AND DATE_ADD(supptrans.trandate, INTERVAL paymentterms.discountdays DAY) < '" . FormatDateForSQL($_POST['NextRunDate']) . "')";
++	}
++
+ 	$SQL = "SELECT suppliers.supplierid,
+ 					currencies.decimalplaces AS currdecimalplaces,
+ 					SUM(supptrans.balance) AS balance
+@@ -65,7 +81,7 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 			INNER JOIN currencies
+ 			ON suppliers.currcode=currencies.currabrev
+ 			WHERE supptrans.balance !=0
+-			AND supptrans.duedate <='" . FormatDateForSQL($_POST['AmountsDueBy']) . "'
++			AND (supptrans.duedate <='" . FormatDateForSQL($_POST['AmountsDueBy']) . "'" . $EarlyPaymentCondition . ")
+ 			AND supptrans.hold=0
+ 			AND suppliers.currcode = '" . $_POST['Currency'] . "'
+ 			AND supptrans.supplierno >= '" . $_POST['FromCriteria'] . "'
+@@ -86,6 +102,7 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 	}
+ 
+ 	$AccumBalance = 0;
++	$AccumDiscount = 0;
+ 	$AccumDiffOnExch = 0;
+ 	while ($SuppliersToPay = DB_fetch_array($SuppliersResult)) {
+ 
+@@ -95,6 +112,8 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 						suppliers.suppname,
+ 						systypes.typename,
+ 						paymentterms.terms,
++						paymentterms.discountpercent,
++						paymentterms.discountdays,
+ 						supptrans.suppreference,
+ 						supptrans.trandate,
+ 						supptrans.rate,
+@@ -112,7 +131,7 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 				ON systypes.typeid = supptrans.type
+ 				WHERE supptrans.supplierno = '" . $SuppliersToPay['supplierid'] . "'
+ 				AND supptrans.balance !=0
+-				AND supptrans.duedate <='" . FormatDateForSQL($_POST['AmountsDueBy']) . "'
++				AND (supptrans.duedate <='" . FormatDateForSQL($_POST['AmountsDueBy']) . "'" . $EarlyPaymentCondition . ")
+ 				AND supptrans.hold = 0
+ 				AND suppliers.currcode = '" . $_POST['Currency'] . "'
+ 				AND supptrans.supplierno >= '" . $_POST['FromCriteria'] . "'
+@@ -124,7 +143,7 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 		$ErrMsg = __('The details of supplier invoices due could not be retrieved');
+ 		$TransResult = DB_query($SQL, $ErrMsg);
+ 		if (DB_num_rows($TransResult) == 0) {
+-			$HTML .= '<tr><td colspan="8" class="centre">' . __('There are no outstanding supplier invoices to pay') . '</td></tr>';
++			$HTML .= '<tr><td colspan="10" class="centre">' . __('There are no outstanding supplier invoices to pay') . '</td></tr>';
+ 			continue;
+ 		}
+ 
+@@ -137,7 +156,18 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 
+ 			$DiffOnExch = ($DetailTrans['balance'] / $DetailTrans['rate']) - ($DetailTrans['balance'] / filter_number_format($_POST['ExRate']));
+ 
++			/* Invoices still inside their discount period (payment is made today) are paid less the discount;
++			 * invoices past it, credit notes and terms without a discount are paid in full */
++			$DiscountTaken = 0;
++			if ($DetailTrans['type'] == 20) {
++				$DiscountDate = EarlyPaymentDiscountDate($DetailTrans['trandate'], $DetailTrans['discountpercent'], $DetailTrans['discountdays']);
++				if (EarlyPaymentDiscountOpen($DiscountDate, date('Y-m-d'))) {
++					$DiscountTaken = EarlyPaymentDiscountAmount($DetailTrans['balance'], $DetailTrans['discountpercent'], $CurrDecimalPlaces);
++				}
++			}
++
+ 			$AccumBalance += $DetailTrans['balance'];
++			$AccumDiscount += $DiscountTaken;
+ 			$AccumDiffOnExch += $DiffOnExch;
+ 
+ 			if (isset($_POST['PrintPDFAndProcess'])) {
+@@ -162,18 +192,43 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 						<td>' . htmlspecialchars($DetailTrans['typename']) . '</td>
+ 						<td>' . htmlspecialchars($DetailTrans['suppreference']) . '</td>
+ 						<td class="right">' . locale_number_format($DetailTrans['balance'], $CurrDecimalPlaces) . '</td>
++						<td class="right">' . locale_number_format($DiscountTaken, $CurrDecimalPlaces) . '</td>
++						<td class="right">' . locale_number_format($DetailTrans['balance'] - $DiscountTaken, $CurrDecimalPlaces) . '</td>
+ 						<td class="right">' . locale_number_format($DiffOnExch, $_SESSION['CompanyRecord']['decimalplaces']) . '</td>
+ 					</tr>';
+ 		}
+ 	}
+ 
++	if (isset($_POST['PrintPDFAndProcess'])) {
++		if ($AccumDiscount != 0 AND $_SESSION['CompanyRecord']['gllink_creditors'] == 1) {
++			/* Account for the discount taken: debit creditors, credit discount received (functional currency) */
++			$DiscountTransNo = GetNextTransNo(22);
++			$DiscountPeriodNo = GetPeriod(Date($_SESSION['DefaultDateFormat']));
++			$DiscountNarrative = __('Early payment discount taken on payment run') . ' ' . $_POST['Currency'] . ' ' . locale_number_format($AccumDiscount, $CurrDecimalPlaces);
++			$DiscountFunctional = $AccumDiscount / filter_number_format($_POST['ExRate']);
++			$SQL = "INSERT INTO gltrans (type, typeno, trandate, periodno, account, narrative, amount)
++					VALUES (22, '" . $DiscountTransNo . "', '" . date('Y-m-d') . "', '" . $DiscountPeriodNo . "',
++						'" . $_SESSION['CompanyRecord']['creditorsact'] . "', '" . $DiscountNarrative . "', '" . $DiscountFunctional . "')";
++			$ErrMsg = __('Cannot insert a GL transaction for the creditors account debit because');
++			$ProcessResult = DB_query($SQL, $ErrMsg, '', true);
++			$SQL = "INSERT INTO gltrans (type, typeno, trandate, periodno, account, narrative, amount)
++					VALUES (22, '" . $DiscountTransNo . "', '" . date('Y-m-d') . "', '" . $DiscountPeriodNo . "',
++						'" . $_SESSION['CompanyRecord']['pytdiscountact'] . "', '" . $DiscountNarrative . "', '" . -$DiscountFunctional . "')";
++			$ErrMsg = __('Cannot insert a GL transaction for the payment discount credit because');
++			$ProcessResult = DB_query($SQL, $ErrMsg, '', true);
++		}
++		DB_Txn_Commit();
++	}
++
+ 	$HTML .= '</tbody></table>';
+ 
+ 	$HTML .= '<table>
+ 				<tr>
+-					<th colspan="2">' . __('Grand Total Payments Due') . '</th>
++					<th colspan="4">' . __('Grand Total Payments Due') . '</th>
+ 				<tr>
+-					<td class="right">' . __('Total Payments') . ': ' . locale_number_format($AccumBalance, $CurrDecimalPlaces) . '</td>
++					<td class="right">' . __('Total Invoices') . ': ' . locale_number_format($AccumBalance, $CurrDecimalPlaces) . '</td>
++					<td class="right">' . __('Discount Saved') . ': ' . locale_number_format($AccumDiscount, $CurrDecimalPlaces) . '</td>
++					<td class="right">' . __('Total Payments') . ': ' . locale_number_format($AccumBalance - $AccumDiscount, $CurrDecimalPlaces) . '</td>
+ 					<td class="right">' . __('Total Diff On Exch') . ': ' . locale_number_format($AccumDiffOnExch, $_SESSION['CompanyRecord']['decimalplaces']) . '</td>
+ 				</tr>
+ 			</table>';
+@@ -285,6 +340,17 @@ if ((isset($_POST['PrintPDF']) or isset($_POST['PrintPDFAndProcess'])) and isset
+ 			<input type="date" name="AmountsDueBy" maxlength="10" size="11" value="' . $DefaultDate . '" />
+ 		  </field>';
+ 
++	$DefaultNextRunDate = isset($_POST['NextRunDate']) ? FormatDateForSQL($_POST['NextRunDate']) : date('Y-m-d', strtotime('+7 days'));
++	echo '<field>
++			<label for="IncludeExpiringDiscounts">' . __('Also Pay Invoices With Discount Expiring Before Next Run') . ':</label>
++			<input type="checkbox" name="IncludeExpiringDiscounts" value="1"' . (!isset($_POST['NextRunDate']) || !empty($_POST['IncludeExpiringDiscounts']) ? ' checked="checked"' : '') . ' />
++			<fieldhelp>' . __('Includes invoices that are not yet due but whose early payment discount would expire before the next payment run, and shows the discount saved') . '</fieldhelp>
++		  </field>';
++	echo '<field>
++			<label for="NextRunDate">' . __('Next Payment Run Date') . ':</label>
++			<input type="date" name="NextRunDate" maxlength="10" size="11" value="' . $DefaultNextRunDate . '" />
++		  </field>';
++
+ 	$ErrMsg = __('The bank accounts could not be retrieved');
+ 	$SQL = "SELECT bankaccountname, accountcode FROM bankaccounts";
+ 	$AccountsResults = DB_query($SQL, $ErrMsg);
+diff --git a/SupplierInquiry.php b/SupplierInquiry.php
+index 41f76d9..9fde40c 100644
+--- a/SupplierInquiry.php
++++ b/SupplierInquiry.php
+@@ -154,6 +154,8 @@ echo '<tr>
+ 	  </tr>
+ 	</table>';
+ 
++echo '<br />', EarlyPaymentDiscountSupplierInvoicesHTML($SupplierID, $SupplierRecord['currdecimalplaces']);
++
+ echo '<br />
+ 	<div class="centre">
+ 		<form action="' . htmlspecialchars($_SERVER['PHP_SELF'],ENT_QUOTES,'UTF-8') . '" method="post">';
+diff --git a/includes/DefineReceiptClass.php b/includes/DefineReceiptClass.php
+index 6369367..a2742b3 100644
+--- a/includes/DefineReceiptClass.php
++++ b/includes/DefineReceiptClass.php
+@@ -61,6 +61,7 @@ class Receipt {
+ 	var $ID;
+ 	var $Tag;
+ 	var $TagName;
++	var $AllocateToInvoice = 0; /*debtortrans id of the invoice settled by this receipt through an early payment discount*/
+ 
+ 	function __construct($Amt, $Cust, $Disc, $Narr, $id, $GLCode, $PayeeBankDetail, $CustomerName, $Tag){
+ /* Constructor function to add a new Receipt object with passed params */
+diff --git a/includes/EarlyPaymentDiscount.php b/includes/EarlyPaymentDiscount.php
+new file mode 100644
+index 0000000..fe4e665
+--- /dev/null
++++ b/includes/EarlyPaymentDiscount.php
+@@ -0,0 +1,124 @@
++<?php
++
++/* Helpers for early payment discount terms ("2% 10, net 30").
++ * paymentterms.discountpercent is a percentage (2 = 2%), paymentterms.discountdays
++ * counts days from the invoice date. 0 percent or 0 days means no discount.
++ * All amounts are in the invoice currency. */
++
++/* Last date (Y-m-d) the discount can be taken, or '' when the terms carry no discount */
++function EarlyPaymentDiscountDate($TranDate, $DiscountPercent, $DiscountDays) {
++	if ($DiscountPercent <= 0 OR $DiscountDays <= 0) {
++		return '';
++	}
++	return date('Y-m-d', strtotime($TranDate . ' +' . (int) $DiscountDays . ' days'));
++}
++
++/* Discount on an open balance, rounded to the currency decimal places */
++function EarlyPaymentDiscountAmount($Balance, $DiscountPercent, $DecimalPlaces) {
++	if ($DiscountPercent <= 0 OR $Balance <= 0) {
++		return 0;
++	}
++	return round($Balance * $DiscountPercent / 100, $DecimalPlaces);
++}
++
++/* HTML table of a customer's open invoices that can still be paid with an early payment discount today
++ * (balance, discount, last date, amount to pay), or '' when there are none. */
++function EarlyPaymentDiscountOpenInvoicesHTML($DebtorNo, $DecimalPlaces) {
++	$SQL = "SELECT debtortrans.transno,
++					debtortrans.trandate,
++					debtortrans.balance,
++					paymentterms.discountpercent,
++					paymentterms.discountdays
++				FROM debtortrans
++				INNER JOIN debtorsmaster ON debtortrans.debtorno = debtorsmaster.debtorno
++				INNER JOIN paymentterms ON debtorsmaster.paymentterms = paymentterms.termsindicator
++				WHERE debtortrans.debtorno = '" . $DebtorNo . "'
++				AND debtortrans.type = 10
++				AND debtortrans.settled = 0
++				AND debtortrans.balance > 0
++				AND paymentterms.discountpercent > 0
++				AND paymentterms.discountdays > 0
++				AND DATE_ADD(debtortrans.trandate, INTERVAL paymentterms.discountdays DAY) >= CURRENT_DATE
++				ORDER BY debtortrans.trandate, debtortrans.transno";
++	$Result = DB_query($SQL);
++	if (DB_num_rows($Result) == 0) {
++		return '';
++	}
++	$HTML = '<table class="selection">
++			<tr>
++				<th colspan="5">' . __('Open invoices that can still be paid with an early payment discount') . '</th>
++			</tr>
++			<tr>
++				<th>' . __('Invoice') . '</th>
++				<th>' . __('Balance') . '</th>
++				<th>' . __('Discount') . '</th>
++				<th>' . __('Discount Date') . '</th>
++				<th>' . __('Amount To Pay By Discount Date') . '</th>
++			</tr>';
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Discount = EarlyPaymentDiscountAmount($MyRow['balance'], $MyRow['discountpercent'], $DecimalPlaces);
++		$HTML .= '<tr class="striped_row">
++				<td>' . $MyRow['transno'] . '</td>
++				<td class="number">' . locale_number_format($MyRow['balance'], $DecimalPlaces) . '</td>
++				<td class="number">' . locale_number_format($MyRow['discountpercent'], 2) . '% (' . locale_number_format($Discount, $DecimalPlaces) . ')</td>
++				<td class="date">' . ConvertSQLDate(EarlyPaymentDiscountDate($MyRow['trandate'], $MyRow['discountpercent'], $MyRow['discountdays'])) . '</td>
++				<td class="number">' . locale_number_format($MyRow['balance'] - $Discount, $DecimalPlaces) . '</td>
++			</tr>';
++	}
++	return $HTML . '</table><br />';
++}
++
++/* HTML table of what we owe a supplier on open invoices that can still be paid with an early payment
++ * discount today (balance, discount, last date, amount to pay), or '' when there are none. */
++function EarlyPaymentDiscountSupplierInvoicesHTML($SupplierID, $DecimalPlaces) {
++	$SQL = "SELECT supptrans.transno,
++					supptrans.suppreference,
++					supptrans.trandate,
++					supptrans.balance,
++					paymentterms.discountpercent,
++					paymentterms.discountdays
++				FROM supptrans
++				INNER JOIN suppliers ON supptrans.supplierno = suppliers.supplierid
++				INNER JOIN paymentterms ON suppliers.paymentterms = paymentterms.termsindicator
++				WHERE supptrans.supplierno = '" . $SupplierID . "'
++				AND supptrans.type = 20
++				AND supptrans.settled = 0
++				AND supptrans.balance > 0
++				AND paymentterms.discountpercent > 0
++				AND paymentterms.discountdays > 0
++				AND DATE_ADD(supptrans.trandate, INTERVAL paymentterms.discountdays DAY) >= CURRENT_DATE
++				ORDER BY supptrans.trandate, supptrans.transno";
++	$Result = DB_query($SQL);
++	if (DB_num_rows($Result) == 0) {
++		return '';
++	}
++	$HTML = '<table class="selection">
++			<tr>
++				<th colspan="6">' . __('Open invoices that can still be paid with an early payment discount') . '</th>
++			</tr>
++			<tr>
++				<th>' . __('Invoice') . '</th>
++				<th>' . __('Reference') . '</th>
++				<th>' . __('Balance') . '</th>
++				<th>' . __('Discount') . '</th>
++				<th>' . __('Discount Date') . '</th>
++				<th>' . __('Amount To Pay By Discount Date') . '</th>
++			</tr>';
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Discount = EarlyPaymentDiscountAmount($MyRow['balance'], $MyRow['discountpercent'], $DecimalPlaces);
++		$HTML .= '<tr class="striped_row">
++				<td>' . $MyRow['transno'] . '</td>
++				<td>' . htmlspecialchars($MyRow['suppreference']) . '</td>
++				<td class="number">' . locale_number_format($MyRow['balance'], $DecimalPlaces) . '</td>
++				<td class="number">' . locale_number_format($MyRow['discountpercent'], 2) . '% (' . locale_number_format($Discount, $DecimalPlaces) . ')</td>
++				<td class="date">' . ConvertSQLDate(EarlyPaymentDiscountDate($MyRow['trandate'], $MyRow['discountpercent'], $MyRow['discountdays'])) . '</td>
++				<td class="number">' . locale_number_format($MyRow['balance'] - $Discount, $DecimalPlaces) . '</td>
++			</tr>';
++	}
++	return $HTML . '</table><br />';
++}
++
++/* True if the discount can still be taken on $AsAtDate (both Y-m-d); the discount date itself is inside the period */
++function EarlyPaymentDiscountOpen($DiscountDate, $AsAtDate) {
++	return $DiscountDate != '' AND $AsAtDate <= $DiscountDate;
++}
+diff --git a/includes/session.php b/includes/session.php
+index 37bf7df..c7936e0 100644
+--- a/includes/session.php
++++ b/includes/session.php
+@@ -90,6 +90,7 @@ include($PathPrefix . 'includes/LanguageSetup.php');
+ ///       for even when authentication is not based on login-form
+ include($PathPrefix . 'includes/ConnectDB.php');
+ include($PathPrefix . 'includes/DateFunctions.php');
++include($PathPrefix . 'includes/EarlyPaymentDiscount.php');
+ 
+ if (!isset($_SESSION['AttemptsCounter']) or $AllowDemoMode == true) {
+ 	$_SESSION['AttemptsCounter'] = 0;
+diff --git a/install/sql/tables/paymentterms.sql b/install/sql/tables/paymentterms.sql
+index 298c2d7..fa4ce87 100644
+--- a/install/sql/tables/paymentterms.sql
++++ b/install/sql/tables/paymentterms.sql
+@@ -3,6 +3,8 @@ CREATE TABLE `paymentterms` (
+   `terms` char(40) NOT NULL DEFAULT '',
+   `daysbeforedue` smallint NOT NULL DEFAULT '0',
+   `dayinfollowingmonth` smallint NOT NULL DEFAULT '0',
++  `discountpercent` double NOT NULL DEFAULT '0',
++  `discountdays` smallint NOT NULL DEFAULT '0',
+   PRIMARY KEY (`termsindicator`),
+   KEY `DaysBeforeDue` (`daysbeforedue`),
+   KEY `DayInFollowingMonth` (`dayinfollowingmonth`)
+diff --git a/sql/updates/44.php b/sql/updates/44.php
+new file mode 100644
+index 0000000..19fbf3f
+--- /dev/null
++++ b/sql/updates/44.php
+@@ -0,0 +1,11 @@
++<?php
++
++// Early payment discount on payment terms, e.g. "2% 10, net 30".
++// Existing terms get 0% / 0 days, i.e. no early payment discount.
++// discountpercent is a percentage (2 = 2%), discountdays counts from the invoice date.
++
++// AddColumn($Column, $Table, $Type, $Null, $Default, $After)
++AddColumn('discountpercent', 'paymentterms', 'double', ' NOT NULL ', '0', 'dayinfollowingmonth');
++AddColumn('discountdays', 'paymentterms', 'smallint', ' NOT NULL ', '0', 'discountpercent');
++
++UpdateDBNo(basename(__FILE__, '.php'), __('Early payment discount on payment terms'));

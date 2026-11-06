@@ -310,3 +310,28 @@ all three runs; it worked from the attached recall (9.4 KB: topics 36, 10,
 120, 26, 11, 8, 147, 40, 50; module/menu seed data, update scripts,
 session) plus grep. Recall queries the short task.md, not brd.md, and
 missed MRP (topic 108) and user access (topic 118).
+
+## t5 gate (2026-11-06): one code-only try before any comparison
+
+Task t5-early-payment (business request only, tasks/t5-early-payment/).
+Code arm, harness v2: 341 s, 118 turns, $1.922, 14 files +464/-18
+(runs/t5-early-payment-code-gate.*). Audited by hand against the 17
+checklist items:
+
+- met: 1 schema and terms page; 3 one shared discount-date function; 4
+  invoice; 5 statement; 6 account and inquiry; 7 receipt recognises the
+  discount and settles the invoice (exact amount only); 8 no double
+  discount with `pymtdiscount` or the receipt type; 14 ageing unchanged.
+- partly: 11 supplier inquiry yes, SupplierTransInquiry no; 13 payment run
+  includes expiring discounts and posts them, remittance advice no; 15
+  currency handled in the invoice currency.
+- missed: 2 terms API; 9 API receipts and counter sales; 10 supplier
+  invoice entry records nothing (it reads the supplier's current terms at
+  payment time, where supplier due dates are stored at entry); 12 manual
+  supplier payments (Payments.php).
+- extra: found the payment run's "Print and Process" never committed its
+  transaction and added DB_Txn_Commit (changes existing behaviour).
+
+Its NOTES.md names 2, 9, 12 as "not covered" and 10 as a choice: it knew
+the places and left them out, so the misses are scope, not missing
+knowledge.
