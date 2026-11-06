@@ -218,3 +218,25 @@ gate (8874d26 or later, commit recorded per run).
 Order as amendment 4: one code-only gate try; if it misses about half of
 items 11-17, one hrono try, then 3 tries per arm graded by blind pair
 review (grading/prompt.md, checklist items 1-17), every score reported.
+
+## Amendment 6 (2026-11-06, before any of its runs): a large task, 40 rules away from the change
+
+t9 had 7 such rules and code-only found 5 by grepping one neighbour
+table; one try per arm cannot separate the arms on 2 items. Like PDP
+contest (31 files, ~120 turns, dozens of rules), t10-credit-control is a large
+feature (credit reviews, holds on every invoicing route, three-level
+reminder letters, interest and fee charges, bad-debt write-off, access,
+install and upgrade, manual) described in a business request (brd.md) that
+names no file, table or rule.
+
+Its checklist has 15 request items (A) and 40 rules away from the change
+(B). The B rules were collected before any run by four reading agents, one
+per map area, from the existing map's briefs, each checked against the base
+code (lists with map page and file:line in grading/t10-credit-control/
+rules/). Rules the map states wrongly, and two where map pages contradict
+each other, are left out. The task is built for this property; results are
+evidence for the mechanism, not an average over webERP tasks.
+
+Runs as amendment 5 (gate, then hrono, then 3 per arm), harness v2 with
+THREADS, threads export, plugin with the brief gate; the hrono arm with
+READ_MAP=1. Primary score: B met (/40), graded blind.
