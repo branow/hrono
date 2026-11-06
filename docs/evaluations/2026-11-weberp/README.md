@@ -255,3 +255,21 @@ in amendment 1) and never called the skill: it took the passages as enough
 and worked by grep. On a task this size the map does not change the
 outcome; recall did not bring the cross-cutting rule (escaping) because
 the task text does not name it.
+
+Cost and time (means per arm, from each run's summary.json; agent cost is
+claude-code's reported API-equivalent):
+
+| set | arm | n | seconds | turns | agent $ | output tok | cache read | cache write |
+|---|---|---|---|---|---|---|---|---|
+| t3 pilot (v1) | hrono | 1 | 102 | 50.0 | 0.766 | 14,568 | 1,445,672 | 82,716 |
+| t3 pilot (v1) | code | 1 | 102 | 43.0 | 0.521 | 14,113 | 801,413 | 54,854 |
+| t3 amend1 (v1 + change skill) | hrono | 3 | 122.0 | 49.3 | 0.851 | 16,259 | 1,560,398 | 94,109 |
+| t3 amend1 | code | 3 | 110.7 | 51.0 | 0.566 | 15,205 | 984,775 | 54,210 |
+| t3 amend2 (plugin + recall) | hrono | 3 | 102.3 | 40.7 | 0.557 | 13,243 | 815,875 | 65,438 |
+| t3 amend2 | code | 3 | 96.3 | 46.3 | 0.566 | 13,099 | 905,604 | 63,536 |
+| t2 amend1 | hrono | 3 | 89.3 | 52.0 | 0.516 | 12,539 | 771,194 | 59,125 |
+| t2 amend1 | code | 3 | 106.3 | 60.0 | 0.455 | 12,368 | 736,451 | 46,086 |
+
+With v1 the pasted note and skill (~6 KB) rode in every turn's context:
+the hrono arm cost 50% more on t3. With the real plugin and recall it cost
+the same as code-only ($0.557 vs $0.566) in 12% fewer turns.
