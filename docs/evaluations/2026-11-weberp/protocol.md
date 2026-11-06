@@ -193,3 +193,28 @@ prompt.
   (Opus 5.5, knows the arm, not blind), key claims checked by hand;
   reports verbatim in grading/gates/. Blind A/B review as in amendments
   1-3 is still the rule for a comparison of repeated tries.
+
+## Amendment 5 (2026-11-06, before any of its runs): a task built on rules away from the change
+
+The claim under test is narrowed to the mechanism seen on the PDP contest task: the
+map helps when the rules a change must follow sit away from the code it
+starts from, under names a code search from the request does not reach.
+Across t2, t3, t6, t7 and t8 code-only runs repeatedly missed rules of
+this kind, and the existing tree states them (customer tables moved by
+Z_ChangeCustomerCode and the customer delete rules: topic 105; POST input
+already escaped by session.php: topic 50; no hardcoded tokens: topic 174;
+UIGeneralFunctions: topics 50, 123, 225).
+
+t9-credit-reviews (tasks/t9-credit-reviews/) is made up to need these
+rules: a business request (brd.md) naming no file, table or rule; a
+checklist (checklist.md, not given to the agent) of 10 request items and
+7 away-from-the-change items, each with where the code holds it and which
+existing map page states it. The task was chosen for this property;
+results are reported as evidence for the mechanism, not as an average
+over webERP tasks. No tree build or sync: base 4cb937f79e8b, threads
+export `4cb937f...-threads`, harness v2 with THREADS, plugin with the brief
+gate (8874d26 or later, commit recorded per run).
+
+Order as amendment 4: one code-only gate try; if it misses about half of
+items 11-17, one hrono try, then 3 tries per arm graded by blind pair
+review (grading/prompt.md, checklist items 1-17), every score reported.

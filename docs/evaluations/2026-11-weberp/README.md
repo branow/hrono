@@ -484,3 +484,31 @@ Other mistakes: a regression in CustWhereAlloc.php (an undefined
 `$TransTypeOptions` blanks the title of every receipt and credit note);
 salesman logins never see plain adjustments; the clean-up re-runs its
 query on confirm.
+
+## t9 (2026-11-06, amendment 5): customer credit reviews
+
+Task tasks/t9-credit-reviews/ (business request; checklist of 10 request
+items and 7 rules away from the change, each stated in the existing map).
+Harness v2 with THREADS, threads export, no sync.
+
+Code-only gate: 310 s, 101 turns, $1.42, 15 files +588/-9. It grepped
+`custnotes` (the neighbour table) and so found Z_ChangeCustomerCode.php
+and the customer delete in Customers.php, and grepped session.php for the
+escaping: items 11, 12, 13 met. Missed 14 (a new token 21 and a hardcoded
+`in_array(21, ...)`) and 16 (no UIGeneralFunctions). It fails the gate
+(about 5 of 7 away-from-the-change items met).
+
+hrono try 1, harness option READ_MAP=1 (the prompt also asks the hrono arm
+to read root.md, the area briefs and the topic briefs the request touches,
+project history included, before any edit): 287 s, 73 turns, $2.43, 12
+files +603/-6. Read 14 map pages (root, 5 areas, 8 topics including 105,
+seed data and menu items, sql updates); no thread topic (174, 225). Met
+11, 12, 13 as code-only, and 14: scripts on the existing AR token 3, no
+new token, the SelectCustomer link checked through `PageSecurityArray`.
+Missed 16 (no UIGeneralFunctions). On the measured items: hrono one item
+ahead (14), 28% fewer turns, 71% more cost. One try per arm: an
+observation.
+
+Across t6-t9 the code-only arm missed the token rule and UIGeneralFunctions
+every time; both are written only in discussions (#761, #828), which the
+map states in thread topics 174 and 225.

@@ -34,6 +34,16 @@ THREADS = os.environ.get("THREADS")
 # EXPORT=<folder under exports/>: the map the hrono arm reads (default: the base's).
 EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
+# READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
+# area and topic briefs for the request, project history included, before any edit.
+READ_MAP = os.environ.get("READ_MAP") == "1"
+READ_MAP_TEXT = (
+    "\n\nBefore you change any file, read the project's map in {export}: root.md, the"
+    " brief of every area the request touches, and every topic brief under those areas"
+    " whose title touches the request, including the project-history briefs (issues,"
+    " pull requests, discussions) on the same subjects. Read each in full. Where a"
+    " brief states a convention or a decision that differs from what older code does,"
+    " follow the brief. Then do the task.")
 
 
 def configure(ws: Path, export: Path) -> None:
@@ -101,6 +111,9 @@ def main() -> None:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
         export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
+        if READ_MAP:
+            prompt += READ_MAP_TEXT.format(export=export)
+            argv[2] = prompt
         argv += ["--plugin-dir", str(PLUGIN), "--add-dir", str(export)]
         env["HRONO_HOME"] = str(HOME)
         (out / f"{ws.name}.recall.md").write_text(recalled(ws, prompt))
