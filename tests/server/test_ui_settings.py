@@ -1045,6 +1045,7 @@ def test_adding_a_source_starts_by_naming_its_KIND(browser: Browser) -> None:
 
     assert "variant=git" in page
     assert "variant=notion" in page
+    assert "variant=github-threads" in page
     assert 'name="f.url"' not in page  # no fields until a kind is chosen
 
 

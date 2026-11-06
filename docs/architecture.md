@@ -52,7 +52,7 @@ one server and one knowledge base. See [api.md](api.md).
 |---|---|
 | `git` | clone or fetch one repo (`git_syncer.py`) |
 | `github-user`, `bitbucket-workspace` | discover an account's repos, then clone each (`discovery.py`) |
-| `confluence`, `notion` | pull pages over the API and materialize them in the cache (`pages.py`) |
+| `confluence`, `notion`, `github-threads` | pull pages over the API and materialize them in the cache (`pages.py`) |
 
 Every piece read carries a **version**: the commit hash, or the page's own
 version. It is opaque and compared only for equality. The address scheme is

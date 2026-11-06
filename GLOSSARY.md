@@ -11,8 +11,9 @@ uses only these words, and a test fails on any word listed under
 **source** — a place hrono reads: a git repository (`git`), every repository
 of a GitHub user or organization (`github-user`), every repository of a
 Bitbucket workspace (`bitbucket-workspace`), Confluence pages chosen by space
-or page (`confluence`), or the Notion pages shared with an integration
-(`notion`). Registering one pulls nothing; `sync` does.
+or page (`confluence`), the Notion pages shared with an integration
+(`notion`), or a repository's issues, pull requests and discussions
+(`github-threads`). Registering one pulls nothing; `sync` does.
 
 **section** — the organizing unit. Around 10 KB of one file, filled greedily to
 a per-category budget (code 10 KB, docs 10 KB, data 2 KB). A section is what

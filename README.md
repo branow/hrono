@@ -9,7 +9,8 @@ A hierarchical, incrementally updated knowledge base for AI agents.
 ## What it is
 
 hrono reads your sources (git repositories, a GitHub user or organization, a
-Bitbucket workspace, Confluence, Notion), splits them into sections, embeds
+Bitbucket workspace, a repository's GitHub conversations, Confluence, Notion),
+splits them into sections, embeds
 them, and clusters them into a tree of topics. Each topic carries a brief: an
 LLM-written summary of what it holds. Briefs of briefs climb to a single root.
 An agent uses the tree two ways: **recall** hands it the passages that answer a
@@ -256,8 +257,9 @@ secrets masked.
 
 ### Sources
 
-Source types: `git`, `github-user`, `bitbucket-workspace`, `confluence` and
-`notion`. A git source can be scoped to part of a repository with
+Source types: `git`, `github-user`, `bitbucket-workspace`, `confluence`,
+`notion` and `github-threads` (a repository's issues, pull requests and
+discussions, one page per thread, without diffs; `until` cuts them at a date). A git source can be scoped to part of a repository with
 `filter.only`, a whitelist of globs applied before anything else:
 
 ```json

@@ -465,5 +465,19 @@
   "Off: no reviews, no cost": "Вимкнено: без переглядів і витрат",
   "Fix the settings above to see the estimate": "Виправте налаштування вище, щоб побачити оцінку",
   "no model has the role insights: nothing runs until one does": "жодна модель не має ролі insights: нічого не запуститься, доки вона не з'явиться",
-  "Every topic over the threshold has been reviewed; a sync reviews a topic again when it rewrites its brief.": "Усі теми понад порогом переглянуто; синхронізація переглядає тему знову, коли переписує її опис."
+  "Every topic over the threshold has been reviewed; a sync reviews a topic again when it rewrites its brief.": "Усі теми понад порогом переглянуто; синхронізація переглядає тему знову, коли переписує її опис.",
+  "GitHub conversations": "Обговорення GitHub",
+  "Repository": "Репозиторій",
+  "Token": "Токен",
+  "How hrono authenticates to GitHub.": "Як hrono автентифікується в GitHub.",
+  "A GitHub personal access token.": "Персональний токен доступу GitHub.",
+  "A GitHub token that can read the repository. Stored encrypted.": "Токен GitHub із доступом на читання репозиторію. Зберігається зашифрованим.",
+  "Issues, pull requests and discussions of a repository.": "Задачі, pull request-и та обговорення репозиторію.",
+  "The repository whose threads to read, as owner/name.": "Репозиторій, чиї обговорення читати, у вигляді власник/назва.",
+  "Threads": "Обговорення",
+  "Which kinds to read: issues, pulls, discussions. Empty reads all.": "Які види читати: issues, pulls, discussions. Порожнє — усі.",
+  "Up to": "До дати",
+  "Leave out everything from this date on: threads opened, comments made and states reached. Empty reads up to now.": "Пропустити все від цієї дати: відкриті обговорення, коментарі та зміни стану. Порожнє — до сьогодні.",
+  "Longest post": "Найдовший допис",
+  "Cut any post past this many characters (8,000 when empty): the long ones are pasted logs and file lists.": "Обрізати допис, довший за стільки символів (8 000, якщо порожнє): довгі — це вставлені журнали та списки файлів."
 }

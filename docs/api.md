@@ -55,7 +55,7 @@ cache at it before fetching, so an edited url needs no hand edit of the cache.
 Bodies:
 
 ```jsonc
-// sources: git | github-user | bitbucket-workspace | confluence | notion
+// sources: git | github-user | bitbucket-workspace | confluence | notion | github-threads
 { "name": "api", "type": "git", "url": "https://github.com/acme/api",
   "auth": { "method": "none" },            // none | token | ssh
   "filter": { "only": ["src/**"], "exclude": ["**/fixtures/**"],
@@ -69,6 +69,11 @@ Bodies:
   "scope": [{ "type": "space", "key": "ENG" }, { "type": "page", "id": "1" }] }
 { "name": "notes", "type": "notion", "auth": { "method": "token", "token": "..." },
   "scope": [{ "type": "page", "id": "..." }] }
+{ "name": "api-threads", "type": "github-threads", "repo": "acme/api",
+  "auth": { "method": "token", "token": "..." },
+  "kinds": ["issues", "pulls", "discussions"],  // optional, all by default
+  "until": "2026-02-27",                        // optional: nothing from this date on
+  "longest_post": 8000 }                        // optional: cut longer posts
 
 // connections: anthropic | openai | openai-compatible | claude-code
 { "name": "anthropic-main", "provider": "anthropic",

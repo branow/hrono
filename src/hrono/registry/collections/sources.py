@@ -19,6 +19,7 @@ as well as name — so this closes the remaining one.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator
@@ -395,6 +396,77 @@ class NotionSource(BaseModel):
     _not_reserved = field_validator("name")(_reject_reserved)
 
 
+class GithubTokenAuth(BaseModel):
+    """A GitHub token; its GraphQL API answers no anonymous caller."""
+
+    method: Literal["token"] = Field(
+        title="Sign-in method", description="A GitHub personal access token."
+    )
+    token: str = Field(
+        title="Token",
+        description=(
+            "A GitHub token that can read the repository. Stored encrypted."
+        ),
+    )
+
+
+class GithubThreadsSource(BaseModel):
+    """A repository's issues, pull requests and discussions, as pages.
+
+    The conversation, not the code: each thread is one page with its opening
+    post, comments and reviews, and no diff. ``until`` cuts the conversation
+    at a date, so a source can be read as it stood at a past commit.
+    """
+
+    name: RegistryName = _name()
+    type: Literal["github-threads"] = Field(
+        title="Type",
+        description="Issues, pull requests and discussions of a repository.",
+    )
+    repo: str = Field(
+        title="Repository",
+        description="The repository whose threads to read, as owner/name.",
+        examples=["acme/payments"],
+        json_schema_extra=LOCATION,
+    )
+    auth: GithubTokenAuth = Field(
+        title="Sign-in",
+        description="How hrono authenticates to GitHub.",
+        json_schema_extra=ACCESS,
+    )
+    kinds: list[Literal["issues", "pulls", "discussions"]] | None = Field(
+        default=None,
+        title="Threads",
+        description=(
+            "Which kinds to read: issues, pulls, discussions. Empty reads all."
+        ),
+        examples=['["issues", "discussions"]'],
+        json_schema_extra=FILES,
+    )
+    until: date | None = Field(
+        default=None,
+        title="Up to",
+        description=(
+            "Leave out everything from this date on: threads opened, comments "
+            "made and states reached. Empty reads up to now."
+        ),
+        examples=["2026-02-27"],
+        json_schema_extra=FILES,
+    )
+    longest_post: int | None = Field(
+        default=None,
+        gt=0,
+        title="Longest post",
+        description=(
+            "Cut any post past this many characters (8,000 when empty): "
+            "the long ones are pasted logs and file lists."
+        ),
+        json_schema_extra=FILES,
+    )
+
+    _not_reserved = field_validator("name")(_reject_reserved)
+
+
 class Source(
     RootModel[
         Annotated[
@@ -402,7 +474,8 @@ class Source(
             | GithubUserSource
             | BitbucketWorkspaceSource
             | ConfluenceSource
-            | NotionSource,
+            | NotionSource
+            | GithubThreadsSource,
             Field(discriminator="type"),
         ]
     ]

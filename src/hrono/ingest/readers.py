@@ -15,6 +15,7 @@ from hrono.ingest.bitbucket import bitbucket_instance
 from hrono.ingest.confluence import confluence_instance
 from hrono.ingest.git_reader import git_instance, git_unit, git_units
 from hrono.ingest.github import github_instance
+from hrono.ingest.github_threads import github_threads_instance
 from hrono.ingest.notion import notion_instance
 
 __all__ = [
@@ -42,6 +43,7 @@ READERS: dict[str, Reader] = {
     ),
     "confluence": Reader(confluence_instance, pages.units, pages.unit),
     "notion": Reader(notion_instance, pages.units, pages.unit),
+    "github-threads": Reader(github_threads_instance, pages.units, pages.unit),
 }
 
 
