@@ -443,3 +443,23 @@ note alone accounts for about 2): t1 12, t2 3/38/20/35, t3 31/35/40/17,
 t4 2/2/2, t8 2. So the t4 hrono tries never read the map either: the t4
 "tie" was code against code. The tasks given as a business request file
 (t4, t8) are the ones where the agent skips the map.
+
+## t8 hrono try 1, rerun after the plugin fix 71909d0 (2026-11-06)
+
+The void try (map never read) is kept in ~/hrono-weberp/runs-void/. Plugin
+fix 71909d0: recall also reads the text files the prompt names (here
+task/brd.md), and the session note sends a change, also one handed over
+in a file, through root.md and the area briefs first. Rerun: recall
+attached 5 passages from the request's text (menu and seed data, shared
+includes, a merged-PR thread, bank matching, the API's debtor
+transactions). 420 s, 135 turns, $2.84, 21 files +774/-40. Map use: one
+read of root.md (call 8), no area or leaf brief; one discussion opened.
+
+Audit (a reading agent, same 22 items): 14 met, 6 partly, 2 missed
+(code-only gate 13/7/2). Differences from code-only: met 17 (inquiry
+allocation link) and 5 (rounding), and it blocks writing off another
+customer's invoice; partly 8 (no glaccountusers, code-only met it) and
+21 (no ManualOutline entry). Same misses: no tags, no UIGeneralFunctions,
+no exchange difference, home-currency threshold, new token 21 for role 8,
+empty branch and the login as salesperson. With the map unread, this is
+code against code; the scores agree within one item.
