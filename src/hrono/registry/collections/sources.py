@@ -19,7 +19,6 @@ as well as name — so this closes the remaining one.
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, RootModel, field_validator
@@ -443,8 +442,9 @@ class GithubThreadsSource(BaseModel):
         examples=['["issues", "discussions"]'],
         json_schema_extra=FILES,
     )
-    until: date | None = Field(
+    until: str | None = Field(
         default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
         title="Up to",
         description=(
             "Leave out everything from this date on: threads opened, comments "

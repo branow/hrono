@@ -352,3 +352,15 @@ def test_split_addresses_a_thread_by_repository_and_digest(
     assert github_threads_instance(_config(), tmp_path) == (
         "github.com/acme/payments"
     )
+
+
+def test_a_source_with_a_cutoff_validates_and_stores_as_json() -> None:
+    from pydantic import ValidationError
+
+    from hrono.registry.collections.sources import Source
+
+    config = Source.model_validate(_config(until="2026-02-27")).model_dump()
+
+    assert json.loads(json.dumps(config))["until"] == "2026-02-27"
+    with pytest.raises(ValidationError):
+        Source.model_validate(_config(until="27 February"))
