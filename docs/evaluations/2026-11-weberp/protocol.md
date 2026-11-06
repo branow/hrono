@@ -164,7 +164,7 @@ recall); the prompt is task.md as before. 3 tries per arm, all six in
 parallel; three blind pair reviews (hrono k vs code k), same reviewer
 prompt.
 
-## Amendment 4 (2026-11-06): gate first, threads map, plugin changes
+## Amendment 4 (2026-11-06, written after its runs): gate first, threads map, plugin changes
 
 - **Order.** A task is first given to one code-only try. Only when that
   try fails on a large share of its checklist (aim: about half met) does
