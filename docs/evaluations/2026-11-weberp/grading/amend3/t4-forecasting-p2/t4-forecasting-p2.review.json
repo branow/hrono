@@ -1,0 +1,120 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    0.5,
+    "sql/updates/44.php uses CreateTable, InsertRecord, NewScript, NewModule, NewMenuItem, ChangeColumnSize and executeSQL, and the install side has tables/forecast*.sql, modules.sql and demo.sql. But the upgrade never checks $_SESSION['Updates']['Errors'] before UpdateDBNo, and scripts and menu items go into new forecastscripts.sql and forecastmenuitems.sql files instead of scripts.sql and menuitems.sql."
+   ],
+   "2": [
+    1,
+    "44.php inserts ',0,' after the 6th flag of every existing modulesallowed (only if the module is not there yet) before NewModule at sequence 7, and widens the column to varchar(50). WWW_Users.php gets the $ModuleList and $ModuleListLabel entries. InstallFunctions.php, CustLoginSetup.php and SuppLoginSetup.php get their extra flag."
+   ],
+   "3": [
+    0.5,
+    "All pages are registered with NewScript and menu items, and use session.php, $Title, header/footer, FormID, __() and prnMsg. However, POSTed StockID values are passed through DB_escape_string again (ForecastItemDescription, ForecastItemRows, forecastbatchitems insert)."
+   ],
+   "4": [
+    1,
+    "ForecastExtractHistory reads stockmoves type 10/11 with hidemovt=0 and SUM(-qty), buckets by month, item and location, and deletes and rewrites the chosen range in one transaction. It also stops gaps from opening against the history already held."
+   ],
+   "5": [
+    1,
+    "forecasthistory stores debtorsmaster.typeid, custbranch.area and custbranch.salesman. ForecastSummary groups on these fields. No existing table gets new columns."
+   ],
+   "6": [
+    1,
+    "ForecastCompute implements all 12 methods with a minimum history per method (raised by parameters such as MA periods, weight count and 2\u00d7season), clamps results at 0, ranks by hold-out MAD per item, and picks a category method by summed error over actuals."
+   ],
+   "7": [
+    1,
+    "revisedqty is nullable. ForecastReview saves it, an empty field or Restore All sets it back to NULL, and COALESCE(revisedqty, calcqty) is used in the inquiry, accuracy and ToMRP pages."
+   ],
+   "8": [
+    1,
+    "ForecastMeasures computes MAD, POA, MSE and RMSE. ForecastAccuracy shows them by item, category or method with a low-accuracy flag, and ForecastCompare shows the methods side by side on the hold-out."
+   ],
+   "9": [
+    1,
+    "ForecastToMRP writes mrpdemands under FCST (created by the upgrade and the installer) and tracks each row in forecastmrpdemands (FK cascade, unique item+period). Replace deletes only tracked rows; incremental skips periods already converted."
+   ],
+   "10": [
+    1,
+    "The forecastparameters table holds alpha, beta, gamma, seasonlength, maperiods, holdout and horizon. ForecastParameters.php validates and saves them, and ForecastGetParameters supplies them as form defaults."
+   ],
+   "11": [
+    1,
+    "ForecastGenerate runs category batches of 25 items per request with auto-continue. forecastbatchitems records status and failure reason per item. Dashboard and inquiry pages exist."
+   ],
+   "12": [
+    1,
+    "modules.sql and demo.sql re-sequence the existing modules correctly. The new data files list their columns or match their tables. Existing pages are untouched apart from the login-setup flag strings."
+   ]
+  },
+  "checklist_total": 11,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A is a complete, carefully built module. Sales history is net of credits and comes from stockmoves. Summaries use the correct customer type, area and salesperson fields. All 12 methods are implemented with minimum-history checks and hold-out best fit. Revisions follow COALESCE everywhere, and the MRP conversion is idempotent and only touches its own demands, recorded in a tracking table with FK cascade. Existing users' module flags are shifted so they keep exactly the modules they had, and the installer, demo data and login-setup pages are all made consistent. It also respects location view permissions and adds its strings to messages.pot. Weaknesses: the upgrade script has no Updates['Errors'] gate before UpdateDBNo; the flag position is fixed at 6 rather than worked out per role (fine for the stock module set); install data goes into extra files instead of scripts.sql and menuitems.sql; and some already-escaped POST values are escaped again. Nothing indicates it would fail at runtime."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses ChangeColumnSize, CreateTable, InsertRecord, NewModule, NewScript, NewMenuItem and executeSQL, and checks $_SESSION['Updates']['Errors'] both before writing its marker row and before UpdateDBNo. Install side: tables/*.sql, scripts.sql, menuitems.sql and modules.sql edited, new forecastparameters.sql and mrpdemandtypes.sql, plus demo.sql."
+   ],
+   "2": [
+    1,
+    "44.php works out the new flag's position per role (that role's modules with sequence < 7), splices a 0 into each user's list, and runs only once thanks to a marker row; then NewModule at 7. WWW_Users.php is updated and the column widened. The admin's existing 12-flag install list already fits 12 modules."
+   ],
+   "3": [
+    1,
+    "All pages are registered with NewScript and menu items, and follow the session.php, $Title, header/footer, FormID, __() and prnMsg pattern. ForecastRequest strips session.php's escaping and escapes once at query time, so nothing is double-escaped, though this approach is unusual for webERP."
+   ],
+   "4": [
+    1,
+    "ForecastExtractHistory reads stockmoves type 10/11 with hidemovt=0 and SUM(-qty) by month, item and location, and deletes and rewrites the range in one transaction. The range held is stored, and a range that does not touch it replaces the history."
+   ],
+   "5": [
+    1,
+    "forecasthistory stores debtorsmaster.typeid, custbranch.area and custbranch.salesman, and summaries are built per dimension. No existing table gets new columns."
+   ],
+   "6": [
+    1,
+    "ForecastRunMethod implements all 12 methods; ForecastMinHistory raises the minimum for parameters; results are clamped at 0. ForecastBestMethod uses lowest hold-out error, and ForecastBestMethodForSet handles categories."
+   ],
+   "7": [
+    1,
+    "The review page sets revisedqty to NULL for an empty field or Clear All. COALESCE(revisedqty, calcqty) is used for accuracy and MRP quantities."
+   ],
+   "8": [
+    1,
+    "ForecastStats returns MAD, POA, MSE and RMSE. ForecastAccuracyData reports by item, category and method, and ForecastMethodCompare.php compares methods on the hold-out."
+   ],
+   "9": [
+    1,
+    "ForecastConvertToMRP writes FCST mrpdemands and tracks them in forecastmrpdemands, cleaning up stale tracking rows first. Replace deletes only tracked rows; incremental skips periods already converted. The FCST type is seeded by the upgrade and the installer."
+   ],
+   "10": [
+    1,
+    "forecastparameters holds Alpha, Beta, Gamma, SeasonLength, MAPeriods, HoldoutMonths, DefaultHorizon and more, validated by ForecastValidateParameters and merged as defaults in ForecastResolveParameters."
+   ],
+   "11": [
+    1,
+    "ForecastCreateBatch and ForecastProcessBatch run in chunks of 25 with auto-continue, and forecastbatchresults records per-item status, method and message. Dashboard and inquiry pages exist."
+   ],
+   "12": [
+    1,
+    "modules.sql and demo.sql re-sequence correctly, scripts.sql and menuitems.sql are appended, and positional INSERTs match. SuppLoginSetup's literal flag string was not lengthened, but that is harmless."
+   ]
+  },
+  "checklist_total": 12,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "B makes essentially the same design choices as A: stockmoves 10/11 net history; typeid, area and salesman dimensions; one active forecast per item and location using a NULL-able unique key; and a tracked, idempotent FCST conversion to MRP. Its upgrade script follows webERP conventions more closely. It gates on Updates['Errors'], works out each role's flag position from the modules table, and guards the flag shift with a run-once marker. It also edits the standard scripts.sql and menuitems.sql rather than adding parallel data files. The methods, best fit (item and category), accuracy measures, revision handling and batch processing all look correct, and its pages call the shared functions with matching signatures. Weaker points: it unescapes POST data with stripslashes inside ForecastRequest, which is unusual for webERP; it did not add its new strings to messages.pot; it applies no location restriction; and the supplier login flag string was left one flag short, which does no harm. Nothing indicates it would fail at runtime."
+ }
+}

@@ -1,0 +1,21 @@
+[
+ "claude",
+ "-p",
+ "# Task: demand forecasting for webERP\n\nYou are a developer on webERP. Implement the demand forecasting module\ndescribed in `task/brd.md`: a new Forecasting module in the main menu with\nthe pages, data and processing it describes, integrated with the rest of\nwebERP the way this project ships features (database changes for new and\nexisting installations, menus, page security, user access, translations).\n\nDeliver the change as files in the repository. When done, write `NOTES.md`\nat the repository root: what you built, the objects and pages, where the\nforecast gets its sales history and how it reaches MRP, and anything in the\nBRD you found ambiguous and how you resolved it.\n\n\nThe webERP repository is in the current directory; the task is task/task.md. There is nothing to run against: deliver the change as files.",
+ "--model",
+ "sonnet",
+ "--max-turns",
+ "200",
+ "--setting-sources",
+ "",
+ "--strict-mcp-config",
+ "--output-format",
+ "stream-json",
+ "--verbose",
+ "--permission-mode",
+ "acceptEdits",
+ "--disallowedTools",
+ "Bash,WebFetch,WebSearch,Task,NotebookEdit",
+ "--allowedTools",
+ "Read,Grep,Glob,Edit,Write,TodoWrite,Skill"
+]

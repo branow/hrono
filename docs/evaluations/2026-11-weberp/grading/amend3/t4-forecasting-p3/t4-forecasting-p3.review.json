@@ -1,0 +1,120 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable, NewConfigValue, InsertRecord, ChangeColumnSize, NewModule, NewScript and NewMenuItem, and only calls UpdateDBNo when $_SESSION['Updates']['Errors'] is 0. The same objects are in install/sql/tables/forecast*.sql, data/scripts.sql, menuitems.sql, modules.sql, config.sql, the new data/mrpdemandtypes.sql and demo.sql."
+   ],
+   "2": [
+    1,
+    "44.php widens modulesallowed to 50 and, inside a transaction, inserts a '0' at each user's role-specific position before calling NewModule at sequence 7. Existing users keep exactly their modules. WWW_Users.php gets $ModuleList/$ModuleListLabel entries, and CustLoginSetup/SuppLoginSetup now write 12 flags. The 12-entry admin list in InstallFunctions already matches."
+   ],
+   "3": [
+    1,
+    "All 10 pages are registered with tokens 2, 11 or 15 and have menu items for every role. Pages use session.php, $Title, header/footer, FormID, __() and prnMsg, and do not re-escape POST data."
+   ],
+   "4": [
+    1,
+    "ForecastExtractHistory reads stockmoves types 10 and 11 with hidemovt=0 and -SUM(qty), grouped by month and location. Re-extracting deletes the range first, in a transaction. forecasthistorymonths records which months were extracted."
+   ],
+   "5": [
+    1,
+    "Customer type comes from debtorsmaster.typeid, and area and salesperson from custbranch, all stored in forecastsaleshistory. No existing table gets new columns."
+   ],
+   "6": [
+    1,
+    "ForecastCompute implements all 12 methods with minimum-history checks per method and parameter, and ForecastFinish clamps results to 0. Best fit holds out months and ranks by MAD; ForecastBestFitForSet picks one method for a category."
+   ],
+   "7": [
+    1,
+    "Revisions use COALESCE(revisedqty, calcqty) in review, accuracy and MRP. A blank entry sets revisedqty to NULL, which restores the calculated quantity."
+   ],
+   "8": [
+    1,
+    "ForecastMetrics computes MAD, MSE, RMSE and POA (forecast/actual), and ForecastAccuracy groups them by item, category and method. ForecastMethodComparison.php compares methods on one item."
+   ],
+   "9": [
+    1,
+    "Writes mrpdemands rows under type FCST, which the upgrade creates, and tracks each row in forecastmrplinks (FK with cascade). Replace mode deletes only linked rows for the same items and horizon; incremental mode skips linked months. Other demand types are never touched, and MRP.php reads these rows unchanged."
+   ],
+   "10": [
+    1,
+    "Seven config values (ForecastAlpha through ForecastHorizon), edited in ForecastParameters.php and used as defaults by ForecastGetDefaults/ForecastBaseParams."
+   ],
+   "11": [
+    1,
+    "ForecastGenerate.php handles a single item or a category, with best fit per item or across the category, and lists a result and failure reason per item. The batch runs in one request. Dashboard and inquiry pages are present."
+   ],
+   "12": [
+    1,
+    "Positional modules.sql/menuitems.sql INSERTs match their tables, existing users' module lists are preserved, and other modules' menus are untouched. One minor gap: Z_ChangeStockCode does not rename stock codes in the new tables."
+   ]
+  },
+  "checklist_total": 12,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A complete, careful implementation. History comes from net invoiced sales (stockmoves types 10 and 11, credits deducted) with a month-coverage table. Customer type, area and salesperson come from the right fields and are stored in its own table, so no salesanalysis writers are left unfilled. All 12 methods have minimum-history checks and non-negative clamping, and best fit uses hold-out MAD. MRP conversion goes through a link table, so it never doubles demand and never touches hand-entered rows. The upgrade script uses webERP's helpers, including NewModule and NewMenuItem, and rewrites each user's modulesallowed for their role, so existing users keep their modules. Fresh install and demo data match the upgrade. Small points: the category batch runs in a single request, Z_ChangeStockCode does not cover the new tables, nothing was executed, and POA is defined as a forecast/actual ratio. I found no runtime defects."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable, AddColumn, ChangeColumnSize, InsertRecord, NewScript and executeSQL, and gates UpdateDBNo on $_SESSION['Updates']['Errors']. The module and menu items are inserted with hand-written SQL instead of NewModule/NewMenuItem. Fresh install gets install/sql/tables/*.sql, mrpdemands.sql, www_users.sql and modules.sql, plus new data files forecastscripts/menuitems/demandtype/parameters.sql (the installer globs data/*.sql) and demo.sql."
+   ],
+   "2": [
+    1,
+    "44.php shifts modules after Manufacturing and inserts ',0,' at the computed position in every user's modulesallowed with SUBSTRING_INDEX, so existing users keep their modules. WWW_Users.php gets the arrays and Cust/SuppLoginSetup write 12 flags. The position comes from role 8 only, which is fine because all roles have the same modules."
+   ],
+   "3": [
+    1,
+    "11 pages registered with tokens 11 or 15. Menu items go only to roles that hold each page's token (securitygroups join), and index.php was made tolerant of a module with no Transactions items. Pages use FormID, __() and prnMsg, and do not re-escape POST data."
+   ],
+   "4": [
+    1,
+    "ForecastExtractHistory reads stockmoves types 10 and 11 with hidemovt=0 and -SUM(qty) into monthly buckets per item and location. It replaces the range inside a transaction, trims to the last complete month and requires a continuous run."
+   ],
+   "5": [
+    1,
+    "Customer type comes from debtorsmaster.typeid, and area and salesperson from custbranch, stored in forecasthistory. No columns are added to salesanalysis."
+   ],
+   "6": [
+    1,
+    "ForecastCompute implements all 12 methods with minimum history, clamps negatives to 0 and rounds to 2 decimals. Best fit uses hold-out total absolute error, per item and across a category (via forecastbatchfit)."
+   ],
+   "7": [
+    1,
+    "Uses COALESCE(revisedqty, calcqty) throughout. Revisions can be cleared per period or all at once with Restore, and the user and date of each revision are recorded."
+   ],
+   "8": [
+    1,
+    "ForecastAccuracy computes MAD, POA, MSE and RMSE by item, category and method. POA is defined as 100 x (1 - absolute error / actual), a choice documented in NOTES. ForecastCompare.php compares methods side by side."
+   ],
+   "9": [
+    1,
+    "INSERT\u2026SELECT into mrpdemands under FCST with a new fromforecast=1 marker. Replace mode deletes only FCST rows with fromforecast=1, and incremental mode uses NOT EXISTS, so demand is never doubled. MRPDemandTypes.php now protects FCST from being created or deleted by hand."
+   ],
+   "10": [
+    1,
+    "New forecastparameters table (alpha, beta, gamma, season length, MA periods, hold-out, horizon, growth %, low-POA threshold, batch size), edited in ForecastParameters.php and used as defaults."
+   ],
+   "11": [
+    1,
+    "Category batches run in BatchSize steps across requests, with state in forecastbatches and per-item results with messages in forecastbatchresults. Dashboard and inquiry pages are present."
+   ],
+   "12": [
+    1,
+    "modules.sql is rewritten consistently. The new mrpdemands column has a default, and existing INSERTs into mrpdemands name their columns. Z_ChangeStockCode now covers the new tables. I found nothing broken."
+   ]
+  },
+  "checklist_total": 12,
+  "correctness": 4,
+  "conventions": 3.5,
+  "regressions": [
+   "none"
+  ],
+  "justification": "Also a complete and well-reasoned implementation. It uses the same correct history source (net invoiced stockmoves) and the right customer type, area and salesperson fields. All 12 methods have minimum-history checks and clamping, with hold-out best fit and a resumable category batch that keeps per-item failure reasons. MRP conversion is safe: forecast rows are marked with fromforecast, so replace and incremental modes neither double demand nor touch other rows, and the FCST type is protected. Existing users' modulesallowed lists are rewritten so they keep their modules. Menu items go only to roles that can open each page, and Z_ChangeStockCode is updated. Against webERP conventions, it bypasses the NewModule/NewMenuItem helpers in favour of hand-written SQL, keeps parameters in a new table rather than config, and adds separate install data files rather than extending scripts.sql and menuitems.sql. These all work but are less idiomatic. DB_affected_rows counts are only used for messages and can be off when the audit trail is on. I found no functional regressions."
+ }
+}

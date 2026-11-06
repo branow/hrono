@@ -1,0 +1,3742 @@
+diff --git a/CustLoginSetup.php b/CustLoginSetup.php
+index 0d84e79..1991fee 100644
+--- a/CustLoginSetup.php
++++ b/CustLoginSetup.php
+@@ -109,7 +109,7 @@ if (isset($_POST['submit'])) {
+ 											'" . $_POST['PageSize'] ."',
+ 											'7',
+ 											'" . $InventoryLocation ."',
+-											'1,1,0,0,0,0,0,0,0,0,0,',
++											'1,1,0,0,0,0,0,0,0,0,0,0,',
+ 											'" . $_SESSION['DefaultDisplayRecordsMax'] . "',
+ 											'" . $_POST['Theme'] . "',
+ 											'". $_POST['UserLanguage'] ."')";
+diff --git a/ForecastAccuracy.php b/ForecastAccuracy.php
+new file mode 100644
+index 0000000..41e1ad6
+--- /dev/null
++++ b/ForecastAccuracy.php
+@@ -0,0 +1,192 @@
++<?php
++
++// Compare past forecasts with the sales that followed: MAD, POA, MSE and RMSE by item, category and method
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Forecast Accuracy');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastAccuracy';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Defaults = ForecastGetParameters();
++$Bounds = ForecastHistoryBounds();
++
++if ($Bounds['to'] === null) {
++	ForecastNoHistoryNotice();
++	include('includes/footer.php');
++	exit();
++}
++
++$FromMonth = isset($_POST['FromMonth']) ? ForecastInput($_POST['FromMonth']) : substr($Bounds['from'], 0, 7);
++$ToMonth = isset($_POST['ToMonth']) ? ForecastInput($_POST['ToMonth']) : substr($Bounds['to'], 0, 7);
++$CategoryID = isset($_POST['CategoryID']) ? ForecastInput($_POST['CategoryID']) : '';
++$Location = isset($_POST['Location']) ? ForecastInput($_POST['Location']) : '';
++$IncludeSuperseded = isset($_POST['IncludeSuperseded']);
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Select the forecast periods to measure') . '</legend>
++		<field>
++			<label for="FromMonth">' . __('From month') . ':</label>
++			<input type="month" name="FromMonth" id="FromMonth" required="required" value="' . htmlspecialchars($FromMonth, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="ToMonth">' . __('To month') . ':</label>
++			<input type="month" name="ToMonth" id="ToMonth" required="required" value="' . htmlspecialchars($ToMonth, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="CategoryID">' . __('Stock category') . ':</label>
++			<select name="CategoryID" id="CategoryID">' . ForecastCategoryOptions($CategoryID, __('Any category')) . '</select>
++		</field>
++		<field>
++			<label for="Location">' . __('Location') . ':</label>
++			<select name="Location" id="Location">
++				<option value="">' . __('Any location') . '</option>
++				<option value="-"' . ($Location == '-' ? ' selected="selected"' : '') . '>' . __('All locations combined') . '</option>' .
++				str_replace('<option value=""></option>', '', ForecastLocationOptions($Location, '')) . '
++			</select>
++		</field>
++		<field>
++			<label for="IncludeSuperseded">' . __('Include superseded forecasts') . ':</label>
++			<input type="checkbox" name="IncludeSuperseded" id="IncludeSuperseded"' . ($IncludeSuperseded ? ' checked="checked"' : '') . ' />
++		</field>
++	</fieldset>
++	<div class="centre">
++		<input type="submit" name="Show" value="' . __('Show Accuracy') . '" />
++	</div>
++	</form>';
++echo '<div class="page_help_text">' . __('Only forecast months that now have actual sales in the history held are measured, so extract the latest sales history first. The forecast used is the revised quantity where there is one. MAD is the mean absolute error, MSE the mean squared error and RMSE its square root. POA, the percent of accuracy, is 100 less the total absolute error as a percentage of total actual sales, never below 0.') . '</div>';
++
++if (isset($_POST['Show'])) {
++	$ValidMonths = (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $FromMonth) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $ToMonth));
++	if (!$ValidMonths or $FromMonth > $ToMonth) {
++		prnMsg(__('Enter the first and last month, the first not after the last'), 'error');
++	} else {
++		$Where = array(
++			"forecastdetails.periodstart >= '" . $FromMonth . "-01'",
++			"forecastdetails.periodstart <= '" . $ToMonth . "-01'",
++			"forecastdetails.periodstart >= '" . $Bounds['from'] . "'",
++			"forecastdetails.periodstart <= '" . $Bounds['to'] . "'",
++		);
++		if ($CategoryID != '') {
++			$Where[] = "stockmaster.categoryid = '" . DB_escape_string($CategoryID) . "'";
++		}
++		if ($Location == '-') {
++			$Where[] = "forecasts.loccode = ''";
++		} elseif ($Location != '') {
++			$Where[] = "forecasts.loccode = '" . DB_escape_string($Location) . "'";
++		}
++		if (!$IncludeSuperseded) {
++			$Where[] = "forecasts.isactive = 1";
++		}
++		$Result = DB_query("SELECT forecasts.stockid,
++									forecasts.loccode,
++									forecasts.method,
++									stockmaster.description,
++									stockmaster.categoryid,
++									" . ForecastEffectiveSQL() . " AS forecastqty,
++									COALESCE((SELECT SUM(forecasthistory.quantity)
++												FROM forecasthistory
++												WHERE forecasthistory.stockid = forecasts.stockid
++													AND (forecasts.loccode = '' OR forecasthistory.loccode = forecasts.loccode)
++													AND forecasthistory.periodstart = forecastdetails.periodstart), 0) AS actualqty
++							FROM forecasts
++							INNER JOIN forecastdetails ON forecastdetails.forecastid = forecasts.forecastid
++							INNER JOIN stockmaster ON stockmaster.stockid = forecasts.stockid
++							WHERE " . implode(' AND ', $Where));
++
++		$ByItem = array();
++		$ByCategory = array();
++		$ByMethod = array();
++		$Total = ForecastNewAccumulator();
++		$Descriptions = array();
++		while ($MyRow = DB_fetch_array($Result)) {
++			$ItemKey = $MyRow['stockid'] . "\t" . $MyRow['loccode'];
++			$Descriptions[$ItemKey] = array($MyRow['stockid'], $MyRow['description'], $MyRow['loccode']);
++			if (!isset($ByItem[$ItemKey])) {
++				$ByItem[$ItemKey] = ForecastNewAccumulator();
++			}
++			if (!isset($ByCategory[$MyRow['categoryid']])) {
++				$ByCategory[$MyRow['categoryid']] = ForecastNewAccumulator();
++			}
++			if (!isset($ByMethod[$MyRow['method']])) {
++				$ByMethod[$MyRow['method']] = ForecastNewAccumulator();
++			}
++			ForecastAccumulate($ByItem[$ItemKey], (float) $MyRow['actualqty'], (float) $MyRow['forecastqty']);
++			ForecastAccumulate($ByCategory[$MyRow['categoryid']], (float) $MyRow['actualqty'], (float) $MyRow['forecastqty']);
++			ForecastAccumulate($ByMethod[$MyRow['method']], (float) $MyRow['actualqty'], (float) $MyRow['forecastqty']);
++			ForecastAccumulate($Total, (float) $MyRow['actualqty'], (float) $MyRow['forecastqty']);
++		}
++
++		if ($Total['n'] == 0) {
++			prnMsg(__('No forecast months in this range have actual sales to compare with'), 'info');
++		} else {
++			$Measures = ForecastMeasures($Total);
++			$Threshold = $Defaults['lowaccuracy'];
++			$Header = '<th>' . __('Months measured') . '</th><th>' . __('MAD') . '</th><th>' . __('POA %') . '</th><th>' . __('MSE') . '</th><th>' . __('RMSE') . '</th>';
++			$Row = function ($Accumulator) use ($Threshold) {
++				$M = ForecastMeasures($Accumulator);
++				return array('<td class="number">' . $M['n'] . '</td>
++					<td class="number">' . ForecastFormatQuantity($M['mad']) . '</td>
++					<td class="number">' . locale_number_format($M['poa'], 1) . '</td>
++					<td class="number">' . ForecastFormatQuantity($M['mse']) . '</td>
++					<td class="number">' . ForecastFormatQuantity($M['rmse']) . '</td>', $M['poa'] < $Threshold);
++			};
++
++			echo '<table class="selection">
++					<tr><th>' . __('Overall') . '</th>' . $Header . '</tr>';
++			list($Cells) = $Row($Total);
++			echo '<tr><td></td>' . $Cells . '</tr></table><br />';
++
++			ksort($ByMethod);
++			echo '<table class="selection">
++					<tr><th>' . __('Method') . '</th>' . $Header . '</tr>';
++			foreach ($ByMethod as $Method => $Accumulator) {
++				list($Cells) = $Row($Accumulator);
++				echo '<tr class="striped_row"><td>' . $Method . ' - ' . htmlspecialchars(ForecastMethodName($Method), ENT_QUOTES, 'UTF-8') . '</td>' . $Cells . '</tr>';
++			}
++			echo '</table><br />';
++
++			ksort($ByCategory);
++			echo '<table class="selection">
++					<tr><th>' . __('Stock category') . '</th>' . $Header . '</tr>';
++			foreach ($ByCategory as $Category => $Accumulator) {
++				list($Cells, $Low) = $Row($Accumulator);
++				echo '<tr class="striped_row"' . ($Low ? ' style="background-color:#ffd6d6"' : '') . '><td>' . htmlspecialchars($Category, ENT_QUOTES, 'UTF-8') . '</td>' . $Cells . '</tr>';
++			}
++			echo '</table><br />';
++
++			uasort($ByItem, function ($A, $B) {
++				return ForecastMeasures($A)['poa'] <=> ForecastMeasures($B)['poa'];
++			});
++			$LowCount = 0;
++			foreach ($ByItem as $Accumulator) {
++				if (ForecastMeasures($Accumulator)['poa'] < $Threshold) {
++					$LowCount++;
++				}
++			}
++			echo '<table class="selection">
++					<tr><th colspan="3">' . __('Items') . '</th>' . $Header . '</tr>';
++			$Shown = 0;
++			foreach ($ByItem as $ItemKey => $Accumulator) {
++				if (++$Shown > 500) {
++					break;
++				}
++				list($Cells, $Low) = $Row($Accumulator);
++				echo '<tr class="striped_row"' . ($Low ? ' style="background-color:#ffd6d6"' : '') . '>
++						<td>' . htmlspecialchars($Descriptions[$ItemKey][0], ENT_QUOTES, 'UTF-8') . '</td>
++						<td>' . htmlspecialchars($Descriptions[$ItemKey][1], ENT_QUOTES, 'UTF-8') . '</td>
++						<td>' . ($Descriptions[$ItemKey][2] == '' ? __('All') : htmlspecialchars($Descriptions[$ItemKey][2], ENT_QUOTES, 'UTF-8')) . '</td>' . $Cells . '</tr>';
++			}
++			echo '</table>';
++			prnMsg(sprintf(__('%d of %d items have a POA below %s%% (highlighted), lowest first.'), $LowCount, count($ByItem), locale_number_format($Threshold, 0)), $LowCount > 0 ? 'warn' : 'info');
++		}
++	}
++}
++
++include('includes/footer.php');
+diff --git a/ForecastDashboard.php b/ForecastDashboard.php
+new file mode 100644
+index 0000000..68a4111
+--- /dev/null
++++ b/ForecastDashboard.php
+@@ -0,0 +1,72 @@
++<?php
++
++// Forecasting dashboard
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Forecasting Dashboard');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastDashboard';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Result = DB_query("SELECT COUNT(*) FROM forecasts WHERE isactive = 1");
++$MyRow = DB_fetch_row($Result);
++$ActiveForecasts = (int) $MyRow[0];
++
++$Result = DB_query("SELECT COUNT(*) FROM forecastsummaries WHERE isactive = 1");
++$MyRow = DB_fetch_row($Result);
++$ActiveSummaries = (int) $MyRow[0];
++
++$Result = DB_query("SELECT COUNT(*)
++					FROM forecastmrpdemands
++					INNER JOIN mrpdemands ON mrpdemands.demandid = forecastmrpdemands.demandid");
++$MyRow = DB_fetch_row($Result);
++$MRPDemands = (int) $MyRow[0];
++
++$Bounds = ForecastHistoryBounds();
++
++echo '<table class="selection">
++		<tr><th colspan="2">' . __('Forecasting at a glance') . '</th></tr>
++		<tr><td>' . __('Active forecasts') . '</td><td class="number">' . $ActiveForecasts . '</td></tr>
++		<tr><td>' . __('Active summary forecasts') . '</td><td class="number">' . $ActiveSummaries . '</td></tr>
++		<tr><td>' . __('Forecast demands in the MRP master schedule') . '</td><td class="number">' . $MRPDemands . '</td></tr>';
++if ($Bounds['to'] === null) {
++	echo '<tr><td>' . __('Sales history') . '</td><td>' . __('None extracted yet') . '</td></tr>';
++} else {
++	echo '<tr><td>' . __('Sales history range') . '</td><td>' . ForecastMonthLabel($Bounds['from']) . ' - ' . ForecastMonthLabel($Bounds['to']) . '</td></tr>
++		<tr><td>' . __('Months with sales') . '</td><td class="number">' . $Bounds['months'] . '</td></tr>
++		<tr><td>' . __('Items with sales') . '</td><td class="number">' . $Bounds['items'] . '</td></tr>';
++}
++echo '</table>';
++
++if ($Bounds['to'] === null) {
++	ForecastNoHistoryNotice();
++}
++
++$Links = array(
++	array('/ForecastHistory.php', __('Extract Sales History'), 11),
++	array('/ForecastGenerate.php', __('Generate Forecasts'), 11),
++	array('/ForecastReview.php', __('Review and Revise Forecasts'), 11),
++	array('/ForecastSummary.php', __('Summary Forecasts'), 11),
++	array('/ForecastToMRP.php', __('Convert Forecasts to MRP Demands'), 11),
++	array('/ForecastInquiry.php', __('Forecast Inquiry'), 2),
++	array('/ForecastAccuracy.php', __('Forecast Accuracy'), 2),
++	array('/ForecastMethodComparison.php', __('Forecast Method Comparison'), 2),
++	array('/ForecastParameters.php', __('Forecasting Parameters'), 15),
++	array('/MRPDemands.php', __('Master Schedule'), 9),
++	array('/MRP.php', __('MRP Calculation'), 9),
++	array('/MRPReport.php', __('MRP'), 2),
++);
++echo '<br /><table class="selection">
++		<tr><th>' . __('Forecasting functions') . '</th></tr>';
++foreach ($Links as $Link) {
++	if (in_array($Link[2], $_SESSION['AllowedPageSecurityTokens'])) {
++		echo '<tr class="striped_row"><td><a href="' . $RootPath . $Link[0] . '">' . $Link[1] . '</a></td></tr>';
++	}
++}
++echo '</table>';
++
++include('includes/footer.php');
+diff --git a/ForecastGenerate.php b/ForecastGenerate.php
+new file mode 100644
+index 0000000..52efc50
+--- /dev/null
++++ b/ForecastGenerate.php
+@@ -0,0 +1,204 @@
++<?php
++
++// Generate forecasts for one item, or for every active item of a stock category
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Generate Forecasts');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastGenerate';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$BatchSize = 20;
++$Defaults = ForecastGetParameters();
++$BatchID = 0;
++
++if (isset($_POST['Generate'])) {
++	$InputError = 0;
++	$Parameters = ForecastReadParameters($_POST);
++	$ScopeType = (isset($_POST['ScopeType']) and $_POST['ScopeType'] == 'category') ? 'category' : 'item';
++	$StockID = isset($_POST['StockID']) ? mb_strtoupper(trim(ForecastInput($_POST['StockID']))) : '';
++	$CategoryID = isset($_POST['CategoryID']) ? ForecastInput($_POST['CategoryID']) : '';
++	$LocCode = isset($_POST['Location']) ? ForecastInput($_POST['Location']) : '';
++	$Method = isset($_POST['Method']) ? (int) $_POST['Method'] : 0;
++	$Horizon = isset($_POST['Horizon']) ? (int) $_POST['Horizon'] : 0;
++
++	foreach (ForecastValidateParameters($Parameters) as $Error) {
++		prnMsg($Error, 'error');
++		$InputError = 1;
++	}
++	if ($Horizon < 1 or $Horizon > 36) {
++		prnMsg(__('The horizon must be between 1 and 36 months'), 'error');
++		$InputError = 1;
++	}
++	if ($Method != 0 and !array_key_exists($Method, ForecastMethods())) {
++		prnMsg(__('Unknown forecasting method'), 'error');
++		$InputError = 1;
++	}
++	if ($LocCode != '') {
++		$Result = DB_query("SELECT locations.loccode FROM locations
++							INNER JOIN locationusers ON locationusers.loccode = locations.loccode
++								AND locationusers.userid = '" . DB_escape_string($_SESSION['UserID']) . "' AND locationusers.canview = 1
++							WHERE locations.loccode = '" . DB_escape_string($LocCode) . "'");
++		if (DB_num_rows($Result) == 0) {
++			prnMsg(__('The location is not valid or you may not use it'), 'error');
++			$InputError = 1;
++		}
++	}
++	if ($ScopeType == 'item') {
++		$Result = DB_query("SELECT stockid FROM stockmaster WHERE stockid = '" . DB_escape_string($StockID) . "'");
++		if (DB_num_rows($Result) == 0) {
++			prnMsg(__('The item code entered is not an inventory item'), 'error');
++			$InputError = 1;
++		}
++	} else {
++		$Result = DB_query("SELECT categoryid FROM stockcategory WHERE categoryid = '" . DB_escape_string($CategoryID) . "'");
++		if (DB_num_rows($Result) == 0) {
++			prnMsg(__('Select a stock category'), 'error');
++			$InputError = 1;
++		}
++	}
++	if (ForecastHistoryBounds()['to'] === null) {
++		ForecastNoHistoryNotice();
++		$InputError = 1;
++	}
++
++	if ($InputError == 0) {
++		set_time_limit(300);
++		$BatchID = ForecastCreateBatch($ScopeType, $StockID, $CategoryID, $LocCode, $Method, $Horizon, $Parameters, $_SESSION['UserID']);
++		ForecastProcessBatch($BatchID, $BatchSize);
++	}
++} elseif (isset($_GET['BatchID'])) {
++	$BatchID = (int) $_GET['BatchID'];
++	set_time_limit(300);
++	ForecastProcessBatch($BatchID, $BatchSize);
++}
++
++if ($BatchID > 0) {
++	$Result = DB_query("SELECT * FROM forecastbatches WHERE batchid = " . (int) $BatchID);
++	$Batch = DB_fetch_array($Result);
++	if ($Batch) {
++		$Done = $Batch['successcount'] + $Batch['failcount'];
++		$Next = $RootPath . '/ForecastGenerate.php?BatchID=' . $BatchID;
++		echo '<table class="selection">
++				<tr><th colspan="2">' . __('Forecast batch') . ' ' . $BatchID . '</th></tr>
++				<tr><td>' . __('Scope') . '</td><td>' . ($Batch['scopetype'] == 'item' ? __('Item') . ' ' . htmlspecialchars($Batch['stockid'], ENT_QUOTES, 'UTF-8') : __('Stock category') . ' ' . htmlspecialchars($Batch['categoryid'], ENT_QUOTES, 'UTF-8')) . '</td></tr>
++				<tr><td>' . __('Location') . '</td><td>' . ($Batch['loccode'] == '' ? __('All locations combined') : htmlspecialchars($Batch['loccode'], ENT_QUOTES, 'UTF-8')) . '</td></tr>
++				<tr><td>' . __('Method') . '</td><td>' . ($Batch['method'] == 0 ? __('Best fit') . ($Batch['chosenmethod'] > 0 ? ': ' . htmlspecialchars(ForecastMethodName($Batch['chosenmethod']), ENT_QUOTES, 'UTF-8') : '') : htmlspecialchars(ForecastMethodName($Batch['method']), ENT_QUOTES, 'UTF-8')) . '</td></tr>
++				<tr><td>' . __('Horizon') . '</td><td>' . $Batch['horizon'] . ' ' . __('months') . '</td></tr>
++				<tr><td>' . __('Progress') . '</td><td><progress max="' . max(1, $Batch['totalitems']) . '" value="' . $Done . '"></progress> ' . $Done . ' / ' . $Batch['totalitems'] . '</td></tr>
++			</table>';
++		if ($Batch['notes'] != '') {
++			prnMsg(htmlspecialchars($Batch['notes'], ENT_QUOTES, 'UTF-8'), 'info');
++		}
++		if ($Batch['status'] == 'running') {
++			echo '<div class="centre"><a href="' . $Next . '">' . __('Continue') . '</a></div>
++				<script>setTimeout(function () { window.location.href = ' . json_encode(htmlspecialchars_decode($Next)) . '; }, 500);</script>';
++		} else {
++			prnMsg(sprintf(__('%d successful, %d failed'), $Batch['successcount'], $Batch['failcount']), $Batch['failcount'] > 0 ? 'warn' : 'success');
++		}
++
++		$Result = DB_query("SELECT forecastbatchresults.stockid,
++									forecastbatchresults.status,
++									forecastbatchresults.message,
++									forecastbatchresults.forecastid,
++									forecasts.method
++							FROM forecastbatchresults
++							LEFT JOIN forecasts ON forecasts.forecastid = forecastbatchresults.forecastid
++							WHERE forecastbatchresults.batchid = " . (int) $BatchID . "
++								AND forecastbatchresults.status <> 'pending'
++							ORDER BY forecastbatchresults.status DESC, forecastbatchresults.stockid
++							LIMIT 1000");
++		if (DB_num_rows($Result) > 0) {
++			echo '<br /><table class="selection">
++					<tr>
++						<th>' . __('Item') . '</th>
++						<th>' . __('Result') . '</th>
++						<th>' . __('Method') . '</th>
++						<th>' . __('Reason') . '</th>
++					</tr>';
++			while ($MyRow = DB_fetch_array($Result)) {
++				echo '<tr class="striped_row">
++						<td>' . htmlspecialchars($MyRow['stockid'], ENT_QUOTES, 'UTF-8') . '</td>';
++				if ($MyRow['status'] == 'ok') {
++					echo '<td><a href="' . $RootPath . '/ForecastReview.php?ForecastID=' . $MyRow['forecastid'] . '">' . __('Successful') . '</a></td>
++						<td>' . htmlspecialchars(ForecastMethodName($MyRow['method']), ENT_QUOTES, 'UTF-8') . '</td>
++						<td></td>';
++				} else {
++					echo '<td>' . __('Failed') . '</td>
++						<td></td>
++						<td>' . htmlspecialchars($MyRow['message'], ENT_QUOTES, 'UTF-8') . '</td>';
++				}
++				echo '</tr>';
++			}
++			echo '</table><br />';
++		}
++	}
++}
++
++if (isset($_POST['Generate'])) {
++	$FormValues = $Parameters;
++	$FormScope = $ScopeType;
++	$FormStock = $StockID;
++	$FormCategory = $CategoryID;
++	$FormLocation = $LocCode;
++	$FormMethod = $Method;
++	$FormHorizon = $Horizon;
++} else {
++	$FormValues = $Defaults;
++	$FormScope = 'item';
++	$FormStock = isset($_GET['StockID']) ? mb_strtoupper(ForecastInput($_GET['StockID'])) : '';
++	$FormCategory = '';
++	$FormLocation = isset($_GET['Location']) ? ForecastInput($_GET['Location']) : '';
++	$FormMethod = isset($_GET['Method']) ? (int) $_GET['Method'] : 0;
++	$FormHorizon = $Defaults['defaulthorizon'];
++}
++
++if (!isset($_GET['BatchID']) or isset($_POST['Generate'])) {
++	echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++	echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++	echo '<fieldset>
++			<legend>' . __('Scope') . '</legend>
++			<field>
++				<label for="ScopeType">' . __('Forecast') . ':</label>
++				<select name="ScopeType" id="ScopeType">
++					<option value="item"' . ($FormScope == 'item' ? ' selected="selected"' : '') . '>' . __('A single item') . '</option>
++					<option value="category"' . ($FormScope == 'category' ? ' selected="selected"' : '') . '>' . __('Every active item of a stock category') . '</option>
++				</select>
++			</field>
++			<field>
++				<label for="StockID">' . __('Item code') . ' (' . __('single item') . '):</label>
++				<input type="text" name="StockID" id="StockID" size="21" maxlength="64" value="' . htmlspecialchars($FormStock, ENT_QUOTES, 'UTF-8') . '" />
++			</field>
++			<field>
++				<label for="CategoryID">' . __('Stock category') . ':</label>
++				<select name="CategoryID" id="CategoryID">' . ForecastCategoryOptions($FormCategory, __('Select a category')) . '</select>
++			</field>
++			<field>
++				<label for="Location">' . __('Location') . ':</label>
++				<select name="Location" id="Location">' . ForecastLocationOptions($FormLocation, __('All locations combined')) . '</select>
++			</field>
++		</fieldset>
++		<fieldset>
++			<legend>' . __('Method') . '</legend>
++			<field>
++				<label for="Method">' . __('Method') . ':</label>
++				<select name="Method" id="Method">' . ForecastMethodOptions($FormMethod, __('Best fit (let the system recommend)')) . '</select>
++			</field>
++			<field>
++				<label for="Horizon">' . __('Months to forecast') . ':</label>
++				<input type="number" name="Horizon" id="Horizon" min="1" max="36" step="1" value="' . (int) $FormHorizon . '" />
++			</field>
++			' . ForecastParameterFields($FormValues) . '
++		</fieldset>
++		<div class="centre">
++			<input type="submit" name="Generate" value="' . __('Generate Forecasts') . '" />
++		</div>
++		</form>';
++	echo '<div class="page_help_text">' . __('Parameters start from the company defaults, change them here to use other values for this run. An item without enough history for the method is reported and not forecast. Generating again replaces the active forecast of an item and location; the old one is kept for the accuracy reports.') . '</div>';
++}
++
++include('includes/footer.php');
+diff --git a/ForecastHistory.php b/ForecastHistory.php
+new file mode 100644
+index 0000000..40229ef
+--- /dev/null
++++ b/ForecastHistory.php
+@@ -0,0 +1,115 @@
++<?php
++
++// Extract the sales history the forecasts are calculated from
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Forecasting Sales History');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastHistory';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$LastCompleteMonth = ForecastAddMonths(date('Y-m-01'), -1);
++
++if (isset($_POST['Extract'])) {
++	$InputError = 0;
++	$FromMonth = isset($_POST['FromMonth']) ? ForecastInput($_POST['FromMonth']) : '';
++	$ToMonth = isset($_POST['ToMonth']) ? ForecastInput($_POST['ToMonth']) : '';
++	if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $FromMonth) or !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $ToMonth)) {
++		prnMsg(__('Both the first and the last month must be entered as a month and year'), 'error');
++		$InputError = 1;
++	} else {
++		$FromMonth .= '-01';
++		$ToMonth .= '-01';
++		if ($FromMonth > $ToMonth) {
++			prnMsg(__('The first month cannot be after the last month'), 'error');
++			$InputError = 1;
++		}
++		if ($ToMonth > $LastCompleteMonth) {
++			prnMsg(__('The history can only run to the last complete month') . ': ' . ForecastMonthLabel($LastCompleteMonth), 'error');
++			$InputError = 1;
++		}
++	}
++	if ($InputError == 0) {
++		$Summary = ForecastExtractHistory($FromMonth, $ToMonth, $_SESSION['UserID']);
++		prnMsg(sprintf(__('Sales history from %s to %s has been extracted: %d items, %d item/location/month records. Any history already held for these months was replaced.'), ForecastMonthLabel($FromMonth), ForecastMonthLabel($ToMonth), $Summary['items'], $Summary['rows']), 'success');
++	}
++}
++
++if (isset($_POST['FromMonth']) and isset($_POST['Extract'])) {
++	$DefaultFrom = substr(ForecastInput($_POST['FromMonth']), 0, 7);
++	$DefaultTo = substr(ForecastInput($_POST['ToMonth']), 0, 7);
++} else {
++	$DefaultTo = substr($LastCompleteMonth, 0, 7);
++	$DefaultFrom = substr(ForecastAddMonths($LastCompleteMonth, -23), 0, 7);
++}
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Extract Sales History') . '</legend>
++		<field>
++			<label for="FromMonth">' . __('From month') . ':</label>
++			<input type="month" name="FromMonth" id="FromMonth" required="required" value="' . htmlspecialchars($DefaultFrom, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="ToMonth">' . __('To month') . ':</label>
++			<input type="month" name="ToMonth" id="ToMonth" required="required" value="' . htmlspecialchars($DefaultTo, ENT_QUOTES, 'UTF-8') . '" />
++			<fieldhelp>' . __('24 months of history is recommended. Running months again replaces them, it does not add to them.') . '</fieldhelp>
++		</field>
++	</fieldset>
++	<div class="centre">
++		<input type="submit" name="Extract" value="' . __('Extract Sales History') . '" />
++	</div>
++	</form>';
++
++echo '<div class="page_help_text">' . __('The history is the quantity invoiced less the quantity credited, by item, stock location and month: the same stock movements that Inventory Item Usage reports. Open sales orders are not included.') . '</div>';
++
++$Bounds = ForecastHistoryBounds();
++if ($Bounds['to'] === null) {
++	ForecastNoHistoryNotice();
++} else {
++	echo '<table class="selection">
++			<tr><th colspan="2">' . __('History held') . '</th></tr>
++			<tr><td>' . __('First month') . '</td><td>' . ForecastMonthLabel($Bounds['from']) . '</td></tr>
++			<tr><td>' . __('Last month') . '</td><td>' . ForecastMonthLabel($Bounds['to']) . '</td></tr>
++			<tr><td>' . __('Months covered') . '</td><td class="number">' . ForecastMonthsBetween($Bounds['from'], $Bounds['to']) . '</td></tr>
++			<tr><td>' . __('Months with sales') . '</td><td class="number">' . $Bounds['months'] . '</td></tr>
++			<tr><td>' . __('Items with sales') . '</td><td class="number">' . $Bounds['items'] . '</td></tr>
++			<tr><td>' . __('Item/location/month records') . '</td><td class="number">' . $Bounds['rows'] . '</td></tr>
++		</table>';
++	if ($Bounds['gaps']) {
++		prnMsg(__('The months extracted so far leave a gap. Months that were never extracted count as months without sales, extract the missing months.'), 'warn');
++	}
++
++	$Result = DB_query("SELECT runid, fromperiod, toperiod, runby, rundate, itemcount, rowcount
++						FROM forecasthistoryruns
++						ORDER BY runid DESC
++						LIMIT 10");
++	echo '<br /><table class="selection">
++			<tr><th colspan="6">' . __('Latest extractions') . '</th></tr>
++			<tr>
++				<th>' . __('From month') . '</th>
++				<th>' . __('To month') . '</th>
++				<th>' . __('Run by') . '</th>
++				<th>' . __('Run on') . '</th>
++				<th>' . __('Items') . '</th>
++				<th>' . __('Records') . '</th>
++			</tr>';
++	while ($MyRow = DB_fetch_array($Result)) {
++		echo '<tr class="striped_row">
++				<td>' . ForecastMonthLabel($MyRow['fromperiod']) . '</td>
++				<td>' . ForecastMonthLabel($MyRow['toperiod']) . '</td>
++				<td>' . htmlspecialchars($MyRow['runby'], ENT_QUOTES, 'UTF-8') . '</td>
++				<td>' . $MyRow['rundate'] . '</td>
++				<td class="number">' . $MyRow['itemcount'] . '</td>
++				<td class="number">' . $MyRow['rowcount'] . '</td>
++			</tr>';
++	}
++	echo '</table>';
++}
++
++include('includes/footer.php');
+diff --git a/ForecastInquiry.php b/ForecastInquiry.php
+new file mode 100644
+index 0000000..1e35f5a
+--- /dev/null
++++ b/ForecastInquiry.php
+@@ -0,0 +1,140 @@
++<?php
++
++// Inquiry on forecasts by item, category, location and period
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Forecast Inquiry');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastInquiry';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Code = isset($_POST['Code']) ? ForecastInput($_POST['Code']) : '';
++$CategoryID = isset($_POST['CategoryID']) ? ForecastInput($_POST['CategoryID']) : '';
++$Location = isset($_POST['Location']) ? ForecastInput($_POST['Location']) : '';
++$FromMonth = isset($_POST['FromMonth']) ? ForecastInput($_POST['FromMonth']) : '';
++$ToMonth = isset($_POST['ToMonth']) ? ForecastInput($_POST['ToMonth']) : '';
++$IncludeSuperseded = isset($_POST['IncludeSuperseded']);
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Select forecasts') . '</legend>
++		<field>
++			<label for="Code">' . __('Item code or description contains') . ':</label>
++			<input type="text" name="Code" id="Code" size="21" maxlength="64" value="' . htmlspecialchars($Code, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="CategoryID">' . __('Stock category') . ':</label>
++			<select name="CategoryID" id="CategoryID">' . ForecastCategoryOptions($CategoryID, __('Any category')) . '</select>
++		</field>
++		<field>
++			<label for="Location">' . __('Location') . ':</label>
++			<select name="Location" id="Location">
++				<option value="">' . __('Any location') . '</option>
++				<option value="-"' . ($Location == '-' ? ' selected="selected"' : '') . '>' . __('All locations combined') . '</option>' .
++				str_replace('<option value=""></option>', '', ForecastLocationOptions($Location, '')) . '
++			</select>
++		</field>
++		<field>
++			<label for="FromMonth">' . __('From month') . ':</label>
++			<input type="month" name="FromMonth" id="FromMonth" value="' . htmlspecialchars($FromMonth, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="ToMonth">' . __('To month') . ':</label>
++			<input type="month" name="ToMonth" id="ToMonth" value="' . htmlspecialchars($ToMonth, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="IncludeSuperseded">' . __('Include superseded forecasts') . ':</label>
++			<input type="checkbox" name="IncludeSuperseded" id="IncludeSuperseded"' . ($IncludeSuperseded ? ' checked="checked"' : '') . ' />
++		</field>
++	</fieldset>
++	<div class="centre">
++		<input type="submit" name="Show" value="' . __('Show Forecasts') . '" />
++	</div>
++	</form>';
++
++if (isset($_POST['Show'])) {
++	$Where = array();
++	if ($Code != '') {
++		$Like = DB_escape_string(str_replace(array('%', '_'), array('\\%', '\\_'), $Code));
++		$Where[] = "(forecasts.stockid LIKE '%" . $Like . "%' OR stockmaster.description LIKE '%" . $Like . "%')";
++	}
++	if ($CategoryID != '') {
++		$Where[] = "stockmaster.categoryid = '" . DB_escape_string($CategoryID) . "'";
++	}
++	if ($Location == '-') {
++		$Where[] = "forecasts.loccode = ''";
++	} elseif ($Location != '') {
++		$Where[] = "forecasts.loccode = '" . DB_escape_string($Location) . "'";
++	}
++	if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $FromMonth)) {
++		$Where[] = "forecastdetails.periodstart >= '" . $FromMonth . "-01'";
++	}
++	if (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $ToMonth)) {
++		$Where[] = "forecastdetails.periodstart <= '" . $ToMonth . "-01'";
++	}
++	if (!$IncludeSuperseded) {
++		$Where[] = "forecasts.isactive = 1";
++	}
++	$Result = DB_query("SELECT forecasts.forecastid, forecasts.stockid, stockmaster.description, stockmaster.categoryid,
++								forecasts.loccode, forecasts.method, forecasts.isactive,
++								forecastdetails.periodstart, forecastdetails.calcqty, forecastdetails.revisedqty,
++								" . ForecastEffectiveSQL() . " AS effective
++						FROM forecasts
++						INNER JOIN forecastdetails ON forecastdetails.forecastid = forecasts.forecastid
++						INNER JOIN stockmaster ON stockmaster.stockid = forecasts.stockid" .
++						(count($Where) > 0 ? " WHERE " . implode(' AND ', $Where) : '') . "
++						ORDER BY forecasts.stockid, forecasts.loccode, forecasts.forecastid DESC, forecastdetails.periodstart
++						LIMIT 1001");
++	if (DB_num_rows($Result) == 0) {
++		prnMsg(__('No forecasts were found'), 'info');
++	} else {
++		echo '<br /><table class="selection">
++				<tr>
++					<th>' . __('Item') . '</th>
++					<th>' . __('Description') . '</th>
++					<th>' . __('Category') . '</th>
++					<th>' . __('Location') . '</th>
++					<th>' . __('Method') . '</th>
++					<th>' . __('Period') . '</th>
++					<th>' . __('Calculated') . '</th>
++					<th>' . __('Revised') . '</th>
++					<th>' . __('Forecast used') . '</th>
++				</tr>';
++		$Count = 0;
++		$Total = 0;
++		while ($MyRow = DB_fetch_array($Result)) {
++			if (++$Count > 1000) {
++				break;
++			}
++			if ($MyRow['isactive'] == 1) {
++				$Total += $MyRow['effective'];
++			}
++			echo '<tr class="striped_row">
++					<td><a href="' . $RootPath . '/ForecastReview.php?ForecastID=' . $MyRow['forecastid'] . '">' . htmlspecialchars($MyRow['stockid'], ENT_QUOTES, 'UTF-8') . '</a></td>
++					<td>' . htmlspecialchars($MyRow['description'], ENT_QUOTES, 'UTF-8') . '</td>
++					<td>' . htmlspecialchars($MyRow['categoryid'], ENT_QUOTES, 'UTF-8') . '</td>
++					<td>' . ($MyRow['loccode'] == '' ? __('All') : htmlspecialchars($MyRow['loccode'], ENT_QUOTES, 'UTF-8')) . '</td>
++					<td>' . htmlspecialchars(ForecastMethodName($MyRow['method']), ENT_QUOTES, 'UTF-8') . ($MyRow['isactive'] == 1 ? '' : ' (' . __('superseded') . ')') . '</td>
++					<td>' . ForecastMonthLabel($MyRow['periodstart']) . '</td>
++					<td class="number">' . ForecastFormatQuantity($MyRow['calcqty']) . '</td>
++					<td class="number">' . ($MyRow['revisedqty'] !== null ? ForecastFormatQuantity($MyRow['revisedqty']) : '') . '</td>
++					<td class="number">' . ForecastFormatQuantity($MyRow['effective']) . '</td>
++				</tr>';
++		}
++		echo '<tr>
++				<td colspan="8"><b>' . __('Total of the active forecasts shown') . '</b></td>
++				<td class="number"><b>' . ForecastFormatQuantity($Total) . '</b></td>
++			</tr>
++			</table>';
++		if ($Count > 1000) {
++			prnMsg(__('Only the first 1000 rows are shown, narrow the selection'), 'info');
++		}
++	}
++}
++
++include('includes/footer.php');
+diff --git a/ForecastMethodComparison.php b/ForecastMethodComparison.php
+new file mode 100644
+index 0000000..ca57f42
+--- /dev/null
++++ b/ForecastMethodComparison.php
+@@ -0,0 +1,197 @@
++<?php
++
++// One item's history forecast with several methods, side by side with their accuracy
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Forecast Method Comparison');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastMethodComparison';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Defaults = ForecastGetParameters();
++$Bounds = ForecastHistoryBounds();
++$Methods = ForecastMethods();
++
++if (isset($_POST['Compare'])) {
++	$Parameters = ForecastReadParameters($_POST);
++	$StockID = isset($_POST['StockID']) ? mb_strtoupper(trim(ForecastInput($_POST['StockID']))) : '';
++	$LocCode = isset($_POST['Location']) ? ForecastInput($_POST['Location']) : '';
++	$Horizon = isset($_POST['Horizon']) ? (int) $_POST['Horizon'] : 0;
++	$Chosen = array();
++	foreach ($Methods as $Number => $Name) {
++		if (isset($_POST['Use' . $Number])) {
++			$Chosen[] = $Number;
++		}
++	}
++} else {
++	$Parameters = $Defaults;
++	$StockID = isset($_GET['StockID']) ? mb_strtoupper(ForecastInput($_GET['StockID'])) : '';
++	$LocCode = '';
++	$Horizon = $Defaults['defaulthorizon'];
++	$Chosen = array_keys($Methods);
++}
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Item') . '</legend>
++		<field>
++			<label for="StockID">' . __('Item code') . ':</label>
++			<input type="text" name="StockID" id="StockID" size="21" maxlength="64" required="required" value="' . htmlspecialchars($StockID, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="Location">' . __('Location') . ':</label>
++			<select name="Location" id="Location">' . ForecastLocationOptions($LocCode, __('All locations combined')) . '</select>
++		</field>
++		<field>
++			<label for="Horizon">' . __('Months to forecast') . ':</label>
++			<input type="number" name="Horizon" id="Horizon" min="1" max="36" step="1" value="' . (int) $Horizon . '" />
++		</field>
++		' . ForecastParameterFields($Parameters) . '
++	</fieldset>
++	<fieldset>
++		<legend>' . __('Methods to compare') . '</legend>';
++foreach ($Methods as $Number => $Name) {
++	echo '<field>
++			<label for="Use' . $Number . '">' . $Number . ' - ' . htmlspecialchars($Name, ENT_QUOTES, 'UTF-8') . ':</label>
++			<input type="checkbox" name="Use' . $Number . '" id="Use' . $Number . '"' . (in_array($Number, $Chosen) ? ' checked="checked"' : '') . ' />
++		</field>';
++}
++echo '</fieldset>
++	<div class="centre">
++		<input type="submit" name="Compare" value="' . __('Compare Methods') . '" />
++	</div>
++	</form>';
++
++if (isset($_POST['Compare'])) {
++	$Errors = ForecastValidateParameters($Parameters);
++	if ($Horizon < 1 or $Horizon > 36) {
++		$Errors[] = __('The horizon must be between 1 and 36 months');
++	}
++	if (count($Chosen) == 0) {
++		$Errors[] = __('Select at least one method');
++	}
++	$Result = DB_query("SELECT stockid, description FROM stockmaster WHERE stockid = '" . DB_escape_string($StockID) . "'");
++	$Item = DB_fetch_array($Result);
++	if (!$Item) {
++		$Errors[] = __('The item code entered is not an inventory item');
++	}
++	if ($Bounds['to'] === null) {
++		ForecastNoHistoryNotice();
++	} elseif (count($Errors) > 0) {
++		foreach ($Errors as $Error) {
++			prnMsg($Error, 'error');
++		}
++	} else {
++		$Series = ForecastItemSeries($StockID, $LocCode, $Bounds['to']);
++		$Values = $Series['values'];
++		$n = count($Values);
++		$Holdout = $Parameters['holdoutmonths'];
++		if ($n == 0) {
++			prnMsg(__('No sales history for this item'), 'warn');
++		} else {
++			echo '<br /><div class="page_help_text">' . sprintf(__('%s has %d months of history, from %s to %s. Each method is trained on all but the last %d months, forecasts those months and is scored against what was sold. The forecast columns use the full history.'), htmlspecialchars($Item['stockid'] . ' - ' . $Item['description'], ENT_QUOTES, 'UTF-8'), $n, ForecastMonthLabel($Series['start']), ForecastMonthLabel($Bounds['to']), $Holdout) . '</div>';
++
++			$Tests = array();
++			$Futures = array();
++			foreach ($Chosen as $Method) {
++				$Backtest = ForecastBacktest($Method, $Values, $Holdout, $Parameters);
++				$Reason = '';
++				if ($Backtest === null) {
++					$Training = array_slice($Values, 0, max(0, $n - $Holdout));
++					$Attempt = ForecastCompute($Method, $Training, $Holdout, $Parameters);
++					$Reason = $Attempt['ok'] ? __('Not enough history left to test') : $Attempt['error'];
++				}
++				$Tests[$Method] = array('backtest' => $Backtest, 'reason' => $Reason);
++				$Futures[$Method] = ForecastCompute($Method, $Values, $Horizon, $Parameters);
++			}
++			$Fit = ForecastBestFitItem($Values, $Parameters, $Holdout, $Chosen);
++
++			echo '<table class="selection">
++					<tr>
++						<th>' . __('Method') . '</th>
++						<th>' . __('MAD') . '</th>
++						<th>' . __('POA %') . '</th>
++						<th>' . __('MSE') . '</th>
++						<th>' . __('RMSE') . '</th>
++						<th>' . __('Notes') . '</th>
++						<th></th>
++					</tr>';
++			foreach ($Chosen as $Method) {
++				$Test = $Tests[$Method];
++				$IsBest = ($Fit['best'] == $Method);
++				echo '<tr class="striped_row"' . ($IsBest ? ' style="font-weight:bold"' : '') . '>
++						<td>' . $Method . ' - ' . htmlspecialchars($Methods[$Method], ENT_QUOTES, 'UTF-8') . '</td>';
++				if ($Test['backtest'] !== null) {
++					$M = $Test['backtest']['measures'];
++					echo '<td class="number">' . ForecastFormatQuantity($M['mad']) . '</td>
++						<td class="number">' . locale_number_format($M['poa'], 1) . '</td>
++						<td class="number">' . ForecastFormatQuantity($M['mse']) . '</td>
++						<td class="number">' . ForecastFormatQuantity($M['rmse']) . '</td>
++						<td>' . ($IsBest ? __('Best fit') : '') . '</td>';
++				} else {
++					echo '<td colspan="4"></td><td>' . htmlspecialchars($Test['reason'], ENT_QUOTES, 'UTF-8') . '</td>';
++				}
++				echo '<td>' . ($Futures[$Method]['ok'] ? '<a href="' . $RootPath . '/ForecastGenerate.php?StockID=' . urlencode($StockID) . '&amp;Location=' . urlencode($LocCode) . '&amp;Method=' . $Method . '">' . __('Generate with this method') . '</a>' : '') . '</td>
++					</tr>';
++			}
++			echo '</table><br />';
++
++			// the hold-out months: actual against each method
++			$Testable = array_filter($Tests, function ($Test) {
++				return $Test['backtest'] !== null;
++			});
++			if (count($Testable) > 0) {
++				echo '<table class="selection">
++						<tr><th colspan="' . (2 + count($Testable)) . '">' . __('Hold-out months: actual sales against each method') . '</th></tr>
++						<tr><th>' . __('Month') . '</th><th>' . __('Actual') . '</th>';
++				foreach ($Testable as $Method => $Test) {
++					echo '<th>' . $Method . '</th>';
++				}
++				echo '</tr>';
++				for ($i = 0; $i < $Holdout; $i++) {
++					$Period = ForecastAddMonths($Bounds['to'], -($Holdout - 1 - $i));
++					echo '<tr class="striped_row"><td>' . ForecastMonthLabel($Period) . '</td><td class="number">' . ForecastFormatQuantity($Values[$n - $Holdout + $i]) . '</td>';
++					foreach ($Testable as $Test) {
++						echo '<td class="number">' . ForecastFormatQuantity($Test['backtest']['forecast'][$i]) . '</td>';
++					}
++					echo '</tr>';
++				}
++				echo '</table><br />';
++			}
++
++			// the forecast months, from the full history
++			$Usable = array_filter($Futures, function ($Future) {
++				return $Future['ok'];
++			});
++			if (count($Usable) > 0) {
++				echo '<table class="selection">
++						<tr><th colspan="' . (1 + count($Usable)) . '">' . __('Forecast months: each method on the full history') . '</th></tr>
++						<tr><th>' . __('Month') . '</th>';
++				foreach ($Usable as $Method => $Future) {
++					echo '<th>' . $Method . '</th>';
++				}
++				echo '</tr>';
++				for ($i = 0; $i < $Horizon; $i++) {
++					echo '<tr class="striped_row"><td>' . ForecastMonthLabel(ForecastAddMonths($Bounds['to'], $i + 1)) . '</td>';
++					foreach ($Usable as $Future) {
++						echo '<td class="number">' . ForecastFormatQuantity($Future['values'][$i]) . '</td>';
++					}
++					echo '</tr>';
++				}
++				echo '</table>';
++			}
++			foreach ($Futures as $Method => $Future) {
++				if (!$Future['ok']) {
++					prnMsg($Method . ' - ' . htmlspecialchars($Methods[$Method], ENT_QUOTES, 'UTF-8') . ': ' . htmlspecialchars($Future['error'], ENT_QUOTES, 'UTF-8'), 'info');
++				}
++			}
++		}
++	}
++}
++
++include('includes/footer.php');
+diff --git a/ForecastParameters.php b/ForecastParameters.php
+new file mode 100644
+index 0000000..e090adb
+--- /dev/null
++++ b/ForecastParameters.php
+@@ -0,0 +1,54 @@
++<?php
++
++// Company wide forecasting defaults, maintained by an administrator
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Forecasting Parameters');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastParameters';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Values = ForecastGetParameters();
++
++if (isset($_POST['Save'])) {
++	$Values = ForecastReadParameters($_POST);
++	$Errors = ForecastValidateParameters($Values);
++	if (count($Errors) > 0) {
++		foreach ($Errors as $Error) {
++			prnMsg($Error, 'error');
++		}
++	} else {
++		ForecastSaveParameters($Values);
++		prnMsg(__('The forecasting parameters have been saved'), 'success');
++	}
++}
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Company defaults') . '</legend>
++		<field>
++			<label for="defaulthorizon">' . __('Default horizon in months') . ':</label>
++			<input type="number" name="defaulthorizon" id="defaulthorizon" min="1" max="36" step="1" value="' . (int) $Values['defaulthorizon'] . '" />
++		</field>
++		' . ForecastParameterFields($Values) . '
++		<field>
++			<label for="lowaccuracy">' . __('Flag items with a POA below (%)') . ':</label>
++			<input type="number" name="lowaccuracy" id="lowaccuracy" min="0" max="100" step="1" value="' . htmlspecialchars($Values['lowaccuracy'], ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="variancepct">' . __('Highlight a variance to last year of (%)') . ':</label>
++			<input type="number" name="variancepct" id="variancepct" min="0" step="1" value="' . htmlspecialchars($Values['variancepct'], ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++	</fieldset>
++	<div class="centre">
++		<input type="submit" name="Save" value="' . __('Save') . '" />
++	</div>
++	</form>';
++echo '<div class="page_help_text">' . __('These values are used whenever a forecast is generated without overriding them. Changing them does not alter forecasts that have already been generated, each keeps the method and parameters it was calculated with.') . '</div>';
++
++include('includes/footer.php');
+diff --git a/ForecastReview.php b/ForecastReview.php
+new file mode 100644
+index 0000000..8dd83e6
+--- /dev/null
++++ b/ForecastReview.php
+@@ -0,0 +1,243 @@
++<?php
++
++// Search forecasts, review them period by period and revise the quantities
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Review and Revise Forecasts');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastReview';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$ForecastID = 0;
++if (isset($_POST['ForecastID'])) {
++	$ForecastID = (int) $_POST['ForecastID'];
++} elseif (isset($_GET['ForecastID'])) {
++	$ForecastID = (int) $_GET['ForecastID'];
++}
++
++$ForecastRow = null;
++if ($ForecastID > 0) {
++	$Result = DB_query("SELECT forecasts.*, stockmaster.description, stockmaster.categoryid
++						FROM forecasts
++						INNER JOIN stockmaster ON stockmaster.stockid = forecasts.stockid
++						WHERE forecasts.forecastid = " . $ForecastID);
++	$ForecastRow = DB_fetch_array($Result);
++	if (!$ForecastRow) {
++		prnMsg(__('The forecast could not be found'), 'error');
++		$ForecastID = 0;
++	}
++}
++
++if ($ForecastRow and (isset($_POST['Save']) or isset($_POST['ClearAll']))) {
++	if ($ForecastRow['isactive'] != 1) {
++		prnMsg(__('Only the active forecast of an item can be revised, this one has been superseded'), 'error');
++	} else {
++		$Periods = array();
++		$Result = DB_query("SELECT periodstart FROM forecastdetails WHERE forecastid = " . $ForecastID . " ORDER BY periodstart");
++		while ($MyRow = DB_fetch_row($Result)) {
++			$Periods[] = $MyRow[0];
++		}
++		if (isset($_POST['ClearAll'])) {
++			DB_query("UPDATE forecastdetails SET revisedqty = NULL, revisedby = '' WHERE forecastid = " . $ForecastID);
++			prnMsg(__('All revisions have been cleared, the calculated quantities apply again'), 'success');
++		} else {
++			list($Revisions, $Errors) = ForecastReadRevisions($_POST['Revised'] ?? array(), $Periods);
++			if (count($Errors) > 0) {
++				foreach ($Errors as $Error) {
++					prnMsg($Error, 'error');
++				}
++			} else {
++				DB_Txn_Begin();
++				foreach ($Revisions as $Period => $Quantity) {
++					if ($Quantity === null) {
++						DB_query("UPDATE forecastdetails SET revisedqty = NULL, revisedby = ''
++									WHERE forecastid = " . $ForecastID . " AND periodstart = '" . $Period . "'", '', '', true);
++					} else {
++						DB_query("UPDATE forecastdetails SET revisedqty = " . $Quantity . ", revisedby = '" . DB_escape_string($_SESSION['UserID']) . "'
++									WHERE forecastid = " . $ForecastID . " AND periodstart = '" . $Period . "'", '', '', true);
++					}
++				}
++				DB_Txn_Commit();
++				prnMsg(__('The revised quantities have been saved. A blank revised quantity means the calculated quantity applies.'), 'success');
++			}
++		}
++	}
++}
++
++if ($ForecastRow) {
++	$Defaults = ForecastGetParameters();
++	$Bounds = ForecastHistoryBounds();
++	$LocationName = __('All locations combined');
++	if ($ForecastRow['loccode'] != '') {
++		$Result = DB_query("SELECT locationname FROM locations WHERE loccode = '" . DB_escape_string($ForecastRow['loccode']) . "'");
++		$LocationRow = DB_fetch_row($Result);
++		$LocationName = $LocationRow ? $LocationRow[0] : $ForecastRow['loccode'];
++	}
++	echo '<table class="selection">
++			<tr><td>' . __('Item') . '</td><td>' . htmlspecialchars($ForecastRow['stockid'] . ' - ' . $ForecastRow['description'], ENT_QUOTES, 'UTF-8') . '</td></tr>
++			<tr><td>' . __('Location') . '</td><td>' . htmlspecialchars($LocationName, ENT_QUOTES, 'UTF-8') . '</td></tr>
++			<tr><td>' . __('Method') . '</td><td>' . htmlspecialchars(ForecastMethodName($ForecastRow['method']), ENT_QUOTES, 'UTF-8') . ' ' . htmlspecialchars(ForecastDescribeParameters($ForecastRow['method'], $ForecastRow['params']), ENT_QUOTES, 'UTF-8') . '</td></tr>
++			<tr><td>' . __('Created') . '</td><td>' . $ForecastRow['createdate'] . ' ' . htmlspecialchars($ForecastRow['createdby'], ENT_QUOTES, 'UTF-8') . '</td></tr>
++			<tr><td>' . __('Status') . '</td><td>' . ($ForecastRow['isactive'] == 1 ? __('Active') : __('Superseded')) . '</td></tr>' .
++			($ForecastRow['notes'] != '' ? '<tr><td>' . __('Notes') . '</td><td>' . htmlspecialchars($ForecastRow['notes'], ENT_QUOTES, 'UTF-8') . '</td></tr>' : '') . '
++		</table><br />';
++
++	$Details = array();
++	$Result = DB_query("SELECT periodstart, calcqty, revisedqty FROM forecastdetails WHERE forecastid = " . $ForecastID . " ORDER BY periodstart");
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Details[$MyRow['periodstart']] = $MyRow;
++	}
++	$LastYear = ForecastLastYear(array('item', $ForecastRow['stockid'], $ForecastRow['loccode']), array_keys($Details), $Bounds);
++	$Editable = ($ForecastRow['isactive'] == 1);
++
++	echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++	echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++		<input type="hidden" name="ForecastID" value="' . $ForecastID . '" />';
++	echo '<table class="selection">
++			<tr>
++				<th>' . __('Period') . '</th>
++				<th>' . __('Calculated') . '</th>
++				<th>' . __('Revised') . '</th>
++				<th>' . __('Forecast used') . '</th>
++				<th>' . __('Last year actual') . '</th>
++				<th>' . __('Variance') . '</th>
++				<th>' . __('Variance %') . '</th>
++			</tr>';
++	foreach ($Details as $Period => $Detail) {
++		$Effective = ($Detail['revisedqty'] !== null) ? (float) $Detail['revisedqty'] : (float) $Detail['calcqty'];
++		$Last = $LastYear[$Period];
++		$Large = ForecastLargeVariance($Effective, $Last, $Defaults['variancepct']);
++		echo '<tr class="striped_row"' . ($Large ? ' style="background-color:#ffd6d6"' : '') . '>
++				<td>' . ForecastMonthLabel($Period) . '</td>
++				<td class="number">' . ForecastFormatQuantity($Detail['calcqty']) . '</td>
++				<td class="number">';
++		if ($Editable) {
++			echo '<input type="text" class="number" name="Revised[' . $Period . ']" size="10" value="' . ($Detail['revisedqty'] !== null ? ForecastFormatQuantity($Detail['revisedqty']) : '') . '" />';
++		} else {
++			echo ($Detail['revisedqty'] !== null ? ForecastFormatQuantity($Detail['revisedqty']) : '');
++		}
++		echo '</td>
++				<td class="number">' . ForecastFormatQuantity($Effective) . '</td>';
++		if ($Last === null) {
++			echo '<td class="number">-</td><td class="number">-</td><td class="number">-</td>';
++		} else {
++			echo '<td class="number">' . ForecastFormatQuantity($Last) . '</td>
++				<td class="number">' . ForecastFormatQuantity($Effective - $Last) . '</td>
++				<td class="number">' . ($Last != 0 ? locale_number_format(($Effective - $Last) / $Last * 100, 1) . '%' : '-') . '</td>';
++		}
++		echo '</tr>';
++	}
++	echo '</table>';
++	if ($Editable) {
++		echo '<div class="centre">
++				<input type="submit" name="Save" value="' . __('Save Revised Quantities') . '" />
++				<input type="submit" name="ClearAll" value="' . __('Clear All Revisions') . '" />
++			</div>';
++	}
++	echo '</form>';
++	echo '<div class="page_help_text">' . sprintf(__('A revised quantity takes priority over the calculated one in every report, in the accuracy measures and in MRP. Clear it (leave it blank) to use the calculated quantity again. Rows differing from last year by %s%% or more are highlighted.'), locale_number_format($Defaults['variancepct'], 0)) . '</div>';
++	echo '<div class="centre"><a href="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">' . __('Search for other forecasts') . '</a></div>';
++} else {
++	// search
++	$Code = isset($_POST['Code']) ? ForecastInput($_POST['Code']) : (isset($_GET['Code']) ? ForecastInput($_GET['Code']) : '');
++	$CategoryID = isset($_POST['CategoryID']) ? ForecastInput($_POST['CategoryID']) : '';
++	$Location = isset($_POST['Location']) ? ForecastInput($_POST['Location']) : '';
++	$IncludeSuperseded = isset($_POST['IncludeSuperseded']);
++
++	echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++	echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++	echo '<fieldset>
++			<legend>' . __('Search for forecasts') . '</legend>
++			<field>
++				<label for="Code">' . __('Item code or description contains') . ':</label>
++				<input type="text" name="Code" id="Code" size="21" maxlength="64" value="' . htmlspecialchars($Code, ENT_QUOTES, 'UTF-8') . '" />
++			</field>
++			<field>
++				<label for="CategoryID">' . __('Stock category') . ':</label>
++				<select name="CategoryID" id="CategoryID">' . ForecastCategoryOptions($CategoryID, __('Any category')) . '</select>
++			</field>
++			<field>
++				<label for="Location">' . __('Location') . ':</label>
++				<select name="Location" id="Location">
++					<option value="">' . __('Any location') . '</option>
++					<option value="-"' . ($Location == '-' ? ' selected="selected"' : '') . '>' . __('All locations combined') . '</option>' .
++					str_replace('<option value=""></option>', '', ForecastLocationOptions($Location, '')) . '
++				</select>
++			</field>
++			<field>
++				<label for="IncludeSuperseded">' . __('Include superseded forecasts') . ':</label>
++				<input type="checkbox" name="IncludeSuperseded" id="IncludeSuperseded"' . ($IncludeSuperseded ? ' checked="checked"' : '') . ' />
++			</field>
++		</fieldset>
++		<div class="centre">
++			<input type="submit" name="Search" value="' . __('Search') . '" />
++		</div>
++		</form>';
++
++	if (isset($_POST['Search']) or $Code != '') {
++		$Where = array();
++		if ($Code != '') {
++			$Like = DB_escape_string(str_replace(array('%', '_'), array('\\%', '\\_'), $Code));
++			$Where[] = "(forecasts.stockid LIKE '%" . $Like . "%' OR stockmaster.description LIKE '%" . $Like . "%')";
++		}
++		if ($CategoryID != '') {
++			$Where[] = "stockmaster.categoryid = '" . DB_escape_string($CategoryID) . "'";
++		}
++		if ($Location == '-') {
++			$Where[] = "forecasts.loccode = ''";
++		} elseif ($Location != '') {
++			$Where[] = "forecasts.loccode = '" . DB_escape_string($Location) . "'";
++		}
++		if (!$IncludeSuperseded) {
++			$Where[] = "forecasts.isactive = 1";
++		}
++		$Result = DB_query("SELECT forecasts.forecastid, forecasts.stockid, stockmaster.description, stockmaster.categoryid,
++									forecasts.loccode, forecasts.method, forecasts.createdate, forecasts.isactive, forecasts.horizon
++							FROM forecasts
++							INNER JOIN stockmaster ON stockmaster.stockid = forecasts.stockid" .
++							(count($Where) > 0 ? " WHERE " . implode(' AND ', $Where) : '') . "
++							ORDER BY forecasts.stockid, forecasts.loccode, forecasts.forecastid DESC
++							LIMIT 201");
++		if (DB_num_rows($Result) == 0) {
++			prnMsg(__('No forecasts were found'), 'info');
++		} else {
++			echo '<br /><table class="selection">
++					<tr>
++						<th>' . __('Item') . '</th>
++						<th>' . __('Description') . '</th>
++						<th>' . __('Category') . '</th>
++						<th>' . __('Location') . '</th>
++						<th>' . __('Method') . '</th>
++						<th>' . __('Months') . '</th>
++						<th>' . __('Created') . '</th>
++						<th>' . __('Status') . '</th>
++					</tr>';
++			$Count = 0;
++			while ($MyRow = DB_fetch_array($Result)) {
++				if (++$Count > 200) {
++					break;
++				}
++				echo '<tr class="striped_row">
++						<td><a href="' . $RootPath . '/ForecastReview.php?ForecastID=' . $MyRow['forecastid'] . '">' . htmlspecialchars($MyRow['stockid'], ENT_QUOTES, 'UTF-8') . '</a></td>
++						<td>' . htmlspecialchars($MyRow['description'], ENT_QUOTES, 'UTF-8') . '</td>
++						<td>' . htmlspecialchars($MyRow['categoryid'], ENT_QUOTES, 'UTF-8') . '</td>
++						<td>' . ($MyRow['loccode'] == '' ? __('All') : htmlspecialchars($MyRow['loccode'], ENT_QUOTES, 'UTF-8')) . '</td>
++						<td>' . htmlspecialchars(ForecastMethodName($MyRow['method']), ENT_QUOTES, 'UTF-8') . '</td>
++						<td class="number">' . $MyRow['horizon'] . '</td>
++						<td>' . $MyRow['createdate'] . '</td>
++						<td>' . ($MyRow['isactive'] == 1 ? __('Active') : __('Superseded')) . '</td>
++					</tr>';
++			}
++			echo '</table>';
++			if ($Count > 200) {
++				prnMsg(__('Only the first 200 forecasts are shown, narrow the search'), 'info');
++			}
++		}
++	}
++}
++
++include('includes/footer.php');
+diff --git a/ForecastSummary.php b/ForecastSummary.php
+new file mode 100644
+index 0000000..4a1222f
+--- /dev/null
++++ b/ForecastSummary.php
+@@ -0,0 +1,161 @@
++<?php
++
++// Summary forecasts by stock category, customer type, sales area or salesperson, built from the extracted sales history
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Summary Forecasts');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastSummary';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Defaults = ForecastGetParameters();
++$DimensionTypes = ForecastDimensionTypes();
++
++if (isset($_POST['Generate'])) {
++	$InputError = 0;
++	$Parameters = ForecastReadParameters($_POST);
++	$Method = isset($_POST['Method']) ? (int) $_POST['Method'] : 0;
++	$Horizon = isset($_POST['Horizon']) ? (int) $_POST['Horizon'] : 0;
++	$Choice = isset($_POST['Summarise']) ? explode('|', ForecastInput($_POST['Summarise']), 2) : array('', '');
++
++	foreach (ForecastValidateParameters($Parameters) as $Error) {
++		prnMsg($Error, 'error');
++		$InputError = 1;
++	}
++	if ($Horizon < 1 or $Horizon > 36) {
++		prnMsg(__('The horizon must be between 1 and 36 months'), 'error');
++		$InputError = 1;
++	}
++	if ($Method != 0 and !array_key_exists($Method, ForecastMethods())) {
++		prnMsg(__('Unknown forecasting method'), 'error');
++		$InputError = 1;
++	}
++	if (count($Choice) != 2 or !array_key_exists($Choice[0], $DimensionTypes)) {
++		prnMsg(__('Select what to summarise'), 'error');
++		$InputError = 1;
++	}
++	if (ForecastHistoryBounds()['to'] === null) {
++		ForecastNoHistoryNotice();
++		$InputError = 1;
++	}
++	if ($InputError == 0) {
++		$Keys = ForecastDimensionKeys($Choice[0]);
++		if ($Choice[1] != '*') {
++			$Keys = array_key_exists($Choice[1], $Keys) ? array($Choice[1] => $Keys[$Choice[1]]) : array();
++		}
++		if (count($Keys) == 0) {
++			prnMsg(__('There is no sales history for the selection'), 'warn');
++		} else {
++			set_time_limit(300);
++			$Succeeded = 0;
++			$Failed = 0;
++			$Rows = '';
++			foreach ($Keys as $Key => $Name) {
++				$Outcome = ForecastGenerateSummary($Choice[0], (string) $Key, $Method, $Horizon, $Parameters, $_SESSION['UserID']);
++				if ($Outcome['ok']) {
++					$Succeeded++;
++					$Rows .= '<tr class="striped_row">
++							<td>' . htmlspecialchars($Name, ENT_QUOTES, 'UTF-8') . '</td>
++							<td><a href="' . $RootPath . '/ForecastSummaryReview.php?SummaryID=' . $Outcome['summaryid'] . '">' . __('Successful') . '</a></td>
++							<td>' . htmlspecialchars(ForecastMethodName($Outcome['method']), ENT_QUOTES, 'UTF-8') . '</td>
++							<td></td>
++						</tr>';
++				} else {
++					$Failed++;
++					$Rows .= '<tr class="striped_row">
++							<td>' . htmlspecialchars($Name, ENT_QUOTES, 'UTF-8') . '</td>
++							<td>' . __('Failed') . '</td>
++							<td></td>
++							<td>' . htmlspecialchars($Outcome['message'], ENT_QUOTES, 'UTF-8') . '</td>
++						</tr>';
++				}
++			}
++			prnMsg(sprintf(__('%d successful, %d failed'), $Succeeded, $Failed), $Failed > 0 ? 'warn' : 'success');
++			echo '<table class="selection">
++					<tr><th>' . $DimensionTypes[$Choice[0]] . '</th><th>' . __('Result') . '</th><th>' . __('Method') . '</th><th>' . __('Reason') . '</th></tr>' . $Rows . '
++				</table><br />';
++		}
++	}
++	$FormValues = $Parameters;
++	$FormChoice = isset($_POST['Summarise']) ? ForecastInput($_POST['Summarise']) : '';
++	$FormMethod = $Method;
++	$FormHorizon = $Horizon;
++} else {
++	$FormValues = $Defaults;
++	$FormChoice = '';
++	$FormMethod = 0;
++	$FormHorizon = $Defaults['defaulthorizon'];
++}
++
++$Options = '';
++foreach ($DimensionTypes as $Type => $TypeName) {
++	$Options .= '<optgroup label="' . htmlspecialchars($TypeName, ENT_QUOTES, 'UTF-8') . '">
++		<option value="' . $Type . '|*"' . ($FormChoice == $Type . '|*' ? ' selected="selected"' : '') . '>' . sprintf(__('Every %s'), mb_strtolower($TypeName)) . '</option>';
++	foreach (ForecastDimensionKeys($Type) as $Key => $Name) {
++		$Value = $Type . '|' . $Key;
++		$Options .= '<option value="' . htmlspecialchars($Value, ENT_QUOTES, 'UTF-8') . '"' . ($FormChoice === $Value ? ' selected="selected"' : '') . '>' . htmlspecialchars(($Key === '' ? '' : $Key . ' - ') . $Name, ENT_QUOTES, 'UTF-8') . '</option>';
++	}
++	$Options .= '</optgroup>';
++}
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Generate summary forecasts') . '</legend>
++		<field>
++			<label for="Summarise">' . __('Summarise') . ':</label>
++			<select name="Summarise" id="Summarise">' . $Options . '</select>
++		</field>
++		<field>
++			<label for="Method">' . __('Method') . ':</label>
++			<select name="Method" id="Method">' . ForecastMethodOptions($FormMethod, __('Best fit (let the system recommend)')) . '</select>
++		</field>
++		<field>
++			<label for="Horizon">' . __('Months to forecast') . ':</label>
++			<input type="number" name="Horizon" id="Horizon" min="1" max="36" step="1" value="' . (int) $FormHorizon . '" />
++		</field>
++		' . ForecastParameterFields($FormValues) . '
++	</fieldset>
++	<div class="centre">
++		<input type="submit" name="Generate" value="' . __('Generate Summary Forecasts') . '" />
++	</div>
++	</form>';
++echo '<div class="page_help_text">' . __('Summary forecasts add up the sales of every item, in the units each item is held in, so they are most meaningful where the items share a unit. They use the same extracted sales history as the item forecasts and are not sent to MRP.') . '</div>';
++
++$Result = DB_query("SELECT summaryid, dimtype, dimkey, method, horizon, createdate, createdby
++					FROM forecastsummaries
++					WHERE isactive = 1
++					ORDER BY dimtype, dimkey");
++if (DB_num_rows($Result) > 0) {
++	echo '<table class="selection">
++			<tr><th colspan="6">' . __('Active summary forecasts') . '</th></tr>
++			<tr>
++				<th>' . __('Summary by') . '</th>
++				<th>' . __('For') . '</th>
++				<th>' . __('Method') . '</th>
++				<th>' . __('Months') . '</th>
++				<th>' . __('Created') . '</th>
++				<th></th>
++			</tr>';
++	$Names = array();
++	while ($MyRow = DB_fetch_array($Result)) {
++		if (!isset($Names[$MyRow['dimtype']])) {
++			$Names[$MyRow['dimtype']] = ForecastDimensionKeys($MyRow['dimtype']);
++		}
++		echo '<tr class="striped_row">
++				<td>' . $DimensionTypes[$MyRow['dimtype']] . '</td>
++				<td>' . htmlspecialchars(($MyRow['dimkey'] === '' ? '' : $MyRow['dimkey'] . ' - ') . ($Names[$MyRow['dimtype']][$MyRow['dimkey']] ?? ''), ENT_QUOTES, 'UTF-8') . '</td>
++				<td>' . htmlspecialchars(ForecastMethodName($MyRow['method']), ENT_QUOTES, 'UTF-8') . '</td>
++				<td class="number">' . $MyRow['horizon'] . '</td>
++				<td>' . $MyRow['createdate'] . ' ' . htmlspecialchars($MyRow['createdby'], ENT_QUOTES, 'UTF-8') . '</td>
++				<td><a href="' . $RootPath . '/ForecastSummaryReview.php?SummaryID=' . $MyRow['summaryid'] . '">' . __('Review') . '</a></td>
++			</tr>';
++	}
++	echo '</table>';
++}
++
++include('includes/footer.php');
+diff --git a/ForecastSummaryReview.php b/ForecastSummaryReview.php
+new file mode 100644
+index 0000000..0f2d792
+--- /dev/null
++++ b/ForecastSummaryReview.php
+@@ -0,0 +1,217 @@
++<?php
++
++// Review and revise a summary forecast, and see the detail behind it
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Review Summary Forecast');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastSummaryReview';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$SummaryID = 0;
++if (isset($_POST['SummaryID'])) {
++	$SummaryID = (int) $_POST['SummaryID'];
++} elseif (isset($_GET['SummaryID'])) {
++	$SummaryID = (int) $_GET['SummaryID'];
++}
++
++$Summary = null;
++if ($SummaryID > 0) {
++	$Result = DB_query("SELECT * FROM forecastsummaries WHERE summaryid = " . $SummaryID);
++	$Summary = DB_fetch_array($Result);
++}
++if (!$Summary) {
++	prnMsg(__('The summary forecast could not be found'), 'error');
++	echo '<div class="centre"><a href="' . $RootPath . '/ForecastSummary.php">' . __('Summary Forecasts') . '</a></div>';
++	include('includes/footer.php');
++	exit();
++}
++
++$DimensionTypes = ForecastDimensionTypes();
++$Keys = ForecastDimensionKeys($Summary['dimtype']);
++$KeyName = ($Summary['dimkey'] === '' ? '' : $Summary['dimkey'] . ' - ') . ($Keys[$Summary['dimkey']] ?? '');
++$Editable = ($Summary['isactive'] == 1);
++
++if ((isset($_POST['Save']) or isset($_POST['ClearAll'])) and $Editable) {
++	$Periods = array();
++	$Result = DB_query("SELECT periodstart FROM forecastsummarydetails WHERE summaryid = " . $SummaryID . " ORDER BY periodstart");
++	while ($MyRow = DB_fetch_row($Result)) {
++		$Periods[] = $MyRow[0];
++	}
++	if (isset($_POST['ClearAll'])) {
++		DB_query("UPDATE forecastsummarydetails SET revisedqty = NULL, revisedby = '' WHERE summaryid = " . $SummaryID);
++		prnMsg(__('All revisions have been cleared, the calculated quantities apply again'), 'success');
++	} else {
++		list($Revisions, $Errors) = ForecastReadRevisions($_POST['Revised'] ?? array(), $Periods);
++		if (count($Errors) > 0) {
++			foreach ($Errors as $Error) {
++				prnMsg($Error, 'error');
++			}
++		} else {
++			DB_Txn_Begin();
++			foreach ($Revisions as $Period => $Quantity) {
++				if ($Quantity === null) {
++					DB_query("UPDATE forecastsummarydetails SET revisedqty = NULL, revisedby = ''
++								WHERE summaryid = " . $SummaryID . " AND periodstart = '" . $Period . "'", '', '', true);
++				} else {
++					DB_query("UPDATE forecastsummarydetails SET revisedqty = " . $Quantity . ", revisedby = '" . DB_escape_string($_SESSION['UserID']) . "'
++								WHERE summaryid = " . $SummaryID . " AND periodstart = '" . $Period . "'", '', '', true);
++				}
++			}
++			DB_Txn_Commit();
++			prnMsg(__('The revised quantities have been saved. A blank revised quantity means the calculated quantity applies.'), 'success');
++		}
++	}
++}
++
++$Defaults = ForecastGetParameters();
++$Bounds = ForecastHistoryBounds();
++
++echo '<table class="selection">
++		<tr><td>' . __('Summary by') . '</td><td>' . $DimensionTypes[$Summary['dimtype']] . '</td></tr>
++		<tr><td>' . __('For') . '</td><td>' . htmlspecialchars($KeyName, ENT_QUOTES, 'UTF-8') . '</td></tr>
++		<tr><td>' . __('Method') . '</td><td>' . htmlspecialchars(ForecastMethodName($Summary['method']), ENT_QUOTES, 'UTF-8') . ' ' . htmlspecialchars(ForecastDescribeParameters($Summary['method'], $Summary['params']), ENT_QUOTES, 'UTF-8') . '</td></tr>
++		<tr><td>' . __('Created') . '</td><td>' . $Summary['createdate'] . ' ' . htmlspecialchars($Summary['createdby'], ENT_QUOTES, 'UTF-8') . '</td></tr>
++		<tr><td>' . __('Status') . '</td><td>' . ($Editable ? __('Active') : __('Superseded')) . '</td></tr>' .
++		($Summary['notes'] != '' ? '<tr><td>' . __('Notes') . '</td><td>' . htmlspecialchars($Summary['notes'], ENT_QUOTES, 'UTF-8') . '</td></tr>' : '') . '
++	</table><br />';
++
++$Details = array();
++$Result = DB_query("SELECT periodstart, calcqty, revisedqty FROM forecastsummarydetails WHERE summaryid = " . $SummaryID . " ORDER BY periodstart");
++while ($MyRow = DB_fetch_array($Result)) {
++	$Details[$MyRow['periodstart']] = $MyRow;
++}
++$LastYear = ForecastLastYear(array('dim', $Summary['dimtype'], $Summary['dimkey']), array_keys($Details), $Bounds);
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++	<input type="hidden" name="SummaryID" value="' . $SummaryID . '" />';
++echo '<table class="selection">
++		<tr>
++			<th>' . __('Period') . '</th>
++			<th>' . __('Calculated') . '</th>
++			<th>' . __('Revised') . '</th>
++			<th>' . __('Forecast used') . '</th>
++			<th>' . __('Last year actual') . '</th>
++			<th>' . __('Variance') . '</th>
++			<th>' . __('Variance %') . '</th>
++		</tr>';
++foreach ($Details as $Period => $Detail) {
++	$Effective = ($Detail['revisedqty'] !== null) ? (float) $Detail['revisedqty'] : (float) $Detail['calcqty'];
++	$Last = $LastYear[$Period];
++	$Large = ForecastLargeVariance($Effective, $Last, $Defaults['variancepct']);
++	echo '<tr class="striped_row"' . ($Large ? ' style="background-color:#ffd6d6"' : '') . '>
++			<td>' . ForecastMonthLabel($Period) . '</td>
++			<td class="number">' . ForecastFormatQuantity($Detail['calcqty']) . '</td>
++			<td class="number">';
++	if ($Editable) {
++		echo '<input type="text" class="number" name="Revised[' . $Period . ']" size="10" value="' . ($Detail['revisedqty'] !== null ? ForecastFormatQuantity($Detail['revisedqty']) : '') . '" />';
++	} else {
++		echo ($Detail['revisedqty'] !== null ? ForecastFormatQuantity($Detail['revisedqty']) : '');
++	}
++	echo '</td>
++			<td class="number">' . ForecastFormatQuantity($Effective) . '</td>';
++	if ($Last === null) {
++		echo '<td class="number">-</td><td class="number">-</td><td class="number">-</td>';
++	} else {
++		echo '<td class="number">' . ForecastFormatQuantity($Last) . '</td>
++			<td class="number">' . ForecastFormatQuantity($Effective - $Last) . '</td>
++			<td class="number">' . ($Last != 0 ? locale_number_format(($Effective - $Last) / $Last * 100, 1) . '%' : '-') . '</td>';
++	}
++	echo '</tr>';
++}
++echo '</table>';
++if ($Editable) {
++	echo '<div class="centre">
++			<input type="submit" name="Save" value="' . __('Save Revised Quantities') . '" />
++			<input type="submit" name="ClearAll" value="' . __('Clear All Revisions') . '" />
++		</div>';
++}
++echo '</form>';
++
++// The detail behind the summary: the monthly history it was calculated from
++$Series = ForecastDimensionSeries($Summary['dimtype'], $Summary['dimkey'], $Summary['historyend']);
++if (count($Series['values']) > 0) {
++	echo '<br /><table class="selection">
++			<tr><th colspan="2">' . __('Sales history behind this forecast') . '</th></tr>
++			<tr><th>' . __('Month') . '</th><th>' . __('Quantity') . '</th></tr>';
++	$Shown = array_slice($Series['values'], -36, 36, true);
++	foreach ($Shown as $Index => $Value) {
++		echo '<tr class="striped_row"><td>' . ForecastMonthLabel(ForecastAddMonths($Series['start'], $Index)) . '</td><td class="number">' . ForecastFormatQuantity($Value) . '</td></tr>';
++	}
++	echo '</table>';
++}
++
++if ($Summary['dimtype'] == 'category') {
++	// the item forecasts in the category
++	$Result = DB_query("SELECT forecasts.forecastid, forecasts.stockid, stockmaster.description, forecasts.loccode, forecasts.method,
++								SUM(" . ForecastEffectiveSQL() . ") AS total
++						FROM forecasts
++						INNER JOIN stockmaster ON stockmaster.stockid = forecasts.stockid
++						INNER JOIN forecastdetails ON forecastdetails.forecastid = forecasts.forecastid
++						WHERE forecasts.isactive = 1
++							AND stockmaster.categoryid = '" . DB_escape_string($Summary['dimkey']) . "'
++							AND forecastdetails.periodstart >= '" . $Summary['firstperiod'] . "'
++							AND forecastdetails.periodstart <= '" . ForecastAddMonths($Summary['firstperiod'], $Summary['horizon'] - 1) . "'
++						GROUP BY forecasts.forecastid, forecasts.stockid, stockmaster.description, forecasts.loccode, forecasts.method
++						ORDER BY forecasts.stockid, forecasts.loccode");
++	echo '<br /><table class="selection">
++			<tr><th colspan="5">' . __('Item forecasts in this category (active, over the months of this summary)') . '</th></tr>
++			<tr>
++				<th>' . __('Item') . '</th>
++				<th>' . __('Description') . '</th>
++				<th>' . __('Location') . '</th>
++				<th>' . __('Method') . '</th>
++				<th>' . __('Forecast total') . '</th>
++			</tr>';
++	while ($MyRow = DB_fetch_array($Result)) {
++		echo '<tr class="striped_row">
++				<td><a href="' . $RootPath . '/ForecastReview.php?ForecastID=' . $MyRow['forecastid'] . '">' . htmlspecialchars($MyRow['stockid'], ENT_QUOTES, 'UTF-8') . '</a></td>
++				<td>' . htmlspecialchars($MyRow['description'], ENT_QUOTES, 'UTF-8') . '</td>
++				<td>' . ($MyRow['loccode'] == '' ? __('All') : htmlspecialchars($MyRow['loccode'], ENT_QUOTES, 'UTF-8')) . '</td>
++				<td>' . htmlspecialchars(ForecastMethodName($MyRow['method']), ENT_QUOTES, 'UTF-8') . '</td>
++				<td class="number">' . ForecastFormatQuantity($MyRow['total']) . '</td>
++			</tr>';
++	}
++	echo '</table>';
++} else {
++	// the customers behind it: the same stock movements the history was extracted from, last twelve months of history
++	$Conditions = array(
++		'custtype' => "COALESCE(CAST(debtorsmaster.typeid AS CHAR), '')",
++		'area' => "COALESCE(custbranch.area, '')",
++		'salesman' => "COALESCE(custbranch.salesman, '')",
++	);
++	$FromDate = ForecastAddMonths($Summary['historyend'], -11);
++	$ToDate = date('Y-m-t', strtotime($Summary['historyend']));
++	$Result = DB_query("SELECT stockmoves.debtorno, debtorsmaster.name, ROUND(SUM(-stockmoves.qty), 2) AS quantity
++						FROM stockmoves
++						LEFT JOIN debtorsmaster ON debtorsmaster.debtorno = stockmoves.debtorno
++						LEFT JOIN custbranch ON custbranch.debtorno = stockmoves.debtorno AND custbranch.branchcode = stockmoves.branchcode
++						WHERE stockmoves.type IN (10, 11)
++							AND stockmoves.hidemovt = 0
++							AND stockmoves.trandate >= '" . $FromDate . "'
++							AND stockmoves.trandate <= '" . $ToDate . "'
++							AND " . $Conditions[$Summary['dimtype']] . " = '" . DB_escape_string($Summary['dimkey']) . "'
++						GROUP BY stockmoves.debtorno, debtorsmaster.name
++						ORDER BY quantity DESC
++						LIMIT 20");
++	echo '<br /><table class="selection">
++			<tr><th colspan="3">' . __('Largest customers behind this forecast, last 12 months of history') . '</th></tr>
++			<tr><th>' . __('Customer') . '</th><th>' . __('Name') . '</th><th>' . __('Quantity') . '</th></tr>';
++	while ($MyRow = DB_fetch_array($Result)) {
++		echo '<tr class="striped_row">
++				<td>' . htmlspecialchars($MyRow['debtorno'], ENT_QUOTES, 'UTF-8') . '</td>
++				<td>' . htmlspecialchars($MyRow['name'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>
++				<td class="number">' . ForecastFormatQuantity($MyRow['quantity']) . '</td>
++			</tr>';
++	}
++	echo '</table>';
++}
++
++echo '<div class="centre"><a href="' . $RootPath . '/ForecastSummary.php">' . __('Summary Forecasts') . '</a></div>';
++
++include('includes/footer.php');
+diff --git a/ForecastToMRP.php b/ForecastToMRP.php
+new file mode 100644
+index 0000000..c65e537
+--- /dev/null
++++ b/ForecastToMRP.php
+@@ -0,0 +1,126 @@
++<?php
++
++// Convert the active forecasts into MRP demands (master schedule) under the forecast demand type
++
++require(__DIR__ . '/includes/session.php');
++include('includes/ForecastFunctions.php');
++
++$Title = __('Convert Forecasts to MRP Demands');
++$ViewTopic = 'Manufacturing';
++$BookMark = 'ForecastToMRP';
++include('includes/header.php');
++
++ForecastPageTitle($Title);
++
++$Defaults = ForecastGetParameters();
++$FromDate = isset($_POST['FromDate']) ? ForecastInput($_POST['FromDate']) : date('Y-m-d');
++$ToDate = isset($_POST['ToDate']) ? ForecastInput($_POST['ToDate']) : date('Y-m-t', strtotime(ForecastAddMonths(date('Y-m-01'), $Defaults['defaulthorizon'] - 1)));
++$Mode = (isset($_POST['Mode']) and $_POST['Mode'] == 'incremental') ? 'incremental' : 'replace';
++$CategoryID = isset($_POST['CategoryID']) ? ForecastInput($_POST['CategoryID']) : '';
++$StockID = isset($_POST['StockID']) ? mb_strtoupper(trim(ForecastInput($_POST['StockID']))) : '';
++
++$Result = DB_query("SELECT mrpdemandtype FROM mrpdemandtypes WHERE mrpdemandtype = '" . FORECAST_DEMAND_TYPE . "'");
++$TypeExists = (DB_num_rows($Result) > 0);
++if (!$TypeExists) {
++	prnMsg(__('The forecast demand type FC does not exist. Add it in MRP Demand Types before converting forecasts.'), 'error');
++}
++
++if (isset($_POST['Convert']) and $TypeExists) {
++	$InputError = 0;
++	$ValidDates = true;
++	foreach (array($FromDate, $ToDate) as $Date) {
++		if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $Date, $Parts) or !checkdate((int) $Parts[2], (int) $Parts[3], (int) $Parts[1])) {
++			$ValidDates = false;
++		}
++	}
++	if (!$ValidDates) {
++		prnMsg(__('The horizon dates must be entered as dates'), 'error');
++		$InputError = 1;
++	} elseif ($FromDate > $ToDate) {
++		prnMsg(__('The horizon cannot end before it starts'), 'error');
++		$InputError = 1;
++	}
++	if ($StockID != '') {
++		$Result = DB_query("SELECT stockid FROM stockmaster WHERE stockid = '" . DB_escape_string($StockID) . "'");
++		if (DB_num_rows($Result) == 0) {
++			prnMsg(__('The item code entered is not an inventory item'), 'error');
++			$InputError = 1;
++		}
++	}
++	if ($InputError == 0) {
++		$Where = "forecasts.isactive = 1 AND stockmaster.discontinued = 0";
++		if ($StockID != '') {
++			$Where .= " AND forecasts.stockid = '" . DB_escape_string($StockID) . "'";
++		}
++		if ($CategoryID != '') {
++			$Where .= " AND stockmaster.categoryid = '" . DB_escape_string($CategoryID) . "'";
++		}
++		$Items = array();
++		$Result = DB_query("SELECT DISTINCT forecasts.stockid
++							FROM forecasts
++							INNER JOIN stockmaster ON stockmaster.stockid = forecasts.stockid
++							WHERE " . $Where . "
++							ORDER BY forecasts.stockid");
++		while ($MyRow = DB_fetch_row($Result)) {
++			$Items[] = $MyRow[0];
++		}
++		if (count($Items) == 0) {
++			prnMsg(__('There are no active forecasts for the selection'), 'warn');
++		} else {
++			set_time_limit(300);
++			$Counts = ForecastConvertToMRP($Items, $FromDate, $ToDate, $Mode, $_SESSION['UserID']);
++			prnMsg(sprintf(__('%d items converted: %d forecast demands removed, %d written, %d periods left as they were because they were already in the master schedule.'), $Counts['items'], $Counts['deleted'], $Counts['inserted'], $Counts['skipped']), 'success');
++		}
++	}
++}
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">';
++echo '<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />';
++echo '<fieldset>
++		<legend>' . __('Convert active forecasts') . '</legend>
++		<field>
++			<label for="FromDate">' . __('Horizon from') . ':</label>
++			<input type="date" name="FromDate" id="FromDate" required="required" value="' . htmlspecialchars($FromDate, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="ToDate">' . __('Horizon to') . ':</label>
++			<input type="date" name="ToDate" id="ToDate" required="required" value="' . htmlspecialchars($ToDate, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="CategoryID">' . __('Stock category') . ':</label>
++			<select name="CategoryID" id="CategoryID">' . ForecastCategoryOptions($CategoryID, __('All categories')) . '</select>
++		</field>
++		<field>
++			<label for="StockID">' . __('Item code') . ' (' . __('leave blank for all items') . '):</label>
++			<input type="text" name="StockID" id="StockID" size="21" maxlength="64" value="' . htmlspecialchars($StockID, ENT_QUOTES, 'UTF-8') . '" />
++		</field>
++		<field>
++			<label for="Mode">' . __('Mode') . ':</label>
++			<select name="Mode" id="Mode">
++				<option value="replace"' . ($Mode == 'replace' ? ' selected="selected"' : '') . '>' . __('Replace the forecast demands of these items for the horizon') . '</option>
++				<option value="incremental"' . ($Mode == 'incremental' ? ' selected="selected"' : '') . '>' . __('Incremental: only add periods not already converted') . '</option>
++			</select>
++		</field>
++	</fieldset>
++	<div class="centre">
++		<input type="submit" name="Convert" value="' . __('Convert to MRP Demands') . '" />
++	</div>
++	</form>';
++
++echo '<div class="page_help_text">' . __('Every month of the horizon that has an active forecast is written to the MRP master schedule as a demand of type FC, using the revised quantity where there is one. Demands entered by hand or from any other source are never changed or removed. Converting again with the same settings gives the same demands. Run MRP Calculation with the master schedule demands option to plan purchases and work orders from them.') . '</div>';
++
++$Result = DB_query("SELECT COUNT(*), MIN(forecastmrpdemands.periodstart), MAX(forecastmrpdemands.periodstart), COUNT(DISTINCT forecastmrpdemands.stockid)
++					FROM forecastmrpdemands
++					INNER JOIN mrpdemands ON mrpdemands.demandid = forecastmrpdemands.demandid");
++$MyRow = DB_fetch_row($Result);
++if ($MyRow[0] > 0) {
++	echo '<table class="selection">
++			<tr><th colspan="2">' . __('Forecast demands now in the master schedule') . '</th></tr>
++			<tr><td>' . __('Demands') . '</td><td class="number">' . $MyRow[0] . '</td></tr>
++			<tr><td>' . __('Items') . '</td><td class="number">' . $MyRow[3] . '</td></tr>
++			<tr><td>' . __('First month') . '</td><td>' . ForecastMonthLabel($MyRow[1]) . '</td></tr>
++			<tr><td>' . __('Last month') . '</td><td>' . ForecastMonthLabel($MyRow[2]) . '</td></tr>
++		</table>';
++}
++
++include('includes/footer.php');
+diff --git a/MRPDemandTypes.php b/MRPDemandTypes.php
+index e00aa92..e551254 100644
+--- a/MRPDemandTypes.php
++++ b/MRPDemandTypes.php
+@@ -74,6 +74,9 @@ if (isset($_POST['submit'])) {
+ 		unset ($SelectedDT);
+ 	}
+ 
++} elseif (isset($_GET['delete']) and isset($SelectedDT) and $SelectedDT == 'FC') {
++	// The forecasting module writes its demands under the FC type
++	prnMsg(__('The FC demand type is used by the Forecasting module and cannot be deleted'), 'warn');
+ } elseif (isset($_GET['delete'])) {
+ //the link to delete a selected record was clicked instead of the submit button
+ 
+diff --git a/NOTES.md b/NOTES.md
+new file mode 100644
+index 0000000..a9d2e57
+--- /dev/null
++++ b/NOTES.md
+@@ -0,0 +1,119 @@
++# Demand forecasting module: implementation notes
++
++**Nothing here has been run.** There was no PHP or database to run against, so all of it is untested. The first thing to do is run `sql/updates/44.php` on a copy of a real database, and do a fresh install, then click through the pages.
++
++## What was built
++
++A new main-menu module **Forecasting** (`forecast`), placed straight after Manufacturing. It has 11 pages, 11 tables, a shared function library and the database changes for new and existing installations.
++
++### Pages
++
++All pages are in the repository root. Menu captions and security levels are registered in `scripts` and `menuitems`.
++
++| Page | Security | What it does |
++|---|---|---|
++| `ForecastDashboard.php` | 2 | Counts of active forecasts and active summary forecasts, forecast demands in MRP, the sales history range, links to every function (including the MRP pages). |
++| `ForecastHistory.php` | 11 | Sales history extraction for a month range (default is the last 24 complete months). Shows the range, items and months held, and the latest runs. |
++| `ForecastGenerate.php` | 11 | Forecast one item (optionally one location, otherwise all locations combined) or every active item of a category. Runs in batches of 20 items per request with a progress bar, then a "47 successful, 3 failed" summary with the reason for each failure. |
++| `ForecastReview.php` | 11 | Search by item, category or location. Period-by-period view with calculated quantity, a revised-quantity input, quantity used, last year's actual for the same month, and variance and variance %. Large variances are highlighted. A blank revised quantity restores the calculated one. |
++| `ForecastSummary.php`, `ForecastSummaryReview.php` | 11 | Summary forecasts by stock category, customer type, sales area or salesperson, with a review and revise screen and the detail behind each summary. |
++| `ForecastToMRP.php` | 11 | Converts active forecasts into MRP demands (replace or incremental mode). |
++| `ForecastInquiry.php` | 2 | Forecasts by item, category, location and period range. |
++| `ForecastAccuracy.php` | 2 | MAD, POA, MSE and RMSE per item, per category and per method for a month range. Items below the low-accuracy threshold are flagged. |
++| `ForecastMethodComparison.php` | 2 | One item, several methods side by side: hold-out accuracy, hold-out month by month, and the forward forecast. |
++| `ForecastParameters.php` | 15 | Company-wide defaults, administrator only. |
++
++Levels 2 and 11 are "Basic Reports and Inquiries" and "Inventory Management", both held by the Manufac/Stock Admin role. Level 15 is the administrator token.
++
++The calculations and shared data handling are in `includes/ForecastFunctions.php`.
++
++### Objects (tables)
++
++The create statements are in `install/sql/tables/forecast*.sql` for new installs and in `sql/updates/44.php` for upgrades.
++
++- `forecastparameters`: key/value defaults: alpha, beta, gamma, season length, moving-average periods, hold-out months, default horizon, plus a few I added (default percent, linear span, the two weight lists, low-accuracy POA threshold, variance highlight %).
++- `forecasthistoryruns`: one row per extraction (range, who, when). It is the source of the "range held" shown on the pages.
++- `forecasthistory`: item × location × month → net quantity. The primary key means re-extraction cannot double.
++- `forecasthistorydim`: the same sales totalled by stock category, customer type, area and salesperson, filled in the same pass. Summary forecasts read this table.
++- `forecasts` and `forecastdetails`: the forecast header (method, parameters as JSON, horizon, history end, notes, who and when) and one row per period with `calcqty` and `revisedqty`.
++- `forecastsummaries` and `forecastsummarydetails`: the same shape for summary forecasts.
++- `forecastbatches` and `forecastbatchresults`: the batch jobs behind the progress screen and the result list.
++- `forecastmrpdemands`: the link from each MRP demand the module writes (`demandid`) to its item and month.
++
++The **active** forecast is enforced by the database. `isactive` is 1 or NULL, with a unique key on (item, location, isactive), so at most one active forecast can exist per item and location. Generating again sets the old one to NULL (superseded, kept for accuracy comparison) and inserts the new one in one transaction. The same applies to summaries.
++
++`revisedqty` is NULL when there is no revision. 0 is a legitimate revision. Everything that reads quantities (review, inquiry, accuracy, MRP) goes through `ForecastEffectiveSQL()`, which is `COALESCE(revisedqty, calcqty)`.
++
++### Where the sales history comes from
++
++`ForecastExtractHistory()` reads `stockmoves` with `type IN (10, 11)` and `hidemovt = 0`, and sums `-qty` by item, location and month of `trandate`.
++
++- Type 10 is the customer invoice and type 11 the credit note, so credits are deducted.
++- This is the same set of movements that Inventory Item Usage (`StockUsage.php`) counts as sales, minus that report's adjustment and work-order movement types.
++- Open sales orders are not used. `MRPCreateDemands.php` works from `salesorders`, which is exactly what the BRD says not to do.
++- Re-running a range deletes the history rows in that range first, in the same transaction.
++- The range can only run to the last complete month. A partial month would read as a collapse in demand.
++- Months with no sales are not stored. The series for an item runs from its first month with sales to the end of the history held, and gaps in between count as zero. Months before the first sale are not zero-filled, so a new item is not penalised.
++
++### How a forecast reaches MRP
++
++1. `ForecastToMRP.php` takes a date horizon, optional category or item, and a mode.
++2. For each item it uses the active forecast over all locations if there is one. Otherwise it adds up the active per-location forecasts, so nothing is counted twice.
++3. It writes one `mrpdemands` row per month, quantity = revised quantity if present, else calculated, with demand type **`FC`** ("Statistical Forecast"). `FC` is created by the upgrade and by the installer. The due date is the first day of the month, or the horizon start for the first month. Zero quantities are skipped.
++4. Each row written is also recorded in `forecastmrpdemands`. That table is how the module knows which demands are its own.
++   - **Replace mode** deletes only recorded demands for the items in scope whose month falls in the horizon, then writes the new ones, in one transaction.
++   - **Incremental mode** only writes months that have no recorded forecast demand yet.
++   - Running either mode twice gives the same demands.
++   - Demands entered by hand on `MRPDemands.php`, from `MRPCreateDemands.php`, or by anything else are not in the link table and are never touched. This holds even if someone enters demands by hand under type `FC`.
++5. The existing `MRP.php` already loads every row of `mrpdemands` when "use master schedule demands" is ticked, so no change to MRP was needed. `MRPDemandTypes.php` now refuses to delete `FC`.
++
++The Forecasting menu also links Master Schedule, MRP Calculation and the MRP report.
++
++### Integration
++
++- **DB upgrade:** `sql/updates/44.php`. The highest file number is picked up automatically as `DBVersion`, so existing databases are sent to the upgrade page. It creates the tables, adds the module, scripts and menu items, adds demand type `FC`, and inserts the default parameters.
++- **New installs:** the tables are picked up from `install/sql/tables/*.sql`. The module, menu, scripts, `FC` type and parameters come from `install/sql/forecasting.sql`, which `InstallFunctions.php` runs after the base data in both the normal and the demo install. I used a separate file because `data/menuitems.sql`, `data/scripts.sql` and `demo.sql` are single enormous generated lines.
++- **User access:** modules are switched on per user by position in the comma list `www_users.modulesallowed`, in `modules.sequence` order. Forecasting takes position 7, so the update inserts a `0` at that position for every existing user and trims or pads each string to the 11 pre-existing flags first. Nobody gains or loses a module, and an administrator grants Forecasting in Users Maintenance, where "Display Forecasting module" now appears. This runs once only, guarded by whether the module row already existed. New users default to all modules on, as before. The installer's admin string already had 12 flags. `CustLoginSetup.php` now writes 12 flags and `SuppLoginSetup.php` has the module in its list.
++- **Menu rows:** `NewModule()`/`NewMenuItem()` and the install file add the rows for every security role, as the existing ones do. `index.php` hides items by page security.
++- **Translations:** all text uses `__()`, including the menu captions in `44.php`. The `.pot` and `.po` files are generated from source by the project's gettext tooling and I did not edit them, so the new strings will appear after the next extraction.
++
++## Methods
++
++All 12 are in `ForecastCompute()`. Forecasts are rounded to 2 decimals and never below 0. Short history gives a reported failure and never made-up data. A series is oldest first and "last year" means the most recent 12 months.
++
++| # | Method | Min months | Notes |
++|---|---|---|---|
++| 1 | Percent over last year | 12 | Same month of the last 12 months × (1 + p/100). A horizon beyond 12 repeats last year's pattern. |
++| 2 | Calculated percent | 24 | Growth = last 12 months ÷ the 12 before, applied to last year. If the earlier year is zero or negative, it fails with that reason. |
++| 3 | Last year to this year | 12 | Same month last year. |
++| 4 | Moving average | max(4, N) | Flat forecast at the mean of the last N months. |
++| 5 | Linear approximation | 6 | Line through the latest month and the month "span" before it (default 5). |
++| 6 | Least squares | 12 | Straight line over all history. |
++| 7 | Second degree | 12 | Quadratic over all history, solved with centred time. |
++| 8 | Flexible | max(12, weights) | Up to 12 percentage weights per prior month, not normalised. Each forecast month is the weighted sum of the preceding months, and forecast months feed later ones. |
++| 9 | Weighted moving average | max(4, weights) | Default 40/30/20/10, normalised, flat. |
++| 10 | Simple exponential smoothing | 12 | Alpha 0.1–0.9. |
++| 11 | Holt | 12 | Alpha, beta. |
++| 12 | Holt-Winters | max(24, 2 × season) | Additive form, alpha, beta, gamma, season length (2–12, default 12). |
++
++**Best fit:** the last H months (default 6) are held out. Each method is trained on the rest and scored on the hold-out. For one item the winner has the lowest MAD, then the lowest RMSE, then the lower method number. For a category, each method is scored by total absolute error ÷ total actual sales over the hold-out, summed across the items. A method must be applicable to every item that can be tested at all, otherwise methods would be compared on different items. If none qualifies, the methods that run on the most items are compared. The chosen method is used for every item in the category.
++
++## Ambiguities in the BRD and how I resolved them
++
++- **Min history for the best fit.** I check it against the shorter training series, not the full one. With 24 months and a 6-month hold-out, Holt-Winters is not tested, because it would be trained on 18 months. Once the winner is chosen, the real forecast uses the full history.
++- **Moving average and weighted MA minimum.** The BRD says 4 months, but averaging N periods with fewer than N months would be a different calculation. The minimum is max(4, N).
++- **POA definition.** The BRD does not define it. I used 100 × (1 − Σ|error| ÷ Σactual), floored at 0, and 100 if nothing was sold and nothing forecast. The other common definition, Σforecast ÷ Σactual, lets over- and under-forecasts cancel, which is useless for flagging low accuracy.
++- **Accuracy and superseded forecasts.** The accuracy page measures the active forecasts by default and has an "Include superseded" box for the older versions. It measures the quantity used (revised first), and only months that now have actuals in the history.
++- **"Same sales the rest of webERP reports".** I took this as the invoiced/credited stock movements (see above). `salesanalysis` is a separate summary table that Utilities can re-apply, and I did not use it.
++- **Summary forecasts and customer dimensions.** The item/location history has no customer, so the extraction also keeps totals by category, customer type, area and salesperson, taken from the same movements. Customer type comes from the debtor, area and salesperson from the customer branch. Sales to unknown debtors go under "Unassigned". Summaries add up quantities in each item's own unit, and they do not go to MRP.
++- **Revisions on regeneration.** Generating again supersedes the old forecast and does not carry its revised quantities over.
++- **Locations.** '' means all locations combined. A per-location forecast is listed under the stock locations the user may view. The extraction itself is company-wide and not limited by user.
++- **Active items.** For category batches "active" means not discontinued and not a dummy (`mbflag = 'D'`) item. An item with no history fails with that reason.
++- **Parameter ranges.** Alpha is held to 0.1–0.9 as the BRD says. Beta and gamma are accepted from 0.01 to 0.99, and the BRD gives no range for them.
++
++## Known limits and things to check
++
++- `install/sql/tables/*.sql` still show `stockid varchar(20)`, while update 43 widened it to 64. My tables use `varchar(64)` and no foreign keys to `stockmaster`, so they work either way. I did not touch the older install files.
++- `modulesallowed` is `varchar(25)`, which holds 12 flags (24 characters). A thirteenth module would need the column widened.
++- Batch generation re-runs the category best-fit evaluation in one request at the start, which could be slow on a very large category. Items are then forecast 20 per request.
++- Incremental MRP mode does not update a month that was converted earlier and has since been revised. Use replace mode for that.
+diff --git a/SuppLoginSetup.php b/SuppLoginSetup.php
+index f7f3667..a6e3666 100644
+--- a/SuppLoginSetup.php
++++ b/SuppLoginSetup.php
+@@ -24,6 +24,7 @@ $ModuleList = array(__('Orders'),
+ 					__('Purchasing'),
+ 					__('Inventory'),
+ 					__('Manufacturing'),
++					__('Forecasting'),
+ 					__('General Ledger'),
+ 					__('Asset Manager'),
+ 					__('Petty Cash'),
+diff --git a/WWW_Users.php b/WWW_Users.php
+index e6c4dd6..51e3ed8 100644
+--- a/WWW_Users.php
++++ b/WWW_Users.php
+@@ -37,6 +37,7 @@ $ModuleList = array(
+ 	__('Payables'),
+ 	__('Inventory'),
+ 	__('Manufacturing'),
++	__('Forecasting'),
+ 	__('General Ledger'),
+ 	__('Asset Manager'),
+ 	__('Petty Cash'),
+@@ -50,6 +51,7 @@ $ModuleListLabel = array(
+ 	__('Display Payables module'),
+ 	__('Display Inventory module'),
+ 	__('Display Manufacturing module'),
++	__('Display Forecasting module'),
+ 	__('Display General Ledger module'),
+ 	__('Display Asset Manager module'),
+ 	__('Display Petty Cash module'),
+diff --git a/includes/ForecastFunctions.php b/includes/ForecastFunctions.php
+new file mode 100644
+index 0000000..49c6960
+--- /dev/null
++++ b/includes/ForecastFunctions.php
+@@ -0,0 +1,1290 @@
++<?php
++
++/* Functions shared by the Forecasting module pages.
++
++Conventions
++ - A "series" is a list of monthly quantities, oldest first, no gaps. The last element is the most recent history month.
++ - A period is identified by the first day of its month (Y-m-01).
++ - A location code of '' means "all locations combined".
++ - The effective quantity of a forecast period is the revised quantity when there is one (NULL means none, 0 is a valid
++   revision), otherwise the calculated quantity. Everything that reads forecast quantities uses ForecastEffectiveSQL().
++ - Values passed to these functions are raw values (not already escaped for SQL), see ForecastInput() for posted data.
++ - Sales history comes from stockmoves, see ForecastExtractHistory().
++*/
++
++define('FORECAST_DEMAND_TYPE', 'FC');
++
++/* Raw value of a posted/requested field. session.php escapes and html-encodes every $_POST/$_GET value, the functions
++here escape for themselves so they need the original text */
++function ForecastInput($Value) {
++	return html_entity_decode(stripslashes($Value), ENT_QUOTES, 'UTF-8');
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Dates
++   --------------------------------------------------------------------------------------------------------------- */
++
++function ForecastMonthStart($Date) {
++	return date('Y-m-01', strtotime($Date));
++}
++
++function ForecastAddMonths($Date, $Months) {
++	$DateTime = new DateTime(substr($Date, 0, 7) . '-01');
++	$DateTime->modify(($Months >= 0 ? '+' : '') . (int) $Months . ' month');
++	return $DateTime->format('Y-m-d');
++}
++
++/* number of months from $From to $To, both months included */
++function ForecastMonthsBetween($From, $To) {
++	$FromParts = explode('-', $From);
++	$ToParts = explode('-', $To);
++	return (($ToParts[0] - $FromParts[0]) * 12) + ($ToParts[1] - $FromParts[1]) + 1;
++}
++
++function ForecastMonthLabel($Date) {
++	return MonthAndYearFromSQLDate(substr($Date, 0, 7) . '-01');
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Methods and parameters
++   --------------------------------------------------------------------------------------------------------------- */
++
++function ForecastMethods() {
++	return array(
++		1 => __('Percent over last year'),
++		2 => __('Calculated percent over last year'),
++		3 => __('Last year to this year'),
++		4 => __('Moving average'),
++		5 => __('Linear approximation'),
++		6 => __('Least squares regression'),
++		7 => __('Second degree approximation'),
++		8 => __('Flexible method'),
++		9 => __('Weighted moving average'),
++		10 => __('Simple exponential smoothing'),
++		11 => __("Holt's double exponential smoothing"),
++		12 => __('Holt-Winters'),
++	);
++}
++
++function ForecastMethodName($Method) {
++	$Methods = ForecastMethods();
++	return $Methods[(int) $Method] ?? __('Unknown');
++}
++
++function ForecastDefaultParameters() {
++	return array(
++		'alpha' => 0.3,
++		'beta' => 0.1,
++		'gamma' => 0.1,
++		'seasonlength' => 12,
++		'maperiods' => 3,
++		'holdoutmonths' => 6,
++		'defaulthorizon' => 12,
++		'percent' => 10,
++		'linearspan' => 5,
++		'wmaweights' => '40,30,20,10',
++		'flexweights' => '25,15,10,0,0,0,0,0,0,0,0,50',
++		'lowaccuracy' => 70,
++		'variancepct' => 25,
++	);
++}
++
++/* The company wide defaults: what is in forecastparameters over the built in values */
++function ForecastGetParameters() {
++	$Parameters = ForecastDefaultParameters();
++	$Result = DB_query("SELECT paramname, paramvalue FROM forecastparameters");
++	while ($MyRow = DB_fetch_array($Result)) {
++		if (array_key_exists($MyRow['paramname'], $Parameters)) {
++			$Parameters[$MyRow['paramname']] = $MyRow['paramvalue'];
++		}
++	}
++	return ForecastCleanParameters($Parameters);
++}
++
++function ForecastCleanParameters($Parameters) {
++	foreach (array('alpha', 'beta', 'gamma', 'percent', 'lowaccuracy', 'variancepct') as $Key) {
++		$Parameters[$Key] = (float) $Parameters[$Key];
++	}
++	foreach (array('seasonlength', 'maperiods', 'holdoutmonths', 'defaulthorizon', 'linearspan') as $Key) {
++		$Parameters[$Key] = (int) $Parameters[$Key];
++	}
++	foreach (array('wmaweights', 'flexweights') as $Key) {
++		$Parameters[$Key] = trim($Parameters[$Key]);
++	}
++	return $Parameters;
++}
++
++function ForecastSaveParameters($Parameters) {
++	foreach ($Parameters as $Name => $Value) {
++		DB_query("REPLACE INTO forecastparameters (paramname, paramvalue)
++					VALUES ('" . DB_escape_string($Name) . "', '" . DB_escape_string($Value) . "')");
++	}
++}
++
++/* "40,30,20,10" -> array(0.4, 0.3, 0.2, 0.1) as fractions, or null when it is not a list of numbers >= 0.
++   The weights are percentages, they are entered most recent period first */
++function ForecastParseWeights($WeightString, $MaxCount = 12) {
++	$Parts = array_filter(array_map('trim', explode(',', $WeightString)), function ($Part) {
++		return $Part !== '';
++	});
++	if (count($Parts) == 0 or count($Parts) > $MaxCount) {
++		return null;
++	}
++	$Weights = array();
++	foreach ($Parts as $Part) {
++		if (!is_numeric($Part) or $Part < 0) {
++			return null;
++		}
++		$Weights[] = $Part / 100;
++	}
++	if (array_sum($Weights) <= 0) {
++		return null;
++	}
++	return $Weights;
++}
++
++/* Check a full parameter set. Returns a list of messages, empty when all is well */
++function ForecastValidateParameters($Parameters) {
++	$Errors = array();
++	if ($Parameters['alpha'] < 0.1 or $Parameters['alpha'] > 0.9) {
++		$Errors[] = __('Alpha must be between 0.1 and 0.9');
++	}
++	if ($Parameters['beta'] <= 0 or $Parameters['beta'] >= 1) {
++		$Errors[] = __('Beta must be greater than 0 and less than 1');
++	}
++	if ($Parameters['gamma'] <= 0 or $Parameters['gamma'] >= 1) {
++		$Errors[] = __('Gamma must be greater than 0 and less than 1');
++	}
++	if ($Parameters['seasonlength'] < 2 or $Parameters['seasonlength'] > 12) {
++		$Errors[] = __('The season length must be between 2 and 12 months');
++	}
++	if ($Parameters['maperiods'] < 2 or $Parameters['maperiods'] > 12) {
++		$Errors[] = __('The number of moving average periods must be between 2 and 12');
++	}
++	if ($Parameters['holdoutmonths'] < 1 or $Parameters['holdoutmonths'] > 12) {
++		$Errors[] = __('The hold-out months must be between 1 and 12');
++	}
++	if ($Parameters['defaulthorizon'] < 1 or $Parameters['defaulthorizon'] > 36) {
++		$Errors[] = __('The horizon must be between 1 and 36 months');
++	}
++	if ($Parameters['percent'] <= -100) {
++		$Errors[] = __('The percent over last year must be greater than -100');
++	}
++	if ($Parameters['linearspan'] < 1 or $Parameters['linearspan'] > 11) {
++		$Errors[] = __('The linear approximation span must be between 1 and 11 months');
++	}
++	if (ForecastParseWeights($Parameters['wmaweights'], 12) === null or count(ForecastParseWeights($Parameters['wmaweights'], 12)) < 2) {
++		$Errors[] = __('The weighted moving average weights must be two to twelve percentages separated by commas, most recent period first');
++	}
++	if (ForecastParseWeights($Parameters['flexweights'], 12) === null) {
++		$Errors[] = __('The flexible method weights must be one to twelve percentages separated by commas, most recent period first');
++	}
++	if ($Parameters['lowaccuracy'] < 0 or $Parameters['lowaccuracy'] > 100) {
++		$Errors[] = __('The low accuracy threshold must be between 0 and 100');
++	}
++	if ($Parameters['variancepct'] < 0) {
++		$Errors[] = __('The variance highlight percentage cannot be negative');
++	}
++	return $Errors;
++}
++
++/* Parameters that matter to a method, the ones stored with a forecast so it can be understood later */
++function ForecastRelevantParameters($Method, $Parameters) {
++	$Keys = array(
++		1 => array('percent'),
++		2 => array(),
++		3 => array(),
++		4 => array('maperiods'),
++		5 => array('linearspan'),
++		6 => array(),
++		7 => array(),
++		8 => array('flexweights'),
++		9 => array('wmaweights'),
++		10 => array('alpha'),
++		11 => array('alpha', 'beta'),
++		12 => array('alpha', 'beta', 'gamma', 'seasonlength'),
++	);
++	$Relevant = array();
++	foreach ($Keys[(int) $Method] as $Key) {
++		$Relevant[$Key] = $Parameters[$Key];
++	}
++	return $Relevant;
++}
++
++/* Parameters as stored with a forecast, laid over the defaults */
++function ForecastDecodeParameters($Json) {
++	$Parameters = ForecastGetParameters();
++	$Stored = json_decode($Json, true);
++	if (is_array($Stored)) {
++		$Parameters = ForecastCleanParameters(array_merge($Parameters, $Stored));
++	}
++	return $Parameters;
++}
++
++function ForecastDescribeParameters($Method, $Json) {
++	$Stored = json_decode($Json, true);
++	if (!is_array($Stored) or count($Stored) == 0) {
++		return '';
++	}
++	$Parts = array();
++	foreach ($Stored as $Key => $Value) {
++		$Parts[] = $Key . '=' . $Value;
++	}
++	return implode(', ', $Parts);
++}
++
++/* Months of history a method needs before it will produce a forecast */
++function ForecastMinHistory($Method, $Parameters) {
++	switch ((int) $Method) {
++		case 1:
++		case 3:
++		case 6:
++		case 7:
++		case 10:
++		case 11:
++			return 12;
++		case 2:
++			return 24;
++		case 4:
++			return max(4, (int) $Parameters['maperiods']);
++		case 5:
++			return 6;
++		case 8:
++			return max(12, count(ForecastParseWeights($Parameters['flexweights']) ?? array()));
++		case 9:
++			return max(4, count(ForecastParseWeights($Parameters['wmaweights']) ?? array()));
++		case 12:
++			return max(24, 2 * (int) $Parameters['seasonlength']);
++	}
++	return PHP_INT_MAX;
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   The forecasting methods
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* Forecast $Horizon months after the end of $Series with $Method.
++   Returns array('ok' => true, 'values' => array(...)) with no negative quantities,
++   or array('ok' => false, 'error' => 'reason') - never invented numbers. */
++function ForecastCompute($Method, $Series, $Horizon, $Parameters) {
++	$Method = (int) $Method;
++	$n = count($Series);
++	$Horizon = (int) $Horizon;
++	$Methods = ForecastMethods();
++	if (!isset($Methods[$Method])) {
++		return array('ok' => false, 'error' => __('Unknown forecasting method'));
++	}
++	if ($Horizon < 1) {
++		return array('ok' => false, 'error' => __('The horizon must be at least one month'));
++	}
++	$Required = ForecastMinHistory($Method, $Parameters);
++	if ($n < $Required) {
++		return array('ok' => false, 'error' => sprintf(__('Insufficient history: %s needs %d months and %d are available'), $Methods[$Method], $Required, $n));
++	}
++
++	$Values = array();
++	switch ($Method) {
++		case 1:
++		case 2:
++		case 3:
++			$Factor = 1;
++			if ($Method == 1) {
++				$Factor = 1 + ($Parameters['percent'] / 100);
++			} elseif ($Method == 2) {
++				$LastYear = array_sum(array_slice($Series, $n - 12, 12));
++				$YearBefore = array_sum(array_slice($Series, $n - 24, 12));
++				if ($YearBefore <= 0) {
++					return array('ok' => false, 'error' => __('Sales in the year before last are nil, the growth rate cannot be calculated'));
++				}
++				$Factor = $LastYear / $YearBefore;
++			}
++			for ($h = 1; $h <= $Horizon; $h++) {
++				// the same calendar month of the most recent twelve months of history
++				$Values[] = $Series[$n - 12 + (($h - 1) % 12)] * $Factor;
++			}
++			break;
++
++		case 4:
++			$Last = array_slice($Series, $n - $Parameters['maperiods']);
++			$Average = array_sum($Last) / count($Last);
++			$Values = array_fill(0, $Horizon, $Average);
++			break;
++
++		case 5:
++			// the line through the latest month and the month 'span' months before it
++			$Span = min($Parameters['linearspan'], $n - 1);
++			$Slope = ($Series[$n - 1] - $Series[$n - 1 - $Span]) / $Span;
++			for ($h = 1; $h <= $Horizon; $h++) {
++				$Values[] = $Series[$n - 1] + ($Slope * $h);
++			}
++			break;
++
++		case 6:
++		case 7:
++			$Coefficients = ForecastPolynomialFit($Series, $Method == 6 ? 1 : 2);
++			if ($Coefficients === null) {
++				return array('ok' => false, 'error' => __('The regression could not be solved for this history'));
++			}
++			for ($h = 1; $h <= $Horizon; $h++) {
++				$Values[] = ForecastPolynomialValue($Coefficients, $n + $h, $n);
++			}
++			break;
++
++		case 8:
++			// each month is the sum of the preceding months times the weights, forecast months feed later ones
++			$Weights = ForecastParseWeights($Parameters['flexweights']);
++			$Extended = $Series;
++			for ($h = 1; $h <= $Horizon; $h++) {
++				$Count = count($Extended);
++				$Value = 0;
++				foreach ($Weights as $Lag => $Weight) {
++					$Value += $Weight * $Extended[$Count - 1 - $Lag];
++				}
++				$Value = max(0, $Value);
++				$Extended[] = $Value;
++				$Values[] = $Value;
++			}
++			break;
++
++		case 9:
++			$Weights = ForecastParseWeights($Parameters['wmaweights']);
++			$Total = 0;
++			foreach ($Weights as $Lag => $Weight) {
++				$Total += $Weight * $Series[$n - 1 - $Lag];
++			}
++			$Values = array_fill(0, $Horizon, $Total / array_sum($Weights));
++			break;
++
++		case 10:
++			$Alpha = $Parameters['alpha'];
++			$Level = array_sum(array_slice($Series, 0, 3)) / 3;
++			foreach ($Series as $Actual) {
++				$Level = ($Alpha * $Actual) + ((1 - $Alpha) * $Level);
++			}
++			$Values = array_fill(0, $Horizon, $Level);
++			break;
++
++		case 11:
++			$Alpha = $Parameters['alpha'];
++			$Beta = $Parameters['beta'];
++			$Level = $Series[0];
++			$Trend = ($Series[3] - $Series[0]) / 3;
++			for ($t = 1; $t < $n; $t++) {
++				$PreviousLevel = $Level;
++				$Level = ($Alpha * $Series[$t]) + ((1 - $Alpha) * ($Level + $Trend));
++				$Trend = ($Beta * ($Level - $PreviousLevel)) + ((1 - $Beta) * $Trend);
++			}
++			for ($h = 1; $h <= $Horizon; $h++) {
++				$Values[] = $Level + ($Trend * $h);
++			}
++			break;
++
++		case 12:
++			// additive Holt-Winters
++			$Alpha = $Parameters['alpha'];
++			$Beta = $Parameters['beta'];
++			$Gamma = $Parameters['gamma'];
++			$L = $Parameters['seasonlength'];
++			$FirstSeason = array_sum(array_slice($Series, 0, $L)) / $L;
++			$SecondSeason = array_sum(array_slice($Series, $L, $L)) / $L;
++			$Level = $FirstSeason;
++			$Trend = ($SecondSeason - $FirstSeason) / $L;
++			$Season = array();
++			for ($i = 0; $i < $L; $i++) {
++				$Season[$i] = $Series[$i] - $FirstSeason;
++			}
++			for ($t = $L; $t < $n; $t++) {
++				$Index = $t % $L;
++				$PreviousLevel = $Level;
++				$Level = ($Alpha * ($Series[$t] - $Season[$Index])) + ((1 - $Alpha) * ($Level + $Trend));
++				$Trend = ($Beta * ($Level - $PreviousLevel)) + ((1 - $Beta) * $Trend);
++				$Season[$Index] = ($Gamma * ($Series[$t] - $Level)) + ((1 - $Gamma) * $Season[$Index]);
++			}
++			for ($h = 1; $h <= $Horizon; $h++) {
++				$Values[] = $Level + ($Trend * $h) + $Season[($n - 1 + $h) % $L];
++			}
++			break;
++	}
++
++	foreach ($Values as $Key => $Value) {
++		if (!is_finite($Value)) {
++			return array('ok' => false, 'error' => __('The calculation did not produce a usable number'));
++		}
++		$Values[$Key] = round(max(0, $Value), 2);
++	}
++	return array('ok' => true, 'values' => $Values);
++}
++
++/* Least squares polynomial of $Degree (1 or 2) through the series at t = 1..n. Time is centred to keep the
++   normal equations well conditioned. Returns the coefficients, lowest power first, or null. */
++function ForecastPolynomialFit($Series, $Degree) {
++	$n = count($Series);
++	$Size = $Degree + 1;
++	$Matrix = array();
++	for ($r = 0; $r < $Size; $r++) {
++		$Matrix[$r] = array_fill(0, $Size + 1, 0.0);
++	}
++	for ($t = 1; $t <= $n; $t++) {
++		$x = $t - (($n + 1) / 2);
++		for ($r = 0; $r < $Size; $r++) {
++			for ($c = 0; $c < $Size; $c++) {
++				$Matrix[$r][$c] += pow($x, $r + $c);
++			}
++			$Matrix[$r][$Size] += pow($x, $r) * $Series[$t - 1];
++		}
++	}
++	// Gaussian elimination with partial pivoting
++	for ($i = 0; $i < $Size; $i++) {
++		$Pivot = $i;
++		for ($r = $i + 1; $r < $Size; $r++) {
++			if (abs($Matrix[$r][$i]) > abs($Matrix[$Pivot][$i])) {
++				$Pivot = $r;
++			}
++		}
++		if (abs($Matrix[$Pivot][$i]) < 1e-12) {
++			return null;
++		}
++		$Swap = $Matrix[$i];
++		$Matrix[$i] = $Matrix[$Pivot];
++		$Matrix[$Pivot] = $Swap;
++		for ($r = $i + 1; $r < $Size; $r++) {
++			$Ratio = $Matrix[$r][$i] / $Matrix[$i][$i];
++			for ($c = $i; $c <= $Size; $c++) {
++				$Matrix[$r][$c] -= $Ratio * $Matrix[$i][$c];
++			}
++		}
++	}
++	$Coefficients = array_fill(0, $Size, 0.0);
++	for ($i = $Size - 1; $i >= 0; $i--) {
++		$Sum = $Matrix[$i][$Size];
++		for ($c = $i + 1; $c < $Size; $c++) {
++			$Sum -= $Matrix[$i][$c] * $Coefficients[$c];
++		}
++		$Coefficients[$i] = $Sum / $Matrix[$i][$i];
++	}
++	return $Coefficients;
++}
++
++function ForecastPolynomialValue($Coefficients, $t, $n) {
++	$x = $t - (($n + 1) / 2);
++	$Value = 0;
++	foreach ($Coefficients as $Power => $Coefficient) {
++		$Value += $Coefficient * pow($x, $Power);
++	}
++	return $Value;
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Accuracy measures
++   --------------------------------------------------------------------------------------------------------------- */
++
++function ForecastNewAccumulator() {
++	return array('n' => 0, 'sumabs' => 0.0, 'sumsq' => 0.0, 'sumactual' => 0.0, 'sumforecast' => 0.0);
++}
++
++function ForecastAccumulate(&$Accumulator, $Actual, $Forecast) {
++	$Error = $Actual - $Forecast;
++	$Accumulator['n']++;
++	$Accumulator['sumabs'] += abs($Error);
++	$Accumulator['sumsq'] += $Error * $Error;
++	$Accumulator['sumactual'] += $Actual;
++	$Accumulator['sumforecast'] += $Forecast;
++}
++
++/* MAD, MSE, RMSE and POA from an accumulator.
++   POA (percent of accuracy) = 100 x (1 - sum of absolute errors / sum of actual sales), never below 0.
++   When there were no actual sales it is 100 if nothing was forecast either, otherwise 0. */
++function ForecastMeasures($Accumulator) {
++	if ($Accumulator['n'] == 0) {
++		return array('n' => 0, 'mad' => null, 'mse' => null, 'rmse' => null, 'poa' => null);
++	}
++	$Measures = array('n' => $Accumulator['n']);
++	$Measures['mad'] = $Accumulator['sumabs'] / $Accumulator['n'];
++	$Measures['mse'] = $Accumulator['sumsq'] / $Accumulator['n'];
++	$Measures['rmse'] = sqrt($Measures['mse']);
++	if ($Accumulator['sumactual'] > 0) {
++		$Measures['poa'] = max(0, 100 * (1 - ($Accumulator['sumabs'] / $Accumulator['sumactual'])));
++	} else {
++		$Measures['poa'] = ($Accumulator['sumabs'] == 0) ? 100 : 0;
++	}
++	return $Measures;
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Best fit: hold out the most recent months, forecast them with each applicable method, compare with what happened
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* One method over the hold-out. Returns null when the method cannot run on the shorter history left for training */
++function ForecastBacktest($Method, $Series, $Holdout, $Parameters) {
++	$n = count($Series);
++	if ($Holdout < 1 or $n - $Holdout < 1) {
++		return null;
++	}
++	$Training = array_slice($Series, 0, $n - $Holdout);
++	$Actual = array_slice($Series, $n - $Holdout);
++	$Result = ForecastCompute($Method, $Training, $Holdout, $Parameters);
++	if (!$Result['ok']) {
++		return null;
++	}
++	$Accumulator = ForecastNewAccumulator();
++	foreach ($Actual as $Key => $Value) {
++		ForecastAccumulate($Accumulator, $Value, $Result['values'][$Key]);
++	}
++	return array('accumulator' => $Accumulator, 'measures' => ForecastMeasures($Accumulator), 'forecast' => $Result['values'], 'actual' => $Actual);
++}
++
++/* Best method for one series: lowest MAD, then lowest RMSE, then the lower method number.
++   Returns array('best' => method or 0, 'results' => method => backtest or null) */
++function ForecastBestFitItem($Series, $Parameters, $Holdout, $Methods = null) {
++	if ($Methods === null) {
++		$Methods = array_keys(ForecastMethods());
++	}
++	$Results = array();
++	$Best = 0;
++	foreach ($Methods as $Method) {
++		$Results[$Method] = ForecastBacktest($Method, $Series, $Holdout, $Parameters);
++		if ($Results[$Method] === null) {
++			continue;
++		}
++		if ($Best == 0) {
++			$Best = $Method;
++			continue;
++		}
++		$Mine = $Results[$Method]['measures'];
++		$Theirs = $Results[$Best]['measures'];
++		if ($Mine['mad'] < $Theirs['mad'] - 1e-9 or (abs($Mine['mad'] - $Theirs['mad']) <= 1e-9 and $Mine['rmse'] < $Theirs['rmse'] - 1e-9)) {
++			$Best = $Method;
++		}
++	}
++	return array('best' => $Best, 'results' => $Results);
++}
++
++/* Best method across a set of series (a category): the method with the lowest total absolute error as a share of
++   total actual sales over the hold-out. Only items that can be tested at all take part, and a method must be
++   applicable to every one of them - otherwise methods would be compared on different items. If no method qualifies the
++   methods that run on most items are compared. $SeriesList is stockid => series.
++   Returns array('best' => method or 0, 'methods' => method => array(items, wape), 'tested' => item count) */
++function ForecastBestFitCategory($SeriesList, $Parameters, $Holdout) {
++	$Methods = array_keys(ForecastMethods());
++	$Totals = array();
++	foreach ($Methods as $Method) {
++		$Totals[$Method] = array('items' => 0, 'sumabs' => 0.0, 'sumactual' => 0.0);
++	}
++	$Tested = 0;
++	foreach ($SeriesList as $Series) {
++		$Any = false;
++		foreach ($Methods as $Method) {
++			$Backtest = ForecastBacktest($Method, $Series, $Holdout, $Parameters);
++			if ($Backtest !== null) {
++				$Any = true;
++				$Totals[$Method]['items']++;
++				$Totals[$Method]['sumabs'] += $Backtest['accumulator']['sumabs'];
++				$Totals[$Method]['sumactual'] += $Backtest['accumulator']['sumactual'];
++			}
++		}
++		if ($Any) {
++			$Tested++;
++		}
++	}
++	$Candidates = array();
++	foreach ($Methods as $Method) {
++		if ($Tested > 0 and $Totals[$Method]['items'] == $Tested) {
++			$Candidates[] = $Method;
++		}
++	}
++	if (count($Candidates) == 0) {
++		$MostItems = 0;
++		foreach ($Methods as $Method) {
++			$MostItems = max($MostItems, $Totals[$Method]['items']);
++		}
++		if ($MostItems > 0) {
++			foreach ($Methods as $Method) {
++				if ($Totals[$Method]['items'] == $MostItems) {
++					$Candidates[] = $Method;
++				}
++			}
++		}
++	}
++	$Best = 0;
++	$BestScore = null;
++	$Summary = array();
++	foreach ($Methods as $Method) {
++		$Score = null;
++		if ($Totals[$Method]['items'] > 0) {
++			$Score = ($Totals[$Method]['sumactual'] > 0) ? $Totals[$Method]['sumabs'] / $Totals[$Method]['sumactual'] : $Totals[$Method]['sumabs'];
++		}
++		$Summary[$Method] = array('items' => $Totals[$Method]['items'], 'wape' => $Score, 'candidate' => in_array($Method, $Candidates));
++		if ($Score !== null and in_array($Method, $Candidates) and ($BestScore === null or $Score < $BestScore - 1e-12)) {
++			$Best = $Method;
++			$BestScore = $Score;
++		}
++	}
++	return array('best' => $Best, 'methods' => $Summary, 'tested' => $Tested);
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Sales history
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* Extract the company's sales into monthly buckets for the months from $FromMonth to $ToMonth (both first-of-month
++   dates). Sales are the invoiced quantities (stockmoves type 10) less the credited quantities (type 11), the same
++   movements Inventory Item Usage reports - open sales orders play no part. Rows for the range are deleted first, so
++   running a range again replaces it. Besides item/location the same pass keeps the totals the summary forecasts
++   need: by stock category, customer type, sales area and salesperson.
++   Returns array('items' => n, 'rows' => n) */
++function ForecastExtractHistory($FromMonth, $ToMonth, $UserID) {
++	$FromDate = $FromMonth;
++	$ToDate = date('Y-m-t', strtotime($ToMonth));
++	$MonthExpression = "DATE_FORMAT(stockmoves.trandate, '%Y-%m-01')";
++	$Where = "stockmoves.type IN (10, 11)
++				AND stockmoves.hidemovt = 0
++				AND stockmoves.trandate >= '" . $FromDate . "'
++				AND stockmoves.trandate <= '" . $ToDate . "'";
++
++	DB_Txn_Begin();
++	DB_query("DELETE FROM forecasthistory WHERE periodstart >= '" . $FromMonth . "' AND periodstart <= '" . $ToMonth . "'", '', '', true);
++	DB_query("DELETE FROM forecasthistorydim WHERE periodstart >= '" . $FromMonth . "' AND periodstart <= '" . $ToMonth . "'", '', '', true);
++
++	DB_query("INSERT INTO forecasthistory (stockid, loccode, periodstart, quantity)
++				SELECT stockmoves.stockid,
++						stockmoves.loccode,
++						" . $MonthExpression . ",
++						ROUND(SUM(-stockmoves.qty), 4)
++				FROM stockmoves
++				WHERE " . $Where . "
++				GROUP BY stockmoves.stockid, stockmoves.loccode, " . $MonthExpression . "
++				HAVING ROUND(SUM(-stockmoves.qty), 4) <> 0", '', '', true);
++
++	$Dimensions = array(
++		'category' => array("stockmaster.categoryid", "INNER JOIN stockmaster ON stockmaster.stockid = stockmoves.stockid"),
++		'custtype' => array("COALESCE(CAST(debtorsmaster.typeid AS CHAR), '')", "LEFT JOIN debtorsmaster ON debtorsmaster.debtorno = stockmoves.debtorno"),
++		'area' => array("COALESCE(custbranch.area, '')", "LEFT JOIN custbranch ON custbranch.debtorno = stockmoves.debtorno AND custbranch.branchcode = stockmoves.branchcode"),
++		'salesman' => array("COALESCE(custbranch.salesman, '')", "LEFT JOIN custbranch ON custbranch.debtorno = stockmoves.debtorno AND custbranch.branchcode = stockmoves.branchcode"),
++	);
++	foreach ($Dimensions as $DimType => $Definition) {
++		DB_query("INSERT INTO forecasthistorydim (dimtype, dimkey, periodstart, quantity)
++					SELECT '" . $DimType . "',
++							" . $Definition[0] . ",
++							" . $MonthExpression . ",
++							ROUND(SUM(-stockmoves.qty), 4)
++					FROM stockmoves
++					" . $Definition[1] . "
++					WHERE " . $Where . "
++					GROUP BY " . $Definition[0] . ", " . $MonthExpression . "
++					HAVING ROUND(SUM(-stockmoves.qty), 4) <> 0", '', '', true);
++	}
++
++	$Result = DB_query("SELECT COUNT(DISTINCT stockid), COUNT(*)
++						FROM forecasthistory
++						WHERE periodstart >= '" . $FromMonth . "' AND periodstart <= '" . $ToMonth . "'", '', '', true);
++	$MyRow = DB_fetch_row($Result);
++	DB_query("INSERT INTO forecasthistoryruns (fromperiod, toperiod, runby, rundate, itemcount, rowcount)
++				VALUES ('" . $FromMonth . "', '" . $ToMonth . "', '" . DB_escape_string($UserID) . "', '" . date('Y-m-d H:i:s') . "', " . (int) $MyRow[0] . ", " . (int) $MyRow[1] . ")", '', '', true);
++	DB_Txn_Commit();
++
++	return array('items' => (int) $MyRow[0], 'rows' => (int) $MyRow[1]);
++}
++
++/* What history is held: first and last month extracted, number of items and months with sales, and whether the
++   extractions leave a gap (months nobody extracted count as no sales). */
++function ForecastHistoryBounds() {
++	$Bounds = array('from' => null, 'to' => null, 'items' => 0, 'months' => 0, 'rows' => 0, 'gaps' => false, 'lastrun' => null);
++	$Result = DB_query("SELECT fromperiod, toperiod, runby, rundate FROM forecasthistoryruns ORDER BY fromperiod, toperiod");
++	if (DB_num_rows($Result) == 0) {
++		return $Bounds;
++	}
++	$CoveredTo = null;
++	while ($MyRow = DB_fetch_array($Result)) {
++		if ($Bounds['from'] === null or $MyRow['fromperiod'] < $Bounds['from']) {
++			$Bounds['from'] = $MyRow['fromperiod'];
++		}
++		if ($Bounds['to'] === null or $MyRow['toperiod'] > $Bounds['to']) {
++			$Bounds['to'] = $MyRow['toperiod'];
++		}
++		if ($CoveredTo !== null and $MyRow['fromperiod'] > ForecastAddMonths($CoveredTo, 1)) {
++			$Bounds['gaps'] = true;
++		}
++		if ($CoveredTo === null or $MyRow['toperiod'] > $CoveredTo) {
++			$CoveredTo = $MyRow['toperiod'];
++		}
++		if ($Bounds['lastrun'] === null or $MyRow['rundate'] > $Bounds['lastrun']['rundate']) {
++			$Bounds['lastrun'] = $MyRow;
++		}
++	}
++	$Result = DB_query("SELECT COUNT(DISTINCT stockid), COUNT(DISTINCT periodstart), COUNT(*) FROM forecasthistory");
++	$MyRow = DB_fetch_row($Result);
++	$Bounds['items'] = (int) $MyRow[0];
++	$Bounds['months'] = (int) $MyRow[1];
++	$Bounds['rows'] = (int) $MyRow[2];
++	return $Bounds;
++}
++
++/* The monthly series of an item (all locations when $LocCode is '') from its first month with sales to the end of
++   the history held. Months in between without sales are zero. Returns array('start' => Y-m-01, 'values' => array()) */
++function ForecastItemSeries($StockID, $LocCode, $HistoryEnd) {
++	$SQL = "SELECT periodstart, SUM(quantity) AS quantity
++			FROM forecasthistory
++			WHERE stockid = '" . DB_escape_string($StockID) . "'" .
++			($LocCode != '' ? " AND loccode = '" . DB_escape_string($LocCode) . "'" : '') . "
++				AND periodstart <= '" . $HistoryEnd . "'
++			GROUP BY periodstart
++			ORDER BY periodstart";
++	return ForecastSeriesFromResult(DB_query($SQL), $HistoryEnd);
++}
++
++function ForecastDimensionSeries($DimType, $DimKey, $HistoryEnd) {
++	$SQL = "SELECT periodstart, quantity
++			FROM forecasthistorydim
++			WHERE dimtype = '" . DB_escape_string($DimType) . "'
++				AND dimkey = '" . DB_escape_string($DimKey) . "'
++				AND periodstart <= '" . $HistoryEnd . "'
++			ORDER BY periodstart";
++	return ForecastSeriesFromResult(DB_query($SQL), $HistoryEnd);
++}
++
++function ForecastSeriesFromResult($Result, $HistoryEnd) {
++	$Rows = array();
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Rows[$MyRow['periodstart']] = (float) $MyRow['quantity'];
++	}
++	if (count($Rows) == 0) {
++		return array('start' => '', 'values' => array());
++	}
++	$Start = array_key_first($Rows);
++	$Months = ForecastMonthsBetween($Start, $HistoryEnd);
++	$Values = array();
++	for ($i = 0; $i < $Months; $i++) {
++		$Period = ForecastAddMonths($Start, $i);
++		$Values[] = $Rows[$Period] ?? 0.0;
++	}
++	return array('start' => $Start, 'values' => $Values);
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Item forecasts
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* SQL for the quantity MRP, reports and accuracy use: the revised quantity when there is one */
++function ForecastEffectiveSQL($Alias = 'forecastdetails') {
++	return "COALESCE(" . $Alias . ".revisedqty, " . $Alias . ".calcqty)";
++}
++
++/* Store a forecast as the active one for the item and location. The one it replaces is kept, no longer active. */
++function ForecastStore($StockID, $LocCode, $Method, $Parameters, $Horizon, $HistoryEnd, $Values, $UserID, $BatchID, $Notes) {
++	$FirstPeriod = ForecastAddMonths($HistoryEnd, 1);
++	$StockID = DB_escape_string($StockID);
++	$LocCode = DB_escape_string($LocCode);
++	DB_Txn_Begin();
++	DB_query("UPDATE forecasts SET isactive = NULL
++				WHERE stockid = '" . $StockID . "' AND loccode = '" . $LocCode . "' AND isactive = 1", '', '', true);
++	DB_query("INSERT INTO forecasts (stockid, loccode, method, params, horizon, historyend, firstperiod, createdby, createdate, isactive, batchid, notes)
++				VALUES ('" . $StockID . "',
++						'" . $LocCode . "',
++						" . (int) $Method . ",
++						'" . DB_escape_string(json_encode(ForecastRelevantParameters($Method, $Parameters))) . "',
++						" . (int) $Horizon . ",
++						'" . $HistoryEnd . "',
++						'" . $FirstPeriod . "',
++						'" . DB_escape_string($UserID) . "',
++						'" . date('Y-m-d H:i:s') . "',
++						1,
++						" . (int) $BatchID . ",
++						'" . DB_escape_string(mb_substr($Notes, 0, 255)) . "')", '', '', true);
++	$ForecastID = (int) DB_Last_Insert_ID('forecasts', 'forecastid');
++	$Rows = array();
++	foreach ($Values as $Key => $Value) {
++		$Rows[] = "(" . $ForecastID . ", '" . ForecastAddMonths($FirstPeriod, $Key) . "', " . (float) $Value . ")";
++	}
++	DB_query("INSERT INTO forecastdetails (forecastid, periodstart, calcqty) VALUES " . implode(', ', $Rows), '', '', true);
++	DB_Txn_Commit();
++	return $ForecastID;
++}
++
++/* Forecast one item and location. $Method 0 asks for the best fit.
++   Returns array('ok' => bool, 'message' => text, 'forecastid' => id, 'method' => method used) */
++function ForecastGenerateItem($StockID, $LocCode, $Method, $Horizon, $Parameters, $UserID, $BatchID = 0) {
++	$Bounds = ForecastHistoryBounds();
++	if ($Bounds['to'] === null) {
++		return array('ok' => false, 'message' => __('No sales history has been extracted yet'), 'forecastid' => 0, 'method' => 0);
++	}
++	$Series = ForecastItemSeries($StockID, $LocCode, $Bounds['to']);
++	if (count($Series['values']) == 0) {
++		return array('ok' => false, 'message' => __('No sales history for this item') . ($LocCode != '' ? ' ' . __('at this location') : ''), 'forecastid' => 0, 'method' => 0);
++	}
++	$Notes = '';
++	if ($Method == 0) {
++		$Fit = ForecastBestFitItem($Series['values'], $Parameters, $Parameters['holdoutmonths']);
++		if ($Fit['best'] == 0) {
++			return array('ok' => false, 'message' => sprintf(__('Insufficient history for the best fit comparison: %d months available, a %d month hold-out leaves too little to train any method'), count($Series['values']), $Parameters['holdoutmonths']), 'forecastid' => 0, 'method' => 0);
++		}
++		$Method = $Fit['best'];
++		$Notes = sprintf(__('Best fit over a %d month hold-out: %s, MAD %s'), $Parameters['holdoutmonths'], ForecastMethodName($Method), round($Fit['results'][$Method]['measures']['mad'], 2));
++	}
++	return ForecastGenerateWithMethod($StockID, $LocCode, $Method, $Series, $Bounds['to'], $Horizon, $Parameters, $UserID, $BatchID, $Notes);
++}
++
++function ForecastGenerateWithMethod($StockID, $LocCode, $Method, $Series, $HistoryEnd, $Horizon, $Parameters, $UserID, $BatchID, $Notes) {
++	$Result = ForecastCompute($Method, $Series['values'], $Horizon, $Parameters);
++	if (!$Result['ok']) {
++		return array('ok' => false, 'message' => $Result['error'], 'forecastid' => 0, 'method' => $Method);
++	}
++	$ForecastID = ForecastStore($StockID, $LocCode, $Method, $Parameters, $Horizon, $HistoryEnd, $Result['values'], $UserID, $BatchID, $Notes);
++	return array('ok' => true, 'message' => '', 'forecastid' => $ForecastID, 'method' => $Method);
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Batches: a single item or a whole category, worked through a few items at a time so large categories do not time out
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* The active items of a category: not discontinued and not dummy (service) items */
++function ForecastCategoryItems($CategoryID) {
++	$Items = array();
++	$Result = DB_query("SELECT stockid FROM stockmaster
++						WHERE categoryid = '" . DB_escape_string($CategoryID) . "'
++							AND discontinued = 0
++							AND mbflag <> 'D'
++						ORDER BY stockid");
++	while ($MyRow = DB_fetch_row($Result)) {
++		$Items[] = $MyRow[0];
++	}
++	return $Items;
++}
++
++/* Start a batch. $ScopeType is 'item' or 'category'. Returns the batch id. For the best fit on a category the
++   method recommended for the category is worked out here, once, and used for every item. */
++function ForecastCreateBatch($ScopeType, $StockID, $CategoryID, $LocCode, $Method, $Horizon, $Parameters, $UserID) {
++	$Items = ($ScopeType == 'item') ? array($StockID) : ForecastCategoryItems($CategoryID);
++	$ChosenMethod = $Method;
++	$Notes = '';
++	if ($ScopeType == 'category' and $Method == 0) {
++		$Bounds = ForecastHistoryBounds();
++		$SeriesList = array();
++		if ($Bounds['to'] !== null) {
++			foreach ($Items as $Item) {
++				$Series = ForecastItemSeries($Item, $LocCode, $Bounds['to']);
++				if (count($Series['values']) > 0) {
++					$SeriesList[$Item] = $Series['values'];
++				}
++			}
++		}
++		$Fit = ForecastBestFitCategory($SeriesList, $Parameters, $Parameters['holdoutmonths']);
++		$ChosenMethod = $Fit['best'];
++		if ($ChosenMethod > 0) {
++			$Notes = sprintf(__('Best fit for the category over a %d month hold-out, %d items compared: %s'), $Parameters['holdoutmonths'], $Fit['tested'], ForecastMethodName($ChosenMethod));
++		} else {
++			$Notes = __('No method could be compared on this category, the history is too short');
++		}
++	}
++	DB_query("INSERT INTO forecastbatches (scopetype, stockid, categoryid, loccode, method, chosenmethod, horizon, params, createdby, createdate, status, totalitems, notes)
++				VALUES ('" . $ScopeType . "',
++						'" . DB_escape_string($StockID) . "',
++						'" . DB_escape_string($CategoryID) . "',
++						'" . DB_escape_string($LocCode) . "',
++						" . (int) $Method . ",
++						" . (int) $ChosenMethod . ",
++						" . (int) $Horizon . ",
++						'" . DB_escape_string(json_encode($Parameters)) . "',
++						'" . DB_escape_string($UserID) . "',
++						'" . date('Y-m-d H:i:s') . "',
++						'" . (count($Items) > 0 ? 'running' : 'complete') . "',
++						" . count($Items) . ",
++						'" . DB_escape_string(mb_substr($Notes, 0, 255)) . "')");
++	$BatchID = (int) DB_Last_Insert_ID('forecastbatches', 'batchid');
++	foreach (array_chunk($Items, 200) as $Chunk) {
++		$Rows = array();
++		foreach ($Chunk as $Item) {
++			$Rows[] = "(" . $BatchID . ", '" . DB_escape_string($Item) . "', 'pending')";
++		}
++		DB_query("INSERT INTO forecastbatchresults (batchid, stockid, status) VALUES " . implode(', ', $Rows));
++	}
++	return $BatchID;
++}
++
++/* Forecast the next $Limit pending items of a batch and record each outcome. */
++function ForecastProcessBatch($BatchID, $Limit) {
++	$BatchResult = DB_query("SELECT * FROM forecastbatches WHERE batchid = " . (int) $BatchID);
++	$Batch = DB_fetch_array($BatchResult);
++	if (!$Batch or $Batch['status'] == 'complete') {
++		return;
++	}
++	$Parameters = ForecastCleanParameters(array_merge(ForecastDefaultParameters(), json_decode($Batch['params'], true) ?: array()));
++	$Method = ($Batch['method'] == 0) ? (int) $Batch['chosenmethod'] : (int) $Batch['method'];
++
++	$Pending = DB_query("SELECT stockid FROM forecastbatchresults
++						WHERE batchid = " . (int) $BatchID . " AND status = 'pending'
++						ORDER BY stockid LIMIT " . (int) $Limit);
++	while ($Item = DB_fetch_array($Pending)) {
++		if ($Method == 0) {
++			$Outcome = array('ok' => false, 'message' => __('No forecasting method could be chosen for this category, the history is too short'), 'forecastid' => 0);
++		} else {
++			$Bounds = ForecastHistoryBounds();
++			$Series = $Bounds['to'] === null ? array('values' => array()) : ForecastItemSeries($Item['stockid'], $Batch['loccode'], $Bounds['to']);
++			if (count($Series['values']) == 0) {
++				$Outcome = array('ok' => false, 'message' => __('No sales history for this item') . ($Batch['loccode'] != '' ? ' ' . __('at this location') : ''), 'forecastid' => 0);
++			} else {
++				$Notes = ($Batch['method'] == 0) ? $Batch['notes'] : '';
++				$Outcome = ForecastGenerateWithMethod($Item['stockid'], $Batch['loccode'], $Method, $Series, $Bounds['to'], $Batch['horizon'], $Parameters, $Batch['createdby'], $BatchID, $Notes);
++			}
++		}
++		DB_query("UPDATE forecastbatchresults
++					SET status = '" . ($Outcome['ok'] ? 'ok' : 'failed') . "',
++						message = '" . DB_escape_string(mb_substr($Outcome['message'], 0, 255)) . "',
++						forecastid = " . (int) $Outcome['forecastid'] . "
++					WHERE batchid = " . (int) $BatchID . " AND stockid = '" . DB_escape_string($Item['stockid']) . "'");
++	}
++
++	$Counts = DB_query("SELECT SUM(status = 'ok'), SUM(status = 'failed'), SUM(status = 'pending')
++						FROM forecastbatchresults WHERE batchid = " . (int) $BatchID);
++	$CountRow = DB_fetch_row($Counts);
++	DB_query("UPDATE forecastbatches
++				SET successcount = " . (int) $CountRow[0] . ",
++					failcount = " . (int) $CountRow[1] . ",
++					status = '" . ((int) $CountRow[2] == 0 ? 'complete' : 'running') . "'
++				WHERE batchid = " . (int) $BatchID);
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Summary forecasts (stock category, customer type, sales area, salesperson)
++   --------------------------------------------------------------------------------------------------------------- */
++
++function ForecastDimensionTypes() {
++	return array(
++		'category' => __('Stock category'),
++		'custtype' => __('Customer type'),
++		'area' => __('Sales area'),
++		'salesman' => __('Salesperson'),
++	);
++}
++
++/* The keys of a dimension that have history, with a readable name: key => name */
++function ForecastDimensionKeys($DimType) {
++	switch ($DimType) {
++		case 'category':
++			$Name = "(SELECT categorydescription FROM stockcategory WHERE categoryid = forecasthistorydim.dimkey)";
++			break;
++		case 'custtype':
++			$Name = "(SELECT typename FROM debtortype WHERE typeid = forecasthistorydim.dimkey)";
++			break;
++		case 'area':
++			$Name = "(SELECT areadescription FROM areas WHERE areacode = forecasthistorydim.dimkey)";
++			break;
++		default:
++			$Name = "(SELECT salesmanname FROM salesman WHERE salesmancode = forecasthistorydim.dimkey)";
++	}
++	$Keys = array();
++	$Result = DB_query("SELECT DISTINCT dimkey, " . $Name . " AS name
++						FROM forecasthistorydim
++						WHERE dimtype = '" . DB_escape_string($DimType) . "'
++						ORDER BY dimkey");
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Keys[$MyRow['dimkey']] = ($MyRow['dimkey'] === '' ? __('Unassigned') : ($MyRow['name'] ?? $MyRow['dimkey']));
++	}
++	return $Keys;
++}
++
++/* Summary forecast for one dimension key, stored as the active summary of that key (the previous one is kept, no
++   longer active). Returns the same shape as ForecastGenerateItem with 'summaryid'. */
++function ForecastGenerateSummary($DimType, $DimKey, $Method, $Horizon, $Parameters, $UserID) {
++	$Bounds = ForecastHistoryBounds();
++	if ($Bounds['to'] === null) {
++		return array('ok' => false, 'message' => __('No sales history has been extracted yet'), 'summaryid' => 0, 'method' => 0);
++	}
++	$Series = ForecastDimensionSeries($DimType, $DimKey, $Bounds['to']);
++	if (count($Series['values']) == 0) {
++		return array('ok' => false, 'message' => __('No sales history'), 'summaryid' => 0, 'method' => 0);
++	}
++	$Notes = '';
++	if ($Method == 0) {
++		$Fit = ForecastBestFitItem($Series['values'], $Parameters, $Parameters['holdoutmonths']);
++		if ($Fit['best'] == 0) {
++			return array('ok' => false, 'message' => sprintf(__('Insufficient history for the best fit comparison: %d months available, a %d month hold-out leaves too little to train any method'), count($Series['values']), $Parameters['holdoutmonths']), 'summaryid' => 0, 'method' => 0);
++		}
++		$Method = $Fit['best'];
++		$Notes = sprintf(__('Best fit over a %d month hold-out: %s, MAD %s'), $Parameters['holdoutmonths'], ForecastMethodName($Method), round($Fit['results'][$Method]['measures']['mad'], 2));
++	}
++	$Result = ForecastCompute($Method, $Series['values'], $Horizon, $Parameters);
++	if (!$Result['ok']) {
++		return array('ok' => false, 'message' => $Result['error'], 'summaryid' => 0, 'method' => $Method);
++	}
++	$FirstPeriod = ForecastAddMonths($Bounds['to'], 1);
++	DB_Txn_Begin();
++	DB_query("UPDATE forecastsummaries SET isactive = NULL
++				WHERE dimtype = '" . DB_escape_string($DimType) . "' AND dimkey = '" . DB_escape_string($DimKey) . "' AND isactive = 1", '', '', true);
++	DB_query("INSERT INTO forecastsummaries (dimtype, dimkey, method, params, horizon, historyend, firstperiod, createdby, createdate, isactive, notes)
++				VALUES ('" . DB_escape_string($DimType) . "',
++						'" . DB_escape_string($DimKey) . "',
++						" . (int) $Method . ",
++						'" . DB_escape_string(json_encode(ForecastRelevantParameters($Method, $Parameters))) . "',
++						" . (int) $Horizon . ",
++						'" . $Bounds['to'] . "',
++						'" . $FirstPeriod . "',
++						'" . DB_escape_string($UserID) . "',
++						'" . date('Y-m-d H:i:s') . "',
++						1,
++						'" . DB_escape_string(mb_substr($Notes, 0, 255)) . "')", '', '', true);
++	$SummaryID = (int) DB_Last_Insert_ID('forecastsummaries', 'summaryid');
++	$Rows = array();
++	foreach ($Result['values'] as $Key => $Value) {
++		$Rows[] = "(" . $SummaryID . ", '" . ForecastAddMonths($FirstPeriod, $Key) . "', " . (float) $Value . ")";
++	}
++	DB_query("INSERT INTO forecastsummarydetails (summaryid, periodstart, calcqty) VALUES " . implode(', ', $Rows), '', '', true);
++	DB_Txn_Commit();
++	return array('ok' => true, 'message' => '', 'summaryid' => $SummaryID, 'method' => $Method);
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Review helpers
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* Actual sales of the same months a year earlier: periodstart => quantity, or null when that month is outside the
++   history held. $Source is array('item', stockid, loccode) or array('dim', dimtype, dimkey). */
++function ForecastLastYear($Source, $Periods, $Bounds) {
++	$Actuals = array();
++	if (count($Periods) == 0) {
++		return $Actuals;
++	}
++	$Earlier = array();
++	foreach ($Periods as $Period) {
++		$Earlier[$Period] = ForecastAddMonths($Period, -12);
++	}
++	if ($Source[0] == 'item') {
++		$SQL = "SELECT periodstart, SUM(quantity) AS quantity FROM forecasthistory
++				WHERE stockid = '" . DB_escape_string($Source[1]) . "'" .
++				($Source[2] != '' ? " AND loccode = '" . DB_escape_string($Source[2]) . "'" : '') . "
++					AND periodstart IN ('" . implode("','", $Earlier) . "')
++				GROUP BY periodstart";
++	} else {
++		$SQL = "SELECT periodstart, quantity FROM forecasthistorydim
++				WHERE dimtype = '" . DB_escape_string($Source[1]) . "' AND dimkey = '" . DB_escape_string($Source[2]) . "'
++					AND periodstart IN ('" . implode("','", $Earlier) . "')";
++	}
++	$Held = array();
++	$Result = DB_query($SQL);
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Held[$MyRow['periodstart']] = (float) $MyRow['quantity'];
++	}
++	foreach ($Earlier as $Period => $LastYearPeriod) {
++		if ($Bounds['from'] !== null and $LastYearPeriod >= $Bounds['from'] and $LastYearPeriod <= $Bounds['to']) {
++			$Actuals[$Period] = $Held[$LastYearPeriod] ?? 0.0;
++		} else {
++			$Actuals[$Period] = null;
++		}
++	}
++	return $Actuals;
++}
++
++/* Is the variance of a forecast against last year large? */
++function ForecastLargeVariance($Quantity, $LastYear, $ThresholdPercent) {
++	if ($LastYear === null) {
++		return false;
++	}
++	if ($LastYear == 0) {
++		return $Quantity > 0;
++	}
++	return abs(($Quantity - $LastYear) / $LastYear * 100) >= $ThresholdPercent;
++}
++
++/* Read the revised quantities posted from a review form. Returns array(period => float or null, errors). A blank
++   field clears the revision, so the calculated quantity applies again. */
++function ForecastReadRevisions($Posted, $Periods) {
++	$Revisions = array();
++	$Errors = array();
++	foreach ($Periods as $Period) {
++		$Value = trim($Posted[$Period] ?? '');
++		if ($Value === '') {
++			$Revisions[$Period] = null;
++			continue;
++		}
++		$Number = filter_number_format($Value);
++		if (!is_numeric($Number) or $Number < 0) {
++			$Errors[] = ForecastMonthLabel($Period) . ': ' . __('the revised quantity must be a number that is not negative, or blank to use the calculated quantity');
++			continue;
++		}
++		$Revisions[$Period] = (float) $Number;
++	}
++	return array($Revisions, $Errors);
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Converting forecasts into MRP demands
++   --------------------------------------------------------------------------------------------------------------- */
++
++/* The quantities MRP should plan for an item: period => quantity (effective, revised first).
++   An item forecast over all locations is used on its own; otherwise the per-location active forecasts are added up,
++   so nothing is counted twice. */
++function ForecastItemDemandByPeriod($StockID) {
++	$StockID = DB_escape_string($StockID);
++	$Result = DB_query("SELECT forecastid FROM forecasts WHERE stockid = '" . $StockID . "' AND loccode = '' AND isactive = 1");
++	if (DB_num_rows($Result) > 0) {
++		$Where = "forecasts.loccode = ''";
++	} else {
++		$Where = "forecasts.loccode <> ''";
++	}
++	$Quantities = array();
++	$Result = DB_query("SELECT forecastdetails.periodstart, SUM(" . ForecastEffectiveSQL() . ") AS quantity
++						FROM forecasts
++						INNER JOIN forecastdetails ON forecastdetails.forecastid = forecasts.forecastid
++						WHERE forecasts.stockid = '" . $StockID . "'
++							AND forecasts.isactive = 1
++							AND " . $Where . "
++						GROUP BY forecastdetails.periodstart
++						ORDER BY forecastdetails.periodstart");
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Quantities[$MyRow['periodstart']] = (float) $MyRow['quantity'];
++	}
++	return $Quantities;
++}
++
++/* Write the active forecasts of $Items as MRP demands of type FC for the months that overlap $FromDate..$ToDate.
++   The demands written are recorded in forecastmrpdemands, so replace mode removes exactly those and no demand entered
++   by hand or from another source is ever touched. 'replace' removes the recorded forecast demands of the items for the
++   horizon first; 'incremental' only adds months an item has no recorded forecast demand for. Run twice, the result is
++   the same. Returns array('items', 'deleted', 'inserted', 'skipped'). */
++function ForecastConvertToMRP($Items, $FromDate, $ToDate, $Mode, $UserID) {
++	$FirstMonth = ForecastMonthStart($FromDate);
++	$Counts = array('items' => 0, 'deleted' => 0, 'inserted' => 0, 'skipped' => 0);
++	DB_Txn_Begin();
++	foreach ($Items as $StockID) {
++		$Quantities = ForecastItemDemandByPeriod($StockID);
++		$Escaped = DB_escape_string($StockID);
++		$Counts['items']++;
++
++		if ($Mode == 'replace') {
++			$Result = DB_query("SELECT forecastmrpdemands.demandid
++								FROM forecastmrpdemands
++								INNER JOIN mrpdemands ON mrpdemands.demandid = forecastmrpdemands.demandid
++								WHERE forecastmrpdemands.stockid = '" . $Escaped . "'
++									AND mrpdemands.mrpdemandtype = '" . FORECAST_DEMAND_TYPE . "'
++									AND forecastmrpdemands.periodstart >= '" . $FirstMonth . "'
++									AND forecastmrpdemands.periodstart <= '" . $ToDate . "'", '', '', true);
++			$DemandIDs = array();
++			while ($MyRow = DB_fetch_row($Result)) {
++				$DemandIDs[] = (int) $MyRow[0];
++			}
++			if (count($DemandIDs) > 0) {
++				DB_query("DELETE FROM mrpdemands WHERE demandid IN (" . implode(',', $DemandIDs) . ") AND mrpdemandtype = '" . FORECAST_DEMAND_TYPE . "'", '', '', true);
++				DB_query("DELETE FROM forecastmrpdemands WHERE demandid IN (" . implode(',', $DemandIDs) . ")", '', '', true);
++				$Counts['deleted'] += count($DemandIDs);
++			}
++		}
++
++		foreach ($Quantities as $Period => $Quantity) {
++			// the month must overlap the horizon, and there is nothing to plan for a zero quantity
++			if ($Period < $FirstMonth or $Period > $ToDate or $Quantity <= 0) {
++				continue;
++			}
++			if ($Mode != 'replace') {
++				$Result = DB_query("SELECT forecastmrpdemands.demandid
++									FROM forecastmrpdemands
++									INNER JOIN mrpdemands ON mrpdemands.demandid = forecastmrpdemands.demandid
++									WHERE forecastmrpdemands.stockid = '" . $Escaped . "'
++										AND forecastmrpdemands.periodstart = '" . $Period . "'
++										AND mrpdemands.mrpdemandtype = '" . FORECAST_DEMAND_TYPE . "'", '', '', true);
++				if (DB_num_rows($Result) > 0) {
++					$Counts['skipped']++;
++					continue;
++				}
++			}
++			// a month that has already started is planned from the first day of the horizon
++			$DueDate = ($Period == $FirstMonth) ? $FromDate : $Period;
++			DB_query("INSERT INTO mrpdemands (stockid, mrpdemandtype, quantity, duedate)
++						VALUES ('" . $Escaped . "', '" . FORECAST_DEMAND_TYPE . "', " . $Quantity . ", '" . $DueDate . "')", '', '', true);
++			$DemandID = (int) DB_Last_Insert_ID('mrpdemands', 'demandid');
++			DB_query("INSERT INTO forecastmrpdemands (demandid, stockid, periodstart, forecastid, convertedby, convertdate)
++						VALUES (" . $DemandID . ", '" . $Escaped . "', '" . $Period . "', 0, '" . DB_escape_string($UserID) . "', '" . date('Y-m-d H:i:s') . "')", '', '', true);
++			$Counts['inserted']++;
++		}
++	}
++	DB_Txn_Commit();
++	return $Counts;
++}
++
++/* ---------------------------------------------------------------------------------------------------------------
++   Form pieces shared by several pages
++   --------------------------------------------------------------------------------------------------------------- */
++
++function ForecastCategoryOptions($Selected = '', $AllLabel = '') {
++	$Options = '';
++	if ($AllLabel != '') {
++		$Options .= '<option value="">' . $AllLabel . '</option>';
++	}
++	$Result = DB_query("SELECT categoryid, categorydescription FROM stockcategory ORDER BY categorydescription");
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Options .= '<option value="' . htmlspecialchars($MyRow['categoryid'], ENT_QUOTES, 'UTF-8') . '"' . ($MyRow['categoryid'] === $Selected ? ' selected="selected"' : '') . '>' . htmlspecialchars($MyRow['categoryid'] . ' - ' . $MyRow['categorydescription'], ENT_QUOTES, 'UTF-8') . '</option>';
++	}
++	return $Options;
++}
++
++function ForecastLocationOptions($Selected = '', $AllLabel = '') {
++	$Options = '<option value="">' . $AllLabel . '</option>';
++	$Result = DB_query("SELECT locations.loccode, locations.locationname
++						FROM locations
++						INNER JOIN locationusers ON locationusers.loccode = locations.loccode
++							AND locationusers.userid = '" . DB_escape_string($_SESSION['UserID']) . "'
++							AND locationusers.canview = 1
++						ORDER BY locations.locationname");
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Options .= '<option value="' . htmlspecialchars($MyRow['loccode'], ENT_QUOTES, 'UTF-8') . '"' . ($MyRow['loccode'] === $Selected ? ' selected="selected"' : '') . '>' . htmlspecialchars($MyRow['locationname'], ENT_QUOTES, 'UTF-8') . '</option>';
++	}
++	return $Options;
++}
++
++function ForecastMethodOptions($Selected = 0, $BestFitLabel = '') {
++	$Options = '';
++	if ($BestFitLabel != '') {
++		$Options .= '<option value="0"' . ($Selected == 0 ? ' selected="selected"' : '') . '>' . $BestFitLabel . '</option>';
++	}
++	foreach (ForecastMethods() as $Number => $Name) {
++		$Options .= '<option value="' . $Number . '"' . ($Number == $Selected ? ' selected="selected"' : '') . '>' . $Number . ' - ' . htmlspecialchars($Name, ENT_QUOTES, 'UTF-8') . '</option>';
++	}
++	return $Options;
++}
++
++/* The method parameter inputs, filled from $Values (the company defaults unless the user changed them) */
++function ForecastParameterFields($Values) {
++	$Fields = array(
++		array('percent', __('Percent over last year (method 1)'), 'number', 'step="0.01"'),
++		array('maperiods', __('Moving average periods (method 4)'), 'number', 'min="2" max="12" step="1"'),
++		array('linearspan', __('Linear approximation span in months (method 5)'), 'number', 'min="1" max="11" step="1"'),
++		array('flexweights', __('Flexible method weights, % per prior period, most recent first (method 8)'), 'text', 'size="35"'),
++		array('wmaweights', __('Weighted moving average weights, %, most recent first (method 9)'), 'text', 'size="35"'),
++		array('alpha', __('Alpha (methods 10 to 12)'), 'number', 'min="0.1" max="0.9" step="0.01"'),
++		array('beta', __('Beta (methods 11 and 12)'), 'number', 'min="0.01" max="0.99" step="0.01"'),
++		array('gamma', __('Gamma (method 12)'), 'number', 'min="0.01" max="0.99" step="0.01"'),
++		array('seasonlength', __('Season length in months (method 12)'), 'number', 'min="2" max="12" step="1"'),
++		array('holdoutmonths', __('Hold-out months for the best fit'), 'number', 'min="1" max="12" step="1"'),
++	);
++	$Html = '';
++	foreach ($Fields as $Field) {
++		$Html .= '<field>
++				<label for="' . $Field[0] . '">' . $Field[1] . ':</label>
++				<input type="' . $Field[2] . '" name="' . $Field[0] . '" id="' . $Field[0] . '" ' . $Field[3] . ' value="' . htmlspecialchars($Values[$Field[0]], ENT_QUOTES, 'UTF-8') . '" />
++			</field>';
++	}
++	return $Html;
++}
++
++/* Parameters as posted by ForecastParameterFields(), over the company defaults for anything missing */
++function ForecastReadParameters($Posted) {
++	$Parameters = ForecastGetParameters();
++	foreach (array('percent', 'maperiods', 'linearspan', 'flexweights', 'wmaweights', 'alpha', 'beta', 'gamma', 'seasonlength', 'holdoutmonths', 'defaulthorizon', 'lowaccuracy', 'variancepct') as $Key) {
++		if (isset($Posted[$Key]) and trim($Posted[$Key]) !== '') {
++			$Parameters[$Key] = ForecastInput($Posted[$Key]);
++		}
++	}
++	return ForecastCleanParameters($Parameters);
++}
++
++function ForecastPageTitle($Title) {
++	global $RootPath, $Theme;
++	echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/inventory.png" title="' . $Title . '" alt="" />' . ' ' . $Title . '</p>';
++}
++
++function ForecastNoHistoryNotice() {
++	global $RootPath;
++	prnMsg(__('No sales history has been extracted yet.') . ' <a href="' . $RootPath . '/ForecastHistory.php">' . __('Extract sales history') . '</a>', 'warn');
++}
++
++function ForecastFormatQuantity($Value) {
++	return locale_number_format($Value, 2);
++}
+diff --git a/includes/InstallFunctions.php b/includes/InstallFunctions.php
+index 1c20c09..fbb8469 100644
+--- a/includes/InstallFunctions.php
++++ b/includes/InstallFunctions.php
+@@ -490,6 +490,15 @@ function UploadData($Demo, $AdminPassword, $AdminUser, $Email, $Language, $CoA,
+ 		}
+ 		flush();
+ 
++		// Forecasting module, menu, page security and default parameters. Same changes as sql/updates/44.php
++		DB_IgnoreForeignKeys();
++		if (!PopulateSQLDataBySQLFile($Path_To_Root . '/install/sql/forecasting.sql', $DBType)) {
++			$Errors++;
++			echo '<div class="error">' . __('The forecasting module data could not be installed') . '</div>';
++		}
++		DB_ReinstateForeignKeys();
++		flush();
++
+ 		/// @todo there is no guarantee that all the db updates have been applied to the single SQL files making up
+ 		///       the installer - that is left to the person preparing the release to verify...
+ 		$SQL = "INSERT INTO config VALUES('DBUpdateNumber', " . HighestFileName($Path_To_Root) . ")";
+@@ -616,6 +625,11 @@ function UploadData($Demo, $AdminPassword, $AdminUser, $Email, $Language, $CoA,
+ 			$Errors++;
+ 			echo '<div class="error">' . __('There was an error populating the database with demo data') . '</div>';
+ 		}
++		// Forecasting module, menu, page security and default parameters. Same changes as sql/updates/44.php
++		if (!PopulateSQLDataBySQLFile($Path_To_Root . '/install/sql/forecasting.sql', $DBType)) {
++			$Errors++;
++			echo '<div class="error">' . __('The forecasting module data could not be installed') . '</div>';
++		}
+ 
+ 		/// @todo this could just be pushed into demo.sql - and checked for presence by the scripts in /build
+ 		/// @todo also, it should be an UPSERT
+diff --git a/install/sql/forecasting.sql b/install/sql/forecasting.sql
+new file mode 100644
+index 0000000..de20084
+--- /dev/null
++++ b/install/sql/forecasting.sql
+@@ -0,0 +1,18 @@
++UPDATE `modules` SET `sequence` = `sequence` + 1 WHERE `sequence` >= 7;
++INSERT INTO `modules` (`secroleid`, `modulelink`, `reportlink`, `modulename`, `sequence`) SELECT `secroleid`, 'forecast', 'fcst', 'Forecasting', 7 FROM `securityroles`;
++INSERT INTO `scripts` (`script`, `pagesecurity`, `description`) VALUES ('ForecastDashboard.php', 2, 'Forecasting dashboard: counts of active forecasts, the sales history range held and links to every forecasting function'), ('ForecastInquiry.php', 2, 'Inquiry showing forecasts by item, category, location and period'), ('ForecastAccuracy.php', 2, 'Compares past forecasts with the sales that followed: MAD, POA, MSE and RMSE by item, category and method'), ('ForecastMethodComparison.php', 2, 'Forecasts one item with several methods side by side with their accuracy'), ('ForecastHistory.php', 11, 'Extracts invoiced sales net of credits into monthly buckets per item and location for forecasting'), ('ForecastGenerate.php', 11, 'Generates statistical forecasts for an item or a whole stock category'), ('ForecastReview.php', 11, 'Search, review and revise forecasts period by period'), ('ForecastSummary.php', 11, 'Generates summary forecasts by stock category, customer type, sales area or salesperson'), ('ForecastSummaryReview.php', 11, 'Review and revise a summary forecast and the detail behind it'), ('ForecastToMRP.php', 11, 'Converts active forecasts into MRP demands'), ('ForecastParameters.php', 15, 'Company wide forecasting defaults');
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Transactions', 'Extract Sales History', '/ForecastHistory.php', 1 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Transactions', 'Generate Forecasts', '/ForecastGenerate.php', 2 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Transactions', 'Review and Revise Forecasts', '/ForecastReview.php', 3 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Transactions', 'Summary Forecasts', '/ForecastSummary.php', 4 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Transactions', 'Convert Forecasts to MRP Demands', '/ForecastToMRP.php', 5 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Reports', 'Forecasting Dashboard', '/ForecastDashboard.php', 1 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Reports', 'Forecast Inquiry', '/ForecastInquiry.php', 2 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Reports', 'Forecast Accuracy', '/ForecastAccuracy.php', 3 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Reports', 'Forecast Method Comparison', '/ForecastMethodComparison.php', 4 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Reports', 'MRP', '/MRPReport.php', 5 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Maintenance', 'Forecasting Parameters', '/ForecastParameters.php', 1 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Maintenance', 'Master Schedule', '/MRPDemands.php', 2 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'forecast', 'Maintenance', 'MRP Calculation', '/MRP.php', 3 FROM `securityroles`;
++INSERT INTO `mrpdemandtypes` (`mrpdemandtype`, `description`) VALUES ('FC', 'Statistical Forecast');
++INSERT INTO `forecastparameters` (`paramname`, `paramvalue`) VALUES ('alpha', '0.3'), ('beta', '0.1'), ('gamma', '0.1'), ('seasonlength', '12'), ('maperiods', '3'), ('holdoutmonths', '6'), ('defaulthorizon', '12'), ('percent', '10'), ('linearspan', '5'), ('wmaweights', '40,30,20,10'), ('flexweights', '25,15,10,0,0,0,0,0,0,0,0,50'), ('lowaccuracy', '70'), ('variancepct', '25');
+diff --git a/install/sql/tables/forecastbatches.sql b/install/sql/tables/forecastbatches.sql
+new file mode 100644
+index 0000000..e8cca83
+--- /dev/null
++++ b/install/sql/tables/forecastbatches.sql
+@@ -0,0 +1,19 @@
++CREATE TABLE `forecastbatches` (
++  `batchid` int NOT NULL AUTO_INCREMENT,
++  `scopetype` varchar(10) NOT NULL DEFAULT 'item',
++  `stockid` varchar(64) NOT NULL DEFAULT '',
++  `categoryid` varchar(6) NOT NULL DEFAULT '',
++  `loccode` varchar(5) NOT NULL DEFAULT '',
++  `method` tinyint NOT NULL DEFAULT '0',
++  `chosenmethod` tinyint NOT NULL DEFAULT '0',
++  `horizon` smallint NOT NULL DEFAULT '12',
++  `params` text NOT NULL,
++  `createdby` varchar(20) NOT NULL DEFAULT '',
++  `createdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `status` varchar(10) NOT NULL DEFAULT 'running',
++  `totalitems` int NOT NULL DEFAULT '0',
++  `successcount` int NOT NULL DEFAULT '0',
++  `failcount` int NOT NULL DEFAULT '0',
++  `notes` varchar(255) NOT NULL DEFAULT '',
++  PRIMARY KEY (`batchid`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecastbatchresults.sql b/install/sql/tables/forecastbatchresults.sql
+new file mode 100644
+index 0000000..343be90
+--- /dev/null
++++ b/install/sql/tables/forecastbatchresults.sql
+@@ -0,0 +1,9 @@
++CREATE TABLE `forecastbatchresults` (
++  `batchid` int NOT NULL DEFAULT '0',
++  `stockid` varchar(64) NOT NULL DEFAULT '',
++  `status` varchar(10) NOT NULL DEFAULT 'pending',
++  `message` varchar(255) NOT NULL DEFAULT '',
++  `forecastid` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`batchid`,`stockid`),
++  KEY `status` (`batchid`,`status`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecastdetails.sql b/install/sql/tables/forecastdetails.sql
+new file mode 100644
+index 0000000..8c1a2fc
+--- /dev/null
++++ b/install/sql/tables/forecastdetails.sql
+@@ -0,0 +1,10 @@
++CREATE TABLE `forecastdetails` (
++  `forecastid` int NOT NULL DEFAULT '0',
++  `periodstart` date NOT NULL DEFAULT '1000-01-01',
++  `calcqty` double NOT NULL DEFAULT '0',
++  `revisedqty` double DEFAULT NULL COMMENT 'NULL means not revised, 0 is a valid revision',
++  `revisedby` varchar(20) NOT NULL DEFAULT '',
++  PRIMARY KEY (`forecastid`,`periodstart`),
++  KEY `periodstart` (`periodstart`),
++  CONSTRAINT `forecastdetails_ibfk_1` FOREIGN KEY (`forecastid`) REFERENCES `forecasts` (`forecastid`) ON DELETE CASCADE
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecasthistory.sql b/install/sql/tables/forecasthistory.sql
+new file mode 100644
+index 0000000..2f6a1e7
+--- /dev/null
++++ b/install/sql/tables/forecasthistory.sql
+@@ -0,0 +1,9 @@
++CREATE TABLE `forecasthistory` (
++  `stockid` varchar(64) NOT NULL DEFAULT '',
++  `loccode` varchar(5) NOT NULL DEFAULT '',
++  `periodstart` date NOT NULL DEFAULT '1000-01-01',
++  `quantity` double NOT NULL DEFAULT '0',
++  PRIMARY KEY (`stockid`,`loccode`,`periodstart`),
++  KEY `periodstart` (`periodstart`),
++  KEY `loccode` (`loccode`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecasthistorydim.sql b/install/sql/tables/forecasthistorydim.sql
+new file mode 100644
+index 0000000..9932412
+--- /dev/null
++++ b/install/sql/tables/forecasthistorydim.sql
+@@ -0,0 +1,8 @@
++CREATE TABLE `forecasthistorydim` (
++  `dimtype` varchar(10) NOT NULL DEFAULT '',
++  `dimkey` varchar(20) NOT NULL DEFAULT '',
++  `periodstart` date NOT NULL DEFAULT '1000-01-01',
++  `quantity` double NOT NULL DEFAULT '0',
++  PRIMARY KEY (`dimtype`,`dimkey`,`periodstart`),
++  KEY `periodstart` (`periodstart`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecasthistoryruns.sql b/install/sql/tables/forecasthistoryruns.sql
+new file mode 100644
+index 0000000..d02630c
+--- /dev/null
++++ b/install/sql/tables/forecasthistoryruns.sql
+@@ -0,0 +1,10 @@
++CREATE TABLE `forecasthistoryruns` (
++  `runid` int NOT NULL AUTO_INCREMENT,
++  `fromperiod` date NOT NULL DEFAULT '1000-01-01',
++  `toperiod` date NOT NULL DEFAULT '1000-01-01',
++  `runby` varchar(20) NOT NULL DEFAULT '',
++  `rundate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `itemcount` int NOT NULL DEFAULT '0',
++  `rowcount` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`runid`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecastmrpdemands.sql b/install/sql/tables/forecastmrpdemands.sql
+new file mode 100644
+index 0000000..e247df3
+--- /dev/null
++++ b/install/sql/tables/forecastmrpdemands.sql
+@@ -0,0 +1,11 @@
++CREATE TABLE `forecastmrpdemands` (
++  `demandid` int NOT NULL DEFAULT '0',
++  `stockid` varchar(64) NOT NULL DEFAULT '',
++  `periodstart` date NOT NULL DEFAULT '1000-01-01',
++  `forecastid` int NOT NULL DEFAULT '0',
++  `convertedby` varchar(20) NOT NULL DEFAULT '',
++  `convertdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  PRIMARY KEY (`demandid`),
++  KEY `stockperiod` (`stockid`,`periodstart`),
++  CONSTRAINT `forecastmrpdemands_ibfk_1` FOREIGN KEY (`demandid`) REFERENCES `mrpdemands` (`demandid`) ON DELETE CASCADE
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecastparameters.sql b/install/sql/tables/forecastparameters.sql
+new file mode 100644
+index 0000000..4149749
+--- /dev/null
++++ b/install/sql/tables/forecastparameters.sql
+@@ -0,0 +1,5 @@
++CREATE TABLE `forecastparameters` (
++  `paramname` varchar(30) NOT NULL DEFAULT '',
++  `paramvalue` varchar(100) NOT NULL DEFAULT '',
++  PRIMARY KEY (`paramname`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecasts.sql b/install/sql/tables/forecasts.sql
+new file mode 100644
+index 0000000..174d1df
+--- /dev/null
++++ b/install/sql/tables/forecasts.sql
+@@ -0,0 +1,19 @@
++CREATE TABLE `forecasts` (
++  `forecastid` int NOT NULL AUTO_INCREMENT,
++  `stockid` varchar(64) NOT NULL DEFAULT '',
++  `loccode` varchar(5) NOT NULL DEFAULT '' COMMENT 'Empty string means all locations combined',
++  `method` tinyint NOT NULL DEFAULT '1',
++  `params` text NOT NULL,
++  `horizon` smallint NOT NULL DEFAULT '12',
++  `historyend` date NOT NULL DEFAULT '1000-01-01',
++  `firstperiod` date NOT NULL DEFAULT '1000-01-01',
++  `createdby` varchar(20) NOT NULL DEFAULT '',
++  `createdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `isactive` tinyint DEFAULT NULL COMMENT '1 for the active forecast, NULL for superseded ones',
++  `batchid` int NOT NULL DEFAULT '0',
++  `notes` varchar(255) NOT NULL DEFAULT '',
++  PRIMARY KEY (`forecastid`),
++  UNIQUE KEY `activeforecast` (`stockid`,`loccode`,`isactive`),
++  KEY `stockid` (`stockid`),
++  KEY `loccode` (`loccode`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecastsummaries.sql b/install/sql/tables/forecastsummaries.sql
+new file mode 100644
+index 0000000..976df43
+--- /dev/null
++++ b/install/sql/tables/forecastsummaries.sql
+@@ -0,0 +1,16 @@
++CREATE TABLE `forecastsummaries` (
++  `summaryid` int NOT NULL AUTO_INCREMENT,
++  `dimtype` varchar(10) NOT NULL DEFAULT 'category',
++  `dimkey` varchar(20) NOT NULL DEFAULT '',
++  `method` tinyint NOT NULL DEFAULT '1',
++  `params` text NOT NULL,
++  `horizon` smallint NOT NULL DEFAULT '12',
++  `historyend` date NOT NULL DEFAULT '1000-01-01',
++  `firstperiod` date NOT NULL DEFAULT '1000-01-01',
++  `createdby` varchar(20) NOT NULL DEFAULT '',
++  `createdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `isactive` tinyint DEFAULT NULL COMMENT '1 for the active summary forecast, NULL for superseded ones',
++  `notes` varchar(255) NOT NULL DEFAULT '',
++  PRIMARY KEY (`summaryid`),
++  UNIQUE KEY `activesummary` (`dimtype`,`dimkey`,`isactive`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/forecastsummarydetails.sql b/install/sql/tables/forecastsummarydetails.sql
+new file mode 100644
+index 0000000..6c67d56
+--- /dev/null
++++ b/install/sql/tables/forecastsummarydetails.sql
+@@ -0,0 +1,9 @@
++CREATE TABLE `forecastsummarydetails` (
++  `summaryid` int NOT NULL DEFAULT '0',
++  `periodstart` date NOT NULL DEFAULT '1000-01-01',
++  `calcqty` double NOT NULL DEFAULT '0',
++  `revisedqty` double DEFAULT NULL COMMENT 'NULL means not revised, 0 is a valid revision',
++  `revisedby` varchar(20) NOT NULL DEFAULT '',
++  PRIMARY KEY (`summaryid`,`periodstart`),
++  CONSTRAINT `forecastsummarydetails_ibfk_1` FOREIGN KEY (`summaryid`) REFERENCES `forecastsummaries` (`summaryid`) ON DELETE CASCADE
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/sql/updates/44.php b/sql/updates/44.php
+new file mode 100644
+index 0000000..2161f8b
+--- /dev/null
++++ b/sql/updates/44.php
+@@ -0,0 +1,222 @@
++<?php
++
++// DEMAND FORECASTING MODULE
++//   - new tables for sales history, forecasts, summary forecasts, batches and the link to MRP demands
++//   - new main menu module "Forecasting", sequence 7 (next to Manufacturing), with its menu items and page security
++//   - modules are switched on per user by position in www_users.modulesallowed, so the new position is inserted
++//     for every existing user as "0": nobody gains or loses a module, the administrator grants Forecasting
++//   - MRP demand type FC for forecast generated demands
++//   - default forecasting parameters
++// Keep in step with install/sql/forecasting.sql, which does the same for new installations.
++
++CreateTable('forecastparameters', 'CREATE TABLE `forecastparameters` (
++  `paramname` varchar(30) NOT NULL DEFAULT "",
++  `paramvalue` varchar(100) NOT NULL DEFAULT "",
++  PRIMARY KEY (`paramname`)
++)');
++
++CreateTable('forecasthistoryruns', 'CREATE TABLE `forecasthistoryruns` (
++  `runid` int NOT NULL AUTO_INCREMENT,
++  `fromperiod` date NOT NULL DEFAULT "1000-01-01",
++  `toperiod` date NOT NULL DEFAULT "1000-01-01",
++  `runby` varchar(20) NOT NULL DEFAULT "",
++  `rundate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `itemcount` int NOT NULL DEFAULT "0",
++  `rowcount` int NOT NULL DEFAULT "0",
++  PRIMARY KEY (`runid`)
++)');
++
++CreateTable('forecasthistory', 'CREATE TABLE `forecasthistory` (
++  `stockid` varchar(64) NOT NULL DEFAULT "",
++  `loccode` varchar(5) NOT NULL DEFAULT "",
++  `periodstart` date NOT NULL DEFAULT "1000-01-01",
++  `quantity` double NOT NULL DEFAULT "0",
++  PRIMARY KEY (`stockid`,`loccode`,`periodstart`),
++  KEY `periodstart` (`periodstart`),
++  KEY `loccode` (`loccode`)
++)');
++
++CreateTable('forecasthistorydim', 'CREATE TABLE `forecasthistorydim` (
++  `dimtype` varchar(10) NOT NULL DEFAULT "",
++  `dimkey` varchar(20) NOT NULL DEFAULT "",
++  `periodstart` date NOT NULL DEFAULT "1000-01-01",
++  `quantity` double NOT NULL DEFAULT "0",
++  PRIMARY KEY (`dimtype`,`dimkey`,`periodstart`),
++  KEY `periodstart` (`periodstart`)
++)');
++
++CreateTable('forecastbatches', 'CREATE TABLE `forecastbatches` (
++  `batchid` int NOT NULL AUTO_INCREMENT,
++  `scopetype` varchar(10) NOT NULL DEFAULT "item",
++  `stockid` varchar(64) NOT NULL DEFAULT "",
++  `categoryid` varchar(6) NOT NULL DEFAULT "",
++  `loccode` varchar(5) NOT NULL DEFAULT "",
++  `method` tinyint NOT NULL DEFAULT "0",
++  `chosenmethod` tinyint NOT NULL DEFAULT "0",
++  `horizon` smallint NOT NULL DEFAULT "12",
++  `params` text NOT NULL,
++  `createdby` varchar(20) NOT NULL DEFAULT "",
++  `createdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `status` varchar(10) NOT NULL DEFAULT "running",
++  `totalitems` int NOT NULL DEFAULT "0",
++  `successcount` int NOT NULL DEFAULT "0",
++  `failcount` int NOT NULL DEFAULT "0",
++  `notes` varchar(255) NOT NULL DEFAULT "",
++  PRIMARY KEY (`batchid`)
++)');
++
++CreateTable('forecastbatchresults', 'CREATE TABLE `forecastbatchresults` (
++  `batchid` int NOT NULL DEFAULT "0",
++  `stockid` varchar(64) NOT NULL DEFAULT "",
++  `status` varchar(10) NOT NULL DEFAULT "pending",
++  `message` varchar(255) NOT NULL DEFAULT "",
++  `forecastid` int NOT NULL DEFAULT "0",
++  PRIMARY KEY (`batchid`,`stockid`),
++  KEY `status` (`batchid`,`status`)
++)');
++
++CreateTable('forecasts', 'CREATE TABLE `forecasts` (
++  `forecastid` int NOT NULL AUTO_INCREMENT,
++  `stockid` varchar(64) NOT NULL DEFAULT "",
++  `loccode` varchar(5) NOT NULL DEFAULT "" COMMENT "Empty string means all locations combined",
++  `method` tinyint NOT NULL DEFAULT "1",
++  `params` text NOT NULL,
++  `horizon` smallint NOT NULL DEFAULT "12",
++  `historyend` date NOT NULL DEFAULT "1000-01-01",
++  `firstperiod` date NOT NULL DEFAULT "1000-01-01",
++  `createdby` varchar(20) NOT NULL DEFAULT "",
++  `createdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `isactive` tinyint DEFAULT NULL COMMENT "1 for the active forecast, NULL for superseded ones",
++  `batchid` int NOT NULL DEFAULT "0",
++  `notes` varchar(255) NOT NULL DEFAULT "",
++  PRIMARY KEY (`forecastid`),
++  UNIQUE KEY `activeforecast` (`stockid`,`loccode`,`isactive`),
++  KEY `stockid` (`stockid`),
++  KEY `loccode` (`loccode`)
++)');
++
++CreateTable('forecastdetails', 'CREATE TABLE `forecastdetails` (
++  `forecastid` int NOT NULL DEFAULT "0",
++  `periodstart` date NOT NULL DEFAULT "1000-01-01",
++  `calcqty` double NOT NULL DEFAULT "0",
++  `revisedqty` double DEFAULT NULL COMMENT "NULL means not revised, 0 is a valid revision",
++  `revisedby` varchar(20) NOT NULL DEFAULT "",
++  PRIMARY KEY (`forecastid`,`periodstart`),
++  KEY `periodstart` (`periodstart`),
++  CONSTRAINT `forecastdetails_ibfk_1` FOREIGN KEY (`forecastid`) REFERENCES `forecasts` (`forecastid`) ON DELETE CASCADE
++)');
++
++CreateTable('forecastsummaries', 'CREATE TABLE `forecastsummaries` (
++  `summaryid` int NOT NULL AUTO_INCREMENT,
++  `dimtype` varchar(10) NOT NULL DEFAULT "category",
++  `dimkey` varchar(20) NOT NULL DEFAULT "",
++  `method` tinyint NOT NULL DEFAULT "1",
++  `params` text NOT NULL,
++  `horizon` smallint NOT NULL DEFAULT "12",
++  `historyend` date NOT NULL DEFAULT "1000-01-01",
++  `firstperiod` date NOT NULL DEFAULT "1000-01-01",
++  `createdby` varchar(20) NOT NULL DEFAULT "",
++  `createdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  `isactive` tinyint DEFAULT NULL COMMENT "1 for the active summary forecast, NULL for superseded ones",
++  `notes` varchar(255) NOT NULL DEFAULT "",
++  PRIMARY KEY (`summaryid`),
++  UNIQUE KEY `activesummary` (`dimtype`,`dimkey`,`isactive`)
++)');
++
++CreateTable('forecastsummarydetails', 'CREATE TABLE `forecastsummarydetails` (
++  `summaryid` int NOT NULL DEFAULT "0",
++  `periodstart` date NOT NULL DEFAULT "1000-01-01",
++  `calcqty` double NOT NULL DEFAULT "0",
++  `revisedqty` double DEFAULT NULL COMMENT "NULL means not revised, 0 is a valid revision",
++  `revisedby` varchar(20) NOT NULL DEFAULT "",
++  PRIMARY KEY (`summaryid`,`periodstart`),
++  CONSTRAINT `forecastsummarydetails_ibfk_1` FOREIGN KEY (`summaryid`) REFERENCES `forecastsummaries` (`summaryid`) ON DELETE CASCADE
++)');
++
++CreateTable('forecastmrpdemands', 'CREATE TABLE `forecastmrpdemands` (
++  `demandid` int NOT NULL DEFAULT "0",
++  `stockid` varchar(64) NOT NULL DEFAULT "",
++  `periodstart` date NOT NULL DEFAULT "1000-01-01",
++  `forecastid` int NOT NULL DEFAULT "0",
++  `convertedby` varchar(20) NOT NULL DEFAULT "",
++  `convertdate` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
++  PRIMARY KEY (`demandid`),
++  KEY `stockperiod` (`stockid`,`periodstart`),
++  CONSTRAINT `forecastmrpdemands_ibfk_1` FOREIGN KEY (`demandid`) REFERENCES `mrpdemands` (`demandid`) ON DELETE CASCADE
++)');
++
++// The module. Users are switched on per module by position in www_users.modulesallowed (the order of
++// modules.sequence), and the new module takes position 7 (index 6) so every position after it moves up one.
++// Existing users get "0" in the new position, once only: if the module is already there this has been done.
++$ForecastModuleResult = DB_query("SELECT modulelink FROM modules WHERE modulelink='forecast'");
++$ForecastModuleExists = (DB_num_rows($ForecastModuleResult) > 0);
++
++NewModule('forecast', 'fcst', __('Forecasting'), 7);
++
++if (!$ForecastModuleExists) {
++	$UsersResult = DB_query("SELECT userid, modulesallowed FROM www_users");
++	while ($UserRow = DB_fetch_array($UsersResult)) {
++		// Eleven modules existed before this update. Keep those eleven flags, whatever else the field held
++		$Flags = explode(',', $UserRow['modulesallowed']);
++		$Flags = array_slice(array_pad($Flags, 11, '0'), 0, 11);
++		array_splice($Flags, 6, 0, array('0'));
++		$NewValue = implode(',', $Flags) . ',';
++		executeSQL("UPDATE www_users SET modulesallowed='" . DB_escape_string($NewValue) . "' WHERE userid='" . DB_escape_string($UserRow['userid']) . "'", false);
++	}
++}
++
++NewScript('ForecastDashboard.php', 2);
++NewScript('ForecastInquiry.php', 2);
++NewScript('ForecastAccuracy.php', 2);
++NewScript('ForecastMethodComparison.php', 2);
++NewScript('ForecastHistory.php', 11);
++NewScript('ForecastGenerate.php', 11);
++NewScript('ForecastReview.php', 11);
++NewScript('ForecastSummary.php', 11);
++NewScript('ForecastSummaryReview.php', 11);
++NewScript('ForecastToMRP.php', 11);
++NewScript('ForecastParameters.php', 15);
++
++NewMenuItem('forecast', 'Transactions', __('Extract Sales History'), '/ForecastHistory.php', 1);
++NewMenuItem('forecast', 'Transactions', __('Generate Forecasts'), '/ForecastGenerate.php', 2);
++NewMenuItem('forecast', 'Transactions', __('Review and Revise Forecasts'), '/ForecastReview.php', 3);
++NewMenuItem('forecast', 'Transactions', __('Summary Forecasts'), '/ForecastSummary.php', 4);
++NewMenuItem('forecast', 'Transactions', __('Convert Forecasts to MRP Demands'), '/ForecastToMRP.php', 5);
++
++NewMenuItem('forecast', 'Reports', __('Forecasting Dashboard'), '/ForecastDashboard.php', 1);
++NewMenuItem('forecast', 'Reports', __('Forecast Inquiry'), '/ForecastInquiry.php', 2);
++NewMenuItem('forecast', 'Reports', __('Forecast Accuracy'), '/ForecastAccuracy.php', 3);
++NewMenuItem('forecast', 'Reports', __('Forecast Method Comparison'), '/ForecastMethodComparison.php', 4);
++NewMenuItem('forecast', 'Reports', __('MRP'), '/MRPReport.php', 5);
++
++NewMenuItem('forecast', 'Maintenance', __('Forecasting Parameters'), '/ForecastParameters.php', 1);
++NewMenuItem('forecast', 'Maintenance', __('Master Schedule'), '/MRPDemands.php', 2);
++NewMenuItem('forecast', 'Maintenance', __('MRP Calculation'), '/MRP.php', 3);
++
++// MRP demand type for forecast generated demands
++InsertRecord('mrpdemandtypes', array('mrpdemandtype'), array('FC'), array('mrpdemandtype', 'description'), array('FC', __('Statistical Forecast')));
++
++// Company wide defaults
++$ForecastDefaults = array(
++	'alpha' => '0.3',
++	'beta' => '0.1',
++	'gamma' => '0.1',
++	'seasonlength' => '12',
++	'maperiods' => '3',
++	'holdoutmonths' => '6',
++	'defaulthorizon' => '12',
++	'percent' => '10',
++	'linearspan' => '5',
++	'wmaweights' => '40,30,20,10',
++	'flexweights' => '25,15,10,0,0,0,0,0,0,0,0,50',
++	'lowaccuracy' => '70',
++	'variancepct' => '25',
++);
++foreach ($ForecastDefaults as $ParamName => $ParamValue) {
++	InsertRecord('forecastparameters', array('paramname'), array($ParamName), array('paramname', 'paramvalue'), array($ParamName, $ParamValue));
++}
++
++if ($_SESSION['Updates']['Errors'] != 0) {
++	return;
++}
++UpdateDBNo(basename(__FILE__, '.php'), __('Add the demand forecasting module'));

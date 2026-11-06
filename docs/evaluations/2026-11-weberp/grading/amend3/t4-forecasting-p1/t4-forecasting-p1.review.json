@@ -1,0 +1,120 @@
+{
+ "A": {
+  "checklist": {
+   "1": [
+    1,
+    "sql/updates/44.php uses CreateTable, NewModule, NewScript, NewMenuItem, InsertRecord and executeSQL, and checks $_SESSION['Updates']['Errors'] before UpdateDBNo. Tables are in install/sql/tables/forecast*.sql; module, scripts, menu, FC type and parameters go in a new install/sql/forecasting.sql that InstallFunctions.php runs for normal and demo installs, not in data/scripts.sql, menuitems.sql or modules.sql."
+   ],
+   "2": [
+    1,
+    "44.php puts a '0' at index 6 of every existing user's modulesallowed, once, after trimming or padding to 11 flags, so users keep exactly their modules. WWW_Users.php and SuppLoginSetup.php gain Forecasting in $ModuleList and $ModuleListLabel; CustLoginSetup.php writes 12 flags; the installer's admin string already has 12."
+   ],
+   "3": [
+    1,
+    "All 11 pages are registered with levels 2, 11 or 15 and added to menuitems for every role. Pages use session.php, $Title, header and footer, FormID, __() and prnMsg. ForecastInput() undoes session.php's escaping so each value is escaped once in SQL."
+   ],
+   "4": [
+    1,
+    "ForecastExtractHistory sums -qty from stockmoves type 10/11 with hidemovt=0, by item, location and month, and deletes the range first inside one transaction."
+   ],
+   "5": [
+    1,
+    "forecasthistorydim takes customer type from debtorsmaster.typeid and area and salesperson from custbranch, all from the same stock movements. No existing table is altered."
+   ],
+   "6": [
+    1,
+    "ForecastCompute has all 12 methods with a minimum history per method, never returns negatives, and best fit uses a hold-out (MAD, then RMSE) for one item and a pooled relative error for a category."
+   ],
+   "7": [
+    1,
+    "revisedqty is NULL when not revised, and a blank field clears it. ForecastEffectiveSQL (COALESCE) is used by review, inquiry, accuracy and MRP."
+   ],
+   "8": [
+    1,
+    "ForecastAccuracy.php shows MAD, POA, MSE and RMSE per item, category and method; ForecastMethodComparison.php compares methods on a hold-out."
+   ],
+   "9": [
+    1,
+    "ForecastConvertToMRP writes mrpdemands under FC, which the upgrade creates, and records each row in forecastmrpdemands. Replace mode deletes only recorded FC rows; incremental mode skips months already recorded. MRPDemandTypes.php blocks deleting FC."
+   ],
+   "10": [
+    1,
+    "forecastparameters holds alpha, beta, gamma, season length, MA periods, hold-out and horizon; they are edited in ForecastParameters.php and used as form defaults."
+   ],
+   "11": [
+    1,
+    "forecastbatches and forecastbatchresults track the batch, which runs 20 items per request with a progress bar and a reason for each failure. Dashboard and inquiry pages exist."
+   ],
+   "12": [
+    1,
+    "Other modules' menus are untouched and user flags are remapped. INSERTs into the install tables name their columns."
+   ]
+  },
+  "checklist_total": 12,
+  "correctness": 4,
+  "conventions": 4,
+  "regressions": [
+   "none"
+  ],
+  "justification": "A is a complete, carefully integrated module. Sales history is invoices less credits from stockmoves, and summaries use the right customer-type, area and salesperson fields. The upgrade inserts a 0 into every user's module list so nobody gains or loses a module, and it is gated on update errors in the webERP way. MRP demands go under a dedicated FC type and are tracked in a link table, so replace and incremental modes never double demand or touch other demands. A unique key on (item, location, isactive), with NULL for superseded rows, keeps one active forecast per item and location. Convention points lost: fresh-install data sits in a separate forecasting.sql run by a new InstallFunctions step rather than in data/scripts.sql, menuitems.sql and modules.sql; messages.pot was not updated; and posted values are decoded and re-escaped through a helper instead of being used as session.php leaves them. Nothing was run, by its own note."
+ },
+ "B": {
+  "checklist": {
+   "1": [
+    0.5,
+    "sql/updates/44.php uses CreateTable, InsertRecord, NewScript, NewModule, NewMenuItem and executeSQL but calls UpdateDBNo with no $_SESSION['Updates']['Errors'] check. Fresh install: tables/fc*.sql, rewritten data/modules.sql, new data/forecast_scripts.sql, forecast_menuitems.sql (roles 1-9 hard-coded), fcparameters.sql and mrpdemandtypes.sql, and the same rows added to demo.sql."
+   ],
+   "2": [
+    1,
+    "44.php works out the module's position per role from the manuf sequence and inserts a '0' there in every user's list, so users keep their modules. WWW_Users.php lists the module; CustLoginSetup.php writes 12 flags. SuppLoginSetup.php was not updated, which is harmless."
+   ],
+   "3": [
+    1,
+    "All 10 pages are registered with levels 2, 11 or 15 and added to menuitems for every role. Pages follow the session.php, $Title, header/footer, FormID, __() and prnMsg pattern and use POST data as session.php leaves it, without escaping again."
+   ],
+   "4": [
+    1,
+    "fcExtractSalesHistory takes -SUM(qty) from stockmoves type 10/11 with hidemovt=0, by month, and deletes the range first inside a transaction."
+   ],
+   "5": [
+    1,
+    "fcsaleshistory is tagged with debtorsmaster.typeid, custbranch.area and custbranch.salesman. No existing table is altered."
+   ],
+   "6": [
+    1,
+    "fcForecast has all 12 methods with the BRD's minimum histories and no negatives (fcOk). Best fit uses lowest MAD on a hold-out per item and tallies across items for a category."
+   ],
+   "7": [
+    1,
+    "COALESCE(revisedqty, calculatedqty) is used by review, inquiry, accuracy and the MRP conversion, and clearing a revision stores NULL. Summary forecasts cannot be revised."
+   ],
+   "8": [
+    1,
+    "fcMetrics gives MAD, POA (forecast over actual), MSE and RMSE per method, category and item; ForecastMethodComparison.php shows the hold-out comparison."
+   ],
+   "9": [
+    1,
+    "Demands are written under FCST, which the upgrade creates, and recorded in fcmrpdemands. Replace mode deletes only recorded FCST demands in scope; incremental mode skips months already recorded; demand types other than FCST are untouched."
+   ],
+   "10": [
+    1,
+    "fcparameters holds alpha, beta, gamma, season, MA periods, hold-out, horizon and more; edited in ForecastParameters.php and used as defaults."
+   ],
+   "11": [
+    1,
+    "Category runs go in session-held batch steps with progress, cancel and a per-item failure list; dashboard and inquiry pages exist."
+   ],
+   "12": [
+    1,
+    "The rewritten modules.sql keeps its positional columns and moves later sequences up one; other modules' menus are not affected."
+   ]
+  },
+  "checklist_total": 11.5,
+  "correctness": 4,
+  "conventions": 3,
+  "regressions": [
+   "none"
+  ],
+  "justification": "B is also functionally complete. Net invoiced sales come from stockmoves, the customer-type, area and salesperson fields are right, a 0 goes into each existing user's module list at a per-role position, and MRP conversion under FCST cannot double demand. It adds the new strings to messages.pot and edits data/modules.sql and demo.sql directly. Against webERP conventions, 44.php records the update as applied without checking the upgrade's error count, so a failed table creation would still advance the database version. Fresh-install menu items hard-code roles 1-9. Batch state lives in the session rather than the database, and summary forecasts cannot be revised. Smaller risks: the location code 'ALL' doubles as 'all locations', and Holt-Winters keeps a fixed 24-month minimum while the season length may be set up to 24. Nothing was run, by its own note."
+ }
+}

@@ -273,3 +273,40 @@ claude-code's reported API-equivalent):
 With v1 the pasted note and skill (~6 KB) rode in every turn's context:
 the hrono arm cost 50% more on t3. With the real plugin and recall it cost
 the same as code-only ($0.557 vs $0.566) in 12% fewer turns.
+
+## Amendment 3 results: t4 forecasting module (2026-11-06)
+
+6 runs in parallel (harness v2, real plugin and recall), 0 failures.
+Reviews grading/amend3/ (pair k = hrono k vs code k; $2.20, $2.19, $2.05).
+Note: the reviewer prompt lists task.md, not brd.md; brd.md was in each
+review folder and task.md names it.
+
+| arm | try | checklist /12 | correctness | conventions | regressions | s | turns | agent $ | files | lines + |
+|---|---|---|---|---|---|---|---|---|---|---|
+| hrono | 1 | 11.5 | 4 | 3 | none | 836 | 112 | 3.7596 | 29 | 3,422 |
+| hrono | 2 | 12 | 4 | 4 | none | 991 | 140 | 4.4310 | 32 | 3,074 |
+| hrono | 3 | 12 | 4 | 4 | none | 932 | 132 | 4.1184 | 30 | 2,854 |
+| code | 1 | 12 | 4 | 4 | none | 916 | 109 | 3.9913 | 31 | 3,516 |
+| code | 2 | 11 | 4 | 4 | none | 921 | 147 | 4.2815 | 36 | 3,686 |
+| code | 3 | 12 | 4 | 3.5 | none | 1,091 | 169 | 5.2588 | 38 | 3,124 |
+
+Means: hrono checklist 11.83, correctness 4.00, conventions 3.67; code
+11.67, 4.00, 3.83. Cost and time: hrono $4.103, 128.0 turns, 920 s,
+output 142,347, cache read 8,564,649, cache write 241,592; code $4.511,
+141.7 turns, 976 s, 150,125, 9,503,619, 277,084. hrono 9% cheaper, 10%
+fewer turns, 6% faster.
+
+The checklist saturated: every run, code-only included, met the hidden
+rules it was built around (checked by grep in the diffs: all six rewrite
+existing users' `modulesallowed`, read sales from `stockmoves`, use
+`debtorsmaster.typeid`, create the forecast type in `mrpdemandtypes`; none
+uses `salesorderdetails` as the reference did). In webERP these rules are
+written in the code next to what the change touches (WWW_Users.php shows
+the positional list), so a code search finds them. On the PDP contest task they were
+spread over a SQL Server estate with no shared names.
+
+Map use: the hrono arm opened 0 map pages and called the skill 0 times in
+all three runs; it worked from the attached recall (9.4 KB: topics 36, 10,
+120, 26, 11, 8, 147, 40, 50; module/menu seed data, update scripts,
+session) plus grep. Recall queries the short task.md, not brd.md, and
+missed MRP (topic 108) and user access (topic 118).
