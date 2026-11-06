@@ -512,3 +512,15 @@ observation.
 Across t6-t9 the code-only arm missed the token rule and UIGeneralFunctions
 every time; both are written only in discussions (#761, #828), which the
 map states in thread topics 174 and 225.
+
+## t10 gate (2026-11-06, amendment 6): credit control, code-only
+
+Harness v2 with THREADS: 1,212 s, 287 turns, $10.04, 52 files
++2,817/-43. Audit (a reading agent, grading/t10-credit-control/
+code-gate.md): A 14.5/15, B 35.5/40, correctness 4, conventions 3. Missed
+B15 (EnsureGLEntriesBalance) and B32 (hold permission through a scripts
+entry, #761); partly B9, B13, B29, B37, B39. With 287 turns the agent read
+its way to almost every rule, including the invoicing, EDI, recurring and
+API hold checks, Z_ChangeCustomerCode, Z_ImportDebtors and the GLAccounts
+guard. It fails the gate: given unlimited turns, code-only finds the rules
+in webERP's code.
