@@ -345,8 +345,18 @@ thread, no diffs, cut at `until`. Registered `webERP-threads`
 tree `weberp` on a COPY of the db: `db/hrono-threads.db` (server on 8792);
 `db/hrono.db` is unchanged. 858 threads (272 issues, 415 PRs, 171
 discussions), 2.9 MB after the 8,000-character cut per post, 974 sections
-by hrono's cut; hrono's first-build estimate $15.29. Sync job_f46aa101
-(results below when it ends). Both arms get the same threads as files
+by hrono's cut; hrono's first-build estimate $15.29. Sync job_f46aa101:
+succeeded, 7.44 h (with one stall and server restart when the login
+expired), $80.55 by `hrono usage --by run`, 0 failed calls. Calls:
+condense 132, judge 150, brief 384, brief-upper 18, insights 18, embedding
+1,149. Why five times the estimate: the threads were placed into topics
+built from code, the monitor measured misfit 0.234 against a baseline of
+0.061, and repair split 33 topics and migrated 219 sections, so the briefs
+were written a second time (170 then 214 more), and adopt made 12 new
+leaves. Record: syncs/threads-4cb937f-job.txt. Snapshot
+`db/snap-4cb937f-threads.db`; export
+`exports/4cb937f79e8b57063bd47132413abdac8abbcbdc-threads` (208 files, 3
+hops, pages 1/5/202); the code-only export of 4cb937f is unchanged. Both arms get the same threads as files
 (`~/hrono-weberp/threads-2026-02-27/` -> workspace `github/`, harness
 `THREADS=`; the prompt says where they are).
 

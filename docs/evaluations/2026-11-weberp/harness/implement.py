@@ -31,6 +31,8 @@ BIN = ROOT / "hr"  # hrono CLI on the venv binary (uv run is slower than the hoo
 # THREADS=<dir>: the repository's GitHub threads (issues, pull requests,
 # discussions) as markdown, copied into both arms' workspaces as github/.
 THREADS = os.environ.get("THREADS")
+# EXPORT=<folder under exports/>: the map the hrono arm reads (default: the base's).
+EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 
 
@@ -97,7 +99,7 @@ def main() -> None:
                              capture_output=True, text=True, check=True).stdout.strip()
         if pin != base:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
-        export = ROOT / "exports" / base
+        export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
         argv += ["--plugin-dir", str(PLUGIN), "--add-dir", str(export)]
         env["HRONO_HOME"] = str(HOME)
