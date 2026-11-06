@@ -23,10 +23,10 @@ one entry per project, keyed by its git root (`git rev-parse
 | `tree` | none | The tree that maps this project. Nothing runs until it is set. |
 | `folder` | `~/.hrono/exports/<tree>` | Where the map is exported and read. |
 | `recall` | `true` | Attach recalled passages to every prompt. |
-| `limit` | `5` | Passages per prompt. |
+| `limit` | `5` | Passages per prompt, 10 at most. |
 | `levels` | `4` | Hops from `root.md` to a leaf in the export. |
 | `shortest` | `20` | Prompts shorter than this get no recall. |
-| `longest` | `12000` | The most recalled text attached to a prompt. |
+| `longest` | `10000` | The most recalled text attached to a prompt (10,000 at most). |
 | `bin` | `hrono` | The hrono command. |
 
 To connect a project: check the CLI is signed in (`hrono profile current`),

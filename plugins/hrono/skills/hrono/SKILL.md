@@ -17,8 +17,8 @@ Read the map from the top down, and read it before any code: a search
 over the briefs returns dozens of pages in no useful order, while the
 overview names each area in one line.
 
-1. Read the pages "hrono recall" lists on the prompt, when it is attached
-   (see below). Then `root.md`: pick every area whose line touches the
+1. Read the briefs the "hrono recall" passages come from, when it is
+   attached (see below). Then `root.md`: pick every area whose line touches the
    question, and read each one's `brief.md` in full. Its `Flows` name every part a piece
    of work passes through, step by step, what each does when a step fails,
    and the parts elsewhere that repair a step or take the same work.
@@ -59,12 +59,12 @@ overview names each area in one line.
    left out scores as a fact you never found.
 
 How to spend your turns:
-- When "hrono recall" is attached to the prompt, its numbered pages are the
-  leaves most likely to hold the answer, best first. Read them before
-  `root.md`: the first five at least, and every other one whose passage
+- When "hrono recall" is attached to the prompt, its passages come from the
+  briefs most likely to hold the answer, best first; each passage names its
+  brief. Read those briefs before `root.md`: every one whose passage
   touches the question. Then the overview and the areas, for the parts
-  they leave out. A passage is a slice of its page; having read the
-  passage is not having read the page.
+  they leave out. A passage is a few lines of its brief; having read the
+  passage is not having read the brief.
 - Read each brief once. What you read stays in front of you; reading it
   again only spends a turn.
 - A brief over about 20 KB: grep it for the question's terms and read

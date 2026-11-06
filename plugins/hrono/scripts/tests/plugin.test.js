@@ -85,19 +85,18 @@ test("a project with no tree set gets no hrono at all", () => {
   assert.deepEqual(w.calls(), []);
 });
 
-test("a prompt gets its recalled passages, named by file and topic", () => {
+test("a prompt gets its recalled passages, each headed by where it comes from", () => {
   const w = world();
   w.configure({ tree: "demo" });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.match(text, /hrono recall from tree "demo"/);
-  assert.match(text, /### 1\. src\/auth\.py \(repo\)\n\ndef login\(\): \.\.\./);
-  assert.match(text, /### 2\. brief of topic 7\n\nAuth handles sign-in\./);
-  assert.doesNotMatch(text, /Pages, best first/);
-  assert.doesNotMatch(text, /git:\/\//);
-  assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--limit", "15"]);
+  assert.match(text, /### Passage 1, from the file src\/auth\.py \(repo\)\n\ndef login\(\): \.\.\./);
+  assert.match(text, /### Passage 2, from a brief\n\nAuth handles sign-in\./);
+  assert.doesNotMatch(text, /Pages, best first|topic 7|git:\/\//);
+  assert.deepEqual(w.calls()[0], ["recall", "demo", ASK, "--json", "--limit", "5"]);
 });
 
-test("hits whose page is in the export list it to read, best first", () => {
+test("a passage names its brief's page once, when the export has it", () => {
   const w = world([{ ...LOGIN, topic: 7 }, BRIEF]);
   const page = path.join(w.dir, "export", "auth-area-3", "sign-in-7", "brief.md");
   fs.mkdirSync(path.dirname(page), { recursive: true });
@@ -105,10 +104,18 @@ test("hits whose page is in the export list it to read, best first", () => {
   w.configure({ tree: "demo", folder: path.join(w.dir, "export") });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.ok(
-    text.includes(`Pages, best first:\n1. ${page}  (holds src/auth.py (repo))\n2. ${page}  (brief of topic 7)\n\n### 1. src/auth.py (repo)`),
+    text.includes(`### Passage 1, from the file src/auth.py (repo), described in the brief ${page}\n\ndef login`),
     text,
   );
-  assert.ok(text.includes(`### 2. brief of topic 7\n\nAuth handles sign-in.`));
+  assert.ok(text.includes(`### Passage 2, from the brief ${page}\n\nAuth handles sign-in.`), text);
+  assert.equal(text.split(page).length - 1, 2);
+});
+
+test("no more than ten passages are asked for", () => {
+  const w = world();
+  w.configure({ tree: "demo", limit: 40 });
+  attached(w.run("recall.js", { prompt: ASK }));
+  assert.deepEqual(w.calls()[0].slice(-2), ["--limit", "10"]);
 });
 
 test("recall off, a short prompt or a slash command attach nothing", () => {
@@ -139,8 +146,8 @@ test("the attachment stops before the size limit", () => {
   w.configure({ tree: "demo", longest: 1100 });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.ok(text.length <= 1100);
-  assert.match(text, /### 1\. f1\.py/);
-  assert.doesNotMatch(text, /### 4\. f4\.py/);
+  assert.match(text, /### Passage 1, from the file f1\.py/);
+  assert.doesNotMatch(text, /### Passage 4,/);
 });
 
 test("no setting attaches more than Claude Code shows inline", () => {
@@ -149,15 +156,15 @@ test("no setting attaches more than Claude Code shows inline", () => {
   w.configure({ tree: "demo", longest: 24000 });
   const text = attached(w.run("recall.js", { prompt: ASK }));
   assert.ok(text.length <= 10000);
-  assert.match(text, /### 3\. f3\.py/);
-  assert.doesNotMatch(text, /### 4\. f4\.py/);
+  assert.match(text, /### Passage 3, from the file f3\.py/);
+  assert.doesNotMatch(text, /### Passage 4,/);
 });
 
 test("a setting of the wrong kind keeps its default", () => {
   const w = world();
   w.configure({ tree: "demo", limit: "lots", recall: "yes" });
   assert.notEqual(attached(w.run("recall.js", { prompt: ASK })), null);
-  assert.deepEqual(w.calls()[0].slice(-2), ["--limit", "15"]);
+  assert.deepEqual(w.calls()[0].slice(-2), ["--limit", "5"]);
 });
 
 test("the session opens with where the map is and how to read it", () => {

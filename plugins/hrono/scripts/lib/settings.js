@@ -18,7 +18,7 @@ const path = require("node:path");
  * @property {string} tree       the hrono tree that describes it
  * @property {string} folder     where the export is written and read
  * @property {boolean} recall    attach recalled passages to every prompt
- * @property {number} limit      passages per prompt
+ * @property {number} limit      passages per prompt (at most MOST_PASSAGES)
  * @property {number} levels     hops from root.md to a leaf in the export
  * @property {number} shortest   prompts shorter than this get no recall
  * @property {number} longest    the most recalled text attached to a prompt
@@ -29,12 +29,15 @@ const path = require("node:path");
 /** @type {Omit<Settings, "root" | "tree" | "folder">} */
 const DEFAULTS = Object.freeze({
   recall: true,
-  limit: 15,
+  limit: 5,
   levels: 4,
   shortest: 20,
   longest: 10000,
   bin: "hrono",
 });
+
+// More passages bury the best ones and the inline limit cuts them anyway.
+const MOST_PASSAGES = 10;
 
 const KEYS = Object.freeze(["tree", "folder", ...Object.keys(DEFAULTS)]);
 
@@ -93,6 +96,7 @@ function load(cwd, home) {
     // plugin off: one typo should not silently cost every other setting
     if (value !== null) Object.assign(settings, { [key]: value });
   }
+  settings.limit = Math.min(settings.limit, MOST_PASSAGES);
   return settings;
 }
 
