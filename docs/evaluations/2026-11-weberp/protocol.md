@@ -163,3 +163,33 @@ checklist.md and reference.diff into task/. Harness v2 (real plugin and
 recall); the prompt is task.md as before. 3 tries per arm, all six in
 parallel; three blind pair reviews (hrono k vs code k), same reviewer
 prompt.
+
+## Amendment 4 (2026-11-06): gate first, threads map, plugin changes
+
+- **Order.** A task is first given to one code-only try. Only when that
+  try fails on a large share of its checklist (aim: about half met) does
+  one hrono try follow, and only then repeated tries. t5, t6 and t7 failed
+  this gate (code-only met most items); t8 passed it (13 of 22 met).
+- **Threads.** From t6 on both arms get the repository's issues, pull
+  requests and discussions up to the base date as files (`github/`), and
+  the hrono arm reads the threads map (export
+  `4cb937f...-threads`, built on the db copy `db/hrono-threads.db`;
+  `db/hrono.db` and the code-only export are unchanged). Harness option
+  `EXPORT` selects the export.
+- **Plugin changes between tries** (each try records the commit it ran on
+  through its run date):
+  - 71909d0: recall also reads the text files the prompt names (the BRD);
+    the session note sends a change through root.md first.
+  - 8874d26: reading a project file names its brief; an edit is refused
+    until root.md and the edited file's briefs are read (setting `gate`,
+    default on).
+  t8 hrono try 1 ran on 71909d0, try 2 on 8874d26. The first t8 hrono try
+  (before 71909d0, map never read) is kept in runs/void/ and not graded.
+- **Stopped start.** The very first t8 hrono start returned no recall
+  (the hook timed out on the server's first call after the sync); it was
+  stopped within seconds of starting and its files deleted before the
+  rerun that is in runs/void/.
+- **Audits.** t7 and t8 tries are audited by one reading agent each
+  (Opus 5.5, knows the arm, not blind), key claims checked by hand;
+  reports verbatim in grading/gates/. Blind A/B review as in amendments
+  1-3 is still the rule for a comparison of repeated tries.
