@@ -28,6 +28,9 @@ TURNS = int(os.environ.get("TURNS", "200"))
 TOOLS = "Read,Grep,Glob,Edit,Write,TodoWrite,Skill"
 HOME = ROOT / "home"  # HRONO_HOME: the plugin settings (agent.json) and the CLI profile
 BIN = ROOT / "hr"  # hrono CLI on the venv binary (uv run is slower than the hook timeout)
+# THREADS=<dir>: the repository's GitHub threads (issues, pull requests,
+# discussions) as markdown, copied into both arms' workspaces as github/.
+THREADS = os.environ.get("THREADS")
 TREE = "weberp"
 
 
@@ -61,6 +64,8 @@ def workspace(task: str, base: str, arm: str, attempt: str) -> Path:
     tar = subprocess.run(["git", "-C", str(ROOT / "upstream.git"), "archive", base],
                          capture_output=True, check=True).stdout
     subprocess.run(["tar", "-x", "-C", str(ws)], input=tar, check=True)
+    if THREADS:
+        shutil.copytree(THREADS, ws / "github")
     (ws / "task").mkdir()
     for src in sorted((EVAL / "tasks" / task).iterdir()):  # task.md and its inputs (brd.md), never the answers
         if src.name not in ("checklist.md", "reference.diff"):
@@ -77,6 +82,9 @@ def main() -> None:
     prompt = (ws / "task" / "task.md").read_text()
     prompt += "\n\nThe webERP repository is in the current directory; the task is task/task.md."
     prompt += " There is nothing to run against: deliver the change as files."
+    if THREADS:
+        prompt += (" The repository's GitHub issues, pull requests and discussions up to"
+                   " the base date are in github/, one markdown file per thread.")
     argv = ["claude", "-p", prompt, "--model", MODEL, "--max-turns", str(TURNS),
             "--setting-sources", "", "--strict-mcp-config",
             "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",

@@ -335,3 +335,36 @@ checklist items:
 Its NOTES.md names 2, 9, 12 as "not covered" and 10 as a choice: it knew
 the places and left them out, so the misses are scope, not missing
 knowledge.
+
+## GitHub threads source (2026-11-06)
+
+New hrono source type `github-threads` (6b01d65, fix 30ca8ce): a
+repository's issues, pull requests and discussions, one markdown page per
+thread, no diffs, cut at `until`. Registered `webERP-threads`
+(timschofield/webERP, until 2026-02-27, the t3/t4 base date) and added to
+tree `weberp` on a COPY of the db: `db/hrono-threads.db` (server on 8792);
+`db/hrono.db` is unchanged. 858 threads (272 issues, 415 PRs, 171
+discussions), 2.9 MB after the 8,000-character cut per post, 974 sections
+by hrono's cut; hrono's first-build estimate $15.29. Sync job_f46aa101
+(results below when it ends). Both arms get the same threads as files
+(`~/hrono-weberp/threads-2026-02-27/` -> workspace `github/`, harness
+`THREADS=`; the prompt says where they are).
+
+## t6 gate (2026-11-06): customer contacts import, code-only with github/
+
+Task t6-contacts-import (tasks/t6-contacts-import/): business request; its
+conventions are decided in discussions #789, #759, #761, #828. Code arm,
+harness v2 with THREADS: 154 s, 76 turns, $0.775, 7 files +322/-6. It
+never opened or searched github/. Audit by hand:
+
+- met: 1 security level 15 in the update and install data; 2 Utilities
+  menu; 3 one update file 44.php with the helpers; 7 template and header
+  check; 8 CSV values escaped with DB_escape_string; 9-11 validation,
+  update-or-insert, statement flag.
+- partly: 4 and 5 the update right is a NEW security token 21 checked as a
+  hardcoded constant (`in_array(CUSTCONTACTS_UPDATE_TOKEN, ...)`), which an
+  administrator can grant through roles, but #761 decided to move away
+  from hardcoded tokens to scripts-table entries like CostUpdate.
+- missed: 6 the form does not use includes/UIGeneralFunctions.php (#828).
+
+The two misses are conventions written only in discussions.
