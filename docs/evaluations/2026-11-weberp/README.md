@@ -463,3 +463,24 @@ customer's invoice; partly 8 (no glaccountusers, code-only met it) and
 no exchange difference, home-currency threshold, new token 21 for role 8,
 empty branch and the login as salesperson. With the map unread, this is
 code against code; the scores agree within one item.
+
+## t8 hrono try 2, with the brief gate 8874d26 (2026-11-06)
+
+Plugin 8874d26: reading a project file names the leaf brief that
+describes it (once per brief), and an edit waits until root.md and the
+edited file's briefs have been read. Run: 485 s, 169 turns, $4.35, 24 files
++1,015/-30. Map use: 11 pages read (root.md, the finance area, leaves for
+allocations, inquiries, GL reports and checks, sql updates, seed data,
+reports), 16 briefs pointed to, 10 edits refused until their briefs were
+read.
+
+Audit (a reading agent, same 22 items): 15 met, 5 partly, 2 missed
+(code-only 13/7/2, try 1 14/6/2). New against code-only: 8 met (user's GL
+accounts and not the control account), 17 inquiry links, 21 manual and
+outline. Still missed: tags (9), UIGeneralFunctions (22); partly: branch
+and salesperson on a plain adjustment (4), no exchange difference (12),
+home-currency threshold (14), token 21 not the receivables token (19).
+Other mistakes: a regression in CustWhereAlloc.php (an undefined
+`$TransTypeOptions` blanks the title of every receipt and credit note);
+salesman logins never see plain adjustments; the clean-up re-runs its
+query on confirm.
