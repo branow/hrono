@@ -378,3 +378,28 @@ never opened or searched github/. Audit by hand:
 - missed: 6 the form does not use includes/UIGeneralFunctions.php (#828).
 
 The two misses are conventions written only in discussions.
+
+## t7 gate (2026-11-06): staff performance appraisals, code-only with github/
+
+Task t7-appraisals (tasks/t7-appraisals/): appraisals on the existing staff
+records, made up from the HR module (1c7142809) narrowed to appraisals; its
+checklist has 16 codebase rules, 7 of them mistakes the real module made
+and later commits fixed, and 5 business rules. Code arm, harness v2 with
+THREADS: 641 s, 147 turns, $3.46, 22 files +1,703/-18. Audit (a reading
+agent, key claims checked by hand): 17 met, 3 partly, 1 missed.
+
+- partly: 9 frequency is a config row but read back from the db, not the
+  session; 10 empty dates are NULL, not '1000-01-01'; 12 the review page
+  is on a new token 22 given only to role 8, so reviewers in other roles
+  are refused the page the email links to.
+- missed: 15 no UIGeneralFunctions helpers (#828).
+- other mistakes: escaped $_POST comments put back into the form after a
+  save, so line breaks become literal \r\n and are stored on the next
+  save; upgrade's `jobtitle` NOT NULL without a default (the install has
+  DEFAULT ''); open appraisals stay open when the person or reviewer
+  leaves; email links built on HTTP_HOST.
+
+It extended `employees`, reused `departments`, guarded both deletes, used
+the Timesheets patterns, no audit table, no double escaping: the rules
+the real module broke were all found by reading the neighbouring code.
+The task fails the gate: too easy for code-only.
