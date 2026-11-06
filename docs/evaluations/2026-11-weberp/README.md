@@ -403,3 +403,27 @@ It extended `employees`, reused `departments`, guarded both deletes, used
 the Timesheets patterns, no audit table, no double escaping: the rules
 the real module broke were all found by reading the neighbouring code.
 The task fails the gate: too easy for code-only.
+
+## t8 gate (2026-11-06): customer balance adjustments, code-only with github/
+
+Task t8-customer-adjustments (tasks/t8-customer-adjustments/): a short
+business ticket (4 points) for the unused transaction type 15 "Journal -
+Debtors"; its 22-item checklist is mostly places far from the new page
+(GL rules, exchange difference, hard-coded type lists, salesman login,
+tags, access). Code arm, harness v2 with THREADS: 389 s, 128 turns, $2.77,
+22 files +914/-34. Audit (a reading agent, key claims checked by hand):
+13 met, 7 partly, 2 missed.
+
+- missed: 9 no GL tags; 22 no UIGeneralFunctions helpers.
+- partly: 4 manual adjustment has no branch and the login as salesperson;
+  5 write-off amount not rounded; 12 no exchange difference (posted at the
+  invoice's old rate, so currency movement lands in the write-off
+  account); 14 clean-up threshold in home currency at historical rates;
+  17 CustomerInquiry unchanged (no allocation link), CustomerAccount
+  without GL link; 19 a new token 21 for role 8 only instead of the
+  receivables token; 21 manual bookmark without an anchor.
+- other mistakes: writing off another customer's invoice by posting its
+  id (the invoice is loaded by id only); salesman logins ignored in the
+  new lists.
+
+Closer to the aim (about half) than t7's 17/21, with two real bugs.
