@@ -12,6 +12,11 @@ down to the files.
   task/brd.md") is recalled on that file's text too.
   Short prompts and slash commands are skipped, and a slow or unreachable
   server never blocks a prompt.
+- **Briefs before edits.** Reading a project file names the brief that
+  describes it, once per brief (`PostToolUse` on Read). An edit waits until
+  `root.md` and the briefs of the edited file have been read: the refusal
+  names those pages, and reading them lets the edit through (`PreToolUse`
+  on Edit and Write; setting `gate`).
 - **The map in every session.** A `SessionStart` hook says the project has a
   map, where its export is and how to read it.
 - **Skills.** `hrono` walks the export from `root.md` down to the sources;

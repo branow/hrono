@@ -9,25 +9,30 @@ const fs = require("node:fs");
 /**
  * @typedef {object} Input
  * @property {string} cwd
- * @property {string} prompt  empty for events without one
+ * @property {string} prompt   empty for events without one
+ * @property {string} session  the session's id
+ * @property {string} file     the file a tool call reads or writes, or ""
  */
 
 /** @returns {Input} */
 function input() {
   try {
     const data = JSON.parse(fs.readFileSync(0, "utf8") || "{}");
+    const tool = typeof data.tool_input === "object" && data.tool_input ? data.tool_input : {};
     return {
       cwd: typeof data.cwd === "string" ? data.cwd : process.cwd(),
       prompt: typeof data.prompt === "string" ? data.prompt : "",
+      session: typeof data.session_id === "string" ? data.session_id : "",
+      file: typeof tool.file_path === "string" ? tool.file_path : "",
     };
   } catch {
-    return { cwd: process.cwd(), prompt: "" };
+    return { cwd: process.cwd(), prompt: "", session: "", file: "" };
   }
 }
 
 /**
  * Run a hook: read its input, write the context it returns, swallow failure.
- * @param {"SessionStart" | "UserPromptSubmit"} event
+ * @param {"SessionStart" | "UserPromptSubmit" | "PostToolUse"} event
  * @param {(input: Input) => string | null} produce
  */
 function run(event, produce) {
@@ -44,4 +49,27 @@ function run(event, produce) {
   }
 }
 
-module.exports = { run };
+/**
+ * Run a hook that may refuse a tool call: a reason refuses it and is shown to
+ * the model; null lets it through. Failure lets it through.
+ * @param {(input: Input) => string | null} refuse
+ */
+function gate(refuse) {
+  try {
+    const reason = refuse(input());
+    if (reason === null) return;
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: reason,
+        },
+      }),
+    );
+  } catch {
+    // never block an edit over the plugin
+  }
+}
+
+module.exports = { run, gate };

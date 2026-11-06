@@ -27,6 +27,7 @@ one entry per project, keyed by its git root (`git rev-parse
 | `levels` | `4` | Hops from `root.md` to a leaf in the export. |
 | `shortest` | `20` | Prompts shorter than this get no recall. |
 | `longest` | `10000` | The most recalled text attached to a prompt (10,000 at most). |
+| `gate` | `true` | An edit waits until `root.md` and the briefs of the edited file have been read; the refusal names them. |
 | `bin` | `hrono` | The hrono command. |
 
 To connect a project: check the CLI is signed in (`hrono profile current`),
