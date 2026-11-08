@@ -290,3 +290,19 @@ reaches; nothing unrelated". Sonnet, TURNS=200, no budget note, THREADS,
 threads export, plugin with the brief gate. Order as amendment 4: one
 code-only gate try; if it misses about half of B, one hrono try; then 3
 per arm, graded blind.
+
+## Amendment 11 (2026-11-08, before any of its runs): ownership, not execution; whole-change review
+
+t11 told the agent to "implement the change requested in brd.md" and both
+arms cut half the feature. Per PRINCIPLES.md, t12-credit-control is t11
+with the same BRD and checklist and a task statement that gives ownership:
+the agent owns the feature, works out what it needs in webERP and what
+else must change with it, decides the open questions, and builds all of
+it. Same arms as amendment 10 (Sonnet, TURNS=200, THREADS, threads export,
+hrono READ_MAP=3), both in parallel, one try each first.
+
+Grading: the checklist (A /43, B /40) by a reading agent per run as
+before, and a blind pairwise review (labels by coin flip) of the change as
+a whole: completeness, fit with the system and its conventions, code
+structure, regressions, what a maintainer would fix, which to merge and
+why, findings beyond the checklist. Both reported in full.

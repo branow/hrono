@@ -52,6 +52,16 @@ So:
   t10-credit-control on webERP did this and code-only met 35.5 of 40.
   Write the BRD first, from the business side only (or take a real one),
   and mine the checklist afterwards.
+- **The task statement gives ownership, not a checklist to execute.** The
+  agent is the engineer who owns the feature in this system. The BRD tells
+  it what the business wants; the agent works out what the full feature
+  needs here to make sense and to work (what else must change because it
+  depends on it, what the business did not think of) and delivers all of
+  it, as a real engineer would. Do not tell it "implement each requirement":
+  told to execute a BRD, agents take the minimum path that satisfies the
+  text and cut scope (webERP t11: both arms skipped half the feature,
+  citing the BRD's open questions). Better context should show as a fuller,
+  better-fitting feature, so the agent needs the freedom to show it.
 - **Code-only must fail it.** Gate every task with one code-only try first
   (protocol amendment 4). Only a task that code-only gets mostly wrong is
   worth an hrono try.
@@ -76,6 +86,17 @@ The map only helps if the agent reads the right amount of it.
 How the agent turns what it read into the change it makes (reading a rule
 and still not applying it) is an open problem, recorded in the webERP t10
 results.
+
+## How to grade
+
+The mined rules are one part of the grade, never the whole of it. They
+can miss what matters, and the map may help in ways no rule list names.
+Every comparison also has a reviewer judge the change as a whole: how
+complete the feature is, how well it fits the system and its conventions,
+how the code is structured, what it would break, what a maintainer would
+have to fix, which one it would rather merge and why, and anything good
+or bad it noticed beyond the rule list. Report those findings verbatim
+next to the rule scores.
 
 ## Fairness that still holds
 
