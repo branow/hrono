@@ -764,3 +764,34 @@ Checklist grader for hrono-6: GetConfig does not load the new GL accounts,
 so charges and write-offs are refused with the GL link on (A drops to 34).
 Still unread: the receipt (49), allocation (214) and session (50) briefs.
 One try; code-1's review score has ranged 4 to 6.5 across four reviews.
+
+### t12 tries 7 and 8 (amendment 16 repeated, fresh code-only baselines)
+
+Same hrono setup as try 6 (READ_MAP=6, RECALL=0, fixed export); two new
+code-only tries (THREADS on, as code-1). Each pair graded blind
+(grading/t12-credit-control-try7/: A = code-2, B = hrono-7;
+try8/: A = code-3, B = hrono-8). One checklist grader per run; one Opus
+whole-change review per pair.
+
+| | code-2 | hrono-7 | code-3 | hrono-8 |
+|---|---|---|---|---|
+| A (BRD) /43 | 41 | 40.5 | 41 | 41 |
+| B (rules) /40 | 26.5 | **29** | 27 | 27.5 |
+| review /10 | **7** ("clearly") | 4 | **7** ("somewhat") | 5.5 |
+| cost / minutes | $10.87 / 24 | $14.80 / 22 | $10.58 / 23 | $12.76 / 18 |
+| map read (before first write) | 0 | 27 (26) | 0 | 26 (26) |
+| source files read | | 48 | | 43 |
+
+Checklists tie (67.5-69.5 of 83). Both reviews prefer code-only. hrono-7:
+company columns added without updating the positional company INSERTs, so
+new installs fail; 48 statements in one seed file; approvals page has no
+menu link; API invoicing not blocked; HTML entities in reminder emails.
+hrono-8: reminder emails crash under SMTP; portal customers can see other
+customers' reminders and charges; write-off exchange difference folded into
+bad debt; a second over-limit setting next to the existing CheckCreditLimits.
+code-3 instead extended CheckCreditLimits, the hold-reason editor and the
+period reports. Neither hrono run read all of the receipt (49), allocation
+(214) and session (50) briefs (hrono-7 read 50, hrono-8 read 214).
+
+Over tries 6-8 with this prompt, review wins 1 of 3; try 6's win is within
+the reviewer's spread. No confident hrono win on t12.

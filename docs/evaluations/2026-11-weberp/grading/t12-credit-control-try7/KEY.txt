@@ -1,0 +1,1 @@
+coin: A=code-2, B=hrono-7 (hrono READ_MAP=6 MUST prompt + listing, RECALL=0, fixed export; code fresh baseline) (keep from graders)
