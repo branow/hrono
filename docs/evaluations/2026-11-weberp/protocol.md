@@ -306,3 +306,24 @@ before, and a blind pairwise review (labels by coin flip) of the change as
 a whole: completeness, fit with the system and its conventions, code
 structure, regressions, what a maintainer would fix, which to merge and
 why, findings beyond the checklist. Both reported in full.
+
+## Amendment 12 (2026-11-08, before any of its runs): plan from the map; no recalled passages
+
+The t12 hrono transcript (README, "t12: how the hrono agent used the map")
+shows the map was read as a toll, not as a plan: 7 pages before the first
+write, 18 more only when the brief gate refused an edit, after the design
+was fixed. New files, where most of the feature lives, have no brief, so
+the flows they copy (GL posting, allocations, customer login) were never
+read, and the agent read as much source as code-only. Recall matched the
+task statement, not the BRD, and attached 3 source snippets.
+
+The hrono arm now runs with READ_MAP=4: before writing code, read root.md
+and the area briefs; list in NOTES.md every part the feature reaches and
+every existing flow its new code imitates, with the leaf brief of each;
+read only those leaf briefs and write down their rules; then implement,
+opening source to change it or copy a described flow, and check the
+change against the list. RECALL=0 turns off recalled passages (plugin
+setting `recall: false`); the session note, skill and gate stay on.
+Everything else as amendment 11: t12-credit-control, Sonnet, TURNS=200,
+THREADS, threads export, graded blind against code-only try 1 with the
+checklist and the whole-change review. One hrono try first.

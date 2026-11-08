@@ -597,3 +597,41 @@ unallocated receipts before chasing, authority split (settings on the
 director's token), foreign keys, Z_CheckDebtorsControl extended,
 DatabaseTranslations. One try per arm: no difference beyond noise; hrono
 cost 74% more.
+
+### t12: how the hrono agent used the map (analysis, no new runs)
+
+From the t12 transcripts (tool calls, results and context size per call):
+
+| | code | hrono |
+|---|---|---|
+| source reads / greps | 61 / 78 | 59 / 58 |
+| source text read (chars) | 312k | 299k |
+| map pages read (chars) | 0 | 25 (490k) |
+| context at the last call | | 587k tokens |
+| cache reads / cost | 26.2M / $8.35 | 51.8M / $14.56 |
+
+- The map was added to source reading, not used instead of it: hrono read
+  as much source as code-only, plus about 120k tokens of briefs (leaf
+  briefs are 20-27k characters each). The extra context, re-read on every
+  call, is the 74% extra cost.
+- Timing: root.md, 3 area briefs and 3 leaf briefs were read before the
+  first write (call 76 of 264). The other 18 pages were read after code
+  was written, 16 of them right after the gate refused an edit (16 of the
+  22 tool errors are gate refusals). Reading came after the design.
+- Gaps: new files (CreditControlFunctions.php, CustomerCredit.php,
+  CreditCharges.php, BadDebtWriteOff.php...) have no brief, so the gate
+  never asks for the briefs of the flows they copy. hrono posted GL
+  entries and allocations without reading the receipt (49), allocation
+  (214), period utility (57), GL journal (124) or GL-thread (215) briefs.
+  It built the customer portal without the login rule: brief 48, read
+  after CustomerCredit.php was written, says only `CustomerLogin==1`, and
+  hrono checked `$_SESSION['CustomerLogin']`, which is never set.
+- Briefs read did not convert: of the 40 B rules, 18 have a source brief
+  hrono read (hrono 11, code 12) and 22 do not (hrono 15.5, code 13.5).
+  Few pages were off-target (two install schema briefs the gate asked for
+  when editing salesorders.sql).
+- Recall attached 3 passages (5k characters) matched to the task
+  statement, which only points at task/task.md: an API invoice comment,
+  the credit-limit check in SelectOrderItems.php and a seed row. Noise.
+
+Next: amendment 12 (plan from the map before code, no recall).

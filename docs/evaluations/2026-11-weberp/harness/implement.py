@@ -36,7 +36,7 @@ EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 # READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
 # area and topic briefs for the request, project history included, before any edit.
-READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3")
+READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4")
 # READ_MAP=3 (amendment 10, docs/evaluations/PRINCIPLES.md): a middle dose of the map, not every brief.
 MIDDLE_TEXT = (
     "\n\nThis project has a map in {export}: briefs that already state the conventions, rules"
@@ -45,6 +45,24 @@ MIDDLE_TEXT = (
     " the leaf briefs of the parts you will change and of the other places the same data or"
     " work reaches. Do not read briefs unrelated to the change. Go to the source code where you"
     " implement, for the detail.")
+# READ_MAP=4 (amendment 12): plan from the map before any code. In t12 the middle dose read
+# 7 pages before the first write and 18 more only when the gate refused an edit, after the
+# design was fixed; the new files (most of the feature) had no brief, so the flows they copy
+# (GL posting, allocations, customer login) were never read, and source reading stayed equal.
+PLAN_TEXT = (
+    "\n\nThis project has a map in {export}: briefs that already state how each part of the"
+    " codebase works, its conventions, rules and flows, so you need not rediscover them from"
+    " the source. Use it to plan before you write any code:"
+    "\n1. Read root.md and the brief of each area this feature touches."
+    "\n2. In NOTES.md, list every part of webERP the feature reaches: where the same data is"
+    " created, changed, shown, posted, imported, deleted or installed, and every existing flow"
+    " your new code does the same kind of work as (for example how a posting, an allocation, a"
+    " page's security or a customer's own login is done today). Name the leaf brief of each."
+    "\n3. Read those leaf briefs, and only those. Under each in NOTES.md, write the rules and"
+    " conventions it states that your change must follow."
+    "\n4. Then implement. Take how things work from the briefs; open source files to change"
+    " them or to copy the exact code of the flow a brief describes, not to search for how the"
+    " system works. Before you finish, check your change against the rules you listed.")
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
 RULES_TEXT = (
     " After reading, write in NOTES.md, under 'Rules from the map', every rule, convention, decision"
@@ -60,13 +78,19 @@ READ_MAP_TEXT = (
     " follow the brief. Then do the task.")
 
 
+# RECALL=0 (amendment 12): no recalled passages. The prompt only points at task/task.md, so
+# recall matched the task statement, not the BRD, and attached source snippets (t12: 3).
+RECALL = os.environ.get("RECALL") != "0"
+
+
 def configure(ws: Path, export: Path) -> None:
     """Name the tree and export for this workspace in the plugin's settings."""
     path = HOME / "agent.json"
     with open(HOME / "agent.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         data = json.loads(path.read_text()) if path.exists() else {"projects": {}}
-        data["projects"][str(ws.resolve())] = {"tree": TREE, "folder": str(export), "bin": str(BIN)}
+        data["projects"][str(ws.resolve())] = {"tree": TREE, "folder": str(export), "bin": str(BIN),
+                                               "recall": RECALL}
         path.write_text(json.dumps(data, indent=1))
 
 
@@ -128,7 +152,10 @@ def main() -> None:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
         export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
-        if os.environ.get("READ_MAP") == "3":
+        if os.environ.get("READ_MAP") == "4":
+            prompt += PLAN_TEXT.format(export=export)
+            argv[2] = prompt
+        elif os.environ.get("READ_MAP") == "3":
             prompt += MIDDLE_TEXT.format(export=export)
             argv[2] = prompt
         elif READ_MAP:
@@ -138,7 +165,8 @@ def main() -> None:
             argv[2] = prompt
         argv += ["--plugin-dir", str(PLUGIN), "--add-dir", str(export)]
         env["HRONO_HOME"] = str(HOME)
-        (out / f"{ws.name}.recall.md").write_text(recalled(ws, prompt))
+        if RECALL:
+            (out / f"{ws.name}.recall.md").write_text(recalled(ws, prompt))
     (out / f"{ws.name}.prompt.md").write_text(prompt)
     (out / f"{ws.name}.argv.json").write_text(json.dumps(argv, indent=1))
     t0 = time.time()
