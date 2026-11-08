@@ -1,0 +1,885 @@
+diff --git a/ConfirmDispatch_Invoice.php b/ConfirmDispatch_Invoice.php
+index 5954a54..171d0a4 100644
+--- a/ConfirmDispatch_Invoice.php
++++ b/ConfirmDispatch_Invoice.php
+@@ -18,6 +18,7 @@ include('includes/SQL_CommonFunctions.php');
+ include('includes/FreightCalculation.php');
+ include('includes/GetSalesTransGLCodes.php');
+ include('includes/CommissionFunctions.php');
++include('includes/CreditControlFunctions.php');
+ 
+ if (empty($_GET['identifier'])) {
+ 	/*unique session identifier to ensure that there is no conflict with other order entry sessions on the same machine  */
+@@ -603,8 +604,19 @@ if (!isset($_POST['DispatchDate']) or !Is_Date($_POST['DispatchDate'])) {
+ 
+ echo '<tbody></table><br />';
+ 
++/* Credit control: goods are not dispatched or invoiced for a customer on stop until credit control releases them */
++$CreditOnStop = CustomerOnStop($_SESSION['Items' . $identifier]->DebtorNo);
++if ($CreditOnStop) {
++	prnMsg(__('This customer account is on stop. The order cannot be dispatched or invoiced until credit control takes the account off stop'), 'error');
++}
++
+ if (isset($_POST['ProcessInvoice']) and $_POST['ProcessInvoice'] != '') {
+ 
++	if ($CreditOnStop) {
++		include('includes/footer.php');
++		exit();
++	}
++
+ 	/* SQL to process the postings for sales invoices...
+ 
+ 	/*First check there are lines on the dipatch with quantities to invoice
+diff --git a/CreditControl.php b/CreditControl.php
+new file mode 100644
+index 0000000..0653095
+--- /dev/null
++++ b/CreditControl.php
+@@ -0,0 +1,239 @@
++<?php
++
++/* Credit control for one customer: record a credit review, put the customer on or off stop or watch,
++and see the full history of credit decisions. Restricted to security token 21 (credit controller,
++deputy, Finance Director) through the scripts table. */
++
++require(__DIR__ . '/includes/session.php');
++include('includes/CreditControlFunctions.php');
++
++$Title = __('Credit Control');
++$ViewTopic = 'AccountsReceivable';
++$BookMark = 'CreditControl';
++include('includes/header.php');
++
++echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/customer.png" title="' . __('Credit Control') . '" alt="" /> ' . $Title . '</p>';
++
++if (isset($_GET['DebtorNo'])) {
++	$DebtorNo = $_GET['DebtorNo'];
++} elseif (isset($_POST['DebtorNo'])) {
++	$DebtorNo = $_POST['DebtorNo'];
++}
++
++if (!isset($DebtorNo) OR $DebtorNo == '') {
++	prnMsg(__('Select a customer first') . ' - <a href="' . $RootPath . '/SelectCustomer.php">' . __('Customer selection') . '</a>', 'info');
++	include('includes/footer.php');
++	exit();
++}
++
++$Result = DB_query("SELECT debtorsmaster.debtorno,
++						debtorsmaster.name,
++						debtorsmaster.currcode,
++						debtorsmaster.creditlimit,
++						debtorsmaster.nextreviewdate,
++						currencies.decimalplaces
++					FROM debtorsmaster
++					INNER JOIN currencies ON debtorsmaster.currcode = currencies.currabrev
++					WHERE debtorsmaster.debtorno = '" . DB_escape_string($DebtorNo) . "'");
++if (DB_num_rows($Result) == 0) {
++	prnMsg(__('The customer record could not be found'), 'error');
++	include('includes/footer.php');
++	exit();
++}
++$Customer = DB_fetch_array($Result);
++$DebtorNo = $Customer['debtorno'];
++
++/* Defence in depth: the page token is checked by session.php, but a sales rep login must never reach this */
++if (!CanMaintainCredit() OR (isset($_SESSION['SalesmanLogin']) AND $_SESSION['SalesmanLogin'] != '')) {
++	prnMsg(__('You are not authorised to maintain credit control information'), 'error');
++	include('includes/footer.php');
++	exit();
++}
++
++$Status = GetCreditStatus($DebtorNo);
++
++if (isset($_POST['RecordReview'])) {
++	$InputError = 0;
++	$NewLimit = filter_number_format($_POST['NewCreditLimit']);
++	$Outcome = $_POST['Outcome'];
++	$ValidOutcomes = array('LimitConfirmed', 'LimitRaised', 'LimitReduced', 'PutOnWatch', 'PutOnStop');
++	if (!in_array($Outcome, $ValidOutcomes)) {
++		$InputError = 1;
++		prnMsg(__('Select the outcome of the review'), 'error');
++	}
++	if (!is_numeric($NewLimit) OR $NewLimit < 0) {
++		$InputError = 1;
++		prnMsg(__('The credit limit must be a number of zero or more'), 'error');
++	}
++	if (!Is_Date($_POST['NextReviewDate'])) {
++		$InputError = 1;
++		prnMsg(__('The next review date must be a valid date in the format') . ' ' . $_SESSION['DefaultDateFormat'], 'error');
++	} elseif (FormatDateForSQL($_POST['NextReviewDate']) <= date('Y-m-d')) {
++		$InputError = 1;
++		prnMsg(__('The next review date must be in the future'), 'error');
++	}
++	if (trim($_POST['Notes']) == '') {
++		$InputError = 1;
++		prnMsg(__('Notes explaining the review outcome must be entered'), 'error');
++	}
++	if ($Outcome == 'LimitRaised' AND $NewLimit <= $Customer['creditlimit']) {
++		$InputError = 1;
++		prnMsg(__('A raised credit limit must be higher than the current limit'), 'error');
++	}
++	if ($Outcome == 'LimitReduced' AND $NewLimit >= $Customer['creditlimit']) {
++		$InputError = 1;
++		prnMsg(__('A reduced credit limit must be lower than the current limit'), 'error');
++	}
++	if ($Outcome == 'LimitConfirmed') {
++		$NewLimit = $Customer['creditlimit'];
++	}
++	$NewStatusCode = false;
++	if ($Outcome == 'PutOnWatch' OR $Outcome == 'PutOnStop') {
++		$NewStatusCode = GetHoldReasonCode($Outcome == 'PutOnStop' ? CREDIT_STATUS_STOP : CREDIT_STATUS_WATCH);
++		if ($NewStatusCode === false) {
++			$InputError = 1;
++			prnMsg(__('No credit status code exists for this outcome. Set one up in Credit Status Maintenance first'), 'error');
++		}
++	}
++
++	if ($InputError == 0) {
++		$NextReview = FormatDateForSQL($_POST['NextReviewDate']);
++		DB_Txn_Begin();
++		$SQL = "UPDATE debtorsmaster SET nextreviewdate = '" . $NextReview . "'";
++		if ($NewLimit != $Customer['creditlimit']) {
++			$SQL .= ", creditlimit = '" . $NewLimit . "'";
++		}
++		if ($NewStatusCode !== false) {
++			$SQL .= ", holdreason = '" . $NewStatusCode . "'";
++		}
++		DB_query($SQL . " WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'", __('The credit review could not be saved'));
++		LogCreditAction($DebtorNo, 'Review', $_POST['Notes'], $Customer['creditlimit'], $NewLimit, $Outcome, $NextReview);
++		if ($NewStatusCode !== false) {
++			LogCreditAction($DebtorNo, $Outcome == 'PutOnStop' ? 'Stop' : 'Watch', $_POST['Notes'], CreditStatusText($Status['status']), CreditStatusText($Outcome == 'PutOnStop' ? CREDIT_STATUS_STOP : CREDIT_STATUS_WATCH));
++		}
++		DB_Txn_Commit();
++		prnMsg(__('The credit review has been recorded'), 'success');
++		$Customer['creditlimit'] = $NewLimit;
++		$Customer['nextreviewdate'] = $NextReview;
++		$Status = GetCreditStatus($DebtorNo);
++	}
++}
++
++if (isset($_POST['ChangeStatus'])) {
++	$InputError = 0;
++	$NewStatus = (int) $_POST['NewStatus'];
++	if (!in_array($NewStatus, array(CREDIT_STATUS_NORMAL, CREDIT_STATUS_STOP, CREDIT_STATUS_WATCH))) {
++		$InputError = 1;
++	}
++	if (trim($_POST['StatusReason']) == '') {
++		$InputError = 1;
++		prnMsg(__('A reason must be entered for a change of credit status'), 'error');
++	}
++	$ReasonCode = false;
++	if ($InputError == 0) {
++		$CodeResult = DB_query("SELECT reasoncode FROM holdreasons
++								WHERE reasoncode = '" . (int) $_POST['StatusCode'] . "'
++								AND dissallowinvoices = '" . $NewStatus . "'");
++		if (DB_num_rows($CodeResult) == 0) {
++			$InputError = 1;
++			prnMsg(__('Select a credit status code that matches the new status'), 'error');
++		} else {
++			$CodeRow = DB_fetch_row($CodeResult);
++			$ReasonCode = $CodeRow[0];
++		}
++	}
++	if ($InputError == 0 AND $NewStatus == $Status['status'] AND $ReasonCode == $Status['reasoncode']) {
++		$InputError = 1;
++		prnMsg(__('The customer already has this credit status'), 'warn');
++	}
++	if ($InputError == 0) {
++		DB_Txn_Begin();
++		DB_query("UPDATE debtorsmaster SET holdreason = '" . $ReasonCode . "'
++					WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'", __('The credit status could not be changed'));
++		$ActionName = ($NewStatus == CREDIT_STATUS_STOP) ? 'Stop' : (($NewStatus == CREDIT_STATUS_WATCH) ? 'Watch' : 'Release');
++		LogCreditAction($DebtorNo, $ActionName, $_POST['StatusReason'], CreditStatusText($Status['status']) . ' / ' . $Status['reason'], CreditStatusText($NewStatus));
++		DB_Txn_Commit();
++		prnMsg(__('The credit status has been changed to') . ' ' . CreditStatusText($NewStatus), 'success');
++		$Status = GetCreditStatus($DebtorNo);
++	}
++}
++
++echo '<table class="selection">
++		<tr><th colspan="2">' . htmlspecialchars($Customer['name'], ENT_QUOTES, 'UTF-8') . ' (' . htmlspecialchars($DebtorNo, ENT_QUOTES, 'UTF-8') . ')</th></tr>
++		<tr><td>' . __('Credit status') . '</td><td><b>' . CreditStatusText($Status['status']) . '</b> - ' . htmlspecialchars($Status['reason'], ENT_QUOTES, 'UTF-8') . '</td></tr>
++		<tr><td>' . __('Credit limit') . '</td><td>' . locale_number_format($Customer['creditlimit'], $Customer['decimalplaces']) . ' ' . $Customer['currcode'] . '</td></tr>
++		<tr><td>' . __('Next review due') . '</td><td>' . ConvertSQLDate($Customer['nextreviewdate']) . '</td></tr>
++	</table><br />';
++
++$StatusOptions = '';
++$CodeResult = DB_query("SELECT reasoncode, reasondescription, dissallowinvoices FROM holdreasons ORDER BY dissallowinvoices, reasoncode");
++$CodeRows = array();
++while ($CodeRow = DB_fetch_array($CodeResult)) {
++	$CodeRows[] = $CodeRow;
++	$StatusOptions .= '<option value="' . $CodeRow['reasoncode'] . '" title="' . $CodeRow['dissallowinvoices'] . '">' . CreditStatusText($CodeRow['dissallowinvoices']) . ' - ' . htmlspecialchars($CodeRow['reasondescription'], ENT_QUOTES, 'UTF-8') . '</option>';
++}
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">
++	<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++	<input type="hidden" name="DebtorNo" value="' . htmlspecialchars($DebtorNo, ENT_QUOTES, 'UTF-8') . '" />';
++
++/* Record a credit review */
++$DefaultNext = isset($_POST['NextReviewDate']) ? $_POST['NextReviewDate'] : ConvertSQLDate(DefaultNextReviewDate());
++echo '<fieldset><legend>' . __('Record a credit review') . '</legend>
++	<field><label for="Outcome">' . __('Outcome') . '</label>
++		<select name="Outcome" id="Outcome">
++			<option value="LimitConfirmed">' . __('Limit confirmed') . '</option>
++			<option value="LimitRaised">' . __('Limit raised') . '</option>
++			<option value="LimitReduced">' . __('Limit reduced') . '</option>
++			<option value="PutOnWatch">' . __('Put on watch') . '</option>
++			<option value="PutOnStop">' . __('Put on stop') . '</option>
++		</select></field>
++	<field><label for="NewCreditLimit">' . __('Credit limit') . '</label>
++		<input type="text" class="number" name="NewCreditLimit" id="NewCreditLimit" size="12" value="' . locale_number_format($Customer['creditlimit'], $Customer['decimalplaces']) . '" /></field>
++	<field><label for="NextReviewDate">' . __('Next review date') . '</label>
++		<input type="text" class="date" name="NextReviewDate" id="NextReviewDate" size="10" value="' . $DefaultNext . '" /></field>
++	<field><label for="Notes">' . __('Notes') . '</label>
++		<textarea name="Notes" id="Notes" rows="3" cols="50">' . (isset($_POST['Notes']) ? htmlspecialchars($_POST['Notes'], ENT_QUOTES, 'UTF-8') : '') . '</textarea></field>
++	</fieldset>
++	<div class="centre"><input type="submit" name="RecordReview" value="' . __('Record Review') . '" /></div>';
++
++/* Change credit status */
++echo '<fieldset><legend>' . __('Change credit status') . '</legend>
++	<field><label for="NewStatus">' . __('New status') . '</label>
++		<select name="NewStatus" id="NewStatus">
++			<option value="0">' . __('Normal') . '</option>
++			<option value="2">' . __('On watch') . '</option>
++			<option value="1">' . __('On stop') . '</option>
++		</select></field>
++	<field><label for="StatusCode">' . __('Credit status code') . '</label>
++		<select name="StatusCode" id="StatusCode">' . $StatusOptions . '</select>
++		<fieldhelp>' . __('The code must belong to the chosen status; codes are maintained in Credit Status Maintenance') . '</fieldhelp></field>
++	<field><label for="StatusReason">' . __('Reason') . '</label>
++		<textarea name="StatusReason" id="StatusReason" rows="2" cols="50"></textarea></field>
++	</fieldset>
++	<div class="centre"><input type="submit" name="ChangeStatus" value="' . __('Change Status') . '" /></div>
++	</form>';
++
++/* Full history, newest first: read-only */
++echo '<br /><table class="selection">
++		<tr><th colspan="8">' . __('Credit history') . '</th></tr>
++		<tr><th>' . __('Date') . '</th><th>' . __('Action') . '</th><th>' . __('By') . '</th><th>' . __('Outcome') . '</th><th>' . __('From') . '</th><th>' . __('To') . '</th><th>' . __('Next review') . '</th><th>' . __('Notes') . '</th></tr>';
++$HistoryResult = DB_query("SELECT actiondate, action, userid, outcome, oldvalue, newvalue, nextreviewdate, notes
++							FROM creditcontrollog
++							WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'
++							ORDER BY actiondate DESC, id DESC");
++while ($Row = DB_fetch_array($HistoryResult)) {
++	echo '<tr class="striped_row">
++			<td>' . $Row['actiondate'] . '</td>
++			<td>' . htmlspecialchars($Row['action'], ENT_QUOTES, 'UTF-8') . '</td>
++			<td>' . htmlspecialchars($Row['userid'], ENT_QUOTES, 'UTF-8') . '</td>
++			<td>' . htmlspecialchars($Row['outcome'], ENT_QUOTES, 'UTF-8') . '</td>
++			<td>' . htmlspecialchars($Row['oldvalue'], ENT_QUOTES, 'UTF-8') . '</td>
++			<td>' . htmlspecialchars($Row['newvalue'], ENT_QUOTES, 'UTF-8') . '</td>
++			<td>' . ($Row['nextreviewdate'] > '1000-01-01' ? ConvertSQLDate($Row['nextreviewdate']) : '') . '</td>
++			<td>' . nl2br(htmlspecialchars($Row['notes'], ENT_QUOTES, 'UTF-8')) . '</td>
++		</tr>';
++}
++echo '</table>';
++
++include('includes/footer.php');
+diff --git a/CreditControlReport.php b/CreditControlReport.php
+new file mode 100644
+index 0000000..97aabf2
+--- /dev/null
++++ b/CreditControlReport.php
+@@ -0,0 +1,148 @@
++<?php
++
++/* Credit control report: customers due or overdue for a credit review, customers over their credit
++limit and customers on watch or on stop. Filterable by sales rep and currency; totals in home currency. */
++
++require(__DIR__ . '/includes/session.php');
++include('includes/CreditControlFunctions.php');
++
++$Title = __('Credit Control Report');
++$ViewTopic = 'AccountsReceivable';
++$BookMark = 'CreditControlReport';
++include('includes/header.php');
++
++echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/customer.png" title="' . $Title . '" alt="" /> ' . $Title . '</p>';
++
++/* A sales rep login sees only their own customers, whatever is posted */
++$RepLogin = (isset($_SESSION['SalesmanLogin']) AND $_SESSION['SalesmanLogin'] != '') ? $_SESSION['SalesmanLogin'] : '';
++$Salesman = ($RepLogin != '') ? $RepLogin : (isset($_POST['Salesman']) ? $_POST['Salesman'] : '');
++$Currency = isset($_POST['Currency']) ? $_POST['Currency'] : '';
++
++echo '<form method="post" action="' . htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8') . '">
++	<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++	<fieldset><legend>' . __('Filter') . '</legend>';
++
++if ($RepLogin == '') {
++	echo '<field><label for="Salesman">' . __('Sales rep') . '</label><select name="Salesman" id="Salesman"><option value="">' . __('All') . '</option>';
++	$Result = DB_query("SELECT salesmancode, salesmanname FROM salesman ORDER BY salesmanname");
++	while ($MyRow = DB_fetch_array($Result)) {
++		echo '<option value="' . $MyRow['salesmancode'] . '"' . ($Salesman == $MyRow['salesmancode'] ? ' selected="selected"' : '') . '>' . htmlspecialchars($MyRow['salesmanname'], ENT_QUOTES, 'UTF-8') . '</option>';
++	}
++	echo '</select></field>';
++}
++echo '<field><label for="Currency">' . __('Currency') . '</label><select name="Currency" id="Currency"><option value="">' . __('All') . '</option>';
++$Result = DB_query("SELECT currabrev, currency FROM currencies ORDER BY currabrev");
++while ($MyRow = DB_fetch_array($Result)) {
++	echo '<option value="' . $MyRow['currabrev'] . '"' . ($Currency == $MyRow['currabrev'] ? ' selected="selected"' : '') . '>' . $MyRow['currabrev'] . ' - ' . htmlspecialchars($MyRow['currency'], ENT_QUOTES, 'UTF-8') . '</option>';
++}
++echo '</select></field></fieldset>
++	<div class="centre"><input type="submit" name="Show" value="' . __('Show Report') . '" /></div></form>';
++
++/* One row per customer: balance is the sum of open debtor transactions in the customer's currency,
++and the home-currency value converts each transaction at its own rate */
++$SQL = "SELECT debtorsmaster.debtorno,
++			debtorsmaster.name,
++			debtorsmaster.currcode,
++			debtorsmaster.creditlimit,
++			debtorsmaster.nextreviewdate,
++			holdreasons.dissallowinvoices,
++			holdreasons.reasondescription,
++			currencies.decimalplaces,
++			currencies.rate,
++			(SELECT MIN(custbranch.salesman) FROM custbranch WHERE custbranch.debtorno = debtorsmaster.debtorno) AS salesman,
++			COALESCE((SELECT SUM(debtortrans.ovamount + debtortrans.ovgst + debtortrans.ovfreight + debtortrans.ovdiscount - debtortrans.alloc)
++				FROM debtortrans WHERE debtortrans.debtorno = debtorsmaster.debtorno), 0) AS balance,
++			COALESCE((SELECT SUM((debtortrans.ovamount + debtortrans.ovgst + debtortrans.ovfreight + debtortrans.ovdiscount - debtortrans.alloc) / debtortrans.rate)
++				FROM debtortrans WHERE debtortrans.debtorno = debtorsmaster.debtorno AND debtortrans.rate <> 0), 0) AS homebalance
++		FROM debtorsmaster
++		INNER JOIN holdreasons ON debtorsmaster.holdreason = holdreasons.reasoncode
++		INNER JOIN currencies ON debtorsmaster.currcode = currencies.currabrev
++		WHERE 1 = 1";
++if ($Currency != '') {
++	$SQL .= " AND debtorsmaster.currcode = '" . DB_escape_string($Currency) . "'";
++}
++if ($Salesman != '') {
++	$SQL .= " AND EXISTS (SELECT 1 FROM custbranch WHERE custbranch.debtorno = debtorsmaster.debtorno AND custbranch.salesman = '" . DB_escape_string($Salesman) . "')";
++}
++$SQL .= " ORDER BY debtorsmaster.name";
++$Result = DB_query($SQL, __('The credit control report could not be retrieved'));
++
++$Today = date('Y-m-d');
++$Review = array();
++$Over = array();
++$Flagged = array();
++while ($MyRow = DB_fetch_array($Result)) {
++	if ($MyRow['nextreviewdate'] <= $Today) {
++		$Review[] = $MyRow;
++	}
++	if ($MyRow['balance'] > $MyRow['creditlimit']) {
++		$MyRow['overby'] = $MyRow['balance'] - $MyRow['creditlimit'];
++		$MyRow['homeoverby'] = ($MyRow['rate'] != 0) ? $MyRow['overby'] / $MyRow['rate'] : 0;
++		$Over[] = $MyRow;
++	}
++	if ($MyRow['dissallowinvoices'] != CREDIT_STATUS_NORMAL) {
++		$Flagged[] = $MyRow;
++	}
++}
++
++$HomeDP = $_SESSION['CompanyRecord']['decimalplaces'];
++$HomeCurr = $_SESSION['CompanyRecord']['currencydefault'];
++
++function CreditReportTable($Heading, $Rows, $Columns, $HomeCurr, $HomeDP, $TotalField, $RootPath) {
++	echo '<br /><table class="selection"><tr><th colspan="' . (count($Columns) + 1) . '">' . $Heading . ' (' . count($Rows) . ')</th></tr><tr><th>' . __('Customer') . '</th>';
++	foreach ($Columns as $Label => $Field) {
++		echo '<th>' . $Label . '</th>';
++	}
++	echo '</tr>';
++	$Total = 0;
++	foreach ($Rows as $Row) {
++		echo '<tr class="striped_row"><td><a href="' . $RootPath . '/CreditControl.php?DebtorNo=' . urlencode($Row['debtorno']) . '">' . htmlspecialchars($Row['name'], ENT_QUOTES, 'UTF-8') . '</a></td>';
++		foreach ($Columns as $Label => $Field) {
++			echo '<td>' . call_user_func($Field, $Row) . '</td>';
++		}
++		echo '</tr>';
++		if ($TotalField !== '') {
++			$Total += $Row[$TotalField];
++		}
++	}
++	if ($TotalField !== '') {
++		echo '<tr><th colspan="' . count($Columns) . '">' . __('Total in') . ' ' . $HomeCurr . '</th><th class="number">' . locale_number_format($Total, $HomeDP) . '</th></tr>';
++	}
++	echo '</table>';
++}
++
++$Money = function ($Field) {
++	return function ($Row) use ($Field) {
++		return '<span class="number">' . locale_number_format($Row[$Field], $Row['decimalplaces']) . '</span> ' . $Row['currcode'];
++	};
++};
++$Text = function ($Field) {
++	return function ($Row) use ($Field) {
++		return htmlspecialchars($Row[$Field], ENT_QUOTES, 'UTF-8');
++	};
++};
++$ReviewDate = function ($Row) {
++	return ConvertSQLDate($Row['nextreviewdate']);
++};
++$StatusCol = function ($Row) {
++	return CreditStatusText($Row['dissallowinvoices']) . ' - ' . htmlspecialchars($Row['reasondescription'], ENT_QUOTES, 'UTF-8');
++};
++$HomeCol = function ($Field, $DP) {
++	return function ($Row) use ($Field, $DP) {
++		return locale_number_format($Row[$Field], $DP);
++	};
++};
++
++CreditReportTable(__('Due or overdue for credit review'), $Review,
++	array(__('Next review due') => $ReviewDate, __('Credit limit') => $Money('creditlimit'), __('Status') => $StatusCol),
++	$HomeCurr, $HomeDP, '', $RootPath);
++
++CreditReportTable(__('Over credit limit'), $Over,
++	array(__('Credit limit') => $Money('creditlimit'), __('Balance') => $Money('balance'), __('Over by') => $Money('overby'), __('Over by') . ' (' . $HomeCurr . ')' => $HomeCol('homeoverby', $HomeDP)),
++	$HomeCurr, $HomeDP, 'homeoverby', $RootPath);
++
++CreditReportTable(__('On watch or on stop'), $Flagged,
++	array(__('Status') => $StatusCol, __('Balance') => $Money('balance'), __('Balance') . ' (' . $HomeCurr . ')' => $HomeCol('homebalance', $HomeDP)),
++	$HomeCurr, $HomeDP, 'homebalance', $RootPath);
++
++include('includes/footer.php');
+diff --git a/Customers.php b/Customers.php
+index 7f2a635..3dd19bd 100644
+--- a/Customers.php
++++ b/Customers.php
+@@ -21,6 +21,7 @@ include('includes/header.php');
+ 
+ include('includes/SQL_CommonFunctions.php');
+ include('includes/CountriesArray.php');
++include('includes/CreditControlFunctions.php');
+ 
+ echo '<p class="page_title_text">
+ 		<img src="'.$RootPath.'/css/'.$Theme.'/images/customer.png" title="' . __('Customer') .
+@@ -131,6 +132,26 @@ if (isset($_POST['submit'])) {
+ 
+ 		$SQL_ClientSince = FormatDateForSQL($_POST['ClientSince']);
+ 
++		/* Credit control: only credit control may change the credit status or the credit limit of an existing customer.
++		For anyone else the stored values are kept whatever was posted. Changes by credit control are logged. */
++		$CreditChanged = false;
++		if (!isset($_POST['New'])) {
++			$OldCreditResult = DB_query("SELECT holdreason, creditlimit FROM debtorsmaster WHERE debtorno = '" . $_POST['DebtorNo'] . "'");
++			if (DB_num_rows($OldCreditResult) == 1) {
++				$OldCredit = DB_fetch_array($OldCreditResult);
++				$NewLimitPosted = filter_number_format($_POST['CreditLimit']);
++				if (!CanMaintainCredit()) {
++					if ($_POST['HoldReason'] != $OldCredit['holdreason'] OR $NewLimitPosted != $OldCredit['creditlimit']) {
++						prnMsg(__('Only credit control can change the credit status or credit limit of a customer. These fields have not been changed'), 'warn');
++					}
++					$_POST['HoldReason'] = $OldCredit['holdreason'];
++					$_POST['CreditLimit'] = locale_number_format($OldCredit['creditlimit'], 4);
++				} elseif ($_POST['HoldReason'] != $OldCredit['holdreason'] OR $NewLimitPosted != $OldCredit['creditlimit']) {
++					$CreditChanged = true;
++				}
++			}
++		}
++
+ 		if (!isset($_POST['New'])) {
+ 
+ 			$SQL = "SELECT count(id)
+@@ -200,6 +221,9 @@ if (isset($_POST['submit'])) {
+ 
+ 			$ErrMsg = __('The customer could not be updated because');
+ 			$Result = DB_query($SQL, $ErrMsg);
++			if ($CreditChanged) {
++				LogCreditAction($_POST['DebtorNo'], 'CustomerMaintenance', __('Changed in customer maintenance'), $OldCredit['holdreason'] . ' / ' . $OldCredit['creditlimit'], $_POST['HoldReason'] . ' / ' . $NewLimitPosted);
++			}
+ 			prnMsg( __('Customer updated'),'success');
+ 			echo '<br />';
+ 
+@@ -235,7 +259,8 @@ if (isset($_POST['submit'])) {
+ 							taxref,
+ 							customerpoline,
+ 							typeid,
+-							language_id)
++							language_id,
++							nextreviewdate)
+ 				VALUES ('" . $_POST['DebtorNo'] ."',
+ 						'" . $_POST['CustName'] ."',
+ 						'" . $_POST['Address1'] ."',
+@@ -257,7 +282,8 @@ if (isset($_POST['submit'])) {
+ 						'" . $_POST['TaxRef'] . "',
+ 						'" . $_POST['CustomerPOLine'] . "',
+ 						'" . $_POST['typeid'] . "',
+-						'" . $_POST['LanguageID'] . "')";
++						'" . $_POST['LanguageID'] . "',
++						'" . DefaultNextReviewDate() . "')";
+ 
+ 			$ErrMsg = __('This customer could not be added because');
+ 			$Result = DB_query($SQL, $ErrMsg);
+diff --git a/DeliveryDetails.php b/DeliveryDetails.php
+index 7dd62ed..aca1206 100644
+--- a/DeliveryDetails.php
++++ b/DeliveryDetails.php
+@@ -24,6 +24,7 @@ include('includes/FreightCalculation.php');
+ include('includes/SQL_CommonFunctions.php');
+ include('includes/StockFunctions.php');
+ include('includes/CountriesArray.php');
++include('includes/CreditControlFunctions.php');
+ 
+ if (isset($_GET['identifier'])) {
+ 	$identifier=$_GET['identifier'];
+@@ -325,6 +326,12 @@ UNTIL ONLINE CREDIT CARD PROCESSING IS PERFORMED ASSUME OK TO PROCESS
+ 	} #end if else freight charge not altered
+ } #end if process order
+ 
++/* Credit control: no order is accepted or released for a customer on stop (quotations are still allowed) */
++if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1 AND $_SESSION['Items'.$identifier]->Quotation != 1 AND CustomerOnStop($_SESSION['Items'.$identifier]->DebtorNo)) {
++	$OK_to_PROCESS = 0;
++	prnMsg(__('This customer account is on stop. The order cannot be accepted until credit control takes the account off stop. Please contact credit control'),'error');
++}
++
+ if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1 AND $_SESSION['ExistingOrder'.$identifier]==0) {
+ 
+ /* finally write the order header to the database and then the order line details */
+diff --git a/EDIProcessOrders.php b/EDIProcessOrders.php
+index 1ae8d35..1f1e441 100644
+--- a/EDIProcessOrders.php
++++ b/EDIProcessOrders.php
+@@ -12,6 +12,7 @@ include('includes/header.php');
+ 
+ include('includes/SQL_CommonFunctions.php'); // need for EDITransNo
+ require_once('includes/MiscFunctions.php');
++include('includes/CreditControlFunctions.php');
+ 
+ /*The logic outline is this ....
+ 
+@@ -892,7 +893,12 @@ echo '<pre>';
+ print_r($Order);
+ echo '</pre>';
+ */
+-				if ($CreateOrder = true) {
++				/* credit control: no electronic order is created for a customer on stop */
++				$CreditStopped = (!empty($Order->DebtorNo) AND CustomerOnStop($Order->DebtorNo));
++				if ($CreditStopped) {
++					$EmailText .= "\n" . __('This order was not created because the customer account is on stop') . ': ' . $Order->DebtorNo;
++				}
++				if ($CreateOrder = true AND !$CreditStopped) {
+ 					//	UpdateOrder($Order);
+ 					DB_Txn_Begin();
+ 				//$Order->OrdDate = date("Y-m-d");
+diff --git a/NOTES.md b/NOTES.md
+new file mode 100644
+index 0000000..3dffdad
+--- /dev/null
++++ b/NOTES.md
+@@ -0,0 +1,58 @@
++# Credit control: what was changed
++
++This delivers the **core** of `task/brd.md`: credit reviews, stop/watch, the credit history, enforcement of the stop, a review/over-limit report, and the install/upgrade path. Nothing could be run here (no shell, no database), so none of it has been executed or tested. Treat it as untested code.
++
++**Not done:** reminder letters (BR-12 to 18), interest and fees (BR-19 to 24), write-offs (BR-25 to 29), the aged-debt columns (BR-31), rep-only credit views (BR-33/34), the portal views (BR-35/36), the month-end ledger reconciliation (BR-37/38) and the staff guide (BR-42/43). Several of these have open questions (section 9 of the BRD) that need Finance answers first: the interest basis, the fee basis, and the write-off threshold and GL accounts.
++
++## Design decision: the status lives in the existing hold reason
++
++webERP already has `debtorsmaster.holdreason` pointing at `holdreasons.dissallowinvoices` (0 = normal, 1 = no invoicing, 2 = watch). The order-entry, counter-sale and statement pages already read it. I used it as the credit status rather than adding a second flag that could disagree with it: **stop = a hold reason with `dissallowinvoices=1`, watch = `2`**. Existing customers already on such a reason are therefore on stop from day one (BR-40) with no migration. Finance defines the reason codes in the existing Credit Status Maintenance page.
++
++## Changes
++
++- **`sql/updates/44.php`** (new update):
++  - adds `debtorsmaster.nextreviewdate`;
++  - creates `creditcontrollog`;
++  - adds config `CreditReviewMonths` (12);
++  - adds security token 21 and grants it to role 8 (System Administrator);
++  - registers `CreditControl.php` and `CreditControlReport.php` at token 21;
++  - sets every existing customer's next review date to today plus 12 months.
++  
++  It calls `UpdateDBNo` only if `Errors == 0`.
++- **Fresh install:** the same changes in `install/sql/tables/debtorsmaster.sql` and `creditcontrollog.sql` (new), and in `install/sql/data/config.sql`, `securitytokens.sql`, `securitygroups.sql` and `scripts.sql`. The numbered updates do not run on a fresh install, so both places had to change.
++- **`includes/CreditControlFunctions.php`** (new): `GetCreditStatus`, `CustomerOnStop`, `CanMaintainCredit`, `LogCreditAction` (append-only log), `DefaultNextReviewDate`.
++- **`CreditControl.php`** (new, token 21):
++  - records a review (outcome, new limit, notes, next review date). A limit change, and a watch or stop outcome, are applied in the same transaction (BR-04);
++  - changes the status with a mandatory reason (BR-05);
++  - shows the full history, which is never edited or deleted (BR-03, BR-32).
++- **`CreditControlReport.php`** (new, token 21): customers due or overdue for review, over their limit (by how much), and on watch or stop. It filters by rep and currency and totals in home currency (BR-30).
++- **Enforcement of the stop (BR-06):**
++  - `DeliveryDetails.php`: blocks placing or amending an order, but not a quotation.
++  - `ConfirmDispatch_Invoice.php`: blocks dispatch and invoicing.
++  - `RecurringSalesOrdersProcess.php`: skips the template with a warning, and it stays due.
++  - `EDIProcessOrders.php`: does not create the order, and says so in the email.
++  - `api/includes/api_salesorders.php`: `InsertSalesOrderHeader` returns the new error 1174 (`api_errorcodes.php`).
++  
++  Order entry, counter sales and special orders already refused or warned on the hold reason before this change.
++- **`Customers.php`:**
++  - only token-21 users can change an existing customer's hold reason or credit limit. For anyone else the stored values are kept and a warning is shown (BR-07);
++  - changes made there by credit control are logged;
++  - new customers get a next review date from `CreditReviewMonths` (BR-02).
++
++## Ambiguities and how I resolved them
++
++- **"Credit controller, deputy and Finance Director".** These are not roles in the system. I added token 21; Finance grants it to the roles it wants. Only the System Administrator role gets it by default.
++- **Quotations.** BR-06 says "orders", so quotations are still allowed for a customer on stop.
++- **Existing orders on a customer put on stop.** Dispatch and invoicing are blocked. Credit control "releases" them by taking the customer off stop. There is no per-order release.
++- **Customer with several branches and reps.** The report treats a customer as belonging to a rep if any branch does (the BRD assumes one rep per customer).
++- **Over-limit balance.** The report compares the open debtor transaction balance with the limit. Orders not yet invoiced are not counted, unlike `GetCreditAvailable`.
++- **BR-10 (hold over-limit orders for approval).** Not implemented. The existing `CheckCreditLimits` setting still warns or blocks, and this needs the answer to open question 5 first.
++- **BR-08 (credit control sees orders taken for watched customers).** Not implemented. Watch is shown and warned about by the existing order-entry code.
++
++## Known gaps and cautions
++
++- **Pre-existing bug left in place.** `EDIProcessOrders.php` has `if ($CreateOrder = true)`, an assignment, so earlier validation failures never stop an order. I did not change it, to avoid altering behaviour beyond the request. My stop check is added as a separate condition.
++- **Credit limit through the API.** `ModifyCustomer` in the API still lets a user with API access change the credit limit and hold reason. It is not restricted to token 21.
++- **Customer imports.** CSV and API customer inserts leave `nextreviewdate` at the sentinel `1000-01-01`, so those customers show as due for review immediately.
++- **Navigation.** There is no menu entry. Reach the pages at `/CreditControl.php?DebtorNo=…` and `/CreditControlReport.php`. I did not edit `SelectCustomer.php` or the menu seed data.
++- **Demo database.** I did not look at `demo.sql`. If it loads without running the numbered updates, it needs the same schema and data changes.
+diff --git a/RecurringSalesOrdersProcess.php b/RecurringSalesOrdersProcess.php
+index 09aeeca..468ce9b 100644
+--- a/RecurringSalesOrdersProcess.php
++++ b/RecurringSalesOrdersProcess.php
+@@ -31,6 +31,7 @@ include('includes/header.php');
+ 
+ include('includes/SQL_CommonFunctions.php');
+ include('includes/GetSalesTransGLCodes.php');
++include('includes/CreditControlFunctions.php');
+ 
+ $SQL = "SELECT recurringsalesorders.recurrorderno,
+ 			recurringsalesorders.debtorno,
+@@ -89,6 +90,12 @@ prnMsg(__('The number of recurring orders to process is') .' : ' . DB_num_rows($
+ 
+ while ($RecurrOrderRow = DB_fetch_array($RecurrOrdersDueResult)){
+ 
++	if (CustomerOnStop($RecurrOrderRow['debtorno'])) {
++		/* credit control: no standing order is created for a customer on stop; the template stays due and is picked up once the stop is lifted */
++		prnMsg(__('Recurring order') . ' ' . $RecurrOrderRow['recurrorderno'] . ' ' . __('for') . ' ' . $RecurrOrderRow['debtorno'] . ' ' . __('was not created because the customer account is on stop'),'warn');
++		continue;
++	}
++
+ 	$EmailText ='';
+ 	echo '<br />' . __('Recurring order') . ' ' . $RecurrOrderRow['recurrorderno'] . ' ' . __('for') . ' ' . $RecurrOrderRow['debtorno'] . ' - ' . $RecurrOrderRow['branchcode'] . ' ' . __('is being processed');
+ 
+diff --git a/api/includes/api_errorcodes.php b/api/includes/api_errorcodes.php
+index 72f5c31..98c11b0 100644
+--- a/api/includes/api_errorcodes.php
++++ b/api/includes/api_errorcodes.php
+@@ -186,6 +186,7 @@ define('LocationCodeDoesntExist',1170);
+ define('IncorrectLocationNameLength',1171);
+ define('TaxProvinceIdNotSetup',1172);
+ define('InvalidControlled',1173);
++define('CustomerAccountOnStop',1174);
+ 
+ 
+ /* Array of Descriptions of errors */
+@@ -363,3 +364,4 @@ $ErrorDescription['1170'] = __('Location Code Does not Exist');
+ $ErrorDescription['1171'] = __('Incorrect Location Name Length');
+ $ErrorDescription['1172'] = __('Tax Province ID Not Setup');
+ $ErrorDescription['1173'] = __('Invalid Controlled');
++$ErrorDescription['1174'] = __('Customer account is on stop');
+diff --git a/api/includes/api_salesorders.php b/api/includes/api_salesorders.php
+index 38014d7..74f39ce 100644
+--- a/api/includes/api_salesorders.php
++++ b/api/includes/api_salesorders.php
+@@ -277,6 +277,11 @@ function InsertSalesOrderHeader($OrderHeader, $user, $password) {
+ 	}
+ 	$Errors=VerifyDebtorExists($OrderHeader['debtorno'], sizeof($Errors), $Errors);
+ 	$Errors=VerifyBranchNoExists($OrderHeader['debtorno'],$OrderHeader['branchcode'], sizeof($Errors), $Errors);
++	/* credit control: no order, other than a quotation, for a customer on stop */
++	include_once(__DIR__ . '/../../includes/CreditControlFunctions.php');
++	if ((!isset($OrderHeader['quotation']) OR $OrderHeader['quotation'] != 1) AND CustomerOnStop($OrderHeader['debtorno'])) {
++		$Errors[sizeof($Errors)] = CustomerAccountOnStop;
++	}
+ 	if (isset($OrderHeader['customerref'])){
+ 		$Errors=VerifyCustomerRef($OrderHeader['customerref'], sizeof($Errors), $Errors);
+ 	}
+diff --git a/includes/CreditControlFunctions.php b/includes/CreditControlFunctions.php
+new file mode 100644
+index 0000000..6391d3e
+--- /dev/null
++++ b/includes/CreditControlFunctions.php
+@@ -0,0 +1,89 @@
++<?php
++
++/* Shared credit control helpers.
++
++A customer's credit status is held in debtorsmaster.holdreason, which points at
++holdreasons.dissallowinvoices: 0 = normal, 2 = on watch, 1 = on stop.
++Every credit control action is written to creditcontrollog. */
++
++define('CREDIT_STATUS_NORMAL', 0);
++define('CREDIT_STATUS_STOP', 1);
++define('CREDIT_STATUS_WATCH', 2);
++
++/* Returns array('status'=>0|1|2, 'reasoncode'=>, 'reason'=>) or false if the customer does not exist */
++function GetCreditStatus($DebtorNo) {
++	$Result = DB_query("SELECT debtorsmaster.holdreason,
++							holdreasons.reasondescription,
++							holdreasons.dissallowinvoices
++						FROM debtorsmaster
++						INNER JOIN holdreasons
++							ON debtorsmaster.holdreason = holdreasons.reasoncode
++						WHERE debtorsmaster.debtorno = '" . DB_escape_string($DebtorNo) . "'");
++	if (DB_num_rows($Result) == 0) {
++		return false;
++	}
++	$MyRow = DB_fetch_array($Result);
++	return array('status' => (int) $MyRow['dissallowinvoices'],
++				'reasoncode' => $MyRow['holdreason'],
++				'reason' => $MyRow['reasondescription']);
++}
++
++function CreditStatusText($Status) {
++	if ($Status == CREDIT_STATUS_STOP) {
++		return __('On stop');
++	} elseif ($Status == CREDIT_STATUS_WATCH) {
++		return __('On watch');
++	}
++	return __('Normal');
++}
++
++/* True when new orders / dispatch / invoicing must be refused for the customer */
++function CustomerOnStop($DebtorNo) {
++	$Status = GetCreditStatus($DebtorNo);
++	return ($Status !== false AND $Status['status'] == CREDIT_STATUS_STOP);
++}
++
++/* The credit controller, deputy and Finance Director hold the CreditControl.php page token */
++function CanMaintainCredit() {
++	return isset($_SESSION['PageSecurityArray']['CreditControl.php'])
++		AND in_array($_SESSION['PageSecurityArray']['CreditControl.php'], $_SESSION['AllowedPageSecurityTokens']);
++}
++
++/* Append to the audit history. Rows are never updated or deleted. */
++function LogCreditAction($DebtorNo, $Action, $Reason = '', $OldValue = '', $NewValue = '', $Outcome = '', $NextReviewDate = '1000-01-01') {
++	DB_query("INSERT INTO creditcontrollog (debtorno,
++											action,
++											actiondate,
++											userid,
++											outcome,
++											oldvalue,
++											newvalue,
++											notes,
++											nextreviewdate)
++					VALUES ('" . DB_escape_string($DebtorNo) . "',
++							'" . DB_escape_string($Action) . "',
++							'" . date('Y-m-d H:i:s') . "',
++							'" . DB_escape_string($_SESSION['UserID']) . "',
++							'" . DB_escape_string($Outcome) . "',
++							'" . DB_escape_string($OldValue) . "',
++							'" . DB_escape_string($NewValue) . "',
++							'" . DB_escape_string($Reason) . "',
++							'" . $NextReviewDate . "')",
++			__('Could not record the credit control action'));
++}
++
++/* Default next review date for a customer: today plus the standard review period in months */
++function DefaultNextReviewDate() {
++	$Months = isset($_SESSION['CreditReviewMonths']) ? (int) $_SESSION['CreditReviewMonths'] : 12;
++	if ($Months < 1) {
++		$Months = 12;
++	}
++	return date('Y-m-d', strtotime('+' . $Months . ' months'));
++}
++
++/* Hold reason codes for stop / watch / normal. Returns the lowest code with the given dissallowinvoices value, or false */
++function GetHoldReasonCode($Status) {
++	$Result = DB_query("SELECT MIN(reasoncode) FROM holdreasons WHERE dissallowinvoices = '" . (int) $Status . "'");
++	$MyRow = DB_fetch_row($Result);
++	return ($MyRow[0] === NULL) ? false : $MyRow[0];
++}
+diff --git a/install/sql/data/config.sql b/install/sql/data/config.sql
+index ac01caf..4b219bf 100644
+--- a/install/sql/data/config.sql
++++ b/install/sql/data/config.sql
+@@ -1,3 +1,3 @@
+ 
+-INSERT INTO `config` VALUES ('AllowOrderLineItemNarrative','1'),('AllowSalesOfZeroCostItems','0'),('AutoAuthorisePO','1'),('AutoCreateWOs','1'),('AutoDebtorNo','0'),('AutoIssue','1'),('AutoSupplierNo','0'),('CheckCreditLimits','1'),('Check_Price_Charged_vs_Order_Price','1'),('Check_Qty_Charged_vs_Del_Qty','1'),('CountryOfOperation','GB'),('CreditingControlledItems_MustExist','0'),('DB_Maintenance','0'),('DB_Maintenance_LastRun','2015-08-14'),('DefaultBlindPackNote','1'),('DefaultCreditLimit','1000'),('DefaultCustomerType','1'),('DefaultDateFormat','d/m/Y'),('DefaultDisplayRecordsMax','50'),('DefaultFactoryLocation','MEL'),('DefaultPriceList','DE'),('DefaultSupplierType','1'),('DefaultTaxCategory','1'),('Default_Shipper','1'),('DefineControlledOnWOEntry','1'),('DispatchCutOffTime','14'),('DoFreightCalc','0'),('EDIHeaderMsgId','D:01B:UN:EAN010'),('EDIReference','WEBERP'),('EDI_Incoming_Orders','companies/weberpdemo/EDI_Incoming_Orders'),('EDI_MsgPending','companies/weberpdemo/EDI_Pending'),('EDI_MsgSent','companies/weberpdemo/EDI_Sent'),('ExchangeRateFeed','ECB'),('Extended_CustomerInfo','1'),('Extended_SupplierInfo','1'),('FactoryManagerEmail','manager@company.com'),('FreightChargeAppliesIfLessThan','1000'),('FreightTaxCategory','1'),('FrequentlyOrderedItems','0'),('geocode_integration','0'),('GoogleTranslatorAPIKey',''),('HTTPS_Only','0'),('InventoryManagerEmail','test@company.com'),('InvoicePortraitFormat','0'),('InvoiceQuantityDefault','1'),('ItemDescriptionLanguages', ','),('LastDayOfWeek','0'),('LogPath',''),('LogSeverity','4'),('MaxImageSize','300'),('MaxSerialItemsIssued','50'),('MonthsAuditTrail','1'),('NumberOfMonthMustBeShown','6'),('NumberOfPeriodsOfStockUsage','12'),('OverChargeProportion','30'),('OverReceiveProportion','20'),('PackNoteFormat','1'),('PageLength','48'),('PastDueDays1','30'),('PastDueDays2','60'),('PeriodProfitAccount',''),('PO_AllowSameItemMultipleTimes','1'),('ProhibitJournalsToControlAccounts','1'),('ProhibitNegativeStock','0'),('ProhibitPostingsBefore','2024-04-30'),('PurchasingManagerEmail','test@company.com'),('QualityCOAText',''),('QualityLogSamples','0'),('QualityProdSpecText',''),('QuickEntries','10'),('RadioBeaconFileCounter','/home/RadioBeacon/FileCounter'),('RadioBeaconFTP_user_name','RadioBeacon ftp server user name'),('RadioBeaconHomeDir','/home/RadioBeacon'),('RadioBeaconStockLocation','BL'),('RadioBraconFTP_server','192.168.2.2'),('RadioBreaconFilePrefix','ORDXX'),('RadionBeaconFTP_user_pass','Radio Beacon remote ftp server password'),('reports_dir','companies/weberp/reports'),('RequirePickingNote','1'),('RomalpaClause','Ownership will not pass to the buyer until the goods have been paid for in full.'),('ShopAboutUs','This web-shop software has been developed by Logic Works Ltd for webERP. For support contact Phil Daintree by rn&lt;a href=&quot;mailto:support@logicworks.co.nz&quot;&gt;email&lt;/a&gt;rn'),('ShopAllowBankTransfer','1'),('ShopAllowCreditCards','1'),('ShopAllowPayPal','1'),('ShopAllowSurcharges','1'),('ShopBankTransferSurcharge','0.0'),('ShopBranchCode','ANGRY'),('ShopContactUs','For support contact Logic Works Ltd by rn&lt;a href=&quot;mailto:support@logicworks.co.nz&quot;&gt;email&lt;/a&gt;'),('ShopCreditCardBankAccount','1030'),('ShopCreditCardGateway','SwipeHQ'),('ShopCreditCardSurcharge','2.95'),('ShopDebtorNo','ANGRY'),('ShopFreightMethod','NoFreight'),('ShopFreightPolicy','Shipping information'),('ShopManagerEmail','shopmanager@yourdomain.com'),('ShopMode','test'),('ShopName','webERP Demo Store'),('ShopPayFlowMerchant',''),('ShopPayFlowPassword',''),('ShopPayFlowUser',''),('ShopPayFlowVendor',''),('ShopPayPalBankAccount','1040'),('ShopPaypalCommissionAccount','1'),('ShopPayPalPassword',''),('ShopPayPalProPassword',''),('ShopPayPalProSignature',''),('ShopPayPalProUser',''),('ShopPayPalSignature',''),('ShopPayPalSurcharge','3.4'),('ShopPayPalUser',''),('ShopPrivacyStatement','&lt;h2&gt;We are committed to protecting your privacy.&lt;/h2&gt;&lt;p&gt;We recognise that your personal information is confidential and we understand that it is important for you to know how we treat your personal information. Please read on for more information about our Privacy Policy.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;h2&gt;1. What information do we collect and how do we use it?&lt;/h2&gt;&lt;br /&gt;We use the information it collects from you for the following purposes:&lt;ul&gt;&lt;li&gt;To assist us in providing you with a quality service&lt;/li&gt;&lt;li&gt;To respond to, and process, your request&lt;/li&gt;&lt;li&gt;To notify competition winners or fulfil promotional obligations&lt;/li&gt;&lt;li&gt;To inform you of, and provide you with, new and existing products and services offered by us from time to time &lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Any information we collect will not be used in ways that you have not consented to.&lt;/p&gt;&lt;p&gt;If you send us an email, we will store your email address and the contents of the email. This information will only be used for the purpose for which you have provided it. Electronic mail submitted to us is handled and saved according to the provisions of the the relevant statues.&lt;/p&gt;&lt;p&gt;When we offer contests and promotions, customers who choose to enter are asked to provide personal information. This information may then be used by us to notify winners, or to fulfil promotional obligations.&lt;/p&gt;&lt;p&gt;We may use the information we collect to occasionally notify you about important functionality changes to our website, new and special offers we think you will find valuable. If at any stage you no longer wish to receive these notifications you may opt out by sending us an email.&lt;/p&gt;&lt;p&gt;We do monitor this website in order to identify user trends and to improve the site if necessary. Any of this information, such as the type of site browser your computer has, will be used only in aggregate form and your individual details will not be identified.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;2. How do we store and protect your personal information and who has access to that information?&lt;/h2&gt;&lt;p&gt;As required by statute, we follow strict procedures when storing and using the information you have provided.&lt;/p&gt;&lt;p&gt;We do not sell, trade or rent your personal information to others. We may provide aggregate statistics about our customers and website trends. However, these statistics will not have any personal information which would identify you.&lt;/p&gt;&lt;p&gt;Only specific employees within our company are able to access your personal data.&lt;/p&gt;&lt;p&gt;This policy means that we may require proof of identity before we disclose any information to you.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;3. What should I do if I want to change my details or if I donÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢t want to be contacted any more?&lt;/h2&gt;&lt;p&gt;At any stage you have the right to access and amend or update your personal details. If you do not want to receive any communications from us you may opt out by contacting us see &lt;a href=&quot;index.php?Page=ContactUs&quot;&gt;the Contact Us Page&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;4. What happens if we decide to change this Privacy Policy?&lt;/h2&gt;&lt;p&gt;If we change any aspect of our Privacy Policy we will post these changes on this page so that you are always aware of how we are treating your personal information.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;5. How can you contact us if you have any questions, comments or concerns about our Privacy Policy?&lt;/h2&gt;&lt;p&gt;We welcome any questions or comments you may have please email us via the contact details provided on our &lt;a href=&quot;index.php?Page=ContactUs&quot;&gt;Contact Us Page&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Please also refer to our &lt;a href=&quot;index.php?Page=TermsAndConditions&quot;&gt;Terms and Conditions&lt;/a&gt; for more information.&lt;/p&gt;'),('ShopShowOnlyAvailableItems','0'),('ShopShowQOHColumn','1'),('ShopStockLocations','MEL,TOR'),('ShopSurchargeStockID',''),('ShopSwipeHQAPIKey',''),('ShopSwipeHQMerchantID',''),('ShopTermsConditions','&lt;p&gt;These terms cover the use of this website. Use includes visits to our sites, purchases on our sites, participation in our database and promotions. These terms of use apply to you when you use our websites. Please read these terms carefully - if you need to refer to them again they can be accessed from the link at the bottom of any page of our websites.&lt;/p&gt;&lt;br /&gt;&lt;ul&gt;&lt;li&gt;&lt;h2&gt;1. Content&lt;/h2&gt;&lt;p&gt;While we endeavour to supply accurate information on this site, errors and omissions may occur. We do not accept any liability, direct or indirect, for any loss or damage which may directly or indirectly result from any advice, opinion, information, representation or omission whether negligent or otherwise, contained on this site. You are solely responsible for the actions you take in reliance on the content on, or accessed, through this site.&lt;/p&gt;&lt;p&gt;We reserve the right to make changes to the content on this site at any time and without notice.&lt;/p&gt;&lt;p&gt;To the extent permitted by law, we make no warranties in relation to the merchantability, fitness for purpose, freedom from computer virus, accuracy or availability of this web site or any other web site.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;2. Making a contract with us&lt;/h2&gt;&lt;p&gt;When you place an order with us, you are making an offer to buy goods. We will send you an e-mail to confirm that we have received and accepted your order, which indicates that a contract has been made between us. We will take payment from you when we accept your order. In the unlikely event that the goods are no longer available, we will refund your payment to the account it originated from, and advise that the goods are no longer available.&lt;/p&gt;&lt;p&gt;An order is placed on our website via adding a product to the shopping cart and proceeding through our checkout process. The checkout process includes giving us delivery and any other relevant details for your order, entering payment information and submitting your order. The final step consists of a confirmation page with full details of your order, which you are able to print as a receipt of your order. We will also email you with confirmation of your order.&lt;/p&gt;&lt;p&gt;We reserve the right to refuse or cancel any orders that we believe, solely by our own judgement, to be placed for commercial purposes, e.g. any kind of reseller. We also reserve the right to refuse or cancel any orders that we believe, solely by our own judgement, to have been placed fraudulently.&lt;/p&gt;&lt;p&gt;We reserve the right to limit the number of an item customers can purchase in a single transaction.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;3. Payment options&lt;/h2&gt;&lt;p&gt;We currently accept the following credit cards:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Visa&lt;/li&gt;&lt;li&gt;MasterCard&lt;/li&gt;&lt;li&gt;American Express&lt;/li&gt;&lt;/ul&gt;You can also pay using PayPal and internet bank transfer. Surcharges may apply for payment by PayPal or credit cards.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;4. Pricing&lt;/h2&gt;&lt;p&gt;All prices listed are inclusive of relevant taxes.  All prices are correct when published. Please note that we reserve the right to alter prices at any time for any reason. If this should happen after you have ordered a product, we will contact you prior to processing your order. Online and in store pricing may differ.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;5. Website and Credit Card Security&lt;/h2&gt;&lt;p&gt;We want you to have a safe and secure shopping experience online. All payments via our sites are processed using SSL (Secure Socket Layer) protocol, whereby sensitive information is encrypted to protect your privacy.&lt;/p&gt;&lt;p&gt;You can help to protect your details from unauthorised access by logging out each time you finish using the site, particularly if you are doing so from a public or shared computer.&lt;/p&gt;&lt;p&gt;For security purposes certain transactions may require proof of identification.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;6. Delivery and Delivery Charges&lt;/h2&gt;&lt;p&gt;We do not deliver to Post Office boxes.&lt;/p&gt;&lt;p&gt;Please note that a signature is required for all deliveries. The goods become the recipientÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s property and responsibility once they have been signed for at the time of delivery. If goods are lost or damaged in transit, please contact us within 7 business days &lt;a href=&quot;index.php?Page=ContactUs&quot;&gt;see Contact Us page for contact details&lt;/a&gt;. We will use this delivery information to make a claim against our courier company. We will offer you the choice of a replacement or a full refund, once we have received confirmation from our courier company that delivery was not successful.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;7. Restricted Products&lt;/h2&gt;&lt;p&gt;Some products on our site carry an age restriction, if a product you have selected is R16 or R18 a message will appear in the cart asking you to confirm you are an appropriate age to purchase the item(s).  Confirming this means that you are of an eligible age to purchase the selected product(s).  You are also agreeing that you are not purchasing the item on behalf of a person who is not the appropriate age.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;8. Delivery Period&lt;/h2&gt;&lt;p&gt;Delivery lead time for products may vary. Deliveries to rural addresses may take longer.  You will receive an email that confirms that your order has been dispatched.&lt;/p&gt;&lt;p&gt;To ensure successful delivery, please provide a delivery address where someone will be present during business hours to sign for the receipt of your package. You can track your order by entering the tracking number emailed to you in the dispatch email at the Courier&#039;s web-site.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;9. Disclaimer&lt;/h2&gt;&lt;p&gt;Our websites are intended to provide information for people shopping our products and accessing our services, including making purchases via our website and registering on our database to receive e-mails from us.&lt;/p&gt;&lt;p&gt;While we endeavour to supply accurate information on this site, errors and omissions may occur. We do not accept any liability, direct or indirect, for any loss or damage which may directly or indirectly result from any advice, opinion, information, representation or omission whether negligent or otherwise, contained on this site. You are solely responsible for the actions you take in reliance on the content on, or accessed, through this site.&lt;/p&gt;&lt;p&gt;We reserve the right to make changes to the content on this site at any time and without notice.&lt;/p&gt;&lt;p&gt;To the extent permitted by law, we make no warranties in relation to the merchantability, fitness for purpose, freedom from computer virus, accuracy or availability of this web site or any other web site.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;10. Links&lt;/h2&gt;&lt;p&gt;Please note that although this site has some hyperlinks to other third party websites, these sites have not been prepared by us are not under our control. The links are only provided as a convenience, and do not imply that we endorse, check, or approve of the third party site. We are not responsible for the privacy principles or content of these third party sites. We are not responsible for the availability of any of these links.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;11. Jurisdiction&lt;/h2&gt;&lt;p&gt;This website is governed by, and is to be interpreted in accordance with, the laws of  ????.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;12. Changes to this Agreement&lt;/h2&gt;&lt;p&gt;We reserve the right to alter, modify or update these terms of use. These terms apply to your order. We may change our terms and conditions at any time, so please do not assume that the same terms will apply to future orders.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;'),('ShopTitle','Shop Home'),('ShortcutMenu','1'),('ShowStockidOnImages','0'),('ShowValueOnGRN','1'),('Show_Settled_LastMonth','1'),('SmtpSetting','0'),('SO_AllowSameItemMultipleTimes','1'),('StandardCostDecimalPlaces','2'),('StockUsageShowZeroWithinPeriodRange','0'),('TaxAuthorityReferenceName',''),('UpdateCurrencyRatesDaily','2025-03-09'),('VersionNumber','5.0.0'),('WeightedAverageCosting','0'),('WikiApp','DokuWiki'),('WikiPath','wiki'),('WorkingDaysWeek','5'),('YearEnd','12');
++INSERT INTO `config` VALUES ('AllowOrderLineItemNarrative','1'),('AllowSalesOfZeroCostItems','0'),('AutoAuthorisePO','1'),('AutoCreateWOs','1'),('AutoDebtorNo','0'),('AutoIssue','1'),('AutoSupplierNo','0'),('CheckCreditLimits','1'),('CreditReviewMonths','12'),('Check_Price_Charged_vs_Order_Price','1'),('Check_Qty_Charged_vs_Del_Qty','1'),('CountryOfOperation','GB'),('CreditingControlledItems_MustExist','0'),('DB_Maintenance','0'),('DB_Maintenance_LastRun','2015-08-14'),('DefaultBlindPackNote','1'),('DefaultCreditLimit','1000'),('DefaultCustomerType','1'),('DefaultDateFormat','d/m/Y'),('DefaultDisplayRecordsMax','50'),('DefaultFactoryLocation','MEL'),('DefaultPriceList','DE'),('DefaultSupplierType','1'),('DefaultTaxCategory','1'),('Default_Shipper','1'),('DefineControlledOnWOEntry','1'),('DispatchCutOffTime','14'),('DoFreightCalc','0'),('EDIHeaderMsgId','D:01B:UN:EAN010'),('EDIReference','WEBERP'),('EDI_Incoming_Orders','companies/weberpdemo/EDI_Incoming_Orders'),('EDI_MsgPending','companies/weberpdemo/EDI_Pending'),('EDI_MsgSent','companies/weberpdemo/EDI_Sent'),('ExchangeRateFeed','ECB'),('Extended_CustomerInfo','1'),('Extended_SupplierInfo','1'),('FactoryManagerEmail','manager@company.com'),('FreightChargeAppliesIfLessThan','1000'),('FreightTaxCategory','1'),('FrequentlyOrderedItems','0'),('geocode_integration','0'),('GoogleTranslatorAPIKey',''),('HTTPS_Only','0'),('InventoryManagerEmail','test@company.com'),('InvoicePortraitFormat','0'),('InvoiceQuantityDefault','1'),('ItemDescriptionLanguages', ','),('LastDayOfWeek','0'),('LogPath',''),('LogSeverity','4'),('MaxImageSize','300'),('MaxSerialItemsIssued','50'),('MonthsAuditTrail','1'),('NumberOfMonthMustBeShown','6'),('NumberOfPeriodsOfStockUsage','12'),('OverChargeProportion','30'),('OverReceiveProportion','20'),('PackNoteFormat','1'),('PageLength','48'),('PastDueDays1','30'),('PastDueDays2','60'),('PeriodProfitAccount',''),('PO_AllowSameItemMultipleTimes','1'),('ProhibitJournalsToControlAccounts','1'),('ProhibitNegativeStock','0'),('ProhibitPostingsBefore','2024-04-30'),('PurchasingManagerEmail','test@company.com'),('QualityCOAText',''),('QualityLogSamples','0'),('QualityProdSpecText',''),('QuickEntries','10'),('RadioBeaconFileCounter','/home/RadioBeacon/FileCounter'),('RadioBeaconFTP_user_name','RadioBeacon ftp server user name'),('RadioBeaconHomeDir','/home/RadioBeacon'),('RadioBeaconStockLocation','BL'),('RadioBraconFTP_server','192.168.2.2'),('RadioBreaconFilePrefix','ORDXX'),('RadionBeaconFTP_user_pass','Radio Beacon remote ftp server password'),('reports_dir','companies/weberp/reports'),('RequirePickingNote','1'),('RomalpaClause','Ownership will not pass to the buyer until the goods have been paid for in full.'),('ShopAboutUs','This web-shop software has been developed by Logic Works Ltd for webERP. For support contact Phil Daintree by rn&lt;a href=&quot;mailto:support@logicworks.co.nz&quot;&gt;email&lt;/a&gt;rn'),('ShopAllowBankTransfer','1'),('ShopAllowCreditCards','1'),('ShopAllowPayPal','1'),('ShopAllowSurcharges','1'),('ShopBankTransferSurcharge','0.0'),('ShopBranchCode','ANGRY'),('ShopContactUs','For support contact Logic Works Ltd by rn&lt;a href=&quot;mailto:support@logicworks.co.nz&quot;&gt;email&lt;/a&gt;'),('ShopCreditCardBankAccount','1030'),('ShopCreditCardGateway','SwipeHQ'),('ShopCreditCardSurcharge','2.95'),('ShopDebtorNo','ANGRY'),('ShopFreightMethod','NoFreight'),('ShopFreightPolicy','Shipping information'),('ShopManagerEmail','shopmanager@yourdomain.com'),('ShopMode','test'),('ShopName','webERP Demo Store'),('ShopPayFlowMerchant',''),('ShopPayFlowPassword',''),('ShopPayFlowUser',''),('ShopPayFlowVendor',''),('ShopPayPalBankAccount','1040'),('ShopPaypalCommissionAccount','1'),('ShopPayPalPassword',''),('ShopPayPalProPassword',''),('ShopPayPalProSignature',''),('ShopPayPalProUser',''),('ShopPayPalSignature',''),('ShopPayPalSurcharge','3.4'),('ShopPayPalUser',''),('ShopPrivacyStatement','&lt;h2&gt;We are committed to protecting your privacy.&lt;/h2&gt;&lt;p&gt;We recognise that your personal information is confidential and we understand that it is important for you to know how we treat your personal information. Please read on for more information about our Privacy Policy.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;&lt;h2&gt;1. What information do we collect and how do we use it?&lt;/h2&gt;&lt;br /&gt;We use the information it collects from you for the following purposes:&lt;ul&gt;&lt;li&gt;To assist us in providing you with a quality service&lt;/li&gt;&lt;li&gt;To respond to, and process, your request&lt;/li&gt;&lt;li&gt;To notify competition winners or fulfil promotional obligations&lt;/li&gt;&lt;li&gt;To inform you of, and provide you with, new and existing products and services offered by us from time to time &lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Any information we collect will not be used in ways that you have not consented to.&lt;/p&gt;&lt;p&gt;If you send us an email, we will store your email address and the contents of the email. This information will only be used for the purpose for which you have provided it. Electronic mail submitted to us is handled and saved according to the provisions of the the relevant statues.&lt;/p&gt;&lt;p&gt;When we offer contests and promotions, customers who choose to enter are asked to provide personal information. This information may then be used by us to notify winners, or to fulfil promotional obligations.&lt;/p&gt;&lt;p&gt;We may use the information we collect to occasionally notify you about important functionality changes to our website, new and special offers we think you will find valuable. If at any stage you no longer wish to receive these notifications you may opt out by sending us an email.&lt;/p&gt;&lt;p&gt;We do monitor this website in order to identify user trends and to improve the site if necessary. Any of this information, such as the type of site browser your computer has, will be used only in aggregate form and your individual details will not be identified.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;2. How do we store and protect your personal information and who has access to that information?&lt;/h2&gt;&lt;p&gt;As required by statute, we follow strict procedures when storing and using the information you have provided.&lt;/p&gt;&lt;p&gt;We do not sell, trade or rent your personal information to others. We may provide aggregate statistics about our customers and website trends. However, these statistics will not have any personal information which would identify you.&lt;/p&gt;&lt;p&gt;Only specific employees within our company are able to access your personal data.&lt;/p&gt;&lt;p&gt;This policy means that we may require proof of identity before we disclose any information to you.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;3. What should I do if I want to change my details or if I donÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢t want to be contacted any more?&lt;/h2&gt;&lt;p&gt;At any stage you have the right to access and amend or update your personal details. If you do not want to receive any communications from us you may opt out by contacting us see &lt;a href=&quot;index.php?Page=ContactUs&quot;&gt;the Contact Us Page&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;4. What happens if we decide to change this Privacy Policy?&lt;/h2&gt;&lt;p&gt;If we change any aspect of our Privacy Policy we will post these changes on this page so that you are always aware of how we are treating your personal information.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;5. How can you contact us if you have any questions, comments or concerns about our Privacy Policy?&lt;/h2&gt;&lt;p&gt;We welcome any questions or comments you may have please email us via the contact details provided on our &lt;a href=&quot;index.php?Page=ContactUs&quot;&gt;Contact Us Page&lt;/a&gt;&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Please also refer to our &lt;a href=&quot;index.php?Page=TermsAndConditions&quot;&gt;Terms and Conditions&lt;/a&gt; for more information.&lt;/p&gt;'),('ShopShowOnlyAvailableItems','0'),('ShopShowQOHColumn','1'),('ShopStockLocations','MEL,TOR'),('ShopSurchargeStockID',''),('ShopSwipeHQAPIKey',''),('ShopSwipeHQMerchantID',''),('ShopTermsConditions','&lt;p&gt;These terms cover the use of this website. Use includes visits to our sites, purchases on our sites, participation in our database and promotions. These terms of use apply to you when you use our websites. Please read these terms carefully - if you need to refer to them again they can be accessed from the link at the bottom of any page of our websites.&lt;/p&gt;&lt;br /&gt;&lt;ul&gt;&lt;li&gt;&lt;h2&gt;1. Content&lt;/h2&gt;&lt;p&gt;While we endeavour to supply accurate information on this site, errors and omissions may occur. We do not accept any liability, direct or indirect, for any loss or damage which may directly or indirectly result from any advice, opinion, information, representation or omission whether negligent or otherwise, contained on this site. You are solely responsible for the actions you take in reliance on the content on, or accessed, through this site.&lt;/p&gt;&lt;p&gt;We reserve the right to make changes to the content on this site at any time and without notice.&lt;/p&gt;&lt;p&gt;To the extent permitted by law, we make no warranties in relation to the merchantability, fitness for purpose, freedom from computer virus, accuracy or availability of this web site or any other web site.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;2. Making a contract with us&lt;/h2&gt;&lt;p&gt;When you place an order with us, you are making an offer to buy goods. We will send you an e-mail to confirm that we have received and accepted your order, which indicates that a contract has been made between us. We will take payment from you when we accept your order. In the unlikely event that the goods are no longer available, we will refund your payment to the account it originated from, and advise that the goods are no longer available.&lt;/p&gt;&lt;p&gt;An order is placed on our website via adding a product to the shopping cart and proceeding through our checkout process. The checkout process includes giving us delivery and any other relevant details for your order, entering payment information and submitting your order. The final step consists of a confirmation page with full details of your order, which you are able to print as a receipt of your order. We will also email you with confirmation of your order.&lt;/p&gt;&lt;p&gt;We reserve the right to refuse or cancel any orders that we believe, solely by our own judgement, to be placed for commercial purposes, e.g. any kind of reseller. We also reserve the right to refuse or cancel any orders that we believe, solely by our own judgement, to have been placed fraudulently.&lt;/p&gt;&lt;p&gt;We reserve the right to limit the number of an item customers can purchase in a single transaction.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;3. Payment options&lt;/h2&gt;&lt;p&gt;We currently accept the following credit cards:&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Visa&lt;/li&gt;&lt;li&gt;MasterCard&lt;/li&gt;&lt;li&gt;American Express&lt;/li&gt;&lt;/ul&gt;You can also pay using PayPal and internet bank transfer. Surcharges may apply for payment by PayPal or credit cards.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;4. Pricing&lt;/h2&gt;&lt;p&gt;All prices listed are inclusive of relevant taxes.  All prices are correct when published. Please note that we reserve the right to alter prices at any time for any reason. If this should happen after you have ordered a product, we will contact you prior to processing your order. Online and in store pricing may differ.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;5. Website and Credit Card Security&lt;/h2&gt;&lt;p&gt;We want you to have a safe and secure shopping experience online. All payments via our sites are processed using SSL (Secure Socket Layer) protocol, whereby sensitive information is encrypted to protect your privacy.&lt;/p&gt;&lt;p&gt;You can help to protect your details from unauthorised access by logging out each time you finish using the site, particularly if you are doing so from a public or shared computer.&lt;/p&gt;&lt;p&gt;For security purposes certain transactions may require proof of identification.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;6. Delivery and Delivery Charges&lt;/h2&gt;&lt;p&gt;We do not deliver to Post Office boxes.&lt;/p&gt;&lt;p&gt;Please note that a signature is required for all deliveries. The goods become the recipientÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢s property and responsibility once they have been signed for at the time of delivery. If goods are lost or damaged in transit, please contact us within 7 business days &lt;a href=&quot;index.php?Page=ContactUs&quot;&gt;see Contact Us page for contact details&lt;/a&gt;. We will use this delivery information to make a claim against our courier company. We will offer you the choice of a replacement or a full refund, once we have received confirmation from our courier company that delivery was not successful.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;7. Restricted Products&lt;/h2&gt;&lt;p&gt;Some products on our site carry an age restriction, if a product you have selected is R16 or R18 a message will appear in the cart asking you to confirm you are an appropriate age to purchase the item(s).  Confirming this means that you are of an eligible age to purchase the selected product(s).  You are also agreeing that you are not purchasing the item on behalf of a person who is not the appropriate age.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;8. Delivery Period&lt;/h2&gt;&lt;p&gt;Delivery lead time for products may vary. Deliveries to rural addresses may take longer.  You will receive an email that confirms that your order has been dispatched.&lt;/p&gt;&lt;p&gt;To ensure successful delivery, please provide a delivery address where someone will be present during business hours to sign for the receipt of your package. You can track your order by entering the tracking number emailed to you in the dispatch email at the Courier&#039;s web-site.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;9. Disclaimer&lt;/h2&gt;&lt;p&gt;Our websites are intended to provide information for people shopping our products and accessing our services, including making purchases via our website and registering on our database to receive e-mails from us.&lt;/p&gt;&lt;p&gt;While we endeavour to supply accurate information on this site, errors and omissions may occur. We do not accept any liability, direct or indirect, for any loss or damage which may directly or indirectly result from any advice, opinion, information, representation or omission whether negligent or otherwise, contained on this site. You are solely responsible for the actions you take in reliance on the content on, or accessed, through this site.&lt;/p&gt;&lt;p&gt;We reserve the right to make changes to the content on this site at any time and without notice.&lt;/p&gt;&lt;p&gt;To the extent permitted by law, we make no warranties in relation to the merchantability, fitness for purpose, freedom from computer virus, accuracy or availability of this web site or any other web site.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;10. Links&lt;/h2&gt;&lt;p&gt;Please note that although this site has some hyperlinks to other third party websites, these sites have not been prepared by us are not under our control. The links are only provided as a convenience, and do not imply that we endorse, check, or approve of the third party site. We are not responsible for the privacy principles or content of these third party sites. We are not responsible for the availability of any of these links.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;11. Jurisdiction&lt;/h2&gt;&lt;p&gt;This website is governed by, and is to be interpreted in accordance with, the laws of  ????.&lt;/p&gt;&lt;/li&gt;&lt;li&gt;&lt;h2&gt;12. Changes to this Agreement&lt;/h2&gt;&lt;p&gt;We reserve the right to alter, modify or update these terms of use. These terms apply to your order. We may change our terms and conditions at any time, so please do not assume that the same terms will apply to future orders.&lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;'),('ShopTitle','Shop Home'),('ShortcutMenu','1'),('ShowStockidOnImages','0'),('ShowValueOnGRN','1'),('Show_Settled_LastMonth','1'),('SmtpSetting','0'),('SO_AllowSameItemMultipleTimes','1'),('StandardCostDecimalPlaces','2'),('StockUsageShowZeroWithinPeriodRange','0'),('TaxAuthorityReferenceName',''),('UpdateCurrencyRatesDaily','2025-03-09'),('VersionNumber','5.0.0'),('WeightedAverageCosting','0'),('WikiApp','DokuWiki'),('WikiPath','wiki'),('WorkingDaysWeek','5'),('YearEnd','12');
+ 
+diff --git a/install/sql/data/scripts.sql b/install/sql/data/scripts.sql
+index 72e3d0b..4e0ccd7 100644
+--- a/install/sql/data/scripts.sql
++++ b/install/sql/data/scripts.sql
+@@ -1,2 +1,2 @@
+ 
+-INSERT INTO `scripts` VALUES ('AccountGroups.php',10,'Defines the groupings of general ledger accounts'),('AccountSections.php',10,'Defines the sections in the general ledger reports'),('AddCustomerContacts.php',3,'Adds customer contacts'),('AddCustomerNotes.php',3,'Adds notes about customers'),('AddCustomerTypeNotes.php',3,''),('AgedControlledInventory.php',11,'Report of Controlled Items and their age'),('AgedDebtors.php',2,'Lists customer account balances in detail or summary in selected currency'),('AgedSuppliers.php',2,'Lists supplier account balances in detail or summary in selected currency'),('AnalysisHorizontalIncome.php',8,'Shows the horizontal analysis of the statement of comprehensive income'),('AnalysisHorizontalPosition.php',8,'Shows the horizontal analysis of the statement of financial position'),('Areas.php',3,'Defines the sales areas - all customers must belong to a sales area for the purposes of sales analysis'),('AuditTrail.php',15,'Shows the activity with SQL statements and who performed the changes'),('AutomaticTranslationDescriptions.php',15,'Translates via Google Translator all empty translated descriptions'),('BankAccountBalances.php',1,'Shows bank accounts authorised for with balances'),('BankAccounts.php',10,'Defines the general ledger code for bank accounts and specifies that bank transactions be created for these accounts for the purposes of reconciliation'),('BankAccountUsers.php',15,'Maintains table bankaccountusers (Authorized users to work with a bank account in webERP)'),('BankMatching.php',7,'Allows payments and receipts to be matched off against bank statements'),('BankReconciliation.php',7,'Displays the bank reconciliation for a selected bank account'),('bank_trans.php',3,''),('BOMExtendedQty.php',2,'Shows the component requirements to make an item'),('BOMIndented.php',2,'Shows the bill of material indented for each level'),('BOMIndentedReverse.php',2,''),('BOMInquiry.php',2,'Displays the bill of material with cost information'),('BOMListing.php',2,'Lists the bills of material for a selected range of items'),('BOMs.php',9,'Administers the bills of material for a selected item'),('BOMs_SingleLevel.php',2,'Single Level BOM entry'),('COGSGLPostings.php',10,'Defines the general ledger account to be used for cost of sales entries'),('CollectiveWorkOrderCost.php',2,'Multiple work orders cost review'),('CompanyPreferences.php',10,'Defines the settings applicable for the company, including name, address, tax authority reference, whether GL integration used, etc.'),('ConfirmDispatchControlled_Invoice.php',2,'Specifies the batch references/serial numbers of items dispatched that are being invoiced'),('ConfirmDispatch_Invoice.php',2,'Creates sales invoices from entered sales orders based on the quantities dispatched that can be modified'),('ContractBOM.php',6,'Creates the item requirements from stock for a contract as part of the contract cost build up'),('ContractCosting.php',6,'Shows a contract cost - the components and other non-stock costs issued to the contract'),('ContractOtherReqts.php',4,'Creates the other requirements for a contract cost build up'),('Contracts.php',6,'Creates or modifies a customer contract costing'),('CopyBOM.php',9,'Allows a bill of material to be copied between items'),('CostUpdate',10,'NB Not a script but allows users to maintain item costs from withing StockCostUpdate.php'),('CounterReturns.php',5,'Allows credits and refunds from the default Counter Sale account for an inventory location'),('CounterSales.php',1,'Allows sales to be entered against a cash sale customer account defined in the users location record'),('CreditItemsControlled.php',3,'Specifies the batch references/serial numbers of items being credited back into stock'),('CreditStatus.php',3,'Defines the credit status records. Each customer account is given a credit status from this table. Some credit status records can prohibit invoicing and new orders being entered.'),('Credit_Invoice.php',3,'Creates a credit note based on the details of an existing invoice'),('Currencies.php',9,'Defines the currencies available. Each customer and supplier must be defined as transacting in one of the currencies defined here.'),('CustEDISetup.php',11,'Allows the set up the customer specified EDI parameters for server, email or ftp.'),('CustItem.php',11,'Customer Items'),('CustLoginSetup.php',15,''),('CustomerAccount.php',1,'Shows customer account/statement on screen rather than PDF'),('CustomerAllocations.php',3,'Allows customer receipts and credit notes to be allocated to sales invoices'),('CustomerBalancesMovement.php',3,'Allow customers to be listed in local currency with balances and activity over a date range'),('CustomerBranches.php',3,'Defines the details of customer branches such as delivery address and contact details - also sales area, representative etc'),('CustomerInquiry.php',1,'Shows the customers account transactions with balances outstanding, links available to drill down to invoice/credit note or email invoices/credit notes'),('CustomerPurchases.php',5,'Shows the purchases a customer has made.'),('CustomerReceipt.php',3,'Entry of both customer receipts against accounts receivable and also general ledger or nominal receipts'),('Customers.php',3,'Defines the setup of a customer account, including payment terms, billing address, credit status, currency etc'),('CustomerTransInquiry.php',2,'Lists in html the sequence of customer transactions, invoices, credit notes or receipts by a user entered date range'),('CustomerTypes.php',15,''),('customer_orders.php',2,''),('CustWhereAlloc.php',2,'Shows to which invoices a receipt was allocated to'),('DailyBankTransactions.php',8,'Allows you to view all bank transactions for a selected date range, and the inquiry can be filtered by matched or unmatched transactions, or all transactions can be chosen'),('DailySalesInquiry.php',2,'Shows the daily sales with GP in a calendar format'),('Dashboard.php',1,'Display outstanding debtors, creditors etc'),('DashboardConfig.php',15,''),('DebtorsAtPeriodEnd.php',2,'Shows the debtors control account as at a previous period end - based on system calendar monthly periods'),('DeliveryDetails.php',1,'Used during order entry to allow the entry of delivery addresses other than the defaulted branch delivery address and information about carrier/shipping method etc'),('Departments.php',1,'Create business departments'),('DiscountCategories.php',11,'Defines the items belonging to a discount category. Discount Categories are used to allow discounts based on quantities across a range of producs'),('DiscountMatrix.php',11,'Defines the rates of discount applicable to discount categories and the customer groupings to which the rates are to apply'),('EDIMessageFormat.php',10,'Specifies the EDI message format used by a customer - administrator use only.'),('EDIProcessOrders.php',11,'Processes incoming EDI orders into sales orders'),('EDISendInvoices.php',15,'Processes invoiced EDI customer invoices into EDI messages and sends using the customers preferred method either ftp or email attachments.'),('EmailConfirmation.php',2,''),('EmailCustStatements.php',2,'Email Customer Statements'),('EmailCustTrans.php',2,'Emails selected invoice or credit to the customer'),('Employees.php',10,'Employees requiring time-sheets maintenance and entry '),('ExchangeRateTrend.php',2,'Shows the trend in exchange rates as retrieved from ECB'),('Factors.php',5,'Defines supplier factor companies'),('FixedAssetCategories.php',11,'Defines the various categories of fixed assets'),('FixedAssetDepreciation.php',10,'Calculates and creates GL transactions to post depreciation for a period'),('FixedAssetItems.php',11,'Allows fixed assets to be defined'),('FixedAssetLocations.php',11,'Allows the locations of fixed assets to be defined'),('FixedAssetRegister.php',11,'Produces a csv, html or pdf report of the fixed assets over a period showing period depreciation, additions and disposals'),('FixedAssetTransfer.php',11,'Allows the fixed asset locations to be changed in bulk'),('FormDesigner.php',14,'Customizes the form layout without requiring the use of scripting or technical development'),('FormMaker.php',1,'Allows running user defined Forms'),('FreightCosts.php',11,'Defines the setup of the freight cost using different shipping methods to different destinations. The system can use this information to calculate applicable freight if the items are defined with the correct kgs and cubic volume'),('FTP_RadioBeacon.php',2,'FTPs sales orders for dispatch to a radio beacon software enabled warehouse dispatching facility'),('GeneratePickingList.php',11,'Generate a picking list'),('geocode.php',3,''),('GeocodeSetup.php',3,'Sets the configuration for geocoding of customers and suppliers'),('geocode_genxml_customers.php',3,''),('geocode_genxml_suppliers.php',3,''),('geo_displaymap_customers.php',3,''),('geo_displaymap_suppliers.php',3,''),('GetStockImage.php',1,''),('GLAccountCSV.php',8,'Produces a CSV of the GL transactions for a particular range of periods and GL account'),('GLAccountGraph.php',8,'Shows a graph of GL account transactions'),('GLAccountInquiry.php',8,'Shows the general ledger transactions for a specified account over a specified range of periods'),('GLAccountReport.php',8,'Produces a report of the GL transactions for a particular account'),('GLAccounts.php',10,'Defines the general ledger accounts'),('GLAccountUsers.php',15,'Maintenance of users allowed to a GL Account'),('GLAccountUsersCopyAuthority.php',15,''),('GLBalanceSheet.php',8,'Shows the balance sheet for the company as at a specified date'),('GLBankAccountUsersCopyAuthority.php',15,''),('GLBudgetHeaders.php',10,''),('GLBudgets.php',10,'Defines GL Budgets'),('GLCashFlowsIndirect.php',8,'Shows a statement of cash flows for the period using the indirect method'),('GLCashFlowsSetup.php',8,'Setups the statement of cash flows sections'),('GLCodesInquiry.php',8,'Shows the list of general ledger codes defined with account names and groupings'),('GLJournal.php',10,'Entry of general ledger journals, periods are calculated based on the date entered here'),('GLJournalInquiry.php',15,'General Ledger Journal Inquiry'),('GLJournalTemplates.php',15,'Maintain Journal templates'),('GLProfit_Loss.php',8,'Shows the profit and loss of the company for the range of periods entered'),('GLStatements.php',8,'Shows a set of financial statements'),('GLTagProfit_Loss.php',8,''),('GLTags.php',10,'Allows GL tags to be defined'),('GLTransInquiry.php',8,'Shows the general ledger journal created for the sub ledger transaction specified'),('GLTrialBalance.php',8,'Shows the trial balance for the month and the for the period selected together with the budgeted trial balances'),('GLTrialBalance_csv.php',8,'Produces a CSV of the Trial Balance for a particular period'),('GoodsReceived.php',11,'Entry of items received against purchase orders'),('GoodsReceivedControlled.php',11,'Entry of the serial numbers or batch references for controlled items received against purchase orders'),('GoodsReceivedNotInvoiced.php',2,'Shows the list of goods received but not yet invoiced, both in supplier currency and home currency. Total in home curency should match the GL Account for Goods received not invoiced. Any discrepancy is due to multicurrency errors.'),('HistoricalTestResults.php',16,'Historical Test Results'),('ImportBankTrans.php',11,'Imports bank transactions'),('ImportBankTransAnalysis.php',11,'Allows analysis of bank transactions being imported'),('index.php',1,'The main menu from where all functions available to the user are accessed by clicking on the links'),('InternalStockCategoriesByRole.php',15,'Maintains the stock categories to be used as internal for any user security role'),('InternalStockRequest.php',1,'Create an internal stock request'),('InternalStockRequestAuthorisation.php',1,'Authorise internal stock requests'),('InternalStockRequestFulfill.php',1,'Fulfill an internal stock request'),('InternalStockRequestInquiry.php',1,'Internal Stock Request inquiry'),('InventoryPlanning.php',2,'Creates a pdf report showing the last 4 months use of items including as a component of assemblies together with stock quantity on hand, current demand for the item and current quantity on sales order.'),('InventoryPlanningPrefSupplier.php',2,'Produces a report showing the inventory to be ordered by supplier'),('InventoryPlanningPrefSupplier_CSV.php',2,'Inventory planning spreadsheet'),('InventoryQuantities.php',2,''),('InventoryValuation.php',2,'Creates a pdf report showing the value of stock at standard cost for a range of product categories selected'),('Labels.php',15,'Produces item pricing labels in a pdf from a range of selected criteria'),('latest_grns.php',2,''),('latest_po.php',3,''),('latest_po_auth.php',2,''),('latest_stock_status.php',3,''),('Locations.php',11,'Defines the inventory stocking locations or warehouses'),('LocationUsers.php',15,'Allows users that have permission to access a location to be defined'),('LocationUsersCopyAuthority.php',15,''),('LoggedInUsers.php',8,''),('Logout.php',1,'Shows when the user logs out of webERP'),('MailingGroupMaintenance.php',15,'Mainting mailing lists for items to mail'),('MailInventoryValuation.php',1,'Meant to be run as a scheduled process to email the stock valuation off to a specified person. Creates the same stock valuation report as InventoryValuation.php'),('MailSalesReport_csv.php',15,'Mailing the sales report'),('MaintenanceReminders.php',1,'Sends email reminders for scheduled asset maintenance tasks'),('MaintenanceTasks.php',1,'Allows set up and edit of scheduled maintenance tasks'),('MaintenanceUserSchedule.php',1,'List users or managers scheduled maintenance tasks and allow to be flagged as completed'),('Manufacturers.php',15,'Maintain brands of sales products'),('MaterialsNotUsed.php',4,'Lists the items from Raw Material Categories not used in any BOM (thus, not used at all)'),('MRP.php',9,''),('MRPCalendar.php',9,''),('MRPCreateDemands.php',9,''),('MRPDemands.php',9,''),('MRPDemandTypes.php',9,''),('MRPPlannedPurchaseOrders.php',2,''),('MRPPlannedWorkOrders.php',2,''),('MRPReport.php',2,''),('MRPReschedules.php',2,''),('MRPShortages.php',2,''),('mrp_dashboard.php',3,''),('NoSalesItems.php',2,'Shows the No Selling (worst) items'),('OffersReceived.php',4,''),('OrderDetails.php',1,'Shows the detail of a sales order'),('OrderEntryDiscountPricing',13,'Not a script but an authority level marker - required if the user is allowed to enter discounts and special pricing against a customer order'),('OutstandingGRNs.php',2,'Creates a pdf showing all GRNs for which there has been no purchase invoice matched off against.'),('PageSecurity.php',15,'Changes the security token of a script'),('PaymentAllocations.php',5,''),('PaymentMethods.php',15,''),('Payments.php',5,'Entry of bank account payments either against an AP account or a general ledger payment - if the AP-GL link in company preferences is set'),('PaymentTerms.php',10,'Defines the payment terms records, these can be expressed as either a number of days credit or a day in the following month. All customers and suppliers must have a corresponding payment term recorded against their account'),('PcAnalysis.php',15,'Creates an Excel with details of PC expnese for 24 months'),('PcAssignCashTabToTab.php',12,'Assign cash from one tab to another'),('PcAssignCashToTab.php',6,''),('PcAuthorizeCash.php',6,'Authorisation of assigned cash'),('PcAuthorizeExpenses.php',6,''),('PcClaimExpensesFromTab.php',6,''),('PcExpenses.php',15,''),('PcExpensesTypeTab.php',15,''),('PcReportExpense.php',15,''),('PcReportTab.php',6,''),('PcTabExpensesList.php',15,'Creates excel with all movements of tab between dates'),('PcTabs.php',15,''),('PcTypeTabs.php',15,''),('PDFAck.php',15,'Print an acknowledgement'),('PDFBankingSummary.php',3,'Creates a pdf showing the amounts entered as receipts on a specified date together with references for the purposes of banking'),('PDFChequeListing.php',3,'Creates a pdf showing all payments that have been made from a specified bank account over a specified period. This can be emailed to an email account defined in config.php - ie a financial controller'),('PDFCOA.php',0,'PDF of COA'),('PDFCustomerList.php',2,'Creates a report of the customer and branch information held. This report has options to print only customer branches in a specified sales area and sales person. Additional option allows to list only those customers with activity either under or over a specified amount, since a specified date.'),('PDFCustTransListing.php',3,''),('PDFDeliveryDifferences.php',3,'Creates a pdf report listing the delivery differences from what the customer requested as recorded in the order entry. The report calculates a percentage of order fill based on the number of orders filled in full on time'),('PDFDIFOT.php',3,'Produces a pdf showing the delivery in full on time performance'),('PDFFGLabel.php',11,'Produces FG Labels'),('PDFGLJournal.php',15,'General Ledger Journal Print'),('PDFGLJournalCN.php',1,'Print GL Journal Chinese version'),('PDFGrn.php',2,'Produces a GRN report on the receipt of stock'),('PDFLowGP.php',2,'Creates a pdf report showing the low gross profit sales made in the selected date range. The percentage of gp deemed acceptable can also be entered'),('PDFOrdersInvoiced.php',3,'Produces a pdf of orders invoiced based on selected criteria'),('PDFOrderStatus.php',3,'Reports on sales order status by date range, by stock location and stock category - producing a pdf showing each line items and any quantites delivered'),('PDFPeriodStockTransListing.php',3,'Allows stock transactions of a specific transaction type to be listed over a single day or period range'),('PDFPickingList.php',2,''),('PDFPriceList.php',2,'Creates a pdf of the price list applicable to a given sales type and customer. Also allows the listing of prices specific to a customer'),('PDFPrintLabel.php',10,''),('PDFProdSpec.php',0,'PDF OF Product Specification'),('PDFQALabel.php',2,'Produces a QA label on receipt of stock'),('PDFQuotation.php',2,''),('PDFQuotationPortrait.php',2,'Portrait quotation'),('PDFReceipt.php',2,''),('PDFRemittanceAdvice.php',2,''),('PDFSellThroughSupportClaim.php',9,'Reports the sell through support claims to be made against all suppliers for a given date range.'),('PDFShipLabel.php',15,'Print a ship label'),('PDFStockCheckComparison.php',2,'Creates a pdf comparing the quantites entered as counted at a given range of locations against the quantity stored as on hand as at the time a stock check was initiated.'),('PDFStockLocTransfer.php',1,'Creates a stock location transfer docket for the selected location transfer reference number'),('PDFStockNegatives.php',1,'Produces a pdf of the negative stocks by location'),('PDFStockTransfer.php',2,'Produces a report for stock transfers'),('PDFSuppTransListing.php',3,''),('PDFTestPlan.php',16,'PDF of Test Plan'),('PDFTopItems.php',2,'Produces a pdf report of the top items sold'),('PDFWOPrint.php',11,'Produces W/O Paperwork'),('PeriodsInquiry.php',2,'Shows a list of all the system defined periods'),('PickingLists.php',11,'Picking List Maintenance'),('PickingListsControlled.php',11,'Picking List Maintenance - Controlled'),('POFinancialPlanning.php',4,''),('POReport.php',2,''),('PO_AuthorisationLevels.php',15,''),('PO_AuthoriseMyOrders.php',4,''),('PO_Header.php',4,'Entry of a purchase order header record - date, references buyer etc'),('PO_Items.php',4,'Entry of a purchase order items - allows entry of items with lookup of currency cost from Purchasing Data previously entered also allows entry of nominal items against a general ledger code if the AP is integrated to the GL'),('PO_OrderDetails.php',2,'Purchase order inquiry shows the quantity received and invoiced of purchase order items as well as the header information'),('PO_PDFPurchOrder.php',2,'Creates a pdf of the selected purchase order for printing or email to one of the supplier contacts entered'),('PO_SelectOSPurchOrder.php',2,'Shows the outstanding purchase orders for selecting with links to receive or modify the purchase order header and items'),('PO_SelectPurchOrder.php',2,'Allows selection of any purchase order with links to the inquiry'),('PriceMatrix.php',11,'Mantain stock prices according to quantity break and sales types'),('Prices.php',9,'Entry of prices for a selected item also allows selection of sales type and currency for the price'),('PricesBasedOnMarkUp.php',11,''),('PricesByCost.php',11,'Allows prices to be updated based on cost'),('Prices_Customer.php',11,'Entry of prices for a selected item and selected customer/branch. The currency and sales type is defaulted from the customer\'s record'),('PrintCheque.php',5,''),('PrintCustOrder.php',2,'Creates a pdf of the dispatch note - by default this is expected to be on two part pre-printed stationery to allow pickers to note discrepancies for the confirmer to update the dispatch at the time of invoicing'),('PrintCustOrder_generic.php',2,'Creates two copies of a laser printed dispatch note - both copies need to be written on by the pickers with any discrepancies to advise customer of any shortfall and on the office copy to ensure the correct quantites are invoiced'),('PrintCustStatements.php',2,'Creates a pdf for the customer statements in the selected range'),('PrintCustTrans.php',1,'Creates either a html invoice or credit note or a pdf. A range of invoices or credit notes can be selected also.'),('PrintCustTransPortrait.php',1,''),('PrintSalesOrder_generic.php',2,''),('PrintWOItemSlip.php',4,'PDF WO Item production Slip '),('ProdSpecGroups.php', 16, 'Product Spec Groups Maintenance'),('ProductSpecs.php',16,'Product Specification Maintenance'),('PurchaseByPrefSupplier.php',2,'Purchase ordering by preferred supplier'),('PurchasesReport.php',2,'Shows a report of purchases from suppliers for the range of selected dates'),('PurchData.php',4,'Entry of supplier purchasing data, the suppliers part reference and the suppliers currency cost of the item'),('QATests.php',16,'Quality Test Maintenance'),('RecurringSalesOrders.php',1,''),('RecurringSalesOrdersProcess.php',1,'Process Recurring Sales Orders'),('RegularPaymentsProcess.php',5,''),('RegularPaymentsSetup.php',5,''),('RelatedItemsUpdate.php',2,'Maintains Related Items'),('ReorderLevel.php',2,'Allows reorder levels of inventory to be updated'),('ReorderLevelLocation.php',2,''),('ReportCreator.php',13,'Report Writer and Form Creator script that creates templates for user defined reports and forms'),('ReportMaker.php',1,'Produces reports from the report writer templates created'),('reportwriter/admin/ReportCreator.php',15,'Report Writer'),('ReprintGRN.php',11,'Allows selection of a goods received batch for reprinting the goods received note given a purchase order number'),('ReverseGRN.php',11,'Reverses the entry of goods received - creating stock movements back out and necessary general ledger journals to effect the reversal'),('RevisionTranslations.php',15,'Human revision for automatic descriptions translations'),('SalesAnalReptCols.php',2,'Entry of the definition of a sales analysis report\'s columns.'),('SalesAnalRepts.php',2,'Entry of the definition of a sales analysis report headers'),('SalesAnalysis_UserDefined.php',2,'Creates a pdf of a selected user defined sales analysis report'),('SalesByTypePeriodInquiry.php',2,'Shows sales for a selected date range by sales type/price list'),('SalesCategories.php',11,''),('SalesCategoryDescriptions.php',15,'Maintain translations for sales categories'),('SalesCategoryPeriodInquiry.php',2,'Shows sales for a selected date range by stock category'),('SalesCommissionRates.php',15,''),('SalesCommissionReports.php',3,''),('SalesCommissionTypes.php',15,''),('SalesGLPostings.php',10,'Defines the general ledger accounts used to post sales to based on product categories and sales areas'),('SalesGraph.php',6,''),('SalesInquiry.php',2,''),('SalesPeople.php',3,'Defines the sales people of the business'),('SalesReport.php',2,'Shows a report of sales to customers for the range of selected dates'),('SalesTopCustomersInquiry.php',1,'Shows the top customers'),('SalesTopItemsInquiry.php',2,'Shows the top item sales for a selected date range'),('SalesTypes.php',15,'Defines the sales types - prices are held against sales types they can be considered price lists. Sales analysis records are held by sales type too.'),('SecurityTokens.php',15,'Administration of security tokens'),('SelectAsset.php',2,'Allows a fixed asset to be selected for modification or viewing'),('SelectCompletedOrder.php',1,'Allows the selection of completed sales orders for inquiries - choices to select by item code or customer'),('SelectContract.php',6,'Allows a contract costing to be selected for modification or viewing'),('SelectCreditItems.php',3,'Entry of credit notes from scratch, selecting the items in either quick entry mode or searching for them manually'),('SelectCustomer.php',2,'Selection of customer - from where all customer related maintenance, transactions and inquiries start'),('SelectGLAccount.php',8,'Selection of general ledger account from where all general ledger account maintenance, or inquiries are initiated'),('SelectOrderItems.php',1,'Entry of sales order items with both quick entry and part search functions'),('SelectPickingLists.php',11,'Select a picking list'),('SelectProduct.php',2,'Selection of items. All item maintenance, transactions and inquiries start with this script'),('SelectQASamples.php',16,'Select  QA Samples'),('SelectRecurringSalesOrder.php',2,''),('SelectSalesOrder.php',2,'Selects a sales order irrespective of completed or not for inquiries'),('SelectSupplier.php',2,'Selects a supplier. A supplier is required to be selected before any AP transactions and before any maintenance or inquiry of the supplier'),('SelectWorkOrder.php',2,''),('SellThroughSupport.php',9,'Defines the items, period and quantum of support for which supplier has agreed to provide.'),('ShipmentCosting.php',11,'Shows the costing of a shipment with all the items invoice values and any shipment costs apportioned. Updating the shipment has an option to update standard costs of all items on the shipment and create any general ledger variance journals'),('Shipments.php',11,'Entry of shipments from outstanding purchase orders for a selected supplier - changes in the delivery date will cascade into the different purchase orders on the shipment'),('Shippers.php',15,'Defines the shipping methods available. Each customer branch has a default shipping method associated with it which must match a record from this table'),('ShiptsList.php',2,'Shows a list of all the open shipments for a selected supplier. Linked from POItems.php'),('Shipt_Select.php',11,'Selection of a shipment for displaying and modification or updating'),('ShopParameters.php',15,'Maintain web-store configuration and set up'),('SMTPServer.php',15,'Sets the SMTP server'),('SpecialOrder.php',4,'Allows for a sales order to be created and an indent order to be created on a supplier for a one off item that may never be purchased again. A dummy part is created based on the description and cost details given.'),('StockAdjustments.php',11,'Entry of quantity corrections to stocks in a selected location.'),('StockAdjustmentsControlled.php',11,'Entry of batch references or serial numbers on controlled stock items being adjusted'),('StockCategories.php',11,'Defines the stock categories. All items must refer to one of these categories. The category record also allows the specification of the general ledger codes where stock items are to be posted - the balance sheet account and the profit and loss effect of any adjustments and the profit and loss effect of any price variances'),('StockCategorySalesInquiry.php',2,'Sales inquiry by stock category showing top items'),('StockCheck.php',2,'Allows creation of a stock check file - copying the current quantites in stock for later comparison to the entered counts. Also produces a pdf for the count sheets.'),('StockClone.php',11,'Script to copy a stock item and associated properties, image, price, purchase and cost data'),('StockCostUpdate.php',9,'Allows update of the standard cost of items producing general ledger journals if the company preferences stock GL interface is active'),('StockCounts.php',2,'Allows entry of stock counts'),('StockDispatch.php',2,''),('StockLocMovements.php',2,'Inquiry shows the Movements of all stock items for a specified location'),('StockLocStatus.php',2,'Shows the stock on hand together with outstanding sales orders and outstanding purchase orders by stock location for all items in the selected stock category'),('StockLocTransfer.php',11,'Entry of a bulk stock location transfer for many parts from one location to another.'),('StockLocTransferReceive.php',11,'Effects the transfer and creates the stock movements for a bulk stock location transfer initiated from StockLocTransfer.php'),('StockMovements.php',2,'Shows a list of all the stock movements for a selected item and stock location including the price at which they were sold in local currency and the price at which they were purchased for in local currency'),('StockQties_csv.php',5,'Makes a comma separated values (CSV)file of the stock item codes and quantities'),('StockQuantityByDate.php',2,'Shows the stock on hand for each item at a selected location and stock category as at a specified date'),('StockReorderLevel.php',4,'Entry and review of the re-order level of items by stocking location'),('Stocks.php',11,'Defines an item - maintenance and addition of new parts'),('StockSerialItemResearch.php',3,''),('StockSerialItems.php',2,'Shows a list of the serial numbers or the batch references and quantities of controlled items. This inquiry is linked from the stock status inquiry'),('StockStatus.php',2,'Shows the stock on hand together with outstanding sales orders and outstanding purchase orders by stock location for a selected part. Has a link to show the serial numbers in stock at the location selected if the item is controlled'),('StockTransferControlled.php',11,'Entry of serial numbers/batch references for controlled items being received on a stock transfer. The script is used by both bulk transfers and point to point transfers'),('StockTransfers.php',11,'Entry of point to point stock location transfers of a single part'),('StockUsage.php',2,'Inquiry showing the quantity of stock used by period calculated from the sum of the stock movements over that period - by item and stock location. Also available over all locations'),('StockUsageGraph.php',2,''),('SuppContractChgs.php',5,''),('SuppCreditGRNs.php',5,'Entry of a supplier credit notes (debit notes) against existing GRN which have already been matched in full or in part'),('SuppFixedAssetChgs.php',5,''),('SuppInvGRNs.php',5,'Entry of supplier invoices against goods received'),('SupplierAllocations.php',5,'Entry of allocations of supplier payments and credit notes to invoices'),('SupplierBalsAtPeriodEnd.php',2,''),('SupplierContacts.php',5,'Entry of supplier contacts and contact details including email addresses'),('SupplierCredit.php',5,'Entry of supplier credit notes (debit notes)'),('SupplierGRNAndInvoiceInquiry.php',5,'Supplier\'s delivery note and grn relationship inquiry'),('SupplierInquiry.php',2,'Inquiry showing invoices, credit notes and payments made to suppliers together with the amounts outstanding'),('SupplierInvoice.php',5,'Entry of supplier invoices'),('SupplierPriceList.php',4,'Maintain Supplier Price Lists'),('Suppliers.php',5,'Entry of new suppliers and maintenance of existing suppliers'),('SupplierTenderCreate.php',4,'Create or Edit tenders'),('SupplierTenders.php',9,''),('SupplierTransInquiry.php',2,''),('SupplierTypes.php',4,''),('SuppLoginSetup.php',15,''),('SuppPaymentRun.php',5,'Automatic creation of payment records based on calculated amounts due from AP invoices entered'),('SuppPriceList.php',2,''),('SuppShiptChgs.php',5,'Entry of supplier invoices against shipments as charges against a shipment'),('SuppTransGLAnalysis.php',5,'Entry of supplier invoices against general ledger codes'),('SuppWhereAlloc.php',3,'Suppliers Where allocated'),('SystemParameters.php',15,'Sets the main system configuration parameters'),('Tax.php',2,'Creates a report of the ad-valorem tax -GST/VAT- for the period selected from accounts payable and accounts receivable data'),('TaxAuthorities.php',15,'Entry of tax authorities - the state intitutions that charge tax'),('TaxAuthorityRates.php',11,'Entry of the rates of tax applicable to the tax authority depending on the item tax level'),('TaxCategories.php',15,'Allows for categories of items to be defined that might have different tax rates applied to them'),('TaxGroups.php',15,'Allows for taxes to be grouped together where multiple taxes might apply on sale or purchase of items'),('TaxProvinces.php',15,'Allows for inventory locations to be defined so that tax applicable from sales in different provinces can be dealt with'),('TestPlanResults.php',16,'Test Plan Results Entry'),('Timesheets.php',1,'Entry of Timesheets'),('TopItems.php',2,'Shows the top selling items'),('total_dashboard.php',1,''),('UnitsOfMeasure.php',15,'Allows for units of measure to be defined'),('unpaid_invoice.php',2,''),('UpgradeDatabase.php',15,'Allows for the database to be automatically upgraded based on currently recorded DBUpgradeNumber config option'),('UserBankAccounts.php',15,'Maintains table bankaccountusers (Authorized users to work with a bank account in webERP)'),('UserGLAccounts.php',15,'Maintenance of GL Accounts allowed for a user'),('UserLocations.php',15,'Location User Maintenance'),('UserSettings.php',1,'Allows the user to change system wide defaults for the theme - appearance, the number of records to show in searches and the language to display messages in'),('WhereUsedInquiry.php',2,'Inquiry showing where an item is used ie all the parents where the item is a component of'),('WOCanBeProducedNow.php',4,'List of WO items that can be produced with available stock in location'),('WorkCentres.php',9,'Defines the various centres of work within a manufacturing company. Also the overhead and labour rates applicable to the work centre and its standard capacity'),('WorkOrderCosting.php',11,''),('WorkOrderEntry.php',10,'Entry of new work orders'),('WorkOrderIssue.php',11,'Issue of materials to a work order'),('WorkOrderReceive.php',11,'Allows for receiving of works orders'),('WorkOrderStatus.php',11,'Shows the status of works orders'),('work_orders.php',3,''),('WOSerialNos.php',10,''),('WWW_Access.php',15,'Adds or removes security roles by a system administrator'),('WWW_Users.php',15,'Entry of users and security settings of users'),('Z_BottomUpCosts.php',15,''),('Z_ChangeBranchCode.php',15,'Utility to change the branch code of a customer that cascades the change through all the necessary tables'),('Z_ChangeCustomerCode.php',15,'Utility to change a customer code that cascades the change through all the necessary tables'),('Z_ChangeGLAccountCode.php',15,'Script to change a GL account code accross all tables necessary'),('Z_ChangeLocationCode.php',15,'Change a locations code and in all tables where the old code was used to the new code'),('Z_ChangeSalesmanCode.php',15,'Utility to change a salesman code'),('Z_ChangeStockCategory.php',15,''),('Z_ChangeStockCode.php',15,'Utility to change an item code that cascades the change through all the necessary tables'),('Z_ChangeSupplierCode.php',15,'Script to change a supplier code accross all tables necessary'),('Z_CheckAllocationsFrom.php',15,''),('Z_CheckAllocs.php',2,''),('Z_CheckDebtorsControl.php',15,'Inquiry that shows the total local currency (functional currency) balance of all customer accounts to reconcile with the general ledger debtors account'),('Z_CheckGLTransBalance.php',15,'Checks all GL transactions balance and reports problem ones'),('Z_CreateChartDetails.php',9,'Utility page to create chart detail records for all general ledger accounts and periods created - needs expert assistance in use'),('Z_CreateCompany.php',15,'Utility to insert company number 1 if not already there - actually only company 1 is used - the system is not multi-company'),('Z_CreateCompanyTemplateFile.php',15,''),('Z_CurrencyDebtorsBalances.php',15,'Inquiry that shows the total foreign currency together with the total local currency (functional currency) balances of all customer accounts to reconcile with the general ledger debtors account'),('Z_CurrencySuppliersBalances.php',15,'Inquiry that shows the total foreign currency amounts and also the local currency (functional currency) balances of all supplier accounts to reconcile with the general ledger creditors account'),('Z_DataExport.php',15,''),('Z_DeleteCreditNote.php',15,'Utility to reverse a customer credit note - a desperate measure that should not be used except in extreme circumstances'),('Z_DeleteInvoice.php',15,'Utility to reverse a customer invoice - a desperate measure that should not be used except in extreme circumstances'),('Z_DeleteOldPrices.php',15,'Deletes all old prices'),('Z_DeleteSalesTransActions.php',15,'Utility to delete all sales transactions, sales analysis the lot! Extreme care required!!!'),('Z_DescribeTable.php',11,''),('Z_Fix1cAllocations.php',9,''),('Z_FixGLTransPeriods.php',15,'Fixes periods where GL transactions were not created correctly'),('Z_GLAccountUsersCopyAuthority.php',15,'Utility to copy authority of GL accounts from one user to another'),('Z_ImportChartOfAccounts.php',11,''),('Z_ImportDebtors.php',15,'Import debtors by csv file'),('Z_ImportFixedAssets.php',15,'Allow fixed assets to be imported from a csv'),('Z_ImportGLAccountGroups.php',11,''),('Z_ImportGLAccountSections.php',11,''),('Z_ImportGLTransactions.php',15,'Import General Ledger Transactions'),('Z_ImportPartCodes.php',11,'Allows inventory items to be imported from a csv'),('Z_ImportPriceList.php',15,'Loads a new price list from a csv file'),('Z_ImportStocks.php',15,''),('Z_index.php',15,'Utility menu page'),('Z_ItemsWithoutPicture.php',15,'Shows the list of curent items without picture in webERP'),('Z_MakeLocUsers.php',15,'Create User Location records'),('Z_MakeNewCompany.php',15,''),('Z_MakeStockLocns.php',15,'Utility to make LocStock records for all items and locations if not already set up.'),('Z_poAddLanguage.php',15,'Add a New Language to the System'),('Z_poAdmin.php',15,'Allows for a gettext language po file to be administered'),('Z_poEditLangHeader.php',15,'Edit a Language File Header'),('Z_poEditLangModule.php',15,'Edit a Language File Module'),('Z_poEditLangRemaining.php',15,'Edit Remaining Strings For This Language'),('Z_poRebuildDefault.php',15,'Rebuild the System Default Language File'),('Z_PriceChanges.php',15,'Utility to make bulk pricing alterations to selected sales type price lists or selected customer prices only'),('Z_ReApplyCostToSA.php',15,'Utility to allow the sales analysis table to be updated with the latest cost information - the sales analysis takes the cost at the time the sale was made to reconcile with the enteries made in the gl.'),('Z_RemovePurchaseBackOrders.php',1,'Removes all purchase order back orders'),('Z_RePostGLFromPeriod.php',15,'Utility to repost all general ledger transaction commencing from a specified period. This can take some time in busy environments. Normally GL transactions are posted automatically each time a trial balance or profit and loss account is run'),('Z_ReverseSuppPaymentRun.php',15,'Utility to reverse an entire Supplier payment run'),('Z_SalesIntegrityCheck.php',15,''),('Z_UpdateChartDetailsBFwd.php',15,'Utility to recalculate the ChartDetails table B/Fwd balances - extreme care!!'),('Z_UpdateItemCosts.php',15,'Use CSV of item codes and costs to update webERP item costs'),('Z_UpdateSalesAnalysisWithLatestCustomerData.php',15,'Updates the salesanalysis table with the latest data from the customer debtorsmaster salestype and custbranch sales area and sales person irrespective of the sales type, area, salesperson at the time when the sale was made'),('Z_Upgrade3.10.php',15,''),('Z_Upgrade_3.01-3.02.php',15,''),('Z_Upgrade_3.04-3.05.php',15,''),('Z_Upgrade_3.05-3.06.php',15,''),('Z_Upgrade_3.07-3.08.php',15,''),('Z_Upgrade_3.08-3.09.php',15,''),('Z_Upgrade_3.09-3.10.php',15,''),('Z_Upgrade_3.10-3.11.php',15,''),('Z_Upgrade_3.11-4.00.php',15,''),('Z_UploadForm.php',15,'Utility to upload a file to a remote server'),('Z_UploadResult.php',15,'Utility to upload a file to a remote server');
++INSERT INTO `scripts` VALUES ('AccountGroups.php',10,'Defines the groupings of general ledger accounts'),('AccountSections.php',10,'Defines the sections in the general ledger reports'),('AddCustomerContacts.php',3,'Adds customer contacts'),('AddCustomerNotes.php',3,'Adds notes about customers'),('AddCustomerTypeNotes.php',3,''),('AgedControlledInventory.php',11,'Report of Controlled Items and their age'),('AgedDebtors.php',2,'Lists customer account balances in detail or summary in selected currency'),('AgedSuppliers.php',2,'Lists supplier account balances in detail or summary in selected currency'),('AnalysisHorizontalIncome.php',8,'Shows the horizontal analysis of the statement of comprehensive income'),('AnalysisHorizontalPosition.php',8,'Shows the horizontal analysis of the statement of financial position'),('Areas.php',3,'Defines the sales areas - all customers must belong to a sales area for the purposes of sales analysis'),('AuditTrail.php',15,'Shows the activity with SQL statements and who performed the changes'),('AutomaticTranslationDescriptions.php',15,'Translates via Google Translator all empty translated descriptions'),('BankAccountBalances.php',1,'Shows bank accounts authorised for with balances'),('BankAccounts.php',10,'Defines the general ledger code for bank accounts and specifies that bank transactions be created for these accounts for the purposes of reconciliation'),('BankAccountUsers.php',15,'Maintains table bankaccountusers (Authorized users to work with a bank account in webERP)'),('BankMatching.php',7,'Allows payments and receipts to be matched off against bank statements'),('BankReconciliation.php',7,'Displays the bank reconciliation for a selected bank account'),('bank_trans.php',3,''),('BOMExtendedQty.php',2,'Shows the component requirements to make an item'),('BOMIndented.php',2,'Shows the bill of material indented for each level'),('BOMIndentedReverse.php',2,''),('BOMInquiry.php',2,'Displays the bill of material with cost information'),('BOMListing.php',2,'Lists the bills of material for a selected range of items'),('BOMs.php',9,'Administers the bills of material for a selected item'),('BOMs_SingleLevel.php',2,'Single Level BOM entry'),('COGSGLPostings.php',10,'Defines the general ledger account to be used for cost of sales entries'),('CollectiveWorkOrderCost.php',2,'Multiple work orders cost review'),('CompanyPreferences.php',10,'Defines the settings applicable for the company, including name, address, tax authority reference, whether GL integration used, etc.'),('ConfirmDispatchControlled_Invoice.php',2,'Specifies the batch references/serial numbers of items dispatched that are being invoiced'),('ConfirmDispatch_Invoice.php',2,'Creates sales invoices from entered sales orders based on the quantities dispatched that can be modified'),('ContractBOM.php',6,'Creates the item requirements from stock for a contract as part of the contract cost build up'),('ContractCosting.php',6,'Shows a contract cost - the components and other non-stock costs issued to the contract'),('ContractOtherReqts.php',4,'Creates the other requirements for a contract cost build up'),('Contracts.php',6,'Creates or modifies a customer contract costing'),('CopyBOM.php',9,'Allows a bill of material to be copied between items'),('CostUpdate',10,'NB Not a script but allows users to maintain item costs from withing StockCostUpdate.php'),('CounterReturns.php',5,'Allows credits and refunds from the default Counter Sale account for an inventory location'),('CounterSales.php',1,'Allows sales to be entered against a cash sale customer account defined in the users location record'),('CreditItemsControlled.php',3,'Specifies the batch references/serial numbers of items being credited back into stock'),('CreditControl.php',21,'Credit control: record credit reviews, change credit limit, put customers on stop or watch and view the credit history'),('CreditControlReport.php',21,'Customers due a credit review, over their credit limit, or on watch or stop'),('CreditStatus.php',3,'Defines the credit status records. Each customer account is given a credit status from this table. Some credit status records can prohibit invoicing and new orders being entered.'),('Credit_Invoice.php',3,'Creates a credit note based on the details of an existing invoice'),('Currencies.php',9,'Defines the currencies available. Each customer and supplier must be defined as transacting in one of the currencies defined here.'),('CustEDISetup.php',11,'Allows the set up the customer specified EDI parameters for server, email or ftp.'),('CustItem.php',11,'Customer Items'),('CustLoginSetup.php',15,''),('CustomerAccount.php',1,'Shows customer account/statement on screen rather than PDF'),('CustomerAllocations.php',3,'Allows customer receipts and credit notes to be allocated to sales invoices'),('CustomerBalancesMovement.php',3,'Allow customers to be listed in local currency with balances and activity over a date range'),('CustomerBranches.php',3,'Defines the details of customer branches such as delivery address and contact details - also sales area, representative etc'),('CustomerInquiry.php',1,'Shows the customers account transactions with balances outstanding, links available to drill down to invoice/credit note or email invoices/credit notes'),('CustomerPurchases.php',5,'Shows the purchases a customer has made.'),('CustomerReceipt.php',3,'Entry of both customer receipts against accounts receivable and also general ledger or nominal receipts'),('Customers.php',3,'Defines the setup of a customer account, including payment terms, billing address, credit status, currency etc'),('CustomerTransInquiry.php',2,'Lists in html the sequence of customer transactions, invoices, credit notes or receipts by a user entered date range'),('CustomerTypes.php',15,''),('customer_orders.php',2,''),('CustWhereAlloc.php',2,'Shows to which invoices a receipt was allocated to'),('DailyBankTransactions.php',8,'Allows you to view all bank transactions for a selected date range, and the inquiry can be filtered by matched or unmatched transactions, or all transactions can be chosen'),('DailySalesInquiry.php',2,'Shows the daily sales with GP in a calendar format'),('Dashboard.php',1,'Display outstanding debtors, creditors etc'),('DashboardConfig.php',15,''),('DebtorsAtPeriodEnd.php',2,'Shows the debtors control account as at a previous period end - based on system calendar monthly periods'),('DeliveryDetails.php',1,'Used during order entry to allow the entry of delivery addresses other than the defaulted branch delivery address and information about carrier/shipping method etc'),('Departments.php',1,'Create business departments'),('DiscountCategories.php',11,'Defines the items belonging to a discount category. Discount Categories are used to allow discounts based on quantities across a range of producs'),('DiscountMatrix.php',11,'Defines the rates of discount applicable to discount categories and the customer groupings to which the rates are to apply'),('EDIMessageFormat.php',10,'Specifies the EDI message format used by a customer - administrator use only.'),('EDIProcessOrders.php',11,'Processes incoming EDI orders into sales orders'),('EDISendInvoices.php',15,'Processes invoiced EDI customer invoices into EDI messages and sends using the customers preferred method either ftp or email attachments.'),('EmailConfirmation.php',2,''),('EmailCustStatements.php',2,'Email Customer Statements'),('EmailCustTrans.php',2,'Emails selected invoice or credit to the customer'),('Employees.php',10,'Employees requiring time-sheets maintenance and entry '),('ExchangeRateTrend.php',2,'Shows the trend in exchange rates as retrieved from ECB'),('Factors.php',5,'Defines supplier factor companies'),('FixedAssetCategories.php',11,'Defines the various categories of fixed assets'),('FixedAssetDepreciation.php',10,'Calculates and creates GL transactions to post depreciation for a period'),('FixedAssetItems.php',11,'Allows fixed assets to be defined'),('FixedAssetLocations.php',11,'Allows the locations of fixed assets to be defined'),('FixedAssetRegister.php',11,'Produces a csv, html or pdf report of the fixed assets over a period showing period depreciation, additions and disposals'),('FixedAssetTransfer.php',11,'Allows the fixed asset locations to be changed in bulk'),('FormDesigner.php',14,'Customizes the form layout without requiring the use of scripting or technical development'),('FormMaker.php',1,'Allows running user defined Forms'),('FreightCosts.php',11,'Defines the setup of the freight cost using different shipping methods to different destinations. The system can use this information to calculate applicable freight if the items are defined with the correct kgs and cubic volume'),('FTP_RadioBeacon.php',2,'FTPs sales orders for dispatch to a radio beacon software enabled warehouse dispatching facility'),('GeneratePickingList.php',11,'Generate a picking list'),('geocode.php',3,''),('GeocodeSetup.php',3,'Sets the configuration for geocoding of customers and suppliers'),('geocode_genxml_customers.php',3,''),('geocode_genxml_suppliers.php',3,''),('geo_displaymap_customers.php',3,''),('geo_displaymap_suppliers.php',3,''),('GetStockImage.php',1,''),('GLAccountCSV.php',8,'Produces a CSV of the GL transactions for a particular range of periods and GL account'),('GLAccountGraph.php',8,'Shows a graph of GL account transactions'),('GLAccountInquiry.php',8,'Shows the general ledger transactions for a specified account over a specified range of periods'),('GLAccountReport.php',8,'Produces a report of the GL transactions for a particular account'),('GLAccounts.php',10,'Defines the general ledger accounts'),('GLAccountUsers.php',15,'Maintenance of users allowed to a GL Account'),('GLAccountUsersCopyAuthority.php',15,''),('GLBalanceSheet.php',8,'Shows the balance sheet for the company as at a specified date'),('GLBankAccountUsersCopyAuthority.php',15,''),('GLBudgetHeaders.php',10,''),('GLBudgets.php',10,'Defines GL Budgets'),('GLCashFlowsIndirect.php',8,'Shows a statement of cash flows for the period using the indirect method'),('GLCashFlowsSetup.php',8,'Setups the statement of cash flows sections'),('GLCodesInquiry.php',8,'Shows the list of general ledger codes defined with account names and groupings'),('GLJournal.php',10,'Entry of general ledger journals, periods are calculated based on the date entered here'),('GLJournalInquiry.php',15,'General Ledger Journal Inquiry'),('GLJournalTemplates.php',15,'Maintain Journal templates'),('GLProfit_Loss.php',8,'Shows the profit and loss of the company for the range of periods entered'),('GLStatements.php',8,'Shows a set of financial statements'),('GLTagProfit_Loss.php',8,''),('GLTags.php',10,'Allows GL tags to be defined'),('GLTransInquiry.php',8,'Shows the general ledger journal created for the sub ledger transaction specified'),('GLTrialBalance.php',8,'Shows the trial balance for the month and the for the period selected together with the budgeted trial balances'),('GLTrialBalance_csv.php',8,'Produces a CSV of the Trial Balance for a particular period'),('GoodsReceived.php',11,'Entry of items received against purchase orders'),('GoodsReceivedControlled.php',11,'Entry of the serial numbers or batch references for controlled items received against purchase orders'),('GoodsReceivedNotInvoiced.php',2,'Shows the list of goods received but not yet invoiced, both in supplier currency and home currency. Total in home curency should match the GL Account for Goods received not invoiced. Any discrepancy is due to multicurrency errors.'),('HistoricalTestResults.php',16,'Historical Test Results'),('ImportBankTrans.php',11,'Imports bank transactions'),('ImportBankTransAnalysis.php',11,'Allows analysis of bank transactions being imported'),('index.php',1,'The main menu from where all functions available to the user are accessed by clicking on the links'),('InternalStockCategoriesByRole.php',15,'Maintains the stock categories to be used as internal for any user security role'),('InternalStockRequest.php',1,'Create an internal stock request'),('InternalStockRequestAuthorisation.php',1,'Authorise internal stock requests'),('InternalStockRequestFulfill.php',1,'Fulfill an internal stock request'),('InternalStockRequestInquiry.php',1,'Internal Stock Request inquiry'),('InventoryPlanning.php',2,'Creates a pdf report showing the last 4 months use of items including as a component of assemblies together with stock quantity on hand, current demand for the item and current quantity on sales order.'),('InventoryPlanningPrefSupplier.php',2,'Produces a report showing the inventory to be ordered by supplier'),('InventoryPlanningPrefSupplier_CSV.php',2,'Inventory planning spreadsheet'),('InventoryQuantities.php',2,''),('InventoryValuation.php',2,'Creates a pdf report showing the value of stock at standard cost for a range of product categories selected'),('Labels.php',15,'Produces item pricing labels in a pdf from a range of selected criteria'),('latest_grns.php',2,''),('latest_po.php',3,''),('latest_po_auth.php',2,''),('latest_stock_status.php',3,''),('Locations.php',11,'Defines the inventory stocking locations or warehouses'),('LocationUsers.php',15,'Allows users that have permission to access a location to be defined'),('LocationUsersCopyAuthority.php',15,''),('LoggedInUsers.php',8,''),('Logout.php',1,'Shows when the user logs out of webERP'),('MailingGroupMaintenance.php',15,'Mainting mailing lists for items to mail'),('MailInventoryValuation.php',1,'Meant to be run as a scheduled process to email the stock valuation off to a specified person. Creates the same stock valuation report as InventoryValuation.php'),('MailSalesReport_csv.php',15,'Mailing the sales report'),('MaintenanceReminders.php',1,'Sends email reminders for scheduled asset maintenance tasks'),('MaintenanceTasks.php',1,'Allows set up and edit of scheduled maintenance tasks'),('MaintenanceUserSchedule.php',1,'List users or managers scheduled maintenance tasks and allow to be flagged as completed'),('Manufacturers.php',15,'Maintain brands of sales products'),('MaterialsNotUsed.php',4,'Lists the items from Raw Material Categories not used in any BOM (thus, not used at all)'),('MRP.php',9,''),('MRPCalendar.php',9,''),('MRPCreateDemands.php',9,''),('MRPDemands.php',9,''),('MRPDemandTypes.php',9,''),('MRPPlannedPurchaseOrders.php',2,''),('MRPPlannedWorkOrders.php',2,''),('MRPReport.php',2,''),('MRPReschedules.php',2,''),('MRPShortages.php',2,''),('mrp_dashboard.php',3,''),('NoSalesItems.php',2,'Shows the No Selling (worst) items'),('OffersReceived.php',4,''),('OrderDetails.php',1,'Shows the detail of a sales order'),('OrderEntryDiscountPricing',13,'Not a script but an authority level marker - required if the user is allowed to enter discounts and special pricing against a customer order'),('OutstandingGRNs.php',2,'Creates a pdf showing all GRNs for which there has been no purchase invoice matched off against.'),('PageSecurity.php',15,'Changes the security token of a script'),('PaymentAllocations.php',5,''),('PaymentMethods.php',15,''),('Payments.php',5,'Entry of bank account payments either against an AP account or a general ledger payment - if the AP-GL link in company preferences is set'),('PaymentTerms.php',10,'Defines the payment terms records, these can be expressed as either a number of days credit or a day in the following month. All customers and suppliers must have a corresponding payment term recorded against their account'),('PcAnalysis.php',15,'Creates an Excel with details of PC expnese for 24 months'),('PcAssignCashTabToTab.php',12,'Assign cash from one tab to another'),('PcAssignCashToTab.php',6,''),('PcAuthorizeCash.php',6,'Authorisation of assigned cash'),('PcAuthorizeExpenses.php',6,''),('PcClaimExpensesFromTab.php',6,''),('PcExpenses.php',15,''),('PcExpensesTypeTab.php',15,''),('PcReportExpense.php',15,''),('PcReportTab.php',6,''),('PcTabExpensesList.php',15,'Creates excel with all movements of tab between dates'),('PcTabs.php',15,''),('PcTypeTabs.php',15,''),('PDFAck.php',15,'Print an acknowledgement'),('PDFBankingSummary.php',3,'Creates a pdf showing the amounts entered as receipts on a specified date together with references for the purposes of banking'),('PDFChequeListing.php',3,'Creates a pdf showing all payments that have been made from a specified bank account over a specified period. This can be emailed to an email account defined in config.php - ie a financial controller'),('PDFCOA.php',0,'PDF of COA'),('PDFCustomerList.php',2,'Creates a report of the customer and branch information held. This report has options to print only customer branches in a specified sales area and sales person. Additional option allows to list only those customers with activity either under or over a specified amount, since a specified date.'),('PDFCustTransListing.php',3,''),('PDFDeliveryDifferences.php',3,'Creates a pdf report listing the delivery differences from what the customer requested as recorded in the order entry. The report calculates a percentage of order fill based on the number of orders filled in full on time'),('PDFDIFOT.php',3,'Produces a pdf showing the delivery in full on time performance'),('PDFFGLabel.php',11,'Produces FG Labels'),('PDFGLJournal.php',15,'General Ledger Journal Print'),('PDFGLJournalCN.php',1,'Print GL Journal Chinese version'),('PDFGrn.php',2,'Produces a GRN report on the receipt of stock'),('PDFLowGP.php',2,'Creates a pdf report showing the low gross profit sales made in the selected date range. The percentage of gp deemed acceptable can also be entered'),('PDFOrdersInvoiced.php',3,'Produces a pdf of orders invoiced based on selected criteria'),('PDFOrderStatus.php',3,'Reports on sales order status by date range, by stock location and stock category - producing a pdf showing each line items and any quantites delivered'),('PDFPeriodStockTransListing.php',3,'Allows stock transactions of a specific transaction type to be listed over a single day or period range'),('PDFPickingList.php',2,''),('PDFPriceList.php',2,'Creates a pdf of the price list applicable to a given sales type and customer. Also allows the listing of prices specific to a customer'),('PDFPrintLabel.php',10,''),('PDFProdSpec.php',0,'PDF OF Product Specification'),('PDFQALabel.php',2,'Produces a QA label on receipt of stock'),('PDFQuotation.php',2,''),('PDFQuotationPortrait.php',2,'Portrait quotation'),('PDFReceipt.php',2,''),('PDFRemittanceAdvice.php',2,''),('PDFSellThroughSupportClaim.php',9,'Reports the sell through support claims to be made against all suppliers for a given date range.'),('PDFShipLabel.php',15,'Print a ship label'),('PDFStockCheckComparison.php',2,'Creates a pdf comparing the quantites entered as counted at a given range of locations against the quantity stored as on hand as at the time a stock check was initiated.'),('PDFStockLocTransfer.php',1,'Creates a stock location transfer docket for the selected location transfer reference number'),('PDFStockNegatives.php',1,'Produces a pdf of the negative stocks by location'),('PDFStockTransfer.php',2,'Produces a report for stock transfers'),('PDFSuppTransListing.php',3,''),('PDFTestPlan.php',16,'PDF of Test Plan'),('PDFTopItems.php',2,'Produces a pdf report of the top items sold'),('PDFWOPrint.php',11,'Produces W/O Paperwork'),('PeriodsInquiry.php',2,'Shows a list of all the system defined periods'),('PickingLists.php',11,'Picking List Maintenance'),('PickingListsControlled.php',11,'Picking List Maintenance - Controlled'),('POFinancialPlanning.php',4,''),('POReport.php',2,''),('PO_AuthorisationLevels.php',15,''),('PO_AuthoriseMyOrders.php',4,''),('PO_Header.php',4,'Entry of a purchase order header record - date, references buyer etc'),('PO_Items.php',4,'Entry of a purchase order items - allows entry of items with lookup of currency cost from Purchasing Data previously entered also allows entry of nominal items against a general ledger code if the AP is integrated to the GL'),('PO_OrderDetails.php',2,'Purchase order inquiry shows the quantity received and invoiced of purchase order items as well as the header information'),('PO_PDFPurchOrder.php',2,'Creates a pdf of the selected purchase order for printing or email to one of the supplier contacts entered'),('PO_SelectOSPurchOrder.php',2,'Shows the outstanding purchase orders for selecting with links to receive or modify the purchase order header and items'),('PO_SelectPurchOrder.php',2,'Allows selection of any purchase order with links to the inquiry'),('PriceMatrix.php',11,'Mantain stock prices according to quantity break and sales types'),('Prices.php',9,'Entry of prices for a selected item also allows selection of sales type and currency for the price'),('PricesBasedOnMarkUp.php',11,''),('PricesByCost.php',11,'Allows prices to be updated based on cost'),('Prices_Customer.php',11,'Entry of prices for a selected item and selected customer/branch. The currency and sales type is defaulted from the customer\'s record'),('PrintCheque.php',5,''),('PrintCustOrder.php',2,'Creates a pdf of the dispatch note - by default this is expected to be on two part pre-printed stationery to allow pickers to note discrepancies for the confirmer to update the dispatch at the time of invoicing'),('PrintCustOrder_generic.php',2,'Creates two copies of a laser printed dispatch note - both copies need to be written on by the pickers with any discrepancies to advise customer of any shortfall and on the office copy to ensure the correct quantites are invoiced'),('PrintCustStatements.php',2,'Creates a pdf for the customer statements in the selected range'),('PrintCustTrans.php',1,'Creates either a html invoice or credit note or a pdf. A range of invoices or credit notes can be selected also.'),('PrintCustTransPortrait.php',1,''),('PrintSalesOrder_generic.php',2,''),('PrintWOItemSlip.php',4,'PDF WO Item production Slip '),('ProdSpecGroups.php', 16, 'Product Spec Groups Maintenance'),('ProductSpecs.php',16,'Product Specification Maintenance'),('PurchaseByPrefSupplier.php',2,'Purchase ordering by preferred supplier'),('PurchasesReport.php',2,'Shows a report of purchases from suppliers for the range of selected dates'),('PurchData.php',4,'Entry of supplier purchasing data, the suppliers part reference and the suppliers currency cost of the item'),('QATests.php',16,'Quality Test Maintenance'),('RecurringSalesOrders.php',1,''),('RecurringSalesOrdersProcess.php',1,'Process Recurring Sales Orders'),('RegularPaymentsProcess.php',5,''),('RegularPaymentsSetup.php',5,''),('RelatedItemsUpdate.php',2,'Maintains Related Items'),('ReorderLevel.php',2,'Allows reorder levels of inventory to be updated'),('ReorderLevelLocation.php',2,''),('ReportCreator.php',13,'Report Writer and Form Creator script that creates templates for user defined reports and forms'),('ReportMaker.php',1,'Produces reports from the report writer templates created'),('reportwriter/admin/ReportCreator.php',15,'Report Writer'),('ReprintGRN.php',11,'Allows selection of a goods received batch for reprinting the goods received note given a purchase order number'),('ReverseGRN.php',11,'Reverses the entry of goods received - creating stock movements back out and necessary general ledger journals to effect the reversal'),('RevisionTranslations.php',15,'Human revision for automatic descriptions translations'),('SalesAnalReptCols.php',2,'Entry of the definition of a sales analysis report\'s columns.'),('SalesAnalRepts.php',2,'Entry of the definition of a sales analysis report headers'),('SalesAnalysis_UserDefined.php',2,'Creates a pdf of a selected user defined sales analysis report'),('SalesByTypePeriodInquiry.php',2,'Shows sales for a selected date range by sales type/price list'),('SalesCategories.php',11,''),('SalesCategoryDescriptions.php',15,'Maintain translations for sales categories'),('SalesCategoryPeriodInquiry.php',2,'Shows sales for a selected date range by stock category'),('SalesCommissionRates.php',15,''),('SalesCommissionReports.php',3,''),('SalesCommissionTypes.php',15,''),('SalesGLPostings.php',10,'Defines the general ledger accounts used to post sales to based on product categories and sales areas'),('SalesGraph.php',6,''),('SalesInquiry.php',2,''),('SalesPeople.php',3,'Defines the sales people of the business'),('SalesReport.php',2,'Shows a report of sales to customers for the range of selected dates'),('SalesTopCustomersInquiry.php',1,'Shows the top customers'),('SalesTopItemsInquiry.php',2,'Shows the top item sales for a selected date range'),('SalesTypes.php',15,'Defines the sales types - prices are held against sales types they can be considered price lists. Sales analysis records are held by sales type too.'),('SecurityTokens.php',15,'Administration of security tokens'),('SelectAsset.php',2,'Allows a fixed asset to be selected for modification or viewing'),('SelectCompletedOrder.php',1,'Allows the selection of completed sales orders for inquiries - choices to select by item code or customer'),('SelectContract.php',6,'Allows a contract costing to be selected for modification or viewing'),('SelectCreditItems.php',3,'Entry of credit notes from scratch, selecting the items in either quick entry mode or searching for them manually'),('SelectCustomer.php',2,'Selection of customer - from where all customer related maintenance, transactions and inquiries start'),('SelectGLAccount.php',8,'Selection of general ledger account from where all general ledger account maintenance, or inquiries are initiated'),('SelectOrderItems.php',1,'Entry of sales order items with both quick entry and part search functions'),('SelectPickingLists.php',11,'Select a picking list'),('SelectProduct.php',2,'Selection of items. All item maintenance, transactions and inquiries start with this script'),('SelectQASamples.php',16,'Select  QA Samples'),('SelectRecurringSalesOrder.php',2,''),('SelectSalesOrder.php',2,'Selects a sales order irrespective of completed or not for inquiries'),('SelectSupplier.php',2,'Selects a supplier. A supplier is required to be selected before any AP transactions and before any maintenance or inquiry of the supplier'),('SelectWorkOrder.php',2,''),('SellThroughSupport.php',9,'Defines the items, period and quantum of support for which supplier has agreed to provide.'),('ShipmentCosting.php',11,'Shows the costing of a shipment with all the items invoice values and any shipment costs apportioned. Updating the shipment has an option to update standard costs of all items on the shipment and create any general ledger variance journals'),('Shipments.php',11,'Entry of shipments from outstanding purchase orders for a selected supplier - changes in the delivery date will cascade into the different purchase orders on the shipment'),('Shippers.php',15,'Defines the shipping methods available. Each customer branch has a default shipping method associated with it which must match a record from this table'),('ShiptsList.php',2,'Shows a list of all the open shipments for a selected supplier. Linked from POItems.php'),('Shipt_Select.php',11,'Selection of a shipment for displaying and modification or updating'),('ShopParameters.php',15,'Maintain web-store configuration and set up'),('SMTPServer.php',15,'Sets the SMTP server'),('SpecialOrder.php',4,'Allows for a sales order to be created and an indent order to be created on a supplier for a one off item that may never be purchased again. A dummy part is created based on the description and cost details given.'),('StockAdjustments.php',11,'Entry of quantity corrections to stocks in a selected location.'),('StockAdjustmentsControlled.php',11,'Entry of batch references or serial numbers on controlled stock items being adjusted'),('StockCategories.php',11,'Defines the stock categories. All items must refer to one of these categories. The category record also allows the specification of the general ledger codes where stock items are to be posted - the balance sheet account and the profit and loss effect of any adjustments and the profit and loss effect of any price variances'),('StockCategorySalesInquiry.php',2,'Sales inquiry by stock category showing top items'),('StockCheck.php',2,'Allows creation of a stock check file - copying the current quantites in stock for later comparison to the entered counts. Also produces a pdf for the count sheets.'),('StockClone.php',11,'Script to copy a stock item and associated properties, image, price, purchase and cost data'),('StockCostUpdate.php',9,'Allows update of the standard cost of items producing general ledger journals if the company preferences stock GL interface is active'),('StockCounts.php',2,'Allows entry of stock counts'),('StockDispatch.php',2,''),('StockLocMovements.php',2,'Inquiry shows the Movements of all stock items for a specified location'),('StockLocStatus.php',2,'Shows the stock on hand together with outstanding sales orders and outstanding purchase orders by stock location for all items in the selected stock category'),('StockLocTransfer.php',11,'Entry of a bulk stock location transfer for many parts from one location to another.'),('StockLocTransferReceive.php',11,'Effects the transfer and creates the stock movements for a bulk stock location transfer initiated from StockLocTransfer.php'),('StockMovements.php',2,'Shows a list of all the stock movements for a selected item and stock location including the price at which they were sold in local currency and the price at which they were purchased for in local currency'),('StockQties_csv.php',5,'Makes a comma separated values (CSV)file of the stock item codes and quantities'),('StockQuantityByDate.php',2,'Shows the stock on hand for each item at a selected location and stock category as at a specified date'),('StockReorderLevel.php',4,'Entry and review of the re-order level of items by stocking location'),('Stocks.php',11,'Defines an item - maintenance and addition of new parts'),('StockSerialItemResearch.php',3,''),('StockSerialItems.php',2,'Shows a list of the serial numbers or the batch references and quantities of controlled items. This inquiry is linked from the stock status inquiry'),('StockStatus.php',2,'Shows the stock on hand together with outstanding sales orders and outstanding purchase orders by stock location for a selected part. Has a link to show the serial numbers in stock at the location selected if the item is controlled'),('StockTransferControlled.php',11,'Entry of serial numbers/batch references for controlled items being received on a stock transfer. The script is used by both bulk transfers and point to point transfers'),('StockTransfers.php',11,'Entry of point to point stock location transfers of a single part'),('StockUsage.php',2,'Inquiry showing the quantity of stock used by period calculated from the sum of the stock movements over that period - by item and stock location. Also available over all locations'),('StockUsageGraph.php',2,''),('SuppContractChgs.php',5,''),('SuppCreditGRNs.php',5,'Entry of a supplier credit notes (debit notes) against existing GRN which have already been matched in full or in part'),('SuppFixedAssetChgs.php',5,''),('SuppInvGRNs.php',5,'Entry of supplier invoices against goods received'),('SupplierAllocations.php',5,'Entry of allocations of supplier payments and credit notes to invoices'),('SupplierBalsAtPeriodEnd.php',2,''),('SupplierContacts.php',5,'Entry of supplier contacts and contact details including email addresses'),('SupplierCredit.php',5,'Entry of supplier credit notes (debit notes)'),('SupplierGRNAndInvoiceInquiry.php',5,'Supplier\'s delivery note and grn relationship inquiry'),('SupplierInquiry.php',2,'Inquiry showing invoices, credit notes and payments made to suppliers together with the amounts outstanding'),('SupplierInvoice.php',5,'Entry of supplier invoices'),('SupplierPriceList.php',4,'Maintain Supplier Price Lists'),('Suppliers.php',5,'Entry of new suppliers and maintenance of existing suppliers'),('SupplierTenderCreate.php',4,'Create or Edit tenders'),('SupplierTenders.php',9,''),('SupplierTransInquiry.php',2,''),('SupplierTypes.php',4,''),('SuppLoginSetup.php',15,''),('SuppPaymentRun.php',5,'Automatic creation of payment records based on calculated amounts due from AP invoices entered'),('SuppPriceList.php',2,''),('SuppShiptChgs.php',5,'Entry of supplier invoices against shipments as charges against a shipment'),('SuppTransGLAnalysis.php',5,'Entry of supplier invoices against general ledger codes'),('SuppWhereAlloc.php',3,'Suppliers Where allocated'),('SystemParameters.php',15,'Sets the main system configuration parameters'),('Tax.php',2,'Creates a report of the ad-valorem tax -GST/VAT- for the period selected from accounts payable and accounts receivable data'),('TaxAuthorities.php',15,'Entry of tax authorities - the state intitutions that charge tax'),('TaxAuthorityRates.php',11,'Entry of the rates of tax applicable to the tax authority depending on the item tax level'),('TaxCategories.php',15,'Allows for categories of items to be defined that might have different tax rates applied to them'),('TaxGroups.php',15,'Allows for taxes to be grouped together where multiple taxes might apply on sale or purchase of items'),('TaxProvinces.php',15,'Allows for inventory locations to be defined so that tax applicable from sales in different provinces can be dealt with'),('TestPlanResults.php',16,'Test Plan Results Entry'),('Timesheets.php',1,'Entry of Timesheets'),('TopItems.php',2,'Shows the top selling items'),('total_dashboard.php',1,''),('UnitsOfMeasure.php',15,'Allows for units of measure to be defined'),('unpaid_invoice.php',2,''),('UpgradeDatabase.php',15,'Allows for the database to be automatically upgraded based on currently recorded DBUpgradeNumber config option'),('UserBankAccounts.php',15,'Maintains table bankaccountusers (Authorized users to work with a bank account in webERP)'),('UserGLAccounts.php',15,'Maintenance of GL Accounts allowed for a user'),('UserLocations.php',15,'Location User Maintenance'),('UserSettings.php',1,'Allows the user to change system wide defaults for the theme - appearance, the number of records to show in searches and the language to display messages in'),('WhereUsedInquiry.php',2,'Inquiry showing where an item is used ie all the parents where the item is a component of'),('WOCanBeProducedNow.php',4,'List of WO items that can be produced with available stock in location'),('WorkCentres.php',9,'Defines the various centres of work within a manufacturing company. Also the overhead and labour rates applicable to the work centre and its standard capacity'),('WorkOrderCosting.php',11,''),('WorkOrderEntry.php',10,'Entry of new work orders'),('WorkOrderIssue.php',11,'Issue of materials to a work order'),('WorkOrderReceive.php',11,'Allows for receiving of works orders'),('WorkOrderStatus.php',11,'Shows the status of works orders'),('work_orders.php',3,''),('WOSerialNos.php',10,''),('WWW_Access.php',15,'Adds or removes security roles by a system administrator'),('WWW_Users.php',15,'Entry of users and security settings of users'),('Z_BottomUpCosts.php',15,''),('Z_ChangeBranchCode.php',15,'Utility to change the branch code of a customer that cascades the change through all the necessary tables'),('Z_ChangeCustomerCode.php',15,'Utility to change a customer code that cascades the change through all the necessary tables'),('Z_ChangeGLAccountCode.php',15,'Script to change a GL account code accross all tables necessary'),('Z_ChangeLocationCode.php',15,'Change a locations code and in all tables where the old code was used to the new code'),('Z_ChangeSalesmanCode.php',15,'Utility to change a salesman code'),('Z_ChangeStockCategory.php',15,''),('Z_ChangeStockCode.php',15,'Utility to change an item code that cascades the change through all the necessary tables'),('Z_ChangeSupplierCode.php',15,'Script to change a supplier code accross all tables necessary'),('Z_CheckAllocationsFrom.php',15,''),('Z_CheckAllocs.php',2,''),('Z_CheckDebtorsControl.php',15,'Inquiry that shows the total local currency (functional currency) balance of all customer accounts to reconcile with the general ledger debtors account'),('Z_CheckGLTransBalance.php',15,'Checks all GL transactions balance and reports problem ones'),('Z_CreateChartDetails.php',9,'Utility page to create chart detail records for all general ledger accounts and periods created - needs expert assistance in use'),('Z_CreateCompany.php',15,'Utility to insert company number 1 if not already there - actually only company 1 is used - the system is not multi-company'),('Z_CreateCompanyTemplateFile.php',15,''),('Z_CurrencyDebtorsBalances.php',15,'Inquiry that shows the total foreign currency together with the total local currency (functional currency) balances of all customer accounts to reconcile with the general ledger debtors account'),('Z_CurrencySuppliersBalances.php',15,'Inquiry that shows the total foreign currency amounts and also the local currency (functional currency) balances of all supplier accounts to reconcile with the general ledger creditors account'),('Z_DataExport.php',15,''),('Z_DeleteCreditNote.php',15,'Utility to reverse a customer credit note - a desperate measure that should not be used except in extreme circumstances'),('Z_DeleteInvoice.php',15,'Utility to reverse a customer invoice - a desperate measure that should not be used except in extreme circumstances'),('Z_DeleteOldPrices.php',15,'Deletes all old prices'),('Z_DeleteSalesTransActions.php',15,'Utility to delete all sales transactions, sales analysis the lot! Extreme care required!!!'),('Z_DescribeTable.php',11,''),('Z_Fix1cAllocations.php',9,''),('Z_FixGLTransPeriods.php',15,'Fixes periods where GL transactions were not created correctly'),('Z_GLAccountUsersCopyAuthority.php',15,'Utility to copy authority of GL accounts from one user to another'),('Z_ImportChartOfAccounts.php',11,''),('Z_ImportDebtors.php',15,'Import debtors by csv file'),('Z_ImportFixedAssets.php',15,'Allow fixed assets to be imported from a csv'),('Z_ImportGLAccountGroups.php',11,''),('Z_ImportGLAccountSections.php',11,''),('Z_ImportGLTransactions.php',15,'Import General Ledger Transactions'),('Z_ImportPartCodes.php',11,'Allows inventory items to be imported from a csv'),('Z_ImportPriceList.php',15,'Loads a new price list from a csv file'),('Z_ImportStocks.php',15,''),('Z_index.php',15,'Utility menu page'),('Z_ItemsWithoutPicture.php',15,'Shows the list of curent items without picture in webERP'),('Z_MakeLocUsers.php',15,'Create User Location records'),('Z_MakeNewCompany.php',15,''),('Z_MakeStockLocns.php',15,'Utility to make LocStock records for all items and locations if not already set up.'),('Z_poAddLanguage.php',15,'Add a New Language to the System'),('Z_poAdmin.php',15,'Allows for a gettext language po file to be administered'),('Z_poEditLangHeader.php',15,'Edit a Language File Header'),('Z_poEditLangModule.php',15,'Edit a Language File Module'),('Z_poEditLangRemaining.php',15,'Edit Remaining Strings For This Language'),('Z_poRebuildDefault.php',15,'Rebuild the System Default Language File'),('Z_PriceChanges.php',15,'Utility to make bulk pricing alterations to selected sales type price lists or selected customer prices only'),('Z_ReApplyCostToSA.php',15,'Utility to allow the sales analysis table to be updated with the latest cost information - the sales analysis takes the cost at the time the sale was made to reconcile with the enteries made in the gl.'),('Z_RemovePurchaseBackOrders.php',1,'Removes all purchase order back orders'),('Z_RePostGLFromPeriod.php',15,'Utility to repost all general ledger transaction commencing from a specified period. This can take some time in busy environments. Normally GL transactions are posted automatically each time a trial balance or profit and loss account is run'),('Z_ReverseSuppPaymentRun.php',15,'Utility to reverse an entire Supplier payment run'),('Z_SalesIntegrityCheck.php',15,''),('Z_UpdateChartDetailsBFwd.php',15,'Utility to recalculate the ChartDetails table B/Fwd balances - extreme care!!'),('Z_UpdateItemCosts.php',15,'Use CSV of item codes and costs to update webERP item costs'),('Z_UpdateSalesAnalysisWithLatestCustomerData.php',15,'Updates the salesanalysis table with the latest data from the customer debtorsmaster salestype and custbranch sales area and sales person irrespective of the sales type, area, salesperson at the time when the sale was made'),('Z_Upgrade3.10.php',15,''),('Z_Upgrade_3.01-3.02.php',15,''),('Z_Upgrade_3.04-3.05.php',15,''),('Z_Upgrade_3.05-3.06.php',15,''),('Z_Upgrade_3.07-3.08.php',15,''),('Z_Upgrade_3.08-3.09.php',15,''),('Z_Upgrade_3.09-3.10.php',15,''),('Z_Upgrade_3.10-3.11.php',15,''),('Z_Upgrade_3.11-4.00.php',15,''),('Z_UploadForm.php',15,'Utility to upload a file to a remote server'),('Z_UploadResult.php',15,'Utility to upload a file to a remote server');
+diff --git a/install/sql/data/securitygroups.sql b/install/sql/data/securitygroups.sql
+index eafa618..9f70433 100644
+--- a/install/sql/data/securitygroups.sql
++++ b/install/sql/data/securitygroups.sql
+@@ -1 +1 @@
+-INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2,11),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,11),(4,0),(4,1),(4,2),(4,5),(5,0),(5,1),(5,2),(5,3),(5,11),(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(6,8),(6,9),(6,10),(6,11),(7,0),(7,1),(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,6),(8,7),(8,8),(8,9),(8,10),(8,11),(8,12),(8,13),(8,14),(8,15),(8,16),(8,20),(9,0),(9,9);
++INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2,11),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,11),(4,0),(4,1),(4,2),(4,5),(5,0),(5,1),(5,2),(5,3),(5,11),(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(6,8),(6,9),(6,10),(6,11),(7,0),(7,1),(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,6),(8,7),(8,8),(8,9),(8,10),(8,11),(8,12),(8,13),(8,14),(8,15),(8,16),(8,20),(8,21),(9,0),(9,9);
+diff --git a/install/sql/data/securitytokens.sql b/install/sql/data/securitytokens.sql
+index 41505e5..a215812 100644
+--- a/install/sql/data/securitytokens.sql
++++ b/install/sql/data/securitytokens.sql
+@@ -1 +1 @@
+-INSERT INTO `securitytokens` VALUES (0,'Main Index Page'),(1,'Order Entry/Inquiries customer access only'),(2,'Basic Reports and Inquiries with selection options'),(3,'Credit notes and AR management'),(4,'Purchasing data/PO Entry/Reorder Levels'),(5,'Accounts Payable'),(6,'Petty Cash'),(7,'Bank Reconciliations'),(8,'General ledger reports/inquiries'),(9,'Supplier centre - Supplier access only'),(10,'General Ledger Maintenance, stock valuation & Configuration'),(11,'Inventory Management and Pricing'),(12,'Prices Security'),(13,'Customer services Price modifications'),(14,'Unknown'),(15,'User Management and System Administration'),(16,'QA'),(18,'Cost authority'),(19,'Internal stock request fully access authority'),(20,'Timesheet administrator');
++INSERT INTO `securitytokens` VALUES (0,'Main Index Page'),(1,'Order Entry/Inquiries customer access only'),(2,'Basic Reports and Inquiries with selection options'),(3,'Credit notes and AR management'),(4,'Purchasing data/PO Entry/Reorder Levels'),(5,'Accounts Payable'),(6,'Petty Cash'),(7,'Bank Reconciliations'),(8,'General ledger reports/inquiries'),(9,'Supplier centre - Supplier access only'),(10,'General Ledger Maintenance, stock valuation & Configuration'),(11,'Inventory Management and Pricing'),(12,'Prices Security'),(13,'Customer services Price modifications'),(14,'Unknown'),(15,'User Management and System Administration'),(16,'QA'),(18,'Cost authority'),(19,'Internal stock request fully access authority'),(20,'Timesheet administrator'),(21,'Credit control - reviews, stop/watch and credit limits');
+diff --git a/install/sql/tables/creditcontrollog.sql b/install/sql/tables/creditcontrollog.sql
+new file mode 100644
+index 0000000..dc59090
+--- /dev/null
++++ b/install/sql/tables/creditcontrollog.sql
+@@ -0,0 +1,16 @@
++CREATE TABLE `creditcontrollog` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `action` varchar(20) NOT NULL DEFAULT '',
++  `actiondate` datetime NOT NULL DEFAULT '1000-01-01 00:00:00',
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `outcome` varchar(40) NOT NULL DEFAULT '',
++  `oldvalue` varchar(40) NOT NULL DEFAULT '',
++  `newvalue` varchar(40) NOT NULL DEFAULT '',
++  `notes` text,
++  `nextreviewdate` date NOT NULL DEFAULT '1000-01-01',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`,`actiondate`),
++  KEY `action` (`action`),
++  CONSTRAINT `creditcontrollog_ibfk_1` FOREIGN KEY (`debtorno`) REFERENCES `debtorsmaster` (`debtorno`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/debtorsmaster.sql b/install/sql/tables/debtorsmaster.sql
+index a2def1c..85f0eb5 100644
+--- a/install/sql/tables/debtorsmaster.sql
++++ b/install/sql/tables/debtorsmaster.sql
+@@ -30,6 +30,7 @@ CREATE TABLE `debtorsmaster` (
+   `customerpoline` tinyint(1) NOT NULL DEFAULT '0',
+   `typeid` tinyint NOT NULL DEFAULT '1',
+   `language_id` varchar(10) NOT NULL DEFAULT 'en_GB.utf8',
++  `nextreviewdate` date NOT NULL DEFAULT '1000-01-01',
+   PRIMARY KEY (`debtorno`),
+   KEY `Currency` (`currcode`),
+   KEY `HoldReason` (`holdreason`),
+diff --git a/sql/updates/44.php b/sql/updates/44.php
+new file mode 100644
+index 0000000..2f57ce5
+--- /dev/null
++++ b/sql/updates/44.php
+@@ -0,0 +1,46 @@
++<?php
++
++/* Credit control: review dates, audit history, security token and pages */
++
++AddColumn('nextreviewdate', 'debtorsmaster', 'date', 'NOT NULL', '1000-01-01', 'language_id');
++
++CreateTable('creditcontrollog', "CREATE TABLE `creditcontrollog` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `action` varchar(20) NOT NULL DEFAULT '',
++  `actiondate` datetime NOT NULL DEFAULT '1000-01-01 00:00:00',
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `outcome` varchar(40) NOT NULL DEFAULT '',
++  `oldvalue` varchar(40) NOT NULL DEFAULT '',
++  `newvalue` varchar(40) NOT NULL DEFAULT '',
++  `notes` text,
++  `nextreviewdate` date NOT NULL DEFAULT '1000-01-01',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`,`actiondate`),
++  KEY `action` (`action`),
++  CONSTRAINT `creditcontrollog_ibfk_1` FOREIGN KEY (`debtorno`) REFERENCES `debtorsmaster` (`debtorno`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
++
++NewConfigValue('CreditReviewMonths', '12');
++
++/* Existing customers start with a next review date one standard period from go-live. Their current
++   status is unchanged: anyone already on a hold reason that prohibits invoicing stays on stop. */
++executeSQL("UPDATE debtorsmaster
++			SET nextreviewdate = DATE_ADD(CURDATE(), INTERVAL 12 MONTH)
++			WHERE nextreviewdate = '1000-01-01'");
++
++/* New security token for credit control, given to the System Administrator role as a starting point */
++executeSQL("INSERT INTO securitytokens (tokenid, tokenname)
++			SELECT 21, 'Credit control - reviews, stop/watch and credit limits' FROM DUAL
++			WHERE NOT EXISTS (SELECT 1 FROM securitytokens WHERE tokenid = 21)");
++executeSQL("INSERT INTO securitygroups (secroleid, tokenid)
++			SELECT 8, 21 FROM DUAL
++			WHERE EXISTS (SELECT 1 FROM securityroles WHERE secroleid = 8)
++			AND NOT EXISTS (SELECT 1 FROM securitygroups WHERE secroleid = 8 AND tokenid = 21)");
++
++NewScript('CreditControl.php', 21);
++NewScript('CreditControlReport.php', 21);
++
++if ($_SESSION['Updates']['Errors'] == 0) {
++	UpdateDBNo(basename(__FILE__, '.php'), __('Credit control: review dates, credit history and security token'));
++}

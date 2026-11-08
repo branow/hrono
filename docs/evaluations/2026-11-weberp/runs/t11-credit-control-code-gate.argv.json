@@ -1,0 +1,21 @@
+[
+ "claude",
+ "-p",
+ "# Task: credit control\n\nImplement the change requested in `task/brd.md` in webERP.\n\nDeliver the change as files in the repository. When done, write `NOTES.md`\nat the repository root: what you changed and where, and anything in the\nrequest you found ambiguous and how you resolved it.\n\n\nThe webERP repository is in the current directory; the task is task/task.md. There is nothing to run against: deliver the change as files. The repository's GitHub issues, pull requests and discussions up to the base date are in github/, one markdown file per thread.",
+ "--model",
+ "sonnet",
+ "--max-turns",
+ "200",
+ "--setting-sources",
+ "",
+ "--strict-mcp-config",
+ "--output-format",
+ "stream-json",
+ "--verbose",
+ "--permission-mode",
+ "acceptEdits",
+ "--disallowedTools",
+ "Bash,WebFetch,WebSearch,Task,NotebookEdit",
+ "--allowedTools",
+ "Read,Grep,Glob,Edit,Write,TodoWrite,Skill"
+]

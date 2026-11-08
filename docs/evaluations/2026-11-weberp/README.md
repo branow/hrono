@@ -548,3 +548,24 @@ conventions; one try per arm, within the spread seen between tries.
 Both missed B15 (EnsureGLEntriesBalance), B21 (account/inquiry pages show
 the new types) and B32 (#761, permission through a scripts entry), although
 the map states all three and the hrono arm read the pages that hold them.
+
+## t11 (2026-11-08, amendment 10): business-only BRD, middle dose of the map
+
+| arm | s | turns | $ | files | map pages | A /43 | B /40 | correctness | conventions |
+|---|---|---|---|---|---|---|---|---|---|
+| code (gate) | 577 | 190 | 4.14 | 33 | - | 16.5 | 12.5 | 2 | 3 |
+| hrono 1 (READ_MAP=3) | 349 | 116 | 2.90 | 18 | 17 | 11.5 | 11 | 2 | 3 |
+
+The gate passed (code-only 12.5/40), but not on the rules: both arms built
+only reviews, stop/watch on every order route and the report, and wrote in
+NOTES.md that they left out reminders, interest and fees, write-offs, the
+portal and the staff guide, citing the BRD's open questions. So the ledger
+and email rules (B11-B29) were not reached by either arm. B met only by
+hrono: B30 (salesman filter), B32 (hold permission through a scripts entry,
+#761, missed by every code-only run t6-t11). Only by code: B5 (API order
+hold), B7 (customer rename), B36. hrono read 17 map pages (middle dose, as
+intended), used fewer turns and less money, and did less.
+
+Lesson: a BRD with open questions lets both arms cut half the scope; the
+task statement must ask for every requirement, the open questions decided
+and written down.

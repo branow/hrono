@@ -1,0 +1,12 @@
+# Task: credit control
+
+Implement the change requested in `task/brd.md` in webERP.
+
+Deliver the change as files in the repository. When done, write `NOTES.md`
+at the repository root: what you changed and where, and anything in the
+request you found ambiguous and how you resolved it.
+
+
+The webERP repository is in the current directory; the task is task/task.md. There is nothing to run against: deliver the change as files. The repository's GitHub issues, pull requests and discussions up to the base date are in github/, one markdown file per thread.
+
+This project has a map in /Users/orest/hrono-weberp/exports/4cb937f79e8b57063bd47132413abdac8abbcbdc-threads: briefs that already state the conventions, rules and flows of the whole codebase, so you need not rediscover them from the source. Before you change any file, read root.md, then the brief of each area the request touches, then the leaf briefs of the parts you will change and of the other places the same data or work reaches. Do not read briefs unrelated to the change. Go to the source code where you implement, for the detail.
