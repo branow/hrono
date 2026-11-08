@@ -1,0 +1,1 @@
+coin 1: B=code-1, A=hrono-3 (READ_MAP=4 + Grep the map, RECALL=0, fixed export) (keep from graders)

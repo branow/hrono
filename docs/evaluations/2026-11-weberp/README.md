@@ -677,3 +677,29 @@ in both tries, lists `CustomerLogin` among session keys; in the code it
 is the local `$CustomerLogin` set by session.php. The correct rule is in
 the session bootstrap brief (50), not read in either try. A brief error
 the agent followed.
+
+### t12 hrono try 3 (amendment 13: Grep the map, CustomerLogin briefs fixed by hand)
+
+Graded blind against code-only try 1 (coin 1: A = hrono-3, B = code-1;
+grading/t12-credit-control-try3/). Only hrono-3 was checklist-graded;
+code-1 keeps its two identical grades (38 / 25.5).
+
+| | code-1 | hrono-2 | hrono-3 |
+|---|---|---|---|
+| A (BRD) /43 | 38 | 39.5 | 37 |
+| B (rules) /40 | 25.5 | 25.5 | 24 |
+| review /10 | 5 (vs h2), 6.5 (vs h3) | 6 | 5 |
+| cost / minutes | $8.35 / 19 | $7.49 / 17 | $6.06 / 15 |
+| source read | 312k | 196k | 213k |
+| map read | 0 | 9 pages, 159k | 4 pages, 76k |
+| Grep calls on the map | 0 | 0 | 3 of 55 |
+
+The portal is now right (customer from `www_users.customerid`, B31 met).
+But the agent read less of the map, not more: 3 searches on the map, then
+only root.md, one area brief and two leaf briefs. Reviewer: "B (code),
+somewhat": code delivers more of the request (over-limit holds and
+releases, aged-debtors status, an authority model, ledger agreement in
+the existing integrity tool) and its dunning skips customers who paid;
+hrono-3 misses BR-10, shares credit authority with purchasing and AR
+clerks, breaks the demo install, and its dunning can send a final notice
+right after a payment.
