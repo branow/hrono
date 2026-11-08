@@ -714,3 +714,23 @@ CustomerReceipt.php, Credit_Invoice.php, DeliveryDetails.php,
 RecurringSalesOrdersProcess.php and the install SQL. "Learn the system
 from the briefs, not from the code" and "read what Grep finds in full" did
 not change the reading. Not graded.
+
+### t12 hrono try 5 (amendment 15), stopped at call 42
+
+Stopped by hand at call 42 (runs/t12-credit-control-hrono-5.stopped.jsonl).
+The session note was delivered (it is in the transcript). The agent read
+the BRD, root.md, then went to code; by call 10 it wrote "I've settled the
+design direction". It read 2 leaf briefs (25, 221) and no area brief.
+
+Map pages read before the first code-reading call, all t12 hrono tries:
+
+| try | where the map instruction was | Grep sentence | briefs before code |
+|---|---|---|---|
+| 1 | prompt (middle dose) | no | 7 |
+| 2 | prompt (amendment 12) | no | 8 |
+| 3 | prompt (amendment 13) | yes | 1 |
+| 4 | prompt (amendment 14) | yes | 2 |
+| 5 | session note only, listing in prompt | yes (in note) | 1 |
+
+Reading the map first happened only when the instruction was in the
+prompt and did not mention Grep.
