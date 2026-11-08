@@ -353,3 +353,15 @@ a hand correction of a map fault, reported as such; the product fix
 
 Run: hrono, READ_MAP=4, RECALL=0, the fixed export, otherwise as
 amendment 12; graded blind against code-only try 1 the same way.
+
+## Amendment 14 (2026-11-08, before any of its runs): read what Grep finds; briefs over code
+
+t12 hrono try 3 searched the map 3 times and took the matching lines for
+the briefs: it read 4 pages (try 2: 9) and scored lower. The READ_MAP=4
+prompt now says: learn the system from the briefs, not from the code;
+Grep the map folder to find which briefs cover a subject or a name, then
+read those briefs in full ("a matching line is not the brief"). The rest
+is unchanged: root.md first, the briefs of the parts the feature touches
+and of the flows its new code imitates, code only where it changes.
+Fixed export, RECALL=0, otherwise as amendment 12; graded blind against
+code-only try 1.
