@@ -365,3 +365,23 @@ is unchanged: root.md first, the briefs of the parts the feature touches
 and of the flows its new code imitates, code only where it changes.
 Fixed export, RECALL=0, otherwise as amendment 12; graded blind against
 code-only try 1.
+
+## Amendment 15 (2026-11-08, before any of its runs): one short instruction, plus the map's listing
+
+The hrono arm got two instructions on the map that disagreed: the
+plugin's SessionStart note (a long paragraph, "only then open the source
+files, to confirm the claims you make") and the harness's READ_MAP
+paragraph ("do not open that code"). The session note is now the only
+instruction, rewritten as three steps:
+
+1. Start at root.md, then read in full the area brief and the leaf briefs
+   of every part the work touches and of the existing flows it works like;
+   find them through root.md's links, or Grep the map folder.
+2. Take how the system works from the briefs; open source files only to
+   change them or to confirm a claim you rely on.
+3. Skip briefs unrelated to the work.
+
+READ_MAP=5 adds no instruction to the prompt, only the map's listing:
+each area folder with its title, and under it every leaf folder (209
+lines, 14k characters). Fixed export, RECALL=0, otherwise as amendment
+12; graded blind against code-only try 1.

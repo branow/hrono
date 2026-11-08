@@ -36,7 +36,7 @@ EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 # READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
 # area and topic briefs for the request, project history included, before any edit.
-READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4")
+READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4", "5")
 # READ_MAP=3 (amendment 10, docs/evaluations/PRINCIPLES.md): a middle dose of the map, not every brief.
 MIDDLE_TEXT = (
     "\n\nThis project has a map in {export}: briefs that already state the conventions, rules"
@@ -57,6 +57,16 @@ PLAN_TEXT = (
     " brief. Where a brief tells you what a module does or how a flow works, take it from the"
     " brief and do not open that code. Open source code only for the files you will change,"
     " and only the parts of them you change.")
+# READ_MAP=5 (amendment 15): no map instruction in the prompt (the plugin's session note is the
+# one instruction); the prompt only lists every brief of the map, by area, path and title.
+def listing(export: Path) -> str:
+    lines = [f"\n\nThe map in {export}, by area. A leaf's brief is <area>/<leaf>/brief.md."]
+    for area in sorted(p for p in export.iterdir() if (p / "brief.md").exists()):
+        lines.append(f"{area.name}: {(area / 'brief.md').open().readline().lstrip('# ').strip()}")
+        lines += [f"  {leaf.name}" for leaf in sorted(area.iterdir()) if (leaf / "brief.md").exists()]
+    return "\n".join(lines)
+
+
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
 RULES_TEXT = (
     " After reading, write in NOTES.md, under 'Rules from the map', every rule, convention, decision"
@@ -146,7 +156,10 @@ def main() -> None:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
         export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
-        if os.environ.get("READ_MAP") == "4":
+        if os.environ.get("READ_MAP") == "5":
+            prompt += listing(export)
+            argv[2] = prompt
+        elif os.environ.get("READ_MAP") == "4":
             prompt += PLAN_TEXT.format(export=export)
             argv[2] = prompt
         elif os.environ.get("READ_MAP") == "3":

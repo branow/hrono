@@ -17,36 +17,20 @@ function note(config) {
   if (!config) return null;
   const root = path.join(config.folder, "root.md");
   const lines = [
-    `This project has an hrono map (tree "${config.tree}"): briefs of ` +
-      "everything its sources hold, from one overview down to the files.",
+    `This project has an hrono map (tree "${config.tree}").`,
   ];
   if (fs.existsSync(root)) {
     const when = fs.statSync(root).mtime.toISOString().slice(0, 10);
     lines.push(
-      `It is exported at ${config.folder} (${when}). A leaf brief.md states ` +
-        "what its sources do exactly - the checks that guard each entry " +
-        "point, every branch and the state it sets, what happens on errors, " +
-        "what it sends and receives and from which other parts - so one " +
-        "brief replaces many file reads. For a question about how something " +
-        "works or how parts fit, read the map before any code, from the top " +
-        `down: start at ${root}, read the brief.md of every area whose line ` +
-        "touches the question - its Flows name every part a piece of work " +
-        "passes through, what each does when a step fails and what repairs " +
-        "it - then the leaf brief of every part on that path, to its last " +
-        "part: the area brief only summarises them. " +
-        "Only then open the source files, to confirm the claims you " +
-        "make; a part whose brief you have not read is one you would guess " +
-        "about. A change or a new feature, including one handed over in a " +
-        "file, goes through the map too, before the first code search: read " +
-        "root.md and the brief of every area the work touches, then the leaf " +
-        "brief of every file you will edit and of every shared file it " +
-        "includes (grep the map for the path; leaves list their files " +
-        "under ## Sources). They state the rules the project applies " +
-        "around that code and the other places the same data or work " +
-        "reaches (lists, checks, reports, permissions, install and " +
-        "upgrade), which a code search for the new feature's names does " +
-        "not find. " +
-        "The hrono skill has the details.",
+      `It is exported at ${config.folder} (${when}): plain-text briefs of ` +
+        "the whole codebase, in far less text than the code. " +
+        `1. Start at ${root}, then read in full the area brief and the leaf ` +
+        "briefs of every part your work touches and of the existing flows " +
+        "it works like; find them through root.md's links, or Grep the map " +
+        "folder for a name or subject. " +
+        "2. Take how the system works from the briefs. Open source files " +
+        "only to change them or to confirm a claim you rely on. " +
+        "3. Skip briefs unrelated to the work.",
     );
   } else {
     lines.push(`It is not exported yet; the hrono-export skill writes it.`);
