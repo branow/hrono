@@ -1,0 +1,1 @@
+coin 0: A=code-1, B=hrono-2 (READ_MAP=4, RECALL=0, no gate) (keep from graders)

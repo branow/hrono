@@ -648,3 +648,32 @@ code it had from briefs; it read code instead of briefs, and read briefs
 for the files it was about to change. The brief gate was removed and
 amendment 12 rewritten to say exactly that: briefs for understanding,
 code only where it changes.
+
+### t12 hrono try 2 (amendment 12: briefs for understanding, no gate, no recall)
+
+Graded blind against code-only try 1 (coin 0: A = code-1, B = hrono-2;
+grading/t12-credit-control-try2/). Code-1 was re-graded by a fresh grader
+and got the same checklist scores as before.
+
+| | code-1 | hrono-1 | hrono-2 |
+|---|---|---|---|
+| A (BRD) /43 | 38 | 40 | 39.5 |
+| B (rules) /40 | 25.5 | 26.5 | 25.5 |
+| review /10 | 6 (vs h1), 5 (vs h2) | 5 | 6 |
+| cost / minutes | $8.35 / 19 | $14.56 / 21 | $7.49 / 17 |
+| source read | 312k | 299k | 196k |
+| map read | 0 | 25 pages, 490k | 9 pages, 159k |
+| peak context | 355k | 591k | 348k |
+
+Reviewer: "B, barely": B enforces holds on every route including API
+invoicing and releases pre-stop orders, has a working month-end
+reconciliation and a go-live loader. A has the more careful ledger code
+and portal isolation, but its install breaks every menu and it breaks
+Customer Maintenance.
+
+hrono repeated try 1's portal bug: `$_SESSION['CustomerLogin']`, never
+set. Cause found in the map: the sales-order-entry leaf brief (37), read
+in both tries, lists `CustomerLogin` among session keys; in the code it
+is the local `$CustomerLogin` set by session.php. The correct rule is in
+the session bootstrap brief (50), not read in either try. A brief error
+the agent followed.
