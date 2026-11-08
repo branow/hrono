@@ -569,3 +569,31 @@ intended), used fewer turns and less money, and did less.
 Lesson: a BRD with open questions lets both arms cut half the scope; the
 task statement must ask for every requirement, the open questions decided
 and written down.
+
+## t12 (2026-11-08, amendment 11): ownership task statement
+
+Same BRD and checklist as t11; the task statement gives the agent the
+feature to own. Both arms in parallel. Blind: coin 0, A = code, B = hrono
+(grading/t12-credit-control/KEY.txt). Checklist graded per run; whole
+change reviewed by an Opus maintainer (review-AB.md, verbatim).
+
+| arm | s | turns | $ | files | map pages | A /43 | B /40 | correctness | conventions | review /10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| code (A) | 1,169 | 241 | 8.35 | 48 | - | 38 | 25.5 | 3 | 3 | 6 |
+| hrono (B) | 1,278 | 265 | 14.56 | 47 | 26 | 40 | 26.5 | 3 | 3 | 5 |
+
+Ownership worked: both built the whole feature (t11: half). On the
+checklist the arms tie (hrono +2 requirements, +1 rule). The reviewer
+would merge code "by a small margin", because hrono's customer-portal page
+tests `$_SESSION['CustomerLogin']`, which is never set, so any customer
+login can open any customer's credit page; the map states how a customer
+login is detected (rule 151 R17), and hrono did not read it. Where hrono
+was better, per the review: hold enforced on more routes (API invoicing,
+release of orders on stop), over-limit hold on amended orders, the watch
+status added to the existing CreditStatus.php instead of a parallel
+mapping, install/upgrade/demo seeds consistent, '1000-01-01' dates, a
+ledger reconciliation page. Where code was better: the portal, netting
+unallocated receipts before chasing, authority split (settings on the
+director's token), foreign keys, Z_CheckDebtorsControl extended,
+DatabaseTranslations. One try per arm: no difference beyond noise; hrono
+cost 74% more.

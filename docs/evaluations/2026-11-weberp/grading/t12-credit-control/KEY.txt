@@ -1,0 +1,1 @@
+coin 0: A=code-1, B=hrono-1 (keep from graders)
