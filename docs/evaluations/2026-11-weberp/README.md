@@ -722,15 +722,16 @@ The session note was delivered (it is in the transcript). The agent read
 the BRD, root.md, then went to code; by call 10 it wrote "I've settled the
 design direction". It read 2 leaf briefs (25, 221) and no area brief.
 
-Map pages read before the first code-reading call, all t12 hrono tries:
+Map pages read (root.md included, unique) before the first code search or
+code read, all t12 hrono tries:
 
-| try | where the map instruction was | Grep sentence | briefs before code |
+| try | where the map instruction was | Grep sentence | pages before code |
 |---|---|---|---|
-| 1 | prompt (middle dose) | no | 7 |
-| 2 | prompt (amendment 12) | no | 8 |
+| 1 | prompt (middle dose) | no | 6 |
+| 2 | prompt (amendment 12) | no | 6 |
 | 3 | prompt (amendment 13) | yes | 1 |
-| 4 | prompt (amendment 14) | yes | 2 |
+| 4 | prompt (amendment 14) | yes | 4 |
 | 5 | session note only, listing in prompt | yes (in note) | 1 |
 
-Reading the map first happened only when the instruction was in the
-prompt and did not mention Grep.
+The most map before code came with the instruction in the prompt and no
+Grep sentence.
