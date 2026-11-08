@@ -616,8 +616,9 @@ From the t12 transcripts (tool calls, results and context size per call):
   call, is the 74% extra cost.
 - Timing: root.md, 3 area briefs and 3 leaf briefs were read before the
   first write (call 76 of 264). The other 18 pages were read after code
-  was written, 16 of them right after the gate refused an edit (16 of the
-  22 tool errors are gate refusals). Reading came after the design.
+  was written: 9 right after the gate refused an edit (12 of the 22 tool
+  errors are gate refusals), the rest just before editing that file.
+  Reading came after the design.
 - Gaps: new files (CreditControlFunctions.php, CustomerCredit.php,
   CreditCharges.php, BadDebtWriteOff.php...) have no brief, so the gate
   never asks for the briefs of the flows they copy. hrono posted GL
