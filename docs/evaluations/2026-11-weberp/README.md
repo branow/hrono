@@ -703,3 +703,14 @@ the existing integrity tool) and its dunning skips customers who paid;
 hrono-3 misses BR-10, shares credit authority with purchasing and AR
 clerks, breaks the demo install, and its dunning can send a final notice
 right after a payment.
+
+### t12 hrono try 4 (amendment 14), stopped at call 53
+
+Stopped by hand at call 53, before any edit (partial transcript:
+runs/t12-credit-control-hrono-4.stopped.jsonl). It read root.md, Grep'd
+the map once, read 4 briefs (37, 105, the 149 area) and then went to the
+source the same way as before: UpgradeDB_mysqli.php, InstallFunctions.php,
+CustomerReceipt.php, Credit_Invoice.php, DeliveryDetails.php,
+RecurringSalesOrdersProcess.php and the install SQL. "Learn the system
+from the briefs, not from the code" and "read what Grep finds in full" did
+not change the reading. Not graded.
