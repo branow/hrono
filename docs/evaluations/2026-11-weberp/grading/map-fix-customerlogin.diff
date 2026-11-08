@@ -1,0 +1,59 @@
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-finance-and-ledger-area-152/weberp-customer-and-supplier-account-inquiries-plus-po-back--107/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-finance-and-ledger-area-152/weberp-customer-and-supplier-account-inquiries-plus-po-back--107/brief.md
+145c145
+< | | `CustomerLogin == 1 AND debtorno != CustomerID` -> refused ('addressed to another customer'). |
+---
+> | | `$CustomerLogin == 1 AND debtorno != $_SESSION['CustomerID']` -> refused ('addressed to another customer'). |
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-installer-seed-data-schema-build-ci-and-project-histo-150/weberp-includes-database-connection-session-login-bootstrap--50/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-installer-seed-data-schema-build-ci-and-project-histo-150/weberp-includes-database-connection-session-login-bootstrap--50/brief.md
+96c96
+< 8. `$SupplierLogin=1` if token 9 is in the tokens and the token count is 2. `$CustomerLogin=1` if token 1 is in the tokens and the token count is 2.
+---
+> 8. `$SupplierLogin=1` if token 9 is in the tokens and the token count is 2. `$CustomerLogin=1` if token 1 is in the tokens and the token count is 2. Both are plain variables, never stored in `$_SESSION`; every page sees them because it includes `session.php`.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-installer-seed-data-schema-build-ci-and-project-histo-150/weberp-test-harness-installer-anonymous-logged-in-page-acces-15/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-installer-seed-data-schema-build-ci-and-project-histo-150/weberp-test-harness-installer-anonymous-logged-in-page-acces-15/brief.md
+147c147
+< - It shows the supplier menu when `SupplierLogin==1` and the customer menu when `CustomerLogin==1`.
+---
+> - It shows the supplier menu when `$SupplierLogin == 1` and the customer menu when `$CustomerLogin == 1`.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-report-writer-printable-reports-and-report-admin-page-153/weberp-reports-and-inquiries-customer-supplier-sales-tax-sto-141/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-report-writer-printable-reports-and-report-admin-page-153/weberp-reports-and-inquiries-customer-supplier-sales-tax-sto-141/brief.md
+179c179
+<   - It enforces `SalesmanLogin` and `CustomerLogin` limits that the inquiry pages lack: it exits with an error if `SalesmanLogin != salesman`, or if `CustomerLogin==1 AND debtorno != CustomerID`.
+---
+>   - It enforces `SalesmanLogin` and `CustomerLogin` limits that the inquiry pages lack: it exits with an error if `SalesmanLogin != salesman`, or if `$CustomerLogin == 1 AND debtorno != $_SESSION['CustomerID']`.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/contracts-weberp-contract-set-up-bom-costing-close-out-quota-63/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/contracts-weberp-contract-set-up-bom-costing-close-out-quota-63/brief.md
+263c263
+<   - Refuses when `SalesmanLogin != ''` and does not match the order's salesman, or when `CustomerLogin == 1` and `CustomerID` differs from the order's debtor.
+---
+>   - Refuses when `SalesmanLogin != ''` and does not match the order's salesman, or when `$CustomerLogin == 1` and `CustomerID` differs from the order's debtor.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-credit-note-from-invoice-creditinvoice-php-cart-setup-35/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-credit-note-from-invoice-creditinvoice-php-cart-setup-35/brief.md
+158c158
+<   - It refuses with an error if `SalesmanLogin` is set and not equal to the transaction's salesman. It also refuses if `CustomerLogin==1` and `debtorno != CustomerID`.
+---
+>   - It refuses with an error if `SalesmanLogin` is set and not equal to the transaction's salesman. It also refuses if `$CustomerLogin == 1` and `debtorno != $_SESSION['CustomerID']`.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-customer-transaction-print-and-email-emailcusttrans-p-60/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-customer-transaction-print-and-email-emailcusttrans-p-60/brief.md
+86c86
+<    - `if CustomerLogin==1 AND debtorno != CustomerID` -> error "This transaction is addressed to another customer and cannot be displayed for privacy reasons", then exit.
+---
+>    - `if $CustomerLogin == 1 AND debtorno != $_SESSION['CustomerID']` -> error "This transaction is addressed to another customer and cannot be displayed for privacy reasons", then exit.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-order-delivery-details-freight-costs-payment-terms-an-48/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-order-delivery-details-freight-costs-payment-terms-an-48/brief.md
+156c156
+< - Form: `CustomerLogin==1` -> hidden SalesPerson, DeliverBlind, FreightCost, ShipVia and Quotation fields. Otherwise visible inputs.
+---
+> - Form: `$CustomerLogin == 1` -> hidden SalesPerson, DeliverBlind, FreightCost, ShipVia and Quotation fields. Otherwise visible inputs.
+189,190c189,190
+< - `SupplierLogin==1` -> show the supplier menu: view or amend outstanding offers, create a new offer, view open tenders without an offer. Exit.
+< - `CustomerLogin==1` -> show the customer menu: Account Status, Place An Order, Order Status. Exit.
+---
+> - `$SupplierLogin == 1` -> show the supplier menu: view or amend outstanding offers, create a new offer, view open tenders without an offer. Exit.
+> - `$CustomerLogin == 1` -> show the customer menu: Account Status, Place An Order, Order Status. Exit.
+diff -r 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-sales-order-entry-and-item-selection-pages-selectorde-37/brief.md 4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed/weberp-sales-purchasing-stock-manufacturing-master-data-repo-151/weberp-sales-order-entry-and-item-selection-pages-selectorde-37/brief.md
+20c20
+< - Session: `UserID`, `SalesmanLogin`, `CustomerID`, `CustomerLogin`, `UserBranch`, `CheckCreditLimits` (0, 1 or 2), `PageSecurityArray` and `AllowedPageSecurityTokens`, `QuickEntries`, `FrequentlyOrderedItems`, `DefaultDateFormat`, `DisplayRecordsMax`, `DefaultTaxCategory`, `AllowOrderLineItemNarrative`, `CompanyRecord['currencydefault']`.
+---
+> - Session: `UserID`, `SalesmanLogin`, `CustomerID`, `UserBranch`, `CheckCreditLimits` (0, 1 or 2), `PageSecurityArray` and `AllowedPageSecurityTokens`, `QuickEntries`, `FrequentlyOrderedItems`, `DefaultDateFormat`, `DisplayRecordsMax`, `DefaultTaxCategory`, `AllowOrderLineItemNarrative`, `CompanyRecord['currencydefault']`.
+32c32
+< - In: `$_GET['OrderNumber']` cast to int; session `CustomerLogin` and `CustomerID`.
+---
+> - In: `$_GET['OrderNumber']` cast to int; session `CustomerID`, and `$CustomerLogin` (a variable `includes/session.php` sets, not a session value).
+325c325
+< - `CustomerLogin`: on a modify load and in `OrderDetails.php`, a customer login sees only its own `debtorno`. Both load paths enforce this. In `OrderDetails.php` the check runs after the header query and before output.
+---
+> - `$CustomerLogin`: on a modify load and in `OrderDetails.php`, a customer login sees only its own `debtorno`. Both load paths enforce this. In `OrderDetails.php` the check runs after the header query and before output.

@@ -45,7 +45,7 @@ MIDDLE_TEXT = (
     " the leaf briefs of the parts you will change and of the other places the same data or"
     " work reaches. Do not read briefs unrelated to the change. Go to the source code where you"
     " implement, for the detail.")
-# READ_MAP=4 (amendment 12): read only the briefs of the parts the feature touches, take
+# READ_MAP=4 (amendments 12, 13: Grep the map): read only the briefs of the parts the feature touches, take
 # from them what code does instead of reading that code, open source only where it changes.
 PLAN_TEXT = (
     "\n\nThis project has a map in {export}: briefs that describe what each part of the"
@@ -53,7 +53,9 @@ PLAN_TEXT = (
     " briefs of the parts your feature touches, including the existing flows your new code"
     " does the same work as. Where a brief tells you what a module does or how a flow works,"
     " take it from the brief and do not open that code. Open source code only for the files"
-    " you will change, and only the parts of them you change.")
+    " you will change, and only the parts of them you change. The map is plain markdown"
+    " files: Grep its folder to find the briefs that cover a subject or a name, the same way"
+    " you search the code.")
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
 RULES_TEXT = (
     " After reading, write in NOTES.md, under 'Rules from the map', every rule, convention, decision"

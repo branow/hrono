@@ -328,3 +328,28 @@ the design was fixed); the session note, skill and read hook stay.
 Everything else as amendment 11: t12-credit-control, Sonnet, TURNS=200,
 THREADS, threads export, graded blind against code-only try 1 with the
 checklist and the whole-change review. One hrono try first.
+
+## Amendment 13 (2026-11-08, before any of its runs): Grep the map; customer-login error fixed by hand
+
+In t12 hrono tries 1 and 2 the agent ran 135 Grep/Glob calls and none on
+the map: Grep searches the working directory, the map is in another
+folder, and nothing said to search it. The READ_MAP=4 prompt gains one
+universal sentence: "The map is plain markdown files: Grep its folder to
+find the briefs that cover a subject or a name, the same way you search
+the code."
+
+The sales-order-entry brief (37) listed `CustomerLogin` as a session
+value; in the code it is the variable `$CustomerLogin` that
+`includes/session.php` sets. hrono followed the brief twice and wrote a
+dead `$_SESSION['CustomerLogin']` check. At the user's request this
+summarization error was fixed by hand in a copy of the export
+(EXPORT=4cb937f79e8b57063bd47132413abdac8abbcbdc-threads-fixed): brief 37
+no longer lists it as a session value, brief 50 says both login flags are
+plain variables, and the bare `CustomerLogin==1` / `SupplierLogin==1`
+tests in 9 briefs are written `$CustomerLogin == 1`. The exact changes are
+in grading/map-fix-customerlogin.diff. No other brief was changed. This is
+a hand correction of a map fault, reported as such; the product fix
+(faithfulness of session-value lists) is separate.
+
+Run: hrono, READ_MAP=4, RECALL=0, the fixed export, otherwise as
+amendment 12; graded blind against code-only try 1 the same way.
