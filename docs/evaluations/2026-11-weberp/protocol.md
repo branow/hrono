@@ -317,13 +317,14 @@ the flows they copy (GL posting, allocations, customer login) were never
 read, and the agent read as much source as code-only. Recall matched the
 task statement, not the BRD, and attached 3 source snippets.
 
-The hrono arm now runs with READ_MAP=4: before writing code, read root.md
-and the area briefs; list in NOTES.md every part the feature reaches and
-every existing flow its new code imitates, with the leaf brief of each;
-read only those leaf briefs and write down their rules; then implement,
-opening source to change it or copy a described flow, and check the
-change against the list. RECALL=0 turns off recalled passages (plugin
-setting `recall: false`); the session note, skill and gate stay on.
+The hrono arm now runs with READ_MAP=4: read root.md, then only the
+briefs of the parts the feature touches, including the existing flows its
+new code does the same work as; take what a module does or how a flow works
+from the brief instead of opening that code; open source only for the files
+it changes, and only the parts it changes. RECALL=0 turns off recalled
+passages (plugin setting `recall: false`). The brief gate is removed from
+the plugin (it was an experiment of 2026-11-06 that forced reading after
+the design was fixed); the session note, skill and read hook stay.
 Everything else as amendment 11: t12-credit-control, Sonnet, TURNS=200,
 THREADS, threads export, graded blind against code-only try 1 with the
 checklist and the whole-change review. One hrono try first.

@@ -207,33 +207,6 @@ function mapped(w, settings = {}) {
   return { root: path.join(folder, "root.md"), leaf };
 }
 
-/** The reason a gate call refused with, or null when it let the edit through. */
-function refused(answer) {
-  assert.equal(answer.status, 0);
-  if (!answer.stdout) return null;
-  const out = JSON.parse(answer.stdout).hookSpecificOutput;
-  assert.equal(out.permissionDecision, "deny");
-  return out.permissionDecisionReason;
-}
-
-test("an edit waits until the overview and the file's brief are read", () => {
-  const w = world();
-  const { root, leaf } = mapped(w);
-  const session = `s-${process.pid}-${Date.now()}`;
-  const edit = (file) => w.run("gate.js", { session_id: session, tool_input: { file_path: file } });
-  const read = (file) => w.run("read.js", { session_id: session, tool_input: { file_path: file } });
-  const source = path.join(w.project, "src", "auth.py");
-
-  const first = refused(edit(source));
-  assert.ok(first.includes(`- ${root}`) && first.includes(`- ${leaf}`));
-  read(root);
-  assert.ok(!refused(edit(source)).includes(`- ${root}`));
-  read(leaf);
-  assert.equal(refused(edit(source)), null);
-  assert.equal(refused(edit(path.join(w.project, "NEW.md"))), null);
-  assert.equal(refused(edit(path.join(w.dir, "elsewhere.txt"))), null);
-});
-
 test("reading a project file names its brief once", () => {
   const w = world();
   const { leaf } = mapped(w);
@@ -243,14 +216,4 @@ test("reading a project file names its brief once", () => {
 
   assert.ok(attached(read(source)).includes(`src/auth.py is described in ${leaf}`));
   assert.equal(attached(read(source)), null);
-});
-
-test("the gate is off when the setting says so", () => {
-  const w = world();
-  mapped(w, { gate: false });
-  const answer = w.run("gate.js", {
-    session_id: "off",
-    tool_input: { file_path: path.join(w.project, "src", "auth.py") },
-  });
-  assert.equal(refused(answer), null);
 });

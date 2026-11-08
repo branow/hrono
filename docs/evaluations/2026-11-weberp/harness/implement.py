@@ -45,24 +45,15 @@ MIDDLE_TEXT = (
     " the leaf briefs of the parts you will change and of the other places the same data or"
     " work reaches. Do not read briefs unrelated to the change. Go to the source code where you"
     " implement, for the detail.")
-# READ_MAP=4 (amendment 12): plan from the map before any code. In t12 the middle dose read
-# 7 pages before the first write and 18 more just before editing (9 after a gate refusal), after the
-# design was fixed; the new files (most of the feature) had no brief, so the flows they copy
-# (GL posting, allocations, customer login) were never read, and source reading stayed equal.
+# READ_MAP=4 (amendment 12): read only the briefs of the parts the feature touches, take
+# from them what code does instead of reading that code, open source only where it changes.
 PLAN_TEXT = (
-    "\n\nThis project has a map in {export}: briefs that already state how each part of the"
-    " codebase works, its conventions, rules and flows, so you need not rediscover them from"
-    " the source. Use it to plan before you write any code:"
-    "\n1. Read root.md and the brief of each area this feature touches."
-    "\n2. In NOTES.md, list every part of webERP the feature reaches: where the same data is"
-    " created, changed, shown, posted, imported, deleted or installed, and every existing flow"
-    " your new code does the same kind of work as (for example how a posting, an allocation, a"
-    " page's security or a customer's own login is done today). Name the leaf brief of each."
-    "\n3. Read those leaf briefs, and only those. Under each in NOTES.md, write the rules and"
-    " conventions it states that your change must follow."
-    "\n4. Then implement. Take how things work from the briefs; open source files to change"
-    " them or to copy the exact code of the flow a brief describes, not to search for how the"
-    " system works. Before you finish, check your change against the rules you listed.")
+    "\n\nThis project has a map in {export}: briefs that describe what each part of the"
+    " codebase does, its rules and how its flows work. Read root.md first, then only the"
+    " briefs of the parts your feature touches, including the existing flows your new code"
+    " does the same work as. Where a brief tells you what a module does or how a flow works,"
+    " take it from the brief and do not open that code. Open source code only for the files"
+    " you will change, and only the parts of them you change.")
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
 RULES_TEXT = (
     " After reading, write in NOTES.md, under 'Rules from the map', every rule, convention, decision"

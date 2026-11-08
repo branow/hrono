@@ -49,27 +49,4 @@ function run(event, produce) {
   }
 }
 
-/**
- * Run a hook that may refuse a tool call: a reason refuses it and is shown to
- * the model; null lets it through. Failure lets it through.
- * @param {(input: Input) => string | null} refuse
- */
-function gate(refuse) {
-  try {
-    const reason = refuse(input());
-    if (reason === null) return;
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: reason,
-        },
-      }),
-    );
-  } catch {
-    // never block an edit over the plugin
-  }
-}
-
-module.exports = { run, gate };
+module.exports = { run };

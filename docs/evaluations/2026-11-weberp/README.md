@@ -636,3 +636,15 @@ From the t12 transcripts (tool calls, results and context size per call):
   the credit-limit check in SelectOrderItems.php and a seed row. Noise.
 
 Next: amendment 12 (plan from the map before code, no recall).
+
+Duplication between briefs and code in t12 hrono (Read results only, 250k
+characters of source): 165k were files it then changed; 85k were files it
+never changed, of which 18k the BRD and 65k files whose brief existed but
+was not read (SQL_CommonFunctions.php, UpgradeDB_mysqli.php,
+InstallFunctions.php, CustomerAllocations.php: the helpers and flows a
+brief would have described). Code read for a file whose brief was already
+read, without changing that file: under 1k. So the agent did not read
+code it had from briefs; it read code instead of briefs, and read briefs
+for the files it was about to change. The brief gate was removed and
+amendment 12 rewritten to say exactly that: briefs for understanding,
+code only where it changes.

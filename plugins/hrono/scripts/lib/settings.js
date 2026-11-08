@@ -23,8 +23,6 @@ const path = require("node:path");
  * @property {number} shortest   prompts shorter than this get no recall
  * @property {number} longest    the most recalled text attached to a prompt
  *                               (at most 10,000: Claude Code's inline limit)
- * @property {boolean} gate     an edit waits until the map's overview and
- *                               the briefs of the edited file are read
  * @property {string} bin        the hrono command
  */
 
@@ -35,7 +33,6 @@ const DEFAULTS = Object.freeze({
   levels: 4,
   shortest: 20,
   longest: 10000,
-  gate: true,
   bin: "hrono",
 });
 
