@@ -22,4 +22,5 @@ Background:
 - [research/prototype/](research/prototype/): the notebooks the recipes came
   from.
 - [evaluations/](evaluations/): real runs of hrono, each with its log, findings
-  and metrics.
+  and metrics. [evaluations/PRINCIPLES.md](evaluations/PRINCIPLES.md) says how
+  an evaluation must be built; read it first.

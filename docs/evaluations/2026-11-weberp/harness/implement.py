@@ -36,7 +36,13 @@ EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 # READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
 # area and topic briefs for the request, project history included, before any edit.
-READ_MAP = os.environ.get("READ_MAP") == "1"
+READ_MAP = os.environ.get("READ_MAP") in ("1", "2")
+# READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
+RULES_TEXT = (
+    " After reading, write in NOTES.md, under 'Rules from the map', every rule, convention, decision"
+    " and other place the same data reaches that the briefs state for this change, each with the brief"
+    " it comes from. Follow each one in the change. Before you finish, go through that list and fix"
+    " anything the change does not yet follow.")
 READ_MAP_TEXT = (
     "\n\nBefore you change any file, read the project's map in {export}: root.md, the"
     " brief of every area the request touches, and every topic brief under those areas"
@@ -116,6 +122,8 @@ def main() -> None:
         configure(ws, export)
         if READ_MAP:
             prompt += READ_MAP_TEXT.format(export=export)
+            if os.environ.get("READ_MAP") == "2":
+                prompt += RULES_TEXT
             argv[2] = prompt
         argv += ["--plugin-dir", str(PLUGIN), "--add-dir", str(export)]
         env["HRONO_HOME"] = str(HOME)

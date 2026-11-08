@@ -256,3 +256,20 @@ amendment 6. One try per arm first, both in parallel; graded by the same
 reading-agent audit as the gate (checklist A and B), then, if the arms
 differ by more than a few B items, 3 tries per arm graded blind. A run cut
 by the budget is graded on what it delivered.
+
+## Amendment 8 (2026-11-06, before any of its runs): t10 with Haiku
+
+Sonnet reads its way to most rules (gate 35.5/40). The map should matter
+more for a model that cannot hold the code it reads. Both arms MODEL=haiku
+(reported model id recorded), TURNS=200, no budget note; otherwise as
+amendment 7 (hrono READ_MAP=1, threads export). One try per arm in
+parallel, blind graded as amendment 7; 3 per arm if they differ clearly.
+
+## Amendment 9 (2026-11-06, before its run): rules list in the hrono prompt
+
+On t10 the hrono arm read the pages stating B15, B21 and B32 and still
+missed them. READ_MAP=2 adds to the hrono prompt: write the rules the
+briefs state for the change in NOTES.md under "Rules from the map", each
+with its brief, follow them, and check the change against the list before
+finishing. First run: Haiku, hrono only, compared with the amendment 8
+code-only Haiku try; blind graded the same way.

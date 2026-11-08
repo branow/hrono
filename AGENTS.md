@@ -32,7 +32,10 @@ so is the web dashboard at `/ui`.
     (`prototype/`). Mine them for recipes, but do not port their structure.
 - `docs/evaluations/`: every real run of hrono, with its log, findings and
   metrics. Add a folder per evaluation (`<YYYY-MM>-<corpus>/`) and keep it
-  up to date as the run goes.
+  up to date as the run goes. **Read `docs/evaluations/PRINCIPLES.md` before
+  designing or judging any evaluation**: what hrono is for (managing the
+  agent's context), what a task and its BRD must look like, and how much of
+  the map an agent should read.
 - `dev/`: the development process, as the epic board. Status is the folder a
   ticket file sits in: `backlog/` -> `todo/` -> `in-progress/` ->
   `verifying/` -> `po-review/` -> `done/`. Also here: `archive/` and
