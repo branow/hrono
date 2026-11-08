@@ -735,3 +735,32 @@ code read, all t12 hrono tries:
 
 The most map before code came with the instruction in the prompt and no
 Grep sentence.
+
+### t12 hrono try 6 (amendment 16: map requirements in the prompt, MUST)
+
+Graded blind against code-only try 1 (coin: A = hrono-6, B = code-1;
+grading/t12-credit-control-try6/). Only hrono-6 checklist-graded.
+
+| | code-1 | hrono-6 |
+|---|---|---|
+| A (BRD) /43 | 38 | 34 |
+| B (rules) /40 | 25.5 | **28** |
+| review /10 | 4 | **6** ("A, clearly") |
+| cost / minutes | $8.35 / 19 | $13.12 / 21 |
+| map read | 0 | 24 pages (21 before the first write), 521k |
+| source read | 312k | 247k |
+| peak context | 355k | 569k |
+
+First clear blind preference for hrono. Reviewer: hrono-6 covers every
+order and invoice route, holds over-limit orders by default, sends email
+correctly, has a reachable customer portal, posts to the ledger following
+webERP's own receipt handling (exchange difference included) and puts the
+GL accounts in Company Preferences; its faults are mechanical (two-statement
+seed files, one `settled` expression, no demo seed). Code-1 regresses
+customer maintenance, crashes reminder emails under SMTP, skips letter
+stages, cannot release pre-stop orders, leaves API invoicing open, does not
+hold over-limit orders by default and its portal page is unreachable.
+Checklist grader for hrono-6: GetConfig does not load the new GL accounts,
+so charges and write-offs are refused with the GL link on (A drops to 34).
+Still unread: the receipt (49), allocation (214) and session (50) briefs.
+One try; code-1's review score has ranged 4 to 6.5 across four reviews.
