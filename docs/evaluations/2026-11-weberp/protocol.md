@@ -385,3 +385,16 @@ READ_MAP=5 adds no instruction to the prompt, only the map's listing:
 each area folder with its title, and under it every leaf folder (209
 lines, 14k characters). Fixed export, RECALL=0, otherwise as amendment
 12; graded blind against code-only try 1.
+
+## Amendment 16 (2026-11-08, before any of its runs): the map instruction in the prompt, as requirements
+
+Try 5 showed the session note is ignored; the most map reading before
+code came with the instruction in the prompt (tries 1, 2). READ_MAP=6
+puts four numbered requirements in the prompt ("You MUST read the map
+before any code ... MUST NOT stop after a few briefs ... MUST take how
+the system works from the briefs; open source only to change it or to
+confirm one claim ... do not read unrelated briefs"), Grep only for a
+part the listing does not make clear, then the listing of amendment 15.
+The plugin's session note is cut to one line (where the map is; the
+skill says how to read it), so the agent gets one instruction. Fixed
+export, RECALL=0, otherwise as amendment 12.

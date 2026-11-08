@@ -36,7 +36,7 @@ EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 # READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
 # area and topic briefs for the request, project history included, before any edit.
-READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4", "5")
+READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4", "5", "6")
 # READ_MAP=3 (amendment 10, docs/evaluations/PRINCIPLES.md): a middle dose of the map, not every brief.
 MIDDLE_TEXT = (
     "\n\nThis project has a map in {export}: briefs that already state the conventions, rules"
@@ -65,6 +65,26 @@ def listing(export: Path) -> str:
         lines.append(f"{area.name}: {(area / 'brief.md').open().readline().lstrip('# ').strip()}")
         lines += [f"  {leaf.name}" for leaf in sorted(area.iterdir()) if (leaf / "brief.md").exists()]
     return "\n".join(lines)
+
+
+# READ_MAP=6 (amendment 16): the map instruction in the prompt, as requirements, then the listing.
+MUST_TEXT = (
+    "\n\n## How you must work: the map first\n\n"
+    "This project has a map in {export}: briefs that describe the whole codebase, what each"
+    " part does, its rules and its flows, in far less text than the code. These are"
+    " requirements, not suggestions:\n\n"
+    "1. You MUST read the map before any code. Read root.md, then the brief.md of every area"
+    " your work touches, then the leaf brief of every part your work touches and of every"
+    " existing flow your new code works like (how the system already stores, posts, sends,"
+    " secures or shows the same kind of thing). The listing below names every brief. When a"
+    " part is not clear from the listing, Grep the map folder, then read the briefs you find"
+    " in full.\n"
+    "2. You MUST NOT stop after a few briefs. Keep reading until you know, for every part you"
+    " will change or add, which brief describes it and the rules it states.\n"
+    "3. You MUST take how the system works from the briefs. Do not open source code to learn"
+    " how something works when a brief describes it. Open source files only to change them,"
+    " or to confirm one specific claim from a brief.\n"
+    "4. Do not read briefs unrelated to the work.")
 
 
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
@@ -156,7 +176,10 @@ def main() -> None:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
         export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
-        if os.environ.get("READ_MAP") == "5":
+        if os.environ.get("READ_MAP") == "6":
+            prompt += MUST_TEXT.format(export=export) + listing(export)
+            argv[2] = prompt
+        elif os.environ.get("READ_MAP") == "5":
             prompt += listing(export)
             argv[2] = prompt
         elif os.environ.get("READ_MAP") == "4":

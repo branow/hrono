@@ -191,9 +191,8 @@ test("the session opens with where the map is and how to read it", () => {
   fs.writeFileSync(path.join(folder, "root.md"), "# Root\n");
   const note = attached(w.run("session-start.js", {}));
   assert.match(note, /hrono map \(tree "demo"\)/);
-  assert.ok(note.includes(`Start at ${path.join(folder, "root.md")}`));
+  assert.ok(note.includes(`starting at ${path.join(folder, "root.md")}`));
   assert.match(note, /attached to prompts automatically/);
-  assert.match(note, /Open source files only to change them or to confirm a claim/);
 });
 
 /** A map whose one leaf brief describes src/auth.py, in the world's export. */
