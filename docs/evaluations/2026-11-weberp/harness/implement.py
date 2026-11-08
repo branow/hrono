@@ -46,7 +46,7 @@ MIDDLE_TEXT = (
     " work reaches. Do not read briefs unrelated to the change. Go to the source code where you"
     " implement, for the detail.")
 # READ_MAP=4 (amendment 12): plan from the map before any code. In t12 the middle dose read
-# 7 pages before the first write and 18 more only when the gate refused an edit, after the
+# 7 pages before the first write and 18 more just before editing (9 after a gate refusal), after the
 # design was fixed; the new files (most of the feature) had no brief, so the flows they copy
 # (GL posting, allocations, customer login) were never read, and source reading stayed equal.
 PLAN_TEXT = (

@@ -311,7 +311,7 @@ why, findings beyond the checklist. Both reported in full.
 
 The t12 hrono transcript (README, "t12: how the hrono agent used the map")
 shows the map was read as a toll, not as a plan: 7 pages before the first
-write, 18 more only when the brief gate refused an edit, after the design
+write, 18 more just before editing a file (9 after a gate refusal), after the design
 was fixed. New files, where most of the feature lives, have no brief, so
 the flows they copy (GL posting, allocations, customer login) were never
 read, and the agent read as much source as code-only. Recall matched the
