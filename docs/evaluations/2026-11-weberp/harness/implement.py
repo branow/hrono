@@ -36,7 +36,15 @@ EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 # READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
 # area and topic briefs for the request, project history included, before any edit.
-READ_MAP = os.environ.get("READ_MAP") in ("1", "2")
+READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3")
+# READ_MAP=3 (amendment 10, docs/evaluations/PRINCIPLES.md): a middle dose of the map, not every brief.
+MIDDLE_TEXT = (
+    "\n\nThis project has a map in {export}: briefs that already state the conventions, rules"
+    " and flows of the whole codebase, so you need not rediscover them from the source. Before"
+    " you change any file, read root.md, then the brief of each area the request touches, then"
+    " the leaf briefs of the parts you will change and of the other places the same data or"
+    " work reaches. Do not read briefs unrelated to the change. Go to the source code where you"
+    " implement, for the detail.")
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
 RULES_TEXT = (
     " After reading, write in NOTES.md, under 'Rules from the map', every rule, convention, decision"
@@ -120,7 +128,10 @@ def main() -> None:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
         export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
-        if READ_MAP:
+        if os.environ.get("READ_MAP") == "3":
+            prompt += MIDDLE_TEXT.format(export=export)
+            argv[2] = prompt
+        elif READ_MAP:
             prompt += READ_MAP_TEXT.format(export=export)
             if os.environ.get("READ_MAP") == "2":
                 prompt += RULES_TEXT

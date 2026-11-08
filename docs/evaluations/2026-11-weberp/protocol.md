@@ -273,3 +273,20 @@ briefs state for the change in NOTES.md under "Rules from the map", each
 with its brief, follow them, and check the change against the list before
 finishing. First run: Haiku, hrono only, compared with the amendment 8
 code-only Haiku try; blind graded the same way.
+
+## Amendment 10 (2026-11-08, before any of its runs): t11, a business-only BRD and a middle dose of the map
+
+Per docs/evaluations/PRINCIPLES.md. t10's BRD was written by the person
+holding the checklist and leaked the hidden rules. t11-credit-control is the
+same feature with a new BRD written by an agent that saw no code, no
+checklist and no earlier BRD, only a business brief (channels, people,
+goals). Its checklist: the BRD's 43 requirements (A) and t10's 40 mined
+rules unchanged (B; primary score).
+
+The hrono arm reads a middle dose of the map: READ_MAP=3 replaces "read
+every brief" with "root.md, the areas the request touches, then the leaf
+briefs of the parts you change and of the other places the same data
+reaches; nothing unrelated". Sonnet, TURNS=200, no budget note, THREADS,
+threads export, plugin with the brief gate. Order as amendment 4: one
+code-only gate try; if it misses about half of B, one hrono try; then 3
+per arm, graded blind.
