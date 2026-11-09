@@ -411,3 +411,11 @@ the briefs, but before editing an existing file or calling or extending
 an existing function, table, setting or install step, read that code.
 READ_MAP=7; otherwise as amendment 16. Compared with the existing
 code-only tries 2 and 3 (no new code-only runs).
+
+## Amendment 18 (2026-11-09, before any of its runs): Haiku, both arms
+
+The same t12 task, harness and grading with `MODEL=haiku` in both arms:
+one code-only try (`code-haiku1`) and one hrono try (`hrono-haiku1`,
+READ_MAP=7, RECALL=0, fixed export), both under `caffeinate -i`, 200
+turns, THREADS on. Graded blind as before: one Opus checklist grader per
+run and one Opus whole-change review of the pair.

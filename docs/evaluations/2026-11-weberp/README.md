@@ -826,3 +826,22 @@ Tries 6, 7, 8, 10 (MUST prompt): hidden rules 28, 29, 27.5, 29 against
 code-only 25.5, 26.5, 27; reviews hrono 6, 4, 5.5, 5 against code-only
 4, 7, 7, 7. hrono finds more of the hidden rules but loses the reviews on
 plumbing it calls without reading (mail, installer).
+
+### t12 with Haiku (amendment 18), one try per arm
+
+Coin: A = code-haiku1, B = hrono-haiku1 (grading/t12-credit-control-haiku1/).
+
+| | code-haiku1 | hrono-haiku1 |
+|---|---|---|
+| A (BRD) /43 | 7.5 | 2.5 |
+| B (rules) /40 | 2 | 2.5 |
+| review /10 | 2 | 1 ("A, somewhat"; neither mergeable) |
+| cost / minutes / turns | $0.62 / 5 / 57 | $0.80 / 6 / 47 |
+| map read | 0 | 7 briefs (first write at call 19), 9 source reads |
+| files changed | 18 | 16 |
+
+Haiku stops after about 50 turns of 200 in both arms and declares the
+feature done. hrono-haiku1 delivers one page that cannot be opened or
+submitted, a broken update 44 and no customer columns; code-haiku1's
+screens would mostly run if the schema were added by hand. The task is
+beyond Haiku either way, so this pair says nothing about the map.

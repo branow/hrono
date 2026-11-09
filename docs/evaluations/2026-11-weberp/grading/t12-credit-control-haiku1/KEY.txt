@@ -1,0 +1,1 @@
+coin: A=code-haiku1, B=hrono-haiku1 (MODEL=haiku; hrono READ_MAP=7, RECALL=0, fixed export) (keep from graders)

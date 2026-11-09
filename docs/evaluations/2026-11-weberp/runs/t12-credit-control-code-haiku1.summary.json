@@ -1,0 +1,56 @@
+{
+ "task": "t12-credit-control",
+ "base": "4cb937f79e8b57063bd47132413abdac8abbcbdc",
+ "arm": "code",
+ "try": "haiku1",
+ "model_alias": "haiku",
+ "models_reported": [
+  "claude-haiku-4-5-20251001"
+ ],
+ "started_utc": "2026-11-09T08:25:56Z",
+ "seconds": 314,
+ "turns": 57,
+ "max_turns": 200,
+ "subtype": "success",
+ "is_error": false,
+ "cost_usd": 0.6179638000000001,
+ "usage": {
+  "input_tokens": 458,
+  "cache_creation_input_tokens": 93400,
+  "cache_read_input_tokens": 2648608,
+  "output_tokens": 33169,
+  "output_tokens_details": {
+   "thinking_tokens": 4448
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 93400,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "not_available",
+  "iterations": [
+   {
+    "input_tokens": 8,
+    "output_tokens": 1207,
+    "cache_read_input_tokens": 89320,
+    "cache_creation_input_tokens": 4080,
+    "cache_creation": {
+     "ephemeral_5m_input_tokens": 0,
+     "ephemeral_1h_input_tokens": 4080
+    },
+    "type": "message"
+   }
+  ],
+  "speed": "standard",
+  "fallback_credit": null
+ },
+ "exit_code": 0,
+ "stat": [
+  " 18 files changed, 1868 insertions(+), 4 deletions(-)"
+ ],
+ "stderr_tail": ""
+}

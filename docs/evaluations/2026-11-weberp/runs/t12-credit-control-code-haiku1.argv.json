@@ -1,0 +1,21 @@
+[
+ "claude",
+ "-p",
+ "# Task: credit control\n\nYou are the developer who owns this feature in webERP, from request to a\nchange you would ship. The business wrote what it wants in `task/brd.md`,\nin its own words; it does not know how webERP works inside.\n\nWork out what this feature really needs in webERP to make sense and to\nwork: what it depends on, what else in the system has to change with it,\nwhat the business did not think to ask for. Decide the open questions the\nway a good engineer on this project would. Then build the whole feature,\nfollowing how this project does things.\n\nWhen done, write `NOTES.md` at the repository root: what you built and\nwhere, what else you changed and why, and the decisions you made.\n\n\nThe webERP repository is in the current directory; the task is task/task.md. There is nothing to run against: deliver the change as files. The repository's GitHub issues, pull requests and discussions up to the base date are in github/, one markdown file per thread.",
+ "--model",
+ "haiku",
+ "--max-turns",
+ "200",
+ "--setting-sources",
+ "",
+ "--strict-mcp-config",
+ "--output-format",
+ "stream-json",
+ "--verbose",
+ "--permission-mode",
+ "acceptEdits",
+ "--disallowedTools",
+ "Bash,WebFetch,WebSearch,Task,NotebookEdit",
+ "--allowedTools",
+ "Read,Grep,Glob,Edit,Write,TodoWrite,Skill"
+]
