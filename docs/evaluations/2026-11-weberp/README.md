@@ -795,3 +795,16 @@ period reports. Neither hrono run read all of the receipt (49), allocation
 
 Over tries 6-8 with this prompt, review wins 1 of 3; try 6's win is within
 the reviewer's spread. No confident hrono win on t12.
+
+### t12 hrono try 9 (amendment 17: read the code a change edits or calls), void
+
+The run ended at call 204 with "API Error: Your computer went to sleep
+mid-response" (the host Mac slept overnight), so the change is cut off:
+four pages are linked but never written, no NOTES.md, 35 files. Graded
+anyway against code-3 (coin: A = code-3, B = hrono-9;
+grading/t12-credit-control-try9/): checklist A 25.5/43, B 24/40; review
+"A clearly", code-3 7 vs hrono-9 3. Void as an infrastructure failure;
+the reading before the cut-off did follow the new rule (20 briefs, then
+`InstallFunctions.php`, `session.php` and the upgrade helpers before
+editing them; seeds one statement per file). Rerun as try 10 under
+`caffeinate -i`. Cost $8.97.

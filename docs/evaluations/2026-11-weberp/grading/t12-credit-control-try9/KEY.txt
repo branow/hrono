@@ -1,0 +1,1 @@
+coin: A=code-3, B=hrono-9 (hrono READ_MAP=7: rule 3 reads the code a change edits or calls; RECALL=0, fixed export) (keep from graders)

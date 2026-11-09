@@ -36,7 +36,7 @@ EXPORT = os.environ.get("EXPORT")
 TREE = "weberp"
 # READ_MAP=1 (amendment 5): the hrono arm's prompt also asks it to read the map's
 # area and topic briefs for the request, project history included, before any edit.
-READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4", "5", "6")
+READ_MAP = os.environ.get("READ_MAP") in ("1", "2", "3", "4", "5", "6", "7")
 # READ_MAP=3 (amendment 10, docs/evaluations/PRINCIPLES.md): a middle dose of the map, not every brief.
 MIDDLE_TEXT = (
     "\n\nThis project has a map in {export}: briefs that already state the conventions, rules"
@@ -85,6 +85,17 @@ MUST_TEXT = (
     " how something works when a brief describes it. Open source files only to change them,"
     " or to confirm one specific claim from a brief.\n"
     "4. Do not read briefs unrelated to the work.")
+
+# READ_MAP=7 (amendment 17): as 6, but the code a change edits or calls must be read.
+MUST_CODE_TEXT = MUST_TEXT.replace(
+    "3. You MUST take how the system works from the briefs. Do not open source code to learn"
+    " how something works when a brief describes it. Open source files only to change them,"
+    " or to confirm one specific claim from a brief.\n",
+    "3. You MUST take how the system works as a whole from the briefs, not by reading code."
+    " But before you edit an existing file, or call or extend an existing function, table,"
+    " setting or install step, you MUST read that code: the briefs tell you where and why,"
+    " the code gives the exact detail (signatures, argument formats, column order).\n")
+assert MUST_CODE_TEXT != MUST_TEXT
 
 
 # READ_MAP=2 (amendment 9): also list the rules the briefs state, follow them, check against the list.
@@ -176,8 +187,9 @@ def main() -> None:
             sys.exit(f"the live tree is at {pin}, not {base}: recall would answer from the wrong commit")
         export = ROOT / "exports" / (EXPORT or base)
         configure(ws, export)
-        if os.environ.get("READ_MAP") == "6":
-            prompt += MUST_TEXT.format(export=export) + listing(export)
+        if os.environ.get("READ_MAP") in ("6", "7"):
+            text = MUST_CODE_TEXT if os.environ.get("READ_MAP") == "7" else MUST_TEXT
+            prompt += text.format(export=export) + listing(export)
             argv[2] = prompt
         elif os.environ.get("READ_MAP") == "5":
             prompt += listing(export)

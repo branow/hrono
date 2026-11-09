@@ -1,0 +1,2840 @@
+diff --git a/ConfirmDispatch_Invoice.php b/ConfirmDispatch_Invoice.php
+index 5954a54..ef8ed1d 100644
+--- a/ConfirmDispatch_Invoice.php
++++ b/ConfirmDispatch_Invoice.php
+@@ -18,6 +18,7 @@ include('includes/SQL_CommonFunctions.php');
+ include('includes/FreightCalculation.php');
+ include('includes/GetSalesTransGLCodes.php');
+ include('includes/CommissionFunctions.php');
++include('includes/CreditControlFunctions.php');
+ 
+ if (empty($_GET['identifier'])) {
+ 	/*unique session identifier to ensure that there is no conflict with other order entry sessions on the same machine  */
+@@ -151,6 +152,16 @@ if (!isset($_GET['OrderNumber']) and !isset($_SESSION['ProcessingOrder'])) {
+ 
+ 		DB_free_result($GetOrdHdrResult);
+ 
++		/* credit control: no dispatch or invoice for an order held for credit control or for a customer on stop */
++		$CreditBlock = OrderCreditBlock($_GET['OrderNumber']);
++		if ($CreditBlock != '') {
++			prnMsg($CreditBlock, 'error');
++			unset($_SESSION['Items' . $identifier]);
++			unset($_SESSION['ProcessingOrder']);
++			include('includes/footer.php');
++			exit();
++		}
++
+ 		/*now populate the line items array with the sales order details records */
+ 
+ 		$LineItemsSQL = "SELECT stkcode,
+@@ -610,6 +621,14 @@ if (isset($_POST['ProcessInvoice']) and $_POST['ProcessInvoice'] != '') {
+ 	/*First check there are lines on the dipatch with quantities to invoice
+ 	invoices can have a zero amount but there must be a quantity to invoice */
+ 
++	/* the customer may have been put on stop, or the order held, since the dispatch was opened */
++	$CreditBlock = OrderCreditBlock($_SESSION['Items' . $identifier]->OrderNo);
++	if ($CreditBlock != '') {
++		prnMsg($CreditBlock, 'error');
++		include('includes/footer.php');
++		exit();
++	}
++
+ 	$QuantityInvoicedIsPositive = false;
+ 
+ 	foreach ($_SESSION['Items' . $identifier]->LineItems as $OrderLine) {
+diff --git a/CreditControlCharges.php b/CreditControlCharges.php
+new file mode 100644
+index 0000000..55e1a65
+--- /dev/null
++++ b/CreditControlCharges.php
+@@ -0,0 +1,302 @@
++<?php
++
++/* Month end interest and late fees on overdue balances, and waivers of charges. Credit control see what will be charged to whom for the month and confirm it. A month cannot be charged twice: a customer is charged interest once and a late fee once for a month. Charges are customer transactions (type 60) in the customer's own currency that appear on the account and the statement, and post to the GL income accounts Finance chose. Waivers (type 61) reverse a charge, with a reason, and reach the GL too. */
++
++require(__DIR__ . '/includes/session.php');
++
++include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
++
++$Title = __('Month End Interest and Late Fees');
++$ViewTopic = 'AccountsReceivable';
++$BookMark = 'CreditControlCharges';
++include('includes/header.php');
++
++echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/customer.png" title="' . $Title . '" alt="" />' . ' ' . $Title . '</p>';
++
++$PostTo = htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8');
++$HomeCurrency = $_SESSION['CompanyRecord']['currencydefault'];
++$HomeDecimals = $_SESSION['CompanyRecord']['decimalplaces'];
++
++if ($_SESSION['CreditInterestRate'] <= 0 and $_SESSION['CreditLateFee'] <= 0) {
++	prnMsg(__('No interest rate and no late fee have been set') . '. ' . __('Finance sets them in Credit Control Settings'), 'warn');
++}
++if ($_SESSION['CompanyRecord']['interestincomeact'] == '0' or $_SESSION['CompanyRecord']['latefeeact'] == '0') {
++	prnMsg(__('The GL accounts for interest and late fee income have not been set') . '. ' . __('Finance sets them in Credit Control Settings'), 'error');
++	include('includes/footer.php');
++	exit();
++}
++
++/* the months that can be charged: this month and the five before it */
++$Months = array();
++for ($i = 0; $i < 6; $i++) {
++	$Months[] = date('Y-m', mktime(0, 0, 0, date('n') - $i, 1, date('Y')));
++}
++$ChargeMonth = (isset($_POST['ChargeMonth']) and in_array($_POST['ChargeMonth'], $Months)) ? $_POST['ChargeMonth'] : $Months[0];
++/* charged as at the last day of the month, or today if the month is not over */
++$LastDay = date('Y-m-t', strtotime($ChargeMonth . '-01'));
++$ChargeDate = min($LastDay, date('Y-m-d'));
++
++/* what would be charged to whom for the month, leaving out what has already been charged */
++function ChargeProposals($ChargeMonth) {
++	$Rate = (float) $_SESSION['CreditInterestRate'];
++	$Fee = (float) $_SESSION['CreditLateFee'];
++	$MinDays = max(1, (int) $_SESSION['CreditChargeDaysOverdue']);
++	$Proposals = array();
++	$Result = DB_query("SELECT DISTINCT debtortrans.debtorno
++						FROM debtortrans
++						INNER JOIN debtorsmaster
++							ON debtortrans.debtorno = debtorsmaster.debtorno
++						INNER JOIN paymentterms
++							ON debtorsmaster.paymentterms = paymentterms.termsindicator
++						WHERE debtortrans.type = 10
++							AND debtortrans.settled = 0
++							AND debtortrans.disputed = 0
++							AND debtortrans.balance > " . CurrencyTolerance($_SESSION['CompanyRecord']['currencydefault']) . "
++							AND (" . OverdueDaysSQL() . ") >= " . $MinDays . "
++						ORDER BY debtortrans.debtorno");
++	while ($DebtorRow = DB_fetch_row($Result)) {
++		$Customer = GetCreditStatus($DebtorRow[0]);
++		$Currency = CustomerCurrencyDetails($Customer['currcode']);
++		if ($Currency['rate'] <= 0) {
++			prnMsg(__('Customer') . ' ' . $DebtorRow[0] . ': ' . __('the exchange rate of the currency') . ' ' . $Customer['currcode'] . ' ' . __('is not set so nothing can be charged'), 'warn');
++			continue;
++		}
++		/* interest and fees are charged on invoices only, never on earlier interest or fees */
++		$Items = GetOverdueItems($DebtorRow[0], $MinDays, false, '10');
++		$Base = 0;
++		foreach ($Items as $Item) {
++			$Base += $Item['balance'];
++		}
++		$Charged = array();
++		$ChargedResult = DB_query("SELECT chargetype FROM debtorcharges WHERE debtorno = '" . $DebtorRow[0] . "' AND chargemonth = '" . $ChargeMonth . "'");
++		while ($ChargedRow = DB_fetch_row($ChargedResult)) {
++			$Charged[$ChargedRow[0]] = true;
++		}
++		$Proposal = array('name' => $Customer['name'],
++						'currcode' => $Customer['currcode'],
++						'decimals' => $Currency['decimalplaces'],
++						'rate' => $Currency['rate'],
++						'base' => $Base,
++						'invoices' => count($Items),
++						'INT' => 0,
++						'FEE' => 0,
++						'note' => '');
++		if (isset($Charged['INT'])) {
++			$Proposal['note'] .= __('Interest already charged this month') . '. ';
++		} elseif ($Customer['exemptinterest']) {
++			$Proposal['note'] .= __('Exempt from interest') . '. ';
++		} elseif ($Rate > 0) {
++			$Proposal['INT'] = round($Base * $Rate / 100 / 12, $Currency['decimalplaces']);
++		}
++		if (isset($Charged['FEE'])) {
++			$Proposal['note'] .= __('Late fee already charged this month') . '. ';
++		} elseif ($Customer['exemptfees']) {
++			$Proposal['note'] .= __('Exempt from late fees') . '. ';
++		} elseif ($Fee > 0) {
++			$Proposal['FEE'] = round($Fee * $Currency['rate'], $Currency['decimalplaces']);
++		}
++		if ($Proposal['INT'] > 0 or $Proposal['FEE'] > 0 or $Proposal['note'] != '') {
++			$Proposals[$DebtorRow[0]] = $Proposal;
++		}
++	}
++	return $Proposals;
++}
++
++if (isset($_POST['PostCharges'])) {
++	$Proposals = ChargeProposals($ChargeMonth);
++	$Posted = 0;
++	foreach (array('INT' => 'Interest', 'FEE' => 'Fee') as $Type => $Field) {
++		if (!isset($_POST[$Field])) {
++			continue;
++		}
++		foreach ($_POST[$Field] as $DebtorNo => $Value) {
++			if (!isset($Proposals[$DebtorNo]) or $Proposals[$DebtorNo][$Type] <= 0) {
++				prnMsg(__('Customer') . ' ' . $DebtorNo . ': ' . __('nothing to charge') . ' ' . ($Type == 'INT' ? __('interest') : __('late fee')) . ' - ' . __('left out'), 'info');
++				continue;
++			}
++			$Proposal = $Proposals[$DebtorNo];
++			if ($Type == 'INT') {
++				$Text = __('Interest on overdue invoices') . ' ' . $ChargeMonth . ' (' . $_SESSION['CreditInterestRate'] . '% ' . __('a year') . ')';
++				$Counter = $_SESSION['CompanyRecord']['interestincomeact'];
++			} else {
++				$Text = __('Late payment fee') . ' ' . $ChargeMonth;
++				$Counter = $_SESSION['CompanyRecord']['latefeeact'];
++			}
++			DB_Txn_Begin();
++			list($TransNo, $TransID) = PostCreditControlTransaction(60, $DebtorNo, $ChargeDate, $Proposal[$Type], $Proposal['rate'], null, $Counter, $Type . '-' . $ChargeMonth, $Text);
++			DB_query("INSERT INTO debtorcharges (debtorno, chargemonth, chargetype, currcode, amount, transno, userid)
++						VALUES ('" . $DebtorNo . "',
++								'" . $ChargeMonth . "',
++								'" . $Type . "',
++								'" . $Proposal['currcode'] . "',
++								'" . $Proposal[$Type] . "',
++								'" . $TransNo . "',
++								'" . $_SESSION['UserID'] . "')", __('The charge could not be recorded because'), '', true);
++			CreditControlLog($DebtorNo, 'CHARGE', $Text, $Proposal[$Type], $Proposal['currcode'], 60, $TransNo);
++			DB_Txn_Commit();
++			$Posted++;
++		}
++	}
++	prnMsg($Posted . ' ' . __('charges have been posted'), 'success');
++}
++
++if (isset($_POST['WaiveCharges']) and isset($_POST['Waive'])) {
++	if (trim($_POST['WaiveReason']) == '') {
++		prnMsg(__('The reason for waiving the charge must be entered'), 'error');
++	} else {
++		$Waived = 0;
++		foreach ($_POST['Waive'] as $ChargeID => $Value) {
++			$Result = DB_query("SELECT debtorcharges.id,
++										debtorcharges.debtorno,
++										debtorcharges.chargemonth,
++										debtorcharges.chargetype,
++										debtorcharges.currcode,
++										debtortrans.id AS transid,
++										debtortrans.rate,
++										debtortrans.balance
++								FROM debtorcharges
++								INNER JOIN debtortrans
++									ON debtortrans.type = 60
++									AND debtortrans.transno = debtorcharges.transno
++								WHERE debtorcharges.id = '" . (int) $ChargeID . "'
++									AND debtorcharges.waived = 0");
++			if (DB_num_rows($Result) == 0) {
++				continue;
++			}
++			$Charge = DB_fetch_array($Result);
++			$Outstanding = round($Charge['balance'], 4);
++			if ($Outstanding <= 0) {
++				prnMsg(__('Customer') . ' ' . $Charge['debtorno'] . ': ' . __('the charge has been paid and cannot be waived'), 'warn');
++				continue;
++			}
++			$Counter = ($Charge['chargetype'] == 'INT') ? $_SESSION['CompanyRecord']['interestincomeact'] : $_SESSION['CompanyRecord']['latefeeact'];
++			$Text = __('Waiver of') . ' ' . ($Charge['chargetype'] == 'INT' ? __('interest') : __('late fee')) . ' ' . $Charge['chargemonth'] . ': ' . $_POST['WaiveReason'];
++			DB_Txn_Begin();
++			/* reversed at the rate the charge was booked at, so the GL income account is reversed by exactly what was posted */
++			list($TransNo, $TransID) = PostCreditControlTransaction(61, $Charge['debtorno'], date('Y-m-d'), -$Outstanding, $Charge['rate'], null, $Counter, 'WAIVE-' . $Charge['chargemonth'], $Text);
++			AllocateCreditControlTransaction($TransID, $Charge['transid'], $Outstanding, date('Y-m-d'));
++			DB_query("UPDATE debtorcharges
++						SET waived = 1,
++							waivedtransno = '" . $TransNo . "'
++						WHERE id = '" . $Charge['id'] . "'", __('The charge could not be marked as waived because'), '', true);
++			CreditControlLog($Charge['debtorno'], 'WAIVER', $Text, -$Outstanding, $Charge['currcode'], 61, $TransNo);
++			DB_Txn_Commit();
++			$Waived++;
++		}
++		prnMsg($Waived . ' ' . __('charges have been waived'), 'success');
++	}
++}
++
++/* ---- the month to charge ---- */
++
++echo '<form method="post" action="' . $PostTo . '">
++		<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++		<fieldset>
++			<field>
++				<label for="ChargeMonth">' . __('Month to charge') . ':</label>
++				<select name="ChargeMonth">';
++foreach ($Months as $Month) {
++	echo '<option value="' . $Month . '"' . ($Month == $ChargeMonth ? ' selected="selected"' : '') . '>' . $Month . '</option>';
++}
++echo '</select>
++				<input type="submit" name="Show" value="' . __('Show') . '" />
++			</field>
++		</fieldset>
++	</form>';
++
++echo '<div class="page_help_text">' . __('Charged as at') . ' ' . ConvertSQLDate($ChargeDate) . '. ' .
++	__('Interest is one twelfth of the annual rate on the invoices overdue by at least') . ' ' . max(1, (int) $_SESSION['CreditChargeDaysOverdue']) . ' ' . __('days') . ', ' .
++	__('the late fee is charged once a month to each customer with such invoices. Disputed invoices and exempt customers are not charged.') . '</div>';
++
++$Proposals = ChargeProposals($ChargeMonth);
++$TotalInterest = 0;
++$TotalFees = 0;
++$Charging = 0;
++echo '<form method="post" action="' . $PostTo . '">
++		<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++		<input type="hidden" name="ChargeMonth" value="' . $ChargeMonth . '" />
++		<table class="selection">
++			<tr>
++				<th>' . __('Customer') . '</th>
++				<th>' . __('Overdue invoices') . '</th>
++				<th>' . __('Overdue balance') . '</th>
++				<th>' . __('Interest') . '</th>
++				<th>' . __('Late fee') . '</th>
++				<th>' . __('Notes') . '</th>
++			</tr>';
++foreach ($Proposals as $DebtorNo => $Proposal) {
++	if ($Proposal['INT'] > 0 or $Proposal['FEE'] > 0) {
++		$Charging++;
++	}
++	$TotalInterest += $Proposal['INT'] / $Proposal['rate'];
++	$TotalFees += $Proposal['FEE'] / $Proposal['rate'];
++	echo '<tr class="striped_row">
++			<td><a href="' . $RootPath . '/CustomerCredit.php?DebtorNo=' . urlencode($DebtorNo) . '">' . $DebtorNo . '</a> ' . $Proposal['name'] . '</td>
++			<td class="number">' . $Proposal['invoices'] . '</td>
++			<td class="number">' . locale_number_format($Proposal['base'], $Proposal['decimals']) . ' ' . $Proposal['currcode'] . '</td>
++			<td class="number">' . ($Proposal['INT'] > 0 ? '<input type="checkbox" name="Interest[' . $DebtorNo . ']" checked="checked" /> ' . locale_number_format($Proposal['INT'], $Proposal['decimals']) : '') . '</td>
++			<td class="number">' . ($Proposal['FEE'] > 0 ? '<input type="checkbox" name="Fee[' . $DebtorNo . ']" checked="checked" /> ' . locale_number_format($Proposal['FEE'], $Proposal['decimals']) : '') . '</td>
++			<td>' . $Proposal['note'] . '</td>
++		</tr>';
++}
++echo '<tr><th colspan="3">' . __('Totals in') . ' ' . $HomeCurrency . '</th>
++		<th class="number">' . locale_number_format($TotalInterest, $HomeDecimals) . '</th>
++		<th class="number">' . locale_number_format($TotalFees, $HomeDecimals) . '</th>
++		<th></th></tr>
++	</table>';
++if ($Charging > 0) {
++	echo '<br /><div class="centre"><input type="submit" name="PostCharges" value="' . __('Confirm and Post These Charges') . '" onclick="return confirm(\'' . __('Post the charges ticked above to the customer accounts and the general ledger?') . '\');" /></div>';
++} else {
++	prnMsg(__('There is nothing to charge for') . ' ' . $ChargeMonth, 'info');
++}
++echo '</form>';
++
++/* ---- waivers ---- */
++$Result = DB_query("SELECT debtorcharges.id,
++							debtorcharges.debtorno,
++							debtorsmaster.name,
++							debtorcharges.chargemonth,
++							debtorcharges.chargetype,
++							debtorcharges.currcode,
++							debtorcharges.amount,
++							debtortrans.balance,
++							debtorcharges.waived
++					FROM debtorcharges
++					INNER JOIN debtorsmaster
++						ON debtorcharges.debtorno = debtorsmaster.debtorno
++					INNER JOIN debtortrans
++						ON debtortrans.type = 60
++						AND debtortrans.transno = debtorcharges.transno
++					WHERE debtorcharges.waived = 0
++					ORDER BY debtorcharges.id DESC
++					LIMIT 100");
++if (DB_num_rows($Result) > 0) {
++	echo '<br /><form method="post" action="' . $PostTo . '">
++			<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++			<input type="hidden" name="ChargeMonth" value="' . $ChargeMonth . '" />
++			<table class="selection">
++				<caption>' . __('Charges that can be waived (reversed)') . '</caption>
++				<tr><th>' . __('Customer') . '</th><th>' . __('Month') . '</th><th>' . __('Charge') . '</th><th>' . __('Amount') . '</th><th>' . __('Still unpaid') . '</th><th>' . __('Waive') . '</th></tr>';
++	while ($MyRow = DB_fetch_array($Result)) {
++		echo '<tr class="striped_row">
++				<td>' . $MyRow['debtorno'] . ' ' . $MyRow['name'] . '</td>
++				<td>' . $MyRow['chargemonth'] . '</td>
++				<td>' . ($MyRow['chargetype'] == 'INT' ? __('Interest') : __('Late fee')) . '</td>
++				<td class="number">' . locale_number_format($MyRow['amount'], 2) . ' ' . $MyRow['currcode'] . '</td>
++				<td class="number">' . locale_number_format($MyRow['balance'], 2) . '</td>
++				<td>' . ($MyRow['balance'] > 0 ? '<input type="checkbox" name="Waive[' . $MyRow['id'] . ']" />' : __('Paid')) . '</td>
++			</tr>';
++	}
++	echo '</table>
++			<fieldset>
++				<field>
++					<label for="WaiveReason">' . __('Reason for waiving') . ':</label>
++					<input type="text" name="WaiveReason" size="60" maxlength="200" />
++				</field>
++			</fieldset>
++			<div class="centre"><input type="submit" name="WaiveCharges" value="' . __('Waive Ticked Charges') . '" /></div>
++		</form>';
++}
++
++include('includes/footer.php');
+diff --git a/CreditControlDunning.php b/CreditControlDunning.php
+new file mode 100644
+index 0000000..b2f5c1f
+--- /dev/null
++++ b/CreditControlDunning.php
+@@ -0,0 +1,161 @@
++<?php
++
++/* The overdue reminder run. Credit control start it (we expect weekly), see who would get which letter, take out the customers they do not want to write to, and send. Customers with no e-mail address are listed so the letter can be posted. Every reminder is recorded against the customer. */
++
++require(__DIR__ . '/includes/session.php');
++
++include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
++require_once('includes/MiscFunctions.php');
++
++$Title = __('Credit Control Reminder Run');
++$ViewTopic = 'AccountsReceivable';
++$BookMark = 'CreditControlDunning';
++include('includes/header.php');
++
++echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/customer.png" title="' . $Title . '" alt="" />' . ' ' . $Title . '</p>';
++
++$PostTo = htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8');
++$Stages = GetDunningStages();
++
++if (count($Stages) == 0) {
++	prnMsg(__('No reminder stages have been set up') . '. ' . __('Finance sets them up in Credit Control Settings'), 'error');
++	include('includes/footer.php');
++	exit();
++}
++
++/* the stop reason used when the final notice puts the customer on stop */
++$StopReason = '';
++$Result = DB_query("SELECT reasoncode FROM holdreasons WHERE dissallowinvoices = 1 ORDER BY reasoncode LIMIT 1");
++if (DB_num_rows($Result) > 0) {
++	$MyRow = DB_fetch_row($Result);
++	$StopReason = $MyRow[0];
++}
++$FinalStage = max(array_keys($Stages));
++
++if (isset($_POST['SendReminders'])) {
++
++	/* The candidates are worked out again now. A customer who has paid since the list was shown is no longer overdue and gets nothing, and the stage is the stage they are at now. */
++	$Candidates = GetDunningCandidates();
++	$Sent = 0;
++	$ToPost = array();
++	$Failed = array();
++
++	foreach ((isset($_POST['Include']) ? $_POST['Include'] : array()) as $DebtorNo => $Value) {
++		if (!isset($Candidates[$DebtorNo]) or $Candidates[$DebtorNo]['skip'] != '') {
++			prnMsg(__('Customer') . ' ' . $DebtorNo . ' ' . __('no longer needs a reminder and was left out'), 'info');
++			continue;
++		}
++		$Candidate = $Candidates[$DebtorNo];
++		$CurrDetails = CustomerCurrencyDetails($Candidate['currcode']);
++		$Customer = array('name' => $Candidate['name'], 'currcode' => $Candidate['currcode'], 'decimalplaces' => $CurrDetails['decimalplaces']);
++		$Stage = $Stages[$Candidate['stage']];
++		$Subject = html_entity_decode(MergeDunningText($Stage['subject'], $Customer, $Candidate['items'], $Candidate['total']), ENT_QUOTES, 'UTF-8');
++		$Body = html_entity_decode(MergeDunningText($Stage['body'], $Customer, $Candidate['items'], $Candidate['total']), ENT_QUOTES, 'UTF-8');
++		$ItemList = array();
++		foreach ($Candidate['items'] as $Item) {
++			$ItemList[] = $Item['type'] . '/' . $Item['transno'];
++		}
++
++		if (count($Candidate['emails']) > 0) {
++			$Method = 'email';
++			$SentTo = implode(', ', $Candidate['emails']);
++			$EmailResult = SendEmailFromWebERP($_SESSION['CompanyRecord']['email'], $Candidate['emails'], $Subject, $Body, array(), true);
++			if ($EmailResult !== true) {
++				$Failed[] = $DebtorNo . ' ' . $Candidate['name'];
++				continue;
++			}
++		} else {
++			$Method = 'post';
++			$SentTo = '';
++			$ToPost[$DebtorNo] = array('name' => $Candidate['name'], 'subject' => $Subject, 'body' => $Body);
++		}
++
++		DB_Txn_Begin();
++		DB_query("INSERT INTO dunninghistory (debtorno,
++											stage,
++											sentdate,
++											userid,
++											method,
++											sentto,
++											currcode,
++											amount,
++											items,
++											lettertext)
++									VALUES ('" . $DebtorNo . "',
++											'" . $Candidate['stage'] . "',
++											NOW(),
++											'" . $_SESSION['UserID'] . "',
++											'" . $Method . "',
++											'" . DB_escape_string($SentTo) . "',
++											'" . $Candidate['currcode'] . "',
++											'" . $Candidate['total'] . "',
++											'" . DB_escape_string(implode(',', $ItemList)) . "',
++											'" . DB_escape_string($Body) . "')", __('The reminder could not be recorded because'), '', true);
++		CreditControlLog($DebtorNo, 'REMINDER', __('Reminder stage') . ' ' . $Candidate['stage'] . ' ' . ($Method == 'email' ? __('e-mailed to') . ' ' . $SentTo : __('to be posted')) . '. ' . __('Items') . ': ' . implode(', ', $ItemList), $Candidate['total'], $Candidate['currcode']);
++		if ($Candidate['stage'] == $FinalStage and $_SESSION['CreditStopAfterFinalNotice'] == 1 and $Candidate['status'] != CREDIT_STATUS_STOP and $StopReason !== '') {
++			SetCreditStatus($DebtorNo, CREDIT_STATUS_STOP, $StopReason, __('Put on stop automatically after the final notice'));
++		}
++		DB_Txn_Commit();
++		$Sent++;
++	}
++
++	prnMsg($Sent . ' ' . __('reminders have been sent or recorded'), 'success');
++	if (count($Failed) > 0) {
++		prnMsg(__('The e-mail could not be sent to') . ': ' . implode(', ', $Failed) . '. ' . __('They have not been recorded as reminded and will be on the next list'), 'error');
++	}
++	if (count($ToPost) > 0) {
++		echo '<h3>' . __('Customers with no e-mail address - post these letters') . '</h3>';
++		foreach ($ToPost as $DebtorNo => $Letter) {
++			echo '<div style="page-break-after: always; margin-bottom: 2em;"><b>' . $DebtorNo . ' ' . $Letter['name'] . '</b><br /><b>' . $Letter['subject'] . '</b><pre>' . $Letter['body'] . '</pre></div>';
++		}
++	}
++}
++
++/* the list of who would get which letter now */
++$Candidates = GetDunningCandidates();
++
++echo '<div class="page_help_text">' . __('These customers have an overdue invoice that is not disputed. Take out the customers you do not want to write to now, for example where a payment has been promised, then send. Customers sent the same or a later stage recently are not on the list.') . '</div>';
++
++$Waiting = 0;
++echo '<form method="post" action="' . $PostTo . '">
++		<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++		<table class="selection">
++			<tr>
++				<th>' . __('Send') . '</th>
++				<th>' . __('Customer') . '</th>
++				<th>' . __('Status') . '</th>
++				<th>' . __('Days overdue') . '</th>
++				<th>' . __('Overdue items') . '</th>
++				<th>' . __('Overdue total') . '</th>
++				<th>' . __('Last stage sent') . '</th>
++				<th>' . __('Letter stage') . '</th>
++				<th>' . __('Goes to') . '</th>
++			</tr>';
++foreach ($Candidates as $DebtorNo => $Candidate) {
++	if ($Candidate['skip'] != '') {
++		continue;
++	}
++	$Waiting++;
++	$CurrDetails = CustomerCurrencyDetails($Candidate['currcode']);
++	echo '<tr class="striped_row">
++			<td><input type="checkbox" name="Include[' . $DebtorNo . ']" checked="checked" /></td>
++			<td><a href="' . $RootPath . '/CustomerCredit.php?DebtorNo=' . urlencode($DebtorNo) . '">' . $DebtorNo . '</a> ' . $Candidate['name'] . '</td>
++			<td>' . CreditStatusText($Candidate['status']) . '</td>
++			<td class="number">' . $Candidate['maxdays'] . '</td>
++			<td class="number">' . count($Candidate['items']) . '</td>
++			<td class="number">' . locale_number_format($Candidate['total'], $CurrDetails['decimalplaces']) . ' ' . $Candidate['currcode'] . '</td>
++			<td class="number">' . ($Candidate['laststage'] > 0 ? $Candidate['laststage'] : '') . '</td>
++			<td class="number">' . $Candidate['stage'] . ($Candidate['stage'] == $FinalStage ? ' (' . __('final') . ')' : '') . '</td>
++			<td>' . (count($Candidate['emails']) > 0 ? implode(', ', $Candidate['emails']) : '<b>' . __('No e-mail address - post the letter') . '</b>') . '</td>
++		</tr>';
++}
++echo '</table>';
++if ($Waiting > 0) {
++	echo '<br /><div class="centre"><input type="submit" name="SendReminders" value="' . __('Send Reminders') . '" /></div>';
++} else {
++	prnMsg(__('There are no customers to send a reminder to now'), 'info');
++}
++echo '</form>';
++
++include('includes/footer.php');
+diff --git a/CreditControlSetup.php b/CreditControlSetup.php
+new file mode 100644
+index 0000000..30c6162
+--- /dev/null
++++ b/CreditControlSetup.php
+@@ -0,0 +1,335 @@
++<?php
++
++/* Finance sets up credit control here: the standard review period, interest rate, late fee, when a balance is overdue enough to be charged, the write-off approval limit, the GL accounts for interest, late fees and bad debts, and the reminder letters. Also loads the current credit status, limits and review dates of customers from a CSV file (go-live) */
++
++require(__DIR__ . '/includes/session.php');
++
++include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
++
++$Title = __('Credit Control Settings');
++$ViewTopic = 'AccountsReceivable';
++$BookMark = 'CreditControlSetup';
++include('includes/header.php');
++
++echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/maintenance.png" title="' . __('Credit Control Settings') . '" alt="" />' . ' ' . $Title . '</p>';
++
++$PostTo = htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8');
++
++if (isset($_POST['SaveSettings'])) {
++	$InputError = 0;
++	$Numeric = array('CreditReviewMonths' => array(1, 120),
++					'CreditInterestRate' => array(0, 100),
++					'CreditLateFee' => array(0, 1000000),
++					'CreditChargeDaysOverdue' => array(0, 365),
++					'CreditWriteOffApprovalLimit' => array(0, 1000000000),
++					'CreditDunningMinDays' => array(0, 365));
++	$NewValues = array();
++	foreach ($Numeric as $Name => $Range) {
++		$Value = filter_number_format($_POST[$Name]);
++		if (!is_numeric($Value) or $Value < $Range[0] or $Value > $Range[1]) {
++			$InputError = 1;
++			prnMsg(__('The setting') . ' ' . $Name . ' ' . __('must be a number between') . ' ' . $Range[0] . ' ' . __('and') . ' ' . $Range[1], 'error');
++		}
++		$NewValues[$Name] = $Value;
++	}
++	if ($_POST['CreditControlEmail'] != '' and !IsEmailAddress($_POST['CreditControlEmail'])) {
++		$InputError = 1;
++		prnMsg(__('The credit control contact e-mail address is not a valid address'), 'error');
++	}
++	$NewValues['CreditControlEmail'] = $_POST['CreditControlEmail'];
++	$NewValues['CreditStopAfterFinalNotice'] = isset($_POST['CreditStopAfterFinalNotice']) ? 1 : 0;
++
++	foreach (array('InterestIncomeAct', 'LateFeeAct', 'BadDebtAct') as $Field) {
++		$Result = DB_query("SELECT COUNT(*) FROM chartmaster WHERE accountcode = '" . $_POST[$Field] . "'");
++		$MyRow = DB_fetch_row($Result);
++		if ($MyRow[0] == 0) {
++			$InputError = 1;
++			prnMsg(__('The GL account selected for') . ' ' . $Field . ' ' . __('does not exist'), 'error');
++		}
++	}
++
++	if ($InputError == 0) {
++		DB_Txn_Begin();
++		foreach ($NewValues as $Name => $Value) {
++			DB_query("UPDATE config SET confvalue = '" . $Value . "' WHERE confname = '" . $Name . "'", __('The setting could not be updated because'), '', true);
++			$_SESSION[$Name] = $Value;
++		}
++		DB_query("UPDATE companies
++					SET interestincomeact = '" . $_POST['InterestIncomeAct'] . "',
++						latefeeact = '" . $_POST['LateFeeAct'] . "',
++						baddebtact = '" . $_POST['BadDebtAct'] . "'
++					WHERE coycode = 1", __('The GL accounts could not be updated because'), '', true);
++		DB_Txn_Commit();
++		$_SESSION['CompanyRecord']['interestincomeact'] = $_POST['InterestIncomeAct'];
++		$_SESSION['CompanyRecord']['latefeeact'] = $_POST['LateFeeAct'];
++		$_SESSION['CompanyRecord']['baddebtact'] = $_POST['BadDebtAct'];
++		prnMsg(__('The credit control settings have been saved'), 'success');
++	}
++}
++
++if (isset($_POST['SaveStages'])) {
++	$InputError = 0;
++	$Stages = array();
++	foreach ($_POST['StageNo'] as $Key => $Stage) {
++		if (isset($_POST['DeleteStage'][$Key])) {
++			continue;
++		}
++		$Days = (int) $_POST['StageDays'][$Key];
++		if ($Days <= 0 or trim($_POST['StageSubject'][$Key]) == '' or trim($_POST['StageBody'][$Key]) == '') {
++			$InputError = 1;
++			prnMsg(__('Every reminder stage needs the number of days overdue, a subject and the wording of the letter'), 'error');
++			break;
++		}
++		$Stages[] = array('days' => $Days, 'subject' => $_POST['StageSubject'][$Key], 'body' => $_POST['StageBody'][$Key]);
++	}
++	if (isset($_POST['NewStageDays']) and trim($_POST['NewStageSubject']) != '') {
++		$Days = (int) $_POST['NewStageDays'];
++		if ($Days <= 0 or trim($_POST['NewStageBody']) == '') {
++			$InputError = 1;
++			prnMsg(__('A new reminder stage needs the number of days overdue, a subject and the wording of the letter'), 'error');
++		} else {
++			$Stages[] = array('days' => $Days, 'subject' => $_POST['NewStageSubject'], 'body' => $_POST['NewStageBody']);
++		}
++	}
++	/* the stages are numbered in the order of the days overdue that trigger them */
++	usort($Stages, function ($A, $B) {
++		return $A['days'] <=> $B['days'];
++	});
++	for ($i = 1; $i < count($Stages); $i++) {
++		if ($Stages[$i]['days'] == $Stages[$i - 1]['days']) {
++			$InputError = 1;
++			prnMsg(__('Two reminder stages cannot start at the same number of days overdue'), 'error');
++		}
++	}
++	if (count($Stages) == 0) {
++		$InputError = 1;
++		prnMsg(__('There must be at least one reminder stage'), 'error');
++	}
++	if ($InputError == 0) {
++		DB_Txn_Begin();
++		DB_query("DELETE FROM dunningstages", __('The reminder stages could not be replaced because'), '', true);
++		foreach ($Stages as $Index => $Stage) {
++			DB_query("INSERT INTO dunningstages (stage, daysoverdue, subject, body)
++						VALUES ('" . ($Index + 1) . "', '" . $Stage['days'] . "', '" . $Stage['subject'] . "', '" . $Stage['body'] . "')", __('The reminder stage could not be saved because'), '', true);
++		}
++		DB_Txn_Commit();
++		prnMsg(__('The reminder stages have been saved'), 'success');
++	}
++}
++
++/* Go-live: credit status, limit and next review date from the credit controller's spreadsheet. CSV columns: customer code, status (N normal, W watch, S stop), credit limit (optional), next review date as YYYY-MM-DD (optional) */
++if (isset($_POST['LoadCSV']) and isset($_FILES['CSVFile']) and $_FILES['CSVFile']['name'] != '') {
++	$FileHandle = fopen($_FILES['CSVFile']['tmp_name'], 'r');
++	if ($FileHandle === false) {
++		prnMsg(__('The file could not be read'), 'error');
++	} else {
++		$LoadErrors = array();
++		$Loaded = 0;
++		$LineNo = 0;
++		$StatusMap = array('N' => CREDIT_STATUS_NORMAL, 'W' => CREDIT_STATUS_WATCH, 'S' => CREDIT_STATUS_STOP);
++		$ReasonFor = array(CREDIT_STATUS_NORMAL => (int) $_POST['LoadReasonNormal'],
++							CREDIT_STATUS_WATCH => (int) $_POST['LoadReasonWatch'],
++							CREDIT_STATUS_STOP => (int) $_POST['LoadReasonStop']);
++		DB_Txn_Begin();
++		while (($Row = fgetcsv($FileHandle, 10000, ',')) !== false) {
++			$LineNo++;
++			if (count($Row) < 2 or $LineNo == 1 and !isset($StatusMap[mb_strtoupper(trim($Row[1]))])) {
++				continue; // blank line or header line
++			}
++			$Code = mb_strtoupper(trim($Row[0]));
++			$Status = mb_strtoupper(trim($Row[1]));
++			$Customer = GetCreditStatus($Code);
++			if ($Customer === false) {
++				$LoadErrors[] = __('Line') . ' ' . $LineNo . ': ' . __('customer') . ' ' . $Code . ' ' . __('does not exist');
++				continue;
++			}
++			if (!isset($StatusMap[$Status])) {
++				$LoadErrors[] = __('Line') . ' ' . $LineNo . ': ' . __('the status must be N, W or S');
++				continue;
++			}
++			$Limit = (isset($Row[2]) and trim($Row[2]) != '') ? trim($Row[2]) : $Customer['creditlimit'];
++			$NextReview = (isset($Row[3]) and trim($Row[3]) != '') ? trim($Row[3]) : date('Y-m-d', strtotime(CreditNextReviewDate()));
++			if (!is_numeric($Limit) or $Limit < 0 or !preg_match('/^\d{4}-\d{2}-\d{2}$/', $NextReview)) {
++				$LoadErrors[] = __('Line') . ' ' . $LineNo . ': ' . __('the credit limit or the next review date is not valid');
++				continue;
++			}
++			DB_query("UPDATE debtorsmaster
++						SET creditlimit = '" . $Limit . "',
++							nextreviewdate = '" . $NextReview . "'
++						WHERE debtorno = '" . $Code . "'", __('The customer could not be updated because'), '', true);
++			if (abs($Limit - $Customer['creditlimit']) > 0.0001) {
++				CreditControlLog($Code, 'LIMIT', __('Credit limit loaded from the spreadsheet, was') . ' ' . $Customer['creditlimit'] . ' ' . __('now') . ' ' . $Limit, $Limit, $Customer['currcode']);
++			}
++			if ($StatusMap[$Status] != $Customer['status']) {
++				if (!SetCreditStatus($Code, $StatusMap[$Status], $ReasonFor[$StatusMap[$Status]], __('Loaded from the credit control spreadsheet'))) {
++					$LoadErrors[] = __('Line') . ' ' . $LineNo . ': ' . __('the reason chosen for status') . ' ' . $Status . ' ' . __('does not fit the status');
++					continue;
++				}
++			}
++			CreditControlLog($Code, 'LOAD', __('Credit details loaded from the credit control spreadsheet'));
++			$Loaded++;
++		}
++		fclose($FileHandle);
++		if (count($LoadErrors) > 0) {
++			DB_Txn_Rollback();
++			prnMsg(__('Nothing was loaded because of the following problems. Correct the file and load it again'), 'error');
++			foreach ($LoadErrors as $LoadError) {
++				echo '<br />' . $LoadError;
++			}
++		} else {
++			DB_Txn_Commit();
++			prnMsg($Loaded . ' ' . __('customers have been loaded'), 'success');
++		}
++	}
++}
++
++$AccountOptions = array();
++$Result = DB_query("SELECT accountcode, accountname FROM chartmaster ORDER BY accountcode");
++while ($MyRow = DB_fetch_array($Result)) {
++	$AccountOptions[$MyRow['accountcode']] = $MyRow['accountcode'] . ' - ' . $MyRow['accountname'];
++}
++function AccountSelect($Name, $Selected, $AccountOptions) {
++	$Select = '<select name="' . $Name . '" required="required"><option value="0"></option>';
++	foreach ($AccountOptions as $Code => $Text) {
++		$Select .= '<option value="' . $Code . '"' . ($Code == $Selected ? ' selected="selected"' : '') . '>' . $Text . '</option>';
++	}
++	return $Select . '</select>';
++}
++
++echo '<form method="post" action="' . $PostTo . '">
++	<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++	<fieldset>
++		<legend>' . __('Reviews, interest, late fees and write-offs') . '</legend>
++		<field>
++			<label for="CreditReviewMonths">' . __('Standard review period (months)') . ':</label>
++			<input type="text" class="integer" name="CreditReviewMonths" size="4" maxlength="3" value="' . $_SESSION['CreditReviewMonths'] . '" />
++			<fieldhelp>' . __('New customers get their first review date this long after their account is opened. Credit control choose the next date at every review, shorter for higher risk customers.') . '</fieldhelp>
++		</field>
++		<field>
++			<label for="CreditInterestRate">' . __('Interest rate on overdue balances (% per year)') . ':</label>
++			<input type="text" class="number" name="CreditInterestRate" size="7" maxlength="7" value="' . $_SESSION['CreditInterestRate'] . '" />
++			<fieldhelp>' . __('Charged at month end on the overdue invoices, one twelfth of the annual rate per month. Interest is not charged on earlier interest or fees. 0 means no interest.') . '</fieldhelp>
++		</field>
++		<field>
++			<label for="CreditLateFee">' . __('Late fee per customer per month (home currency)') . ':</label>
++			<input type="text" class="number" name="CreditLateFee" size="10" maxlength="12" value="' . $_SESSION['CreditLateFee'] . '" />
++			<fieldhelp>' . __('One fee a month for a customer with overdue invoices, converted to the customer\'s currency. 0 means no late fees.') . '</fieldhelp>
++		</field>
++		<field>
++			<label for="CreditChargeDaysOverdue">' . __('Days overdue before a balance is charged') . ':</label>
++			<input type="text" class="integer" name="CreditChargeDaysOverdue" size="4" maxlength="3" value="' . $_SESSION['CreditChargeDaysOverdue'] . '" />
++		</field>
++		<field>
++			<label for="CreditWriteOffApprovalLimit">' . __('Write-offs above this amount need the Finance Director (home currency)') . ':</label>
++			<input type="text" class="number" name="CreditWriteOffApprovalLimit" size="12" maxlength="14" value="' . $_SESSION['CreditWriteOffApprovalLimit'] . '" />
++		</field>
++		<field>
++			<label for="CreditDunningMinDays">' . __('Least days between two reminders of the same stage') . ':</label>
++			<input type="text" class="integer" name="CreditDunningMinDays" size="4" maxlength="3" value="' . $_SESSION['CreditDunningMinDays'] . '" />
++		</field>
++		<field>
++			<label for="CreditStopAfterFinalNotice">' . __('Put the customer on stop when the final notice is sent') . ':</label>
++			<input type="checkbox" name="CreditStopAfterFinalNotice"' . ($_SESSION['CreditStopAfterFinalNotice'] ? ' checked="checked"' : '') . ' />
++			<fieldhelp>' . __('Left off, the final notice only flags the customer in the credit control report and credit control decide.') . '</fieldhelp>
++		</field>
++		<field>
++			<label for="CreditControlEmail">' . __('Credit control contact e-mail shown to staff and customers') . ':</label>
++			<input type="email" name="CreditControlEmail" size="40" maxlength="55" value="' . $_SESSION['CreditControlEmail'] . '" />
++		</field>
++		<field>
++			<label for="InterestIncomeAct">' . __('GL account for interest income') . ':</label>
++			' . AccountSelect('InterestIncomeAct', $_SESSION['CompanyRecord']['interestincomeact'], $AccountOptions) . '
++		</field>
++		<field>
++			<label for="LateFeeAct">' . __('GL account for late fee income') . ':</label>
++			' . AccountSelect('LateFeeAct', $_SESSION['CompanyRecord']['latefeeact'], $AccountOptions) . '
++		</field>
++		<field>
++			<label for="BadDebtAct">' . __('GL account for bad debts') . ':</label>
++			' . AccountSelect('BadDebtAct', $_SESSION['CompanyRecord']['baddebtact'], $AccountOptions) . '
++		</field>
++	</fieldset>
++	<div class="centre"><input type="submit" name="SaveSettings" value="' . __('Save Settings') . '" /></div>
++</form>';
++
++/* the reminder letters */
++echo '<form method="post" action="' . $PostTo . '">
++	<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++	<div class="page_help_text">' . __('In the wording of a letter these are replaced when it is sent: {customer}, {company}, {currency}, {total} and {invoices} (the list of overdue items).') . '</div>';
++$Stages = GetDunningStages();
++$Key = 0;
++foreach ($Stages as $Stage) {
++	echo '<fieldset>
++			<legend>' . __('Stage') . ' ' . $Stage['stage'] . '</legend>
++			<input type="hidden" name="StageNo[' . $Key . ']" value="' . $Stage['stage'] . '" />
++			<field>
++				<label for="StageDays">' . __('Days overdue that trigger it') . ':</label>
++				<input type="text" class="integer" name="StageDays[' . $Key . ']" size="4" maxlength="4" value="' . $Stage['daysoverdue'] . '" />
++			</field>
++			<field>
++				<label for="StageSubject">' . __('Subject') . ':</label>
++				<input type="text" name="StageSubject[' . $Key . ']" size="60" maxlength="100" value="' . $Stage['subject'] . '" />
++			</field>
++			<field>
++				<label for="StageBody">' . __('Letter') . ':</label>
++				<textarea name="StageBody[' . $Key . ']" rows="10" cols="70">' . $Stage['body'] . '</textarea>
++			</field>
++			<field>
++				<label for="DeleteStage">' . __('Delete this stage') . ':</label>
++				<input type="checkbox" name="DeleteStage[' . $Key . ']" />
++			</field>
++		</fieldset>';
++	$Key++;
++}
++echo '<fieldset>
++		<legend>' . __('Add a stage') . '</legend>
++		<field>
++			<label for="NewStageDays">' . __('Days overdue that trigger it') . ':</label>
++			<input type="text" class="integer" name="NewStageDays" size="4" maxlength="4" />
++		</field>
++		<field>
++			<label for="NewStageSubject">' . __('Subject') . ':</label>
++			<input type="text" name="NewStageSubject" size="60" maxlength="100" />
++		</field>
++		<field>
++			<label for="NewStageBody">' . __('Letter') . ':</label>
++			<textarea name="NewStageBody" rows="6" cols="70"></textarea>
++		</field>
++	</fieldset>
++	<div class="centre"><input type="submit" name="SaveStages" value="' . __('Save Reminder Stages') . '" /></div>
++</form>';
++
++/* load from the spreadsheet */
++$ReasonOptions = array(0 => '', 1 => '', 2 => '');
++$Result = DB_query("SELECT reasoncode, reasondescription, dissallowinvoices FROM holdreasons ORDER BY reasoncode");
++while ($MyRow = DB_fetch_array($Result)) {
++	$Class = ($MyRow['dissallowinvoices'] == 1 ? 1 : ($MyRow['dissallowinvoices'] == 2 ? 2 : 0));
++	$ReasonOptions[$Class] .= '<option value="' . $MyRow['reasoncode'] . '">' . $MyRow['reasondescription'] . '</option>';
++}
++echo '<form method="post" action="' . $PostTo . '" enctype="multipart/form-data">
++	<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++	<fieldset>
++		<legend>' . __('Load credit status, limits and review dates from a CSV file') . '</legend>
++		<div class="page_help_text">' . __('One customer per line: customer code, status (N normal, W watch, S stop), credit limit and next review date (YYYY-MM-DD). The last two are optional. Customers not in the file keep their status and get the standard review period. Nothing is loaded if any line has a problem.') . '</div>
++		<field>
++			<label for="CSVFile">' . __('CSV file') . ':</label>
++			<input type="file" name="CSVFile" />
++		</field>
++		<field>
++			<label for="LoadReasonNormal">' . __('Reason used for N') . ':</label>
++			<select name="LoadReasonNormal">' . $ReasonOptions[0] . '</select>
++		</field>
++		<field>
++			<label for="LoadReasonWatch">' . __('Reason used for W') . ':</label>
++			<select name="LoadReasonWatch">' . $ReasonOptions[2] . '</select>
++		</field>
++		<field>
++			<label for="LoadReasonStop">' . __('Reason used for S') . ':</label>
++			<select name="LoadReasonStop">' . $ReasonOptions[1] . '</select>
++		</field>
++	</fieldset>
++	<div class="centre"><input type="submit" name="LoadCSV" value="' . __('Load File') . '" /></div>
++</form>';
++
++include('includes/footer.php');
+diff --git a/CreditStatus.php b/CreditStatus.php
+index 87ba23e..ab0249b 100644
+--- a/CreditStatus.php
++++ b/CreditStatus.php
+@@ -60,43 +60,32 @@ if (isset($_POST['submit'])) {
+ 
+ 	$Msg='';
+ 
++	/* 0 invoicing allowed, 1 on stop, 2 on watch */
++	$DisallowInvoices = 0;
++	if (isset($_POST['DisallowInvoices']) and in_array($_POST['DisallowInvoices'], array('1', '2'))) {
++		$DisallowInvoices = (int) $_POST['DisallowInvoices'];
++	}
++
+ 	if (isset($SelectedReason) AND $InputError != 1) {
+ 
+ 		/*SelectedReason could also exist if submit had not been clicked this code would not run in this case cos submit is false of course	see the delete code below*/
+ 
+-		if (isset($_POST['DisallowInvoices']) and $_POST['DisallowInvoices']=='on'){
+-			$SQL = "UPDATE holdreasons SET
+-							reasondescription='" . $_POST['ReasonDescription'] . "',
+-							dissallowinvoices=1
+-							WHERE reasoncode = '".$SelectedReason."'";
+-		} else {
+-			$SQL = "UPDATE holdreasons SET
+-							reasondescription='" . $_POST['ReasonDescription'] . "',
+-							dissallowinvoices=0
+-							WHERE reasoncode = '".$SelectedReason."'";
+-		}
++		$SQL = "UPDATE holdreasons SET
++						reasondescription='" . $_POST['ReasonDescription'] . "',
++						dissallowinvoices='" . $DisallowInvoices . "'
++						WHERE reasoncode = '".$SelectedReason."'";
+ 		$Msg = __('The credit status record has been updated');
+ 
+ 	} elseif ($InputError != 1) {
+ 
+ 	/*Selected Reason is null cos no item selected on first time round so must be adding a record must be submitting new entries in the new status code form */
+ 
+-		if (isset($_POST['DisallowInvoices']) AND $_POST['DisallowInvoices']=='on'){
+-
+-			$SQL = "INSERT INTO holdreasons (reasoncode,
+-											reasondescription,
+-											dissallowinvoices)
+-									VALUES ('" .$_POST['ReasonCode'] . "',
+-											'".$_POST['ReasonDescription'] . "',
+-											1)";
+-		} else {
+-			$SQL = "INSERT INTO holdreasons (reasoncode,
+-											reasondescription,
+-											dissallowinvoices)
+-									VALUES ('" . $_POST['ReasonCode'] . "',
+-											'" . $_POST['ReasonDescription'] ."',
+-											0)";
+-		}
++		$SQL = "INSERT INTO holdreasons (reasoncode,
++										reasondescription,
++										dissallowinvoices)
++								VALUES ('" .$_POST['ReasonCode'] . "',
++										'".$_POST['ReasonDescription'] . "',
++										'" . $DisallowInvoices . "')";
+ 
+ 		$Msg = __('A new credit status record has been inserted');
+ 	}
+@@ -156,7 +145,9 @@ or deletion of the records*/
+ 
+ 	while ($MyRow=DB_fetch_array($Result)) {
+ 
+-		if ($MyRow['dissallowinvoices']==0) {
++		if ($MyRow['dissallowinvoices']==2) {
++			$DissallowText = '<b>' . __('ON WATCH') . '</b>';
++		} elseif ($MyRow['dissallowinvoices']<=0) {
+ 			$DissallowText = __('Invoice OK');
+ 		} else {
+ 			$DissallowText = '<b>' .  __('NO INVOICING')  . '</b>';
+@@ -232,14 +223,14 @@ if (!isset($_GET['delete'])) {
+ 			 ' tabindex="2" type="text" name="ReasonDescription" required="required" value="'. $_POST['ReasonDescription'] .'" size="28" maxlength="30" />
+ 		</field>
+ 		<field>
+-			<label for="DisallowInvoices">' .  __('Disallow Invoices') . '</label>';
+-	if (isset($_POST['DisallowInvoices']) and $_POST['DisallowInvoices']==1) {
+-		echo '<input tabindex="3" type="checkbox" checked="checked" name="DisallowInvoices" />
+-			</field>';
+-	} else {
+-		echo '<input tabindex="3" type="checkbox" name="DisallowInvoices" />
+-			</field>';
+-	}
++			<label for="DisallowInvoices">' .  __('Effect on the customer') . '</label>
++			<select tabindex="3" name="DisallowInvoices">
++				<option value="0"' . ((!isset($_POST['DisallowInvoices']) or $_POST['DisallowInvoices'] <= 0) ? ' selected="selected"' : '') . '>' . __('Normal - invoicing allowed') . '</option>
++				<option value="2"' . ((isset($_POST['DisallowInvoices']) and $_POST['DisallowInvoices'] == 2) ? ' selected="selected"' : '') . '>' . __('On watch - orders accepted with a warning and shown to credit control') . '</option>
++				<option value="1"' . ((isset($_POST['DisallowInvoices']) and $_POST['DisallowInvoices'] == 1) ? ' selected="selected"' : '') . '>' . __('On stop - no new orders and no invoicing') . '</option>
++			</select>
++			<fieldhelp>' . __('The reason credit control chooses when it puts a customer on stop or on watch. Customers with a reason that is on stop cannot be sold to.') . '</fieldhelp>
++		</field>';
+ 	echo '</fieldset>
+ 			<div class="centre">
+ 				<input tabindex="4" type="submit" name="submit" value="' . __('Enter Information') . '" />
+diff --git a/CustomerCredit.php b/CustomerCredit.php
+new file mode 100644
+index 0000000..6518051
+--- /dev/null
++++ b/CustomerCredit.php
+@@ -0,0 +1,422 @@
++<?php
++
++/* The credit control view of one customer: credit status, limit, balance and overdue items, reviews, stop and watch, exemptions from interest and fees, disputed invoices and the complete credit control history. Credit control change things here, sales reps see their own customers' details but cannot change anything. */
++
++require(__DIR__ . '/includes/session.php');
++
++include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
++
++$Title = __('Customer Credit Control');
++$ViewTopic = 'AccountsReceivable';
++$BookMark = 'CustomerCredit';
++include('includes/header.php');
++
++if (isset($_GET['DebtorNo'])) {
++	$DebtorNo = $_GET['DebtorNo'];
++} elseif (isset($_POST['DebtorNo'])) {
++	$DebtorNo = $_POST['DebtorNo'];
++} elseif (isset($_SESSION['CustomerID'])) {
++	$DebtorNo = $_SESSION['CustomerID'];
++} else {
++	$DebtorNo = '';
++}
++
++$Customer = GetCreditStatus($DebtorNo);
++
++if ($DebtorNo == '' or $Customer === false) {
++	prnMsg(__('To see the credit control details of a customer, select the customer first'), 'info');
++	echo '<div class="centre"><a href="' . $RootPath . '/SelectCustomer.php">' . __('Select a customer') . '</a></div>';
++	include('includes/footer.php');
++	exit();
++}
++
++/* sales reps see only their own customers */
++if (!UserCanSeeCustomerCredit($DebtorNo)) {
++	prnMsg(__('You have no authority to see the credit control details of this customer'), 'error');
++	include('includes/footer.php');
++	exit();
++}
++
++$CanChange = UserIsCreditController();
++$CurrDetails = CustomerCurrencyDetails($Customer['currcode']);
++$DecimalPlaces = $CurrDetails['decimalplaces'];
++$Today = date($_SESSION['DefaultDateFormat']);
++
++if ($CanChange and isset($_POST['RecordReview'])) {
++
++	$InputError = 0;
++	$Outcome = $_POST['Outcome'];
++	$NewLimit = filter_number_format($_POST['NewLimit']);
++	if (!in_array($Outcome, array('CONFIRMED', 'RAISED', 'REDUCED', 'NORMAL', 'WATCH', 'STOP'))) {
++		$InputError = 1;
++		prnMsg(__('The outcome of the review must be selected'), 'error');
++	}
++	if (!Is_Date($_POST['NextReviewDate'])) {
++		$InputError = 1;
++		prnMsg(__('The next review date must be a date in the format') . ' ' . $_SESSION['DefaultDateFormat'], 'error');
++	} elseif (Date1GreaterThanDate2($Today, $_POST['NextReviewDate']) == 1) {
++		$InputError = 1;
++		prnMsg(__('The next review date cannot be before today'), 'error');
++	}
++	if (in_array($Outcome, array('RAISED', 'REDUCED'))) {
++		if (!is_numeric($NewLimit) or $NewLimit < 0) {
++			$InputError = 1;
++			prnMsg(__('The new credit limit must be a number that is not negative'), 'error');
++		} elseif ($Outcome == 'RAISED' and $NewLimit <= $Customer['creditlimit']) {
++			$InputError = 1;
++			prnMsg(__('A review that raises the limit must set a limit above the current limit of') . ' ' . locale_number_format($Customer['creditlimit'], $DecimalPlaces), 'error');
++		} elseif ($Outcome == 'REDUCED' and $NewLimit >= $Customer['creditlimit']) {
++			$InputError = 1;
++			prnMsg(__('A review that reduces the limit must set a limit below the current limit of') . ' ' . locale_number_format($Customer['creditlimit'], $DecimalPlaces), 'error');
++		}
++	} else {
++		$NewLimit = $Customer['creditlimit'];
++	}
++	if (in_array($Outcome, array('WATCH', 'STOP', 'NORMAL')) and (!isset($_POST['ReasonCode']) or $_POST['ReasonCode'] === '')) {
++		$InputError = 1;
++		prnMsg(__('The credit status reason must be selected'), 'error');
++	}
++	if (trim($_POST['Notes']) == '') {
++		$InputError = 1;
++		prnMsg(__('The notes of the review must be entered, they are the record of why the decision was made'), 'error');
++	}
++
++	if ($InputError == 0) {
++		DB_Txn_Begin();
++		$SQL = "INSERT INTO creditreviews (debtorno,
++											reviewdate,
++											userid,
++											outcome,
++											oldlimit,
++											newlimit,
++											notes,
++											nextreviewdate)
++								VALUES ('" . $DebtorNo . "',
++										CURRENT_DATE,
++										'" . $_SESSION['UserID'] . "',
++										'" . $Outcome . "',
++										'" . $Customer['creditlimit'] . "',
++										'" . $NewLimit . "',
++										'" . $_POST['Notes'] . "',
++										'" . FormatDateForSQL($_POST['NextReviewDate']) . "')";
++		DB_query($SQL, __('The credit review could not be recorded because'), '', true);
++
++		/* the limit changes together with the review that gives the reason for it */
++		DB_query("UPDATE debtorsmaster
++					SET creditlimit = '" . $NewLimit . "',
++						nextreviewdate = '" . FormatDateForSQL($_POST['NextReviewDate']) . "'
++					WHERE debtorno = '" . $DebtorNo . "'", __('The credit limit and review date could not be updated because'), '', true);
++
++		CreditControlLog($DebtorNo, 'REVIEW', __('Review') . ': ' . $Outcome . '. ' . $_POST['Notes'] . ' ' . __('Next review') . ' ' . $_POST['NextReviewDate']);
++		if (abs($NewLimit - $Customer['creditlimit']) > 0.0001) {
++			CreditControlLog($DebtorNo, 'LIMIT', __('Credit limit changed from') . ' ' . $Customer['creditlimit'] . ' ' . __('to') . ' ' . $NewLimit . ' ' . __('by review'), $NewLimit, $Customer['currcode']);
++		}
++		if (in_array($Outcome, array('WATCH', 'STOP', 'NORMAL'))) {
++			$NewStatus = array('WATCH' => CREDIT_STATUS_WATCH, 'STOP' => CREDIT_STATUS_STOP, 'NORMAL' => CREDIT_STATUS_NORMAL);
++			if (!SetCreditStatus($DebtorNo, $NewStatus[$Outcome], $_POST['ReasonCode'], $_POST['Notes'])) {
++				DB_Txn_Rollback();
++				prnMsg(__('The reason selected does not match the new credit status. Choose a reason that puts the customer on stop, on watch or back to normal as appropriate'), 'error');
++				$InputError = 1;
++			}
++		}
++		if ($InputError == 0) {
++			DB_Txn_Commit();
++			prnMsg(__('The credit review has been recorded'), 'success');
++		}
++		$Customer = GetCreditStatus($DebtorNo);
++	}
++}
++
++if ($CanChange and isset($_POST['ChangeStatus'])) {
++	if (trim($_POST['StatusNotes']) == '' or !isset($_POST['StatusReason']) or $_POST['StatusReason'] === '') {
++		prnMsg(__('The new credit status, the reason and a note are all required'), 'error');
++	} else {
++		$NewStatus = array('NORMAL' => CREDIT_STATUS_NORMAL, 'WATCH' => CREDIT_STATUS_WATCH, 'STOP' => CREDIT_STATUS_STOP);
++		DB_Txn_Begin();
++		if (isset($NewStatus[$_POST['NewStatus']]) and SetCreditStatus($DebtorNo, $NewStatus[$_POST['NewStatus']], $_POST['StatusReason'], $_POST['StatusNotes'])) {
++			DB_Txn_Commit();
++			prnMsg(__('The credit status of the customer has been changed'), 'success');
++		} else {
++			DB_Txn_Rollback();
++			prnMsg(__('The reason selected does not match the new credit status. Choose a reason that puts the customer on stop, on watch or back to normal as appropriate'), 'error');
++		}
++		$Customer = GetCreditStatus($DebtorNo);
++	}
++}
++
++if ($CanChange and isset($_POST['SaveExemptions'])) {
++	$ExemptInterest = isset($_POST['ExemptInterest']) ? 1 : 0;
++	$ExemptFees = isset($_POST['ExemptFees']) ? 1 : 0;
++	if (($ExemptInterest != $Customer['exemptinterest'] or $ExemptFees != $Customer['exemptfees'])) {
++		if (trim($_POST['ExemptNotes']) == '') {
++			prnMsg(__('The reason for the change of exemption must be entered'), 'error');
++		} else {
++			DB_Txn_Begin();
++			DB_query("UPDATE debtorsmaster
++						SET exemptinterest = '" . $ExemptInterest . "',
++							exemptfees = '" . $ExemptFees . "'
++						WHERE debtorno = '" . $DebtorNo . "'", __('The exemptions could not be updated because'), '', true);
++			CreditControlLog($DebtorNo, 'EXEMPT', __('Exempt from interest') . ': ' . ($ExemptInterest ? __('Yes') : __('No')) . ', ' . __('exempt from late fees') . ': ' . ($ExemptFees ? __('Yes') : __('No')) . '. ' . $_POST['ExemptNotes']);
++			DB_Txn_Commit();
++			prnMsg(__('The exemptions have been saved'), 'success');
++			$Customer = GetCreditStatus($DebtorNo);
++		}
++	}
++}
++
++if ($CanChange and isset($_POST['AddNote'])) {
++	if (trim($_POST['HistoryNote']) == '') {
++		prnMsg(__('The note must be entered'), 'error');
++	} else {
++		/* for example that the debt has been passed to a collection agency or that legal action has started, handled outside the system */
++		CreditControlLog($DebtorNo, 'NOTE', $_POST['HistoryNote']);
++		prnMsg(__('The note has been added to the credit control history'), 'success');
++	}
++}
++
++if ($CanChange and isset($_POST['SaveDisputes'])) {
++	if (trim($_POST['DisputeNotes']) == '') {
++		prnMsg(__('The reason for the change of dispute marking must be entered'), 'error');
++	} else {
++		$Result = DB_query("SELECT id, type, transno, disputed
++							FROM debtortrans
++							WHERE debtorno = '" . $DebtorNo . "'
++								AND type IN (10, 60)
++								AND settled = 0");
++		DB_Txn_Begin();
++		$Changed = 0;
++		while ($MyRow = DB_fetch_array($Result)) {
++			$NewDisputed = isset($_POST['Disputed_' . $MyRow['id']]) ? 1 : 0;
++			if ($NewDisputed != $MyRow['disputed']) {
++				DB_query("UPDATE debtortrans SET disputed = '" . $NewDisputed . "' WHERE id = '" . $MyRow['id'] . "'", __('The dispute marking could not be updated because'), '', true);
++				CreditControlLog($DebtorNo, 'DISPUTE', ($NewDisputed ? __('Marked as disputed') : __('Dispute settled')) . ': ' . __('transaction type') . ' ' . $MyRow['type'] . ' ' . __('number') . ' ' . $MyRow['transno'] . '. ' . $_POST['DisputeNotes'], 0, '', $MyRow['type'], $MyRow['transno']);
++				$Changed++;
++			}
++		}
++		DB_Txn_Commit();
++		prnMsg($Changed . ' ' . __('invoices have been updated'), 'success');
++	}
++}
++
++/* ---- display ---- */
++
++$Result = DB_query("SELECT COALESCE(SUM(balance), 0) FROM debtortrans WHERE debtorno = '" . $DebtorNo . "'");
++$MyRow = DB_fetch_row($Result);
++$Balance = $MyRow[0];
++$OverdueItems = GetOverdueItems($DebtorNo, 1, true);
++$OverdueTotal = 0;
++foreach ($OverdueItems as $Item) {
++	$OverdueTotal += $Item['balance'];
++}
++list($LastStage, $LastStageDate) = LastReminderSent($DebtorNo);
++
++echo '<p class="page_title_text"><img src="' . $RootPath . '/css/' . $Theme . '/images/customer.png" title="' . __('Customer') . '" alt="" />' . ' ' . __('Credit control') . ' - ' . $Customer['debtorno'] . ' ' . $Customer['name'] . '</p>';
++
++if ($Customer['status'] == CREDIT_STATUS_STOP) {
++	prnMsg(__('This customer is ON STOP') . ' (' . $Customer['reasondescription'] . '). ' . __('No new orders can be accepted and goods cannot be dispatched or invoiced unless credit control releases the order'), 'error');
++} elseif ($Customer['status'] == CREDIT_STATUS_WATCH) {
++	prnMsg(__('This customer is ON WATCH') . ' (' . $Customer['reasondescription'] . '). ' . __('Orders can be taken but credit control must be told'), 'warn');
++}
++
++$ReviewDue = (is_null($Customer['nextreviewdate']) or $Customer['nextreviewdate'] <= date('Y-m-d'));
++
++echo '<table class="selection">
++		<tr><th>' . __('Credit status') . '</th><td>' . CreditStatusText($Customer['status']) . ' (' . $Customer['reasondescription'] . ')</td></tr>
++		<tr><th>' . __('Credit limit') . '</th><td class="number">' . locale_number_format($Customer['creditlimit'], $DecimalPlaces) . ' ' . $Customer['currcode'] . '</td></tr>
++		<tr><th>' . __('Balance') . '</th><td class="number">' . locale_number_format($Balance, $DecimalPlaces) . ' ' . $Customer['currcode'] . '</td></tr>
++		<tr><th>' . __('Overdue') . '</th><td class="number">' . locale_number_format($OverdueTotal, $DecimalPlaces) . ' ' . $Customer['currcode'] . '</td></tr>
++		<tr><th>' . __('Last reminder sent') . '</th><td>' . ($LastStage > 0 ? __('Stage') . ' ' . $LastStage . ' ' . ConvertSQLDate(substr($LastStageDate, 0, 10)) : __('None')) . '</td></tr>
++		<tr><th>' . __('Next review due') . '</th><td>' . (is_null($Customer['nextreviewdate']) ? __('Not set') : ConvertSQLDate($Customer['nextreviewdate'])) . ($ReviewDue ? ' <b>' . __('Review due') . '</b>' : '') . '</td></tr>
++		<tr><th>' . __('Exempt from interest') . '</th><td>' . ($Customer['exemptinterest'] ? __('Yes') : __('No')) . '</td></tr>
++		<tr><th>' . __('Exempt from late fees') . '</th><td>' . ($Customer['exemptfees'] ? __('Yes') : __('No')) . '</td></tr>
++	</table><br />';
++
++if ($CanChange) {
++
++	$PostTo = htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8');
++
++	/* the hold reasons by what they do, for the selection lists */
++	$ReasonOptions = array(0 => '', 1 => '', 2 => '');
++	$Result = DB_query("SELECT reasoncode, reasondescription, dissallowinvoices FROM holdreasons ORDER BY reasoncode");
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Class = ($MyRow['dissallowinvoices'] == 1 ? 1 : ($MyRow['dissallowinvoices'] == 2 ? 2 : 0));
++		$ReasonOptions[$Class] .= '<option value="' . $MyRow['reasoncode'] . '">' . $MyRow['reasondescription'] . '</option>';
++	}
++	$AllReasons = '<option value=""></option><optgroup label="' . __('Normal') . '">' . $ReasonOptions[0] . '</optgroup><optgroup label="' . __('On watch') . '">' . $ReasonOptions[2] . '</optgroup><optgroup label="' . __('On stop') . '">' . $ReasonOptions[1] . '</optgroup>';
++
++	echo '<form method="post" action="' . $PostTo . '">
++			<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++			<input type="hidden" name="DebtorNo" value="' . $DebtorNo . '" />
++			<fieldset>
++				<legend>' . __('Record a credit review') . '</legend>
++				<field>
++					<label for="Outcome">' . __('Outcome') . ':</label>
++					<select name="Outcome" required="required">
++						<option value="CONFIRMED">' . __('Limit confirmed') . '</option>
++						<option value="RAISED">' . __('Limit raised') . '</option>
++						<option value="REDUCED">' . __('Limit reduced') . '</option>
++						<option value="WATCH">' . __('Put on watch') . '</option>
++						<option value="STOP">' . __('Put on stop') . '</option>
++						<option value="NORMAL">' . __('Taken off watch or stop') . '</option>
++					</select>
++				</field>
++				<field>
++					<label for="NewLimit">' . __('New credit limit (for raised or reduced)') . ':</label>
++					<input type="text" class="number" name="NewLimit" size="14" maxlength="14" value="' . locale_number_format($Customer['creditlimit'], $DecimalPlaces) . '" />
++				</field>
++				<field>
++					<label for="ReasonCode">' . __('Credit status reason (for watch, stop or normal)') . ':</label>
++					<select name="ReasonCode">' . $AllReasons . '</select>
++				</field>
++				<field>
++					<label for="NextReviewDate">' . __('Next review date') . ':</label>
++					<input type="text" class="date" name="NextReviewDate" size="12" maxlength="10" required="required" value="' . date($_SESSION['DefaultDateFormat'], mktime(0, 0, 0, date('n') + $_SESSION['CreditReviewMonths'], date('j'), date('Y'))) . '" />
++				</field>
++				<field>
++					<label for="Notes">' . __('Notes') . ':</label>
++					<textarea name="Notes" rows="3" cols="60" required="required"></textarea>
++				</field>
++			</fieldset>
++			<div class="centre"><input type="submit" name="RecordReview" value="' . __('Record Review') . '" /></div>
++		</form>';
++
++	echo '<form method="post" action="' . $PostTo . '">
++			<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++			<input type="hidden" name="DebtorNo" value="' . $DebtorNo . '" />
++			<fieldset>
++				<legend>' . __('Change credit status') . '</legend>
++				<field>
++					<label for="NewStatus">' . __('New status') . ':</label>
++					<select name="NewStatus" required="required">
++						<option value="NORMAL">' . __('Normal') . '</option>
++						<option value="WATCH">' . __('On watch') . '</option>
++						<option value="STOP">' . __('On stop') . '</option>
++					</select>
++				</field>
++				<field>
++					<label for="StatusReason">' . __('Reason') . ':</label>
++					<select name="StatusReason" required="required">' . $AllReasons . '</select>
++				</field>
++				<field>
++					<label for="StatusNotes">' . __('Notes') . ':</label>
++					<textarea name="StatusNotes" rows="2" cols="60" required="required"></textarea>
++				</field>
++			</fieldset>
++			<div class="centre"><input type="submit" name="ChangeStatus" value="' . __('Change Status') . '" /></div>
++		</form>';
++
++	echo '<form method="post" action="' . $PostTo . '">
++			<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++			<input type="hidden" name="DebtorNo" value="' . $DebtorNo . '" />
++			<fieldset>
++				<legend>' . __('Exemptions from interest and late fees') . '</legend>
++				<field>
++					<label for="ExemptInterest">' . __('Exempt from interest') . ':</label>
++					<input type="checkbox" name="ExemptInterest"' . ($Customer['exemptinterest'] ? ' checked="checked"' : '') . ' />
++				</field>
++				<field>
++					<label for="ExemptFees">' . __('Exempt from late fees') . ':</label>
++					<input type="checkbox" name="ExemptFees"' . ($Customer['exemptfees'] ? ' checked="checked"' : '') . ' />
++				</field>
++				<field>
++					<label for="ExemptNotes">' . __('Reason for a change') . ':</label>
++					<input type="text" name="ExemptNotes" size="60" maxlength="200" />
++				</field>
++			</fieldset>
++			<div class="centre"><input type="submit" name="SaveExemptions" value="' . __('Save Exemptions') . '" /></div>
++		</form>';
++
++	/* open invoices and charges that can be marked as disputed */
++	$Result = DB_query("SELECT debtortrans.id, debtortrans.type, systypes.typename, debtortrans.transno, debtortrans.trandate, debtortrans.balance, debtortrans.disputed
++						FROM debtortrans
++						INNER JOIN systypes ON debtortrans.type = systypes.typeid
++						WHERE debtortrans.debtorno = '" . $DebtorNo . "'
++							AND debtortrans.type IN (10, 60)
++							AND debtortrans.settled = 0
++						ORDER BY debtortrans.trandate");
++	if (DB_num_rows($Result) > 0) {
++		echo '<form method="post" action="' . $PostTo . '">
++				<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++				<input type="hidden" name="DebtorNo" value="' . $DebtorNo . '" />
++				<table class="selection">
++					<caption>' . __('Disputed invoices - not chased and not charged interest until the dispute is settled') . '</caption>
++					<tr><th>' . __('Type') . '</th><th>' . __('Number') . '</th><th>' . __('Date') . '</th><th>' . __('Balance') . '</th><th>' . __('Disputed') . '</th></tr>';
++		while ($MyRow = DB_fetch_array($Result)) {
++			echo '<tr class="striped_row">
++					<td>' . $MyRow['typename'] . '</td>
++					<td class="number">' . $MyRow['transno'] . '</td>
++					<td>' . ConvertSQLDate($MyRow['trandate']) . '</td>
++					<td class="number">' . locale_number_format($MyRow['balance'], $DecimalPlaces) . '</td>
++					<td><input type="checkbox" name="Disputed_' . $MyRow['id'] . '"' . ($MyRow['disputed'] ? ' checked="checked"' : '') . ' /></td>
++				</tr>';
++		}
++		echo '</table>
++				<fieldset>
++					<field>
++						<label for="DisputeNotes">' . __('Reason for a change') . ':</label>
++						<input type="text" name="DisputeNotes" size="60" maxlength="200" />
++					</field>
++				</fieldset>
++				<div class="centre"><input type="submit" name="SaveDisputes" value="' . __('Save Disputes') . '" /></div>
++			</form>';
++	}
++
++	echo '<form method="post" action="' . $PostTo . '">
++			<input type="hidden" name="FormID" value="' . $_SESSION['FormID'] . '" />
++			<input type="hidden" name="DebtorNo" value="' . $DebtorNo . '" />
++			<fieldset>
++				<legend>' . __('Add a note to the history (for example a debt passed to a collection agency or legal action)') . '</legend>
++				<field>
++					<label for="HistoryNote">' . __('Note') . ':</label>
++					<input type="text" name="HistoryNote" size="80" maxlength="500" />
++				</field>
++			</fieldset>
++			<div class="centre"><input type="submit" name="AddNote" value="' . __('Add Note') . '" /></div>
++		</form>';
++} else {
++	prnMsg(__('You can see the credit control details of this customer but only credit control can change them'), 'info');
++}
++
++/* the history - reviews, stop and watch, limits, reminders, charges, waivers and write-offs. It is never changed or deleted. */
++$Result = DB_query("SELECT eventdate, userid, eventtype, detail, amount, currcode
++					FROM creditcontrollog
++					WHERE debtorno = '" . $DebtorNo . "'
++					ORDER BY eventdate DESC, id DESC");
++echo '<table class="selection">
++		<caption>' . __('Credit control history') . '</caption>
++		<tr><th>' . __('Date') . '</th><th>' . __('By') . '</th><th>' . __('Event') . '</th><th>' . __('Detail') . '</th><th>' . __('Amount') . '</th></tr>';
++while ($MyRow = DB_fetch_array($Result)) {
++	echo '<tr class="striped_row">
++			<td>' . ConvertSQLDateTime($MyRow['eventdate']) . '</td>
++			<td>' . $MyRow['userid'] . '</td>
++			<td>' . $MyRow['eventtype'] . '</td>
++			<td>' . $MyRow['detail'] . '</td>
++			<td class="number">' . ($MyRow['amount'] != 0 ? locale_number_format($MyRow['amount'], $DecimalPlaces) . ' ' . $MyRow['currcode'] : '') . '</td>
++		</tr>';
++}
++echo '</table>';
++
++$Result = DB_query("SELECT reviewdate, userid, outcome, oldlimit, newlimit, notes, nextreviewdate
++					FROM creditreviews
++					WHERE debtorno = '" . $DebtorNo . "'
++					ORDER BY reviewdate DESC, id DESC");
++echo '<br /><table class="selection">
++		<caption>' . __('Credit reviews') . '</caption>
++		<tr><th>' . __('Date') . '</th><th>' . __('By') . '</th><th>' . __('Outcome') . '</th><th>' . __('Old limit') . '</th><th>' . __('New limit') . '</th><th>' . __('Next review') . '</th><th>' . __('Notes') . '</th></tr>';
++while ($MyRow = DB_fetch_array($Result)) {
++	echo '<tr class="striped_row">
++			<td>' . ConvertSQLDate($MyRow['reviewdate']) . '</td>
++			<td>' . $MyRow['userid'] . '</td>
++			<td>' . $MyRow['outcome'] . '</td>
++			<td class="number">' . locale_number_format($MyRow['oldlimit'], $DecimalPlaces) . '</td>
++			<td class="number">' . locale_number_format($MyRow['newlimit'], $DecimalPlaces) . '</td>
++			<td>' . ConvertSQLDate($MyRow['nextreviewdate']) . '</td>
++			<td>' . $MyRow['notes'] . '</td>
++		</tr>';
++}
++echo '</table>';
++
++echo '<br /><div class="centre"><a href="' . $RootPath . '/SelectCustomer.php?Select=' . urlencode($DebtorNo) . '">' . __('Back to the customer') . '</a></div>';
++
++include('includes/footer.php');
+diff --git a/Customers.php b/Customers.php
+index 7f2a635..4dd45dd 100644
+--- a/Customers.php
++++ b/Customers.php
+@@ -20,6 +20,7 @@ $BookMark = 'NewCustomer';
+ include('includes/header.php');
+ 
+ include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
+ include('includes/CountriesArray.php');
+ 
+ echo '<p class="page_title_text">
+@@ -131,6 +132,22 @@ if (isset($_POST['submit'])) {
+ 
+ 		$SQL_ClientSince = FormatDateForSQL($_POST['ClientSince']);
+ 
++		/* Only credit control changes the credit status and the credit limit of a customer, everyone else keeps what is there. A new customer made by someone else starts normal with the default credit limit. */
++		$CreditLimitToSave = filter_number_format($_POST['CreditLimit']);
++		$OldCreditDetails = false;
++		if (!isset($_POST['New'])) {
++			$OldCreditDetails = GetCreditStatus($_POST['DebtorNo']);
++		}
++		if (!UserIsCreditController()) {
++			if ($OldCreditDetails !== false) {
++				$_POST['HoldReason'] = $OldCreditDetails['holdreason'];
++				$CreditLimitToSave = $OldCreditDetails['creditlimit'];
++			} else {
++				$_POST['HoldReason'] = 0;
++				$CreditLimitToSave = $_SESSION['DefaultCreditLimit'];
++			}
++		}
++
+ 		if (!isset($_POST['New'])) {
+ 
+ 			$SQL = "SELECT count(id)
+@@ -154,7 +171,7 @@ if (isset($_POST['submit'])) {
+ 												discount='" . filter_number_format($_POST['Discount'])/100 . "',
+ 												discountcode='" . $_POST['DiscountCode'] . "',
+ 												pymtdiscount='" . filter_number_format($_POST['PymtDiscount'])/100 . "',
+-												creditlimit='" . filter_number_format($_POST['CreditLimit']) . "',
++												creditlimit='" . $CreditLimitToSave . "',
+ 												salestype = '" . $_POST['SalesType'] . "',
+ 												invaddrbranch='" . $_POST['AddrInvBranch'] . "',
+ 												taxref='" . $_POST['TaxRef'] . "',
+@@ -184,7 +201,7 @@ if (isset($_POST['submit'])) {
+ 												discount='" . filter_number_format($_POST['Discount'])/100 . "',
+ 												discountcode='" . $_POST['DiscountCode'] . "',
+ 												pymtdiscount='" . filter_number_format($_POST['PymtDiscount'])/100 . "',
+-												creditlimit='" . filter_number_format($_POST['CreditLimit']) . "',
++												creditlimit='" . $CreditLimitToSave . "',
+ 												salestype = '" . $_POST['SalesType'] . "',
+ 												invaddrbranch='" . $_POST['AddrInvBranch'] . "',
+ 												taxref='" . $_POST['TaxRef'] . "',
+@@ -200,6 +217,16 @@ if (isset($_POST['submit'])) {
+ 
+ 			$ErrMsg = __('The customer could not be updated because');
+ 			$Result = DB_query($SQL, $ErrMsg);
++			/* credit control history: a change of the limit or the credit status made here is recorded like one made in the credit review */
++			if ($OldCreditDetails !== false) {
++				if (abs($OldCreditDetails['creditlimit'] - $CreditLimitToSave) > 0.0001) {
++					CreditControlLog($_POST['DebtorNo'], 'LIMIT', __('Credit limit changed in customer maintenance from') . ' ' . $OldCreditDetails['creditlimit'] . ' ' . __('to') . ' ' . $CreditLimitToSave, $CreditLimitToSave, $OldCreditDetails['currcode']);
++				}
++				if ($OldCreditDetails['holdreason'] != $_POST['HoldReason']) {
++					$NewCreditDetails = GetCreditStatus($_POST['DebtorNo']);
++					CreditControlLog($_POST['DebtorNo'], 'STATUS', __('Credit status changed in customer maintenance from') . ' ' . $OldCreditDetails['reasondescription'] . ' (' . CreditStatusText($OldCreditDetails['status']) . ') ' . __('to') . ' ' . $NewCreditDetails['reasondescription'] . ' (' . CreditStatusText($NewCreditDetails['status']) . ')');
++				}
++			}
+ 			prnMsg( __('Customer updated'),'success');
+ 			echo '<br />';
+ 
+@@ -235,7 +262,8 @@ if (isset($_POST['submit'])) {
+ 							taxref,
+ 							customerpoline,
+ 							typeid,
+-							language_id)
++							language_id,
++							nextreviewdate)
+ 				VALUES ('" . $_POST['DebtorNo'] ."',
+ 						'" . $_POST['CustName'] ."',
+ 						'" . $_POST['Address1'] ."',
+@@ -251,13 +279,14 @@ if (isset($_POST['submit'])) {
+ 						'" . filter_number_format($_POST['Discount'])/100 . "',
+ 						'" . $_POST['DiscountCode'] . "',
+ 						'" . filter_number_format($_POST['PymtDiscount'])/100 . "',
+-						'" . filter_number_format($_POST['CreditLimit']) . "',
++						'" . $CreditLimitToSave . "',
+ 						'" . $_POST['SalesType'] . "',
+ 						'" . $_POST['AddrInvBranch'] . "',
+ 						'" . $_POST['TaxRef'] . "',
+ 						'" . $_POST['CustomerPOLine'] . "',
+ 						'" . $_POST['typeid'] . "',
+-						'" . $_POST['LanguageID'] . "')";
++						'" . $_POST['LanguageID'] . "',
++						'" . CreditNextReviewDate() . "')";
+ 
+ 			$ErrMsg = __('This customer could not be added because');
+ 			$Result = DB_query($SQL, $ErrMsg);
+@@ -336,6 +365,16 @@ if (isset($_POST['submit'])) {
+ 		}
+ 
+ 	}
++	if ($CancelDelete == 0) {
++		/* the credit control history is kept for the auditors */
++		$SQL = "SELECT COUNT(*) FROM creditcontrollog WHERE debtorno='" . $_POST['DebtorNo'] . "'";
++		$Result = DB_query($SQL);
++		$MyRow = DB_fetch_row($Result);
++		if ($MyRow[0] > 0) {
++			$CancelDelete = 1;
++			prnMsg(__('Cannot delete this customer because there is a credit control history for it'),'warn');
++		}
++	}
+ 	if ($CancelDelete==0) { //ie not cancelled the delete as a result of above tests
+ 		$SQL="DELETE FROM custbranch WHERE debtorno='" . $_POST['DebtorNo'] . "'";
+ 		$Result = DB_query($SQL, $ErrMsg);
+@@ -931,7 +970,7 @@ if (!isset($DebtorNo)) {
+ 			</field>
+ 			<field>
+ 				<label for="CreditLimit">' . __('Credit Limit') . ':</label>
+-				<input ' . (in_array('CreditLimit',$Errors) ?  'class="inputerror"' : '' ) .' type="text" class="integer" name="CreditLimit" required="required" size="16" maxlength="14" value="' . $_POST['CreditLimit'] . '" />
++				<input ' . (in_array('CreditLimit',$Errors) ?  'class="inputerror"' : '' ) .' type="text" class="integer" name="CreditLimit" required="required" size="16" maxlength="14" value="' . $_POST['CreditLimit'] . '"' . (UserIsCreditController() ? '' : ' readonly="readonly"') . ' />
+ 			</field>
+ 			<field>
+ 				<label for="TaxRef">' . __('Tax Reference') . ':</label>
+@@ -974,7 +1013,7 @@ if (!isset($DebtorNo)) {
+ 		$Result = DB_query("SELECT reasoncode, reasondescription FROM holdreasons");
+ 		echo '<field>
+ 				<label for="HoldReason">' . __('Credit Status') . ':</label>
+-				<select name="HoldReason" required="required">';
++				<select name="HoldReason" required="required"' . (UserIsCreditController() ? '' : ' disabled="disabled"') . '>';
+ 		while ($MyRow = DB_fetch_array($Result)) {
+ 			if ($_POST['HoldReason']==$MyRow['reasoncode']){
+ 				echo '<option selected="selected" value="'. $MyRow['reasoncode'] . '">' . $MyRow['reasondescription'] . '</option>';
+diff --git a/DeliveryDetails.php b/DeliveryDetails.php
+index 7dd62ed..4cb7e5c 100644
+--- a/DeliveryDetails.php
++++ b/DeliveryDetails.php
+@@ -22,6 +22,7 @@ if (isset($_POST['ConfirmedDate'])){$_POST['ConfirmedDate'] = ConvertSQLDate($_P
+ 
+ include('includes/FreightCalculation.php');
+ include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
+ include('includes/StockFunctions.php');
+ include('includes/CountriesArray.php');
+ 
+@@ -325,6 +326,30 @@ UNTIL ONLINE CREDIT CARD PROCESSING IS PERFORMED ASSUME OK TO PROCESS
+ 	} #end if else freight charge not altered
+ } #end if process order
+ 
++/* Credit control: no new order for a customer on stop, an order that takes the customer over their credit limit is held for credit control, an order for a customer on watch is flagged for credit control to see. This is the one place every order entered by the sales office or by the customer through the web shop is saved. */
++$CreditFlag = ORDER_CREDIT_NONE;
++if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1) {
++	$CreditOutcome = CreditCheckForNewOrder($_SESSION['Items'.$identifier]->DebtorNo,
++											$_SESSION['Items'.$identifier]->total,
++											$_SESSION['ExistingOrder'.$identifier],
++											$_SESSION['Items'.$identifier]->Quotation);
++	if ($CreditOutcome['message'] != '') {
++		prnMsg($CreditOutcome['message'], $CreditOutcome['type']);
++	}
++	if ($CreditOutcome['refuse']) {
++		$OK_to_PROCESS = 0;
++	}
++	$CreditFlag = $CreditOutcome['flag'];
++	if ($_SESSION['ExistingOrder'.$identifier] != 0) {
++		/* an order that is already held or released stays that way until credit control changes it */
++		$Result = DB_query("SELECT creditflag FROM salesorders WHERE orderno='" . $_SESSION['ExistingOrder'.$identifier] . "'");
++		$MyRow = DB_fetch_row($Result);
++		if (in_array($MyRow[0], array(ORDER_CREDIT_HELD, ORDER_CREDIT_RELEASED))) {
++			$CreditFlag = $MyRow[0];
++		}
++	}
++}
++
+ if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1 AND $_SESSION['ExistingOrder'.$identifier]==0) {
+ 
+ /* finally write the order header to the database and then the order line details */
+@@ -362,7 +387,8 @@ if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1 AND $_SESSION['ExistingOrder'.
+ 								quotedate,
+ 								confirmeddate,
+ 								quotation,
+-								deliverblind)
++								deliverblind,
++								creditflag)
+ 							VALUES (
+ 								'". $OrderNo . "',
+ 								'" . $_SESSION['Items'.$identifier]->DebtorNo . "',
+@@ -388,7 +414,8 @@ if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1 AND $_SESSION['ExistingOrder'.
+ 								'" . $QuotDate . "',
+ 								'" . $ConfDate . "',
+ 								'" . $_SESSION['Items'.$identifier]->Quotation . "',
+-								'" . $_SESSION['Items'.$identifier]->DeliverBlind ."'
++								'" . $_SESSION['Items'.$identifier]->DeliverBlind ."',
++								'" . $CreditFlag . "'
+ 								)";
+ 
+ 	$ErrMsg = __('The order cannot be added because');
+@@ -715,7 +742,8 @@ if (isset($OK_to_PROCESS) AND $OK_to_PROCESS == 1 AND $_SESSION['ExistingOrder'.
+ 										fromstkloc = '" . $_SESSION['Items'.$identifier]->Location ."',
+ 										printedpackingslip = '" . $_POST['ReprintPackingSlip'] . "',
+ 										quotation = '" . $_SESSION['Items'.$identifier]->Quotation . "',
+-										deliverblind = '" . $_SESSION['Items'.$identifier]->DeliverBlind . "'
++										deliverblind = '" . $_SESSION['Items'.$identifier]->DeliverBlind . "',
++										creditflag = '" . $CreditFlag . "'
+ 						WHERE salesorders.orderno='" . $_SESSION['ExistingOrder'.$identifier] ."'";
+ 
+ 	$ErrMsg = __('The order cannot be updated because');
+diff --git a/EDIProcessOrders.php b/EDIProcessOrders.php
+index 1ae8d35..bcee5b2 100644
+--- a/EDIProcessOrders.php
++++ b/EDIProcessOrders.php
+@@ -11,6 +11,7 @@ $BookMark = '';
+ include('includes/header.php');
+ 
+ include('includes/SQL_CommonFunctions.php'); // need for EDITransNo
++include('includes/CreditControlFunctions.php');
+ require_once('includes/MiscFunctions.php');
+ 
+ /*The logic outline is this ....
+@@ -892,7 +893,24 @@ echo '<pre>';
+ print_r($Order);
+ echo '</pre>';
+ */
+-				if ($CreateOrder = true) {
++				/* Credit control: no order is created from an EDI message for a customer on stop, an order that takes the customer over their credit limit is created held for credit control, an order for a customer on watch is flagged. */
++				$CreditRefused = false;
++				$CreditFlag = ORDER_CREDIT_NONE;
++				if ($Order->DebtorNo != '') {
++					$EDIOrderValue = 0;
++					foreach ($Order->LineItems as $EDILine) {
++						$EDIOrderValue += $EDILine->Quantity * $EDILine->Price * (1 - $EDILine->Disc);
++					}
++					$CreditOutcome = CreditCheckForNewOrder($Order->DebtorNo, $EDIOrderValue, 0, $Order->Quotation);
++					$CreditRefused = $CreditOutcome['refuse'];
++					$CreditFlag = $CreditOutcome['flag'];
++					if ($CreditOutcome['message'] != '') {
++						$EmailText .= "\n" . $CreditOutcome['message'] . ($CreditRefused ? ' ' . __('The order was not created') : '') . "\n";
++						CreditControlLog($Order->DebtorNo, $CreditRefused ? 'ORDERBLOCK' : 'ORDERFLAG', __('EDI order') . ' ' . $Order->CustRef . ': ' . $CreditOutcome['message']);
++					}
++				}
++
++				if ($CreateOrder = true and !$CreditRefused) {
+ 					//	UpdateOrder($Order);
+ 					DB_Txn_Begin();
+ 				//$Order->OrdDate = date("Y-m-d");
+@@ -933,7 +951,8 @@ echo '</pre>';
+ 								quotedate,
+ 								confirmeddate,
+ 								quotation,
+-								deliverblind
++								deliverblind,
++								creditflag
+ 								)
+ 							VALUES (
+ 								'". $OrderNo . "',
+@@ -960,7 +979,8 @@ echo '</pre>';
+ 								'" . $QuotDate . "',
+ 								'" . $ConfDate . "',
+ 								'" . $Order->Quotation . "',
+-								'" . $Order->DeliverBlind ."'
++								'" . $Order->DeliverBlind ."',
++								'" . $CreditFlag . "'
+ 								)";
+ 						$ErrMsg = __('The order cannot be created because');
+ 						$InsertQryResult = DB_query($HeaderSQL, $ErrMsg);
+diff --git a/RecurringSalesOrdersProcess.php b/RecurringSalesOrdersProcess.php
+index 09aeeca..c1b0942 100644
+--- a/RecurringSalesOrdersProcess.php
++++ b/RecurringSalesOrdersProcess.php
+@@ -30,6 +30,7 @@ $BookMark = "RecurringSalesOrders";
+ include('includes/header.php');
+ 
+ include('includes/SQL_CommonFunctions.php');
++include('includes/CreditControlFunctions.php');
+ include('includes/GetSalesTransGLCodes.php');
+ 
+ $SQL = "SELECT recurringsalesorders.recurrorderno,
+@@ -92,6 +93,19 @@ while ($RecurrOrderRow = DB_fetch_array($RecurrOrdersDueResult)){
+ 	$EmailText ='';
+ 	echo '<br />' . __('Recurring order') . ' ' . $RecurrOrderRow['recurrorderno'] . ' ' . __('for') . ' ' . $RecurrOrderRow['debtorno'] . ' - ' . $RecurrOrderRow['branchcode'] . ' ' . __('is being processed');
+ 
++	/* Credit control: a customer on stop gets no order from their standing order. The template is left alone, so the order is created by the first run after credit control takes the customer off stop. An order that takes the customer over their credit limit is created held for credit control, an order for a customer on watch is flagged. */
++	$Result = DB_query("SELECT COALESCE(SUM(unitprice * quantity * (1 - discountpercent)), 0)
++						FROM recurrsalesorderdetails
++						WHERE recurrorderno = '" . $RecurrOrderRow['recurrorderno'] . "'");
++	$TemplateValue = DB_fetch_row($Result);
++	$CreditOutcome = CreditCheckForNewOrder($RecurrOrderRow['debtorno'], $TemplateValue[0]);
++	if ($CreditOutcome['refuse']) {
++		prnMsg(__('Recurring order') . ' ' . $RecurrOrderRow['recurrorderno'] . ': ' . $CreditOutcome['message'] . ' ' . __('No order was created'), 'warn');
++		CreditControlLog($RecurrOrderRow['debtorno'], 'ORDERBLOCK', __('Recurring order') . ' ' . $RecurrOrderRow['recurrorderno'] . ' ' . __('not created because the customer is on stop'));
++		continue;
++	}
++	$CreditFlag = $CreditOutcome['flag'];
++
+ 	DB_Txn_Begin();
+ 
+ 	/*the last recurrence was the date of the last time the order recurred
+@@ -123,7 +137,8 @@ while ($RecurrOrderRow = DB_fetch_array($RecurrOrdersDueResult)){
+ 							contactemail,
+ 							freightcost,
+ 							fromstkloc,
+-							deliverydate )
++							deliverydate,
++							creditflag )
+ 						VALUES (
+ 							'" . $OrderNo . "',
+ 							'" . $RecurrOrderRow['debtorno'] . "',
+@@ -144,7 +159,8 @@ while ($RecurrOrderRow = DB_fetch_array($RecurrOrdersDueResult)){
+ 							'" . $RecurrOrderRow['contactemail'] . "',
+ 							'" . $RecurrOrderRow['freightcost'] ."',
+ 							'" . $RecurrOrderRow['fromstkloc'] ."',
+-							'" . $DelDate . "')";
++							'" . $DelDate . "',
++							'" . $CreditFlag . "')";
+ 
+ 	$ErrMsg = __('The order cannot be added because');
+ 	$InsertQryResult = DB_query($HeaderSQL, $ErrMsg,true);
+@@ -204,7 +220,11 @@ while ($RecurrOrderRow = DB_fetch_array($RecurrOrdersDueResult)){
+ 
+ 	prnMsg(__('Recurring order was created for') . ' ' . $RecurrOrderRow['name'] . ' ' . __('with order Number') . ' ' . $OrderNo, 'success');
+ 
+-	if ($RecurrOrderRow['autoinvoice']==1){
++	if ($CreditFlag != ORDER_CREDIT_NONE) {
++		CreditControlLog($RecurrOrderRow['debtorno'], 'ORDERFLAG', __('Recurring order') . ' ' . $OrderNo . ': ' . $CreditOutcome['message']);
++	}
++
++	if ($RecurrOrderRow['autoinvoice']==1 and $CreditFlag != ORDER_CREDIT_HELD){
+ 		/*Only dummy item orders can have autoinvoice =1
+ 		so no need to worry about assemblies/kitsets/controlled items*/
+ 
+diff --git a/api/includes/api_errorcodes.php b/api/includes/api_errorcodes.php
+index 72f5c31..7369871 100644
+--- a/api/includes/api_errorcodes.php
++++ b/api/includes/api_errorcodes.php
+@@ -186,6 +186,7 @@ define('LocationCodeDoesntExist',1170);
+ define('IncorrectLocationNameLength',1171);
+ define('TaxProvinceIdNotSetup',1172);
+ define('InvalidControlled',1173);
++define('CustomerOnStop',1174);
+ 
+ 
+ /* Array of Descriptions of errors */
+@@ -363,3 +364,4 @@ $ErrorDescription['1170'] = __('Location Code Does not Exist');
+ $ErrorDescription['1171'] = __('Incorrect Location Name Length');
+ $ErrorDescription['1172'] = __('Tax Province ID Not Setup');
+ $ErrorDescription['1173'] = __('Invalid Controlled');
++$ErrorDescription['1174'] = __('The customer is on stop, no new orders can be accepted');
+diff --git a/api/includes/api_php.php b/api/includes/api_php.php
+index 909174b..b4a8237 100644
+--- a/api/includes/api_php.php
++++ b/api/includes/api_php.php
+@@ -80,6 +80,7 @@ include(__DIR__ . '/api_salesareas.php');
+ include(__DIR__ . '/api_salesman.php');
+ include(__DIR__ . '/api_taxgroups.php');
+ include(__DIR__ . '/api_holdreasons.php');
++include(__DIR__ . '/../../includes/CreditControlFunctions.php');
+ include(__DIR__ . '/api_paymentterms.php');
+ include(__DIR__ . '/api_customertypes.php');
+ include(__DIR__ . '/api_stock.php');
+diff --git a/api/includes/api_salesorders.php b/api/includes/api_salesorders.php
+index 38014d7..9e71b6f 100644
+--- a/api/includes/api_salesorders.php
++++ b/api/includes/api_salesorders.php
+@@ -277,6 +277,15 @@ function InsertSalesOrderHeader($OrderHeader, $user, $password) {
+ 	}
+ 	$Errors=VerifyDebtorExists($OrderHeader['debtorno'], sizeof($Errors), $Errors);
+ 	$Errors=VerifyBranchNoExists($OrderHeader['debtorno'],$OrderHeader['branchcode'], sizeof($Errors), $Errors);
++	/* credit control: no new order for a customer on stop, by any route. The order lines are not known yet, so the over limit hold is applied when the order is invoiced (see InvoiceSalesOrder) */
++	if (sizeof($Errors)==0) {
++		$CreditOutcome = CreditCheckForNewOrder($OrderHeader['debtorno'], 0, 0, isset($OrderHeader['quotation']) ? $OrderHeader['quotation'] : 0);
++		if ($CreditOutcome['refuse']) {
++			$Errors[] = CustomerOnStop;
++			return $Errors;
++		}
++		$OrderHeader['creditflag'] = $CreditOutcome['flag'];
++	}
+ 	if (isset($OrderHeader['customerref'])){
+ 		$Errors=VerifyCustomerRef($OrderHeader['customerref'], sizeof($Errors), $Errors);
+ 	}
+@@ -795,6 +804,11 @@ function InvoiceSalesOrder($OrderNo, $User, $Password) {
+ 	if (sizeof($Errors)!=0) {
+ 		return $Errors;
+ 	}
++	/* credit control: no invoice for an order held for credit control or for a customer on stop unless credit control released the order */
++	if (OrderCreditBlock($OrderNo) != '') {
++		$Errors[] = CustomerOnStop;
++		return $Errors;
++	}
+ 	/*Does not deal with assembly items or serialise/lot track items - for use by POS */
+ 	/*Get Company Defaults */
+ 	$ReadCoyResult = api_DB_query("SELECT debtorsact,
+diff --git a/includes/CreditControlFunctions.php b/includes/CreditControlFunctions.php
+new file mode 100644
+index 0000000..fd598a1
+--- /dev/null
++++ b/includes/CreditControlFunctions.php
+@@ -0,0 +1,528 @@
++<?php
++
++/* Shared functions for credit control: customer credit status, the credit control history log, overdue item selection, over-limit tests and the reminder letter stages.
++
++The credit status (normal, watch, on stop) of a customer is not stored separately. It is the existing hold reason of the customer - debtorsmaster.holdreason - and holdreasons.dissallowinvoices: 1 means on stop and 2 means on watch, anything else is normal. Order entry, counter sales, customer inquiries and statements already read it that way, so a change made here is seen everywhere.
++
++Security tokens: 21 = credit control (put on or off stop and watch, change limits, reviews, reminder runs, charges, write-offs), 22 = credit control approval (Finance Director approves write-offs above the limit).
++*/
++
++define('CREDIT_STATUS_NORMAL', 0);
++define('CREDIT_STATUS_WATCH', 1);
++define('CREDIT_STATUS_STOP', 2);
++
++/* salesorders.creditflag values */
++define('ORDER_CREDIT_NONE', 0);
++define('ORDER_CREDIT_HELD', 1); // over credit limit or customer on stop - not to be dispatched or invoiced until credit control releases it
++define('ORDER_CREDIT_WATCH', 2); // taken for a customer on watch - for information, can be dispatched
++define('ORDER_CREDIT_RELEASED', 3); // released by credit control
++
++function CreditStatusText($Status) {
++	switch ($Status) {
++		case CREDIT_STATUS_STOP:
++			return __('On stop');
++		case CREDIT_STATUS_WATCH:
++			return __('On watch');
++		default:
++			return __('Normal');
++	}
++}
++
++/* true if the logged in user has the credit control token */
++function UserIsCreditController() {
++	return (isset($_SESSION['AllowedPageSecurityTokens']) and in_array(21, $_SESSION['AllowedPageSecurityTokens']));
++}
++
++/* true if the logged in user may approve write-offs above the limit */
++function UserIsCreditApprover() {
++	return (isset($_SESSION['AllowedPageSecurityTokens']) and in_array(22, $_SESSION['AllowedPageSecurityTokens']));
++}
++
++/* Sales reps (SalesmanLogin) see only their own customers, customer logins only themselves */
++function UserCanSeeCustomerCredit($DebtorNo) {
++	global $CustomerLogin;
++	if (isset($CustomerLogin) and $CustomerLogin == 1) {
++		return ($_SESSION['CustomerID'] == $DebtorNo);
++	}
++	if ($_SESSION['SalesmanLogin'] != '') {
++		$Result = DB_query("SELECT COUNT(*)
++							FROM custbranch
++							WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'
++								AND salesman = '" . DB_escape_string($_SESSION['SalesmanLogin']) . "'");
++		$MyRow = DB_fetch_row($Result);
++		return ($MyRow[0] > 0);
++	}
++	return true;
++}
++
++/* returns the SQL condition limiting debtorsmaster rows to the customers of the logged in sales rep, '' if there is no limit */
++function SalesRepCustomerLimit($Rep = '') {
++	if ($_SESSION['SalesmanLogin'] != '') {
++		$Rep = $_SESSION['SalesmanLogin'];
++	}
++	if ($Rep != '') {
++		return " AND debtorsmaster.debtorno IN (SELECT DISTINCT debtorno FROM custbranch WHERE salesman = '" . DB_escape_string($Rep) . "') ";
++	}
++	return '';
++}
++
++/* The credit status and key credit details of a customer, false if the customer does not exist */
++function GetCreditStatus($DebtorNo) {
++	$Result = DB_query("SELECT debtorsmaster.debtorno,
++								debtorsmaster.name,
++								debtorsmaster.currcode,
++								debtorsmaster.creditlimit,
++								debtorsmaster.holdreason,
++								debtorsmaster.nextreviewdate,
++								debtorsmaster.exemptinterest,
++								debtorsmaster.exemptfees,
++								holdreasons.reasondescription,
++								holdreasons.dissallowinvoices
++						FROM debtorsmaster
++						INNER JOIN holdreasons
++							ON debtorsmaster.holdreason = holdreasons.reasoncode
++						WHERE debtorsmaster.debtorno = '" . DB_escape_string($DebtorNo) . "'");
++	if (DB_num_rows($Result) == 0) {
++		return false;
++	}
++	$MyRow = DB_fetch_array($Result);
++	if ($MyRow['dissallowinvoices'] == 1) {
++		$MyRow['status'] = CREDIT_STATUS_STOP;
++	} elseif ($MyRow['dissallowinvoices'] == 2) {
++		$MyRow['status'] = CREDIT_STATUS_WATCH;
++	} else {
++		$MyRow['status'] = CREDIT_STATUS_NORMAL;
++	}
++	return $MyRow;
++}
++
++/* Appends to the credit control history of a customer. The history is never updated or deleted. */
++function CreditControlLog($DebtorNo, $EventType, $Detail, $Amount = 0, $CurrCode = '', $TransType = 0, $TransNo = 0) {
++	$SQL = "INSERT INTO creditcontrollog (debtorno,
++										eventdate,
++										userid,
++										eventtype,
++										detail,
++										amount,
++										currcode,
++										transtype,
++										transno)
++							VALUES ('" . DB_escape_string($DebtorNo) . "',
++									NOW(),
++									'" . $_SESSION['UserID'] . "',
++									'" . $EventType . "',
++									'" . DB_escape_string($Detail) . "',
++									'" . $Amount . "',
++									'" . $CurrCode . "',
++									'" . $TransType . "',
++									'" . $TransNo . "')";
++	DB_query($SQL, __('The credit control history could not be updated because'), '', true);
++}
++
++/* The date the next review of a customer falls due, a standard period from today (CreditReviewMonths, set by Finance) */
++function CreditNextReviewDate($Months = 0) {
++	if ($Months <= 0) {
++		$Months = $_SESSION['CreditReviewMonths'];
++	}
++	if ($Months <= 0) {
++		$Months = 12;
++	}
++	return date('Y-m-d', mktime(0, 0, 0, date('n') + $Months, date('j'), date('Y')));
++}
++
++/* Puts a customer on stop, on watch or back to normal by setting their hold reason, and records it in the history. $ReasonCode must be a holdreasons code whose dissallowinvoices matches the new status. Returns true if done. */
++function SetCreditStatus($DebtorNo, $NewStatus, $ReasonCode, $Notes) {
++	$Customer = GetCreditStatus($DebtorNo);
++	if ($Customer === false) {
++		return false;
++	}
++	$Result = DB_query("SELECT reasondescription, dissallowinvoices
++						FROM holdreasons
++						WHERE reasoncode = '" . (int) $ReasonCode . "'");
++	if (DB_num_rows($Result) == 0) {
++		return false;
++	}
++	$Reason = DB_fetch_array($Result);
++	if (($NewStatus == CREDIT_STATUS_STOP and $Reason['dissallowinvoices'] != 1)
++		or ($NewStatus == CREDIT_STATUS_WATCH and $Reason['dissallowinvoices'] != 2)
++		or ($NewStatus == CREDIT_STATUS_NORMAL and in_array($Reason['dissallowinvoices'], array(1, 2)))) {
++		return false;
++	}
++	DB_query("UPDATE debtorsmaster
++				SET holdreason = '" . (int) $ReasonCode . "'
++				WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'", __('The credit status of the customer could not be updated because'), '', true);
++	if ($NewStatus == CREDIT_STATUS_STOP) {
++		$EventType = 'STOP';
++	} elseif ($NewStatus == CREDIT_STATUS_WATCH) {
++		$EventType = 'WATCH';
++	} else {
++		$EventType = 'NORMAL';
++	}
++	CreditControlLog($DebtorNo, $EventType, CreditStatusText($Customer['status']) . ' -> ' . CreditStatusText($NewStatus) . ' (' . $Reason['reasondescription'] . '): ' . $Notes);
++	return true;
++}
++
++/* SQL expression for the number of days an item in debtortrans is past its due date. Needs debtortrans and paymentterms in the query. Same rule as the aged debtors report. */
++function OverdueDaysSQL() {
++	return "CASE WHEN paymentterms.daysbeforedue > 0
++				THEN TO_DAYS(CURRENT_DATE) - TO_DAYS(debtortrans.trandate) - paymentterms.daysbeforedue
++				ELSE TO_DAYS(CURRENT_DATE) - TO_DAYS(ADDDATE(LAST_DAY(debtortrans.trandate), paymentterms.dayinfollowingmonth))
++			END";
++}
++
++/* The open invoices and charges of a customer that are overdue by at least $MinDays. $IncludeDisputed false leaves out invoices marked as disputed. Interest and fees are charged on invoices only, never on earlier charges. */
++function GetOverdueItems($DebtorNo, $MinDays = 1, $IncludeDisputed = false, $Types = '10,60') {
++	$SQL = "SELECT debtortrans.id,
++					debtortrans.type,
++					debtortrans.transno,
++					debtortrans.trandate,
++					debtortrans.balance,
++					debtortrans.disputed,
++					systypes.typename,
++					" . OverdueDaysSQL() . " AS daysoverdue
++			FROM debtortrans
++			INNER JOIN systypes
++				ON debtortrans.type = systypes.typeid
++			INNER JOIN debtorsmaster
++				ON debtortrans.debtorno = debtorsmaster.debtorno
++			INNER JOIN paymentterms
++				ON debtorsmaster.paymentterms = paymentterms.termsindicator
++			WHERE debtortrans.debtorno = '" . DB_escape_string($DebtorNo) . "'
++				AND debtortrans.type IN (" . $Types . ")
++				AND debtortrans.settled = 0
++				AND debtortrans.balance > " . CurrencyTolerance($_SESSION['CompanyRecord']['currencydefault']) . "
++				" . ($IncludeDisputed ? '' : 'AND debtortrans.disputed = 0') . "
++			HAVING daysoverdue >= " . (int) $MinDays . "
++			ORDER BY debtortrans.trandate, debtortrans.id";
++	$Result = DB_query($SQL, __('The overdue items of the customer could not be retrieved because'));
++	$Items = array();
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Items[] = $MyRow;
++	}
++	return $Items;
++}
++
++/* The credit limit headroom a new order of $OrderValue (in the customer's currency) would leave: credit limit less the account balance, less the value of the other open orders. $ExistingOrderNo is left out of the open orders when an existing order is being changed. Negative means the order would take the customer over the limit. */
++function CreditHeadroomForOrder($DebtorNo, $OrderValue, $ExistingOrderNo = 0) {
++	$Result = DB_query("SELECT creditlimit FROM debtorsmaster WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'");
++	$MyRow = DB_fetch_row($Result);
++	$Limit = $MyRow[0];
++	$Result = DB_query("SELECT COALESCE(SUM(balance), 0) FROM debtortrans WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'");
++	$MyRow = DB_fetch_row($Result);
++	$Balance = $MyRow[0];
++	$Result = DB_query("SELECT COALESCE(SUM(salesorderdetails.unitprice *
++								(salesorderdetails.quantity - salesorderdetails.qtyinvoiced) *
++								(1 - salesorderdetails.discountpercent)), 0)
++						FROM salesorders
++						INNER JOIN salesorderdetails
++							ON salesorders.orderno = salesorderdetails.orderno
++						WHERE salesorders.debtorno = '" . DB_escape_string($DebtorNo) . "'
++							AND salesorderdetails.completed = 0
++							AND salesorders.quotation = 0
++							AND salesorders.orderno <> '" . (int) $ExistingOrderNo . "'");
++	$MyRow = DB_fetch_row($Result);
++	return $Limit - $Balance - $MyRow[0] - $OrderValue;
++}
++
++/* What to do with an order about to be saved for a customer: returns array('refuse' => bool, 'flag' => salesorders.creditflag to set, 'message' => text for the user, 'type' => prnMsg type). Quotations are not orders and are never refused or held. Credit control themselves are not held by the over limit test. */
++function CreditCheckForNewOrder($DebtorNo, $OrderValue, $ExistingOrderNo = 0, $Quotation = 0) {
++	$Outcome = array('refuse' => false, 'flag' => ORDER_CREDIT_NONE, 'message' => '', 'type' => 'info');
++	if ($Quotation == 1) {
++		return $Outcome;
++	}
++	$Customer = GetCreditStatus($DebtorNo);
++	if ($Customer === false) {
++		return $Outcome;
++	}
++	$Contact = CreditControlContactText();
++	if ($Customer['status'] == CREDIT_STATUS_STOP) {
++		if ($ExistingOrderNo > 0) {
++			/* changing an order taken before the stop is not a new order, but it cannot be dispatched until credit control releases it */
++			$Outcome['flag'] = ORDER_CREDIT_HELD;
++			$Outcome['type'] = 'warn';
++			$Outcome['message'] = __('The account') . ' ' . $Customer['name'] . ' ' . __('is on stop') . ' (' . $Customer['reasondescription'] . '). ' . __('The order is held and cannot be dispatched or invoiced until credit control releases it') . '. ' . $Contact;
++			return $Outcome;
++		}
++		$Outcome['refuse'] = true;
++		$Outcome['type'] = 'error';
++		$Outcome['message'] = __('The account') . ' ' . $Customer['name'] . ' ' . __('is on stop') . ' (' . $Customer['reasondescription'] . '). ' . __('No new orders can be accepted') . '. ' . $Contact;
++		return $Outcome;
++	}
++	if ($_SESSION['CheckCreditLimits'] > 0 and !UserIsCreditController()
++		and CreditHeadroomForOrder($DebtorNo, $OrderValue, $ExistingOrderNo) < 0) {
++		$Outcome['flag'] = ORDER_CREDIT_HELD;
++		$Outcome['type'] = 'warn';
++		$Outcome['message'] = __('This order would take') . ' ' . $Customer['name'] . ' ' . __('over their credit limit') . '. ' . __('It has been accepted but is held for credit control approval and cannot be dispatched or invoiced until it is released') . '. ' . $Contact;
++		return $Outcome;
++	}
++	if ($Customer['status'] == CREDIT_STATUS_WATCH) {
++		$Outcome['flag'] = ORDER_CREDIT_WATCH;
++		$Outcome['type'] = 'warn';
++		$Outcome['message'] = __('The account') . ' ' . $Customer['name'] . ' ' . __('is on watch') . '. ' . __('The order has been accepted and is shown on the credit control list') . '. ' . $Contact;
++	}
++	return $Outcome;
++}
++
++/* Goods on an existing order cannot be dispatched or invoiced while the order is held for credit control, or while the customer is on stop unless credit control has released the order. Returns the reason, or '' if the order can go ahead. */
++function OrderCreditBlock($OrderNo) {
++	$Result = DB_query("SELECT salesorders.creditflag,
++								salesorders.debtorno
++						FROM salesorders
++						WHERE salesorders.orderno = '" . (int) $OrderNo . "'");
++	if (DB_num_rows($Result) == 0) {
++		return '';
++	}
++	$Order = DB_fetch_array($Result);
++	if ($Order['creditflag'] == ORDER_CREDIT_HELD) {
++		return __('This order is held for credit control approval and cannot be dispatched or invoiced until credit control releases it') . '. ' . CreditControlContactText();
++	}
++	if ($Order['creditflag'] != ORDER_CREDIT_RELEASED) {
++		$Customer = GetCreditStatus($Order['debtorno']);
++		if ($Customer !== false and $Customer['status'] == CREDIT_STATUS_STOP) {
++			return __('The account') . ' ' . $Customer['name'] . ' ' . __('is on stop') . ' (' . $Customer['reasondescription'] . '). ' . __('Goods cannot be dispatched or invoiced unless credit control releases this order') . '. ' . CreditControlContactText();
++		}
++	}
++	return '';
++}
++
++/* the text telling people who to contact about credit */
++function CreditControlContactText() {
++	$Email = $_SESSION['CompanyRecord']['email'];
++	if (isset($_SESSION['CreditControlEmail']) and $_SESSION['CreditControlEmail'] != '') {
++		$Email = $_SESSION['CreditControlEmail'];
++	}
++	return __('Please contact credit control') . ($Email != '' ? ' (' . $Email . ')' : '') . '.';
++}
++
++/* The credit control stage letters. Returns array of stage => row, ordered by stage. */
++function GetDunningStages() {
++	$Result = DB_query("SELECT stage, daysoverdue, subject, body FROM dunningstages ORDER BY stage");
++	$Stages = array();
++	while ($MyRow = DB_fetch_array($Result)) {
++		$Stages[$MyRow['stage']] = $MyRow;
++	}
++	return $Stages;
++}
++
++/* The last reminder stage sent to a customer, 0 if none. Also returns the date it was sent through the second element. */
++function LastReminderSent($DebtorNo) {
++	$Result = DB_query("SELECT stage, sentdate
++						FROM dunninghistory
++						WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'
++						ORDER BY sentdate DESC, id DESC
++						LIMIT 1");
++	if (DB_num_rows($Result) == 0) {
++		return array(0, '');
++	}
++	$MyRow = DB_fetch_row($Result);
++	return array($MyRow[0], $MyRow[1]);
++}
++
++/* The e-mail addresses reminders for a customer go to: the contacts flagged to receive statements, else the e-mail of the customer's first branch */
++function GetAccountsEmailAddresses($DebtorNo) {
++	$Addresses = array();
++	$Result = DB_query("SELECT email
++						FROM custcontacts
++						WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'
++							AND statement = 1");
++	while ($MyRow = DB_fetch_row($Result)) {
++		if (IsEmailAddress($MyRow[0])) {
++			$Addresses[$MyRow[0]] = $MyRow[0];
++		}
++	}
++	if (count($Addresses) == 0) {
++		$Result = DB_query("SELECT email
++							FROM custbranch
++							WHERE debtorno = '" . DB_escape_string($DebtorNo) . "'
++							ORDER BY branchcode
++							LIMIT 1");
++		if (DB_num_rows($Result) > 0) {
++			$MyRow = DB_fetch_row($Result);
++			if (IsEmailAddress($MyRow[0])) {
++				$Addresses[$MyRow[0]] = $MyRow[0];
++			}
++		}
++	}
++	return $Addresses;
++}
++
++/* Fills a reminder letter's text from the stage definition */
++function MergeDunningText($Text, $Customer, $Items, $Total) {
++	$Lines = '';
++	foreach ($Items as $Item) {
++		$Lines .= $Item['typename'] . ' ' . $Item['transno'] . '  ' . ConvertSQLDate($Item['trandate']) . '  ' . locale_number_format($Item['balance'], $Customer['decimalplaces']) . ' ' . $Customer['currcode'] . '  (' . $Item['daysoverdue'] . ' ' . __('days overdue') . ")\n";
++	}
++	$Search = array('{customer}', '{company}', '{currency}', '{total}', '{invoices}');
++	$Replace = array($Customer['name'],
++					$_SESSION['CompanyRecord']['coyname'],
++					$Customer['currcode'],
++					locale_number_format($Total, $Customer['decimalplaces']),
++					$Lines);
++	return str_replace($Search, $Replace, $Text);
++}
++
++/* The customers a reminder run would write to, with the stage of letter for each. A customer is a candidate if they have an overdue item that is not disputed, at least as many days overdue as the first stage. The stage is the highest stage whose days have been reached, so a customer who has paid has no overdue item and gets nothing, whatever stage they were last sent. A customer who was sent the same or a higher stage less than CreditDunningMinDays days ago is left out, so nobody gets the same letter twice in a short time. */
++function GetDunningCandidates() {
++	$Stages = GetDunningStages();
++	$Candidates = array();
++	if (count($Stages) == 0) {
++		return $Candidates;
++	}
++	$FirstStage = reset($Stages);
++	$Result = DB_query("SELECT DISTINCT debtortrans.debtorno
++						FROM debtortrans
++						INNER JOIN debtorsmaster
++							ON debtortrans.debtorno = debtorsmaster.debtorno
++						INNER JOIN paymentterms
++							ON debtorsmaster.paymentterms = paymentterms.termsindicator
++						WHERE debtortrans.type IN (10, 60)
++							AND debtortrans.settled = 0
++							AND debtortrans.disputed = 0
++							AND debtortrans.balance > " . CurrencyTolerance($_SESSION['CompanyRecord']['currencydefault']) . "
++							AND (" . OverdueDaysSQL() . ") >= " . (int) $FirstStage['daysoverdue'] . "
++						ORDER BY debtortrans.debtorno");
++	while ($DebtorRow = DB_fetch_row($Result)) {
++		$Items = GetOverdueItems($DebtorRow[0], 1, false);
++		if (count($Items) == 0) {
++			continue;
++		}
++		$MaxDays = 0;
++		$Total = 0;
++		foreach ($Items as $Item) {
++			$MaxDays = max($MaxDays, $Item['daysoverdue']);
++			$Total += $Item['balance'];
++		}
++		$StageToSend = 0;
++		foreach ($Stages as $Stage) {
++			if ($MaxDays >= $Stage['daysoverdue']) {
++				$StageToSend = $Stage['stage'];
++			}
++		}
++		if ($StageToSend == 0) {
++			continue;
++		}
++		list($LastStage, $LastDate) = LastReminderSent($DebtorRow[0]);
++		$Skip = '';
++		if ($LastStage >= $StageToSend and $LastDate != '') {
++			$Result2 = DB_query("SELECT DATEDIFF(CURRENT_DATE, '" . substr($LastDate, 0, 10) . "')");
++			$DaysSince = DB_fetch_row($Result2);
++			if ($DaysSince[0] < $_SESSION['CreditDunningMinDays']) {
++				$Skip = __('Stage') . ' ' . $LastStage . ' ' . __('was sent') . ' ' . $DaysSince[0] . ' ' . __('days ago');
++			}
++		}
++		$Customer = GetCreditStatus($DebtorRow[0]);
++		$Candidates[$DebtorRow[0]] = array('name' => $Customer['name'],
++										'currcode' => $Customer['currcode'],
++										'status' => $Customer['status'],
++										'stage' => $StageToSend,
++										'laststage' => $LastStage,
++										'items' => $Items,
++										'total' => $Total,
++										'maxdays' => $MaxDays,
++										'skip' => $Skip,
++										'emails' => GetAccountsEmailAddresses($DebtorRow[0]));
++	}
++	return $Candidates;
++}
++
++/* Posts a customer transaction made by credit control - an interest or fee charge (type 60, positive), a charge waiver (type 61, negative) or a bad debt write-off (type 62, negative) - to the customer account and, when the debtors ledger is linked to the general ledger, to the GL: the trade debtors control account against $CounterAccount.
++$Amount is in the customer's currency and signed. $HomeAmount is the same amount in the home currency at the rates it was booked at, signed (pass null to convert at $Rate). Call it inside a transaction. Returns array(transaction number, debtortrans id). */
++function PostCreditControlTransaction($Type, $DebtorNo, $TransDate, $Amount, $Rate, $HomeAmount, $CounterAccount, $Reference, $Text) {
++	$Decimals = $_SESSION['CompanyRecord']['decimalplaces'];
++	if ($HomeAmount === null) {
++		$HomeAmount = $Amount / $Rate;
++	} elseif ($HomeAmount != 0) {
++		$Rate = $Amount / $HomeAmount; // the blended rate of what was booked
++	}
++	$HomeAmount = round($HomeAmount, $Decimals);
++
++	$Result = DB_query("SELECT custbranch.branchcode,
++								custbranch.salesman,
++								debtorsmaster.salestype
++						FROM debtorsmaster
++						INNER JOIN custbranch
++							ON debtorsmaster.debtorno = custbranch.debtorno
++						WHERE debtorsmaster.debtorno = '" . DB_escape_string($DebtorNo) . "'
++						ORDER BY custbranch.branchcode
++						LIMIT 1");
++	$Branch = DB_fetch_array($Result);
++
++	$TransNo = GetNextTransNo($Type);
++	$PeriodNo = GetPeriod(date($_SESSION['DefaultDateFormat'], strtotime($TransDate)));
++
++	$SQL = "INSERT INTO debtortrans (transno,
++									type,
++									debtorno,
++									branchcode,
++									trandate,
++									inputdate,
++									prd,
++									reference,
++									tpe,
++									rate,
++									ovamount,
++									invtext,
++									salesperson)
++							VALUES ('" . $TransNo . "',
++									'" . $Type . "',
++									'" . DB_escape_string($DebtorNo) . "',
++									'" . $Branch['branchcode'] . "',
++									'" . $TransDate . "',
++									'" . date('Y-m-d H:i:s') . "',
++									'" . $PeriodNo . "',
++									'" . DB_escape_string($Reference) . "',
++									'" . $Branch['salestype'] . "',
++									'" . $Rate . "',
++									'" . $Amount . "',
++									'" . DB_escape_string($Text) . "',
++									'" . $Branch['salesman'] . "')";
++	DB_query($SQL, __('CRITICAL ERROR') . '! ' . __('NOTE DOWN THIS ERROR AND SEEK ASSISTANCE') . ': ' . __('The customer transaction could not be added because'), '', true);
++	$TransID = DB_Last_Insert_ID('debtortrans', 'id');
++
++	if ($_SESSION['CompanyRecord']['gllink_debtors'] == 1 and $HomeAmount != 0) {
++		$Narrative = mb_substr($DebtorNo . ' - ' . $Text, 0, 200);
++		foreach (array(array($_SESSION['CompanyRecord']['debtorsact'], $HomeAmount), array($CounterAccount, -$HomeAmount)) as $GLLine) {
++			list($Account, $GLAmount) = $GLLine;
++			DB_query("INSERT INTO gltrans (type,
++										typeno,
++										trandate,
++										periodno,
++										account,
++										narrative,
++										amount)
++								VALUES ('" . $Type . "',
++										'" . $TransNo . "',
++										'" . $TransDate . "',
++										'" . $PeriodNo . "',
++										'" . $Account . "',
++										'" . DB_escape_string($Narrative) . "',
++										'" . $GLAmount . "')", __('CRITICAL ERROR') . '! ' . __('NOTE DOWN THIS ERROR AND SEEK ASSISTANCE') . ': ' . __('The general ledger posting could not be added because'), '', true);
++		}
++		EnsureGLEntriesBalance($Type, $TransNo);
++	}
++	return array($TransNo, $TransID);
++}
++
++/* Allocates part of a credit transaction (a waiver or a write-off, debtortrans id $FromID) to an open debit item ($ToID). Same bookkeeping as the credit note and receipt allocation pages: a custallocns row, the debit item's alloc goes up and it is settled when nothing is left, the credit's alloc goes down (credits carry a negative alloc). */
++function AllocateCreditControlTransaction($FromID, $ToID, $Amount, $AllocDate) {
++	DB_query("INSERT INTO custallocns (amt, datealloc, transid_allocfrom, transid_allocto)
++				VALUES ('" . $Amount . "', '" . $AllocDate . "', '" . $FromID . "', '" . $ToID . "')", __('The allocation could not be added because'), '', true);
++	DB_query("UPDATE debtortrans
++				SET alloc = alloc + " . $Amount . "
++				WHERE id = '" . $ToID . "'", __('The allocation could not be applied because'), '', true);
++	DB_query("UPDATE debtortrans
++				SET settled = IF(ABS(balance) < " . CurrencyTolerance($_SESSION['CompanyRecord']['currencydefault']) . ", 1, 0)
++				WHERE id = '" . $ToID . "'", __('The allocation could not be applied because'), '', true);
++	DB_query("UPDATE debtortrans
++				SET alloc = alloc - " . $Amount . "
++				WHERE id = '" . $FromID . "'", __('The allocation could not be applied because'), '', true);
++	DB_query("UPDATE debtortrans
++				SET settled = IF(ABS(balance) < " . CurrencyTolerance($_SESSION['CompanyRecord']['currencydefault']) . ", 1, 0)
++				WHERE id = '" . $FromID . "'", __('The allocation could not be applied because'), '', true);
++}
++
++/* The currency decimal places and rate of a customer's currency */
++function CustomerCurrencyDetails($CurrCode) {
++	$Result = DB_query("SELECT decimalplaces, rate FROM currencies WHERE currabrev = '" . DB_escape_string($CurrCode) . "'");
++	return DB_fetch_array($Result);
++}
+diff --git a/includes/InstallFunctions.php b/includes/InstallFunctions.php
+index 1c20c09..ce77910 100644
+--- a/includes/InstallFunctions.php
++++ b/includes/InstallFunctions.php
+@@ -528,7 +528,10 @@ function UploadData($Demo, $AdminPassword, $AdminUser, $Email, $Language, $CoA,
+ 											1,
+ 											1,
+ 											1,
+-											'5600'
++											'5600',
++											'0',
++											'0',
++											'0'
+ 										)";
+ 		$Result = DB_query($SQL, '', '', false, false);
+ 		if (DB_error_no() == 0) {
+diff --git a/install/sql/data/creditcontrol.sql b/install/sql/data/creditcontrol.sql
+new file mode 100644
+index 0000000..7d3e52c
+--- /dev/null
++++ b/install/sql/data/creditcontrol.sql
+@@ -0,0 +1 @@
++INSERT INTO `config` (`confname`, `confvalue`) VALUES ('CreditReviewMonths','12'),('CreditInterestRate','0'),('CreditLateFee','0'),('CreditChargeDaysOverdue','30'),('CreditWriteOffApprovalLimit','1000'),('CreditDunningMinDays','14'),('CreditControlEmail',''),('CreditStopAfterFinalNotice','0');
+diff --git a/install/sql/data/creditcontrolmenuitems.sql b/install/sql/data/creditcontrolmenuitems.sql
+new file mode 100644
+index 0000000..e356060
+--- /dev/null
++++ b/install/sql/data/creditcontrolmenuitems.sql
+@@ -0,0 +1 @@
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) VALUES (1,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(1,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(1,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(1,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(1,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(1,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(2,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(2,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(2,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(2,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(2,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(2,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(3,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(3,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(3,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(3,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(3,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(3,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(4,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(4,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(4,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(4,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(4,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(4,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(5,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(5,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(5,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(5,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(5,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(5,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(6,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(6,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(6,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(6,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(6,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(6,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(7,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(7,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(7,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(7,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(7,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(7,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(8,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(8,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(8,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(8,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(8,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(8,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30),(9,'AR','Transactions','Credit Control Reminder Run','/CreditControlDunning.php',5),(9,'AR','Transactions','Month End Interest and Late Fees','/CreditControlCharges.php',6),(9,'AR','Transactions','Bad Debt Write-offs','/CreditControlWriteOff.php',7),(9,'AR','Reports','Credit Control Report','/CreditControlReport.php',11),(9,'AR','Reports','Debtors to General Ledger Reconciliation','/DebtorsGLReconciliation.php',12),(9,'system','Transactions','Credit Control Settings','/CreditControlSetup.php',30);
+diff --git a/install/sql/data/creditcontrolscripts.sql b/install/sql/data/creditcontrolscripts.sql
+new file mode 100644
+index 0000000..1e94ead
+--- /dev/null
++++ b/install/sql/data/creditcontrolscripts.sql
+@@ -0,0 +1 @@
++INSERT INTO `scripts` (`script`, `pagesecurity`, `description`) VALUES ('CreditControlSetup.php',21,'Credit control settings: review period, interest, late fee, GL accounts and reminder letters'),('CustomerCredit.php',2,'Credit status, reviews, stop and watch, disputes and credit history of a customer'),('CreditControlReport.php',2,'Customers due a credit review, over their credit limit, on watch or on stop; orders held for credit control'),('CreditControlDunning.php',21,'Overdue reminder letter run'),('CreditControlCharges.php',21,'Month end interest and late fee charges and waivers'),('CreditControlWriteOff.php',2,'Bad debt write-offs, their approval and the write-off report'),('DebtorsGLReconciliation.php',8,'Reconciles customer balances to the trade debtors control account'),('CustomerCreditNotices.php',1,'Customer portal: reminders and charges on the customer account');
+diff --git a/install/sql/data/dunningstages.sql b/install/sql/data/dunningstages.sql
+new file mode 100644
+index 0000000..90c0c9d
+--- /dev/null
++++ b/install/sql/data/dunningstages.sql
+@@ -0,0 +1 @@
++INSERT INTO `dunningstages` (`stage`, `daysoverdue`, `subject`, `body`) VALUES (1,30,'Reminder: overdue invoices on your account','Dear {customer},\n\nOur records show that the following items on your account are now overdue:\n\n{invoices}\nThe total overdue is {total} {currency}. If you have already paid, please accept our thanks and ignore this reminder. Otherwise we would be grateful for your payment.\n\nKind regards,\nCredit Control\n{company}'),(2,60,'Second reminder: overdue invoices on your account','Dear {customer},\n\nWe wrote to you recently about overdue items on your account and have not yet received payment. The items still outstanding are:\n\n{invoices}\nThe total overdue is {total} {currency}. Please arrange payment immediately, or contact us if there is a problem with any of these items.\n\nKind regards,\nCredit Control\n{company}'),(3,90,'FINAL NOTICE: overdue invoices on your account','Dear {customer},\n\nThis is the final notice about the following overdue items:\n\n{invoices}\nThe total overdue is {total} {currency}. Unless we receive payment within 7 days your account will be put on stop, no further orders will be accepted and interest and late payment charges will be applied.\n\nKind regards,\nCredit Control\n{company}');
+diff --git a/install/sql/data/holdreasons.sql b/install/sql/data/holdreasons.sql
+new file mode 100644
+index 0000000..c3db797
+--- /dev/null
++++ b/install/sql/data/holdreasons.sql
+@@ -0,0 +1 @@
++INSERT INTO `holdreasons` (`reasoncode`, `reasondescription`, `dissallowinvoices`) VALUES (0,'No hold',0),(1,'Credit watch',2),(2,'Credit stop',1);
+diff --git a/install/sql/data/securitygroups.sql b/install/sql/data/securitygroups.sql
+index eafa618..ba60b87 100644
+--- a/install/sql/data/securitygroups.sql
++++ b/install/sql/data/securitygroups.sql
+@@ -1 +1 @@
+-INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2,11),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,11),(4,0),(4,1),(4,2),(4,5),(5,0),(5,1),(5,2),(5,3),(5,11),(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(6,8),(6,9),(6,10),(6,11),(7,0),(7,1),(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,6),(8,7),(8,8),(8,9),(8,10),(8,11),(8,12),(8,13),(8,14),(8,15),(8,16),(8,20),(9,0),(9,9);
++INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2,11),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,11),(4,0),(4,1),(4,2),(4,5),(5,0),(5,1),(5,2),(5,3),(5,11),(5,21),(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(6,8),(6,9),(6,10),(6,11),(6,21),(7,0),(7,1),(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,6),(8,7),(8,8),(8,9),(8,10),(8,11),(8,12),(8,13),(8,14),(8,15),(8,16),(8,20),(8,21),(8,22),(9,0),(9,9);
+diff --git a/install/sql/data/securitytokens.sql b/install/sql/data/securitytokens.sql
+index 41505e5..b26be70 100644
+--- a/install/sql/data/securitytokens.sql
++++ b/install/sql/data/securitytokens.sql
+@@ -1 +1 @@
+-INSERT INTO `securitytokens` VALUES (0,'Main Index Page'),(1,'Order Entry/Inquiries customer access only'),(2,'Basic Reports and Inquiries with selection options'),(3,'Credit notes and AR management'),(4,'Purchasing data/PO Entry/Reorder Levels'),(5,'Accounts Payable'),(6,'Petty Cash'),(7,'Bank Reconciliations'),(8,'General ledger reports/inquiries'),(9,'Supplier centre - Supplier access only'),(10,'General Ledger Maintenance, stock valuation & Configuration'),(11,'Inventory Management and Pricing'),(12,'Prices Security'),(13,'Customer services Price modifications'),(14,'Unknown'),(15,'User Management and System Administration'),(16,'QA'),(18,'Cost authority'),(19,'Internal stock request fully access authority'),(20,'Timesheet administrator');
++INSERT INTO `securitytokens` VALUES (0,'Main Index Page'),(1,'Order Entry/Inquiries customer access only'),(2,'Basic Reports and Inquiries with selection options'),(3,'Credit notes and AR management'),(4,'Purchasing data/PO Entry/Reorder Levels'),(5,'Accounts Payable'),(6,'Petty Cash'),(7,'Bank Reconciliations'),(8,'General ledger reports/inquiries'),(9,'Supplier centre - Supplier access only'),(10,'General Ledger Maintenance, stock valuation & Configuration'),(11,'Inventory Management and Pricing'),(12,'Prices Security'),(13,'Customer services Price modifications'),(14,'Unknown'),(15,'User Management and System Administration'),(16,'QA'),(18,'Cost authority'),(19,'Internal stock request fully access authority'),(20,'Timesheet administrator'),(21,'Credit control - stop, watch, limits, reminders, charges and write-offs'),(22,'Credit control approval - Finance Director approves write-offs');
+diff --git a/install/sql/data/systypes.sql b/install/sql/data/systypes.sql
+index 36d3e8e..85d0fa2 100644
+--- a/install/sql/data/systypes.sql
++++ b/install/sql/data/systypes.sql
+@@ -1 +1 @@
+-INSERT INTO `systypes` VALUES (0,'Journal - GL',0),(1,'Payment - GL',0),(2,'Receipt - GL',0),(3,'Standing Journal',0),(4,'Journal Template Number',0),(10,'Sales Invoice',0),(11,'Credit Note',0),(12,'Receipt',0),(15,'Journal - Debtors',0),(16,'Location Transfer',0),(17,'Stock Adjustment',0),(18,'Purchase Order',0),(19,'Picking List',0),(20,'Purchase Invoice',0),(21,'Debit Note',0),(22,'Creditors Payment',0),(23,'Creditors Journal',0),(25,'Purchase Order Delivery',0),(26,'Work Order Receipt',0),(28,'Work Order Issue',0),(29,'Work Order Variance',0),(30,'Sales Order',0),(31,'Shipment Close',0),(32,'Contract Close',0),(35,'Cost Update',0),(36,'Exchange Difference',0),(37,'Tenders',0),(38,'Stock Requests',0),(39,'Sales Commision Accruals',0),(40,'Work Order',0),(41,'Asset Addition',0),(42,'Asset Category Change',0),(43,'Delete w/down asset',0),(44,'Depreciation',0),(49,'Import Fixed Assets',0),(50,'Opening Balance',0),(500,'Auto Debtor Number',0),(600,'Auto Supplier Number',0);
++INSERT INTO `systypes` VALUES (0,'Journal - GL',0),(1,'Payment - GL',0),(2,'Receipt - GL',0),(3,'Standing Journal',0),(4,'Journal Template Number',0),(10,'Sales Invoice',0),(11,'Credit Note',0),(12,'Receipt',0),(15,'Journal - Debtors',0),(16,'Location Transfer',0),(17,'Stock Adjustment',0),(18,'Purchase Order',0),(19,'Picking List',0),(20,'Purchase Invoice',0),(21,'Debit Note',0),(22,'Creditors Payment',0),(23,'Creditors Journal',0),(25,'Purchase Order Delivery',0),(26,'Work Order Receipt',0),(28,'Work Order Issue',0),(29,'Work Order Variance',0),(30,'Sales Order',0),(31,'Shipment Close',0),(32,'Contract Close',0),(35,'Cost Update',0),(36,'Exchange Difference',0),(37,'Tenders',0),(38,'Stock Requests',0),(39,'Sales Commision Accruals',0),(40,'Work Order',0),(41,'Asset Addition',0),(42,'Asset Category Change',0),(43,'Delete w/down asset',0),(44,'Depreciation',0),(49,'Import Fixed Assets',0),(50,'Opening Balance',0),(60,'Customer Interest/Fee Charge',0),(61,'Customer Charge Waiver',0),(62,'Customer Bad Debt Write-off',0),(500,'Auto Debtor Number',0),(600,'Auto Supplier Number',0);
+diff --git a/install/sql/demo.sql b/install/sql/demo.sql
+index bf8dae1..526b89c 100644
+--- a/install/sql/demo.sql
++++ b/install/sql/demo.sql
+@@ -7,11 +7,22 @@ INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `u
+ 
+ INSERT INTO `scripts` (`script`, `pagesecurity`, `description`) VALUES ('AccountGroups.php',10,'Defines the groupings of general ledger accounts'),('AccountSections.php',10,'Defines the sections in the general ledger reports'),('AddCustomerContacts.php',3,'Adds customer contacts'),('AddCustomerNotes.php',3,'Adds notes about customers'),('AddCustomerTypeNotes.php',3,''),('AgedControlledInventory.php',11,'Report of Controlled Items and their age'),('AgedDebtors.php',2,'Lists customer account balances in detail or summary in selected currency'),('AgedSuppliers.php',2,'Lists supplier account balances in detail or summary in selected currency'),('AnalysisHorizontalIncome.php',8,'Shows the horizontal analysis of the statement of comprehensive income'),('AnalysisHorizontalPosition.php',8,'Shows the horizontal analysis of the statement of financial position'),('Areas.php',3,'Defines the sales areas - all customers must belong to a sales area for the purposes of sales analysis'),('AuditTrail.php',15,'Shows the activity with SQL statements and who performed the changes'),('AutomaticTranslationDescriptions.php',15,'Translates via Google Translator all empty translated descriptions'),('BankAccountBalances.php',1,'Shows bank accounts authorised for with balances'),('BankAccounts.php',10,'Defines the general ledger code for bank accounts and specifies that bank transactions be created for these accounts for the purposes of reconciliation'),('BankAccountUsers.php',15,'Maintains table bankaccountusers (Authorized users to work with a bank account in webERP)'),('BankMatching.php',7,'Allows payments and receipts to be matched off against bank statements'),('BankReconciliation.php',7,'Displays the bank reconciliation for a selected bank account'),('bank_trans.php',3,''),('BOMExtendedQty.php',2,'Shows the component requirements to make an item'),('BOMIndented.php',2,'Shows the bill of material indented for each level'),('BOMIndentedReverse.php',2,''),('BOMInquiry.php',2,'Displays the bill of material with cost information'),('BOMListing.php',2,'Lists the bills of material for a selected range of items'),('BOMs.php',9,'Administers the bills of material for a selected item'),('BOMs_SingleLevel.php',2,'Single Level BOM entry'),('COGSGLPostings.php',10,'Defines the general ledger account to be used for cost of sales entries'),('CollectiveWorkOrderCost.php',2,'Multiple work orders cost review'),('CompanyPreferences.php',10,'Defines the settings applicable for the company, including name, address, tax authority reference, whether GL integration used, etc.'),('ConfirmDispatchControlled_Invoice.php',2,'Specifies the batch references/serial numbers of items dispatched that are being invoiced'),('ConfirmDispatch_Invoice.php',2,'Creates sales invoices from entered sales orders based on the quantities dispatched that can be modified'),('ContractBOM.php',6,'Creates the item requirements from stock for a contract as part of the contract cost build up'),('ContractCosting.php',6,'Shows a contract cost - the components and other non-stock costs issued to the contract'),('ContractOtherReqts.php',4,'Creates the other requirements for a contract cost build up'),('Contracts.php',6,'Creates or modifies a customer contract costing'),('CopyBOM.php',9,'Allows a bill of material to be copied between items'),('CostUpdate',10,'NB Not a script but allows users to maintain item costs from withing StockCostUpdate.php'),('CounterReturns.php',5,'Allows credits and refunds from the default Counter Sale account for an inventory location'),('CounterSales.php',1,'Allows sales to be entered against a cash sale customer account defined in the users location record'),('CreditItemsControlled.php',3,'Specifies the batch references/serial numbers of items being credited back into stock'),('CreditStatus.php',3,'Defines the credit status records. Each customer account is given a credit status from this table. Some credit status records can prohibit invoicing and new orders being entered.'),('Credit_Invoice.php',3,'Creates a credit note based on the details of an existing invoice'),('Currencies.php',9,'Defines the currencies available. Each customer and supplier must be defined as transacting in one of the currencies defined here.'),('CustEDISetup.php',11,'Allows the set up the customer specified EDI parameters for server, email or ftp.'),('CustItem.php',11,'Customer Items'),('CustLoginSetup.php',15,''),('CustomerAccount.php',1,'Shows customer account/statement on screen rather than PDF'),('CustomerAllocations.php',3,'Allows customer receipts and credit notes to be allocated to sales invoices'),('CustomerBalancesMovement.php',3,'Allow customers to be listed in local currency with balances and activity over a date range'),('CustomerBranches.php',3,'Defines the details of customer branches such as delivery address and contact details - also sales area, representative etc'),('CustomerInquiry.php',1,'Shows the customers account transactions with balances outstanding, links available to drill down to invoice/credit note or email invoices/credit notes'),('CustomerPurchases.php',5,'Shows the purchases a customer has made.'),('CustomerReceipt.php',3,'Entry of both customer receipts against accounts receivable and also general ledger or nominal receipts'),('Customers.php',3,'Defines the setup of a customer account, including payment terms, billing address, credit status, currency etc'),('CustomerTransInquiry.php',2,'Lists in html the sequence of customer transactions, invoices, credit notes or receipts by a user entered date range'),('CustomerTypes.php',15,''),('customer_orders.php',2,''),('CustWhereAlloc.php',2,'Shows to which invoices a receipt was allocated to'),('DailyBankTransactions.php',8,'Allows you to view all bank transactions for a selected date range, and the inquiry can be filtered by matched or unmatched transactions, or all transactions can be chosen'),('DailySalesInquiry.php',2,'Shows the daily sales with GP in a calendar format'),('Dashboard.php',1,'Display outstanding debtors, creditors etc'),('DashboardConfig.php',15,''),('DebtorsAtPeriodEnd.php',2,'Shows the debtors control account as at a previous period end - based on system calendar monthly periods'),('DeliveryDetails.php',1,'Used during order entry to allow the entry of delivery addresses other than the defaulted branch delivery address and information about carrier/shipping method etc'),('Departments.php',1,'Create business departments'),('DiscountCategories.php',11,'Defines the items belonging to a discount category. Discount Categories are used to allow discounts based on quantities across a range of producs'),('DiscountMatrix.php',11,'Defines the rates of discount applicable to discount categories and the customer groupings to which the rates are to apply'),('EDIMessageFormat.php',10,'Specifies the EDI message format used by a customer - administrator use only.'),('EDIProcessOrders.php',11,'Processes incoming EDI orders into sales orders'),('EDISendInvoices.php',15,'Processes invoiced EDI customer invoices into EDI messages and sends using the customers preferred method either ftp or email attachments.'),('EmailConfirmation.php',2,''),('EmailCustStatements.php',2,'Email Customer Statements'),('EmailCustTrans.php',2,'Emails selected invoice or credit to the customer'),('Employees.php',10,'Employees requiring time-sheets maintenance and entry '),('ExchangeRateTrend.php',2,'Shows the trend in exchange rates as retrieved from ECB'),('Factors.php',5,'Defines supplier factor companies'),('FixedAssetCategories.php',11,'Defines the various categories of fixed assets'),('FixedAssetDepreciation.php',10,'Calculates and creates GL transactions to post depreciation for a period'),('FixedAssetItems.php',11,'Allows fixed assets to be defined'),('FixedAssetLocations.php',11,'Allows the locations of fixed assets to be defined'),('FixedAssetRegister.php',11,'Produces a csv, html or pdf report of the fixed assets over a period showing period depreciation, additions and disposals'),('FixedAssetTransfer.php',11,'Allows the fixed asset locations to be changed in bulk'),('FormDesigner.php',14,'Customizes the form layout without requiring the use of scripting or technical development'),('FormMaker.php',1,'Allows running user defined Forms'),('FreightCosts.php',11,'Defines the setup of the freight cost using different shipping methods to different destinations. The system can use this information to calculate applicable freight if the items are defined with the correct kgs and cubic volume'),('FTP_RadioBeacon.php',2,'FTPs sales orders for dispatch to a radio beacon software enabled warehouse dispatching facility'),('GeneratePickingList.php',11,'Generate a picking list'),('geocode.php',3,''),('GeocodeSetup.php',3,'Sets the configuration for geocoding of customers and suppliers'),('geocode_genxml_customers.php',3,''),('geocode_genxml_suppliers.php',3,''),('geo_displaymap_customers.php',3,''),('geo_displaymap_suppliers.php',3,''),('GetStockImage.php',1,''),('GLAccountCSV.php',8,'Produces a CSV of the GL transactions for a particular range of periods and GL account'),('GLAccountGraph.php',8,'Shows a graph of GL account transactions'),('GLAccountInquiry.php',8,'Shows the general ledger transactions for a specified account over a specified range of periods'),('GLAccountReport.php',8,'Produces a report of the GL transactions for a particular account'),('GLAccounts.php',10,'Defines the general ledger accounts'),('GLAccountUsers.php',15,'Maintenance of users allowed to a GL Account'),('GLAccountUsersCopyAuthority.php',15,''),('GLBalanceSheet.php',8,'Shows the balance sheet for the company as at a specified date'),('GLBankAccountUsersCopyAuthority.php',15,''),('GLBudgetHeaders.php',10,''),('GLBudgets.php',10,'Defines GL Budgets'),('GLCashFlowsIndirect.php',8,'Shows a statement of cash flows for the period using the indirect method'),('GLCashFlowsSetup.php',8,'Setups the statement of cash flows sections'),('GLCodesInquiry.php',8,'Shows the list of general ledger codes defined with account names and groupings'),('GLJournal.php',10,'Entry of general ledger journals, periods are calculated based on the date entered here'),('GLJournalInquiry.php',15,'General Ledger Journal Inquiry'),('GLJournalTemplates.php',15,'Maintain Journal templates'),('GLProfit_Loss.php',8,'Shows the profit and loss of the company for the range of periods entered'),('GLStatements.php',8,'Shows a set of financial statements'),('GLTagProfit_Loss.php',8,''),('GLTags.php',10,'Allows GL tags to be defined'),('GLTransInquiry.php',8,'Shows the general ledger journal created for the sub ledger transaction specified'),('GLTrialBalance.php',8,'Shows the trial balance for the month and the for the period selected together with the budgeted trial balances'),('GLTrialBalance_csv.php',8,'Produces a CSV of the Trial Balance for a particular period'),('GoodsReceived.php',11,'Entry of items received against purchase orders'),('GoodsReceivedControlled.php',11,'Entry of the serial numbers or batch references for controlled items received against purchase orders'),('GoodsReceivedNotInvoiced.php',2,'Shows the list of goods received but not yet invoiced, both in supplier currency and home currency. Total in home curency should match the GL Account for Goods received not invoiced. Any discrepancy is due to multicurrency errors.'),('HistoricalTestResults.php',16,'Historical Test Results'),('ImportBankTrans.php',11,'Imports bank transactions'),('ImportBankTransAnalysis.php',11,'Allows analysis of bank transactions being imported'),('index.php',1,'The main menu from where all functions available to the user are accessed by clicking on the links'),('InternalStockCategoriesByRole.php',15,'Maintains the stock categories to be used as internal for any user security role'),('InternalStockRequest.php',1,'Create an internal stock request'),('InternalStockRequestAuthorisation.php',1,'Authorise internal stock requests'),('InternalStockRequestFulfill.php',1,'Fulfill an internal stock request'),('InternalStockRequestInquiry.php',1,'Internal Stock Request inquiry'),('InventoryPlanning.php',2,'Creates a pdf report showing the last 4 months use of items including as a component of assemblies together with stock quantity on hand, current demand for the item and current quantity on sales order.'),('InventoryPlanningPrefSupplier.php',2,'Produces a report showing the inventory to be ordered by supplier'),('InventoryPlanningPrefSupplier_CSV.php',2,'Inventory planning spreadsheet'),('InventoryQuantities.php',2,''),('InventoryValuation.php',2,'Creates a pdf report showing the value of stock at standard cost for a range of product categories selected'),('Labels.php',15,'Produces item pricing labels in a pdf from a range of selected criteria'),('latest_grns.php',2,''),('latest_po.php',3,''),('latest_po_auth.php',2,''),('latest_stock_status.php',3,''),('Locations.php',11,'Defines the inventory stocking locations or warehouses'),('LocationUsers.php',15,'Allows users that have permission to access a location to be defined'),('LocationUsersCopyAuthority.php',15,''),('LoggedInUsers.php',8,''),('Logout.php',1,'Shows when the user logs out of webERP'),('MailingGroupMaintenance.php',15,'Mainting mailing lists for items to mail'),('MailInventoryValuation.php',1,'Meant to be run as a scheduled process to email the stock valuation off to a specified person. Creates the same stock valuation report as InventoryValuation.php'),('MailSalesReport_csv.php',15,'Mailing the sales report'),('MaintenanceReminders.php',1,'Sends email reminders for scheduled asset maintenance tasks'),('MaintenanceTasks.php',1,'Allows set up and edit of scheduled maintenance tasks'),('MaintenanceUserSchedule.php',1,'List users or managers scheduled maintenance tasks and allow to be flagged as completed'),('Manufacturers.php',15,'Maintain brands of sales products'),('MaterialsNotUsed.php',4,'Lists the items from Raw Material Categories not used in any BOM (thus, not used at all)'),('MRP.php',9,''),('MRPCalendar.php',9,''),('MRPCreateDemands.php',9,''),('MRPDemands.php',9,''),('MRPDemandTypes.php',9,''),('MRPPlannedPurchaseOrders.php',2,''),('MRPPlannedWorkOrders.php',2,''),('MRPReport.php',2,''),('MRPReschedules.php',2,''),('MRPShortages.php',2,''),('mrp_dashboard.php',3,''),('NoSalesItems.php',2,'Shows the No Selling (worst) items'),('OffersReceived.php',4,''),('OrderDetails.php',1,'Shows the detail of a sales order'),('OrderEntryDiscountPricing',13,'Not a script but an authority level marker - required if the user is allowed to enter discounts and special pricing against a customer order'),('OutstandingGRNs.php',2,'Creates a pdf showing all GRNs for which there has been no purchase invoice matched off against.'),('PageSecurity.php',15,'Changes the security token of a script'),('PaymentAllocations.php',5,''),('PaymentMethods.php',15,''),('Payments.php',5,'Entry of bank account payments either against an AP account or a general ledger payment - if the AP-GL link in company preferences is set'),('PaymentTerms.php',10,'Defines the payment terms records, these can be expressed as either a number of days credit or a day in the following month. All customers and suppliers must have a corresponding payment term recorded against their account'),('PcAnalysis.php',15,'Creates an Excel with details of PC expnese for 24 months'),('PcAssignCashTabToTab.php',12,'Assign cash from one tab to another'),('PcAssignCashToTab.php',6,''),('PcAuthorizeCash.php',6,'Authorisation of assigned cash'),('PcAuthorizeExpenses.php',6,''),('PcClaimExpensesFromTab.php',6,''),('PcExpenses.php',15,''),('PcExpensesTypeTab.php',15,''),('PcReportExpense.php',15,''),('PcReportTab.php',6,''),('PcTabExpensesList.php',15,'Creates excel with all movements of tab between dates'),('PcTabs.php',15,''),('PcTypeTabs.php',15,''),('PDFAck.php',15,'Print an acknowledgement'),('PDFBankingSummary.php',3,'Creates a pdf showing the amounts entered as receipts on a specified date together with references for the purposes of banking'),('PDFChequeListing.php',3,'Creates a pdf showing all payments that have been made from a specified bank account over a specified period. This can be emailed to an email account defined in config.php - ie a financial controller'),('PDFCOA.php',0,'PDF of COA'),('PDFCustomerList.php',2,'Creates a report of the customer and branch information held. This report has options to print only customer branches in a specified sales area and sales person. Additional option allows to list only those customers with activity either under or over a specified amount, since a specified date.'),('PDFCustTransListing.php',3,''),('PDFDeliveryDifferences.php',3,'Creates a pdf report listing the delivery differences from what the customer requested as recorded in the order entry. The report calculates a percentage of order fill based on the number of orders filled in full on time'),('PDFDIFOT.php',3,'Produces a pdf showing the delivery in full on time performance'),('PDFFGLabel.php',11,'Produces FG Labels'),('PDFGLJournal.php',15,'General Ledger Journal Print'),('PDFGLJournalCN.php',1,'Print GL Journal Chinese version'),('PDFGrn.php',2,'Produces a GRN report on the receipt of stock'),('PDFLowGP.php',2,'Creates a pdf report showing the low gross profit sales made in the selected date range. The percentage of gp deemed acceptable can also be entered'),('PDFOrdersInvoiced.php',3,'Produces a pdf of orders invoiced based on selected criteria'),('PDFOrderStatus.php',3,'Reports on sales order status by date range, by stock location and stock category - producing a pdf showing each line items and any quantites delivered'),('PDFPeriodStockTransListing.php',3,'Allows stock transactions of a specific transaction type to be listed over a single day or period range'),('PDFPickingList.php',2,''),('PDFPriceList.php',2,'Creates a pdf of the price list applicable to a given sales type and customer. Also allows the listing of prices specific to a customer'),('PDFPrintLabel.php',10,''),('PDFProdSpec.php',0,'PDF OF Product Specification'),('PDFQALabel.php',2,'Produces a QA label on receipt of stock'),('PDFQuotation.php',2,''),('PDFQuotationPortrait.php',2,'Portrait quotation'),('PDFReceipt.php',2,''),('PDFRemittanceAdvice.php',2,''),('PDFSellThroughSupportClaim.php',9,'Reports the sell through support claims to be made against all suppliers for a given date range.'),('PDFShipLabel.php',15,'Print a ship label'),('PDFStockCheckComparison.php',2,'Creates a pdf comparing the quantites entered as counted at a given range of locations against the quantity stored as on hand as at the time a stock check was initiated.'),('PDFStockLocTransfer.php',1,'Creates a stock location transfer docket for the selected location transfer reference number'),('PDFStockNegatives.php',1,'Produces a pdf of the negative stocks by location'),('PDFStockTransfer.php',2,'Produces a report for stock transfers'),('PDFSuppTransListing.php',3,''),('PDFTestPlan.php',16,'PDF of Test Plan'),('PDFTopItems.php',2,'Produces a pdf report of the top items sold'),('PDFWOPrint.php',11,'Produces W/O Paperwork'),('PeriodsInquiry.php',2,'Shows a list of all the system defined periods'),('PickingLists.php',11,'Picking List Maintenance'),('PickingListsControlled.php',11,'Picking List Maintenance - Controlled'),('POFinancialPlanning.php',4,''),('POReport.php',2,''),('PO_AuthorisationLevels.php',15,''),('PO_AuthoriseMyOrders.php',4,''),('PO_Header.php',4,'Entry of a purchase order header record - date, references buyer etc'),('PO_Items.php',4,'Entry of a purchase order items - allows entry of items with lookup of currency cost from Purchasing Data previously entered also allows entry of nominal items against a general ledger code if the AP is integrated to the GL'),('PO_OrderDetails.php',2,'Purchase order inquiry shows the quantity received and invoiced of purchase order items as well as the header information'),('PO_PDFPurchOrder.php',2,'Creates a pdf of the selected purchase order for printing or email to one of the supplier contacts entered'),('PO_SelectOSPurchOrder.php',2,'Shows the outstanding purchase orders for selecting with links to receive or modify the purchase order header and items'),('PO_SelectPurchOrder.php',2,'Allows selection of any purchase order with links to the inquiry'),('PriceMatrix.php',11,'Mantain stock prices according to quantity break and sales types'),('Prices.php',9,'Entry of prices for a selected item also allows selection of sales type and currency for the price'),('PricesBasedOnMarkUp.php',11,''),('PricesByCost.php',11,'Allows prices to be updated based on cost'),('Prices_Customer.php',11,'Entry of prices for a selected item and selected customer/branch. The currency and sales type is defaulted from the customer\'s record'),('PrintCheque.php',5,''),('PrintCustOrder.php',2,'Creates a pdf of the dispatch note - by default this is expected to be on two part pre-printed stationery to allow pickers to note discrepancies for the confirmer to update the dispatch at the time of invoicing'),('PrintCustOrder_generic.php',2,'Creates two copies of a laser printed dispatch note - both copies need to be written on by the pickers with any discrepancies to advise customer of any shortfall and on the office copy to ensure the correct quantites are invoiced'),('PrintCustStatements.php',2,'Creates a pdf for the customer statements in the selected range'),('PrintCustTrans.php',1,'Creates either a html invoice or credit note or a pdf. A range of invoices or credit notes can be selected also.'),('PrintCustTransPortrait.php',1,''),('PrintSalesOrder_generic.php',2,''),('PrintWOItemSlip.php',4,'PDF WO Item production Slip '),('ProductSpecs.php',16,'Product Specification Maintenance'),('PurchaseByPrefSupplier.php',2,'Purchase ordering by preferred supplier'),('PurchasesReport.php',2,'Shows a report of purchases from suppliers for the range of selected dates'),('PurchData.php',4,'Entry of supplier purchasing data, the suppliers part reference and the suppliers currency cost of the item'),('QATests.php',16,'Quality Test Maintenance'),('RecurringSalesOrders.php',1,''),('RecurringSalesOrdersProcess.php',1,'Process Recurring Sales Orders'),('RegularPaymentsProcess.php',5,''),('RegularPaymentsSetup.php',5,''),('RelatedItemsUpdate.php',2,'Maintains Related Items'),('ReorderLevel.php',2,'Allows reorder levels of inventory to be updated'),('ReorderLevelLocation.php',2,''),('ReportCreator.php',13,'Report Writer and Form Creator script that creates templates for user defined reports and forms'),('ReportMaker.php',1,'Produces reports from the report writer templates created'),('reportwriter/admin/ReportCreator.php',15,'Report Writer'),('ReprintGRN.php',11,'Allows selection of a goods received batch for reprinting the goods received note given a purchase order number'),('ReverseGRN.php',11,'Reverses the entry of goods received - creating stock movements back out and necessary general ledger journals to effect the reversal'),('RevisionTranslations.php',15,'Human revision for automatic descriptions translations'),('SalesAnalReptCols.php',2,'Entry of the definition of a sales analysis report\'s columns.'),('SalesAnalRepts.php',2,'Entry of the definition of a sales analysis report headers'),('SalesAnalysis_UserDefined.php',2,'Creates a pdf of a selected user defined sales analysis report'),('SalesByTypePeriodInquiry.php',2,'Shows sales for a selected date range by sales type/price list'),('SalesCategories.php',11,''),('SalesCategoryDescriptions.php',15,'Maintain translations for sales categories'),('SalesCategoryPeriodInquiry.php',2,'Shows sales for a selected date range by stock category'),('SalesCommissionRates.php',15,''),('SalesCommissionReports.php',3,''),('SalesCommissionTypes.php',15,''),('SalesGLPostings.php',10,'Defines the general ledger accounts used to post sales to based on product categories and sales areas'),('SalesGraph.php',6,''),('SalesInquiry.php',2,''),('SalesPeople.php',3,'Defines the sales people of the business'),('SalesReport.php',2,'Shows a report of sales to customers for the range of selected dates'),('SalesTopCustomersInquiry.php',1,'Shows the top customers'),('SalesTopItemsInquiry.php',2,'Shows the top item sales for a selected date range'),('SalesTypes.php',15,'Defines the sales types - prices are held against sales types they can be considered price lists. Sales analysis records are held by sales type too.'),('SecurityTokens.php',15,'Administration of security tokens'),('SelectAsset.php',2,'Allows a fixed asset to be selected for modification or viewing'),('SelectCompletedOrder.php',1,'Allows the selection of completed sales orders for inquiries - choices to select by item code or customer'),('SelectContract.php',6,'Allows a contract costing to be selected for modification or viewing'),('SelectCreditItems.php',3,'Entry of credit notes from scratch, selecting the items in either quick entry mode or searching for them manually'),('SelectCustomer.php',2,'Selection of customer - from where all customer related maintenance, transactions and inquiries start'),('SelectGLAccount.php',8,'Selection of general ledger account from where all general ledger account maintenance, or inquiries are initiated'),('SelectOrderItems.php',1,'Entry of sales order items with both quick entry and part search functions'),('SelectPickingLists.php',11,'Select a picking list'),('SelectProduct.php',2,'Selection of items. All item maintenance, transactions and inquiries start with this script'),('SelectQASamples.php',16,'Select  QA Samples'),('SelectRecurringSalesOrder.php',2,''),('SelectSalesOrder.php',2,'Selects a sales order irrespective of completed or not for inquiries'),('SelectSupplier.php',2,'Selects a supplier. A supplier is required to be selected before any AP transactions and before any maintenance or inquiry of the supplier'),('SelectWorkOrder.php',2,''),('SellThroughSupport.php',9,'Defines the items, period and quantum of support for which supplier has agreed to provide.'),('ShipmentCosting.php',11,'Shows the costing of a shipment with all the items invoice values and any shipment costs apportioned. Updating the shipment has an option to update standard costs of all items on the shipment and create any general ledger variance journals'),('Shipments.php',11,'Entry of shipments from outstanding purchase orders for a selected supplier - changes in the delivery date will cascade into the different purchase orders on the shipment'),('Shippers.php',15,'Defines the shipping methods available. Each customer branch has a default shipping method associated with it which must match a record from this table'),('ShiptsList.php',2,'Shows a list of all the open shipments for a selected supplier. Linked from POItems.php'),('Shipt_Select.php',11,'Selection of a shipment for displaying and modification or updating'),('ShopParameters.php',15,'Maintain web-store configuration and set up'),('SMTPServer.php',15,'Sets the SMTP server'),('SpecialOrder.php',4,'Allows for a sales order to be created and an indent order to be created on a supplier for a one off item that may never be purchased again. A dummy part is created based on the description and cost details given.'),('StockAdjustments.php',11,'Entry of quantity corrections to stocks in a selected location.'),('StockAdjustmentsControlled.php',11,'Entry of batch references or serial numbers on controlled stock items being adjusted'),('StockCategories.php',11,'Defines the stock categories. All items must refer to one of these categories. The category record also allows the specification of the general ledger codes where stock items are to be posted - the balance sheet account and the profit and loss effect of any adjustments and the profit and loss effect of any price variances'),('StockCategorySalesInquiry.php',2,'Sales inquiry by stock category showing top items'),('StockCheck.php',2,'Allows creation of a stock check file - copying the current quantites in stock for later comparison to the entered counts. Also produces a pdf for the count sheets.'),('StockClone.php',11,'Script to copy a stock item and associated properties, image, price, purchase and cost data'),('StockCostUpdate.php',9,'Allows update of the standard cost of items producing general ledger journals if the company preferences stock GL interface is active'),('StockCounts.php',2,'Allows entry of stock counts'),('StockDispatch.php',2,''),('StockLocMovements.php',2,'Inquiry shows the Movements of all stock items for a specified location'),('StockLocStatus.php',2,'Shows the stock on hand together with outstanding sales orders and outstanding purchase orders by stock location for all items in the selected stock category'),('StockLocTransfer.php',11,'Entry of a bulk stock location transfer for many parts from one location to another.'),('StockLocTransferReceive.php',11,'Effects the transfer and creates the stock movements for a bulk stock location transfer initiated from StockLocTransfer.php'),('StockMovements.php',2,'Shows a list of all the stock movements for a selected item and stock location including the price at which they were sold in local currency and the price at which they were purchased for in local currency'),('StockQties_csv.php',5,'Makes a comma separated values (CSV)file of the stock item codes and quantities'),('StockQuantityByDate.php',2,'Shows the stock on hand for each item at a selected location and stock category as at a specified date'),('StockReorderLevel.php',4,'Entry and review of the re-order level of items by stocking location'),('Stocks.php',11,'Defines an item - maintenance and addition of new parts'),('StockSerialItemResearch.php',3,''),('StockSerialItems.php',2,'Shows a list of the serial numbers or the batch references and quantities of controlled items. This inquiry is linked from the stock status inquiry'),('StockStatus.php',2,'Shows the stock on hand together with outstanding sales orders and outstanding purchase orders by stock location for a selected part. Has a link to show the serial numbers in stock at the location selected if the item is controlled'),('StockTransferControlled.php',11,'Entry of serial numbers/batch references for controlled items being received on a stock transfer. The script is used by both bulk transfers and point to point transfers'),('StockTransfers.php',11,'Entry of point to point stock location transfers of a single part'),('StockUsage.php',2,'Inquiry showing the quantity of stock used by period calculated from the sum of the stock movements over that period - by item and stock location. Also available over all locations'),('StockUsageGraph.php',2,''),('SuppContractChgs.php',5,''),('SuppCreditGRNs.php',5,'Entry of a supplier credit notes (debit notes) against existing GRN which have already been matched in full or in part'),('SuppFixedAssetChgs.php',5,''),('SuppInvGRNs.php',5,'Entry of supplier invoices against goods received'),('SupplierAllocations.php',5,'Entry of allocations of supplier payments and credit notes to invoices'),('SupplierBalsAtPeriodEnd.php',2,''),('SupplierContacts.php',5,'Entry of supplier contacts and contact details including email addresses'),('SupplierCredit.php',5,'Entry of supplier credit notes (debit notes)'),('SupplierGRNAndInvoiceInquiry.php',5,'Suppliers delivery note and grn relationship inquiry'),('SupplierInquiry.php',2,'Inquiry showing invoices, credit notes and payments made to suppliers together with the amounts outstanding'),('SupplierInvoice.php',5,'Entry of supplier invoices'),('SupplierPriceList.php',4,'Maintain Supplier Price Lists'),('Suppliers.php',5,'Entry of new suppliers and maintenance of existing suppliers'),('SupplierTenderCreate.php',4,'Create or Edit tenders'),('SupplierTenders.php',9,''),('SupplierTransInquiry.php',2,''),('SupplierTypes.php',4,''),('SuppLoginSetup.php',15,''),('SuppPaymentRun.php',5,'Automatic creation of payment records based on calculated amounts due from AP invoices entered'),('SuppPriceList.php',2,''),('SuppShiptChgs.php',5,'Entry of supplier invoices against shipments as charges against a shipment'),('SuppTransGLAnalysis.php',5,'Entry of supplier invoices against general ledger codes'),('SuppWhereAlloc.php',3,'Suppliers Where allocated'),('SystemParameters.php',15,'Sets the main system configuration parameters'),('Tax.php',2,'Creates a report of the ad-valorem tax -GST/VAT- for the period selected from accounts payable and accounts receivable data'),('TaxAuthorities.php',15,'Entry of tax authorities - the state intitutions that charge tax'),('TaxAuthorityRates.php',11,'Entry of the rates of tax applicable to the tax authority depending on the item tax level'),('TaxCategories.php',15,'Allows for categories of items to be defined that might have different tax rates applied to them'),('TaxGroups.php',15,'Allows for taxes to be grouped together where multiple taxes might apply on sale or purchase of items'),('TaxProvinces.php',15,'Allows for inventory locations to be defined so that tax applicable from sales in different provinces can be dealt with'),('TestPlanResults.php',16,'Test Plan Results Entry'),('Timesheets.php',1,'Entry of Timesheets'),('TopItems.php',2,'Shows the top selling items'),('total_dashboard.php',1,''),('UnitsOfMeasure.php',15,'Allows for units of measure to be defined'),('unpaid_invoice.php',2,''),('UpgradeDatabase.php',15,'Allows for the database to be automatically upgraded based on currently recorded DBUpgradeNumber config option'),('UserBankAccounts.php',15,'Maintains table bankaccountusers (Authorized users to work with a bank account in webERP)'),('UserGLAccounts.php',15,'Maintenance of GL Accounts allowed for a user'),('UserLocations.php',15,'Location User Maintenance'),('UserSettings.php',1,'Allows the user to change system wide defaults for the theme - appearance, the number of records to show in searches and the language to display messages in'),('WhereUsedInquiry.php',2,'Inquiry showing where an item is used ie all the parents where the item is a component of'),('WOCanBeProducedNow.php',4,'List of WO items that can be produced with available stock in location'),('WorkCentres.php',9,'Defines the various centres of work within a manufacturing company. Also the overhead and labour rates applicable to the work centre and its standard capacity'),('WorkOrderCosting.php',11,''),('WorkOrderEntry.php',10,'Entry of new work orders'),('WorkOrderIssue.php',11,'Issue of materials to a work order'),('WorkOrderReceive.php',11,'Allows for receiving of works orders'),('WorkOrderStatus.php',11,'Shows the status of works orders'),('work_orders.php',3,''),('WOSerialNos.php',10,''),('WWW_Access.php',15,'Adds or removes security roles by a system administrator'),('WWW_Users.php',15,'Entry of users and security settings of users'),('Z_BottomUpCosts.php',15,''),('Z_ChangeBranchCode.php',15,'Utility to change the branch code of a customer that cascades the change through all the necessary tables'),('Z_ChangeCustomerCode.php',15,'Utility to change a customer code that cascades the change through all the necessary tables'),('Z_ChangeGLAccountCode.php',15,'Script to change a GL account code accross all tables necessary'),('Z_ChangeLocationCode.php',15,'Change a locations code and in all tables where the old code was used to the new code'),('Z_ChangeSalesmanCode.php',15,'Utility to change a salesman code'),('Z_ChangeStockCategory.php',15,''),('Z_ChangeStockCode.php',15,'Utility to change an item code that cascades the change through all the necessary tables'),('Z_ChangeSupplierCode.php',15,'Script to change a supplier code accross all tables necessary'),('Z_CheckAllocationsFrom.php',15,''),('Z_CheckAllocs.php',2,''),('Z_CheckDebtorsControl.php',15,'Inquiry that shows the total local currency (functional currency) balance of all customer accounts to reconcile with the general ledger debtors account'),('Z_CheckGLTransBalance.php',15,'Checks all GL transactions balance and reports problem ones'),('Z_CreateChartDetails.php',9,'Utility page to create chart detail records for all general ledger accounts and periods created - needs expert assistance in use'),('Z_CreateCompany.php',15,'Utility to insert company number 1 if not already there - actually only company 1 is used - the system is not multi-company'),('Z_CreateCompanyTemplateFile.php',15,''),('Z_CurrencyDebtorsBalances.php',15,'Inquiry that shows the total foreign currency together with the total local currency (functional currency) balances of all customer accounts to reconcile with the general ledger debtors account'),('Z_CurrencySuppliersBalances.php',15,'Inquiry that shows the total foreign currency amounts and also the local currency (functional currency) balances of all supplier accounts to reconcile with the general ledger creditors account'),('Z_DataExport.php',15,''),('Z_DeleteCreditNote.php',15,'Utility to reverse a customer credit note - a desperate measure that should not be used except in extreme circumstances'),('Z_DeleteInvoice.php',15,'Utility to reverse a customer invoice - a desperate measure that should not be used except in extreme circumstances'),('Z_DeleteOldPrices.php',15,'Deletes all old prices'),('Z_DeleteSalesTransActions.php',15,'Utility to delete all sales transactions, sales analysis the lot! Extreme care required!!!'),('Z_DescribeTable.php',11,''),('Z_Fix1cAllocations.php',9,''),('Z_FixGLTransPeriods.php',15,'Fixes periods where GL transactions were not created correctly'),('Z_GLAccountUsersCopyAuthority.php',15,'Utility to copy authority of GL accounts from one user to another'),('Z_ImportChartOfAccounts.php',11,''),('Z_ImportDebtors.php',15,'Import debtors by csv file'),('Z_ImportFixedAssets.php',15,'Allow fixed assets to be imported from a csv'),('Z_ImportGLAccountGroups.php',11,''),('Z_ImportGLAccountSections.php',11,''),('Z_ImportGLTransactions.php',15,'Import General Ledger Transactions'),('Z_ImportPartCodes.php',11,'Allows inventory items to be imported from a csv'),('Z_ImportPriceList.php',15,'Loads a new price list from a csv file'),('Z_ImportStocks.php',15,''),('Z_index.php',15,'Utility menu page'),('Z_ItemsWithoutPicture.php',15,'Shows the list of curent items without picture in webERP'),('Z_MakeLocUsers.php',15,'Create User Location records'),('Z_MakeNewCompany.php',15,''),('Z_MakeStockLocns.php',15,'Utility to make LocStock records for all items and locations if not already set up.'),('Z_poAddLanguage.php',15,'Add a New Language to the System'),('Z_poAdmin.php',15,'Allows for a gettext language po file to be administered'),('Z_poEditLangHeader.php',15,'Edit a Language File Header'),('Z_poEditLangModule.php',15,'Edit a Language File Module'),('Z_poEditLangRemaining.php',15,'Edit Remaining Strings For This Language'),('Z_poRebuildDefault.php',15,'Rebuild the System Default Language File'),('Z_PriceChanges.php',15,'Utility to make bulk pricing alterations to selected sales type price lists or selected customer prices only'),('Z_ReApplyCostToSA.php',15,'Utility to allow the sales analysis table to be updated with the latest cost information - the sales analysis takes the cost at the time the sale was made to reconcile with the enteries made in the gl.'),('Z_RemovePurchaseBackOrders.php',1,'Removes all purchase order back orders'),('Z_ReverseSuppPaymentRun.php',15,'Utility to reverse an entire Supplier payment run'),('Z_SalesIntegrityCheck.php',15,''),('Z_UpdateItemCosts.php',15,'Use CSV of item codes and costs to update webERP item costs'),('Z_UpdateSalesAnalysisWithLatestCustomerData.php',15,'Updates the salesanalysis table with the latest data from the customer debtorsmaster salestype and custbranch sales area and sales person irrespective of the sales type, area, salesperson at the time when the sale was made'),('Z_Upgrade3.10.php',15,''),('Z_Upgrade_3.01-3.02.php',15,''),('Z_Upgrade_3.04-3.05.php',15,''),('Z_Upgrade_3.05-3.06.php',15,''),('Z_Upgrade_3.07-3.08.php',15,''),('Z_Upgrade_3.08-3.09.php',15,''),('Z_Upgrade_3.09-3.10.php',15,''),('Z_Upgrade_3.10-3.11.php',15,''),('Z_Upgrade_3.11-4.00.php',15,''),('Z_UploadForm.php',15,'Utility to upload a file to a remote server'),('Z_UploadResult.php',15,'Utility to upload a file to a remote server');
+ 
+-INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2,11),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,11),(4,0),(4,1),(4,2),(4,5),(5,0),(5,1),(5,2),(5,3),(5,11),(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(6,8),(6,9),(6,10),(6,11),(7,0),(7,1),(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,6),(8,7),(8,8),(8,9),(8,10),(8,11),(8,12),(8,13),(8,14),(8,15),(8,16),(8,20),(9,0),(9,9),(9,20);
++INSERT INTO `securitygroups` VALUES (1,0),(1,1),(1,2),(1,5),(2,0),(2,1),(2,2),(2,11),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,11),(4,0),(4,1),(4,2),(4,5),(5,0),(5,1),(5,2),(5,3),(5,11),(5,21),(6,0),(6,1),(6,2),(6,3),(6,4),(6,5),(6,6),(6,7),(6,8),(6,9),(6,10),(6,11),(6,21),(7,0),(7,1),(8,0),(8,1),(8,2),(8,3),(8,4),(8,5),(8,6),(8,7),(8,8),(8,9),(8,10),(8,11),(8,12),(8,13),(8,14),(8,15),(8,16),(8,20),(8,21),(8,22),(9,0),(9,9),(9,20);
++
++INSERT INTO `securitytokens` (`tokenid`, `tokenname`) VALUES (21,'Credit control - stop, watch, limits, reminders, charges and write-offs'),(22,'Credit control approval - Finance Director approves write-offs');
++INSERT INTO `config` (`confname`, `confvalue`) VALUES ('CreditReviewMonths','12'),('CreditInterestRate','0'),('CreditLateFee','0'),('CreditChargeDaysOverdue','30'),('CreditWriteOffApprovalLimit','1000'),('CreditDunningMinDays','14'),('CreditControlEmail',''),('CreditStopAfterFinalNotice','0');
++INSERT INTO `dunningstages` (`stage`, `daysoverdue`, `subject`, `body`) VALUES (1,30,'Reminder: overdue invoices on your account','Dear {customer},\n\nOur records show that the following items on your account are now overdue:\n\n{invoices}\nThe total overdue is {total} {currency}. If you have already paid, please accept our thanks and ignore this reminder. Otherwise we would be grateful for your payment.\n\nKind regards,\nCredit Control\n{company}'),(2,60,'Second reminder: overdue invoices on your account','Dear {customer},\n\nWe wrote to you recently about overdue items on your account and have not yet received payment. The items still outstanding are:\n\n{invoices}\nThe total overdue is {total} {currency}. Please arrange payment immediately, or contact us if there is a problem with any of these items.\n\nKind regards,\nCredit Control\n{company}'),(3,90,'FINAL NOTICE: overdue invoices on your account','Dear {customer},\n\nThis is the final notice about the following overdue items:\n\n{invoices}\nThe total overdue is {total} {currency}. Unless we receive payment within 7 days your account will be put on stop, no further orders will be accepted and interest and late payment charges will be applied.\n\nKind regards,\nCredit Control\n{company}');
++INSERT INTO `scripts` (`script`, `pagesecurity`, `description`) VALUES ('CreditControlSetup.php',21,'Credit control settings: review period, interest, late fee, GL accounts and reminder letters'),('CustomerCredit.php',2,'Credit status, reviews, stop and watch, disputes and credit history of a customer'),('CreditControlReport.php',2,'Customers due a credit review, over their credit limit, on watch or on stop; orders held for credit control'),('CreditControlDunning.php',21,'Overdue reminder letter run'),('CreditControlCharges.php',21,'Month end interest and late fee charges and waivers'),('CreditControlWriteOff.php',2,'Bad debt write-offs, their approval and the write-off report'),('DebtorsGLReconciliation.php',8,'Reconciles customer balances to the trade debtors control account'),('CustomerCreditNotices.php',1,'Customer portal: reminders and charges on the customer account');
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'AR', 'Transactions', 'Credit Control Reminder Run', '/CreditControlDunning.php', 5 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'AR', 'Transactions', 'Month End Interest and Late Fees', '/CreditControlCharges.php', 6 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'AR', 'Transactions', 'Bad Debt Write-offs', '/CreditControlWriteOff.php', 7 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'AR', 'Reports', 'Credit Control Report', '/CreditControlReport.php', 11 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'AR', 'Reports', 'Debtors to General Ledger Reconciliation', '/DebtorsGLReconciliation.php', 12 FROM `securityroles`;
++INSERT INTO `menuitems` (`secroleid`, `modulelink`, `menusection`, `caption`, `url`, `sequence`) SELECT `secroleid`, 'system', 'Transactions', 'Credit Control Settings', '/CreditControlSetup.php', 30 FROM `securityroles`;
+ 
+ INSERT INTO `favourites` VALUES ('admin','Search Customers','SelectCustomer.php'),('admin','Search Inventory Items','SelectProduct.php'),('admin','Search Suppliers','SelectSupplier.php');
+-INSERT INTO `systypes` VALUES (0,'Journal - GL',0),(1,'Payment - GL',0),(2,'Receipt - GL',0),(3,'Standing Journal',0),(4,'Journal Template Number',0),(10,'Sales Invoice',0),(11,'Credit Note',0),(12,'Receipt',0),(15,'Journal - Debtors',0),(16,'Location Transfer',0),(17,'Stock Adjustment',0),(18,'Purchase Order',0),(19,'Picking List',0),(20,'Purchase Invoice',0),(21,'Debit Note',0),(22,'Creditors Payment',0),(23,'Creditors Journal',0),(25,'Purchase Order Delivery',0),(26,'Work Order Receipt',0),(28,'Work Order Issue',0),(29,'Work Order Variance',0),(30,'Sales Order',0),(31,'Shipment Close',0),(32,'Contract Close',0),(35,'Cost Update',0),(36,'Exchange Difference',0),(37,'Tenders',0),(38,'Stock Requests',0),(39,'Sales Commision Accruals',0),(40,'Work Order',0),(41,'Asset Addition',0),(42,'Asset Category Change',0),(43,'Delete w/down asset',0),(44,'Depreciation',0),(49,'Import Fixed Assets',0),(50,'Opening Balance',0),(500,'Auto Debtor Number',0),(600,'Auto Supplier Number',0);
+-INSERT INTO `companies` VALUES (1,'webERP Demonstration Company Ltd','1234567890','','123 Web Way','PO Box 123','Queen Street','Melbourne','Victoria 3043','Australia','+61 3 4567 8901','+61 3 4567 8902','weberp@weberpdemo.com','USD','1100','4900','2100','2400','2150','2150','4200','5200','4200','3500',1,1,1,'5600');
++INSERT INTO `systypes` VALUES (0,'Journal - GL',0),(1,'Payment - GL',0),(2,'Receipt - GL',0),(3,'Standing Journal',0),(4,'Journal Template Number',0),(10,'Sales Invoice',0),(11,'Credit Note',0),(12,'Receipt',0),(15,'Journal - Debtors',0),(16,'Location Transfer',0),(17,'Stock Adjustment',0),(18,'Purchase Order',0),(19,'Picking List',0),(20,'Purchase Invoice',0),(21,'Debit Note',0),(22,'Creditors Payment',0),(23,'Creditors Journal',0),(25,'Purchase Order Delivery',0),(26,'Work Order Receipt',0),(28,'Work Order Issue',0),(29,'Work Order Variance',0),(30,'Sales Order',0),(31,'Shipment Close',0),(32,'Contract Close',0),(35,'Cost Update',0),(36,'Exchange Difference',0),(37,'Tenders',0),(38,'Stock Requests',0),(39,'Sales Commision Accruals',0),(40,'Work Order',0),(41,'Asset Addition',0),(42,'Asset Category Change',0),(43,'Delete w/down asset',0),(44,'Depreciation',0),(49,'Import Fixed Assets',0),(50,'Opening Balance',0),(60,'Customer Interest/Fee Charge',0),(61,'Customer Charge Waiver',0),(62,'Customer Bad Debt Write-off',0),(500,'Auto Debtor Number',0),(600,'Auto Supplier Number',0);
++INSERT INTO `companies` VALUES (1,'webERP Demonstration Company Ltd','1234567890','','123 Web Way','PO Box 123','Queen Street','Melbourne','Victoria 3043','Australia','+61 3 4567 8901','+61 3 4567 8902','weberp@weberpdemo.com','USD','1100','4900','2100','2400','2150','2150','4200','5200','4200','3500',1,1,1,'5600','0','0','0');
+ 
+ INSERT INTO `accountsection` (`sectionid`, `sectionname`) VALUES
+ (1, 'Revenue'),
+@@ -518,16 +529,16 @@ INSERT INTO `paymentmethods` (`paymentid`, `paymentname`) VALUES
+ (9, 'Money Order'),
+ (10, 'On Account');
+ 
+-INSERT INTO `holdreasons` (`reasoncode`, `reasondescription`) VALUES
+-(0, 'No hold'),
+-(1, 'Credit Limit Exceeded'),
+-(2, 'Payment Overdue'),
+-(3, 'Disputed Invoice'),
+-(4, 'Credit Hold'),
+-(5, 'Customer Request'),
+-(6, 'Under Review'),
+-(7, 'Bankruptcy'),
+-(8, 'Fraud Suspected');
++INSERT INTO `holdreasons` (`reasoncode`, `reasondescription`, `dissallowinvoices`) VALUES
++(0, 'No hold', 0),
++(1, 'Credit Limit Exceeded', 2),
++(2, 'Payment Overdue', 2),
++(3, 'Disputed Invoice', 0),
++(4, 'Credit Hold', 1),
++(5, 'Customer Request', 1),
++(6, 'Under Review', 2),
++(7, 'Bankruptcy', 1),
++(8, 'Fraud Suspected', 1);
+ 
+ 
+ 
+diff --git a/install/sql/tables/companies.sql b/install/sql/tables/companies.sql
+index 476d720..9818162 100644
+--- a/install/sql/tables/companies.sql
++++ b/install/sql/tables/companies.sql
+@@ -27,5 +27,8 @@ CREATE TABLE `companies` (
+   `gllink_creditors` tinyint(1) DEFAULT '1',
+   `gllink_stock` tinyint(1) DEFAULT '1',
+   `freightact` varchar(20) NOT NULL DEFAULT '0',
++  `interestincomeact` varchar(20) NOT NULL DEFAULT '0',
++  `latefeeact` varchar(20) NOT NULL DEFAULT '0',
++  `baddebtact` varchar(20) NOT NULL DEFAULT '0',
+   PRIMARY KEY (`coycode`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/creditcontrollog.sql b/install/sql/tables/creditcontrollog.sql
+new file mode 100644
+index 0000000..c30d6f9
+--- /dev/null
++++ b/install/sql/tables/creditcontrollog.sql
+@@ -0,0 +1,16 @@
++CREATE TABLE `creditcontrollog` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `eventdate` datetime NOT NULL,
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `eventtype` varchar(12) NOT NULL DEFAULT '',
++  `detail` varchar(1000) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `transtype` smallint NOT NULL DEFAULT '0',
++  `transno` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `eventdate` (`eventdate`),
++  KEY `eventtype` (`eventtype`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/creditreviews.sql b/install/sql/tables/creditreviews.sql
+new file mode 100644
+index 0000000..8e6bd81
+--- /dev/null
++++ b/install/sql/tables/creditreviews.sql
+@@ -0,0 +1,14 @@
++CREATE TABLE `creditreviews` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `reviewdate` date NOT NULL DEFAULT '1000-01-01',
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `outcome` varchar(20) NOT NULL DEFAULT '',
++  `oldlimit` double NOT NULL DEFAULT '0',
++  `newlimit` double NOT NULL DEFAULT '0',
++  `notes` text DEFAULT NULL,
++  `nextreviewdate` date NOT NULL DEFAULT '1000-01-01',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `reviewdate` (`reviewdate`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/creditwriteoffs.sql b/install/sql/tables/creditwriteoffs.sql
+new file mode 100644
+index 0000000..71fb7af
+--- /dev/null
++++ b/install/sql/tables/creditwriteoffs.sql
+@@ -0,0 +1,19 @@
++CREATE TABLE `creditwriteoffs` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `requestdate` datetime NOT NULL,
++  `requestedby` varchar(20) NOT NULL DEFAULT '',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `homeamount` double NOT NULL DEFAULT '0',
++  `reason` varchar(500) NOT NULL DEFAULT '',
++  `putonstop` tinyint NOT NULL DEFAULT '1',
++  `status` tinyint NOT NULL DEFAULT '0' COMMENT '0 awaiting approval, 1 posted, 2 rejected',
++  `approvedby` varchar(20) NOT NULL DEFAULT '',
++  `approvaldate` datetime DEFAULT NULL,
++  `transno` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `status` (`status`),
++  KEY `approvaldate` (`approvaldate`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/debtorcharges.sql b/install/sql/tables/debtorcharges.sql
+new file mode 100644
+index 0000000..e0d6e3b
+--- /dev/null
++++ b/install/sql/tables/debtorcharges.sql
+@@ -0,0 +1,15 @@
++CREATE TABLE `debtorcharges` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `chargemonth` char(7) NOT NULL DEFAULT '',
++  `chargetype` char(3) NOT NULL DEFAULT 'INT',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `transno` int NOT NULL DEFAULT '0',
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `waived` tinyint NOT NULL DEFAULT '0',
++  `waivedtransno` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`id`),
++  UNIQUE KEY `onechargepermonth` (`debtorno`, `chargemonth`, `chargetype`),
++  KEY `transno` (`transno`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/debtorsmaster.sql b/install/sql/tables/debtorsmaster.sql
+index a2def1c..ac30f5b 100644
+--- a/install/sql/tables/debtorsmaster.sql
++++ b/install/sql/tables/debtorsmaster.sql
+@@ -30,6 +30,9 @@ CREATE TABLE `debtorsmaster` (
+   `customerpoline` tinyint(1) NOT NULL DEFAULT '0',
+   `typeid` tinyint NOT NULL DEFAULT '1',
+   `language_id` varchar(10) NOT NULL DEFAULT 'en_GB.utf8',
++  `nextreviewdate` date DEFAULT NULL,
++  `exemptinterest` tinyint NOT NULL DEFAULT '0',
++  `exemptfees` tinyint NOT NULL DEFAULT '0',
+   PRIMARY KEY (`debtorno`),
+   KEY `Currency` (`currcode`),
+   KEY `HoldReason` (`holdreason`),
+@@ -38,6 +41,7 @@ CREATE TABLE `debtorsmaster` (
+   KEY `SalesType` (`salestype`),
+   KEY `EDIInvoices` (`ediinvoices`),
+   KEY `EDIOrders` (`ediorders`),
++  KEY `nextreviewdate` (`nextreviewdate`),
+   KEY `debtorsmaster_ibfk_5` (`typeid`),
+   CONSTRAINT `debtorsmaster_ibfk_1` FOREIGN KEY (`holdreason`) REFERENCES `holdreasons` (`reasoncode`),
+   CONSTRAINT `debtorsmaster_ibfk_2` FOREIGN KEY (`currcode`) REFERENCES `currencies` (`currabrev`),
+diff --git a/install/sql/tables/debtortrans.sql b/install/sql/tables/debtortrans.sql
+index 9560711..6c7e809 100644
+--- a/install/sql/tables/debtortrans.sql
++++ b/install/sql/tables/debtortrans.sql
+@@ -24,6 +24,7 @@ CREATE TABLE `debtortrans` (
+   `consignment` varchar(20) NOT NULL DEFAULT '',
+   `packages` int NOT NULL DEFAULT '1' COMMENT 'number of cartons',
+   `salesperson` varchar(4) NOT NULL DEFAULT '',
++  `disputed` tinyint NOT NULL DEFAULT '0',
+   `balance` double GENERATED ALWAYS AS (((((`ovamount` + `ovgst`) + `ovfreight`) + `ovdiscount`) - `alloc`)) STORED,
+   PRIMARY KEY (`id`),
+   KEY `DebtorNo` (`debtorno`,`branchcode`),
+diff --git a/install/sql/tables/dunninghistory.sql b/install/sql/tables/dunninghistory.sql
+new file mode 100644
+index 0000000..8e16420
+--- /dev/null
++++ b/install/sql/tables/dunninghistory.sql
+@@ -0,0 +1,16 @@
++CREATE TABLE `dunninghistory` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `stage` tinyint NOT NULL DEFAULT '1',
++  `sentdate` datetime NOT NULL,
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `method` varchar(5) NOT NULL DEFAULT 'email',
++  `sentto` varchar(255) NOT NULL DEFAULT '',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `items` varchar(1000) NOT NULL DEFAULT '',
++  `lettertext` text DEFAULT NULL,
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `sentdate` (`sentdate`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/dunningstages.sql b/install/sql/tables/dunningstages.sql
+new file mode 100644
+index 0000000..0f3e36a
+--- /dev/null
++++ b/install/sql/tables/dunningstages.sql
+@@ -0,0 +1,7 @@
++CREATE TABLE `dunningstages` (
++  `stage` tinyint NOT NULL DEFAULT '1',
++  `daysoverdue` smallint NOT NULL DEFAULT '0',
++  `subject` varchar(100) NOT NULL DEFAULT '',
++  `body` text DEFAULT NULL,
++  PRIMARY KEY (`stage`)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+diff --git a/install/sql/tables/salesorders.sql b/install/sql/tables/salesorders.sql
+index 268032a..60250d1 100644
+--- a/install/sql/tables/salesorders.sql
++++ b/install/sql/tables/salesorders.sql
+@@ -29,6 +29,7 @@ CREATE TABLE `salesorders` (
+   `poplaced` tinyint NOT NULL DEFAULT '0',
+   `salesperson` varchar(4) NOT NULL,
+   `internalcomment` blob DEFAULT NULL,
++  `creditflag` tinyint NOT NULL DEFAULT '0' COMMENT '0 none, 1 held for credit control, 2 customer on watch, 3 released by credit control',
+   PRIMARY KEY (`orderno`),
+   KEY `DebtorNo` (`debtorno`),
+   KEY `OrdDate` (`orddate`),
+@@ -39,6 +40,7 @@ CREATE TABLE `salesorders` (
+   KEY `quotation` (`quotation`),
+   KEY `poplaced` (`poplaced`),
+   KEY `salesperson` (`salesperson`),
++  KEY `creditflag` (`creditflag`),
+   CONSTRAINT `salesorders_ibfk_1` FOREIGN KEY (`branchcode`, `debtorno`) REFERENCES `custbranch` (`branchcode`, `debtorno`),
+   CONSTRAINT `salesorders_ibfk_2` FOREIGN KEY (`shipvia`) REFERENCES `shippers` (`shipper_id`),
+   CONSTRAINT `salesorders_ibfk_3` FOREIGN KEY (`fromstkloc`) REFERENCES `locations` (`loccode`)
+diff --git a/sql/updates/44.php b/sql/updates/44.php
+new file mode 100644
+index 0000000..2116f61
+--- /dev/null
++++ b/sql/updates/44.php
+@@ -0,0 +1,206 @@
++<?php
++
++// CREDIT CONTROL
++//   - history tables for reviews and every credit control action, reminder stages and the reminders sent,
++//     interest and fee charges, bad debt write-offs
++//   - customer next review date and interest/fee exemptions, disputed invoices, order credit flag
++//   - GL accounts for interest income, late fees and bad debts
++//   - settings, security tokens, scripts, menu items and the transaction types the charges, waivers and
++//     write-offs post as
++//
++// The credit status of a customer is the existing holdreason / holdreasons.dissallowinvoices
++// (1 = on stop, 2 = on watch), so no new column holds it.
++// install/sql/tables, install/sql/data and install/sql/demo.sql carry the same changes for new installations.
++
++CreateTable('creditreviews',
++"CREATE TABLE `creditreviews` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `reviewdate` date NOT NULL DEFAULT '1000-01-01',
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `outcome` varchar(20) NOT NULL DEFAULT '',
++  `oldlimit` double NOT NULL DEFAULT '0',
++  `newlimit` double NOT NULL DEFAULT '0',
++  `notes` text DEFAULT NULL,
++  `nextreviewdate` date NOT NULL DEFAULT '1000-01-01',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `reviewdate` (`reviewdate`)
++)");
++
++CreateTable('creditcontrollog',
++"CREATE TABLE `creditcontrollog` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `eventdate` datetime NOT NULL,
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `eventtype` varchar(12) NOT NULL DEFAULT '',
++  `detail` varchar(1000) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `transtype` smallint NOT NULL DEFAULT '0',
++  `transno` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `eventdate` (`eventdate`),
++  KEY `eventtype` (`eventtype`)
++)");
++
++CreateTable('dunningstages',
++"CREATE TABLE `dunningstages` (
++  `stage` tinyint NOT NULL DEFAULT '1',
++  `daysoverdue` smallint NOT NULL DEFAULT '0',
++  `subject` varchar(100) NOT NULL DEFAULT '',
++  `body` text DEFAULT NULL,
++  PRIMARY KEY (`stage`)
++)");
++
++CreateTable('dunninghistory',
++"CREATE TABLE `dunninghistory` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `stage` tinyint NOT NULL DEFAULT '1',
++  `sentdate` datetime NOT NULL,
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `method` varchar(5) NOT NULL DEFAULT 'email',
++  `sentto` varchar(255) NOT NULL DEFAULT '',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `items` varchar(1000) NOT NULL DEFAULT '',
++  `lettertext` text DEFAULT NULL,
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `sentdate` (`sentdate`)
++)");
++
++CreateTable('debtorcharges',
++"CREATE TABLE `debtorcharges` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `chargemonth` char(7) NOT NULL DEFAULT '',
++  `chargetype` char(3) NOT NULL DEFAULT 'INT',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `transno` int NOT NULL DEFAULT '0',
++  `userid` varchar(20) NOT NULL DEFAULT '',
++  `waived` tinyint NOT NULL DEFAULT '0',
++  `waivedtransno` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`id`),
++  UNIQUE KEY `onechargepermonth` (`debtorno`, `chargemonth`, `chargetype`),
++  KEY `transno` (`transno`)
++)");
++
++CreateTable('creditwriteoffs',
++"CREATE TABLE `creditwriteoffs` (
++  `id` int NOT NULL AUTO_INCREMENT,
++  `debtorno` varchar(10) NOT NULL DEFAULT '',
++  `requestdate` datetime NOT NULL,
++  `requestedby` varchar(20) NOT NULL DEFAULT '',
++  `currcode` char(3) NOT NULL DEFAULT '',
++  `amount` double NOT NULL DEFAULT '0',
++  `homeamount` double NOT NULL DEFAULT '0',
++  `reason` varchar(500) NOT NULL DEFAULT '',
++  `putonstop` tinyint NOT NULL DEFAULT '1',
++  `status` tinyint NOT NULL DEFAULT '0' COMMENT '0 awaiting approval, 1 posted, 2 rejected',
++  `approvedby` varchar(20) NOT NULL DEFAULT '',
++  `approvaldate` datetime DEFAULT NULL,
++  `transno` int NOT NULL DEFAULT '0',
++  PRIMARY KEY (`id`),
++  KEY `debtorno` (`debtorno`),
++  KEY `status` (`status`),
++  KEY `approvaldate` (`approvaldate`)
++)");
++
++AddColumn('nextreviewdate', 'debtorsmaster', 'date', 'NULL', '', 'language_id');
++AddColumn('exemptinterest', 'debtorsmaster', 'tinyint', 'NOT NULL', '0', 'nextreviewdate');
++AddColumn('exemptfees', 'debtorsmaster', 'tinyint', 'NOT NULL', '0', 'exemptinterest');
++AddColumn('disputed', 'debtortrans', 'tinyint', 'NOT NULL', '0', 'salesperson');
++AddColumn('creditflag', 'salesorders', 'tinyint', 'NOT NULL', '0', 'internalcomment');
++AddColumn('interestincomeact', 'companies', 'varchar(20)', 'NOT NULL', '0', 'freightact');
++AddColumn('latefeeact', 'companies', 'varchar(20)', 'NOT NULL', '0', 'interestincomeact');
++AddColumn('baddebtact', 'companies', 'varchar(20)', 'NOT NULL', '0', 'latefeeact');
++
++$Result = DB_query("SHOW INDEX FROM debtorsmaster WHERE Key_name = 'nextreviewdate'");
++if (DB_num_rows($Result) == 0) {
++	executeSQL("ALTER TABLE `debtorsmaster` ADD KEY `nextreviewdate` (`nextreviewdate`)");
++}
++$Result = DB_query("SHOW INDEX FROM salesorders WHERE Key_name = 'creditflag'");
++if (DB_num_rows($Result) == 0) {
++	executeSQL("ALTER TABLE `salesorders` ADD KEY `creditflag` (`creditflag`)");
++}
++
++/* Transaction types for the charges, waivers and write-offs. systypes.typeno is the last number used, 0 for none yet. */
++foreach (array(60 => 'Customer Interest/Fee Charge', 61 => 'Customer Charge Waiver', 62 => 'Customer Bad Debt Write-off') as $TypeID => $TypeName) {
++	executeSQL("INSERT INTO systypes (typeid, typename, typeno)
++				SELECT " . $TypeID . ", '" . $TypeName . "', 0
++				FROM DUAL
++				WHERE NOT EXISTS (SELECT 1 FROM systypes WHERE typeid = " . $TypeID . ")");
++}
++
++NewSecurityToken(21, 'Credit control - stop, watch, limits, reminders, charges and write-offs');
++NewSecurityToken(22, 'Credit control approval - Finance Director approves write-offs');
++/* AR clerks and accountants run credit control, the system administrator can also approve write-offs. Other roles, including the sales roles, get neither token. */
++executeSQL("INSERT IGNORE INTO securitygroups (secroleid, tokenid)
++			SELECT secroleid, 21 FROM securityroles WHERE secroleid IN (5, 6, 8)");
++executeSQL("INSERT IGNORE INTO securitygroups (secroleid, tokenid)
++			SELECT secroleid, 22 FROM securityroles WHERE secroleid = 8");
++
++NewConfigValue('CreditReviewMonths', '12');
++NewConfigValue('CreditInterestRate', '0');
++NewConfigValue('CreditLateFee', '0');
++NewConfigValue('CreditChargeDaysOverdue', '30');
++NewConfigValue('CreditWriteOffApprovalLimit', '1000');
++NewConfigValue('CreditDunningMinDays', '14');
++NewConfigValue('CreditControlEmail', '');
++NewConfigValue('CreditStopAfterFinalNotice', '0');
++
++NewScript('CreditControlSetup.php', 21);
++NewScript('CustomerCredit.php', 2);
++NewScript('CreditControlReport.php', 2);
++NewScript('CreditControlDunning.php', 21);
++NewScript('CreditControlCharges.php', 21);
++NewScript('CreditControlWriteOff.php', 2);
++NewScript('DebtorsGLReconciliation.php', 8);
++NewScript('CustomerCreditNotices.php', 1);
++
++NewMenuItem('AR', 'Transactions', __('Credit Control Reminder Run'), '/CreditControlDunning.php', 5);
++NewMenuItem('AR', 'Transactions', __('Month End Interest and Late Fees'), '/CreditControlCharges.php', 6);
++NewMenuItem('AR', 'Transactions', __('Bad Debt Write-offs'), '/CreditControlWriteOff.php', 7);
++NewMenuItem('AR', 'Reports', __('Credit Control Report'), '/CreditControlReport.php', 11);
++NewMenuItem('AR', 'Reports', __('Debtors to General Ledger Reconciliation'), '/DebtorsGLReconciliation.php', 12);
++NewMenuItem('system', 'Transactions', __('Credit Control Settings'), '/CreditControlSetup.php', 30);
++
++/* holdreasons.dissallowinvoices defaulted to -1 for reasons loaded by the demo data or a CSV import. Credit control reads 1 as on stop, 2 as on watch and anything else as normal, so make 'not set' explicit. */
++executeSQL("UPDATE holdreasons SET dissallowinvoices = 0 WHERE dissallowinvoices < 0");
++/* credit control needs at least one reason to put a customer on stop and one for watch */
++executeSQL("INSERT INTO holdreasons (reasoncode, reasondescription, dissallowinvoices)
++			SELECT 98, 'Credit watch', 2
++			FROM DUAL
++			WHERE NOT EXISTS (SELECT 1 FROM holdreasons WHERE dissallowinvoices = 2)
++				AND NOT EXISTS (SELECT 1 FROM holdreasons WHERE reasoncode = 98)");
++executeSQL("INSERT INTO holdreasons (reasoncode, reasondescription, dissallowinvoices)
++			SELECT 99, 'Credit stop', 1
++			FROM DUAL
++			WHERE NOT EXISTS (SELECT 1 FROM holdreasons WHERE dissallowinvoices = 1)
++				AND NOT EXISTS (SELECT 1 FROM holdreasons WHERE reasoncode = 99)");
++
++/* The three reminder letters. Finance changes the days and the wording in Credit Control Settings. */
++executeSQL("INSERT INTO dunningstages (stage, daysoverdue, subject, body)
++			SELECT 1, 30, 'Reminder: overdue invoices on your account', 'Dear {customer},\n\nOur records show that the following items on your account are now overdue:\n\n{invoices}\nThe total overdue is {total} {currency}. If you have already paid, please accept our thanks and ignore this reminder. Otherwise we would be grateful for your payment.\n\nKind regards,\nCredit Control\n{company}'
++			FROM DUAL
++			WHERE NOT EXISTS (SELECT 1 FROM dunningstages WHERE stage = 1)");
++executeSQL("INSERT INTO dunningstages (stage, daysoverdue, subject, body)
++			SELECT 2, 60, 'Second reminder: overdue invoices on your account', 'Dear {customer},\n\nWe wrote to you recently about overdue items on your account and have not yet received payment. The items still outstanding are:\n\n{invoices}\nThe total overdue is {total} {currency}. Please arrange payment immediately, or contact us if there is a problem with any of these items.\n\nKind regards,\nCredit Control\n{company}'
++			FROM DUAL
++			WHERE NOT EXISTS (SELECT 1 FROM dunningstages WHERE stage = 2)");
++executeSQL("INSERT INTO dunningstages (stage, daysoverdue, subject, body)
++			SELECT 3, 90, 'FINAL NOTICE: overdue invoices on your account', 'Dear {customer},\n\nThis is the final notice about the following overdue items:\n\n{invoices}\nThe total overdue is {total} {currency}. Unless we receive payment within 7 days your account will be put on stop, no further orders will be accepted and interest and late payment charges will be applied.\n\nKind regards,\nCredit Control\n{company}'
++			FROM DUAL
++			WHERE NOT EXISTS (SELECT 1 FROM dunningstages WHERE stage = 3)");
++
++/* Go-live: every existing customer is normal (their hold reason is untouched, so customers already on stop stay on stop) and gets a next review date a standard period from now. Credit control can load the dates and statuses from the spreadsheet in Credit Control Settings. */
++executeSQL("UPDATE debtorsmaster SET nextreviewdate = DATE_ADD(CURRENT_DATE, INTERVAL 12 MONTH) WHERE nextreviewdate IS NULL");
++
++if ($_SESSION['Updates']['Errors'] == 0) {
++	UpdateDBNo(basename(__FILE__, '.php'), __('Credit control'));
++}

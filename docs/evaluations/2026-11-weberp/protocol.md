@@ -398,3 +398,16 @@ part the listing does not make clear, then the listing of amendment 15.
 The plugin's session note is cut to one line (where the map is; the
 skill says how to read it), so the agent gets one instruction. Fixed
 export, RECALL=0, otherwise as amendment 12.
+
+## Amendment 17 (2026-11-08, before any of its runs): read the code a change edits or calls
+
+Tries 7 and 8 lost their reviews on shared plumbing the agent edited or
+called without reading brief or code: the SMTP mail call (rule in brief
+157, unread; no mail code read), the positional company INSERT in the
+installer (not in the map; `InstallFunctions.php` unread), the portal
+session. Requirement 3 of amendment 16 ("do not open source to learn how
+something works") is replaced: take how the system works as a whole from
+the briefs, but before editing an existing file or calling or extending
+an existing function, table, setting or install step, read that code.
+READ_MAP=7; otherwise as amendment 16. Compared with the existing
+code-only tries 2 and 3 (no new code-only runs).

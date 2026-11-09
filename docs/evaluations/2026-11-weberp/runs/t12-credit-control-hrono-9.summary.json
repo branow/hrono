@@ -1,0 +1,45 @@
+{
+ "task": "t12-credit-control",
+ "base": "4cb937f79e8b57063bd47132413abdac8abbcbdc",
+ "arm": "hrono",
+ "try": "9",
+ "model_alias": "sonnet",
+ "models_reported": [
+  "<synthetic>",
+  "claude-sonnet-5-5"
+ ],
+ "started_utc": "2026-11-08T21:14:00Z",
+ "seconds": 5539,
+ "turns": 208,
+ "max_turns": 200,
+ "subtype": "success",
+ "is_error": true,
+ "cost_usd": 8.972812000000003,
+ "usage": {
+  "input_tokens": 167,
+  "cache_creation_input_tokens": 444272,
+  "cache_read_input_tokens": 29027450,
+  "output_tokens": 138990,
+  "output_tokens_details": {
+   "thinking_tokens": 39338
+  },
+  "server_tool_use": {
+   "web_search_requests": 0,
+   "web_fetch_requests": 0
+  },
+  "service_tier": "standard",
+  "cache_creation": {
+   "ephemeral_1h_input_tokens": 444272,
+   "ephemeral_5m_input_tokens": 0
+  },
+  "inference_geo": "global",
+  "iterations": [],
+  "speed": "standard",
+  "fallback_credit": null
+ },
+ "exit_code": 1,
+ "stat": [
+  " 35 files changed, 2273 insertions(+), 69 deletions(-)"
+ ],
+ "stderr_tail": ""
+}
