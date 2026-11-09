@@ -419,3 +419,9 @@ one code-only try (`code-haiku1`) and one hrono try (`hrono-haiku1`,
 READ_MAP=7, RECALL=0, fixed export), both under `caffeinate -i`, 200
 turns, THREADS on. Graded blind as before: one Opus checklist grader per
 run and one Opus whole-change review of the pair.
+
+## Amendment 19 (2026-11-09, before any of its runs): Opus, both arms
+
+As amendment 18 with `MODEL=opus`: one code-only try (`code-opus1`) and
+one hrono try (`hrono-opus1`, READ_MAP=7, RECALL=0, fixed export), both
+under `caffeinate -i`, 200 turns, THREADS on; graded blind as before.
