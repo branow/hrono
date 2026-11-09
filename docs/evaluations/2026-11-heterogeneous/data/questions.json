@@ -1,0 +1,364 @@
+[
+  {
+    "id": "T01",
+    "half": "thread",
+    "question": "When I import a sales order from a CSV file and one of the lines is an obsolete item, the whole import stops. Is that on purpose, and what did the maintainers decide to do about it?",
+    "facts": [
+      "The abort was added on purpose by a maintainer (pakricard): an obsolete item is one the company no longer buys, makes or sells, kept only for history.",
+      "About 200 other places check the obsolete flag (BOMs, purchase orders, work orders, MRP, price lists...), so lifting it only for sales orders would be inconsistent.",
+      "The suggested workaround is to flag the item current, enter the order, then flag it obsolete again.",
+      "Three behaviours were weighed (abort, skip the obsolete line and import the rest, import everything); skipping the line was the compromise most participants accepted, and a richer item lifecycle status was moved to a separate discussion."
+    ],
+    "source": [
+      "threads-2026-02-27/discussions/discussion-808.md"
+    ]
+  },
+  {
+    "id": "T02",
+    "half": "thread",
+    "question": "I need to write a new database update script. What rules should it follow, and why do the maintainers insist on them?",
+    "facts": [
+      "Update scripts should use only the helper functions of the database-specific upgrade include files, not raw SQL.",
+      "The reason is to keep updates independent of the database server: MariaDB and MySQL are diverging and the lead still hopes to support Postgres; the helpers also do sanity checks that lower the risk of damaging the database.",
+      "A script should record its update number only when the run had no errors (check the session update error count is 0), so a failed update is not marked as done."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-304.md"
+    ]
+  },
+  {
+    "id": "T03",
+    "half": "thread",
+    "question": "A user got a blank page and an 'Incorrect decimal value' error on the version column when processing a new purchase order. What caused it and how was it fixed?",
+    "facts": [
+      "The insert into the purchase order table sent an empty string for the order version, which the strict MariaDB setup rejected.",
+      "It only happened when the order was started from the inventory item page ('Purchase this item from' a supplier), not when created through Purchases > New Purchase Order, where the version shows as 1.",
+      "The maintainer fixed it with an updated purchase order header script, after which processing the order worked."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-421.md"
+    ]
+  },
+  {
+    "id": "T04",
+    "half": "thread",
+    "question": "Why did the project drop the old chartdetails table for GL balances, and why are the new totals kept up to date by database triggers instead of PHP code?",
+    "facts": [
+      "chartdetails was considered inefficient and cumbersome and often held incorrect data; the replacement is a simple per-account, per-period totals table (gltotals).",
+      "Updating the totals by parsing each SQL statement inside the query function failed because GL narratives broke the parsing; wrapping all ~194 GL inserts in a new function was judged too much work.",
+      "Triggers on GL transaction insert/update/delete were tested and adopted, which keeps the totals current with no extra code; the 'posted' flag on GL transactions then became meaningless and was removed.",
+      "Upgrade note: old installs may see small differences from the old chartdetails figures, mostly in periods over ten years old; the new totals are taken as correct."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-354.md"
+    ]
+  },
+  {
+    "id": "T05",
+    "half": "thread",
+    "question": "Why can't I create a work order for an item that has no bill of materials, when older versions allowed it?",
+    "facts": [
+      "The requirement for a BOM was added to work order entry in September 2024.",
+      "The lead's concern: when a work order is closed, the system posts a usage variance between the BOM's expected cost and the actual issues; with no BOM the variance would be huge and distort the accounts.",
+      "Suggested workaround: use the same GL account for stock usage and usage variance, giving up usage-variance reporting.",
+      "Agreed direction: allow it as an option (first a system parameter, later a checkbox on the work order entry form) with the default behaviour unchanged; still open."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-793.md"
+    ]
+  },
+  {
+    "id": "T06",
+    "half": "thread",
+    "question": "Why is the minimum supported MySQL version 5.7.5, and what is the project's general stance on supporting older database and server versions?",
+    "facts": [
+      "The installer failed on old servers because the schema uses generated (calculated) columns; MySQL 5.5 does not understand 'GENERATED ALWAYS'.",
+      "Generated columns arrived only in MySQL 5.7.5, and no one wanted the extra code to work around that, so 5.7.5 was declared the minimum.",
+      "The lead's stated principle is to support as much older hardware and software as possible, even at the cost of newer features, compromising only when no workaround is feasible."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-687.md"
+    ]
+  },
+  {
+    "id": "T07",
+    "half": "thread",
+    "question": "MariaDB uses the same PHP mysqli functions as MySQL, so why is there still a separate 'mariadb' database type in the config? Was merging them considered?",
+    "facts": [
+      "A pull request proposed dropping the mariadb type and connector and using mysql/mysqli for MariaDB; it was closed, not merged.",
+      "The lead kept it because MariaDB and MySQL are diverging (for example the syntax for calculated columns differs), so they need different upgrade function files chosen by the database type.",
+      "An alternative of detecting the server type at run time with a class hierarchy for the database layer was rejected as over-complicated, 'a solution in search of a problem'; the lead agreed the Postgres files could go since they do not work."
+    ],
+    "source": [
+      "threads-2026-02-27/pulls/pull-472.md"
+    ]
+  },
+  {
+    "id": "T08",
+    "half": "thread",
+    "question": "Why can't automatic exchange-rate updates use Google any more, and what does someone upgrading need to do about that setting?",
+    "facts": [
+      "Enabling auto update made the currency maintenance page crash with an empty rates list.",
+      "The lead dropped Google because it kept changing its API without warning, while the European Central Bank feed stays constant; the ECB list is limited (some currencies, such as the Kenyan shilling, are missing).",
+      "The feed choice was kept as a drop-down so other sources can be added later.",
+      "Anyone who had Google selected must open System Parameters and save the setting again to overwrite it."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-234.md"
+    ]
+  },
+  {
+    "id": "T09",
+    "half": "thread",
+    "question": "Why does the menu items table store a row per security role, duplicating the same link and caption many times, when access is checked against the page security tokens anyway?",
+    "facts": [
+      "The lead added the role column on purpose so menus can be customised per security role: which items appear, their order and their captions.",
+      "He had a half-finished menu editor for this, and a module editor that moves module access from the user level to the role level.",
+      "New roles should default to the standard menu (a copy-menu option was suggested), and sequence numbers in steps of 10 were agreed to make inserting items easy."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-352.md"
+    ]
+  },
+  {
+    "id": "T10",
+    "half": "thread",
+    "question": "Can I use the XML-RPC API on a server that hosts several company databases, and is a rework of the API planned?",
+    "facts": [
+      "API callers cannot choose the company database in a multi-database setup; the suggested workaround was one database per domain or sub-domain, and a contributor warned that a wrong setup can lead to data loss.",
+      "A proposed rework (other protocols such as JSON-RPC, choosing the database, session-based auth, generated docs, removing the per-function login call and duplicated code) was suspended because a change touching the whole API was unlikely to be accepted.",
+      "New API functions (for example supplier transactions and GL reports) were deferred until after the v5.0 release, modelled on the existing customer-transaction functions, and developed in a contributor's fork branch."
+    ],
+    "source": [
+      "threads-2026-02-27/discussions/discussion-720.md"
+    ]
+  },
+  {
+    "id": "T11",
+    "half": "thread",
+    "question": "Why are the contract and BOM pages protected by the petty cash security token, and what is the 'Unknown' token for?",
+    "facts": [
+      "There is no deliberate reason: a maintainer reported the default script-to-token assignments as wrong or non-standard, and the lead agreed they look random and is happy to change them.",
+      "The 'Unknown' token (14) is used only by the form designer page; the lead favours removing such tokens, and renaming it was also suggested.",
+      "Other proposals: a separate Contracts token, a low token for claiming petty cash expenses, and deciding whether MRP pages should be open to suppliers; a full rethink of roles was seen as non-trivial, and the issue is still open."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-802.md"
+    ]
+  },
+  {
+    "id": "T12",
+    "half": "thread",
+    "question": "Some report pages can be run from cron without logging in. Is that something we should rely on, and what do the maintainers think of it?",
+    "facts": [
+      "Those pages set a flag that skips the login and security checks so they can be run from the command line or cron (for example the mailed inventory valuation and sales reports).",
+      "Contributors called these pages a security liability because they disable all authorisation checks; the lead has always opposed the flag.",
+      "The lead keeps it because many existing installations depend on it and removing it would break them; he notes it is used only to produce reports, not to change data, and one maintainer runs his cron jobs with it through a modified session script."
+    ],
+    "source": [
+      "threads-2026-02-27/issues/issue-502.md",
+      "threads-2026-02-27/pulls/pull-676.md"
+    ]
+  },
+  {
+    "id": "C01",
+    "half": "code",
+    "question": "How are the per-period GL account totals kept in step with GL transactions, and how does a report get an account's balance?",
+    "facts": [
+      "Totals live in the gltotals table, one row per account and period.",
+      "Database triggers on gltrans keep it current: insert adds the amount (creating the row if missing), delete subtracts it, update moves the amount when the account or period changes or adjusts it otherwise.",
+      "The installer creates these triggers, and a database update rebuilt the totals from existing gltrans for upgraded installs.",
+      "An account balance up to a period is the sum of gltotals amounts for that account up to and including the period."
+    ],
+    "source": [
+      "install/sql/triggers/gltrans_after_insert.sql:1",
+      "install/sql/triggers/gltrans_after_update.sql:1",
+      "install/sql/triggers/gltrans_after_delete.sql:1",
+      "includes/InstallFunctions.php:728",
+      "sql/updates/17.php:1",
+      "includes/GLFunctions.php:66"
+    ]
+  },
+  {
+    "id": "C02",
+    "half": "code",
+    "question": "When an item is added to a sales order, how does the system pick its price?",
+    "facts": [
+      "Order entry calls the price lookup with the item, customer, branch and quantity.",
+      "It tries, in order: a special price for this customer and branch, then for the customer with no branch, then the customer's sales type price list, then the default price list.",
+      "Only prices valid today count (start date on or before today, end date on or after today; 9999-12-31 means no end), and the most recent start date wins; customer prices must be in the customer's currency.",
+      "If none is found it falls back to the price matrix (quantity breaks by sales type), and otherwise returns 0 with a 'no prices set up' warning."
+    ],
+    "source": [
+      "includes/SelectOrderItems_IntoCart.php:110",
+      "includes/GetPrice.php:3-121"
+    ]
+  },
+  {
+    "id": "C03",
+    "half": "code",
+    "question": "How does a purchase order end up as Pending or Authorised when it is created, and who can authorise it later?",
+    "facts": [
+      "Each user's authority is a limit per currency in the purchase order authorisation table.",
+      "With the auto-authorise setting on, a new order is created Authorised (and printable) when the creator's limit in the order currency is greater than the order value; otherwise, or with the setting off, it is created Pending.",
+      "Changing the status to Authorised later requires the user's limit to exceed the order total; otherwise a 'You do not have permission' message is shown.",
+      "An order cannot go back to Pending once some of it has been received, and only a user with enough authority or the order's initiator can set it to Pending."
+    ],
+    "source": [
+      "PO_Items.php:82-122",
+      "PO_Header.php:62-136"
+    ]
+  },
+  {
+    "id": "C04",
+    "half": "code",
+    "question": "How does login check passwords, and what happens after repeated wrong passwords?",
+    "facts": [
+      "Passwords are stored with PHP password_hash and checked with password_verify.",
+      "If a legacy hashing function is configured (sha1, md5 or plain), the old hash is also tried and on success the password is re-hashed with the modern algorithm.",
+      "Failed attempts are counted in the session; once the count reaches 5 the account is marked blocked, and the system administrator is emailed if an address is set (the email includes the attempted password).",
+      "A blocked account cannot log in even with the right password, and in maintenance mode ('SysAdmin access only') only users with security token 15 can log in."
+    ],
+    "source": [
+      "includes/session.php:389-397",
+      "includes/LoginFunctions.php:37",
+      "includes/LoginFunctions.php:56-101",
+      "includes/LoginFunctions.php:266-305"
+    ]
+  },
+  {
+    "id": "C05",
+    "half": "code",
+    "question": "How does the system decide whether a logged-in user may open a given page?",
+    "facts": [
+      "At login the user's security role is used to load its allowed tokens from the security groups table into the session.",
+      "Each script's required token comes from the scripts table, loaded into a page-security array keyed by script file name.",
+      "On every page the session include compares the script's token with the user's allowed tokens and shows a 'security settings on your account do not permit' page if it is missing, unless the page sets the flag that skips checks.",
+      "A user whose only tokens are 9 (with 0) is treated as a supplier login, and one with only 1 (with 0) as a customer login."
+    ],
+    "source": [
+      "includes/LoginFunctions.php:148-163",
+      "includes/GetConfig.php:44-46",
+      "includes/session.php:331-367"
+    ]
+  },
+  {
+    "id": "C06",
+    "half": "code",
+    "question": "After I pull new code, how does webERP find out the database needs updating and apply the updates?",
+    "facts": [
+      "Updates are numbered PHP files in sql/updates; the highest file number is the code's database version, computed once per session.",
+      "The config table holds the last applied update number; when the code version is higher, every page except logout redirects to the database upgrade page.",
+      "The upgrade page lists the pending updates and, on 'Continue With Updates', includes each file from the next number up to the highest, with foreign key checks switched off around each one.",
+      "Each update file records its own number in config when it succeeds, and a fresh install sets the number to the highest file so no updates run."
+    ],
+    "source": [
+      "includes/session.php:278-291",
+      "includes/session.php:400-405",
+      "Z_UpgradeDatabase.php:49-57",
+      "Z_UpgradeDatabase.php:119-138",
+      "includes/InstallFunctions.php:495"
+    ]
+  },
+  {
+    "id": "C07",
+    "half": "code",
+    "question": "When automatic daily exchange-rate updates are on, when do they actually run and how is each currency's rate worked out?",
+    "facts": [
+      "The update runs during login, for the first login on a day after the date stored in the auto-update setting; that date is then set to today, so it runs at most once a day.",
+      "Rates come from the European Central Bank daily XML feed or from the alternative currency feed, depending on the configured source.",
+      "The feeds are euro-based, so each currency's rate is its euro rate divided by the euro rate of the company's home currency; the home currency itself is skipped.",
+      "The new rate is written to the currencies table."
+    ],
+    "source": [
+      "includes/LoginFunctions.php:195-240",
+      "includes/MiscFunctions.php:145-220",
+      "SystemParameters.php:326-331"
+    ]
+  },
+  {
+    "id": "C08",
+    "half": "code",
+    "question": "What gets posted to the GL when a work order is closed, and how are the variances calculated?",
+    "facts": [
+      "For each component, usage variance = (required quantity - issued quantity) x standard cost, and cost variance = issued quantity x (standard cost - actual issue cost per unit); issues of items not in the requirements add their full value to usage variance.",
+      "The variances are shared among the work order's output items in proportion to the standard value received.",
+      "Under standard costing, usage variance goes to the stock category's material usage variance account and cost variance to its purchase price variance account, each balanced against the category's WIP account (when stock is linked to the GL).",
+      "Under weighted-average costing, the variance for stock still on hand updates the item's cost and stock value, and the rest goes to the usage variance account; the work order is then marked closed."
+    ],
+    "source": [
+      "WorkOrderCosting.php:233-252",
+      "WorkOrderCosting.php:309",
+      "WorkOrderCosting.php:336-445",
+      "WorkOrderCosting.php:447-529"
+    ]
+  },
+  {
+    "id": "C09",
+    "half": "code",
+    "question": "How does an XML-RPC API call authenticate, and which company database does it work on?",
+    "facts": [
+      "All XML-RPC calls go through one entry point that dispatches to functions defined in the API include files.",
+      "Each API function takes a user name and password and calls a helper that logs in through the same user login routine as the web login (so blocking and lockout apply) unless the session is already logged in.",
+      "The database is the one already in the session or else the default database from config (weberpdemo unless changed); the caller cannot pass one.",
+      "A failed login returns the NoAuthorisation error code (1) instead of data."
+    ],
+    "source": [
+      "api/api_xml-rpc.php:1",
+      "api/includes/api_php.php:23-52",
+      "api/includes/api_login.php:12-60",
+      "api/includes/api_session.php:25",
+      "config.distrib.php:72"
+    ]
+  },
+  {
+    "id": "C10",
+    "half": "code",
+    "question": "When a sales invoice is posted, how does the system choose which GL accounts get the sales and the cost of sales?",
+    "facts": [
+      "Sales and discount accounts come from the sales GL postings table, and cost of sales from the COGS GL postings table.",
+      "Both are matched on the customer branch's sales area, the item's stock category and the sales type (price list).",
+      "If no exact match exists, they fall back step by step to wildcard rows ('AN' for any area or sales type, 'ANY' for any stock category).",
+      "If still nothing matches, it posts to account 1 'Default Sales and COGS', creating it if needed, and shows a warning to set up the postings."
+    ],
+    "source": [
+      "includes/GetSalesTransGLCodes.php:8-141",
+      "includes/GetSalesTransGLCodes.php:147-280",
+      "ConfirmDispatch_Invoice.php:1408",
+      "ConfirmDispatch_Invoice.php:1456"
+    ]
+  },
+  {
+    "id": "C11",
+    "half": "code",
+    "question": "What does the installer do when I press install, and in what order?",
+    "facts": [
+      "It creates the database, then the company folder, then writes config.php from the installer answers.",
+      "It creates the tables from the per-table SQL files and then the GL triggers that keep the period totals.",
+      "It loads the data: the chosen chart of accounts, the admin user, the base data files (or the demo data), then sets the database update number to the highest update file so no upgrades run afterwards.",
+      "Finally it writes the company's entry in the companies file."
+    ],
+    "source": [
+      "install/pages/page_6.php:40-101",
+      "includes/InstallFunctions.php:300",
+      "includes/InstallFunctions.php:332-500",
+      "includes/InstallFunctions.php:728"
+    ]
+  },
+  {
+    "id": "C12",
+    "half": "code",
+    "question": "When goods are received against a purchase order, what value do they come in at and what is posted to the GL?",
+    "facts": [
+      "Stock items are valued at the item's current cost (material + labour + overhead, a generated column), and the PO line keeps a weighted average of that cost across all receipts on the line.",
+      "Nominal (non-stock) lines and dummy items are valued at the order price converted to local currency with the order's exchange rate.",
+      "With the GL linked, the receipt debits the GL account stored on the purchase order line and credits the company's goods-received (GRN) suspense account, for quantity x unit cost.",
+      "The PO line's received quantity is increased and the line is marked completed once the full quantity is in."
+    ],
+    "source": [
+      "GoodsReceived.php:410-466",
+      "GoodsReceived.php:676-716",
+      "install/sql/tables/stockmaster.sql:29"
+    ]
+  }
+]

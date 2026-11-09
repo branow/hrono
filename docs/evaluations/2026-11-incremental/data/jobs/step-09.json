@@ -1,0 +1,142 @@
+{
+  "changed": true,
+  "forced": 0,
+  "parked": 0,
+  "judged": 16,
+  "propagated": 16,
+  "skipped": 0,
+  "abstained": 0,
+  "misfit_rate": 0.0316,
+  "above_baseline": true,
+  "repaired": {
+    "dissolved": 0,
+    "split": 0,
+    "migrated": 0,
+    "freed": 0,
+    "pinned": 0,
+    "reparented": 0,
+    "removed": 0
+  },
+  "adopted": 0,
+  "settle_due": true,
+  "incomplete": false,
+  "tree": {
+    "topics_added": 0,
+    "topics_removed": 0,
+    "sections_refiled": 0,
+    "briefs_rewritten": 23
+  },
+  "stages": [
+    {
+      "op": "update",
+      "over": null,
+      "seconds": 146.94,
+      "result": {
+        "changed": true,
+        "batch": 7,
+        "forced": 0,
+        "parked": 0,
+        "condense": {
+          "condensed": 44,
+          "tokens": {
+            "input": 18,
+            "output": 20805
+          }
+        }
+      }
+    },
+    {
+      "op": "propagate",
+      "over": null,
+      "seconds": 189.25,
+      "result": {
+        "judged": 16,
+        "propagated": 16,
+        "skipped": 0,
+        "abstained": 0,
+        "incomplete": false,
+        "tokens": {
+          "input": 11634,
+          "output": 5659
+        }
+      }
+    },
+    {
+      "op": "brief",
+      "over": null,
+      "seconds": 700.1,
+      "result": {
+        "briefed": 17,
+        "skipped_pinned": 0,
+        "tokens": {
+          "input": 36,
+          "output": 140261
+        }
+      }
+    },
+    {
+      "op": "brief-upper",
+      "over": null,
+      "seconds": 82.75,
+      "result": {}
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 65.78,
+      "result": {
+        "embedded": 734
+      }
+    },
+    {
+      "op": "monitor",
+      "over": null,
+      "seconds": 2.75,
+      "result": {
+        "measured": 32,
+        "rate": 0.0316,
+        "baseline": 0.0293,
+        "above_baseline": true
+      }
+    },
+    {
+      "op": "repair",
+      "over": null,
+      "seconds": 0.74,
+      "result": {
+        "dissolved": 0,
+        "split": 0,
+        "migrated": 0,
+        "freed": 0,
+        "pinned": 0,
+        "reparented": 0,
+        "removed": 0
+      }
+    },
+    {
+      "op": "adopt",
+      "over": null,
+      "seconds": 44.82,
+      "result": null
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 16.54,
+      "result": {
+        "embedded": 18
+      }
+    },
+    {
+      "op": "health",
+      "over": null,
+      "seconds": 0.23,
+      "result": {
+        "waiting": 0,
+        "misfits": 0,
+        "stale": 1
+      }
+    }
+  ]
+}
+

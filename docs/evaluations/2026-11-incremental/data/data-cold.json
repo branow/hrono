@@ -1,0 +1,33 @@
+{
+ "trees": {
+  "cold1": {
+   "sections_placed": 913,
+   "nodes_by_level": {
+    "0": 57,
+    "1": 5,
+    "2": 1
+   },
+   "briefs": 63,
+   "briefs_unfaithful": 32,
+   "briefs_flagged": 0
+  },
+  "cold2": {
+   "sections_placed": 913,
+   "nodes_by_level": {
+    "0": 58,
+    "1": 5,
+    "2": 1
+   },
+   "briefs": 64,
+   "briefs_unfaithful": 29,
+   "briefs_flagged": 0
+  }
+ },
+ "pairs": {
+  "cold1 vs cold2": {
+   "common_sections": 913,
+   "ari": 0.5805,
+   "ami": 0.7646
+  }
+ }
+}

@@ -1,0 +1,698 @@
+[
+ {
+  "id": "T01",
+  "half": "thread",
+  "labels": {
+   "none": "Answer A",
+   "A": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "B": [
+    false,
+    false,
+    true,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T02",
+  "half": "thread",
+  "labels": {
+   "none": "Answer A",
+   "A": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    true
+   ],
+   "B": [
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T03",
+  "half": "thread",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "B": [
+    true,
+    true,
+    true
+   ],
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T04",
+  "half": "thread",
+  "labels": {
+   "none": "Answer A",
+   "A": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "B": [
+    false,
+    false,
+    true,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T05",
+  "half": "thread",
+  "labels": {
+   "B": "Answer A",
+   "A": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T06",
+  "half": "thread",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "B": [
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T07",
+  "half": "thread",
+  "labels": {
+   "A": "Answer A",
+   "none": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "A": [
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "B": [
+    true,
+    true,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T08",
+  "half": "thread",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    true
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T09",
+  "half": "thread",
+  "labels": {
+   "none": "Answer A",
+   "B": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "B": [
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T10",
+  "half": "thread",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "B": [
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T11",
+  "half": "thread",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "B": [
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "T12",
+  "half": "thread",
+  "labels": {
+   "A": "Answer A",
+   "B": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 3,
+  "covered": {
+   "A": [
+    true,
+    false,
+    false
+   ],
+   "B": [
+    false,
+    false,
+    false
+   ],
+   "none": [
+    true,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C01",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    true,
+    false,
+    false,
+    true
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "A": [
+    true,
+    false,
+    false,
+    true
+   ]
+  }
+ },
+ {
+  "id": "C02",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    true,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    true,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C03",
+  "half": "code",
+  "labels": {
+   "A": "Answer A",
+   "none": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "A": [
+    true,
+    false,
+    true,
+    false
+   ],
+   "none": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "B": [
+    true,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C04",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    false,
+    true,
+    true,
+    false
+   ],
+   "none": [
+    true,
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    true,
+    true,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C05",
+  "half": "code",
+  "labels": {
+   "A": "Answer A",
+   "B": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "A": [
+    false,
+    false,
+    true,
+    false
+   ],
+   "B": [
+    true,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    true,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C06",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "A": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C07",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "none": "Answer B",
+   "A": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "none": [
+    true,
+    false,
+    true,
+    false
+   ],
+   "A": [
+    true,
+    true,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C08",
+  "half": "code",
+  "labels": {
+   "none": "Answer A",
+   "A": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "B": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C09",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "A": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    true,
+    true,
+    true,
+    true
+   ],
+   "A": [
+    true,
+    true,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C10",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "A": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    false,
+    false,
+    false,
+    true
+   ],
+   "A": [
+    true,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    true,
+    true,
+    true,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C11",
+  "half": "code",
+  "labels": {
+   "B": "Answer A",
+   "A": "Answer B",
+   "none": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "B": [
+    true,
+    true,
+    false,
+    true
+   ],
+   "A": [
+    true,
+    true,
+    false,
+    true
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ },
+ {
+  "id": "C12",
+  "half": "code",
+  "labels": {
+   "A": "Answer A",
+   "none": "Answer B",
+   "B": "Answer C"
+  },
+  "facts": 4,
+  "covered": {
+   "A": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "none": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "B": [
+    false,
+    false,
+    false,
+    false
+   ]
+  }
+ }
+]

@@ -1,0 +1,129 @@
+{
+  "changed": false,
+  "forced": 0,
+  "parked": 0,
+  "judged": 0,
+  "propagated": 0,
+  "skipped": 0,
+  "abstained": 0,
+  "misfit_rate": 0.0306,
+  "above_baseline": true,
+  "repaired": {
+    "dissolved": 0,
+    "split": 0,
+    "migrated": 0,
+    "freed": 0,
+    "pinned": 0,
+    "reparented": 0,
+    "removed": 0
+  },
+  "adopted": 0,
+  "settle_due": false,
+  "incomplete": false,
+  "tree": {
+    "topics_added": 0,
+    "topics_removed": 0,
+    "sections_refiled": 0,
+    "briefs_rewritten": 1
+  },
+  "stages": [
+    {
+      "op": "update",
+      "over": null,
+      "seconds": 0.75,
+      "result": {
+        "changed": false,
+        "batch": null
+      }
+    },
+    {
+      "op": "propagate",
+      "over": null,
+      "seconds": 0.01,
+      "result": {
+        "judged": 0,
+        "propagated": 0,
+        "skipped": 0,
+        "abstained": 0,
+        "incomplete": false
+      }
+    },
+    {
+      "op": "brief",
+      "over": null,
+      "seconds": 44.47,
+      "result": {
+        "briefed": 1,
+        "skipped_pinned": 0,
+        "tokens": {
+          "input": 4,
+          "output": 6076
+        }
+      }
+    },
+    {
+      "op": "brief-upper",
+      "over": null,
+      "seconds": 0.03,
+      "result": {}
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 120.55,
+      "result": {
+        "embedded": 19
+      }
+    },
+    {
+      "op": "monitor",
+      "over": null,
+      "seconds": 3.47,
+      "result": {
+        "measured": 32,
+        "rate": 0.0306,
+        "baseline": 0.0293,
+        "above_baseline": true
+      }
+    },
+    {
+      "op": "repair",
+      "over": null,
+      "seconds": 0.04,
+      "result": {
+        "dissolved": 0,
+        "split": 0,
+        "migrated": 0,
+        "freed": 0,
+        "pinned": 0,
+        "reparented": 0,
+        "removed": 0
+      }
+    },
+    {
+      "op": "adopt",
+      "over": null,
+      "seconds": 44.1,
+      "result": null
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 26.03,
+      "result": {
+        "embedded": 18
+      }
+    },
+    {
+      "op": "health",
+      "over": null,
+      "seconds": 0.22,
+      "result": {
+        "waiting": 0,
+        "misfits": 0,
+        "stale": 1
+      }
+    }
+  ]
+}
+

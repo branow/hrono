@@ -1,0 +1,19 @@
+step	commit	date	commits	files_changed	lines_added	lines_deleted	last_subject
+1	72f410a250102aa3ed7652767410a9aa78d249ef	2026-07-01	1	1	0	5	script: rm uv deps from update-user-agents.py
+2	648264f22d3d264473f43a50c9200aea2a235b60	2026-07-05	2	4	68	21	utils.processoutput: refactor stdin argument
+3	c744a8542f35c12d0ddc091958a2734ce2c292fe	2026-07-05	1	1	19	19	build: remove redundant env markers in uv.lock
+4	d2ecb7bac65a40dd851fa43e3291acca9d2f1788	2026-07-14	9	5	312	232	stream.dash: also find namespaced default_KID attr
+5	8cca11c6fb6fa67677e9bd2c483e819af1a56487	2026-07-16	1	1	22	22	build: bump types-docutils to 0.22.3.20260712
+6	520428756dec56aa6b10ca578a46bc175f344aa8	2026-07-24	8	73	208	390	tools: bump ruff to 0.16.0 and fix issues
+7	df8ee648c99b3960e4e1a4005b19074fd3b988b6	2026-07-24	1	6	7	8	chore: clean up tool.ruff.lint.per-file-ignores
+8	cb1eacfd6732dcbed9281ddc6bdb8f97ad91b4bb	2026-07-25	1	3	12	0	ci.github: set workflow concurrency
+9	5b570867912c82a983171c2c7f14100322ea2e95	2026-08-09	28	30	1380	345	docs: remove wheel from dependencies section
+10	5874559e6ead80f409ff2652e3ca7b51a1e79f7a	2026-08-09	3	2	14	5	docs: fix table.docutils stylesheets
+11	c68d73cfffd110d1094fbfc5f0e214ceca2b8662	2026-08-09	1	1	1	1	docs: fix column width of dependencies table
+12	662fc38b1aaa907c1bc06c71ea060ef387d52b0e	2026-08-24	14	8	217	148	tools: bump ty to 0.0.74 and fix issues
+13	f14649243dc9856ba5181188c07764ac05af4c04	2026-08-20	1	2	163	25	plugins.pluto: fix URL matching and channel resolution
+14	851b9319a21f3bf94fc094dc2a9e7f38e1e125ee	2026-09-01	13	20	669	172	session.http_useragents: update useragents
+15	78531bad3048a1f2e3c0d0e7678425439b9f33dc	2026-09-02	1	3	36	1	stream.dash: fix t attr in SegmentTimeline
+16	1618468719dedd4c7c5f91fc2ec92154be34a432	2026-09-16	47	61	2964	1196	tools: bump ty to 0.0.81 and fix issues
+17	ce859dbdd679b96390382f15f8457c408e3eff7f	2026-09-16	1	1	3	3	build: bump types-docutils to 0.23.0.20260911
+18	1bd90e9a2f0e39c71140a4611fdd0ebdc10a4177	2026-09-18	4	7	105	44	tests.cli: move test_setup_session_options()

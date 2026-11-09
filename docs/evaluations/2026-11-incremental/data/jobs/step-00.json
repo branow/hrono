@@ -1,0 +1,115 @@
+{
+  "tree": {
+    "topics_added": 64,
+    "topics_removed": 0,
+    "sections_refiled": 0,
+    "briefs_rewritten": 64
+  },
+  "stages": [
+    {
+      "op": "sync",
+      "over": "streamlink",
+      "seconds": 0.16,
+      "result": {
+        "fetched": 1
+      }
+    },
+    {
+      "op": "split",
+      "over": "streamlink",
+      "seconds": 3.22,
+      "result": {
+        "files_changed": 620,
+        "sections_cut": 893,
+        "files_gone": 0
+      }
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 279.63,
+      "result": {
+        "embedded": 8699
+      }
+    },
+    {
+      "op": "condense",
+      "over": null,
+      "seconds": 1436.89,
+      "result": {
+        "condensed": 889,
+        "tokens": {
+          "input": 12927,
+          "output": 446178
+        }
+      }
+    },
+    {
+      "op": "embed-condensations",
+      "over": null,
+      "seconds": 79.13,
+      "result": {
+        "embedded": 889
+      }
+    },
+    {
+      "op": "cluster",
+      "over": null,
+      "seconds": 12.44,
+      "result": {
+        "sections": 893,
+        "topics": 57,
+        "split": 8,
+        "attached": 246,
+        "collected": false
+      }
+    },
+    {
+      "op": "restore-pins",
+      "over": null,
+      "seconds": 0.0,
+      "result": {
+        "held": 0,
+        "released": 0
+      }
+    },
+    {
+      "op": "brief",
+      "over": null,
+      "seconds": 4213.5,
+      "result": {
+        "briefed": 57,
+        "skipped_pinned": 0,
+        "tokens": {
+          "input": 116,
+          "output": 423249
+        }
+      }
+    },
+    {
+      "op": "build-tree",
+      "over": null,
+      "seconds": 221.73,
+      "result": {}
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 13.82,
+      "result": {
+        "embedded": 12
+      }
+    },
+    {
+      "op": "health",
+      "over": null,
+      "seconds": 0.23,
+      "result": {
+        "waiting": 0,
+        "misfits": 0,
+        "stale": 1
+      }
+    }
+  ]
+}
+

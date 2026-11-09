@@ -1,0 +1,116 @@
+job_e484340864904f1fa46e636a5e5cb896  maintain  succeeded
+result:
+{
+  "tree": {
+    "topics_added": 63,
+    "topics_removed": 0,
+    "sections_refiled": 0,
+    "briefs_rewritten": 63
+  },
+  "stages": [
+    {
+      "op": "sync",
+      "over": "streamlink",
+      "seconds": 0.19,
+      "result": {
+        "fetched": 1
+      }
+    },
+    {
+      "op": "split",
+      "over": "streamlink",
+      "seconds": 3.71,
+      "result": {
+        "files_changed": 625,
+        "sections_cut": 913,
+        "files_gone": 0
+      }
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 845.43,
+      "result": {
+        "embedded": 9002
+      }
+    },
+    {
+      "op": "condense",
+      "over": null,
+      "seconds": 1459.5,
+      "result": {
+        "condensed": 909,
+        "tokens": {
+          "input": 9677,
+          "output": 459700
+        }
+      }
+    },
+    {
+      "op": "embed-condensations",
+      "over": null,
+      "seconds": 147.8,
+      "result": {
+        "embedded": 909
+      }
+    },
+    {
+      "op": "cluster",
+      "over": null,
+      "seconds": 14.43,
+      "result": {
+        "sections": 913,
+        "topics": 57,
+        "split": 4,
+        "attached": 240,
+        "collected": false
+      }
+    },
+    {
+      "op": "restore-pins",
+      "over": null,
+      "seconds": 0.0,
+      "result": {
+        "held": 0,
+        "released": 0
+      }
+    },
+    {
+      "op": "brief",
+      "over": null,
+      "seconds": 820.98,
+      "result": {
+        "briefed": 57,
+        "skipped_pinned": 0,
+        "tokens": {
+          "input": 114,
+          "output": 445055
+        }
+      }
+    },
+    {
+      "op": "build-tree",
+      "over": null,
+      "seconds": 420.2,
+      "result": {}
+    },
+    {
+      "op": "embed",
+      "over": null,
+      "seconds": 14.25,
+      "result": {
+        "embedded": 12
+      }
+    },
+    {
+      "op": "health",
+      "over": null,
+      "seconds": 0.28,
+      "result": {
+        "waiting": 0,
+        "misfits": 0,
+        "stale": 0
+      }
+    }
+  ]
+}

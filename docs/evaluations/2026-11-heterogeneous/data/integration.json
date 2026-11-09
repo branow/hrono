@@ -1,0 +1,50 @@
+{
+ "sections_placed": {
+  "thread": 955,
+  "code": 2008
+ },
+ "leaves": 202,
+ "leaves_by_type": {
+  "code only": 132,
+  "mixed": 2,
+  "thread only": 68
+ },
+ "mixed_leaves": 2,
+ "mixed_leaves_random_mean": 197.63,
+ "mixed_leaves_random_min": 191,
+ "purity_mean": 0.9993,
+ "purity_random_mean": 0.6923,
+ "areas": {
+  "150": {
+   "code": 351,
+   "thread": 769
+  },
+  "152": {
+   "code": 200,
+   "thread": 13
+  },
+  "153": {
+   "code": 433,
+   "thread": 2
+  },
+  "151": {
+   "code": 867
+  },
+  "149": {
+   "code": 157,
+   "thread": 171
+  }
+ },
+ "colocation": {
+  "pr / linked": 350,
+  "pr / no linked file": 65,
+  "pr / same area": 210,
+  "pr / same area, random files (expected)": 189.1,
+  "pr / same leaf": 0,
+  "text / linked": 258,
+  "text / no linked file": 185,
+  "text / same area": 121,
+  "text / same area, random files (expected)": 100.7,
+  "text / same leaf": 1
+ }
+}
