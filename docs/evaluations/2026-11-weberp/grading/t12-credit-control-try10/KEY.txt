@@ -1,0 +1,1 @@
+coin: A=code-3, B=hrono-10 (hrono READ_MAP=7, RECALL=0, fixed export, caffeinate) (keep from graders)

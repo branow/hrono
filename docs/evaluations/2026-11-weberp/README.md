@@ -808,3 +808,21 @@ the reading before the cut-off did follow the new rule (20 briefs, then
 `InstallFunctions.php`, `session.php` and the upgrade helpers before
 editing them; seeds one statement per file). Rerun as try 10 under
 `caffeinate -i`. Cost $8.97.
+
+### t12 hrono try 10 (amendment 17, rerun of try 9 under caffeinate)
+
+Coin: A = code-3, B = hrono-10 (grading/t12-credit-control-try10/).
+$11.72, 20 min, 252 calls, 19 briefs (first write at call 57), 54 source
+reads, 52 files. Checklist hrono-10: A 40/43, B 29/40 (code-3: 41, 27).
+Review "A, somewhat": code-3 7, hrono-10 5. The same two faults as
+before decide it: the fresh non-demo install fails (hrono-10 read
+`InstallFunctions.php` lines 470-500; the positional company INSERT is at
+505) and the reminder email breaks under SMTP (it grepped the
+`SendEmailFromWebERP` signature, never read `SendEmailBySmtp`, and did not
+read brief 157 that states the address-keyed `$To`). Also: month-end
+integrity tools report false differences for the new types.
+
+Tries 6, 7, 8, 10 (MUST prompt): hidden rules 28, 29, 27.5, 29 against
+code-only 25.5, 26.5, 27; reviews hrono 6, 4, 5.5, 5 against code-only
+4, 7, 7, 7. hrono finds more of the hidden rules but loses the reviews on
+plumbing it calls without reading (mail, installer).
