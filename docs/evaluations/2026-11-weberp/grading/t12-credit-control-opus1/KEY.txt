@@ -1,0 +1,1 @@
+coin: A=hrono-opus1, B=code-opus1 (MODEL=opus; hrono READ_MAP=7, RECALL=0, fixed export) (keep from graders)

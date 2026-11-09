@@ -845,3 +845,26 @@ feature done. hrono-haiku1 delivers one page that cannot be opened or
 submitted, a broken update 44 and no customer columns; code-haiku1's
 screens would mostly run if the schema were added by hand. The task is
 beyond Haiku either way, so this pair says nothing about the map.
+
+### t12 with Opus (amendment 19), one try per arm
+
+Coin: A = hrono-opus1, B = code-opus1 (grading/t12-credit-control-opus1/).
+
+| | code-opus1 | hrono-opus1 |
+|---|---|---|
+| A (BRD) /43 | 42 | **42.5** |
+| B (rules) /40 | 29 | **30** |
+| review /10 | **7** ("B, barely") | 6.5 |
+| cost / minutes | $24.28 / 37 | $26.41 / 34 |
+| map read | 0 | 25 briefs (first write at call 108) |
+| source files read | 81 | 64 |
+| files changed | 64 | 59 |
+
+Both arms deliver a full feature; the best checklist scores of t12 so far
+(hrono-opus1 72.5/83). Reviewer: code-opus1 fits webERP better (reuses
+CheckCreditLimits, GetCreditAvailable, EnsureGLEntriesBalance; PDF letters;
+repairs the debtors-control check; more order routes); hrono-opus1 is
+better on data integrity (foreign keys, customer-code change, GL balance
+check before commit, charges on the account screen, accurate watch history)
+but its portal display is unreachable and it adds parallel settings and
+pages. Effectively a tie.
