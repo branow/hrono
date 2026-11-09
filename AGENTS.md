@@ -57,6 +57,25 @@ then `uv run ruff check --fix .`, then `uv run pytest -n auto`. Ruff's
 formatter is authoritative; do not hand-format or fight its output. All three
 must be clean before the work is done.
 
+**Design choices belong to the user.** When a change's shape is not already
+settled (naming, schema, how a step's output enters the tree or the export),
+propose the options with example values and get a yes before editing or
+rebuilding. Mechanical fixes with one obvious answer can just be done.
+Explain in hrono's words (`GLOSSARY.md`), never invented phrases.
+
+**Remove failed experiments.** Anything added to the product to test an idea
+(a hook, setting, prompt, gate) is either kept on purpose, and said so, or
+deleted with its settings, docs and tests in the same session. Leftovers
+quietly distort later runs.
+
+**Private evaluations stay out of git.** Runs on private company data live
+only in a separate local workspace outside this repo: runs, transcripts,
+tasks, code, trees. The one
+exception is a fully anonymized summary in
+`docs/evaluations/2026-10-private-data-platform/README.md`; it names no
+company, product, vendor, stack, ticket, person or data. Grep it for such
+names before every edit.
+
 ## Tech stack
 
 - Python 3.13, managed by **uv**; package `src/hrono/`, console script `hrono`.

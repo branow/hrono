@@ -276,6 +276,15 @@ instead of `title=`.
 - **Do** keep labels short and metadata quiet (Faint Ink, small).
 - **Do** make every view a URL, reachable from the keyboard, readable in light and dark.
 - **Do** verify laid-out pixels (overflow, wrapping, overlap) in a real browser test.
+- **Do** keep labels to one or two words and put the detail in the tip mark.
+- **Do** make real actions look clickable and emphasized (Sign in, Open topic page).
+- **Do** let filters and search react as you type, with no separate Filter button.
+- **Do** give controls that sit side by side one shared height.
+- **Do** animate hover with a transition, never a jumpy re-layout.
+- **Do** follow a background job live on the page (the `follow` macro) and show its result there.
+- **Do** write copy that reads right under every setup: metered API, subscription, local or mixed providers; empty, small or huge tree; reader or admin. Prefer data-driven wording or a per-value tip over a fixed note.
+- **Do** prefer fewer, more general features (a "files only" filter in Search over a separate Files tab).
+- **Do**, before calling a UI change done, review every screenshot against these rules, measure the layout at 1920, 1440, 1024 and 390 px, and open every collapsed or hidden state.
 
 ### Don't:
 - **Don't** add a raw hex, a new font or a framework; there is no frontend build.
@@ -283,3 +292,6 @@ instead of `title=`.
 - **Don't** repeat the tree's name on a page that already shows it in the picker.
 - **Don't** let a row of tabs or controls wrap raggedly or scroll the page sideways.
 - **Don't** use words outside `GLOSSARY.md` on the screen.
+- **Don't** draw metadata (counts, level, topic id, status) as a bordered chip that looks like a button.
+- **Don't** put a white halo or outline (paint-order stroke) on labels.
+- **Don't** ask the reader to refresh the page.

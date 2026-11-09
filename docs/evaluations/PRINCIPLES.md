@@ -105,3 +105,41 @@ adds only the map and the plugin. Protocol and amendments are written
 before runs; every run, transcript and score is kept; grading is blind
 where arms are compared. A task chosen for the property above is reported
 as such, not as an average over all tasks.
+
+## Running experiments
+
+- **Fix before you run.** Fix every known problem in hrono's real code and
+  prompts first (not only in the eval harness). After a run, trace where each
+  fact was lost (tree, export, agent reading, answer) from the existing
+  artifacts and fix every fault found. Propose the next run only when no
+  further improvement is visible.
+- **Pilot small, state the cost.** Any step that calls a model starts as a
+  pilot of about 10 calls or fewer; show the outputs and wait for a go before
+  scaling. State the call count and cost before every paid run; anything over
+  about $5 needs explicit approval. Free steps (re-clustering stored vectors)
+  can run in full. Finish and report one stage before starting the next.
+- **The baseline is code-only agents.** Reuse existing code-only runs. Prefer
+  agent outcome on one or two questions over proxy judges. Condensations feed
+  briefs only; agents never see them.
+- **Watch long runs live.** After starting a model-calling job, check within
+  2-3 minutes which stages and model roles it runs (`llm_calls` by `job_id`,
+  node counts), then about every 10 minutes. Snapshot the db first. Stop it
+  the moment it does something other than what was approved.
+- **Verify the setup against the best-practice setup.** Before the first paid
+  call of an eval, diff the whole registry against this setup, item by item,
+  and show the diff (it scored best as of 2026-10-27: the BC Registries full
+  rebuild, 0.67 vs code-only 0.63): Haiku for condense and judge, Sonnet for
+  brief and upper brief, embedding
+  `ibm-granite/granite-embedding-97m-multilingual-r2`, the default prompts
+  (compare template hashes), tree `"lookups": true`,
+  `HRONO_LLM_CONCURRENCY=6`. hrono's own defaults are not this setup (lookups
+  is off by default). Never copy a setup from an older eval's README. Two traps: embeddings are keyed by the registry
+  name, so swapping its model silently reuses old vectors; and brief freshness
+  ignores the lookups setting, so turning lookups on needs briefs marked stale.
+- **Pin each repo separately.** In a multi-repo tree, only the repo a task
+  changes moves to its pre-task commit; every other repo stays put. Never pin
+  all repos to one date. Never move, sync or rebuild a tree without a go for
+  that exact step.
+- **Name sources exactly as their repo** (`exigodb`), never with a pin or eval
+  prefix. The name is the first segment of every path in briefs and exports.
+  Keep pins apart by database, not by source name.
